@@ -1,6 +1,6 @@
 package market
 
-type order struct {
+type Order struct {
 	id            string
 	orderType     string
 	equitySymbol  string
