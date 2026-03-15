@@ -52,6 +52,30 @@ docs/
    - event timeline views
 4. Extend into post-trade workflows and simulation control.
 
+## Current Development Commands
+
+Go matching engine:
+
+```bash
+cd services/matching-engine
+GOCACHE=/tmp/reef-go-build-cache go test ./...
+GOCACHE=/tmp/reef-go-build-cache go run ./cmd/matching-engine
+```
+
+Kotlin platform runtime:
+
+```bash
+cd services/platform-runtime
+GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
+GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
+```
+
+Repository check:
+
+```bash
+make test
+```
+
 ## Steering
 
 Start here before adding code:

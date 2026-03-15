@@ -19,18 +19,20 @@ Current state:
 - `GET /health`
 - `POST /orders/submit`
 - placeholder proxy path to the Go matching engine
+- unit-testable API and application layers
 
-Run intent once Gradle is available:
+Run locally when Gradle is available:
 
 ```bash
 cd services/platform-runtime
-./gradlew run
+GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
+GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
 ```
 
 Current limitation:
 
-- this machine does not currently have Gradle or Kotlin tooling installed
-- the source layout is ready, but runtime execution was not verified locally
+- local verification in the Codex sandbox may still need elevated execution because Gradle opens local coordination sockets
+- CI is configured to run the Kotlin test suite through the checked-in wrapper
 
 Build guidance:
 
