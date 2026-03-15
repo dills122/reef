@@ -76,10 +76,12 @@ message TradeCreated {
   string event_id = 1;
   string trade_id = 2;
   string execution_id = 3;
-  string instrument_id = 4;
-  OrderQuantity quantity = 5;
-  Price price = 6;
-  string occurred_at = 7;
+  string buy_order_id = 4;
+  string sell_order_id = 5;
+  string instrument_id = 6;
+  OrderQuantity quantity = 7;
+  Price price = 8;
+  string occurred_at = 9;
 }
 
 message SubmitOrderResult {

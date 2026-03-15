@@ -3,12 +3,21 @@ package com.reef.platform.infrastructure.engine
 import com.reef.platform.api.JsonFields
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
+import com.reef.platform.domain.TradeCreated
 
 class EngineClient : EngineGateway {
-    private val engineBaseUrl: String =
-        System.getenv("MATCHING_ENGINE_BASE_URL") ?: "http://localhost:8081"
+    private val engineBaseUrl: String
+
+    constructor() {
+        engineBaseUrl = System.getenv("MATCHING_ENGINE_BASE_URL") ?: "http://localhost:8081"
+    }
+
+    internal constructor(engineBaseUrl: String) {
+        this.engineBaseUrl = engineBaseUrl
+    }
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         val payload = """
@@ -50,7 +59,9 @@ class EngineClient : EngineGateway {
                     orderId = JsonFields.extract(body, "orderId"),
                     engineOrderId = JsonFields.extract(body, "engineOrderId"),
                     occurredAt = extractLast(body, "occurredAt")
-                )
+                ),
+                executions = parseExecutions(body),
+                trades = parseTrades(body)
             )
         }
 
@@ -61,8 +72,42 @@ class EngineClient : EngineGateway {
                 code = JsonFields.extract(body, "code"),
                 reason = JsonFields.extract(body, "reason"),
                 occurredAt = extractLast(body, "occurredAt")
-            )
+            ),
+            executions = emptyList(),
+            trades = emptyList()
         )
+    }
+
+    private fun parseExecutions(body: String): List<ExecutionCreated> {
+        return JsonFields.extractObjects(body, "executions").map { execution ->
+            ExecutionCreated(
+                eventId = JsonFields.extract(execution, "eventId"),
+                executionId = JsonFields.extract(execution, "executionId"),
+                orderId = JsonFields.extract(execution, "orderId"),
+                instrumentId = JsonFields.extract(execution, "instrumentId"),
+                quantityUnits = JsonFields.extract(execution, "quantityUnits"),
+                executionPrice = JsonFields.extract(execution, "executionPrice"),
+                currency = JsonFields.extract(execution, "currency"),
+                occurredAt = JsonFields.extract(execution, "occurredAt")
+            )
+        }
+    }
+
+    private fun parseTrades(body: String): List<TradeCreated> {
+        return JsonFields.extractObjects(body, "trades").map { trade ->
+            TradeCreated(
+                eventId = JsonFields.extract(trade, "eventId"),
+                tradeId = JsonFields.extract(trade, "tradeId"),
+                executionId = JsonFields.extract(trade, "executionId"),
+                buyOrderId = JsonFields.extract(trade, "buyOrderId"),
+                sellOrderId = JsonFields.extract(trade, "sellOrderId"),
+                instrumentId = JsonFields.extract(trade, "instrumentId"),
+                quantityUnits = JsonFields.extract(trade, "quantityUnits"),
+                price = JsonFields.extract(trade, "price"),
+                currency = JsonFields.extract(trade, "currency"),
+                occurredAt = JsonFields.extract(trade, "occurredAt")
+            )
+        }
     }
 
     private fun extractLast(body: String, key: String): String {
