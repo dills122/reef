@@ -10,17 +10,13 @@ import (
 )
 
 type Service struct {
-	mu    sync.Mutex
-	books map[string]*orderBook
+	mu     sync.Mutex
+	books  map[string]*orderBook
+	orders map[string]*orderRecord
 }
 
 type restingOrder struct {
-	OrderID       string
-	InstrumentID  string
-	Side          domain.Side
-	QuantityUnits int64
-	LimitPrice    int64
-	Currency      string
+	OrderID string
 }
 
 type orderBook struct {
@@ -28,9 +24,22 @@ type orderBook struct {
 	sells []*restingOrder
 }
 
+type orderRecord struct {
+	OrderID           string
+	InstrumentID      string
+	Side              domain.Side
+	OriginalQuantity  int64
+	RemainingQuantity int64
+	LimitPrice        int64
+	Currency          string
+	Status            domain.OrderStatus
+	LastUpdatedAt     string
+}
+
 func NewService() *Service {
 	return &Service{
-		books: make(map[string]*orderBook),
+		books:  make(map[string]*orderBook),
+		orders: make(map[string]*orderRecord),
 	}
 }
 
@@ -112,26 +121,33 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	}
 
 	book := s.bookFor(cmd.InstrumentID)
-	incoming := &restingOrder{
-		OrderID:       cmd.OrderID,
-		InstrumentID:  cmd.InstrumentID,
-		Side:          cmd.Side,
-		QuantityUnits: quantityUnits,
-		LimitPrice:    limitPrice,
-		Currency:      cmd.Currency,
+	record := &orderRecord{
+		OrderID:           cmd.OrderID,
+		InstrumentID:      cmd.InstrumentID,
+		Side:              cmd.Side,
+		OriginalQuantity:  quantityUnits,
+		RemainingQuantity: quantityUnits,
+		LimitPrice:        limitPrice,
+		Currency:          cmd.Currency,
+		Status:            domain.OrderStatusAccepted,
+		LastUpdatedAt:     now,
 	}
+	s.orders[cmd.OrderID] = record
+	incoming := &restingOrder{OrderID: cmd.OrderID}
 
-	if incoming.Side == domain.SideBuy {
+	if record.Side == domain.SideBuy {
 		s.matchBuy(book, incoming, &result, now)
-		if incoming.QuantityUnits > 0 {
-			book.buys = insertBuy(book.buys, incoming)
+		if record.RemainingQuantity > 0 {
+			book.buys = s.insertBuy(book.buys, incoming)
 		}
 	} else {
 		s.matchSell(book, incoming, &result, now)
-		if incoming.QuantityUnits > 0 {
-			book.sells = insertSell(book.sells, incoming)
+		if record.RemainingQuantity > 0 {
+			book.sells = s.insertSell(book.sells, incoming)
 		}
 	}
+
+	s.refreshOrderStatus(record)
 
 	return result
 }
@@ -152,6 +168,28 @@ func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
 	return len(book.sells)
 }
 
+func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record, ok := s.orders[orderID]
+	if !ok {
+		return domain.OrderState{}, false
+	}
+
+	return domain.OrderState{
+		OrderID:           record.OrderID,
+		InstrumentID:      record.InstrumentID,
+		Side:              record.Side,
+		Status:            record.Status,
+		OriginalQuantity:  strconv.FormatInt(record.OriginalQuantity, 10),
+		RemainingQuantity: strconv.FormatInt(record.RemainingQuantity, 10),
+		LimitPrice:        strconv.FormatInt(record.LimitPrice, 10),
+		Currency:          record.Currency,
+		LastUpdatedAt:     record.LastUpdatedAt,
+	}, true
+}
+
 func (s *Service) bookFor(instrumentID string) *orderBook {
 	book := s.books[instrumentID]
 	if book == nil {
@@ -162,44 +200,58 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 }
 
 func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
-	for incoming.QuantityUnits > 0 && len(book.sells) > 0 {
+	incomingRecord := s.orders[incoming.OrderID]
+
+	for incomingRecord.RemainingQuantity > 0 && len(book.sells) > 0 {
 		resting := book.sells[0]
-		if incoming.LimitPrice < resting.LimitPrice {
+		restingRecord := s.orders[resting.OrderID]
+		if incomingRecord.LimitPrice < restingRecord.LimitPrice {
 			return
 		}
 
-		matchedUnits := minInt64(incoming.QuantityUnits, resting.QuantityUnits)
-		executionPrice := resting.LimitPrice
-		s.appendMatch(result, incoming, resting, matchedUnits, executionPrice, occurredAt)
+		matchedUnits := minInt64(incomingRecord.RemainingQuantity, restingRecord.RemainingQuantity)
+		executionPrice := restingRecord.LimitPrice
+		s.appendMatch(result, incomingRecord, restingRecord, matchedUnits, executionPrice, occurredAt)
 
-		incoming.QuantityUnits -= matchedUnits
-		resting.QuantityUnits -= matchedUnits
-		if resting.QuantityUnits == 0 {
+		incomingRecord.RemainingQuantity -= matchedUnits
+		restingRecord.RemainingQuantity -= matchedUnits
+		incomingRecord.LastUpdatedAt = occurredAt
+		restingRecord.LastUpdatedAt = occurredAt
+		s.refreshOrderStatus(incomingRecord)
+		s.refreshOrderStatus(restingRecord)
+		if restingRecord.RemainingQuantity == 0 {
 			book.sells = book.sells[1:]
 		}
 	}
 }
 
 func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
-	for incoming.QuantityUnits > 0 && len(book.buys) > 0 {
+	incomingRecord := s.orders[incoming.OrderID]
+
+	for incomingRecord.RemainingQuantity > 0 && len(book.buys) > 0 {
 		resting := book.buys[0]
-		if incoming.LimitPrice > resting.LimitPrice {
+		restingRecord := s.orders[resting.OrderID]
+		if incomingRecord.LimitPrice > restingRecord.LimitPrice {
 			return
 		}
 
-		matchedUnits := minInt64(incoming.QuantityUnits, resting.QuantityUnits)
-		executionPrice := resting.LimitPrice
-		s.appendMatch(result, resting, incoming, matchedUnits, executionPrice, occurredAt)
+		matchedUnits := minInt64(incomingRecord.RemainingQuantity, restingRecord.RemainingQuantity)
+		executionPrice := restingRecord.LimitPrice
+		s.appendMatch(result, restingRecord, incomingRecord, matchedUnits, executionPrice, occurredAt)
 
-		incoming.QuantityUnits -= matchedUnits
-		resting.QuantityUnits -= matchedUnits
-		if resting.QuantityUnits == 0 {
+		incomingRecord.RemainingQuantity -= matchedUnits
+		restingRecord.RemainingQuantity -= matchedUnits
+		incomingRecord.LastUpdatedAt = occurredAt
+		restingRecord.LastUpdatedAt = occurredAt
+		s.refreshOrderStatus(incomingRecord)
+		s.refreshOrderStatus(restingRecord)
+		if restingRecord.RemainingQuantity == 0 {
 			book.buys = book.buys[1:]
 		}
 	}
 }
 
-func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *restingOrder, sellOrder *restingOrder, matchedUnits int64, executionPrice int64, occurredAt string) {
+func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, matchedUnits int64, executionPrice int64, occurredAt string) {
 	executionID := fmt.Sprintf("exec-%s-%s-%d", buyOrder.OrderID, sellOrder.OrderID, len(result.Trades)+1)
 	tradeID := fmt.Sprintf("trade-%s-%s-%d", buyOrder.OrderID, sellOrder.OrderID, len(result.Trades)+1)
 
@@ -240,6 +292,17 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *restin
 	})
 }
 
+func (s *Service) refreshOrderStatus(record *orderRecord) {
+	switch {
+	case record.RemainingQuantity == record.OriginalQuantity:
+		record.Status = domain.OrderStatusAccepted
+	case record.RemainingQuantity == 0:
+		record.Status = domain.OrderStatusFilled
+	default:
+		record.Status = domain.OrderStatusPartiallyFilled
+	}
+}
+
 func minInt64(a int64, b int64) int64 {
 	if a < b {
 		return a
@@ -247,9 +310,9 @@ func minInt64(a int64, b int64) int64 {
 	return b
 }
 
-func insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
+func (s *Service) insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
 	for idx, order := range existing {
-		if incoming.LimitPrice > order.LimitPrice {
+		if s.orders[incoming.OrderID].LimitPrice > s.orders[order.OrderID].LimitPrice {
 			return insertAt(existing, incoming, idx)
 		}
 	}
@@ -257,9 +320,9 @@ func insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder
 	return append(existing, incoming)
 }
 
-func insertSell(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
+func (s *Service) insertSell(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
 	for idx, order := range existing {
-		if incoming.LimitPrice < order.LimitPrice {
+		if s.orders[incoming.OrderID].LimitPrice < s.orders[order.OrderID].LimitPrice {
 			return insertAt(existing, incoming, idx)
 		}
 	}

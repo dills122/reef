@@ -7,6 +7,15 @@ const (
 	SideSell Side = "SELL"
 )
 
+type OrderStatus string
+
+const (
+	OrderStatusAccepted        OrderStatus = "ACCEPTED"
+	OrderStatusPartiallyFilled OrderStatus = "PARTIALLY_FILLED"
+	OrderStatusFilled          OrderStatus = "FILLED"
+	OrderStatusRejected        OrderStatus = "REJECTED"
+)
+
 type SubmitOrder struct {
 	CommandID     string `json:"commandId"`
 	CorrelationID string `json:"correlationId"`
@@ -37,6 +46,18 @@ type OrderRejected struct {
 	Code       string `json:"code"`
 	Reason     string `json:"reason"`
 	OccurredAt string `json:"occurredAt"`
+}
+
+type OrderState struct {
+	OrderID           string      `json:"orderId"`
+	InstrumentID      string      `json:"instrumentId"`
+	Side              Side        `json:"side"`
+	Status            OrderStatus `json:"status"`
+	OriginalQuantity  string      `json:"originalQuantity"`
+	RemainingQuantity string      `json:"remainingQuantity"`
+	LimitPrice        string      `json:"limitPrice"`
+	Currency          string      `json:"currency"`
+	LastUpdatedAt     string      `json:"lastUpdatedAt"`
 }
 
 type ExecutionCreated struct {

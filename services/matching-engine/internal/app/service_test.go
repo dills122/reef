@@ -33,6 +33,15 @@ func TestSubmitOrderAcceptsAndRestsFirstOrder(t *testing.T) {
 	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
 		t.Fatalf("expected one resting buy order")
 	}
+
+	state, ok := service.OrderState("ord-1")
+	if !ok {
+		t.Fatalf("expected order state for ord-1")
+	}
+
+	if state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
+		t.Fatalf("unexpected accepted order state: %#v", state)
+	}
 }
 
 func TestSubmitOrderMatchesCrossingOrder(t *testing.T) {
@@ -74,6 +83,16 @@ func TestSubmitOrderMatchesCrossingOrder(t *testing.T) {
 
 	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
 		t.Fatalf("expected no resting buy orders after full match")
+	}
+
+	buyState, ok := service.OrderState("ord-buy-1")
+	if !ok || buyState.Status != domain.OrderStatusFilled {
+		t.Fatalf("expected filled buy order state, got %#v", buyState)
+	}
+
+	sellState, ok := service.OrderState("ord-sell-1")
+	if !ok || sellState.Status != domain.OrderStatusFilled {
+		t.Fatalf("expected filled sell order state, got %#v", sellState)
 	}
 }
 
@@ -130,6 +149,16 @@ func TestSubmitOrderPartiallyFillsAndLeavesResidualLiquidity(t *testing.T) {
 	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
 		t.Fatalf("expected one resting sell order after residual fill")
 	}
+
+	buyState, ok := service.OrderState("ord-buy-1")
+	if !ok || buyState.Status != domain.OrderStatusFilled {
+		t.Fatalf("expected filled buy order state, got %#v", buyState)
+	}
+
+	secondSellState, ok := service.OrderState("ord-sell-2")
+	if !ok || secondSellState.Status != domain.OrderStatusPartiallyFilled || secondSellState.RemainingQuantity != "10" {
+		t.Fatalf("expected partially filled sell order state, got %#v", secondSellState)
+	}
 }
 
 func TestSubmitOrderMatchesAcrossMultipleRestingOrders(t *testing.T) {
@@ -184,6 +213,11 @@ func TestSubmitOrderMatchesAcrossMultipleRestingOrders(t *testing.T) {
 
 	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
 		t.Fatalf("expected one remaining resting sell order after sweep")
+	}
+
+	restingState, ok := service.OrderState("ord-sell-2")
+	if !ok || restingState.Status != domain.OrderStatusPartiallyFilled || restingState.RemainingQuantity != "15" {
+		t.Fatalf("expected remaining resting sell state, got %#v", restingState)
 	}
 }
 
