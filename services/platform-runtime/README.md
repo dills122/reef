@@ -13,6 +13,25 @@ Responsibilities:
 - integrate with the matching engine
 - host simulation control initially, unless extracted later
 
+Current state:
+
+- Kotlin source and Gradle build scaffold
+- `GET /health`
+- `POST /orders/submit`
+- placeholder proxy path to the Go matching engine
+
+Run intent once Gradle is available:
+
+```bash
+cd services/platform-runtime
+./gradlew run
+```
+
+Current limitation:
+
+- this machine does not currently have Gradle or Kotlin tooling installed
+- the source layout is ready, but runtime execution was not verified locally
+
 Build guidance:
 
 - follow [`docs/steering/architecture.md`](../../docs/steering/architecture.md)

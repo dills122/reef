@@ -1,8 +1,8 @@
 # Proto Contracts
 
-This directory will hold protobuf definitions once the first runtime-to-engine contract is formalized.
+This directory now contains the first draft runtime-to-engine contract in [`order_execution.proto`](./order_execution.proto).
 
-The first planned contract slice should cover:
+Current scope:
 
 - `SubmitOrder`
 - `CancelOrder`
@@ -11,6 +11,13 @@ The first planned contract slice should cover:
 - `OrderRejected`
 - `ExecutionCreated`
 - `TradeCreated`
+- `SubmitOrderResult`
+
+Current usage model:
+
+- the `.proto` file is the canonical contract draft
+- the first runnable implementation uses HTTP JSON with equivalent shapes
+- protobuf generation can be added once the Kotlin and Go service toolchains are fully bootstrapped
 
 Contract rules:
 
