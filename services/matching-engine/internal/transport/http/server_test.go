@@ -55,3 +55,55 @@ func TestSubmitOrder(t *testing.T) {
 		t.Fatalf("expected accepted payload, got %s", rec.Body.String())
 	}
 }
+
+func TestSubmitOrderReturnsTradeForCrossingOrder(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	firstBody := []byte(`{
+		"commandId":"cmd-1",
+		"correlationId":"corr-1",
+		"actorId":"trader-1",
+		"occurredAt":"2026-03-14T18:00:00Z",
+		"orderId":"ord-buy-1",
+		"instrumentId":"AAPL",
+		"participantId":"participant-1",
+		"accountId":"account-1",
+		"side":"BUY",
+		"orderType":"LIMIT",
+		"quantityUnits":"100",
+		"limitPrice":"150250000000",
+		"currency":"USD",
+		"timeInForce":"DAY"
+	}`)
+
+	secondBody := []byte(`{
+		"commandId":"cmd-2",
+		"correlationId":"corr-2",
+		"actorId":"trader-2",
+		"occurredAt":"2026-03-14T18:01:00Z",
+		"orderId":"ord-sell-1",
+		"instrumentId":"AAPL",
+		"participantId":"participant-2",
+		"accountId":"account-2",
+		"side":"SELL",
+		"orderType":"LIMIT",
+		"quantityUnits":"100",
+		"limitPrice":"150000000000",
+		"currency":"USD",
+		"timeInForce":"DAY"
+	}`)
+
+	server.Routes().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(firstBody)))
+
+	req := httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(secondBody))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"trades"`)) {
+		t.Fatalf("expected trades payload, got %s", rec.Body.String())
+	}
+
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"buyOrderId":"ord-buy-1"`)) {
+		t.Fatalf("expected matched buy order id, got %s", rec.Body.String())
+	}
+}

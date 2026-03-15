@@ -32,7 +32,33 @@ data class EngineOrderRejected(
     val occurredAt: String
 )
 
+data class ExecutionCreated(
+    val eventId: String,
+    val executionId: String,
+    val orderId: String,
+    val instrumentId: String,
+    val quantityUnits: String,
+    val executionPrice: String,
+    val currency: String,
+    val occurredAt: String
+)
+
+data class TradeCreated(
+    val eventId: String,
+    val tradeId: String,
+    val executionId: String,
+    val buyOrderId: String,
+    val sellOrderId: String,
+    val instrumentId: String,
+    val quantityUnits: String,
+    val price: String,
+    val currency: String,
+    val occurredAt: String
+)
+
 data class SubmitOrderResult(
     val accepted: EngineOrderAccepted? = null,
-    val rejected: EngineOrderRejected? = null
+    val rejected: EngineOrderRejected? = null,
+    val executions: List<ExecutionCreated> = emptyList(),
+    val trades: List<TradeCreated> = emptyList()
 )
