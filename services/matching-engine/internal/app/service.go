@@ -124,12 +124,12 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if incoming.Side == domain.SideBuy {
 		s.matchBuy(book, incoming, &result, now)
 		if incoming.QuantityUnits > 0 {
-			book.buys = append(book.buys, incoming)
+			book.buys = insertBuy(book.buys, incoming)
 		}
 	} else {
 		s.matchSell(book, incoming, &result, now)
 		if incoming.QuantityUnits > 0 {
-			book.sells = append(book.sells, incoming)
+			book.sells = insertSell(book.sells, incoming)
 		}
 	}
 
@@ -245,4 +245,31 @@ func minInt64(a int64, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
+	for idx, order := range existing {
+		if incoming.LimitPrice > order.LimitPrice {
+			return insertAt(existing, incoming, idx)
+		}
+	}
+
+	return append(existing, incoming)
+}
+
+func insertSell(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
+	for idx, order := range existing {
+		if incoming.LimitPrice < order.LimitPrice {
+			return insertAt(existing, incoming, idx)
+		}
+	}
+
+	return append(existing, incoming)
+}
+
+func insertAt(existing []*restingOrder, incoming *restingOrder, idx int) []*restingOrder {
+	existing = append(existing, nil)
+	copy(existing[idx+1:], existing[idx:])
+	existing[idx] = incoming
+	return existing
 }

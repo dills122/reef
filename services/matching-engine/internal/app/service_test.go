@@ -77,6 +77,116 @@ func TestSubmitOrderMatchesCrossingOrder(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderPartiallyFillsAndLeavesResidualLiquidity(t *testing.T) {
+	service := NewService()
+
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "150",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	firstMatch := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+
+	if len(firstMatch.Trades) != 1 {
+		t.Fatalf("expected one trade on first partial fill, got %#v", firstMatch.Trades)
+	}
+
+	if firstMatch.Trades[0].QuantityUnits != "100" {
+		t.Fatalf("expected 100 units on first trade, got %#v", firstMatch.Trades[0])
+	}
+
+	secondMatch := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-2",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "60",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+
+	if len(secondMatch.Trades) != 1 {
+		t.Fatalf("expected one trade on second partial fill, got %#v", secondMatch.Trades)
+	}
+
+	if secondMatch.Trades[0].QuantityUnits != "50" {
+		t.Fatalf("expected residual 50 units to match, got %#v", secondMatch.Trades[0])
+	}
+
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
+		t.Fatalf("expected no resting buy orders after residual fill")
+	}
+
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
+		t.Fatalf("expected one resting sell order after residual fill")
+	}
+}
+
+func TestSubmitOrderMatchesAcrossMultipleRestingOrders(t *testing.T) {
+	service := NewService()
+
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "75",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-2",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "80",
+		LimitPrice:    "150100000000",
+		Currency:      "USD",
+	})
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "140",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	if len(result.Executions) != 4 {
+		t.Fatalf("expected four executions across two matches, got %#v", result.Executions)
+	}
+
+	if len(result.Trades) != 2 {
+		t.Fatalf("expected two trades across two resting orders, got %#v", result.Trades)
+	}
+
+	if result.Trades[0].QuantityUnits != "75" {
+		t.Fatalf("expected first trade to consume best offer, got %#v", result.Trades[0])
+	}
+
+	if result.Trades[1].QuantityUnits != "65" {
+		t.Fatalf("expected second trade to consume remaining buy quantity, got %#v", result.Trades[1])
+	}
+
+	if result.Trades[0].SellOrderID != "ord-sell-1" || result.Trades[1].SellOrderID != "ord-sell-2" {
+		t.Fatalf("expected price-time matching order, got %#v", result.Trades)
+	}
+
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
+		t.Fatalf("expected one remaining resting sell order after sweep")
+	}
+}
+
 func TestSubmitOrderRejectsMissingInstrument(t *testing.T) {
 	service := NewService()
 
