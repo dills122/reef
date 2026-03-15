@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package reef.contracts.orderexecution.v1;
+
+option go_package = "github.com/dills122/reef/contracts/proto/orderexecution/v1;orderv1";
+
+message CommandMetadata {
+  string command_id = 1;
+  string correlation_id = 2;
+  string actor_id = 3;
+  string actor_type = 4;
+  string occurred_at = 5;
+}
+
+message OrderQuantity {
+  string units = 1;
+}
+
+message Price {
+  string nanos = 1;
+  string currency = 2;
+}
+
+message SubmitOrder {
+  CommandMetadata metadata = 1;
+  string order_id = 2;
+  string instrument_id = 3;
+  string participant_id = 4;
+  string account_id = 5;
+  OrderSide side = 6;
+  OrderType order_type = 7;
+  OrderQuantity quantity = 8;
+  Price limit_price = 9;
+  TimeInForce time_in_force = 10;
+}
+
+message CancelOrder {
+  CommandMetadata metadata = 1;
+  string order_id = 2;
+  string reason = 3;
+}
+
+message ModifyOrder {
+  CommandMetadata metadata = 1;
+  string order_id = 2;
+  OrderQuantity quantity = 3;
+  Price limit_price = 4;
+}
+
+message OrderAccepted {
+  string event_id = 1;
+  string order_id = 2;
+  string engine_order_id = 3;
+  string occurred_at = 4;
+}
+
+message OrderRejected {
+  string event_id = 1;
+  string order_id = 2;
+  string code = 3;
+  string reason = 4;
+  string occurred_at = 5;
+}
+
+message ExecutionCreated {
+  string event_id = 1;
+  string execution_id = 2;
+  string order_id = 3;
+  string instrument_id = 4;
+  OrderQuantity quantity = 5;
+  Price execution_price = 6;
+  string occurred_at = 7;
+}
+
+message TradeCreated {
+  string event_id = 1;
+  string trade_id = 2;
+  string execution_id = 3;
+  string instrument_id = 4;
+  OrderQuantity quantity = 5;
+  Price price = 6;
+  string occurred_at = 7;
+}
+
+message SubmitOrderResult {
+  oneof outcome {
+    OrderAccepted accepted = 1;
+    OrderRejected rejected = 2;
+  }
+
+  repeated ExecutionCreated executions = 3;
+  repeated TradeCreated trades = 4;
+}
+
+enum OrderSide {
+  ORDER_SIDE_UNSPECIFIED = 0;
+  ORDER_SIDE_BUY = 1;
+  ORDER_SIDE_SELL = 2;
+}
+
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  ORDER_TYPE_LIMIT = 1;
+}
+
+enum TimeInForce {
+  TIME_IN_FORCE_UNSPECIFIED = 0;
+  TIME_IN_FORCE_DAY = 1;
+  TIME_IN_FORCE_IOC = 2;
+}
