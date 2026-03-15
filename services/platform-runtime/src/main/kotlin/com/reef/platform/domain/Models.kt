@@ -62,3 +62,18 @@ data class SubmitOrderResult(
     val executions: List<ExecutionCreated> = emptyList(),
     val trades: List<TradeCreated> = emptyList()
 )
+
+data class PersistedOrder(
+    val orderId: String,
+    val engineOrderId: String,
+    val instrumentId: String,
+    val participantId: String,
+    val accountId: String,
+    val side: String,
+    val orderType: String,
+    val quantityUnits: String,
+    val limitPrice: String,
+    val currency: String,
+    val timeInForce: String,
+    val acceptedAt: String
+)
