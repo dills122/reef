@@ -322,3 +322,15 @@ Summary:
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+
+### D-023: Single-Instance Capacity Objective
+
+Status: accepted
+
+Summary:
+- Reef should track a concrete single-instance throughput objective before horizontal scale-out.
+- planning anchor target is 2,000 req/s per instance, with staged near-term and stretch targets documented in SLO baselines.
+
+Primary references:
+- [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
+- [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)

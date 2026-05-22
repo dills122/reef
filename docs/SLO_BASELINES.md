@@ -34,3 +34,26 @@ Provide explicit baseline service-level objectives for early-stage architecture 
 
 - Baselines are validated by deterministic load/simulation scenarios and CI test coverage where practical.
 - Targets are intentionally conservative for current architecture maturity and should be tightened after dev-env sprint stabilization.
+
+## Single-Instance Capacity Goal
+
+Purpose:
+- establish an explicit scaling target for one runtime + one engine instance before horizontal scaling.
+
+Targets:
+
+1. Near-term target (after dev-env + post-match foundation hardening):
+- sustained throughput: 500 to 1,000 req/s
+- latency: p95 < 20ms, p99 < 75ms on core order APIs
+
+2. Mid-term target (after persistence and rate-limit backend hardening):
+- sustained throughput: 1,500 to 3,000 req/s
+- latency: p95 < 30ms, p99 < 120ms
+
+3. Stretch target (well-tuned single-node profile):
+- sustained throughput: 3,000 to 5,000 req/s
+- maintain stable error rates and acceptable latency envelopes
+
+Planning anchor:
+- product planning objective is 2,000 req/s per instance.
+- higher throughput is treated as optimization upside, not a baseline dependency.
