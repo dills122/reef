@@ -127,5 +127,6 @@ data class RuntimeEvent(
     val correlationId: String,
     val producer: String,
     val schemaVersion: String,
+    val sequenceNumber: Long = 0,
     val occurredAt: String
 )

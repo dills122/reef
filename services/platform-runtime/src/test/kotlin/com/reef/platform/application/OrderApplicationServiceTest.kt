@@ -177,6 +177,7 @@ class OrderApplicationServiceTest {
 
         val events = service.persistedTraceEvents("trace-seq-1")
         assertEquals(listOf("OrderAccepted", "ExecutionCreated", "TradeCreated"), events.map { it.eventType })
+        assertEquals(listOf(1L, 2L, 3L), events.map { it.sequenceNumber })
         assertEquals("cmd-seq-1", events.first().causationId)
         assertTrue(events.drop(1).all { it.causationId == events.first().eventId })
         assertTrue(events.all { it.traceId == "trace-seq-1" })

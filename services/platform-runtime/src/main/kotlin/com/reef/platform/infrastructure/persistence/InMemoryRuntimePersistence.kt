@@ -18,6 +18,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
     private val events = mutableListOf<RuntimeEvent>()
+    private val traceSequences = mutableMapOf<String, Long>()
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         submitResults[commandId] = result
@@ -76,7 +77,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun saveEvent(event: RuntimeEvent) {
-        events.add(event)
+        val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
+        traceSequences[event.traceId] = nextSequence
+        events.add(event.copy(sequenceNumber = nextSequence))
     }
 
     override fun acceptedOrder(orderId: String): PersistedOrder? {

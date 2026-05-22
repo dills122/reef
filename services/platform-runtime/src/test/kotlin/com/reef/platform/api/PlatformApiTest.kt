@@ -159,6 +159,7 @@ class PlatformApiTest {
         val eventsResponse = api.events()
         assertContains(eventsResponse, "\"eventType\":\"TradeCreated\"")
         assertContains(eventsResponse, "\"producer\":\"platform-runtime\"")
+        assertContains(eventsResponse, "\"sequenceNumber\":")
 
         val ordersResponse = api.orders()
         assertContains(ordersResponse, "\"orders\"")

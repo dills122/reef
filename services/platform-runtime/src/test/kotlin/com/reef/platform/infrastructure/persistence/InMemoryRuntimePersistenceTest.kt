@@ -99,5 +99,6 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(1, persistence.eventsForOrder("ord-1").size)
         assertEquals(1, persistence.eventsForTrace("trace-1").size)
         assertEquals(1, persistence.events().size)
+        assertEquals(1L, persistence.eventsForTrace("trace-1").first().sequenceNumber)
     }
 }

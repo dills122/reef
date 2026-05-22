@@ -277,6 +277,7 @@ class PlatformApi(
               "correlationId":"${JsonFields.escape(event.correlationId)}",
               "producer":"${JsonFields.escape(event.producer)}",
               "schemaVersion":"${JsonFields.escape(event.schemaVersion)}",
+              "sequenceNumber":${event.sequenceNumber},
               "occurredAt":"${JsonFields.escape(event.occurredAt)}"
             }
             """.trimIndent()
