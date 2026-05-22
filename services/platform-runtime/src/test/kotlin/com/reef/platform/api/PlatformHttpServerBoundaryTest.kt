@@ -60,12 +60,86 @@ class PlatformHttpServerBoundaryTest {
         }
     }
 
+    @Test
+    fun apiV1SubmitReplaysFirstResponseForSameIdempotencyKey() {
+        val server = testServerWithGateway(EchoOrderEngineGateway())
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-1"
+            )
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = """
+                    {
+                      "commandId":"cmd-1",
+                      "traceId":"trace-1",
+                      "causationId":"",
+                      "correlationId":"corr-1",
+                      "actorId":"bot-1",
+                      "occurredAt":"2026-05-22T00:00:00Z",
+                      "orderId":"ord-first",
+                      "instrumentId":"AAPL",
+                      "participantId":"participant-1",
+                      "accountId":"account-1",
+                      "side":"BUY",
+                      "orderType":"LIMIT",
+                      "quantityUnits":"100",
+                      "limitPrice":"150250000000",
+                      "currency":"USD",
+                      "timeInForce":"DAY"
+                    }
+                """.trimIndent()
+            )
+            val second = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = """
+                    {
+                      "commandId":"cmd-2",
+                      "traceId":"trace-2",
+                      "causationId":"",
+                      "correlationId":"corr-2",
+                      "actorId":"bot-2",
+                      "occurredAt":"2026-05-22T00:00:01Z",
+                      "orderId":"ord-second",
+                      "instrumentId":"AAPL",
+                      "participantId":"participant-1",
+                      "accountId":"account-1",
+                      "side":"BUY",
+                      "orderType":"LIMIT",
+                      "quantityUnits":"200",
+                      "limitPrice":"150250000001",
+                      "currency":"USD",
+                      "timeInForce":"DAY"
+                    }
+                """.trimIndent()
+            )
+            assertEquals(200, first.status)
+            assertEquals(200, second.status)
+            assertEquals(first.body, second.body)
+            assertContains(second.body, "\"orderId\":\"ord-first\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
     data class HttpResponse(val status: Int, val body: String)
 
     private fun testServer(boundary: ExternalApiBoundary = ExternalApiBoundary()): com.sun.net.httpserver.HttpServer {
+        return testServerWithGateway(StaticAcceptedEngineGateway(), boundary)
+    }
+
+    private fun testServerWithGateway(
+        gateway: EngineGateway,
+        boundary: ExternalApiBoundary = ExternalApiBoundary()
+    ): com.sun.net.httpserver.HttpServer {
         val api = PlatformApi(
             OrderApplicationService(
-                engineGateway = StaticAcceptedEngineGateway()
+                engineGateway = gateway
             )
         )
         return PlatformHttpServer(
@@ -107,5 +181,26 @@ private class StaticAcceptedEngineGateway : EngineGateway {
 
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "")
+    )
+}
+
+private class EchoOrderEngineGateway : EngineGateway {
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-05-22T00:00:00Z"
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
 }

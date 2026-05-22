@@ -310,3 +310,15 @@ Summary:
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+
+### D-022: Baseline SLO Target Document
+
+Status: accepted
+
+Summary:
+- baseline SLO targets must be explicitly documented and versioned.
+- cross-stage objectives (order path, boundary, and post-match stages) should be tracked and refined as architecture matures.
+
+Primary references:
+- [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
+- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)

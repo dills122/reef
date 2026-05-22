@@ -26,23 +26,23 @@ Reference sprint doc:
 - [x] Create runtime `application/admin` command handlers
 - [x] Add admin command DTOs and result models
 - [x] Add reference data admin CLI commands
-- [ ] Add simulation control admin CLI hooks
+- [x] Add simulation control admin CLI hooks
 - [x] Add trace/event inspection admin CLI commands
-- [ ] Add calendar profile management admin CLI commands (US default + country profiles)
-- [ ] Add role/permission administration admin CLI commands
-- [ ] Add override reason code management admin commands
+- [x] Add calendar profile management admin CLI commands (US default + country profiles)
+- [x] Add role/permission administration admin CLI commands
+- [x] Add override reason code management admin commands
 - [x] Ensure admin actions emit audit events
 
 ## Workstream D: Hardening and Docs
 
 - [x] Add integration tests for transport fallback and parity
-- [ ] Add integration tests for boundary idempotency behavior
-- [ ] Add integration tests for admin CLI command flow
+- [x] Add integration tests for boundary idempotency behavior
+- [x] Add integration tests for admin CLI command flow
 - [x] Add schema governance checks for contract evolution rules
 - [x] Document injectable clock policy and determinism guardrails
-- [ ] Define baseline stage SLO targets
-- [ ] Update runbooks/startup docs for new flags and routes
-- [ ] Record any additional major design decisions in `docs/DECISIONS.md`
+- [x] Define baseline stage SLO targets
+- [x] Update runbooks/startup docs for new flags and routes
+- [x] Record any additional major design decisions in `docs/DECISIONS.md`
 
 ## Sprint Exit Checklist
 
@@ -50,7 +50,7 @@ Reference sprint doc:
 - [x] `/api/v1` write endpoints enforce idempotency key handling
 - [x] Boundary auth and rate-limit hooks are executable paths
 - [x] Admin CLI runs through reusable application layer modules
-- [ ] Calendar and role/permission admin flows are executable
-- [ ] Idempotency scope and retention behavior are validated
+- [x] Calendar and role/permission admin flows are executable
+- [x] Idempotency scope and retention behavior are validated
 - [x] Schema governance and determinism policies are documented
-- [ ] CI validates new paths
+- [x] CI validates new paths

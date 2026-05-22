@@ -65,3 +65,13 @@ Build guidance:
 - follow [`docs/steering/architecture.md`](../../docs/steering/architecture.md)
 - follow [`docs/steering/kotlin.md`](../../docs/steering/kotlin.md)
 - start as a modular monolith with clear bounded contexts
+
+Admin CLI:
+
+- entrypoint: `com.reef.platform.admin.AdminMainKt`
+- commands include:
+  - reference upserts (`instrument-upsert`, `participant-upsert`, `account-upsert`)
+  - role/permission admin (`role-upsert`, `role-assign`, `roles-list`, `actor-roles`)
+  - calendar and override management (`calendar-upsert`, `calendar-list`, `override-upsert`, `override-list`)
+  - simulation controls (`sim-start`, `sim-pause`, `sim-stop`, `sim-state`)
+  - trace inspection (`events-recent`, `trace-events`)
