@@ -14,6 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class OrderApplicationServiceTest {
     @Test
@@ -141,6 +142,37 @@ class OrderApplicationServiceTest {
 
         assertNotNull(result.accepted)
         assertEquals(1, service.persistedTraceEvents("trace-cancel-1").size)
+    }
+
+    @Test
+    fun submitOrderTraceEventsFollowExpectedSequence() {
+        val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
+        service.submitOrder(
+            SubmitOrderCommand(
+                commandId = "cmd-seq-1",
+                traceId = "trace-seq-1",
+                causationId = "",
+                correlationId = "corr-seq-1",
+                actorId = "trader-1",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-seq-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY"
+            )
+        )
+
+        val events = service.persistedTraceEvents("trace-seq-1")
+        assertEquals(listOf("OrderAccepted", "ExecutionCreated", "TradeCreated"), events.map { it.eventType })
+        assertEquals("cmd-seq-1", events.first().causationId)
+        assertTrue(events.drop(1).all { it.causationId == events.first().eventId })
+        assertTrue(events.all { it.traceId == "trace-seq-1" })
     }
 }
 
