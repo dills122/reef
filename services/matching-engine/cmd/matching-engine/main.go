@@ -25,7 +25,7 @@ func main() {
 	server := transport.NewServer(service)
 
 	if enableGRPC {
-		grpcServer, err := grpcTransport.NewServer(grpcAddr)
+		grpcServer, err := grpcTransport.NewServer(grpcAddr, service)
 		if err != nil {
 			log.Fatalf("failed to initialize gRPC server: %v", err)
 		}

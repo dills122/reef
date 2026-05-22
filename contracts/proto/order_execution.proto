@@ -102,10 +102,10 @@ message HealthCheckResponse {
 }
 
 service OrderExecutionService {
-  rpc SubmitOrder(SubmitOrder) returns (SubmitOrderResult);
-  rpc CancelOrder(CancelOrder) returns (SubmitOrderResult);
-  rpc ModifyOrder(ModifyOrder) returns (SubmitOrderResult);
-  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc SubmitOrder(reef.contracts.orderexecution.v1.SubmitOrder) returns (reef.contracts.orderexecution.v1.SubmitOrderResult);
+  rpc CancelOrder(reef.contracts.orderexecution.v1.CancelOrder) returns (reef.contracts.orderexecution.v1.SubmitOrderResult);
+  rpc ModifyOrder(reef.contracts.orderexecution.v1.ModifyOrder) returns (reef.contracts.orderexecution.v1.SubmitOrderResult);
+  rpc HealthCheck(reef.contracts.orderexecution.v1.HealthCheckRequest) returns (reef.contracts.orderexecution.v1.HealthCheckResponse);
 }
 
 enum OrderSide {
