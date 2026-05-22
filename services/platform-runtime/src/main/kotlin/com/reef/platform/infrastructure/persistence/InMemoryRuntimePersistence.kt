@@ -1,13 +1,19 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val submitResults = linkedMapOf<String, SubmitOrderResult>()
+    private val instruments = linkedMapOf<String, Instrument>()
+    private val participants = linkedMapOf<String, Participant>()
+    private val accounts = linkedMapOf<String, Account>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
@@ -19,6 +25,42 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun submitResult(commandId: String): SubmitOrderResult? {
         return submitResults[commandId]
+    }
+
+    override fun saveInstrument(instrument: Instrument) {
+        instruments[instrument.instrumentId] = instrument
+    }
+
+    override fun saveParticipant(participant: Participant) {
+        participants[participant.participantId] = participant
+    }
+
+    override fun saveAccount(account: Account) {
+        accounts[account.accountId] = account
+    }
+
+    override fun instruments(): List<Instrument> {
+        return instruments.values.toList()
+    }
+
+    override fun participants(): List<Participant> {
+        return participants.values.toList()
+    }
+
+    override fun accounts(): List<Account> {
+        return accounts.values.toList()
+    }
+
+    override fun hasInstrument(instrumentId: String): Boolean {
+        return instruments.containsKey(instrumentId)
+    }
+
+    override fun hasParticipant(participantId: String): Boolean {
+        return participants.containsKey(participantId)
+    }
+
+    override fun hasAccount(accountId: String): Boolean {
+        return accounts.containsKey(accountId)
     }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {

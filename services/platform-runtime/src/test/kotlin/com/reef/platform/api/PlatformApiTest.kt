@@ -64,6 +64,7 @@ class PlatformApiTest {
                 )
             )
         )
+        seedReferenceData(api)
 
         val response = api.submitOrder(validRequestBody())
 
@@ -91,6 +92,7 @@ class PlatformApiTest {
                 )
             )
         )
+        seedReferenceData(api)
 
         val response = api.submitOrder(validRequestBody())
 
@@ -140,6 +142,7 @@ class PlatformApiTest {
                 )
             )
         )
+        seedReferenceData(api)
 
         api.submitOrder(validRequestBody())
 
@@ -221,6 +224,25 @@ class PlatformApiTest {
         assertContains(modifyResponse, "\"accepted\"")
     }
 
+    @Test
+    fun referenceDataCrudEndpointsExposeSavedEntities() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult()
+                )
+            )
+        )
+
+        api.createInstrument("""{"instrumentId":"MSFT","symbol":"MSFT"}""")
+        api.createParticipant("""{"participantId":"participant-9","name":"Participant 9"}""")
+        api.createAccount("""{"accountId":"account-9","participantId":"participant-9"}""")
+
+        assertContains(api.instruments(), "\"instrumentId\":\"MSFT\"")
+        assertContains(api.participants(), "\"participantId\":\"participant-9\"")
+        assertContains(api.accounts(), "\"accountId\":\"account-9\"")
+    }
+
     private fun validRequestBody(): String {
         return """
             {
@@ -242,6 +264,12 @@ class PlatformApiTest {
               "timeInForce":"DAY"
             }
         """.trimIndent()
+    }
+
+    private fun seedReferenceData(api: PlatformApi) {
+        api.createInstrument("""{"instrumentId":"AAPL","symbol":"AAPL"}""")
+        api.createParticipant("""{"participantId":"participant-1","name":"Participant 1"}""")
+        api.createAccount("""{"accountId":"account-1","participantId":"participant-1"}""")
     }
 }
 

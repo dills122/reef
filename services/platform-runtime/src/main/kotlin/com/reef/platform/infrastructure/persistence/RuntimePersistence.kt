@@ -1,7 +1,10 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -9,6 +12,15 @@ import com.reef.platform.domain.TradeCreated
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
+    fun saveInstrument(instrument: Instrument)
+    fun saveParticipant(participant: Participant)
+    fun saveAccount(account: Account)
+    fun instruments(): List<Instrument>
+    fun participants(): List<Participant>
+    fun accounts(): List<Account>
+    fun hasInstrument(instrumentId: String): Boolean
+    fun hasParticipant(participantId: String): Boolean
+    fun hasAccount(accountId: String): Boolean
     fun saveAcceptedOrder(order: PersistedOrder)
     fun saveExecutions(executions: List<ExecutionCreated>)
     fun saveTrades(trades: List<TradeCreated>)

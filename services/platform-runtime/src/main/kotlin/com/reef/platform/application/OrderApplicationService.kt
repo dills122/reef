@@ -1,9 +1,12 @@
 package com.reef.platform.application
 
 import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
@@ -24,6 +27,23 @@ class OrderApplicationService(
         val existingResult = runtimePersistence.submitResult(command.commandId)
         if (existingResult != null) {
             return existingResult
+        }
+
+        val validationError = validateReferenceData(command)
+        if (validationError != null) {
+            runtimePersistence.saveSubmitResult(command.commandId, validationError)
+            val traceId = command.traceId.ifBlank { command.orderId }
+            appendLifecycleEvent(
+                command.orderId,
+                command.commandId,
+                command.correlationId,
+                traceId,
+                validationError.accepted,
+                validationError.rejected,
+                "OrderAccepted",
+                "OrderRejected"
+            )
+            return validationError
         }
 
         val result = engineGateway.submitOrder(command)
@@ -218,4 +238,57 @@ class OrderApplicationService(
     fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)
 
     fun events() = runtimePersistence.events()
+
+    fun createInstrument(instrument: Instrument) = runtimePersistence.saveInstrument(instrument)
+
+    fun createParticipant(participant: Participant) = runtimePersistence.saveParticipant(participant)
+
+    fun createAccount(account: Account) = runtimePersistence.saveAccount(account)
+
+    fun instruments() = runtimePersistence.instruments()
+
+    fun participants() = runtimePersistence.participants()
+
+    fun accounts() = runtimePersistence.accounts()
+
+    private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
+        val now = command.occurredAt
+        if (!runtimePersistence.hasInstrument(command.instrumentId)) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-missing-instrument-ref-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "instrumentId does not exist",
+                    occurredAt = now
+                )
+            )
+        }
+
+        if (!runtimePersistence.hasParticipant(command.participantId)) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-missing-participant-ref-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "participantId does not exist",
+                    occurredAt = now
+                )
+            )
+        }
+
+        if (!runtimePersistence.hasAccount(command.accountId)) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-missing-account-ref-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "accountId does not exist",
+                    occurredAt = now
+                )
+            )
+        }
+
+        return null
+    }
 }

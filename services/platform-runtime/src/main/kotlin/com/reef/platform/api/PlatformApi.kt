@@ -1,10 +1,13 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
@@ -67,6 +70,54 @@ class PlatformApi(
             limitPrice = JsonFields.extract(body, "limitPrice")
         )
         return toJson(orderService.modifyOrder(command))
+    }
+
+    fun createInstrument(body: String): String {
+        val instrument = Instrument(
+            instrumentId = JsonFields.extract(body, "instrumentId"),
+            symbol = JsonFields.extract(body, "symbol")
+        )
+        orderService.createInstrument(instrument)
+        return """{"instrumentId":"${JsonFields.escape(instrument.instrumentId)}"}"""
+    }
+
+    fun createParticipant(body: String): String {
+        val participant = Participant(
+            participantId = JsonFields.extract(body, "participantId"),
+            name = JsonFields.extract(body, "name")
+        )
+        orderService.createParticipant(participant)
+        return """{"participantId":"${JsonFields.escape(participant.participantId)}"}"""
+    }
+
+    fun createAccount(body: String): String {
+        val account = Account(
+            accountId = JsonFields.extract(body, "accountId"),
+            participantId = JsonFields.extract(body, "participantId")
+        )
+        orderService.createAccount(account)
+        return """{"accountId":"${JsonFields.escape(account.accountId)}"}"""
+    }
+
+    fun instruments(): String {
+        val values = orderService.instruments().joinToString(prefix = "[", postfix = "]") { instrument ->
+            """{"instrumentId":"${JsonFields.escape(instrument.instrumentId)}","symbol":"${JsonFields.escape(instrument.symbol)}"}"""
+        }
+        return """{"instruments":$values}"""
+    }
+
+    fun participants(): String {
+        val values = orderService.participants().joinToString(prefix = "[", postfix = "]") { participant ->
+            """{"participantId":"${JsonFields.escape(participant.participantId)}","name":"${JsonFields.escape(participant.name)}"}"""
+        }
+        return """{"participants":$values}"""
+    }
+
+    fun accounts(): String {
+        val values = orderService.accounts().joinToString(prefix = "[", postfix = "]") { account ->
+            """{"accountId":"${JsonFields.escape(account.accountId)}","participantId":"${JsonFields.escape(account.participantId)}"}"""
+        }
+        return """{"accounts":$values}"""
     }
 
     fun order(orderId: String): String {

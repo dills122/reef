@@ -103,6 +103,21 @@ data class PersistedOrder(
     val acceptedAt: String
 )
 
+data class Instrument(
+    val instrumentId: String,
+    val symbol: String
+)
+
+data class Participant(
+    val participantId: String,
+    val name: String
+)
+
+data class Account(
+    val accountId: String,
+    val participantId: String
+)
+
 data class RuntimeEvent(
     val eventId: String,
     val eventType: String,

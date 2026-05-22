@@ -3,8 +3,11 @@ package com.reef.platform.application
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -22,6 +25,7 @@ class OrderApplicationServiceTest {
         val gateway = RecordingEngineGateway()
         val persistence = InMemoryRuntimePersistence()
         val service = OrderApplicationService(gateway, persistence)
+        seedReferenceData(service)
 
         val result = service.submitOrder(
             SubmitOrderCommand(
@@ -58,6 +62,7 @@ class OrderApplicationServiceTest {
     @Test
     fun submitOrderDoesNotPersistRejectedArtifacts() {
         val service = OrderApplicationService(RejectingEngineGateway(), InMemoryRuntimePersistence())
+        seedReferenceData(service)
 
         val result = service.submitOrder(
             SubmitOrderCommand(
@@ -93,6 +98,7 @@ class OrderApplicationServiceTest {
         val gateway = RecordingEngineGateway()
         val persistence = InMemoryRuntimePersistence()
         val service = OrderApplicationService(gateway, persistence)
+        seedReferenceData(service)
 
         val command = SubmitOrderCommand(
             commandId = "cmd-idempotent-1",
@@ -147,6 +153,7 @@ class OrderApplicationServiceTest {
     @Test
     fun submitOrderTraceEventsFollowExpectedSequence() {
         val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
+        seedReferenceData(service)
         service.submitOrder(
             SubmitOrderCommand(
                 commandId = "cmd-seq-1",
@@ -174,6 +181,40 @@ class OrderApplicationServiceTest {
         assertTrue(events.drop(1).all { it.causationId == events.first().eventId })
         assertTrue(events.all { it.traceId == "trace-seq-1" })
     }
+
+    @Test
+    fun submitOrderRejectsWhenReferenceDataMissing() {
+        val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
+        val result = service.submitOrder(
+            SubmitOrderCommand(
+                commandId = "cmd-missing-ref-1",
+                traceId = "trace-missing-ref-1",
+                causationId = "",
+                correlationId = "corr-missing-ref-1",
+                actorId = "trader-1",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-missing-ref-1",
+                instrumentId = "UNKNOWN",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY"
+            )
+        )
+
+        assertNotNull(result.rejected)
+        assertEquals("REFERENCE_DATA_ERROR", result.rejected?.code)
+    }
+}
+
+private fun seedReferenceData(service: OrderApplicationService) {
+    service.createInstrument(Instrument("AAPL", "AAPL"))
+    service.createParticipant(Participant("participant-1", "Participant 1"))
+    service.createAccount(Account("account-1", "participant-1"))
 }
 
 private class RecordingEngineGateway : EngineGateway {

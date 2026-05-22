@@ -5,6 +5,9 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.Participant
+import com.reef.platform.domain.Account
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -17,6 +20,9 @@ class InMemoryRuntimePersistenceTest {
             "cmd-1",
             SubmitOrderResult()
         )
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
 
         persistence.saveAcceptedOrder(
             PersistedOrder(
@@ -79,6 +85,12 @@ class InMemoryRuntimePersistenceTest {
         )
 
         assertEquals(SubmitOrderResult(), persistence.submitResult("cmd-1"))
+        assertEquals(1, persistence.instruments().size)
+        assertEquals(1, persistence.participants().size)
+        assertEquals(1, persistence.accounts().size)
+        assertEquals(true, persistence.hasInstrument("AAPL"))
+        assertEquals(true, persistence.hasParticipant("participant-1"))
+        assertEquals(true, persistence.hasAccount("account-1"))
         assertNotNull(persistence.acceptedOrder("ord-1"))
         assertEquals(1, persistence.acceptedOrders().size)
         assertEquals(1, persistence.executionsForOrder("ord-1").size)

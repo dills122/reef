@@ -26,6 +26,48 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.submitOrder(body))
         }
 
+        server.createContext("/reference/instruments") { exchange ->
+            when (exchange.requestMethod) {
+                "POST" -> {
+                    val body = exchange.requestBody.bufferedReader().readText()
+                    writeJson(exchange, 200, api.createInstrument(body))
+                }
+                "GET" -> writeJson(exchange, 200, api.instruments())
+                else -> {
+                    exchange.sendResponseHeaders(405, -1)
+                    exchange.close()
+                }
+            }
+        }
+
+        server.createContext("/reference/participants") { exchange ->
+            when (exchange.requestMethod) {
+                "POST" -> {
+                    val body = exchange.requestBody.bufferedReader().readText()
+                    writeJson(exchange, 200, api.createParticipant(body))
+                }
+                "GET" -> writeJson(exchange, 200, api.participants())
+                else -> {
+                    exchange.sendResponseHeaders(405, -1)
+                    exchange.close()
+                }
+            }
+        }
+
+        server.createContext("/reference/accounts") { exchange ->
+            when (exchange.requestMethod) {
+                "POST" -> {
+                    val body = exchange.requestBody.bufferedReader().readText()
+                    writeJson(exchange, 200, api.createAccount(body))
+                }
+                "GET" -> writeJson(exchange, 200, api.accounts())
+                else -> {
+                    exchange.sendResponseHeaders(405, -1)
+                    exchange.close()
+                }
+            }
+        }
+
         server.createContext("/orders/cancel") { exchange ->
             if (exchange.requestMethod != "POST") {
                 exchange.sendResponseHeaders(405, -1)
