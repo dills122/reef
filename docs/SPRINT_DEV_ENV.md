@@ -25,6 +25,11 @@ In scope:
   - seed/reference data baseline
 - health/readiness gating and startup ordering
 - runbook documentation and troubleshooting notes
+- single-Postgres, split-ready persistence architecture:
+  - domain schema isolation (`runtime`, `auth`, `admin`, `boundary`)
+  - per-domain migration organization
+  - unified DB env var contract
+  - extraction-ready guardrails (no cross-domain DB coupling)
 
 Out of scope:
 - Kubernetes manifests and production orchestration
@@ -66,9 +71,16 @@ Tasks:
 1. Add DB initialization/migration scripts for required runtime tables.
 2. Add seed scripts for required reference data.
 3. Add `dev-reset` path (down + volume cleanup + reseed).
+4. Create domain schemas (`runtime`, `auth`, `admin`, `boundary`) in one Postgres instance.
+5. Organize migrations by domain (separate folders, forward-only).
+6. Define canonical DB env var contract and map all runtime/admin/boundary persistence to it.
+7. Enforce split-readiness guardrails:
+   - no cross-schema foreign keys across domain boundaries
+   - no cross-domain repository coupling in application code
 
 Exit criteria:
 - clean machine can bootstrap to working state deterministically
+- single-instance Postgres runs with explicit domain schemas and split-ready migration boundaries
 
 ### Workstream C: Developer Entry Points and Smoke Validation
 
@@ -137,6 +149,12 @@ optional profiles drift from base stack.
 
 Mitigation:
 add CI/dev checks that run base and profiled smoke paths regularly.
+
+Risk:
+single-DB implementation creates hidden coupling that blocks future scoped DB extraction.
+
+Mitigation:
+enforce domain schemas, per-domain migrations, and repository boundary rules in this sprint.
 
 Risk:
 dev commands become too bespoke.
