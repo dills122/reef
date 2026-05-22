@@ -23,6 +23,8 @@ class OrderApplicationServiceTest {
         val result = service.submitOrder(
             SubmitOrderCommand(
                 commandId = "cmd-1",
+                traceId = "trace-1",
+                causationId = "",
                 correlationId = "corr-1",
                 actorId = "trader-1",
                 occurredAt = "2026-03-14T18:00:00Z",
@@ -46,6 +48,7 @@ class OrderApplicationServiceTest {
         assertEquals(1, service.persistedExecutions("ord-1").size)
         assertEquals(1, service.persistedTrades("ord-1").size)
         assertEquals(3, service.persistedEvents("ord-1").size)
+        assertEquals(3, service.persistedTraceEvents("trace-1").size)
     }
 
     @Test
@@ -55,6 +58,8 @@ class OrderApplicationServiceTest {
         val result = service.submitOrder(
             SubmitOrderCommand(
                 commandId = "cmd-2",
+                traceId = "trace-2",
+                causationId = "",
                 correlationId = "corr-2",
                 actorId = "trader-2",
                 occurredAt = "2026-03-14T18:00:00Z",
@@ -76,6 +81,7 @@ class OrderApplicationServiceTest {
         assertEquals(0, service.persistedExecutions("ord-2").size)
         assertEquals(0, service.persistedTrades("ord-2").size)
         assertEquals(1, service.persistedEvents("ord-2").size)
+        assertEquals(1, service.persistedTraceEvents("trace-2").size)
     }
 }
 

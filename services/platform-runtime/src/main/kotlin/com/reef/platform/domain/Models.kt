@@ -2,6 +2,8 @@ package com.reef.platform.domain
 
 data class SubmitOrderCommand(
     val commandId: String,
+    val traceId: String,
+    val causationId: String,
     val correlationId: String,
     val actorId: String,
     val occurredAt: String,
@@ -82,5 +84,10 @@ data class RuntimeEvent(
     val eventId: String,
     val eventType: String,
     val orderId: String,
+    val traceId: String,
+    val causationId: String,
+    val correlationId: String,
+    val producer: String,
+    val schemaVersion: String,
     val occurredAt: String
 )

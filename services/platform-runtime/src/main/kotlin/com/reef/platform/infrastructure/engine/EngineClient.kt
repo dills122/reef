@@ -23,6 +23,8 @@ class EngineClient : EngineGateway {
         val payload = """
             {
               "commandId":"${JsonFields.escape(command.commandId)}",
+              "traceId":"${JsonFields.escape(command.traceId)}",
+              "causationId":"${JsonFields.escape(command.causationId)}",
               "correlationId":"${JsonFields.escape(command.correlationId)}",
               "actorId":"${JsonFields.escape(command.actorId)}",
               "occurredAt":"${JsonFields.escape(command.occurredAt)}",

@@ -64,6 +64,11 @@ class InMemoryRuntimePersistenceTest {
                 eventId = "evt-order-accepted-1",
                 eventType = "OrderAccepted",
                 orderId = "ord-1",
+                traceId = "trace-1",
+                causationId = "cmd-1",
+                correlationId = "corr-1",
+                producer = "platform-runtime",
+                schemaVersion = "v1",
                 occurredAt = "2026-03-14T18:00:00Z"
             )
         )
@@ -74,6 +79,7 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(1, persistence.trades().size)
         assertEquals(1, persistence.tradesForOrder("ord-1").size)
         assertEquals(1, persistence.eventsForOrder("ord-1").size)
+        assertEquals(1, persistence.eventsForTrace("trace-1").size)
         assertEquals(1, persistence.events().size)
     }
 }

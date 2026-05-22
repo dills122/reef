@@ -60,6 +60,8 @@ class EngineClientIntegrationTest {
             val result = client.submitOrder(
                 SubmitOrderCommand(
                     commandId = "cmd-1",
+                    traceId = "trace-1",
+                    causationId = "",
                     correlationId = "corr-1",
                     actorId = "trader-1",
                     occurredAt = "2026-03-14T18:00:00Z",

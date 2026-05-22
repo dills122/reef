@@ -148,9 +148,12 @@ class PlatformApiTest {
         val orderEventsResponse = api.orderEvents("ord-1")
         assertContains(orderEventsResponse, "\"events\"")
         assertContains(orderEventsResponse, "\"eventType\":\"OrderAccepted\"")
+        assertContains(orderEventsResponse, "\"traceId\":\"trace-1\"")
+        assertContains(orderEventsResponse, "\"causationId\":\"cmd-1\"")
 
         val eventsResponse = api.events()
         assertContains(eventsResponse, "\"eventType\":\"TradeCreated\"")
+        assertContains(eventsResponse, "\"producer\":\"platform-runtime\"")
 
         val ordersResponse = api.orders()
         assertContains(ordersResponse, "\"orders\"")
@@ -159,12 +162,18 @@ class PlatformApiTest {
         val tradesResponse = api.trades()
         assertContains(tradesResponse, "\"trades\"")
         assertContains(tradesResponse, "\"tradeId\":\"trade-1\"")
+
+        val traceEventsResponse = api.traceEvents("trace-1")
+        assertContains(traceEventsResponse, "\"traceId\":\"trace-1\"")
+        assertContains(traceEventsResponse, "\"events\"")
     }
 
     private fun validRequestBody(): String {
         return """
             {
               "commandId":"cmd-1",
+              "traceId":"trace-1",
+              "causationId":"",
               "correlationId":"corr-1",
               "actorId":"trader-1",
               "occurredAt":"2026-03-14T18:00:00Z",

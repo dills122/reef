@@ -13,8 +13,12 @@ class OrderApplicationService(
     private val engineGateway: EngineGateway = EngineClient(),
     private val runtimePersistence: RuntimePersistence = InMemoryRuntimePersistence()
 ) {
+    private val eventProducer = "platform-runtime"
+    private val eventSchemaVersion = "v1"
+
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         val result = engineGateway.submitOrder(command)
+        val traceId = command.traceId.ifBlank { command.orderId }
 
         val accepted = result.accepted
         if (accepted != null) {
@@ -41,6 +45,11 @@ class OrderApplicationService(
                     eventId = accepted.eventId,
                     eventType = "OrderAccepted",
                     orderId = accepted.orderId,
+                    traceId = traceId,
+                    causationId = command.commandId,
+                    correlationId = command.correlationId,
+                    producer = eventProducer,
+                    schemaVersion = eventSchemaVersion,
                     occurredAt = accepted.occurredAt
                 )
             )
@@ -50,6 +59,11 @@ class OrderApplicationService(
                         eventId = execution.eventId,
                         eventType = "ExecutionCreated",
                         orderId = execution.orderId,
+                        traceId = traceId,
+                        causationId = accepted.eventId,
+                        correlationId = command.correlationId,
+                        producer = eventProducer,
+                        schemaVersion = eventSchemaVersion,
                         occurredAt = execution.occurredAt
                     )
                 )
@@ -60,6 +74,11 @@ class OrderApplicationService(
                         eventId = trade.eventId,
                         eventType = "TradeCreated",
                         orderId = command.orderId,
+                        traceId = traceId,
+                        causationId = accepted.eventId,
+                        correlationId = command.correlationId,
+                        producer = eventProducer,
+                        schemaVersion = eventSchemaVersion,
                         occurredAt = trade.occurredAt
                     )
                 )
@@ -72,6 +91,11 @@ class OrderApplicationService(
                         eventId = rejected.eventId,
                         eventType = "OrderRejected",
                         orderId = rejected.orderId,
+                        traceId = traceId,
+                        causationId = command.commandId,
+                        correlationId = command.correlationId,
+                        producer = eventProducer,
+                        schemaVersion = eventSchemaVersion,
                         occurredAt = rejected.occurredAt
                     )
                 )
@@ -92,6 +116,8 @@ class OrderApplicationService(
     fun persistedTrades() = runtimePersistence.trades()
 
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
+
+    fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)
 
     fun events() = runtimePersistence.events()
 }

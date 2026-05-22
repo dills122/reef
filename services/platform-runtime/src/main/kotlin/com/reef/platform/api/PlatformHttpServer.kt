@@ -73,6 +73,24 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.events())
         }
 
+        server.createContext("/traces/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+
+            val path = exchange.requestURI.path.removePrefix("/traces/")
+            if (!path.endsWith("/events")) {
+                exchange.sendResponseHeaders(404, -1)
+                exchange.close()
+                return@createContext
+            }
+
+            val traceId = path.removeSuffix("/events").trimEnd('/')
+            writeJson(exchange, 200, api.traceEvents(traceId))
+        }
+
         server.start()
         println("platform-runtime listening on :$port")
     }

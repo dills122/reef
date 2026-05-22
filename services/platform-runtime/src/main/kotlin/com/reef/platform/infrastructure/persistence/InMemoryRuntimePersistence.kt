@@ -51,6 +51,10 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return events.filter { it.orderId == orderId }
     }
 
+    override fun eventsForTrace(traceId: String): List<RuntimeEvent> {
+        return events.filter { it.traceId == traceId }
+    }
+
     override fun events(): List<RuntimeEvent> {
         return events.toList()
     }

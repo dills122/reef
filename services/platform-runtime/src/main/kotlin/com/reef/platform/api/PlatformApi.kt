@@ -18,6 +18,8 @@ class PlatformApi(
     fun submitOrder(body: String): String {
         val command = SubmitOrderCommand(
             commandId = JsonFields.extract(body, "commandId"),
+            traceId = JsonFields.extract(body, "traceId"),
+            causationId = JsonFields.extract(body, "causationId"),
             correlationId = JsonFields.extract(body, "correlationId"),
             actorId = JsonFields.extract(body, "actorId"),
             occurredAt = JsonFields.extract(body, "occurredAt"),
@@ -64,6 +66,15 @@ class PlatformApi(
         return """
             {
               "events":${toEventsJson(orderService.events())}
+            }
+        """.trimIndent()
+    }
+
+    fun traceEvents(traceId: String): String {
+        return """
+            {
+              "traceId":"${JsonFields.escape(traceId)}",
+              "events":${toEventsJson(orderService.persistedTraceEvents(traceId))}
             }
         """.trimIndent()
     }
@@ -179,6 +190,11 @@ class PlatformApi(
               "eventId":"${JsonFields.escape(event.eventId)}",
               "eventType":"${JsonFields.escape(event.eventType)}",
               "orderId":"${JsonFields.escape(event.orderId)}",
+              "traceId":"${JsonFields.escape(event.traceId)}",
+              "causationId":"${JsonFields.escape(event.causationId)}",
+              "correlationId":"${JsonFields.escape(event.correlationId)}",
+              "producer":"${JsonFields.escape(event.producer)}",
+              "schemaVersion":"${JsonFields.escape(event.schemaVersion)}",
               "occurredAt":"${JsonFields.escape(event.occurredAt)}"
             }
             """.trimIndent()
