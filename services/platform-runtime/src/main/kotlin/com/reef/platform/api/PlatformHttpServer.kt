@@ -6,7 +6,8 @@ import java.net.InetSocketAddress
 
 class PlatformHttpServer(
     private val api: PlatformApi = PlatformApi(),
-    private val boundary: ExternalApiBoundary = ExternalApiBoundary()
+    private val boundary: ExternalApiBoundary = ExternalApiBoundary(),
+    private val idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
 ) {
     fun start() {
         val port = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080
@@ -38,8 +39,15 @@ class PlatformHttpServer(
                 writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
                 return@createContext
             }
+            val cached = readIdempotentResult(exchange, "/api/v1/orders/submit")
+            if (cached != null) {
+                writeJson(exchange, cached.status, cached.payload)
+                return@createContext
+            }
             val body = exchange.requestBody.bufferedReader().readText()
-            writeJson(exchange, 200, api.submitOrder(body))
+            val payload = api.submitOrder(body)
+            rememberIdempotentResult(exchange, "/api/v1/orders/submit", 200, payload)
+            writeJson(exchange, 200, payload)
         }
 
         server.createContext("/reference/instruments") { exchange ->
@@ -105,8 +113,15 @@ class PlatformHttpServer(
                 writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
                 return@createContext
             }
+            val cached = readIdempotentResult(exchange, "/api/v1/orders/cancel")
+            if (cached != null) {
+                writeJson(exchange, cached.status, cached.payload)
+                return@createContext
+            }
             val body = exchange.requestBody.bufferedReader().readText()
-            writeJson(exchange, 200, api.cancelOrder(body))
+            val payload = api.cancelOrder(body)
+            rememberIdempotentResult(exchange, "/api/v1/orders/cancel", 200, payload)
+            writeJson(exchange, 200, payload)
         }
 
         server.createContext("/orders/modify") { exchange ->
@@ -130,8 +145,15 @@ class PlatformHttpServer(
                 writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
                 return@createContext
             }
+            val cached = readIdempotentResult(exchange, "/api/v1/orders/modify")
+            if (cached != null) {
+                writeJson(exchange, cached.status, cached.payload)
+                return@createContext
+            }
             val body = exchange.requestBody.bufferedReader().readText()
-            writeJson(exchange, 200, api.modifyOrder(body))
+            val payload = api.modifyOrder(body)
+            rememberIdempotentResult(exchange, "/api/v1/orders/modify", 200, payload)
+            writeJson(exchange, 200, payload)
         }
 
         server.createContext("/orders/") { exchange ->
@@ -236,5 +258,17 @@ class PlatformHttpServer(
 
     private fun correlationId(exchange: HttpExchange): String {
         return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
+    }
+
+    private fun readIdempotentResult(exchange: HttpExchange, route: String): IdempotencyResult? {
+        val clientId = boundary.clientId(exchange.requestHeaders) ?: return null
+        val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return null
+        return idempotencyStore.find(clientId, route, idempotencyKey)
+    }
+
+    private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
+        val clientId = boundary.clientId(exchange.requestHeaders) ?: return
+        val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return
+        idempotencyStore.save(clientId, route, idempotencyKey, IdempotencyResult(status, payload))
     }
 }

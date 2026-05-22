@@ -20,6 +20,16 @@ interface IdempotencyPolicy {
     fun validate(clientId: String, route: String, idempotencyKey: String?): BoundaryError?
 }
 
+interface IdempotencyStore {
+    fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult?
+    fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult)
+}
+
+data class IdempotencyResult(
+    val status: Int,
+    val payload: String
+)
+
 class AllowAllAuthHook : AuthHook {
     override fun authorize(clientId: String, token: String?): BoundaryError? = null
 }
@@ -41,13 +51,25 @@ class RequiredIdempotencyPolicy : IdempotencyPolicy {
     }
 }
 
+class InMemoryIdempotencyStore : IdempotencyStore {
+    private val results = java.util.concurrent.ConcurrentHashMap<String, IdempotencyResult>()
+
+    override fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult? {
+        return results["$clientId|$route|$idempotencyKey"]
+    }
+
+    override fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult) {
+        results.putIfAbsent("$clientId|$route|$idempotencyKey", result)
+    }
+}
+
 class ExternalApiBoundary(
     private val authHook: AuthHook = AllowAllAuthHook(),
     private val rateLimitHook: RateLimitHook = AllowAllRateLimitHook(),
     private val idempotencyPolicy: IdempotencyPolicy = RequiredIdempotencyPolicy()
 ) {
     fun checkWrite(headers: Headers, route: String): BoundaryError? {
-        val clientId = headers.firstValue("X-Client-Id")
+        val clientId = clientId(headers)
             ?: return BoundaryError(401, "CLIENT_ID_REQUIRED", "missing X-Client-Id header")
 
         val authError = authHook.authorize(clientId, headers.firstValue("Authorization"))
@@ -56,7 +78,7 @@ class ExternalApiBoundary(
         val rateLimitError = rateLimitHook.allow(clientId, route)
         if (rateLimitError != null) return rateLimitError
 
-        return idempotencyPolicy.validate(clientId, route, headers.firstValue("Idempotency-Key"))
+        return idempotencyPolicy.validate(clientId, route, idempotencyKey(headers))
     }
 
     fun toErrorJson(error: BoundaryError, correlationId: String): String {
@@ -68,6 +90,9 @@ class ExternalApiBoundary(
             }
         """.trimIndent()
     }
+
+    fun clientId(headers: Headers): String? = headers.firstValue("X-Client-Id")
+    fun idempotencyKey(headers: Headers): String? = headers.firstValue("Idempotency-Key")
 }
 
 private fun Headers.firstValue(name: String): String? {

@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertNotNull
 
 class ExternalApiBoundaryTest {
     @Test
@@ -53,5 +54,23 @@ class ExternalApiBoundaryTest {
         assertContains(payload, "\"code\":\"RATE_LIMITED\"")
         assertContains(payload, "\"message\":\"too many requests\"")
         assertContains(payload, "\"correlationId\":\"corr-1\"")
+    }
+
+    @Test
+    fun idempotencyStoreScopesByClientRouteAndKey() {
+        val store = InMemoryIdempotencyStore()
+        store.save(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            result = IdempotencyResult(200, """{"ok":true}""")
+        )
+
+        val found = store.find("client-1", "/api/v1/orders/submit", "idem-1")
+        val otherRoute = store.find("client-1", "/api/v1/orders/cancel", "idem-1")
+
+        assertNotNull(found)
+        assertEquals(200, found.status)
+        assertNull(otherRoute)
     }
 }
