@@ -94,6 +94,20 @@ message SubmitOrderResult {
   repeated TradeCreated trades = 4;
 }
 
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string service = 1;
+  string status = 2;
+}
+
+service OrderExecutionService {
+  rpc SubmitOrder(SubmitOrder) returns (SubmitOrderResult);
+  rpc CancelOrder(CancelOrder) returns (SubmitOrderResult);
+  rpc ModifyOrder(ModifyOrder) returns (SubmitOrderResult);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
 enum OrderSide {
   ORDER_SIDE_UNSPECIFIED = 0;
   ORDER_SIDE_BUY = 1;
