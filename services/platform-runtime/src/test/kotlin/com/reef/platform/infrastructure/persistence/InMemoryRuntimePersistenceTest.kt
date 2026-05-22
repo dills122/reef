@@ -3,6 +3,7 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,6 +13,10 @@ class InMemoryRuntimePersistenceTest {
     @Test
     fun storesAndQueriesAcceptedArtifacts() {
         val persistence = InMemoryRuntimePersistence()
+        persistence.saveSubmitResult(
+            "cmd-1",
+            SubmitOrderResult()
+        )
 
         persistence.saveAcceptedOrder(
             PersistedOrder(
@@ -73,6 +78,7 @@ class InMemoryRuntimePersistenceTest {
             )
         )
 
+        assertEquals(SubmitOrderResult(), persistence.submitResult("cmd-1"))
         assertNotNull(persistence.acceptedOrder("ord-1"))
         assertEquals(1, persistence.acceptedOrders().size)
         assertEquals(1, persistence.executionsForOrder("ord-1").size)

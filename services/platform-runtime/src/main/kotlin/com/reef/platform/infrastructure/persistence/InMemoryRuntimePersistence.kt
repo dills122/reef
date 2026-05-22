@@ -3,13 +3,23 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 
 class InMemoryRuntimePersistence : RuntimePersistence {
+    private val submitResults = linkedMapOf<String, SubmitOrderResult>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
     private val events = mutableListOf<RuntimeEvent>()
+
+    override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
+        submitResults[commandId] = result
+    }
+
+    override fun submitResult(commandId: String): SubmitOrderResult? {
+        return submitResults[commandId]
+    }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
         orders[order.orderId] = order

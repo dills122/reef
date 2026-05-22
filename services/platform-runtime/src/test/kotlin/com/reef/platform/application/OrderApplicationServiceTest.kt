@@ -42,6 +42,7 @@ class OrderApplicationServiceTest {
         )
 
         assertNotNull(gateway.lastCommand)
+        assertEquals(1, gateway.submitCalls)
         assertEquals("ord-1", gateway.lastCommand?.orderId)
         assertEquals("eng-ord-1", result.accepted?.engineOrderId)
         assertEquals("eng-ord-1", service.persistedOrder("ord-1")?.engineOrderId)
@@ -83,12 +84,49 @@ class OrderApplicationServiceTest {
         assertEquals(1, service.persistedEvents("ord-2").size)
         assertEquals(1, service.persistedTraceEvents("trace-2").size)
     }
+
+    @Test
+    fun submitOrderIsIdempotentByCommandId() {
+        val gateway = RecordingEngineGateway()
+        val persistence = InMemoryRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+
+        val command = SubmitOrderCommand(
+            commandId = "cmd-idempotent-1",
+            traceId = "trace-idempotent-1",
+            causationId = "",
+            correlationId = "corr-1",
+            actorId = "trader-1",
+            occurredAt = "2026-03-14T18:00:00Z",
+            orderId = "ord-idempotent-1",
+            instrumentId = "AAPL",
+            participantId = "participant-1",
+            accountId = "account-1",
+            side = "BUY",
+            orderType = "LIMIT",
+            quantityUnits = "100",
+            limitPrice = "150250000000",
+            currency = "USD",
+            timeInForce = "DAY"
+        )
+
+        val first = service.submitOrder(command)
+        val second = service.submitOrder(command)
+
+        assertEquals(first, second)
+        assertEquals(1, gateway.submitCalls)
+        assertEquals(1, service.persistedOrders().size)
+        assertEquals(1, service.persistedTrades().size)
+        assertEquals(3, service.persistedTraceEvents("trace-idempotent-1").size)
+    }
 }
 
 private class RecordingEngineGateway : EngineGateway {
     var lastCommand: SubmitOrderCommand? = null
+    var submitCalls: Int = 0
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        submitCalls += 1
         lastCommand = command
         return SubmitOrderResult(
             accepted = EngineOrderAccepted(

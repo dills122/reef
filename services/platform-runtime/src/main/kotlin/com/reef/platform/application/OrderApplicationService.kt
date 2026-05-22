@@ -17,8 +17,14 @@ class OrderApplicationService(
     private val eventSchemaVersion = "v1"
 
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        val existingResult = runtimePersistence.submitResult(command.commandId)
+        if (existingResult != null) {
+            return existingResult
+        }
+
         val result = engineGateway.submitOrder(command)
         val traceId = command.traceId.ifBlank { command.orderId }
+        runtimePersistence.saveSubmitResult(command.commandId, result)
 
         val accepted = result.accepted
         if (accepted != null) {
