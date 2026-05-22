@@ -40,6 +40,21 @@ Transport config:
 - `MATCHING_ENGINE_BASE_URL` for HTTP transport (default `http://localhost:8081`)
 - `MATCHING_ENGINE_GRPC_TARGET` for gRPC transport target (default `localhost:9081`)
 
+External boundary config:
+
+- `EXTERNAL_API_AUTH_MODE=allow-all|static-token` (default `allow-all`)
+- `EXTERNAL_API_TOKENS=client-1:token-1,client-2:token-2` (used by `static-token`)
+- `EXTERNAL_API_RATE_LIMIT_MODE=allow-all|fixed-window` (default `allow-all`)
+- `EXTERNAL_API_RATE_LIMIT_MAX` (default `120`)
+- `EXTERNAL_API_RATE_LIMIT_WINDOW_SECONDS` (default `60`)
+- `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
+
+When `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`, the runtime reuses:
+
+- `RUNTIME_DB_URL`
+- `RUNTIME_DB_USER`
+- `RUNTIME_DB_PASSWORD`
+
 Current limitation:
 
 - local verification in the Codex sandbox may still need elevated execution because Gradle opens local coordination sockets

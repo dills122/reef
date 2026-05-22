@@ -6,9 +6,17 @@ import java.net.InetSocketAddress
 
 class PlatformHttpServer(
     private val api: PlatformApi = PlatformApi(),
-    private val boundary: ExternalApiBoundary = ExternalApiBoundary(),
-    private val idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
+    private val boundary: ExternalApiBoundary,
+    private val idempotencyStore: IdempotencyStore
 ) {
+    constructor(
+        api: PlatformApi = PlatformApi()
+    ) : this(
+        api = api,
+        boundary = defaultBoundary().first,
+        idempotencyStore = defaultBoundary().second
+    )
+
     fun start() {
         val port = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080
         val server = HttpServer.create(InetSocketAddress(port), 0)
@@ -271,4 +279,15 @@ class PlatformHttpServer(
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return
         idempotencyStore.save(clientId, route, idempotencyKey, IdempotencyResult(status, payload))
     }
+}
+
+private fun defaultBoundary(): Pair<ExternalApiBoundary, IdempotencyStore> {
+    val hooks = defaultBoundaryHooks()
+    return Pair(
+        ExternalApiBoundary(
+            authHook = hooks.authHook,
+            rateLimitHook = hooks.rateLimitHook
+        ),
+        hooks.idempotencyStore
+    )
 }

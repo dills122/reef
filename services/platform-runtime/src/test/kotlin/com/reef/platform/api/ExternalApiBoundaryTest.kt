@@ -4,8 +4,9 @@ import com.sun.net.httpserver.Headers
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import java.time.Instant
 
 class ExternalApiBoundaryTest {
     @Test
@@ -72,5 +73,29 @@ class ExternalApiBoundaryTest {
         assertNotNull(found)
         assertEquals(200, found.status)
         assertNull(otherRoute)
+    }
+
+    @Test
+    fun staticTokenAuthHookRequiresMatchingClientToken() {
+        val hook = StaticTokenAuthHook(mapOf("client-1" to "token-1"))
+        assertNull(hook.authorize("client-1", "Bearer token-1"))
+        assertEquals("UNAUTHORIZED", hook.authorize("client-1", "Bearer wrong")?.code)
+        assertEquals("UNAUTHORIZED", hook.authorize("unknown", "Bearer token-1")?.code)
+    }
+
+    @Test
+    fun fixedWindowRateLimitHookRejectsAfterThreshold() {
+        val store = InMemoryRateLimitStore()
+        val hook = FixedWindowRateLimitHook(
+            store = store,
+            maxRequests = 2,
+            windowSeconds = 60,
+            clock = { Instant.ofEpochSecond(120) }
+        )
+
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+        val limited = hook.allow("client-1", "/api/v1/orders/submit")
+        assertEquals("RATE_LIMITED", limited?.code)
     }
 }
