@@ -32,7 +32,7 @@ Out of scope:
 ## Sprint Outcomes
 
 By end of sprint, Reef should have:
-- explicit runtime transport selection path (`http|grpc`) with gRPC scaffold in place
+- explicit runtime transport selection path (`http|grpc`) with gRPC path implemented
 - versioned external boundary routes and middleware hooks
 - admin use-case modules callable from CLI without HTTP coupling
 - audit/trace/idempotency standards enforced in new modules
@@ -47,7 +47,7 @@ start migration from ad hoc HTTP/JSON internals to protobuf/gRPC-ready communica
 Tasks:
 1. Extend protobuf contracts for submit/modify/cancel parity.
 2. Add matching-engine gRPC server scaffold (parallel with existing HTTP adapter).
-3. Add runtime gRPC client scaffold behind transport flag.
+3. Add runtime gRPC client behind transport flag.
 4. Keep HTTP adapter as fallback path.
 5. Add contract parity tests across transports.
 
