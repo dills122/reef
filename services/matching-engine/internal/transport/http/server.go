@@ -20,6 +20,8 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/orders/submit", s.handleSubmitOrder)
+	mux.HandleFunc("/orders/cancel", s.handleCancelOrder)
+	mux.HandleFunc("/orders/modify", s.handleModifyOrder)
 	return mux
 }
 
@@ -47,6 +49,46 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := s.service.SubmitOrder(cmd)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var cmd domain.CancelOrder
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid json payload",
+		})
+		return
+	}
+
+	result := s.service.CancelOrder(cmd)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleModifyOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var cmd domain.ModifyOrder
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid json payload",
+		})
+		return
+	}
+
+	result := s.service.ModifyOrder(cmd)
 	writeJSON(w, http.StatusOK, result)
 }
 

@@ -1,7 +1,9 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
@@ -36,6 +38,35 @@ class PlatformApi(
         )
 
         return toJson(orderService.submitOrder(command))
+    }
+
+    fun cancelOrder(body: String): String {
+        val command = CancelOrderCommand(
+            commandId = JsonFields.extract(body, "commandId"),
+            traceId = JsonFields.extract(body, "traceId"),
+            causationId = JsonFields.extract(body, "causationId"),
+            correlationId = JsonFields.extract(body, "correlationId"),
+            actorId = JsonFields.extract(body, "actorId"),
+            occurredAt = JsonFields.extract(body, "occurredAt"),
+            orderId = JsonFields.extract(body, "orderId"),
+            reason = JsonFields.extract(body, "reason")
+        )
+        return toJson(orderService.cancelOrder(command))
+    }
+
+    fun modifyOrder(body: String): String {
+        val command = ModifyOrderCommand(
+            commandId = JsonFields.extract(body, "commandId"),
+            traceId = JsonFields.extract(body, "traceId"),
+            causationId = JsonFields.extract(body, "causationId"),
+            correlationId = JsonFields.extract(body, "correlationId"),
+            actorId = JsonFields.extract(body, "actorId"),
+            occurredAt = JsonFields.extract(body, "occurredAt"),
+            orderId = JsonFields.extract(body, "orderId"),
+            quantityUnits = JsonFields.extract(body, "quantityUnits"),
+            limitPrice = JsonFields.extract(body, "limitPrice")
+        )
+        return toJson(orderService.modifyOrder(command))
     }
 
     fun order(orderId: String): String {

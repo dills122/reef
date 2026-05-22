@@ -1,9 +1,11 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -168,6 +170,57 @@ class PlatformApiTest {
         assertContains(traceEventsResponse, "\"events\"")
     }
 
+    @Test
+    fun cancelAndModifySerializeResponses() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult(
+                        accepted = EngineOrderAccepted(
+                            eventId = "evt-accepted-1",
+                            orderId = "ord-1",
+                            engineOrderId = "eng-ord-1",
+                            occurredAt = "2026-03-14T18:00:00Z"
+                        )
+                    )
+                )
+            )
+        )
+
+        val cancelResponse = api.cancelOrder(
+            """
+            {
+              "commandId":"cmd-cancel-1",
+              "traceId":"trace-1",
+              "causationId":"",
+              "correlationId":"corr-1",
+              "actorId":"trader-1",
+              "occurredAt":"2026-03-14T18:00:00Z",
+              "orderId":"ord-1",
+              "reason":"test"
+            }
+            """.trimIndent()
+        )
+        assertContains(cancelResponse, "\"accepted\"")
+
+        val modifyResponse = api.modifyOrder(
+            """
+            {
+              "commandId":"cmd-modify-1",
+              "traceId":"trace-1",
+              "causationId":"",
+              "correlationId":"corr-1",
+              "actorId":"trader-1",
+              "occurredAt":"2026-03-14T18:00:00Z",
+              "orderId":"ord-1",
+              "quantityUnits":"120",
+              "limitPrice":"150250000001"
+            }
+            """.trimIndent()
+        )
+        assertContains(modifyResponse, "\"accepted\"")
+    }
+
     private fun validRequestBody(): String {
         return """
             {
@@ -196,6 +249,14 @@ private class FakeEngineGateway(
     private val result: SubmitOrderResult
 ) : EngineGateway {
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        return result
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        return result
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
         return result
     }
 }

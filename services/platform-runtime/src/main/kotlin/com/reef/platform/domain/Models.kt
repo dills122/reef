@@ -19,6 +19,29 @@ data class SubmitOrderCommand(
     val timeInForce: String
 )
 
+data class CancelOrderCommand(
+    val commandId: String,
+    val traceId: String,
+    val causationId: String,
+    val correlationId: String,
+    val actorId: String,
+    val occurredAt: String,
+    val orderId: String,
+    val reason: String
+)
+
+data class ModifyOrderCommand(
+    val commandId: String,
+    val traceId: String,
+    val causationId: String,
+    val correlationId: String,
+    val actorId: String,
+    val occurredAt: String,
+    val orderId: String,
+    val quantityUnits: String,
+    val limitPrice: String
+)
+
 data class EngineOrderAccepted(
     val eventId: String,
     val orderId: String,

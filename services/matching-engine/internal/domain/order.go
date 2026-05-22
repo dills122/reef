@@ -13,6 +13,7 @@ const (
 	OrderStatusAccepted        OrderStatus = "ACCEPTED"
 	OrderStatusPartiallyFilled OrderStatus = "PARTIALLY_FILLED"
 	OrderStatusFilled          OrderStatus = "FILLED"
+	OrderStatusCancelled       OrderStatus = "CANCELLED"
 	OrderStatusRejected        OrderStatus = "REJECTED"
 )
 
@@ -31,6 +32,29 @@ type SubmitOrder struct {
 	LimitPrice    string `json:"limitPrice"`
 	Currency      string `json:"currency"`
 	TimeInForce   string `json:"timeInForce"`
+}
+
+type CancelOrder struct {
+	CommandID     string `json:"commandId"`
+	TraceID       string `json:"traceId"`
+	CausationID   string `json:"causationId"`
+	CorrelationID string `json:"correlationId"`
+	ActorID       string `json:"actorId"`
+	OccurredAt    string `json:"occurredAt"`
+	OrderID       string `json:"orderId"`
+	Reason        string `json:"reason"`
+}
+
+type ModifyOrder struct {
+	CommandID     string `json:"commandId"`
+	TraceID       string `json:"traceId"`
+	CausationID   string `json:"causationId"`
+	CorrelationID string `json:"correlationId"`
+	ActorID       string `json:"actorId"`
+	OccurredAt    string `json:"occurredAt"`
+	OrderID       string `json:"orderId"`
+	QuantityUnits string `json:"quantityUnits"`
+	LimitPrice    string `json:"limitPrice"`
 }
 
 type OrderAccepted struct {

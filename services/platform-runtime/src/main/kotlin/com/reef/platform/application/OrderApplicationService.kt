@@ -1,5 +1,9 @@
 package com.reef.platform.application
 
+import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.EngineOrderAccepted
+import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
@@ -109,6 +113,94 @@ class OrderApplicationService(
         }
 
         return result
+    }
+
+    fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        val existingResult = runtimePersistence.submitResult(command.commandId)
+        if (existingResult != null) {
+            return existingResult
+        }
+
+        val result = engineGateway.cancelOrder(command)
+        val traceId = command.traceId.ifBlank { command.orderId }
+        runtimePersistence.saveSubmitResult(command.commandId, result)
+        appendLifecycleEvent(
+            command.orderId,
+            command.commandId,
+            command.correlationId,
+            traceId,
+            result.accepted,
+            result.rejected,
+            "OrderCancelled",
+            "OrderCancelRejected"
+        )
+        return result
+    }
+
+    fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        val existingResult = runtimePersistence.submitResult(command.commandId)
+        if (existingResult != null) {
+            return existingResult
+        }
+
+        val result = engineGateway.modifyOrder(command)
+        val traceId = command.traceId.ifBlank { command.orderId }
+        runtimePersistence.saveSubmitResult(command.commandId, result)
+        appendLifecycleEvent(
+            command.orderId,
+            command.commandId,
+            command.correlationId,
+            traceId,
+            result.accepted,
+            result.rejected,
+            "OrderModified",
+            "OrderModifyRejected"
+        )
+        return result
+    }
+
+    private fun appendLifecycleEvent(
+        defaultOrderId: String,
+        commandId: String,
+        correlationId: String,
+        traceId: String,
+        accepted: EngineOrderAccepted?,
+        rejected: EngineOrderRejected?,
+        acceptedEventType: String,
+        rejectedEventType: String
+    ) {
+        if (accepted != null) {
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = accepted.eventId,
+                    eventType = acceptedEventType,
+                    orderId = accepted.orderId.ifBlank { defaultOrderId },
+                    traceId = traceId,
+                    causationId = commandId,
+                    correlationId = correlationId,
+                    producer = eventProducer,
+                    schemaVersion = eventSchemaVersion,
+                    occurredAt = accepted.occurredAt
+                )
+            )
+            return
+        }
+
+        if (rejected != null) {
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = rejected.eventId,
+                    eventType = rejectedEventType,
+                    orderId = rejected.orderId.ifBlank { defaultOrderId },
+                    traceId = traceId,
+                    causationId = commandId,
+                    correlationId = correlationId,
+                    producer = eventProducer,
+                    schemaVersion = eventSchemaVersion,
+                    occurredAt = rejected.occurredAt
+                )
+            )
+        }
     }
 
     fun persistedOrder(orderId: String) = runtimePersistence.acceptedOrder(orderId)

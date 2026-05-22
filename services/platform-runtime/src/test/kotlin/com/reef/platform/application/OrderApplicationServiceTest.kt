@@ -3,6 +3,8 @@ package com.reef.platform.application
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -119,6 +121,27 @@ class OrderApplicationServiceTest {
         assertEquals(1, service.persistedTrades().size)
         assertEquals(3, service.persistedTraceEvents("trace-idempotent-1").size)
     }
+
+    @Test
+    fun cancelOrderPersistsLifecycleEvent() {
+        val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
+
+        val result = service.cancelOrder(
+            CancelOrderCommand(
+                commandId = "cmd-cancel-1",
+                traceId = "trace-cancel-1",
+                causationId = "",
+                correlationId = "corr-cancel-1",
+                actorId = "trader-1",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-1",
+                reason = "user requested"
+            )
+        )
+
+        assertNotNull(result.accepted)
+        assertEquals(1, service.persistedTraceEvents("trace-cancel-1").size)
+    }
 }
 
 private class RecordingEngineGateway : EngineGateway {
@@ -163,6 +186,30 @@ private class RecordingEngineGateway : EngineGateway {
             )
         )
     }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        submitCalls += 1
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-cancel-1",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-03-14T18:00:00Z"
+            )
+        )
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        submitCalls += 1
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-modify-1",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-03-14T18:00:00Z"
+            )
+        )
+    }
 }
 
 private class RejectingEngineGateway : EngineGateway {
@@ -174,6 +221,44 @@ private class RejectingEngineGateway : EngineGateway {
                 code = "VALIDATION_ERROR",
                 reason = "rejected",
                 occurredAt = "2026-03-14T18:00:00Z"
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        return submitOrder(
+            SubmitOrderCommand(
+                commandId = command.commandId,
+                traceId = command.traceId,
+                causationId = command.causationId,
+                correlationId = command.correlationId,
+                actorId = command.actorId,
+                occurredAt = command.occurredAt,
+                orderId = command.orderId,
+                instrumentId = "",
+                participantId = "",
+                accountId = "",
+                side = "",
+                orderType = "",
+                quantityUnits = "",
+                limitPrice = "",
+                currency = "",
+                timeInForce = ""
+            )
+        )
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        return cancelOrder(
+            CancelOrderCommand(
+                commandId = command.commandId,
+                traceId = command.traceId,
+                causationId = command.causationId,
+                correlationId = command.correlationId,
+                actorId = command.actorId,
+                occurredAt = command.occurredAt,
+                orderId = command.orderId,
+                reason = ""
             )
         )
     }

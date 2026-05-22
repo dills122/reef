@@ -26,6 +26,26 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.submitOrder(body))
         }
 
+        server.createContext("/orders/cancel") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            writeJson(exchange, 200, api.cancelOrder(body))
+        }
+
+        server.createContext("/orders/modify") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            writeJson(exchange, 200, api.modifyOrder(body))
+        }
+
         server.createContext("/orders/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 exchange.sendResponseHeaders(405, -1)
