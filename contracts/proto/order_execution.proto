@@ -3,6 +3,8 @@ syntax = "proto3";
 package reef.contracts.orderexecution.v1;
 
 option go_package = "github.com/dills122/reef/contracts/proto/orderexecution/v1;orderv1";
+option java_package = "reef.contracts.orderexecution.v1";
+option java_multiple_files = true;
 
 message CommandMetadata {
   string command_id = 1;
@@ -92,6 +94,20 @@ message SubmitOrderResult {
 
   repeated ExecutionCreated executions = 3;
   repeated TradeCreated trades = 4;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string service = 1;
+  string status = 2;
+}
+
+service OrderExecutionService {
+  rpc SubmitOrder(reef.contracts.orderexecution.v1.SubmitOrder) returns (reef.contracts.orderexecution.v1.SubmitOrderResult);
+  rpc CancelOrder(reef.contracts.orderexecution.v1.CancelOrder) returns (reef.contracts.orderexecution.v1.SubmitOrderResult);
+  rpc ModifyOrder(reef.contracts.orderexecution.v1.ModifyOrder) returns (reef.contracts.orderexecution.v1.SubmitOrderResult);
+  rpc HealthCheck(reef.contracts.orderexecution.v1.HealthCheckRequest) returns (reef.contracts.orderexecution.v1.HealthCheckResponse);
 }
 
 enum OrderSide {

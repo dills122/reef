@@ -130,3 +130,13 @@ data class RuntimeEvent(
     val sequenceNumber: Long = 0,
     val occurredAt: String
 )
+
+data class RoleDefinition(
+    val roleId: String,
+    val permissions: List<String>
+)
+
+data class ActorRoleBinding(
+    val actorId: String,
+    val roleId: String
+)

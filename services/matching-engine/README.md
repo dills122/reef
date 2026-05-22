@@ -7,6 +7,7 @@ Current state:
 - runnable HTTP service
 - `GET /health`
 - `POST /orders/submit`
+- gRPC server scaffold behind env flag (`MATCHING_ENGINE_ENABLE_GRPC=1`)
 - placeholder acceptance and validation logic only
 - tested with `go test ./...`
 
@@ -15,6 +16,13 @@ Run locally:
 ```bash
 cd services/matching-engine
 GOCACHE=/tmp/reef-go-build-cache go run ./cmd/matching-engine
+```
+
+Run with gRPC scaffold enabled:
+
+```bash
+cd services/matching-engine
+MATCHING_ENGINE_ENABLE_GRPC=1 MATCHING_ENGINE_GRPC_ADDR=:9081 GOCACHE=/tmp/reef-go-build-cache go run ./cmd/matching-engine
 ```
 
 Example request:

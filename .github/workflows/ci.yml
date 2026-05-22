@@ -9,6 +9,15 @@ on:
   pull_request:
 
 jobs:
+  proto-governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Proto additive compatibility check
+        run: ./scripts/check-proto-additive.sh
+
   go-matching-engine:
     runs-on: ubuntu-latest
     defaults:

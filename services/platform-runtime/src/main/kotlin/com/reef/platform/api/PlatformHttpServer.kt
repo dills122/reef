@@ -5,10 +5,24 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 
 class PlatformHttpServer(
-    private val api: PlatformApi = PlatformApi()
+    private val port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
+    private val api: PlatformApi = PlatformApi(),
+    private val boundary: ExternalApiBoundary,
+    private val idempotencyStore: IdempotencyStore,
+    private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy
 ) {
-    fun start() {
-        val port = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080
+    constructor(
+        port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
+        api: PlatformApi = PlatformApi()
+    ) : this(
+        port = port,
+        api = api,
+        boundary = defaultBoundary().first,
+        idempotencyStore = defaultBoundary().second,
+        idempotencyRetentionPolicy = defaultBoundary().third
+    )
+
+    fun start(): HttpServer {
         val server = HttpServer.create(InetSocketAddress(port), 0)
 
         server.createContext("/health") { exchange ->
@@ -24,6 +38,28 @@ class PlatformHttpServer(
 
             val body = exchange.requestBody.bufferedReader().readText()
             writeJson(exchange, 200, api.submitOrder(body))
+        }
+
+        server.createContext("/api/v1/orders/submit") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/submit")
+            if (violation != null) {
+                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+                return@createContext
+            }
+            val cached = readIdempotentResult(exchange, "/api/v1/orders/submit")
+            if (cached != null) {
+                writeJson(exchange, cached.status, cached.payload)
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            val payload = api.submitOrder(body)
+            rememberIdempotentResult(exchange, "/api/v1/orders/submit", 200, payload)
+            writeJson(exchange, 200, payload)
         }
 
         server.createContext("/reference/instruments") { exchange ->
@@ -78,6 +114,28 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.cancelOrder(body))
         }
 
+        server.createContext("/api/v1/orders/cancel") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/cancel")
+            if (violation != null) {
+                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+                return@createContext
+            }
+            val cached = readIdempotentResult(exchange, "/api/v1/orders/cancel")
+            if (cached != null) {
+                writeJson(exchange, cached.status, cached.payload)
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            val payload = api.cancelOrder(body)
+            rememberIdempotentResult(exchange, "/api/v1/orders/cancel", 200, payload)
+            writeJson(exchange, 200, payload)
+        }
+
         server.createContext("/orders/modify") { exchange ->
             if (exchange.requestMethod != "POST") {
                 exchange.sendResponseHeaders(405, -1)
@@ -86,6 +144,28 @@ class PlatformHttpServer(
             }
             val body = exchange.requestBody.bufferedReader().readText()
             writeJson(exchange, 200, api.modifyOrder(body))
+        }
+
+        server.createContext("/api/v1/orders/modify") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/modify")
+            if (violation != null) {
+                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+                return@createContext
+            }
+            val cached = readIdempotentResult(exchange, "/api/v1/orders/modify")
+            if (cached != null) {
+                writeJson(exchange, cached.status, cached.payload)
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            val payload = api.modifyOrder(body)
+            rememberIdempotentResult(exchange, "/api/v1/orders/modify", 200, payload)
+            writeJson(exchange, 200, payload)
         }
 
         server.createContext("/orders/") { exchange ->
@@ -165,6 +245,7 @@ class PlatformHttpServer(
 
         server.start()
         println("platform-runtime listening on :$port")
+        return server
     }
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
@@ -187,4 +268,38 @@ class PlatformHttpServer(
         }
         return defaultValue
     }
+
+    private fun correlationId(exchange: HttpExchange): String {
+        return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
+    }
+
+    private fun readIdempotentResult(exchange: HttpExchange, route: String): IdempotencyResult? {
+        val clientId = boundary.clientId(exchange.requestHeaders) ?: return null
+        val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return null
+        return idempotencyStore.find(clientId, route, idempotencyKey)
+    }
+
+    private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
+        val clientId = boundary.clientId(exchange.requestHeaders) ?: return
+        val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return
+        idempotencyStore.save(
+            clientId,
+            route,
+            idempotencyKey,
+            IdempotencyResult(status, payload),
+            idempotencyRetentionPolicy.ttlFor(route)
+        )
+    }
+}
+
+private fun defaultBoundary(): Triple<ExternalApiBoundary, IdempotencyStore, IdempotencyRetentionPolicy> {
+    val hooks = defaultBoundaryHooks()
+    return Triple(
+        ExternalApiBoundary(
+            authHook = hooks.authHook,
+            rateLimitHook = hooks.rateLimitHook
+        ),
+        hooks.idempotencyStore,
+        hooks.idempotencyRetentionPolicy
+    )
 }

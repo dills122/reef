@@ -5,6 +5,8 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.RoleDefinition
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -14,6 +16,8 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val instruments = linkedMapOf<String, Instrument>()
     private val participants = linkedMapOf<String, Participant>()
     private val accounts = linkedMapOf<String, Account>()
+    private val roles = linkedMapOf<String, RoleDefinition>()
+    private val actorRoleBindings = mutableListOf<ActorRoleBinding>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
@@ -40,6 +44,15 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         accounts[account.accountId] = account
     }
 
+    override fun saveRole(role: RoleDefinition) {
+        roles[role.roleId] = role
+    }
+
+    override fun saveActorRoleBinding(binding: ActorRoleBinding) {
+        actorRoleBindings.removeIf { it.actorId == binding.actorId && it.roleId == binding.roleId }
+        actorRoleBindings.add(binding)
+    }
+
     override fun instruments(): List<Instrument> {
         return instruments.values.toList()
     }
@@ -50,6 +63,14 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun accounts(): List<Account> {
         return accounts.values.toList()
+    }
+
+    override fun roles(): List<RoleDefinition> {
+        return roles.values.toList()
+    }
+
+    override fun actorRoleBindings(actorId: String): List<ActorRoleBinding> {
+        return actorRoleBindings.filter { it.actorId == actorId }
     }
 
     override fun hasInstrument(instrumentId: String): Boolean {

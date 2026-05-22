@@ -5,41 +5,52 @@ Reference sprint doc:
 
 ## Workstream A: Inter-Service Communication Foundation
 
-- [ ] Extend protobuf contracts for submit/modify/cancel parity
-- [ ] Add matching engine gRPC server scaffold
-- [ ] Add runtime gRPC client scaffold behind `ENGINE_TRANSPORT`
-- [ ] Keep HTTP fallback path active
-- [ ] Add parity contract tests across transports
+- [x] Extend protobuf contracts for submit/modify/cancel parity
+- [x] Add matching engine gRPC server scaffold
+- [x] Add runtime gRPC client scaffold behind `ENGINE_TRANSPORT`
+- [x] Keep HTTP fallback path active
+- [x] Add parity contract tests across transports
 
 ## Workstream B: External API Boundary Foundation
 
-- [ ] Add `/api/v1` route namespace
-- [ ] Add auth-token/API-key validation hook interface
-- [ ] Add idempotency-key requirement for mutating writes
-- [ ] Add rate-limit hook and local default implementation
-- [ ] Add standard boundary error envelope (`code`, `message`, `correlationId`)
+- [x] Add `/api/v1` route namespace
+- [x] Add auth-token/API-key validation hook interface
+- [x] Add idempotency-key requirement for mutating writes
+- [x] Add rate-limit hook and local default implementation
+- [x] Add standard boundary error envelope (`code`, `message`, `correlationId`)
+- [x] Implement idempotency scope model (`clientId + route + idempotencyKey`)
+- [x] Add idempotency retention/TTL class hooks
 
 ## Workstream C: Admin Layer (CLI First)
 
-- [ ] Create runtime `application/admin` command handlers
-- [ ] Add admin command DTOs and result models
-- [ ] Add reference data admin CLI commands
-- [ ] Add simulation control admin CLI hooks
-- [ ] Add trace/event inspection admin CLI commands
-- [ ] Ensure admin actions emit audit events
+- [x] Create runtime `application/admin` command handlers
+- [x] Add admin command DTOs and result models
+- [x] Add reference data admin CLI commands
+- [x] Add simulation control admin CLI hooks
+- [x] Add trace/event inspection admin CLI commands
+- [x] Add calendar profile management admin CLI commands (US default + country profiles)
+- [x] Add role/permission administration admin CLI commands
+- [x] Add override reason code management admin commands
+- [x] Ensure admin actions emit audit events
 
 ## Workstream D: Hardening and Docs
 
-- [ ] Add integration tests for transport fallback and parity
-- [ ] Add integration tests for boundary idempotency behavior
-- [ ] Add integration tests for admin CLI command flow
-- [ ] Update runbooks/startup docs for new flags and routes
-- [ ] Record any additional major design decisions in `docs/DECISIONS.md`
+- [x] Add integration tests for transport fallback and parity
+- [x] Add integration tests for boundary idempotency behavior
+- [x] Add integration tests for admin CLI command flow
+- [x] Add schema governance checks for contract evolution rules
+- [x] Document injectable clock policy and determinism guardrails
+- [x] Define baseline stage SLO targets
+- [x] Update runbooks/startup docs for new flags and routes
+- [x] Record any additional major design decisions in `docs/DECISIONS.md`
 
 ## Sprint Exit Checklist
 
-- [ ] Runtime supports HTTP and gRPC transport selection path
-- [ ] `/api/v1` write endpoints enforce idempotency key handling
-- [ ] Boundary auth and rate-limit hooks are executable paths
-- [ ] Admin CLI runs through reusable application layer modules
-- [ ] CI validates new paths
+- [x] Runtime supports HTTP and gRPC transport selection path
+- [x] `/api/v1` write endpoints enforce idempotency key handling
+- [x] Boundary auth and rate-limit hooks are executable paths
+- [x] Admin CLI runs through reusable application layer modules
+- [x] Calendar and role/permission admin flows are executable
+- [x] Idempotency scope and retention behavior are validated
+- [x] Schema governance and determinism policies are documented
+- [x] CI validates new paths

@@ -6,6 +6,9 @@
 
 This document describes the initial technical design for Reef, a simulation-first institutional trading venue and post-trade platform.
 
+Companion standards:
+- [`docs/POST_MATCH_STANDARDS.md`](./docs/POST_MATCH_STANDARDS.md) defines normative post-match implementation standards, role model, calendar configuration rules, observability requirements, and exception taxonomy.
+
 The design target is:
 
 - realistic architecture and service boundaries
@@ -192,14 +195,22 @@ Owns:
 - fail records
 - settlement completion/failure outcomes
 
-### 6.6 Exceptions and operations
+### 6.6 Clearing and netting
+Owns:
+- clearing submission and acceptance workflow
+- CCP-style novation lifecycle
+- participant risk-check outcomes for clearing eligibility
+- netting of trade obligations by participant, instrument, and settlement date
+- netted obligation snapshots and adjustments
+
+### 6.7 Exceptions and operations
 Owns:
 - break queues
 - exception cases
 - repair actions
 - escalation state
 
-### 6.7 Simulation control
+### 6.8 Simulation control
 Owns:
 - scenarios
 - participant bots
@@ -208,7 +219,7 @@ Owns:
 - replay runs
 - fault injection
 
-### 6.8 Audit and analytics
+### 6.9 Audit and analytics
 Owns:
 - event timeline views
 - derived metrics
@@ -231,6 +242,22 @@ The foundational end-to-end flow for v1 is:
 9. Exceptions are raised when downstream steps fail or mismatch.
 10. The UI presents both current-state views and event timelines.
 
+### 7.1 Expanded post-match flow (target operating model)
+
+To simulate a production-shaped U.S. equities post-trade lifecycle, Reef should model explicit stages after match:
+
+1. execution capture records fills from the engine with normalized economics and identifiers.
+2. trade processing applies enrichment, allocation, booking, and fee placeholders.
+3. confirmation and affirmation handles compare states, mismatch detection, and workflow deadlines.
+4. clearing receives affirmed trades, performs acceptance or rejection, and records novation transitions.
+5. netting consolidates obligations by participant and instrument into settlement-ready net positions.
+6. settlement orchestrates instruction, settlement attempts, partial completion, fail aging, and repair paths.
+7. exceptions and operations provides actionable queues, ownership, and repair commands across all stages.
+8. audit and analytics preserves immutable traceability from order to final settlement outcome.
+
+Design rule:
+- each stage must remain independently observable and replayable; no hidden "black-box" transition from trade to settled.
+
 ## 8. Suggested Event Model
 
 The system should use explicit commands and events.
@@ -243,7 +270,13 @@ Examples:
 - `AllocateTrade`
 - `GenerateConfirmation`
 - `AffirmTrade`
+- `SubmitForClearing`
+- `AcceptClearing`
+- `RejectClearing`
+- `NetSettlementObligations`
 - `ScheduleSettlement`
+- `InstructSettlement`
+- `AdvanceSettlement`
 - `ResolveException`
 - `StartScenarioRun`
 - `PauseMarketClock`
@@ -260,11 +293,22 @@ Examples:
 - `TradeAllocated`
 - `TradeBooked`
 - `ConfirmationGenerated`
+- `TradeCompared`
+- `TradeAffirmed`
+- `TradeMismatched`
+- `ClearingSubmitted`
+- `ClearingAccepted`
+- `ClearingRejected`
+- `TradeNovated`
+- `ObligationsNetted`
 - `AffirmationFailed`
 - `SettlementObligationCreated`
 - `SettlementScheduled`
+- `SettlementInstructionCreated`
+- `SettlementPartiallyCompleted`
 - `SettlementCompleted`
 - `SettlementFailed`
+- `SettlementFailAged`
 - `ExceptionOpened`
 - `ExceptionResolved`
 - `ScenarioRunStarted`
@@ -309,8 +353,12 @@ Potential states:
 - created
 - allocated
 - booked
+- compared
 - confirmed
 - affirmed
+- clearing_submitted
+- clearing_accepted
+- novated
 - ready_for_settlement
 - settled
 - failed
@@ -322,6 +370,7 @@ Potential states:
 - pending_instruction
 - scheduled
 - in_settlement
+- partially_settled
 - settled
 - failed
 - aged_fail
@@ -397,6 +446,11 @@ Admin command requirements:
 - audit event emission
 - idempotency for mutating operations
 
+Early admin priorities for post-match realism:
+- calendar profile management (country-agnostic with U.S. defaults)
+- role and permission administration for core operational personas
+- policy version management (netting and settlement profiles)
+
 ## 12. Scalability Posture (Early)
 
 To avoid design lock-in:
@@ -406,7 +460,7 @@ To avoid design lock-in:
 - maintain append-only event trail for replay and diagnostics
 - avoid coupling public API shapes to internal engine transport contracts
 
-### 10.2 Event log
+### 12.1 Event log
 Maintain an append-only `event_log` table with at least:
 - event id
 - event type
@@ -426,7 +480,7 @@ This supports:
 - debugging
 - scenario analysis
 
-### 10.3 Read models
+### 12.2 Read models
 Maintain denormalized read models tailored for UI workflows, such as:
 - order blotter views
 - trade timeline views
@@ -434,7 +488,7 @@ Maintain denormalized read models tailored for UI workflows, such as:
 - exception workbench summaries
 - scenario run dashboards
 
-## 11. Platform Runtime Design (Kotlin)
+## 13. Platform Runtime Design (Kotlin)
 
 The Kotlin runtime is the central orchestrator of business workflows.
 
@@ -458,7 +512,7 @@ Suggested structure inside Kotlin services:
 - `application` — command handlers, use cases, orchestration
 - `infrastructure` — database adapters, messaging, engine clients, framework adapters
 
-## 12. Matching Engine Design (Go)
+## 14. Matching Engine Design (Go)
 
 The Go engine should be narrowly focused.
 
@@ -500,7 +554,84 @@ Initial acceptable options:
 Likely preferred medium-term option:
 - protobuf contracts with gRPC or NATS-backed messaging
 
-## 13. Simulation Harness Design (Kotlin)
+## 14.1 Post-match engines design (Kotlin runtime modules first)
+
+The first implementation should keep these engines as bounded modules inside the Kotlin runtime, with extraction optional later.
+
+### A. Trade Processing Engine
+Responsibilities:
+- execution normalization and enrichment
+- allocation and booking workflows
+- commission and fee placeholder application
+- transition trades into compare-ready state
+
+### B. Compare and Affirmation Engine
+Responsibilities:
+- confirmation generation
+- affirmation tracking and deadline handling
+- mismatch detection and exception opening
+- compare-state read models for operations
+
+### C. Clearing Engine
+Responsibilities:
+- submit eligible trades to clearing workflow
+- record clearing acceptance and rejection
+- maintain novation state transitions
+- emit clearing risk or validation failures
+
+### D. Netting Engine
+Responsibilities:
+- aggregate gross obligations into net obligations
+- maintain netting batches and adjustment events
+- publish settlement-ready obligation groups
+
+### E. Settlement Engine
+Responsibilities:
+- instruction creation and queueing
+- settlement attempts and partial-settle handling
+- fail aging and operator repair integration
+- final settlement completion and closure
+
+### Cross-engine design rules
+- engines communicate through commands and immutable events, not direct table writes into each other's modules.
+- all write paths are idempotency-safe by command ID.
+- each engine owns its state machine and validation invariants.
+- each stage publishes queue-oriented read models for UI and admin operations.
+
+## 14.2 Environment model: production-shaped and simulation modes
+
+Reef should support two modes without changing core domain behavior:
+
+### Production-shaped mode
+- realistic workflow timing windows and operational deadlines
+- stricter validation and failure handling
+- deterministic but externally paced clock behavior
+- integration-ready adapter boundaries for external systems
+
+### Simulation mode
+- controllable market and settlement clocks
+- seeded determinism for replay
+- scenario-driven fault injection at each post-match stage
+- accelerated lifecycle progression for rapid experimentation
+
+Mode rule:
+- both modes must execute the same application commands and state machines; mode only adjusts timing, adapters, and failure injection profiles.
+
+## 14.3 Settlement ledger adapter strategy
+
+Settlement state should be modeled behind an explicit adapter interface:
+
+- `RelationalLedgerAdapter` for default Postgres-backed lifecycle state and history.
+- `EventLogLedgerAdapter` for append-only event-first settlement audit paths.
+- `BlockchainLedgerAdapter` for optional scenario experiments with tokenized obligations, atomic delivery-versus-payment simulation, or external finality proofs.
+
+Adapter design rules:
+- domain-level settlement semantics remain constant across adapters.
+- adapter selection is environment-configurable, not hardcoded in domain modules.
+- blockchain-backed modes are optional experiments and must not block baseline delivery.
+- default v1 implementation is a relational account-style ledger with append-only postings plus compensating corrections.
+
+## 15. Simulation Harness Design (Kotlin)
 
 The simulator harness should act like a specialized control-plane client.
 
@@ -530,7 +661,7 @@ Scenarios should be:
 - downstream failures
 - settlement rule overrides
 
-## 14. UI Design Direction (Angular)
+## 16. UI Design Direction (Angular)
 
 Angular should power operational platform surfaces.
 
@@ -554,7 +685,7 @@ Angular should power operational platform surfaces.
 - use Angular signals for local UI state where possible
 - use broader store patterns only where state is genuinely cross-cutting or streaming-heavy
 
-## 15. Messaging Strategy
+## 17. Messaging Strategy
 
 ### Early phase
 Use an in-process event bus inside the Kotlin runtime where appropriate. Keep complexity low.
@@ -569,7 +700,7 @@ Potential uses:
 - engine integration if desired
 - background workers
 
-## 16. Shared Contracts
+## 18. Shared Contracts
 
 Cross-language contracts should be explicit and versioned.
 
@@ -585,7 +716,7 @@ Use **Protobuf** for:
 - future gRPC support
 - reduced contract drift
 
-## 17. Repository Structure
+## 19. Repository Structure
 
 A pragmatic monorepo is recommended.
 
@@ -617,7 +748,7 @@ reef/
     decisions/
 ```
 
-## 18. Development Workflow Goals
+## 20. Development Workflow Goals
 
 Local development should remain simple.
 
@@ -635,7 +766,7 @@ Local development should remain simple.
 - `make scenario-demo`
 - `make reset`
 
-## 19. MVP Scope Recommendation
+## 21. MVP Scope Recommendation
 
 The first thin slice should prove the architecture, not complete every market workflow.
 
@@ -658,7 +789,7 @@ This slice is enough to validate:
 - UI workflows
 - simulation viability
 
-## 20. Future Expansion Areas
+## 22. Future Expansion Areas
 
 Once the thin slice is working, likely next areas are:
 - richer scenario DSL
@@ -670,21 +801,21 @@ Once the thin slice is working, likely next areas are:
 - replay controls and time-travel inspection
 - more advanced post-trade workflows
 
-## 21. Risks and Tradeoffs
+## 23. Risks and Tradeoffs
 
-### 21.1 Multi-language complexity
+### 23.1 Multi-language complexity
 Angular + Kotlin + Go adds tooling complexity. This is acceptable if contract boundaries are explicit and the repo stays organized.
 
-### 21.2 Framework drift
+### 23.2 Framework drift
 If the Kotlin layer becomes overly framework-dependent, future adaptability drops. Keep domain and application code clean.
 
-### 21.3 Premature distribution
+### 23.3 Premature distribution
 Too many deployables too early will slow progress. Keep the runtime consolidated until real need appears.
 
-### 21.4 Over-modeling post-trade too early
+### 23.4 Over-modeling post-trade too early
 The project can become huge quickly. Favor a thin but coherent vertical slice first.
 
-## 22. Immediate Next Steps
+## 24. Immediate Next Steps
 
 1. Normalize the repository structure around apps, services, libs, infra, and docs.
 2. Define shared contracts for the initial order and execution flow.
@@ -693,6 +824,6 @@ The project can become huge quickly. Favor a thin but coherent vertical slice fi
 5. Stand up the first Angular shell with basic event and blotter views.
 6. Build the first deterministic scenario that produces a full lifecycle from order submission to settlement outcome.
 
-## 23. One-Sentence Architecture Statement
+## 25. One-Sentence Architecture Statement
 
 **Reef should be built as a simulation-first institutional trading platform with Angular operational UIs, a Kotlin platform runtime, a Go matching engine, relational current-state persistence plus an append-only event log, and a separate control plane for deterministic scenario execution and replay.**

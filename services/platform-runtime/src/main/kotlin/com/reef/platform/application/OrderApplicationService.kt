@@ -11,14 +11,14 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
-import com.reef.platform.infrastructure.engine.EngineClient
 import com.reef.platform.infrastructure.engine.EngineGateway
+import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 
 class OrderApplicationService(
-    private val engineGateway: EngineGateway = EngineClient(),
+    private val engineGateway: EngineGateway = defaultEngineGateway(),
     private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence()
 ) {
     private val eventProducer = "platform-runtime"
