@@ -57,6 +57,47 @@ class AdminCliAdapter(
                 val roles = adminService.listActorRoles(args[1])
                 """{"rolesCount":${roles.size},"actorId":"${args[1]}"}"""
             }
+            "calendar-upsert" -> {
+                if (args.size < 4) return "usage: calendar-upsert <profileId> <timezone> <settlementCycle>"
+                adminService.upsertCalendarProfile(
+                    actor,
+                    com.reef.platform.application.admin.CalendarProfile(args[1], args[2], args[3])
+                )
+                """{"status":"ok","command":"calendar-upsert"}"""
+            }
+            "calendar-list" -> {
+                val profiles = adminService.listCalendarProfiles()
+                """{"profilesCount":${profiles.size}}"""
+            }
+            "override-upsert" -> {
+                if (args.size < 3) return "usage: override-upsert <code> <description>"
+                adminService.upsertOverrideReason(
+                    actor,
+                    com.reef.platform.application.admin.OverrideReasonCode(args[1], args[2])
+                )
+                """{"status":"ok","command":"override-upsert"}"""
+            }
+            "override-list" -> {
+                val reasons = adminService.listOverrideReasons()
+                """{"reasonsCount":${reasons.size}}"""
+            }
+            "sim-start" -> {
+                if (args.size < 2) return "usage: sim-start <scenario>"
+                adminService.startSimulation(actor, args[1])
+                """{"status":"ok","command":"sim-start"}"""
+            }
+            "sim-pause" -> {
+                adminService.pauseSimulation(actor)
+                """{"status":"ok","command":"sim-pause"}"""
+            }
+            "sim-stop" -> {
+                adminService.stopSimulation(actor)
+                """{"status":"ok","command":"sim-stop"}"""
+            }
+            "sim-state" -> {
+                val state = adminService.simulationState()
+                """{"status":"${state.status}","scenario":"${state.scenario}"}"""
+            }
             "trace-events" -> {
                 if (args.size < 2) return "usage: trace-events <traceId>"
                 val events = adminService.traceEvents(args[1])
@@ -77,6 +118,14 @@ class AdminCliAdapter(
               role-assign <actorId> <roleId>
               roles-list
               actor-roles <actorId>
+              calendar-upsert <profileId> <timezone> <settlementCycle>
+              calendar-list
+              override-upsert <code> <description>
+              override-list
+              sim-start <scenario>
+              sim-pause
+              sim-stop
+              sim-state
               trace-events <traceId>
         """.trimIndent()
     }

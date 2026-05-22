@@ -18,6 +18,14 @@ class AdminCliAdapterTest {
         assertContains(cli.execute(listOf("role-assign", "ops-2", "ops_role")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("roles-list")), "\"rolesCount\":")
         assertContains(cli.execute(listOf("actor-roles", "ops-2")), "\"rolesCount\":")
+        assertContains(cli.execute(listOf("calendar-upsert", "us-default", "America/New_York", "T+1")), "\"status\":\"ok\"")
+        assertContains(cli.execute(listOf("calendar-list")), "\"profilesCount\":")
+        assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
+        assertContains(cli.execute(listOf("override-list")), "\"reasonsCount\":")
+        assertContains(cli.execute(listOf("sim-start", "scenario-1")), "\"status\":\"ok\"")
+        assertContains(cli.execute(listOf("sim-pause")), "\"status\":\"ok\"")
+        assertContains(cli.execute(listOf("sim-stop")), "\"status\":\"ok\"")
+        assertContains(cli.execute(listOf("sim-state")), "\"status\":\"")
         assertContains(cli.execute(listOf("events-recent", "10")), "\"eventsCount\":")
     }
 

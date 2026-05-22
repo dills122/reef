@@ -27,6 +27,23 @@ class AdminApplicationServiceTest {
     }
 
     @Test
+    fun managesCalendarOverrideAndSimulationControls() {
+        val persistence = InMemoryRuntimePersistence()
+        val service = AdminApplicationService(persistence)
+        val actor = AdminActor(actorId = "admin-cli", correlationId = "corr-3", occurredAt = "2026-05-22T00:00:00Z")
+
+        service.upsertCalendarProfile(actor, CalendarProfile("us-default", "America/New_York", "T+1"))
+        service.upsertOverrideReason(actor, OverrideReasonCode("MANUAL_REPAIR", "manual operational repair"))
+        service.startSimulation(actor, "scenario-1")
+        service.pauseSimulation(actor)
+        service.stopSimulation(actor)
+
+        assertEquals(1, service.listCalendarProfiles().size)
+        assertEquals(1, service.listOverrideReasons().size)
+        assertEquals("stopped", service.simulationState().status)
+    }
+
+    @Test
     fun deniesReferenceWriteWhenActorHasNoPermission() {
         val persistence = InMemoryRuntimePersistence()
         val service = AdminApplicationService(persistence)

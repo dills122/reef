@@ -35,11 +35,30 @@ data class UpsertAccountCommand(
     val participantId: String
 )
 
+data class CalendarProfile(
+    val profileId: String,
+    val timezone: String,
+    val settlementCycle: String
+)
+
+data class OverrideReasonCode(
+    val code: String,
+    val description: String
+)
+
+data class SimulationControlState(
+    val status: String,
+    val scenario: String = ""
+)
+
 class AdminApplicationService(
     private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence()
 ) {
     private val eventProducer = "platform-runtime-admin"
     private val eventSchemaVersion = "v1"
+    private val calendarProfiles = linkedMapOf<String, CalendarProfile>()
+    private val overrideReasons = linkedMapOf<String, OverrideReasonCode>()
+    private var simulationState = SimulationControlState(status = "stopped", scenario = "")
 
     init {
         runtimePersistence.saveRole(
@@ -87,6 +106,47 @@ class AdminApplicationService(
         emitAudit(actor, "AdminRoleAssigned", targetActorId, "roleId=$roleId")
     }
 
+    fun upsertCalendarProfile(actor: AdminActor, profile: CalendarProfile) {
+        requirePermission(actor, Permission.CALENDAR_ADMIN)
+        calendarProfiles[profile.profileId] = profile
+        emitAudit(
+            actor,
+            "AdminCalendarProfileUpserted",
+            profile.profileId,
+            "timezone=${profile.timezone},settlementCycle=${profile.settlementCycle}"
+        )
+    }
+
+    fun listCalendarProfiles(): List<CalendarProfile> = calendarProfiles.values.toList()
+
+    fun upsertOverrideReason(actor: AdminActor, reason: OverrideReasonCode) {
+        requirePermission(actor, Permission.OVERRIDE_ADMIN)
+        overrideReasons[reason.code] = reason
+        emitAudit(actor, "AdminOverrideReasonUpserted", reason.code, "description=${reason.description}")
+    }
+
+    fun listOverrideReasons(): List<OverrideReasonCode> = overrideReasons.values.toList()
+
+    fun startSimulation(actor: AdminActor, scenario: String) {
+        requirePermission(actor, Permission.SIMULATION_CONTROL)
+        simulationState = SimulationControlState(status = "running", scenario = scenario)
+        emitAudit(actor, "AdminSimulationStarted", scenario, "status=running")
+    }
+
+    fun pauseSimulation(actor: AdminActor) {
+        requirePermission(actor, Permission.SIMULATION_CONTROL)
+        simulationState = simulationState.copy(status = "paused")
+        emitAudit(actor, "AdminSimulationPaused", simulationState.scenario, "status=paused")
+    }
+
+    fun stopSimulation(actor: AdminActor) {
+        requirePermission(actor, Permission.SIMULATION_CONTROL)
+        simulationState = SimulationControlState(status = "stopped", scenario = simulationState.scenario)
+        emitAudit(actor, "AdminSimulationStopped", simulationState.scenario, "status=stopped")
+    }
+
+    fun simulationState(): SimulationControlState = simulationState
+
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()
 
     fun listParticipants(): List<Participant> = runtimePersistence.participants()
@@ -133,6 +193,9 @@ object Permission {
     const val SUPERUSER = "admin.superuser"
     const val REFERENCE_WRITE = "reference.write"
     const val AUTH_ADMIN = "auth.admin"
+    const val CALENDAR_ADMIN = "calendar.admin"
+    const val OVERRIDE_ADMIN = "override.admin"
+    const val SIMULATION_CONTROL = "simulation.control"
 }
 
 private fun defaultRuntimePersistence(): RuntimePersistence {
