@@ -20,6 +20,7 @@ Current state:
 - `POST /orders/submit`
 - placeholder proxy path to the Go matching engine
 - unit-testable API and application layers
+- runtime-to-engine transport selection scaffold (`ENGINE_TRANSPORT=http|grpc`)
 
 Run locally when Gradle is available:
 
@@ -28,6 +29,13 @@ cd services/platform-runtime
 GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
 GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
 ```
+
+Transport config:
+
+- `ENGINE_TRANSPORT=http` (default)
+- `ENGINE_TRANSPORT=grpc` (scaffold mode, currently delegates to HTTP path until gRPC stubs are integrated)
+- `MATCHING_ENGINE_BASE_URL` for HTTP transport (default `http://localhost:8081`)
+- `MATCHING_ENGINE_GRPC_TARGET` for future gRPC transport target (default `localhost:9081`)
 
 Current limitation:
 
