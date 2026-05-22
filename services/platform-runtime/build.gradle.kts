@@ -9,6 +9,7 @@ repositories {
 
 dependencies {
     implementation(kotlin("stdlib"))
+    implementation("org.postgresql:postgresql:42.7.4")
     testImplementation(kotlin("test"))
 }
 

@@ -14,11 +14,12 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineClient
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 
 class OrderApplicationService(
     private val engineGateway: EngineGateway = EngineClient(),
-    private val runtimePersistence: RuntimePersistence = InMemoryRuntimePersistence()
+    private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence()
 ) {
     private val eventProducer = "platform-runtime"
     private val eventSchemaVersion = "v1"
@@ -291,4 +292,16 @@ class OrderApplicationService(
 
         return null
     }
+}
+
+private fun defaultRuntimePersistence(): RuntimePersistence {
+    val persistence = System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory"
+    if (persistence != "postgres") {
+        return InMemoryRuntimePersistence()
+    }
+
+    val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+    val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
+    val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
+    return PostgresRuntimePersistence(jdbcUrl, user, password)
 }
