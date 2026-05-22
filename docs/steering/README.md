@@ -5,6 +5,8 @@ These documents define how Reef should be built as the repository grows into the
 ## Documents
 
 - [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules
+- [Inter-Service Communication](./inter-service-communication.md): service transport, protobuf/gRPC direction, metadata/idempotency standards
+- [External API Boundary](./external-api-boundary.md): user-facing API architecture, versioning, auth/idempotency/rate-limit standards
 - [Repository](./repository.md): top-level folder conventions, naming, and documentation expectations
 - [Go](./go.md): matching engine and systems-side coding guidance
 - [Kotlin](./kotlin.md): platform runtime and simulator guidance

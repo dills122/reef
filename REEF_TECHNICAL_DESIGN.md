@@ -32,7 +32,7 @@ Reef will be built as a multi-app, multi-language platform with a modular-first 
 
 ## 3. System Shape
 
-At a high level, Reef consists of five major parts.
+At a high level, Reef consists of six major parts.
 
 ### 3.1 Platform UI layer
 Angular applications for operational users and simulation control.
@@ -55,6 +55,17 @@ Responsibilities:
 - build read models for UI consumption
 - coordinate with the engine
 
+### 3.2.1 External API boundary (public/client-facing)
+
+The runtime must expose a stable user/consumer-facing boundary under versioned routes (for example `/api/v1`), even when implemented in-process initially.
+
+Responsibilities:
+- validate client requests and identity context
+- enforce idempotency for mutating commands
+- enforce per-client rate limits
+- map public contracts to internal command models
+- provide a stable integration surface decoupled from internal service transport
+
 ### 3.3 Matching engine
 A Go service responsible for order book and matching behavior.
 
@@ -76,7 +87,20 @@ Responsibilities:
 - inject faults and downstream failures
 - coordinate replay and reset behavior
 
-### 3.5 Marketing/documentation site
+### 3.5 Admin operations surface (CLI first)
+
+Admin controls should be implemented as application-layer use cases first and exposed via a CLI adapter in early phases.
+
+Responsibilities:
+- reference data administration
+- simulation run/operator controls
+- trace/event inspection and maintenance operations
+- admin audit action logging
+
+Design rule:
+- admin HTTP APIs can be added later by reusing the same application-layer admin modules used by the CLI
+
+### 3.6 Marketing/documentation site
 An Astro site for public-facing docs, architecture pages, screenshots, and writeups.
 
 ## 4. Recommended Deployment Evolution
@@ -253,6 +277,18 @@ Examples:
 - events must be suitable for append-only storage
 - event handlers should be idempotent
 
+## 8.4 Event envelope standards
+
+All meaningful domain events must carry:
+- `eventId`
+- `eventType`
+- `traceId`
+- `causationId`
+- `correlationId`
+- `occurredAt`
+- producer/service identity
+- schema version
+
 ## 9. State Machines
 
 Key workflows should be implemented as explicit state machines rather than loosely managed status fields.
@@ -318,6 +354,57 @@ Expected core tables:
 - `exceptions`
 - `scenario_runs`
 - `audit_entries` or projections for UI support
+
+## 11. Communication and API Standards
+
+### 11.1 Inter-service communication
+
+Direction:
+- Protobuf contracts in `contracts/proto/`
+- gRPC as the preferred runtime-to-engine transport
+- temporary HTTP/JSON compatibility path during migration via feature flags
+
+Rules:
+- contracts are versioned and additive-first
+- command IDs are treated as idempotency keys
+- retries must be bounded and idempotency-safe
+- trace/correlation metadata must propagate across service calls
+
+### 11.2 Public API boundary
+
+Near-term architecture:
+- implement the public boundary in Kotlin runtime
+- keep API routes versioned under `/api/v1`
+- preserve clean module seams to allow later gateway extraction
+
+Boundary requirements:
+- authentication hook (token/API key)
+- idempotency key requirement for writes
+- rate limiting at client scope
+- structured error envelope with correlation IDs
+- audit-safe structured logging
+
+### 11.3 Admin layer
+
+Direction:
+- application-layer admin use cases first
+- CLI adapter first
+- admin HTTP adapter later, reusing the same modules
+
+Admin command requirements:
+- actor context
+- authorization checks
+- audit event emission
+- idempotency for mutating operations
+
+## 12. Scalability Posture (Early)
+
+To avoid design lock-in:
+- keep boundary components stateless where possible
+- maintain write/read model separation
+- preserve transport abstraction between runtime and engine
+- maintain append-only event trail for replay and diagnostics
+- avoid coupling public API shapes to internal engine transport contracts
 
 ### 10.2 Event log
 Maintain an append-only `event_log` table with at least:

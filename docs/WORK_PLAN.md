@@ -50,7 +50,27 @@ The most effective sequence is:
 5. add deterministic simulation and replay
 6. only then introduce more distributed infrastructure
 
+Current execution sprint for this sequence:
+- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+
 ## Major Workstreams
+
+Additional active workstream:
+
+### Workstream H: Communication + Boundary + Admin Foundation
+
+Goal:
+establish production-shaped service communication, public API boundary foundations, and admin layer architecture without overbuilding deployment complexity.
+
+Scope:
+- transport abstraction and gRPC/protobuf migration scaffold
+- `/api/v1` public boundary and middleware hooks
+- CLI-first admin application layer with reusable command modules
+
+Exit criteria:
+- runtime transport path supports HTTP and gRPC selection
+- boundary writes enforce idempotency + auth/rate-limit hooks
+- admin operations run through application layer and audit-event emission
 
 ### Workstream A: Runtime Query and Audit Surface
 
