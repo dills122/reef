@@ -38,6 +38,7 @@ type Config struct {
 	PriceMax        int64
 	TraceCheckLimit int
 	ReportOut       string
+	Mode            string
 }
 
 type Action string
@@ -57,6 +58,8 @@ type requestResult struct {
 	TraceID     string
 	OrderID     string
 	CommandID   string
+	RejectCode  string
+	RejectReason string
 }
 
 type summary struct {
@@ -66,12 +69,14 @@ type summary struct {
 	DurationSeconds float64                     `json:"durationSeconds"`
 	Config          Config                      `json:"config"`
 	ThroughputRPS   float64                     `json:"throughputRps"`
+	AcceptedBusinessOpsRPS float64              `json:"acceptedBusinessOpsRps"`
 	TotalRequests   int64                       `json:"totalRequests"`
 	TotalSuccess    int64                       `json:"totalSuccess"`
 	TotalFailures   int64                       `json:"totalFailures"`
 	ByAction        map[Action]actionSummary    `json:"byAction"`
 	StatusCodes     map[int]int64               `json:"statusCodes"`
 	TopErrors       []errorSummary              `json:"topErrors"`
+	RejectReasons   []errorSummary              `json:"rejectReasons"`
 	LatencyMs       latencySummary              `json:"latencyMs"`
 	TraceChecks     traceChecks                 `json:"traceChecks"`
 }
@@ -114,6 +119,15 @@ type traceEventsResponse struct {
 
 type workerState struct {
 	orders []string
+}
+
+type runtimeReject struct {
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+}
+
+type runtimeResponse struct {
+	Rejected *runtimeReject `json:"rejected,omitempty"`
 }
 
 func main() {
@@ -195,6 +209,7 @@ func parseConfig() (Config, error) {
 	flag.Int64Var(&cfg.PriceMax, "price-max", envInt64("REEF_PRICE_MAX", 151_000_000_000), "maximum order price nanos")
 	flag.IntVar(&cfg.TraceCheckLimit, "trace-check-limit", envInt("REEF_TRACE_CHECK_LIMIT", 50), "max unique traces to validate")
 	flag.StringVar(&cfg.ReportOut, "report-out", envOr("REEF_REPORT_OUT", ""), "optional json report output path")
+	flag.StringVar(&cfg.Mode, "mode", envOr("REEF_MODE", "chaos"), "traffic mode: chaos or strict-lifecycle")
 	flag.Parse()
 
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
@@ -208,6 +223,9 @@ func parseConfig() (Config, error) {
 	}
 	if cfg.SubmitPct+cfg.ModifyPct+cfg.CancelPct != 100 {
 		return cfg, errors.New("submit-pct + modify-pct + cancel-pct must equal 100")
+	}
+	if cfg.Mode != "chaos" && cfg.Mode != "strict-lifecycle" {
+		return cfg, errors.New("mode must be chaos or strict-lifecycle")
 	}
 	return cfg, nil
 }
@@ -238,7 +256,7 @@ func runWorker(
 			}
 		}
 
-		action := chooseAction(rng, cfg)
+		action := chooseAction(rng, cfg, len(state.orders) > 0)
 		reqID := atomic.AddInt64(counter, 1)
 		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
 		commandID := fmt.Sprintf("cmd-%d-%d", workerID, reqID)
@@ -295,6 +313,8 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				traceSeen.Store(traceID, struct{}{})
+			} else if cfg.Mode == "strict-lifecycle" && isTerminalOrderRejection(result.RejectCode) {
+				state.orders = removeOrder(state.orders, orderID)
 			}
 		case ActionCancel:
 			if len(state.orders) == 0 {
@@ -317,6 +337,8 @@ func runWorker(
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
 				traceSeen.Store(traceID, struct{}{})
+			} else if cfg.Mode == "strict-lifecycle" && isTerminalOrderRejection(result.RejectCode) {
+				state.orders = removeOrder(state.orders, orderID)
 			}
 		}
 		results <- result
@@ -336,7 +358,18 @@ func fillResult(result *requestResult, status int, body []byte, err error, start
 	}
 	text := string(body)
 	if strings.Contains(text, "\"rejected\"") {
-		result.ErrorText = "rejected"
+		var parsed runtimeResponse
+		if err := json.Unmarshal(body, &parsed); err == nil && parsed.Rejected != nil {
+			result.RejectCode = parsed.Rejected.Code
+			result.RejectReason = parsed.Rejected.Reason
+			if parsed.Rejected.Code != "" {
+				result.ErrorText = "rejected:" + parsed.Rejected.Code
+			} else {
+				result.ErrorText = "rejected"
+			}
+		} else {
+			result.ErrorText = "rejected"
+		}
 		return
 	}
 	result.Success = true
@@ -358,6 +391,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	}
 
 	errorCounts := make(map[string]int64)
+	rejectReasons := make(map[string]int64)
 	allLatencies := make([]float64, 0, len(results))
 	actionLatencies := map[Action][]float64{
 		ActionSubmit: {},
@@ -382,11 +416,19 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 			if r.ErrorText != "" {
 				errorCounts[r.ErrorText]++
 			}
+			if r.RejectCode != "" {
+				key := r.RejectCode
+				if r.RejectReason != "" {
+					key = key + ": " + r.RejectReason
+				}
+				rejectReasons[key]++
+			}
 		}
 		report.ByAction[r.Action] = current
 	}
 
 	report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
+	report.AcceptedBusinessOpsRPS = float64(report.TotalSuccess) / report.DurationSeconds
 	report.LatencyMs = computeLatency(allLatencies)
 	for action, values := range actionLatencies {
 		current := report.ByAction[action]
@@ -394,6 +436,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		report.ByAction[action] = current
 	}
 	report.TopErrors = topErrors(errorCounts, 8)
+	report.RejectReasons = topErrors(rejectReasons, 12)
 	return report
 }
 
@@ -493,7 +536,10 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 	return resp.StatusCode, respBody, err
 }
 
-func chooseAction(rng *rand.Rand, cfg Config) Action {
+func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
+	if cfg.Mode == "strict-lifecycle" && !hasOrders {
+		return ActionSubmit
+	}
 	n := rng.Intn(100)
 	if n < cfg.SubmitPct {
 		return ActionSubmit
@@ -502,6 +548,19 @@ func chooseAction(rng *rand.Rand, cfg Config) Action {
 		return ActionModify
 	}
 	return ActionCancel
+}
+
+func isTerminalOrderRejection(code string) bool {
+	return code == "INVALID_STATE" || code == "NOT_FOUND"
+}
+
+func removeOrder(orders []string, orderID string) []string {
+	for i, existing := range orders {
+		if existing == orderID {
+			return append(orders[:i], orders[i+1:]...)
+		}
+	}
+	return orders
 }
 
 func chooseSide(rng *rand.Rand) string {
