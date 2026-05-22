@@ -5,7 +5,8 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 
 class PlatformHttpServer(
-    private val api: PlatformApi = PlatformApi()
+    private val api: PlatformApi = PlatformApi(),
+    private val boundary: ExternalApiBoundary = ExternalApiBoundary()
 ) {
     fun start() {
         val port = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080
@@ -22,6 +23,21 @@ class PlatformHttpServer(
                 return@createContext
             }
 
+            val body = exchange.requestBody.bufferedReader().readText()
+            writeJson(exchange, 200, api.submitOrder(body))
+        }
+
+        server.createContext("/api/v1/orders/submit") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/submit")
+            if (violation != null) {
+                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+                return@createContext
+            }
             val body = exchange.requestBody.bufferedReader().readText()
             writeJson(exchange, 200, api.submitOrder(body))
         }
@@ -78,10 +94,40 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.cancelOrder(body))
         }
 
+        server.createContext("/api/v1/orders/cancel") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/cancel")
+            if (violation != null) {
+                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            writeJson(exchange, 200, api.cancelOrder(body))
+        }
+
         server.createContext("/orders/modify") { exchange ->
             if (exchange.requestMethod != "POST") {
                 exchange.sendResponseHeaders(405, -1)
                 exchange.close()
+                return@createContext
+            }
+            val body = exchange.requestBody.bufferedReader().readText()
+            writeJson(exchange, 200, api.modifyOrder(body))
+        }
+
+        server.createContext("/api/v1/orders/modify") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/modify")
+            if (violation != null) {
+                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
                 return@createContext
             }
             val body = exchange.requestBody.bufferedReader().readText()
@@ -186,5 +232,9 @@ class PlatformHttpServer(
             }
         }
         return defaultValue
+    }
+
+    private fun correlationId(exchange: HttpExchange): String {
+        return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
     }
 }
