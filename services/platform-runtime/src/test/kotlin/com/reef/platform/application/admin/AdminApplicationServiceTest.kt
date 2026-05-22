@@ -3,6 +3,7 @@ package com.reef.platform.application.admin
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AdminApplicationServiceTest {
@@ -10,7 +11,7 @@ class AdminApplicationServiceTest {
     fun upsertReferenceDataAndEmitAuditEvents() {
         val persistence = InMemoryRuntimePersistence()
         val service = AdminApplicationService(persistence)
-        val actor = AdminActor(actorId = "ops-1", correlationId = "corr-1", occurredAt = "2026-05-22T00:00:00Z")
+        val actor = AdminActor(actorId = "admin-cli", correlationId = "corr-1", occurredAt = "2026-05-22T00:00:00Z")
 
         service.upsertInstrument(actor, UpsertInstrumentCommand("AAPL", "AAPL"))
         service.upsertParticipant(actor, UpsertParticipantCommand("participant-1", "Participant 1"))
@@ -20,8 +21,19 @@ class AdminApplicationServiceTest {
         assertEquals(1, service.listParticipants().size)
         assertEquals(1, service.listAccounts().size)
 
-        val events = service.traceEvents("admin:ops-1")
+        val events = service.traceEvents("admin:admin-cli")
         assertEquals(3, events.size)
         assertTrue(events.all { it.eventType.startsWith("Admin") })
+    }
+
+    @Test
+    fun deniesReferenceWriteWhenActorHasNoPermission() {
+        val persistence = InMemoryRuntimePersistence()
+        val service = AdminApplicationService(persistence)
+        val actor = AdminActor(actorId = "trader-1", correlationId = "corr-2", occurredAt = "2026-05-22T00:00:00Z")
+
+        assertFailsWith<AuthorizationException> {
+            service.upsertInstrument(actor, UpsertInstrumentCommand("MSFT", "MSFT"))
+        }
     }
 }

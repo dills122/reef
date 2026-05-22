@@ -5,6 +5,8 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.RoleDefinition
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -15,9 +17,13 @@ interface RuntimePersistence {
     fun saveInstrument(instrument: Instrument)
     fun saveParticipant(participant: Participant)
     fun saveAccount(account: Account)
+    fun saveRole(role: RoleDefinition)
+    fun saveActorRoleBinding(binding: ActorRoleBinding)
     fun instruments(): List<Instrument>
     fun participants(): List<Participant>
     fun accounts(): List<Account>
+    fun roles(): List<RoleDefinition>
+    fun actorRoleBindings(actorId: String): List<ActorRoleBinding>
     fun hasInstrument(instrumentId: String): Boolean
     fun hasParticipant(participantId: String): Boolean
     fun hasAccount(accountId: String): Boolean

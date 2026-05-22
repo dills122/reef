@@ -38,6 +38,25 @@ class AdminCliAdapter(
                 val events = adminService.recentEvents(limit)
                 """{"eventsCount":${events.size}}"""
             }
+            "role-upsert" -> {
+                if (args.size < 3) return "usage: role-upsert <roleId> <permissionCsv>"
+                adminService.upsertRole(actor, args[1], args[2])
+                """{"status":"ok","command":"role-upsert"}"""
+            }
+            "role-assign" -> {
+                if (args.size < 3) return "usage: role-assign <actorId> <roleId>"
+                adminService.assignRole(actor, args[1], args[2])
+                """{"status":"ok","command":"role-assign"}"""
+            }
+            "roles-list" -> {
+                val roles = adminService.listRoles()
+                """{"rolesCount":${roles.size}}"""
+            }
+            "actor-roles" -> {
+                if (args.size < 2) return "usage: actor-roles <actorId>"
+                val roles = adminService.listActorRoles(args[1])
+                """{"rolesCount":${roles.size},"actorId":"${args[1]}"}"""
+            }
             "trace-events" -> {
                 if (args.size < 2) return "usage: trace-events <traceId>"
                 val events = adminService.traceEvents(args[1])
@@ -54,6 +73,10 @@ class AdminCliAdapter(
               participant-upsert <participantId> <name>
               account-upsert <accountId> <participantId>
               events-recent [limit]
+              role-upsert <roleId> <permissionCsv>
+              role-assign <actorId> <roleId>
+              roles-list
+              actor-roles <actorId>
               trace-events <traceId>
         """.trimIndent()
     }

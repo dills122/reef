@@ -7,6 +7,8 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.RoleDefinition
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -42,6 +44,23 @@ class PostgresRuntimePersistence(
                     CREATE TABLE IF NOT EXISTS reference_accounts (
                       account_id TEXT PRIMARY KEY,
                       participant_id TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS auth_roles (
+                      role_id TEXT PRIMARY KEY,
+                      permissions TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS auth_actor_roles (
+                      actor_id TEXT NOT NULL,
+                      role_id TEXT NOT NULL,
+                      PRIMARY KEY (actor_id, role_id)
                     )
                     """.trimIndent()
                 )
@@ -220,6 +239,38 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun saveRole(role: RoleDefinition) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO auth_roles(role_id, permissions)
+                VALUES (?, ?)
+                ON CONFLICT (role_id) DO UPDATE SET permissions = EXCLUDED.permissions
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, role.roleId)
+                ps.setString(2, role.permissions.joinToString(","))
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun saveActorRoleBinding(binding: ActorRoleBinding) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO auth_actor_roles(actor_id, role_id)
+                VALUES (?, ?)
+                ON CONFLICT (actor_id, role_id) DO NOTHING
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, binding.actorId)
+                ps.setString(2, binding.roleId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
     override fun instruments(): List<Instrument> = queryList("SELECT instrument_id, symbol FROM reference_instruments") {
         Instrument(getString("instrument_id"), getString("symbol"))
     }
@@ -230,6 +281,35 @@ class PostgresRuntimePersistence(
 
     override fun accounts(): List<Account> = queryList("SELECT account_id, participant_id FROM reference_accounts") {
         Account(getString("account_id"), getString("participant_id"))
+    }
+
+    override fun roles(): List<RoleDefinition> = queryList("SELECT role_id, permissions FROM auth_roles") {
+        RoleDefinition(
+            roleId = getString("role_id"),
+            permissions = getString("permissions").split(",").filter { it.isNotBlank() }
+        )
+    }
+
+    override fun actorRoleBindings(actorId: String): List<ActorRoleBinding> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                "SELECT actor_id, role_id FROM auth_actor_roles WHERE actor_id = ?"
+            ).use { ps ->
+                ps.setString(1, actorId)
+                ps.executeQuery().use { rs ->
+                    val out = mutableListOf<ActorRoleBinding>()
+                    while (rs.next()) {
+                        out.add(
+                            ActorRoleBinding(
+                                actorId = rs.getString("actor_id"),
+                                roleId = rs.getString("role_id")
+                            )
+                        )
+                    }
+                    return out
+                }
+            }
+        }
     }
 
     override fun hasInstrument(instrumentId: String): Boolean = exists("reference_instruments", "instrument_id", instrumentId)

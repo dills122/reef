@@ -4,6 +4,8 @@ import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.RoleDefinition
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
@@ -15,6 +17,8 @@ data class AdminActor(
     val correlationId: String = "",
     val occurredAt: String = Instant.now().toString()
 )
+
+class AuthorizationException(message: String) : RuntimeException(message)
 
 data class UpsertInstrumentCommand(
     val instrumentId: String,
@@ -37,19 +41,50 @@ class AdminApplicationService(
     private val eventProducer = "platform-runtime-admin"
     private val eventSchemaVersion = "v1"
 
+    init {
+        runtimePersistence.saveRole(
+            RoleDefinition(
+                roleId = "system_admin",
+                permissions = listOf(Permission.SUPERUSER)
+            )
+        )
+        runtimePersistence.saveActorRoleBinding(
+            ActorRoleBinding(
+                actorId = System.getenv("ADMIN_ACTOR_ID") ?: "admin-cli",
+                roleId = "system_admin"
+            )
+        )
+    }
+
     fun upsertInstrument(actor: AdminActor, command: UpsertInstrumentCommand) {
+        requirePermission(actor, Permission.REFERENCE_WRITE)
         runtimePersistence.saveInstrument(Instrument(command.instrumentId, command.symbol))
         emitAudit(actor, "AdminInstrumentUpserted", command.instrumentId, "symbol=${command.symbol}")
     }
 
     fun upsertParticipant(actor: AdminActor, command: UpsertParticipantCommand) {
+        requirePermission(actor, Permission.REFERENCE_WRITE)
         runtimePersistence.saveParticipant(Participant(command.participantId, command.name))
         emitAudit(actor, "AdminParticipantUpserted", command.participantId, "name=${command.name}")
     }
 
     fun upsertAccount(actor: AdminActor, command: UpsertAccountCommand) {
+        requirePermission(actor, Permission.REFERENCE_WRITE)
         runtimePersistence.saveAccount(Account(command.accountId, command.participantId))
         emitAudit(actor, "AdminAccountUpserted", command.accountId, "participantId=${command.participantId}")
+    }
+
+    fun upsertRole(actor: AdminActor, roleId: String, permissionsCsv: String) {
+        requirePermission(actor, Permission.AUTH_ADMIN)
+        val permissions = permissionsCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        runtimePersistence.saveRole(RoleDefinition(roleId, permissions))
+        emitAudit(actor, "AdminRoleUpserted", roleId, "permissions=${permissions.joinToString(",")}")
+    }
+
+    fun assignRole(actor: AdminActor, targetActorId: String, roleId: String) {
+        requirePermission(actor, Permission.AUTH_ADMIN)
+        runtimePersistence.saveActorRoleBinding(ActorRoleBinding(targetActorId, roleId))
+        emitAudit(actor, "AdminRoleAssigned", targetActorId, "roleId=$roleId")
     }
 
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()
@@ -57,6 +92,10 @@ class AdminApplicationService(
     fun listParticipants(): List<Participant> = runtimePersistence.participants()
 
     fun listAccounts(): List<Account> = runtimePersistence.accounts()
+
+    fun listRoles(): List<RoleDefinition> = runtimePersistence.roles()
+
+    fun listActorRoles(actorId: String): List<ActorRoleBinding> = runtimePersistence.actorRoleBindings(actorId)
 
     fun recentEvents(limit: Int): List<RuntimeEvent> = runtimePersistence.recentEvents(limit)
 
@@ -77,6 +116,23 @@ class AdminApplicationService(
             )
         )
     }
+
+    private fun requirePermission(actor: AdminActor, permission: String) {
+        val boundRoleIds = runtimePersistence.actorRoleBindings(actor.actorId).map { it.roleId }.toSet()
+        val allowed = runtimePersistence.roles()
+            .filter { it.roleId in boundRoleIds }
+            .flatMap { it.permissions }
+            .toSet()
+        if (permission !in allowed && Permission.SUPERUSER !in allowed) {
+            throw AuthorizationException("actor ${actor.actorId} missing permission $permission")
+        }
+    }
+}
+
+object Permission {
+    const val SUPERUSER = "admin.superuser"
+    const val REFERENCE_WRITE = "reference.write"
+    const val AUTH_ADMIN = "auth.admin"
 }
 
 private fun defaultRuntimePersistence(): RuntimePersistence {
