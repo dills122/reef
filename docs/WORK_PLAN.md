@@ -53,6 +53,9 @@ The most effective sequence is:
 Current execution sprint for this sequence:
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
 
+Bridging sprint before post-match:
+- [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
+
 Next planned sprint block:
 - [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
 

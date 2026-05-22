@@ -1,0 +1,41 @@
+# Sprint Tracker: Local Dev Environment Foundation
+
+Reference sprint doc:
+- [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
+
+## Workstream A: Compose Topology and Service Contracts
+
+- [ ] Add base `docker-compose.yml` for runtime/engine/postgres
+- [ ] Add optional `redis` profile
+- [ ] Add optional observability profile (`otel-collector` + `jaeger`)
+- [ ] Standardize network aliases and env contracts across services
+
+## Workstream B: Bootstrap and Data Lifecycle
+
+- [ ] Add runtime DB initialization/migration path for local startup
+- [ ] Add deterministic seed data path for required reference entities
+- [ ] Add `make dev-reset` with volume reset + reseed
+
+## Workstream C: Developer Entry Points and Smoke Validation
+
+- [ ] Add `make dev-up`
+- [ ] Add `make dev-down`
+- [ ] Add `make dev-smoke`
+- [ ] Add health/readiness waits for all required services
+- [ ] Add smoke assertions for `/health` and core order flow endpoints
+- [ ] Add `/api/v1` boundary header-path smoke assertions
+
+## Workstream D: Observability Profile Hardening
+
+- [ ] Wire OTEL env config for runtime and engine when observability profile is enabled
+- [ ] Verify one full trace is visible in Jaeger from runtime -> engine flow
+- [ ] Document profile enablement and troubleshooting
+- [ ] Define explicit criteria to switch observability profile to default-on
+
+## Sprint Exit Checklist
+
+- [ ] New contributor can run `make dev-up` and reach working stack quickly
+- [ ] `make dev-smoke` passes on base stack
+- [ ] `make dev-smoke` passes with optional redis profile enabled
+- [ ] Optional observability profile validated and documented
+- [ ] `make dev-reset` returns environment to deterministic clean state
