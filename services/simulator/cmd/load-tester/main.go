@@ -39,6 +39,9 @@ type Config struct {
 	TraceCheckLimit int
 	ReportOut       string
 	Mode            string
+	Tail            bool
+	TailInterval    time.Duration
+	TailLines       int
 }
 
 type Action string
@@ -121,6 +124,33 @@ type workerState struct {
 	orders []string
 }
 
+type trade struct {
+	EventID       string `json:"eventId"`
+	TradeID       string `json:"tradeId"`
+	BuyOrderID    string `json:"buyOrderId"`
+	SellOrderID   string `json:"sellOrderId"`
+	QuantityUnits string `json:"quantityUnits"`
+	Price         string `json:"price"`
+	OccurredAt    string `json:"occurredAt"`
+}
+
+type tradesResponse struct {
+	Trades []trade `json:"trades"`
+}
+
+type event struct {
+	EventID        string `json:"eventId"`
+	EventType      string `json:"eventType"`
+	OrderID        string `json:"orderId"`
+	TraceID        string `json:"traceId"`
+	SequenceNumber int64  `json:"sequenceNumber"`
+	OccurredAt     string `json:"occurredAt"`
+}
+
+type eventsResponse struct {
+	Events []event `json:"events"`
+}
+
 type runtimeReject struct {
 	Code   string `json:"code"`
 	Reason string `json:"reason"`
@@ -156,6 +186,9 @@ func main() {
 	rateCh := make(chan struct{}, 1)
 	if cfg.RatePerSecond > 0 {
 		go tokenFeeder(ctx, cfg.RatePerSecond, rateCh)
+	}
+	if cfg.Tail {
+		go tailLoop(ctx, client, cfg)
 	}
 
 	for workerID := 0; workerID < cfg.Workers; workerID++ {
@@ -210,6 +243,9 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.TraceCheckLimit, "trace-check-limit", envInt("REEF_TRACE_CHECK_LIMIT", 50), "max unique traces to validate")
 	flag.StringVar(&cfg.ReportOut, "report-out", envOr("REEF_REPORT_OUT", ""), "optional json report output path")
 	flag.StringVar(&cfg.Mode, "mode", envOr("REEF_MODE", "chaos"), "traffic mode: chaos or strict-lifecycle")
+	flag.BoolVar(&cfg.Tail, "tail", envBool("REEF_TAIL", false), "stream new trades/events during the run")
+	flag.DurationVar(&cfg.TailInterval, "tail-interval", envDuration("REEF_TAIL_INTERVAL", 2*time.Second), "tail poll interval")
+	flag.IntVar(&cfg.TailLines, "tail-lines", envInt("REEF_TAIL_LINES", 5), "max trade/event rows per tail poll")
 	flag.Parse()
 
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
@@ -226,6 +262,12 @@ func parseConfig() (Config, error) {
 	}
 	if cfg.Mode != "chaos" && cfg.Mode != "strict-lifecycle" {
 		return cfg, errors.New("mode must be chaos or strict-lifecycle")
+	}
+	if cfg.TailInterval <= 0 {
+		return cfg, errors.New("tail-interval must be > 0")
+	}
+	if cfg.TailLines <= 0 {
+		return cfg, errors.New("tail-lines must be > 0")
 	}
 	return cfg, nil
 }
@@ -462,6 +504,93 @@ func runTraceChecks(client *http.Client, cfg Config, seen *sync.Map) traceChecks
 	return checks
 }
 
+func tailLoop(ctx context.Context, client *http.Client, cfg Config) {
+	ticker := time.NewTicker(cfg.TailInterval)
+	defer ticker.Stop()
+	seenTrades := make(map[string]struct{})
+	seenEvents := make(map[string]struct{})
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			trades := fetchNewTrades(client, cfg.BaseURL, seenTrades, cfg.TailLines)
+			events := fetchNewEvents(client, cfg.BaseURL, seenEvents, cfg.TailLines)
+			if len(trades) == 0 && len(events) == 0 {
+				continue
+			}
+			fmt.Printf("[tail %s] new_trades=%d new_events=%d\n", time.Now().UTC().Format(time.RFC3339), len(trades), len(events))
+			for _, t := range trades {
+				fmt.Printf("  trade %s buy=%s sell=%s qty=%s px=%s at=%s\n", t.TradeID, t.BuyOrderID, t.SellOrderID, t.QuantityUnits, t.Price, t.OccurredAt)
+			}
+			for _, e := range events {
+				fmt.Printf("  event %s type=%s order=%s trace=%s seq=%d at=%s\n", e.EventID, e.EventType, e.OrderID, e.TraceID, e.SequenceNumber, e.OccurredAt)
+			}
+		}
+	}
+}
+
+func fetchNewTrades(client *http.Client, baseURL string, seen map[string]struct{}, limit int) []trade {
+	resp, err := client.Get(baseURL + "/trades")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
+	}
+	var parsed tradesResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil
+	}
+	out := make([]trade, 0, limit)
+	for i := len(parsed.Trades) - 1; i >= 0 && len(out) < limit; i-- {
+		row := parsed.Trades[i]
+		if _, ok := seen[row.EventID]; ok {
+			continue
+		}
+		seen[row.EventID] = struct{}{}
+		out = append(out, row)
+	}
+	reverseTrades(out)
+	return out
+}
+
+func fetchNewEvents(client *http.Client, baseURL string, seen map[string]struct{}, limit int) []event {
+	resp, err := client.Get(baseURL + "/events")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
+	}
+	var parsed eventsResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil
+	}
+	out := make([]event, 0, limit)
+	for i := len(parsed.Events) - 1; i >= 0 && len(out) < limit; i-- {
+		row := parsed.Events[i]
+		if _, ok := seen[row.EventID]; ok {
+			continue
+		}
+		seen[row.EventID] = struct{}{}
+		out = append(out, row)
+	}
+	reverseEvents(out)
+	return out
+}
+
 func checkTrace(client *http.Client, baseURL, traceID string) bool {
 	resp, err := client.Get(baseURL + "/traces/" + traceID + "/events")
 	if err != nil {
@@ -561,6 +690,18 @@ func removeOrder(orders []string, orderID string) []string {
 		}
 	}
 	return orders
+}
+
+func reverseTrades(values []trade) {
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
+	}
+}
+
+func reverseEvents(values []event) {
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
+	}
 }
 
 func chooseSide(rng *rand.Rand) string {
@@ -705,4 +846,19 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "t", "yes", "y", "on":
+		return true
+	case "0", "false", "f", "no", "n", "off":
+		return false
+	default:
+		return fallback
+	}
 }

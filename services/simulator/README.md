@@ -40,6 +40,9 @@ go run ./cmd/load-tester \
 - `--timeout`: per-request timeout
 - `--submit-pct`, `--modify-pct`, `--cancel-pct`: must sum to `100`
 - `--mode`: `chaos` or `strict-lifecycle`
+- `--tail`: stream newly observed trades/events while running
+- `--tail-interval`: tail poll frequency (for example `2s`)
+- `--tail-lines`: max trade/event lines printed per poll
 - `--qty-min`, `--qty-max`: quantity randomization range
 - `--price-min`, `--price-max`: price randomization range
 - `--trace-check-limit`: number of unique traces validated at end of run
@@ -54,6 +57,19 @@ go run ./cmd/load-tester \
 
 - `acceptedBusinessOpsRps`: successful business operations per second
 - `rejectReasons`: grouped rejection code/reason breakdown
+
+Tail usage example:
+
+```bash
+go run ./cmd/load-tester \
+  --base-url http://localhost:8080 \
+  --duration 30s \
+  --workers 8 \
+  --rate 100 \
+  --tail \
+  --tail-interval 2s \
+  --tail-lines 4
+```
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
 
