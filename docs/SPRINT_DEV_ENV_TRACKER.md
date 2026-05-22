@@ -32,6 +32,13 @@ Reference sprint doc:
 - [ ] Document profile enablement and troubleshooting
 - [ ] Define explicit criteria to switch observability profile to default-on
 
+## Workstream E: Stress and Performance Baseline
+
+- [ ] Add `make dev-stress` target for simulator load testing against Docker stack
+- [ ] Add stepped load profile scenario (100 -> 200 -> 300 -> 400 rps baseline)
+- [ ] Capture baseline stress report artifact and summary doc
+- [ ] Define local pass/fail thresholds and degradation trigger criteria
+
 ## Sprint Exit Checklist
 
 - [ ] New contributor can run `make dev-up` and reach working stack quickly
@@ -39,3 +46,4 @@ Reference sprint doc:
 - [ ] `make dev-smoke` passes with optional redis profile enabled
 - [ ] Optional observability profile validated and documented
 - [ ] `make dev-reset` returns environment to deterministic clean state
+- [ ] `make dev-stress` produces repeatable baseline envelope metrics

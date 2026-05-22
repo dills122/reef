@@ -38,6 +38,7 @@ By end of sprint, Reef should have:
 - deterministic reset/reseed path
 - optional Redis and observability profiles that are test-verified
 - smoke coverage for core API flow under Docker
+- repeatable stress-test profile and baseline performance report under Docker
 
 ## Workstreams
 
@@ -99,12 +100,29 @@ Exit criteria:
 - observability profile can be enabled and verified reliably
 - clear criteria documented for future default-on switch
 
+### Workstream E: Stress and Performance Baseline
+
+Goal:
+establish realistic performance baselines in the Dockerized dev environment before post-match expansion.
+
+Tasks:
+1. Add `make dev-stress` load-test entrypoint using the simulator load tester.
+2. Define stepped load profile (for example: 100 -> 200 -> 300 -> 400 rps).
+3. Capture a baseline report artifact (`/tmp` + docs summary) with throughput, latency, and reject distribution.
+4. Document pass/fail thresholds and “degradation” trigger points for local runs.
+
+Exit criteria:
+- stress profile runs reproducibly against the Docker stack
+- baseline report is recorded and linked from sprint artifacts
+- break-point and acceptable operating envelope are documented
+
 ## Delivery Sequence (Recommended)
 
 1. Workstream A
 2. Workstream B
 3. Workstream C
 4. Workstream D
+5. Workstream E
 
 ## Risks and Mitigations
 
