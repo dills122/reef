@@ -11,7 +11,9 @@ interface RuntimePersistence {
     fun saveTrades(trades: List<TradeCreated>)
     fun saveEvent(event: RuntimeEvent)
     fun acceptedOrder(orderId: String): PersistedOrder?
+    fun acceptedOrders(): List<PersistedOrder>
     fun executionsForOrder(orderId: String): List<ExecutionCreated>
+    fun trades(): List<TradeCreated>
     fun tradesForOrder(orderId: String): List<TradeCreated>
     fun eventsForOrder(orderId: String): List<RuntimeEvent>
     fun events(): List<RuntimeEvent>

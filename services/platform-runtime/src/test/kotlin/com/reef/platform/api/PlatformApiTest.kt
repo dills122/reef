@@ -151,6 +151,14 @@ class PlatformApiTest {
 
         val eventsResponse = api.events()
         assertContains(eventsResponse, "\"eventType\":\"TradeCreated\"")
+
+        val ordersResponse = api.orders()
+        assertContains(ordersResponse, "\"orders\"")
+        assertContains(ordersResponse, "\"orderId\":\"ord-1\"")
+
+        val tradesResponse = api.trades()
+        assertContains(tradesResponse, "\"trades\"")
+        assertContains(tradesResponse, "\"tradeId\":\"trade-1\"")
     }
 
     private fun validRequestBody(): String {

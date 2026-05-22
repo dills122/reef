@@ -31,12 +31,20 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return orders[orderId]
     }
 
+    override fun acceptedOrders(): List<PersistedOrder> {
+        return orders.values.toList()
+    }
+
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> {
         return executions.filter { it.orderId == orderId }
     }
 
     override fun tradesForOrder(orderId: String): List<TradeCreated> {
         return trades.filter { it.buyOrderId == orderId || it.sellOrderId == orderId }
+    }
+
+    override fun trades(): List<TradeCreated> {
+        return trades.toList()
     }
 
     override fun eventsForOrder(orderId: String): List<RuntimeEvent> {

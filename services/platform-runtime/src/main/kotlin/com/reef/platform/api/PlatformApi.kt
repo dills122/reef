@@ -68,6 +68,22 @@ class PlatformApi(
         """.trimIndent()
     }
 
+    fun orders(): String {
+        return """
+            {
+              "orders":${toOrdersJson(orderService.persistedOrders())}
+            }
+        """.trimIndent()
+    }
+
+    fun trades(): String {
+        return """
+            {
+              "trades":${toTradesJson(orderService.persistedTrades())}
+            }
+        """.trimIndent()
+    }
+
     private fun toJson(result: SubmitOrderResult): String {
         val accepted = result.accepted
         if (accepted != null) {
@@ -166,6 +182,12 @@ class PlatformApi(
               "occurredAt":"${JsonFields.escape(event.occurredAt)}"
             }
             """.trimIndent()
+        }
+    }
+
+    private fun toOrdersJson(orders: List<PersistedOrder>): String {
+        return orders.joinToString(prefix = "[", postfix = "]") { order ->
+            toOrderJson(order)
         }
     }
 }

@@ -46,6 +46,24 @@ class PlatformHttpServer(
             writeJson(exchange, status, response)
         }
 
+        server.createContext("/orders") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            writeJson(exchange, 200, api.orders())
+        }
+
+        server.createContext("/trades") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            writeJson(exchange, 200, api.trades())
+        }
+
         server.createContext("/events") { exchange ->
             if (exchange.requestMethod != "GET") {
                 exchange.sendResponseHeaders(405, -1)

@@ -69,7 +69,9 @@ class InMemoryRuntimePersistenceTest {
         )
 
         assertNotNull(persistence.acceptedOrder("ord-1"))
+        assertEquals(1, persistence.acceptedOrders().size)
         assertEquals(1, persistence.executionsForOrder("ord-1").size)
+        assertEquals(1, persistence.trades().size)
         assertEquals(1, persistence.tradesForOrder("ord-1").size)
         assertEquals(1, persistence.eventsForOrder("ord-1").size)
         assertEquals(1, persistence.events().size)
