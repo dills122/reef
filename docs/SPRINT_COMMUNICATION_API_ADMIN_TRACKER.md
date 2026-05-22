@@ -18,6 +18,8 @@ Reference sprint doc:
 - [ ] Add idempotency-key requirement for mutating writes
 - [ ] Add rate-limit hook and local default implementation
 - [ ] Add standard boundary error envelope (`code`, `message`, `correlationId`)
+- [ ] Implement idempotency scope model (`clientId + route + idempotencyKey`)
+- [ ] Add idempotency retention/TTL class hooks
 
 ## Workstream C: Admin Layer (CLI First)
 
@@ -26,6 +28,9 @@ Reference sprint doc:
 - [ ] Add reference data admin CLI commands
 - [ ] Add simulation control admin CLI hooks
 - [ ] Add trace/event inspection admin CLI commands
+- [ ] Add calendar profile management admin CLI commands (US default + country profiles)
+- [ ] Add role/permission administration admin CLI commands
+- [ ] Add override reason code management admin commands
 - [ ] Ensure admin actions emit audit events
 
 ## Workstream D: Hardening and Docs
@@ -33,6 +38,9 @@ Reference sprint doc:
 - [ ] Add integration tests for transport fallback and parity
 - [ ] Add integration tests for boundary idempotency behavior
 - [ ] Add integration tests for admin CLI command flow
+- [ ] Add schema governance checks for contract evolution rules
+- [ ] Document injectable clock policy and determinism guardrails
+- [ ] Define baseline stage SLO targets
 - [ ] Update runbooks/startup docs for new flags and routes
 - [ ] Record any additional major design decisions in `docs/DECISIONS.md`
 
@@ -42,4 +50,7 @@ Reference sprint doc:
 - [ ] `/api/v1` write endpoints enforce idempotency key handling
 - [ ] Boundary auth and rate-limit hooks are executable paths
 - [ ] Admin CLI runs through reusable application layer modules
+- [ ] Calendar and role/permission admin flows are executable
+- [ ] Idempotency scope and retention behavior are validated
+- [ ] Schema governance and determinism policies are documented
 - [ ] CI validates new paths

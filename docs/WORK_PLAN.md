@@ -53,6 +53,9 @@ The most effective sequence is:
 Current execution sprint for this sequence:
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
 
+Next planned sprint block:
+- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+
 ## Major Workstreams
 
 Additional active workstream:
@@ -66,11 +69,13 @@ Scope:
 - transport abstraction and gRPC/protobuf migration scaffold
 - `/api/v1` public boundary and middleware hooks
 - CLI-first admin application layer with reusable command modules
+- foundational policy codification for idempotency scope, schema governance, deterministic clocks, and override auditing
 
 Exit criteria:
 - runtime transport path supports HTTP and gRPC selection
 - boundary writes enforce idempotency + auth/rate-limit hooks
 - admin operations run through application layer and audit-event emission
+- calendar/role admin paths and policy guardrails are implementation-ready and documented
 
 ### Workstream A: Runtime Query and Audit Surface
 
@@ -281,7 +286,31 @@ Checkpoint:
 
 - matched trades create downstream workflow records automatically
 
-## Phase 2B: Failures, Exceptions, Settlement
+## Phase 2B: Clearing and Netting Foundations
+
+Priority:
+medium
+
+Deliverables:
+
+- clearing workflow module with acceptance and rejection states
+- novation lifecycle tracking
+- netting batches and net obligation records
+- settlement input queues sourced from net obligations
+
+Concrete tasks:
+
+1. define clearing commands, events, and state transitions
+2. add clearing eligibility checks and rejection reason model
+3. implement netting rules by participant, instrument, and settlement date
+4. emit netting outputs to settlement obligation intake
+5. expose clearing and netting operations read models
+
+Checkpoint:
+
+- a matched and affirmed trade can move through clearing and become a netted settlement obligation
+
+## Phase 2C: Failures, Exceptions, Settlement
 
 Priority:
 medium
@@ -411,6 +440,14 @@ Reason:
 - it completes the inspectability promise of the current venue slice
 - it avoids starting reference data or UI work on top of an opaque backend
 - it keeps the platform close to the technical design's audit-first intent
+
+After the current communication/boundary/admin sprint completes, recommended next sprint:
+
+1. implement post-match engine skeletons in runtime modules
+2. land compare and affirmation happy-path plus mismatch routing
+3. land clearing submission and acceptance/rejection lifecycle
+4. land first netting pass and settlement-intake handoff
+5. add simulation controls for post-match clock acceleration and fault injection
 
 ## Definition of Done For Early Features
 

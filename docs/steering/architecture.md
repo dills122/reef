@@ -63,6 +63,7 @@ The initial domain breakdown should follow these contexts:
 - orders-and-execution
 - trade-processing
 - post-trade-workflow
+- clearing-and-netting
 - settlement
 - exceptions-and-operations
 - simulation-control
