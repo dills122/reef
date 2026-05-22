@@ -1,19 +1,55 @@
 package com.reef.platform.application
 
+import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.Account
+import com.reef.platform.domain.EngineOrderAccepted
+import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineClient
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 
 class OrderApplicationService(
     private val engineGateway: EngineGateway = EngineClient(),
-    private val runtimePersistence: RuntimePersistence = InMemoryRuntimePersistence()
+    private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence()
 ) {
+    private val eventProducer = "platform-runtime"
+    private val eventSchemaVersion = "v1"
+
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        val existingResult = runtimePersistence.submitResult(command.commandId)
+        if (existingResult != null) {
+            return existingResult
+        }
+
+        val validationError = validateReferenceData(command)
+        if (validationError != null) {
+            runtimePersistence.saveSubmitResult(command.commandId, validationError)
+            val traceId = command.traceId.ifBlank { command.orderId }
+            appendLifecycleEvent(
+                command.orderId,
+                command.commandId,
+                command.correlationId,
+                traceId,
+                validationError.accepted,
+                validationError.rejected,
+                "OrderAccepted",
+                "OrderRejected"
+            )
+            return validationError
+        }
+
         val result = engineGateway.submitOrder(command)
+        val traceId = command.traceId.ifBlank { command.orderId }
+        runtimePersistence.saveSubmitResult(command.commandId, result)
 
         val accepted = result.accepted
         if (accepted != null) {
@@ -35,14 +71,237 @@ class OrderApplicationService(
             )
             runtimePersistence.saveExecutions(result.executions)
             runtimePersistence.saveTrades(result.trades)
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = accepted.eventId,
+                    eventType = "OrderAccepted",
+                    orderId = accepted.orderId,
+                    traceId = traceId,
+                    causationId = command.commandId,
+                    correlationId = command.correlationId,
+                    producer = eventProducer,
+                    schemaVersion = eventSchemaVersion,
+                    occurredAt = accepted.occurredAt
+                )
+            )
+            result.executions.forEach { execution ->
+                runtimePersistence.saveEvent(
+                    RuntimeEvent(
+                        eventId = execution.eventId,
+                        eventType = "ExecutionCreated",
+                        orderId = execution.orderId,
+                        traceId = traceId,
+                        causationId = accepted.eventId,
+                        correlationId = command.correlationId,
+                        producer = eventProducer,
+                        schemaVersion = eventSchemaVersion,
+                        occurredAt = execution.occurredAt
+                    )
+                )
+            }
+            result.trades.forEach { trade ->
+                runtimePersistence.saveEvent(
+                    RuntimeEvent(
+                        eventId = trade.eventId,
+                        eventType = "TradeCreated",
+                        orderId = command.orderId,
+                        traceId = traceId,
+                        causationId = accepted.eventId,
+                        correlationId = command.correlationId,
+                        producer = eventProducer,
+                        schemaVersion = eventSchemaVersion,
+                        occurredAt = trade.occurredAt
+                    )
+                )
+            }
+        } else {
+            val rejected = result.rejected
+            if (rejected != null) {
+                runtimePersistence.saveEvent(
+                    RuntimeEvent(
+                        eventId = rejected.eventId,
+                        eventType = "OrderRejected",
+                        orderId = rejected.orderId,
+                        traceId = traceId,
+                        causationId = command.commandId,
+                        correlationId = command.correlationId,
+                        producer = eventProducer,
+                        schemaVersion = eventSchemaVersion,
+                        occurredAt = rejected.occurredAt
+                    )
+                )
+            }
         }
 
         return result
     }
 
+    fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        val existingResult = runtimePersistence.submitResult(command.commandId)
+        if (existingResult != null) {
+            return existingResult
+        }
+
+        val result = engineGateway.cancelOrder(command)
+        val traceId = command.traceId.ifBlank { command.orderId }
+        runtimePersistence.saveSubmitResult(command.commandId, result)
+        appendLifecycleEvent(
+            command.orderId,
+            command.commandId,
+            command.correlationId,
+            traceId,
+            result.accepted,
+            result.rejected,
+            "OrderCancelled",
+            "OrderCancelRejected"
+        )
+        return result
+    }
+
+    fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        val existingResult = runtimePersistence.submitResult(command.commandId)
+        if (existingResult != null) {
+            return existingResult
+        }
+
+        val result = engineGateway.modifyOrder(command)
+        val traceId = command.traceId.ifBlank { command.orderId }
+        runtimePersistence.saveSubmitResult(command.commandId, result)
+        appendLifecycleEvent(
+            command.orderId,
+            command.commandId,
+            command.correlationId,
+            traceId,
+            result.accepted,
+            result.rejected,
+            "OrderModified",
+            "OrderModifyRejected"
+        )
+        return result
+    }
+
+    private fun appendLifecycleEvent(
+        defaultOrderId: String,
+        commandId: String,
+        correlationId: String,
+        traceId: String,
+        accepted: EngineOrderAccepted?,
+        rejected: EngineOrderRejected?,
+        acceptedEventType: String,
+        rejectedEventType: String
+    ) {
+        if (accepted != null) {
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = accepted.eventId,
+                    eventType = acceptedEventType,
+                    orderId = accepted.orderId.ifBlank { defaultOrderId },
+                    traceId = traceId,
+                    causationId = commandId,
+                    correlationId = correlationId,
+                    producer = eventProducer,
+                    schemaVersion = eventSchemaVersion,
+                    occurredAt = accepted.occurredAt
+                )
+            )
+            return
+        }
+
+        if (rejected != null) {
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = rejected.eventId,
+                    eventType = rejectedEventType,
+                    orderId = rejected.orderId.ifBlank { defaultOrderId },
+                    traceId = traceId,
+                    causationId = commandId,
+                    correlationId = correlationId,
+                    producer = eventProducer,
+                    schemaVersion = eventSchemaVersion,
+                    occurredAt = rejected.occurredAt
+                )
+            )
+        }
+    }
+
     fun persistedOrder(orderId: String) = runtimePersistence.acceptedOrder(orderId)
+
+    fun persistedOrders() = runtimePersistence.acceptedOrders()
 
     fun persistedExecutions(orderId: String) = runtimePersistence.executionsForOrder(orderId)
 
     fun persistedTrades(orderId: String) = runtimePersistence.tradesForOrder(orderId)
+
+    fun persistedTrades() = runtimePersistence.trades()
+
+    fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
+
+    fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)
+
+    fun events() = runtimePersistence.events()
+
+    fun createInstrument(instrument: Instrument) = runtimePersistence.saveInstrument(instrument)
+
+    fun createParticipant(participant: Participant) = runtimePersistence.saveParticipant(participant)
+
+    fun createAccount(account: Account) = runtimePersistence.saveAccount(account)
+
+    fun instruments() = runtimePersistence.instruments()
+
+    fun participants() = runtimePersistence.participants()
+
+    fun accounts() = runtimePersistence.accounts()
+
+    private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
+        val now = command.occurredAt
+        if (!runtimePersistence.hasInstrument(command.instrumentId)) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-missing-instrument-ref-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "instrumentId does not exist",
+                    occurredAt = now
+                )
+            )
+        }
+
+        if (!runtimePersistence.hasParticipant(command.participantId)) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-missing-participant-ref-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "participantId does not exist",
+                    occurredAt = now
+                )
+            )
+        }
+
+        if (!runtimePersistence.hasAccount(command.accountId)) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-missing-account-ref-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "accountId does not exist",
+                    occurredAt = now
+                )
+            )
+        }
+
+        return null
+    }
+}
+
+private fun defaultRuntimePersistence(): RuntimePersistence {
+    val persistence = System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory"
+    if (persistence != "postgres") {
+        return InMemoryRuntimePersistence()
+    }
+
+    val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+    val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
+    val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
+    return PostgresRuntimePersistence(jdbcUrl, user, password)
 }

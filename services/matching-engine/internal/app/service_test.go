@@ -239,3 +239,58 @@ func TestSubmitOrderRejectsMissingInstrument(t *testing.T) {
 		t.Fatalf("expected validation error, got %s", result.Rejected.Code)
 	}
 }
+
+func TestCancelOrderRemovesRestingOrder(t *testing.T) {
+	service := NewService()
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	result := service.CancelOrder(domain.CancelOrder{
+		OrderID: "ord-1",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted cancel result, got %#v", result)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
+		t.Fatalf("expected no resting order after cancel")
+	}
+	state, ok := service.OrderState("ord-1")
+	if !ok || state.Status != domain.OrderStatusCancelled {
+		t.Fatalf("expected cancelled order state, got %#v", state)
+	}
+}
+
+func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
+	service := NewService()
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	result := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-1",
+		QuantityUnits: "120",
+		LimitPrice:    "150300000000",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted modify result, got %#v", result)
+	}
+
+	state, ok := service.OrderState("ord-1")
+	if !ok {
+		t.Fatalf("expected order state for ord-1")
+	}
+	if state.OriginalQuantity != "120" || state.RemainingQuantity != "120" || state.LimitPrice != "150300000000" {
+		t.Fatalf("unexpected modified state: %#v", state)
+	}
+}

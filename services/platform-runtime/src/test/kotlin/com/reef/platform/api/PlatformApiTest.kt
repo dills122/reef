@@ -1,9 +1,11 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -62,6 +64,7 @@ class PlatformApiTest {
                 )
             )
         )
+        seedReferenceData(api)
 
         val response = api.submitOrder(validRequestBody())
 
@@ -89,6 +92,7 @@ class PlatformApiTest {
                 )
             )
         )
+        seedReferenceData(api)
 
         val response = api.submitOrder(validRequestBody())
 
@@ -96,10 +100,156 @@ class PlatformApiTest {
         assertContains(response, "\"code\":\"VALIDATION_ERROR\"")
     }
 
+    @Test
+    fun orderAndEventsExposePersistedArtifacts() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult(
+                        accepted = EngineOrderAccepted(
+                            eventId = "evt-1",
+                            orderId = "ord-1",
+                            engineOrderId = "eng-ord-1",
+                            occurredAt = "2026-03-14T18:00:00Z"
+                        ),
+                        executions = listOf(
+                            ExecutionCreated(
+                                eventId = "evt-exec-1",
+                                executionId = "exec-1",
+                                orderId = "ord-1",
+                                instrumentId = "AAPL",
+                                quantityUnits = "100",
+                                executionPrice = "150250000000",
+                                currency = "USD",
+                                occurredAt = "2026-03-14T18:00:00Z"
+                            )
+                        ),
+                        trades = listOf(
+                            TradeCreated(
+                                eventId = "evt-trade-1",
+                                tradeId = "trade-1",
+                                executionId = "exec-1",
+                                buyOrderId = "ord-1",
+                                sellOrderId = "ord-2",
+                                instrumentId = "AAPL",
+                                quantityUnits = "100",
+                                price = "150250000000",
+                                currency = "USD",
+                                occurredAt = "2026-03-14T18:00:00Z"
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        seedReferenceData(api)
+
+        api.submitOrder(validRequestBody())
+
+        val orderResponse = api.order("ord-1")
+        assertContains(orderResponse, "\"order\"")
+        assertContains(orderResponse, "\"engineOrderId\":\"eng-ord-1\"")
+
+        val orderEventsResponse = api.orderEvents("ord-1")
+        assertContains(orderEventsResponse, "\"events\"")
+        assertContains(orderEventsResponse, "\"eventType\":\"OrderAccepted\"")
+        assertContains(orderEventsResponse, "\"traceId\":\"trace-1\"")
+        assertContains(orderEventsResponse, "\"causationId\":\"cmd-1\"")
+
+        val eventsResponse = api.events()
+        assertContains(eventsResponse, "\"eventType\":\"TradeCreated\"")
+        assertContains(eventsResponse, "\"producer\":\"platform-runtime\"")
+        assertContains(eventsResponse, "\"sequenceNumber\":")
+
+        val ordersResponse = api.orders()
+        assertContains(ordersResponse, "\"orders\"")
+        assertContains(ordersResponse, "\"orderId\":\"ord-1\"")
+
+        val tradesResponse = api.trades()
+        assertContains(tradesResponse, "\"trades\"")
+        assertContains(tradesResponse, "\"tradeId\":\"trade-1\"")
+
+        val traceEventsResponse = api.traceEvents("trace-1")
+        assertContains(traceEventsResponse, "\"traceId\":\"trace-1\"")
+        assertContains(traceEventsResponse, "\"events\"")
+    }
+
+    @Test
+    fun cancelAndModifySerializeResponses() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult(
+                        accepted = EngineOrderAccepted(
+                            eventId = "evt-accepted-1",
+                            orderId = "ord-1",
+                            engineOrderId = "eng-ord-1",
+                            occurredAt = "2026-03-14T18:00:00Z"
+                        )
+                    )
+                )
+            )
+        )
+
+        val cancelResponse = api.cancelOrder(
+            """
+            {
+              "commandId":"cmd-cancel-1",
+              "traceId":"trace-1",
+              "causationId":"",
+              "correlationId":"corr-1",
+              "actorId":"trader-1",
+              "occurredAt":"2026-03-14T18:00:00Z",
+              "orderId":"ord-1",
+              "reason":"test"
+            }
+            """.trimIndent()
+        )
+        assertContains(cancelResponse, "\"accepted\"")
+
+        val modifyResponse = api.modifyOrder(
+            """
+            {
+              "commandId":"cmd-modify-1",
+              "traceId":"trace-1",
+              "causationId":"",
+              "correlationId":"corr-1",
+              "actorId":"trader-1",
+              "occurredAt":"2026-03-14T18:00:00Z",
+              "orderId":"ord-1",
+              "quantityUnits":"120",
+              "limitPrice":"150250000001"
+            }
+            """.trimIndent()
+        )
+        assertContains(modifyResponse, "\"accepted\"")
+    }
+
+    @Test
+    fun referenceDataCrudEndpointsExposeSavedEntities() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult()
+                )
+            )
+        )
+
+        api.createInstrument("""{"instrumentId":"MSFT","symbol":"MSFT"}""")
+        api.createParticipant("""{"participantId":"participant-9","name":"Participant 9"}""")
+        api.createAccount("""{"accountId":"account-9","participantId":"participant-9"}""")
+
+        assertContains(api.instruments(), "\"instrumentId\":\"MSFT\"")
+        assertContains(api.participants(), "\"participantId\":\"participant-9\"")
+        assertContains(api.accounts(), "\"accountId\":\"account-9\"")
+    }
+
     private fun validRequestBody(): String {
         return """
             {
               "commandId":"cmd-1",
+              "traceId":"trace-1",
+              "causationId":"",
               "correlationId":"corr-1",
               "actorId":"trader-1",
               "occurredAt":"2026-03-14T18:00:00Z",
@@ -116,12 +266,26 @@ class PlatformApiTest {
             }
         """.trimIndent()
     }
+
+    private fun seedReferenceData(api: PlatformApi) {
+        api.createInstrument("""{"instrumentId":"AAPL","symbol":"AAPL"}""")
+        api.createParticipant("""{"participantId":"participant-1","name":"Participant 1"}""")
+        api.createAccount("""{"accountId":"account-1","participantId":"participant-1"}""")
+    }
 }
 
 private class FakeEngineGateway(
     private val result: SubmitOrderResult
 ) : EngineGateway {
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        return result
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        return result
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
         return result
     }
 }

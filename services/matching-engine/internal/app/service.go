@@ -152,6 +152,104 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	return result
 }
 
+func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if cmd.OrderID == "" {
+		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
+	}
+
+	record, ok := s.orders[cmd.OrderID]
+	if !ok {
+		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+
+	if record.Status == domain.OrderStatusFilled {
+		return rejectedResult("evt-reject-order-filled", cmd.OrderID, "INVALID_STATE", "filled order cannot be cancelled", now)
+	}
+	if record.Status == domain.OrderStatusCancelled {
+		return rejectedResult("evt-reject-order-cancelled", cmd.OrderID, "INVALID_STATE", "order already cancelled", now)
+	}
+
+	book := s.bookFor(record.InstrumentID)
+	s.removeRestingOrder(book, record)
+	record.RemainingQuantity = 0
+	record.Status = domain.OrderStatusCancelled
+	record.LastUpdatedAt = now
+
+	return domain.SubmitOrderResult{
+		Accepted: &domain.OrderAccepted{
+			EventID:       fmt.Sprintf("evt-order-cancelled-%s", cmd.OrderID),
+			OrderID:       cmd.OrderID,
+			EngineOrderID: fmt.Sprintf("eng-%s", cmd.OrderID),
+			OccurredAt:    now,
+		},
+	}
+}
+
+func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if cmd.OrderID == "" {
+		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
+	}
+
+	record, ok := s.orders[cmd.OrderID]
+	if !ok {
+		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+
+	if record.Status == domain.OrderStatusFilled || record.Status == domain.OrderStatusCancelled {
+		return rejectedResult("evt-reject-order-not-modifiable", cmd.OrderID, "INVALID_STATE", "order is not modifiable", now)
+	}
+
+	quantityUnits, err := strconv.ParseInt(cmd.QuantityUnits, 10, 64)
+	if err != nil || quantityUnits <= 0 {
+		return rejectedResult("evt-reject-invalid-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must be a positive integer", now)
+	}
+
+	limitPrice, err := strconv.ParseInt(cmd.LimitPrice, 10, 64)
+	if err != nil || limitPrice <= 0 {
+		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
+	}
+
+	alreadyFilled := record.OriginalQuantity - record.RemainingQuantity
+	if quantityUnits <= alreadyFilled {
+		return rejectedResult("evt-reject-invalid-modify-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must remain above already filled quantity", now)
+	}
+
+	book := s.bookFor(record.InstrumentID)
+	s.removeRestingOrder(book, record)
+
+	record.OriginalQuantity = quantityUnits
+	record.RemainingQuantity = quantityUnits - alreadyFilled
+	record.LimitPrice = limitPrice
+	record.LastUpdatedAt = now
+	s.refreshOrderStatus(record)
+
+	if record.RemainingQuantity > 0 {
+		incoming := &restingOrder{OrderID: cmd.OrderID}
+		if record.Side == domain.SideBuy {
+			book.buys = s.insertBuy(book.buys, incoming)
+		} else {
+			book.sells = s.insertSell(book.sells, incoming)
+		}
+	}
+
+	return domain.SubmitOrderResult{
+		Accepted: &domain.OrderAccepted{
+			EventID:       fmt.Sprintf("evt-order-modified-%s", cmd.OrderID),
+			OrderID:       cmd.OrderID,
+			EngineOrderID: fmt.Sprintf("eng-%s", cmd.OrderID),
+			OccurredAt:    now,
+		},
+	}
+}
+
 func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -334,5 +432,34 @@ func insertAt(existing []*restingOrder, incoming *restingOrder, idx int) []*rest
 	existing = append(existing, nil)
 	copy(existing[idx+1:], existing[idx:])
 	existing[idx] = incoming
+	return existing
+}
+
+func rejectedResult(eventID string, orderID string, code string, reason string, occurredAt string) domain.SubmitOrderResult {
+	return domain.SubmitOrderResult{
+		Rejected: &domain.OrderRejected{
+			EventID:    eventID,
+			OrderID:    orderID,
+			Code:       code,
+			Reason:     reason,
+			OccurredAt: occurredAt,
+		},
+	}
+}
+
+func (s *Service) removeRestingOrder(book *orderBook, record *orderRecord) {
+	if record.Side == domain.SideBuy {
+		book.buys = removeOrderByID(book.buys, record.OrderID)
+		return
+	}
+	book.sells = removeOrderByID(book.sells, record.OrderID)
+}
+
+func removeOrderByID(existing []*restingOrder, orderID string) []*restingOrder {
+	for idx, order := range existing {
+		if order.OrderID == orderID {
+			return append(existing[:idx], existing[idx+1:]...)
+		}
+	}
 	return existing
 }

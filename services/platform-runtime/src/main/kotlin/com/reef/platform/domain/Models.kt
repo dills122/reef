@@ -2,6 +2,8 @@ package com.reef.platform.domain
 
 data class SubmitOrderCommand(
     val commandId: String,
+    val traceId: String,
+    val causationId: String,
     val correlationId: String,
     val actorId: String,
     val occurredAt: String,
@@ -15,6 +17,29 @@ data class SubmitOrderCommand(
     val limitPrice: String,
     val currency: String,
     val timeInForce: String
+)
+
+data class CancelOrderCommand(
+    val commandId: String,
+    val traceId: String,
+    val causationId: String,
+    val correlationId: String,
+    val actorId: String,
+    val occurredAt: String,
+    val orderId: String,
+    val reason: String
+)
+
+data class ModifyOrderCommand(
+    val commandId: String,
+    val traceId: String,
+    val causationId: String,
+    val correlationId: String,
+    val actorId: String,
+    val occurredAt: String,
+    val orderId: String,
+    val quantityUnits: String,
+    val limitPrice: String
 )
 
 data class EngineOrderAccepted(
@@ -76,4 +101,32 @@ data class PersistedOrder(
     val currency: String,
     val timeInForce: String,
     val acceptedAt: String
+)
+
+data class Instrument(
+    val instrumentId: String,
+    val symbol: String
+)
+
+data class Participant(
+    val participantId: String,
+    val name: String
+)
+
+data class Account(
+    val accountId: String,
+    val participantId: String
+)
+
+data class RuntimeEvent(
+    val eventId: String,
+    val eventType: String,
+    val orderId: String,
+    val traceId: String,
+    val causationId: String,
+    val correlationId: String,
+    val producer: String,
+    val schemaVersion: String,
+    val sequenceNumber: Long = 0,
+    val occurredAt: String
 )

@@ -107,3 +107,37 @@ func TestSubmitOrderReturnsTradeForCrossingOrder(t *testing.T) {
 		t.Fatalf("expected matched buy order id, got %s", rec.Body.String())
 	}
 }
+
+func TestCancelOrderEndpoint(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	submitBody := []byte(`{
+		"commandId":"cmd-1",
+		"correlationId":"corr-1",
+		"actorId":"trader-1",
+		"occurredAt":"2026-03-14T18:00:00Z",
+		"orderId":"ord-1",
+		"instrumentId":"AAPL",
+		"participantId":"participant-1",
+		"accountId":"account-1",
+		"side":"BUY",
+		"orderType":"LIMIT",
+		"quantityUnits":"100",
+		"limitPrice":"150250000000",
+		"currency":"USD",
+		"timeInForce":"DAY"
+	}`)
+	server.Routes().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(submitBody)))
+
+	cancelBody := []byte(`{"orderId":"ord-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/orders/cancel", bytes.NewReader(cancelBody))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"accepted"`)) {
+		t.Fatalf("expected accepted payload, got %s", rec.Body.String())
+	}
+}

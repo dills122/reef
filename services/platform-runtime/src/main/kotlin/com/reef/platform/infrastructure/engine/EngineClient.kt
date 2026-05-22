@@ -1,9 +1,11 @@
 package com.reef.platform.infrastructure.engine
 
 import com.reef.platform.api.JsonFields
+import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -23,6 +25,8 @@ class EngineClient : EngineGateway {
         val payload = """
             {
               "commandId":"${JsonFields.escape(command.commandId)}",
+              "traceId":"${JsonFields.escape(command.traceId)}",
+              "causationId":"${JsonFields.escape(command.causationId)}",
               "correlationId":"${JsonFields.escape(command.correlationId)}",
               "actorId":"${JsonFields.escape(command.actorId)}",
               "occurredAt":"${JsonFields.escape(command.occurredAt)}",
@@ -39,7 +43,46 @@ class EngineClient : EngineGateway {
             }
         """.trimIndent()
 
-        val connection = java.net.URI.create("$engineBaseUrl/orders/submit").toURL().openConnection() as java.net.HttpURLConnection
+        return postAndParse("/orders/submit", payload)
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        val payload = """
+            {
+              "commandId":"${JsonFields.escape(command.commandId)}",
+              "traceId":"${JsonFields.escape(command.traceId)}",
+              "causationId":"${JsonFields.escape(command.causationId)}",
+              "correlationId":"${JsonFields.escape(command.correlationId)}",
+              "actorId":"${JsonFields.escape(command.actorId)}",
+              "occurredAt":"${JsonFields.escape(command.occurredAt)}",
+              "orderId":"${JsonFields.escape(command.orderId)}",
+              "reason":"${JsonFields.escape(command.reason)}"
+            }
+        """.trimIndent()
+
+        return postAndParse("/orders/cancel", payload)
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        val payload = """
+            {
+              "commandId":"${JsonFields.escape(command.commandId)}",
+              "traceId":"${JsonFields.escape(command.traceId)}",
+              "causationId":"${JsonFields.escape(command.causationId)}",
+              "correlationId":"${JsonFields.escape(command.correlationId)}",
+              "actorId":"${JsonFields.escape(command.actorId)}",
+              "occurredAt":"${JsonFields.escape(command.occurredAt)}",
+              "orderId":"${JsonFields.escape(command.orderId)}",
+              "quantityUnits":"${JsonFields.escape(command.quantityUnits)}",
+              "limitPrice":"${JsonFields.escape(command.limitPrice)}"
+            }
+        """.trimIndent()
+
+        return postAndParse("/orders/modify", payload)
+    }
+
+    private fun postAndParse(path: String, payload: String): SubmitOrderResult {
+        val connection = java.net.URI.create("$engineBaseUrl$path").toURL().openConnection() as java.net.HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.setRequestProperty("Content-Type", "application/json")
