@@ -138,6 +138,9 @@ Exit criteria:
 These should advance incrementally across phases:
 
 - authentication and role-aware UI surfaces
+- inter-service gRPC/protobuf contract hardening
+- external API boundary and client integration standards
+- admin command surface (CLI first, API later)
 - audit/event explorer
 - testing strategy and fixtures
 - developer bootstrap and local orchestration

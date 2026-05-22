@@ -11,7 +11,7 @@ The project is being rebuilt from an early prototype into a production-shaped lo
 
 ## Current State
 
-The repository is in Phase 0 foundation work.
+The repository is in early Phase 1 implementation (API-first venue slice).
 
 What exists now:
 
@@ -19,6 +19,7 @@ What exists now:
 - technical design in [`REEF_TECHNICAL_DESIGN.md`](./REEF_TECHNICAL_DESIGN.md)
 - implementation roadmap in [`docs/ROADMAP.md`](./docs/ROADMAP.md)
 - architecture and language steering in [`docs/steering/`](./docs/steering/)
+- load/simulation CLI in [`services/simulator/`](./services/simulator/)
 
 The old Go prototype has been retired so the repository can be rebuilt around the current architecture intentionally.
 
@@ -75,6 +76,18 @@ Repository check:
 ```bash
 make test
 ```
+
+## Current Defaults
+
+- runtime-to-engine transport currently defaults to HTTP adapter, with gRPC direction documented for migration
+- user-facing API boundary direction is versioned `/api/v1` contracts
+- admin surface direction is CLI-first using reusable runtime admin application modules
+
+Related docs:
+- [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)
+- [`docs/steering/external-api-boundary.md`](./docs/steering/external-api-boundary.md)
+- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./docs/SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/DECISIONS.md`](./docs/DECISIONS.md)
 
 ## Steering
 

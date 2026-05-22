@@ -161,6 +161,11 @@ At minimum, plan for:
 - introduce NATS when async workflows materially improve the design
 - never let transport concerns define the domain model
 
+For communication and API specifics, treat these as normative companions:
+
+- [`inter-service-communication.md`](./inter-service-communication.md)
+- [`external-api-boundary.md`](./external-api-boundary.md)
+
 ## Observability and Audit
 
 Every service should make it easy to answer:
