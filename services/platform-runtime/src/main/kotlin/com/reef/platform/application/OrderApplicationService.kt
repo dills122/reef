@@ -234,11 +234,15 @@ class OrderApplicationService(
 
     fun persistedTrades() = runtimePersistence.trades()
 
+    fun recentTrades(limit: Int) = runtimePersistence.recentTrades(limit)
+
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
 
     fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)
 
     fun events() = runtimePersistence.events()
+
+    fun recentEvents(limit: Int) = runtimePersistence.recentEvents(limit)
 
     fun createInstrument(instrument: Instrument) = runtimePersistence.saveInstrument(instrument)
 
