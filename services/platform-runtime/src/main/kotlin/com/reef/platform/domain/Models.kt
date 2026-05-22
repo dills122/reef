@@ -77,3 +77,10 @@ data class PersistedOrder(
     val timeInForce: String,
     val acceptedAt: String
 )
+
+data class RuntimeEvent(
+    val eventId: String,
+    val eventType: String,
+    val orderId: String,
+    val occurredAt: String
+)

@@ -2,6 +2,7 @@ package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.TradeCreated
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,9 +59,19 @@ class InMemoryRuntimePersistenceTest {
                 )
             )
         )
+        persistence.saveEvent(
+            RuntimeEvent(
+                eventId = "evt-order-accepted-1",
+                eventType = "OrderAccepted",
+                orderId = "ord-1",
+                occurredAt = "2026-03-14T18:00:00Z"
+            )
+        )
 
         assertNotNull(persistence.acceptedOrder("ord-1"))
         assertEquals(1, persistence.executionsForOrder("ord-1").size)
         assertEquals(1, persistence.tradesForOrder("ord-1").size)
+        assertEquals(1, persistence.eventsForOrder("ord-1").size)
+        assertEquals(1, persistence.events().size)
     }
 }

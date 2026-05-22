@@ -26,6 +26,35 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.submitOrder(body))
         }
 
+        server.createContext("/orders/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+
+            val path = exchange.requestURI.path.removePrefix("/orders/")
+            if (path.endsWith("/events")) {
+                val orderId = path.removeSuffix("/events").trimEnd('/')
+                writeJson(exchange, 200, api.orderEvents(orderId))
+                return@createContext
+            }
+
+            val orderId = path.trimEnd('/')
+            val response = api.order(orderId)
+            val status = if (response.contains("\"error\":\"order not found\"")) 404 else 200
+            writeJson(exchange, status, response)
+        }
+
+        server.createContext("/events") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            writeJson(exchange, 200, api.events())
+        }
+
         server.start()
         println("platform-runtime listening on :$port")
     }

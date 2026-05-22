@@ -96,6 +96,63 @@ class PlatformApiTest {
         assertContains(response, "\"code\":\"VALIDATION_ERROR\"")
     }
 
+    @Test
+    fun orderAndEventsExposePersistedArtifacts() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult(
+                        accepted = EngineOrderAccepted(
+                            eventId = "evt-1",
+                            orderId = "ord-1",
+                            engineOrderId = "eng-ord-1",
+                            occurredAt = "2026-03-14T18:00:00Z"
+                        ),
+                        executions = listOf(
+                            ExecutionCreated(
+                                eventId = "evt-exec-1",
+                                executionId = "exec-1",
+                                orderId = "ord-1",
+                                instrumentId = "AAPL",
+                                quantityUnits = "100",
+                                executionPrice = "150250000000",
+                                currency = "USD",
+                                occurredAt = "2026-03-14T18:00:00Z"
+                            )
+                        ),
+                        trades = listOf(
+                            TradeCreated(
+                                eventId = "evt-trade-1",
+                                tradeId = "trade-1",
+                                executionId = "exec-1",
+                                buyOrderId = "ord-1",
+                                sellOrderId = "ord-2",
+                                instrumentId = "AAPL",
+                                quantityUnits = "100",
+                                price = "150250000000",
+                                currency = "USD",
+                                occurredAt = "2026-03-14T18:00:00Z"
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        api.submitOrder(validRequestBody())
+
+        val orderResponse = api.order("ord-1")
+        assertContains(orderResponse, "\"order\"")
+        assertContains(orderResponse, "\"engineOrderId\":\"eng-ord-1\"")
+
+        val orderEventsResponse = api.orderEvents("ord-1")
+        assertContains(orderEventsResponse, "\"events\"")
+        assertContains(orderEventsResponse, "\"eventType\":\"OrderAccepted\"")
+
+        val eventsResponse = api.events()
+        assertContains(eventsResponse, "\"eventType\":\"TradeCreated\"")
+    }
+
     private fun validRequestBody(): String {
         return """
             {

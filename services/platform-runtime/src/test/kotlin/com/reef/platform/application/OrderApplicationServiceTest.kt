@@ -45,6 +45,7 @@ class OrderApplicationServiceTest {
         assertEquals("eng-ord-1", service.persistedOrder("ord-1")?.engineOrderId)
         assertEquals(1, service.persistedExecutions("ord-1").size)
         assertEquals(1, service.persistedTrades("ord-1").size)
+        assertEquals(3, service.persistedEvents("ord-1").size)
     }
 
     @Test
@@ -74,6 +75,7 @@ class OrderApplicationServiceTest {
         assertNull(service.persistedOrder("ord-2"))
         assertEquals(0, service.persistedExecutions("ord-2").size)
         assertEquals(0, service.persistedTrades("ord-2").size)
+        assertEquals(1, service.persistedEvents("ord-2").size)
     }
 }
 

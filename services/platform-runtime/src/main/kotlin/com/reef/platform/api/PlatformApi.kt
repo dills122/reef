@@ -2,6 +2,8 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -32,6 +34,38 @@ class PlatformApi(
         )
 
         return toJson(orderService.submitOrder(command))
+    }
+
+    fun order(orderId: String): String {
+        val order = orderService.persistedOrder(orderId)
+        if (order == null) {
+            return """{"error":"order not found","orderId":"${JsonFields.escape(orderId)}"}"""
+        }
+
+        return """
+            {
+              "order":${toOrderJson(order)},
+              "executions":${toExecutionsJson(orderService.persistedExecutions(orderId))},
+              "trades":${toTradesJson(orderService.persistedTrades(orderId))}
+            }
+        """.trimIndent()
+    }
+
+    fun orderEvents(orderId: String): String {
+        return """
+            {
+              "orderId":"${JsonFields.escape(orderId)}",
+              "events":${toEventsJson(orderService.persistedEvents(orderId))}
+            }
+        """.trimIndent()
+    }
+
+    fun events(): String {
+        return """
+            {
+              "events":${toEventsJson(orderService.events())}
+            }
+        """.trimIndent()
     }
 
     private fun toJson(result: SubmitOrderResult): String {
@@ -98,6 +132,38 @@ class PlatformApi(
               "price":"${JsonFields.escape(trade.price)}",
               "currency":"${JsonFields.escape(trade.currency)}",
               "occurredAt":"${JsonFields.escape(trade.occurredAt)}"
+            }
+            """.trimIndent()
+        }
+    }
+
+    private fun toOrderJson(order: PersistedOrder): String {
+        return """
+            {
+              "orderId":"${JsonFields.escape(order.orderId)}",
+              "engineOrderId":"${JsonFields.escape(order.engineOrderId)}",
+              "instrumentId":"${JsonFields.escape(order.instrumentId)}",
+              "participantId":"${JsonFields.escape(order.participantId)}",
+              "accountId":"${JsonFields.escape(order.accountId)}",
+              "side":"${JsonFields.escape(order.side)}",
+              "orderType":"${JsonFields.escape(order.orderType)}",
+              "quantityUnits":"${JsonFields.escape(order.quantityUnits)}",
+              "limitPrice":"${JsonFields.escape(order.limitPrice)}",
+              "currency":"${JsonFields.escape(order.currency)}",
+              "timeInForce":"${JsonFields.escape(order.timeInForce)}",
+              "acceptedAt":"${JsonFields.escape(order.acceptedAt)}"
+            }
+        """.trimIndent()
+    }
+
+    private fun toEventsJson(events: List<RuntimeEvent>): String {
+        return events.joinToString(prefix = "[", postfix = "]") { event ->
+            """
+            {
+              "eventId":"${JsonFields.escape(event.eventId)}",
+              "eventType":"${JsonFields.escape(event.eventType)}",
+              "orderId":"${JsonFields.escape(event.orderId)}",
+              "occurredAt":"${JsonFields.escape(event.occurredAt)}"
             }
             """.trimIndent()
         }

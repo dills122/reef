@@ -1,6 +1,7 @@
 package com.reef.platform.application
 
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineClient
@@ -35,6 +36,46 @@ class OrderApplicationService(
             )
             runtimePersistence.saveExecutions(result.executions)
             runtimePersistence.saveTrades(result.trades)
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = accepted.eventId,
+                    eventType = "OrderAccepted",
+                    orderId = accepted.orderId,
+                    occurredAt = accepted.occurredAt
+                )
+            )
+            result.executions.forEach { execution ->
+                runtimePersistence.saveEvent(
+                    RuntimeEvent(
+                        eventId = execution.eventId,
+                        eventType = "ExecutionCreated",
+                        orderId = execution.orderId,
+                        occurredAt = execution.occurredAt
+                    )
+                )
+            }
+            result.trades.forEach { trade ->
+                runtimePersistence.saveEvent(
+                    RuntimeEvent(
+                        eventId = trade.eventId,
+                        eventType = "TradeCreated",
+                        orderId = command.orderId,
+                        occurredAt = trade.occurredAt
+                    )
+                )
+            }
+        } else {
+            val rejected = result.rejected
+            if (rejected != null) {
+                runtimePersistence.saveEvent(
+                    RuntimeEvent(
+                        eventId = rejected.eventId,
+                        eventType = "OrderRejected",
+                        orderId = rejected.orderId,
+                        occurredAt = rejected.occurredAt
+                    )
+                )
+            }
         }
 
         return result
@@ -45,4 +86,8 @@ class OrderApplicationService(
     fun persistedExecutions(orderId: String) = runtimePersistence.executionsForOrder(orderId)
 
     fun persistedTrades(orderId: String) = runtimePersistence.tradesForOrder(orderId)
+
+    fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
+
+    fun events() = runtimePersistence.events()
 }
