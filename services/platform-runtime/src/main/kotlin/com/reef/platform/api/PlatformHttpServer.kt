@@ -123,6 +123,11 @@ class PlatformHttpServer(
                 exchange.close()
                 return@createContext
             }
+            val limit = queryLimit(exchange, 0)
+            if (limit > 0) {
+                writeJson(exchange, 200, api.recentTrades(limit))
+                return@createContext
+            }
             writeJson(exchange, 200, api.trades())
         }
 
@@ -130,6 +135,11 @@ class PlatformHttpServer(
             if (exchange.requestMethod != "GET") {
                 exchange.sendResponseHeaders(405, -1)
                 exchange.close()
+                return@createContext
+            }
+            val limit = queryLimit(exchange, 0)
+            if (limit > 0) {
+                writeJson(exchange, 200, api.recentEvents(limit))
                 return@createContext
             }
             writeJson(exchange, 200, api.events())
@@ -164,5 +174,17 @@ class PlatformHttpServer(
         exchange.responseBody.use { output ->
             output.write(bytes)
         }
+    }
+
+    private fun queryLimit(exchange: HttpExchange, defaultValue: Int): Int {
+        val query = exchange.requestURI.query ?: return defaultValue
+        val values = query.split("&")
+        for (value in values) {
+            val parts = value.split("=", limit = 2)
+            if (parts.size == 2 && parts[0] == "limit") {
+                return parts[1].toIntOrNull() ?: defaultValue
+            }
+        }
+        return defaultValue
     }
 }

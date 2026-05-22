@@ -29,8 +29,10 @@ interface RuntimePersistence {
     fun acceptedOrders(): List<PersistedOrder>
     fun executionsForOrder(orderId: String): List<ExecutionCreated>
     fun trades(): List<TradeCreated>
+    fun recentTrades(limit: Int): List<TradeCreated>
     fun tradesForOrder(orderId: String): List<TradeCreated>
     fun eventsForOrder(orderId: String): List<RuntimeEvent>
     fun eventsForTrace(traceId: String): List<RuntimeEvent>
     fun events(): List<RuntimeEvent>
+    fun recentEvents(limit: Int): List<RuntimeEvent>
 }

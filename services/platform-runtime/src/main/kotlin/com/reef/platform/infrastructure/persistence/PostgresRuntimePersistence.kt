@@ -444,6 +444,24 @@ class PostgresRuntimePersistence(
         )
     }
 
+    override fun recentTrades(limit: Int): List<TradeCreated> = queryList(
+        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM trades ORDER BY occurred_at DESC LIMIT ?",
+        limit.coerceAtLeast(0).toString()
+    ) {
+        TradeCreated(
+            eventId = getString("event_id"),
+            tradeId = getString("trade_id"),
+            executionId = getString("execution_id"),
+            buyOrderId = getString("buy_order_id"),
+            sellOrderId = getString("sell_order_id"),
+            instrumentId = getString("instrument_id"),
+            quantityUnits = getString("quantity_units"),
+            price = getString("price"),
+            currency = getString("currency"),
+            occurredAt = getString("occurred_at")
+        )
+    }.asReversed()
+
     override fun tradesForOrder(orderId: String): List<TradeCreated> = queryList(
         """
         SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at
@@ -479,6 +497,11 @@ class PostgresRuntimePersistence(
     override fun events(): List<RuntimeEvent> = queryEvents(
         "SELECT * FROM runtime_events ORDER BY trace_id, sequence_number"
     )
+
+    override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
+        "SELECT * FROM runtime_events ORDER BY occurred_at DESC, event_id DESC LIMIT ?",
+        limit.coerceAtLeast(0).toString()
+    ).asReversed()
 
     private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = queryList(sql, *params) {
         RuntimeEvent(

@@ -40,6 +40,7 @@ go run ./cmd/load-tester \
 - `--timeout`: per-request timeout
 - `--submit-pct`, `--modify-pct`, `--cancel-pct`: must sum to `100`
 - `--mode`: `chaos` or `strict-lifecycle`
+- `--profile-mm-pct`, `--profile-inst-pct`, `--profile-retail-pct`, `--profile-noise-pct`: worker profile mix, must sum to `100`
 - `--tail`: stream newly observed trades/events while running
 - `--tail-interval`: tail poll frequency (for example `2s`)
 - `--tail-lines`: max trade/event lines printed per poll
@@ -52,6 +53,14 @@ go run ./cmd/load-tester \
 
 - `chaos`: randomized actions regardless of order lifecycle state; useful for resilience and rejection-path testing.
 - `strict-lifecycle`: forces submit when no local live orders exist and prunes clearly terminal rejected orders from worker state; useful for cleaner business-throughput measurements.
+
+### Profile Model
+
+The tester now assigns workers to four behavior profiles:
+- `market-maker`: tighter prices around mid, smaller frequent quote adjustments
+- `institutional`: larger sizes and more modify activity
+- `retail`: smaller sizes and submit-heavy behavior
+- `noise`: random background flow
 
 ### Report Additions
 

@@ -42,6 +42,10 @@ type Config struct {
 	Tail            bool
 	TailInterval    time.Duration
 	TailLines       int
+	ProfileMixMM    int
+	ProfileMixInst  int
+	ProfileMixRetail int
+	ProfileMixNoise int
 }
 
 type Action string
@@ -53,6 +57,7 @@ const (
 )
 
 type requestResult struct {
+	Profile      string
 	Action      Action
 	Success     bool
 	StatusCode  int
@@ -77,11 +82,20 @@ type summary struct {
 	TotalSuccess    int64                       `json:"totalSuccess"`
 	TotalFailures   int64                       `json:"totalFailures"`
 	ByAction        map[Action]actionSummary    `json:"byAction"`
+	ByProfile       map[string]profileSummary   `json:"byProfile"`
 	StatusCodes     map[int]int64               `json:"statusCodes"`
 	TopErrors       []errorSummary              `json:"topErrors"`
 	RejectReasons   []errorSummary              `json:"rejectReasons"`
 	LatencyMs       latencySummary              `json:"latencyMs"`
 	TraceChecks     traceChecks                 `json:"traceChecks"`
+}
+
+type profileSummary struct {
+	Requests int64                    `json:"requests"`
+	Success  int64                    `json:"success"`
+	Failures int64                    `json:"failures"`
+	ByAction map[Action]actionSummary `json:"byAction"`
+	Latency  latencySummary           `json:"latencyMs"`
 }
 
 type actionSummary struct {
@@ -123,6 +137,13 @@ type traceEventsResponse struct {
 type workerState struct {
 	orders []string
 }
+
+const (
+	profileMarketMaker  = "market-maker"
+	profileInstitutional = "institutional"
+	profileRetail       = "retail"
+	profileNoise        = "noise"
+)
 
 type trade struct {
 	EventID       string `json:"eventId"`
@@ -193,10 +214,11 @@ func main() {
 
 	for workerID := 0; workerID < cfg.Workers; workerID++ {
 		wg.Add(1)
-		go func(id int) {
+		profile := profileForWorker(workerID, cfg.Workers, cfg)
+		go func(id int, workerProfile string) {
 			defer wg.Done()
-			runWorker(ctx, client, cfg, id, &counter, rateCh, results, &traceSeen)
-		}(workerID)
+			runWorker(ctx, client, cfg, id, workerProfile, &counter, rateCh, results, &traceSeen)
+		}(workerID, profile)
 	}
 
 	go func() {
@@ -246,6 +268,10 @@ func parseConfig() (Config, error) {
 	flag.BoolVar(&cfg.Tail, "tail", envBool("REEF_TAIL", false), "stream new trades/events during the run")
 	flag.DurationVar(&cfg.TailInterval, "tail-interval", envDuration("REEF_TAIL_INTERVAL", 2*time.Second), "tail poll interval")
 	flag.IntVar(&cfg.TailLines, "tail-lines", envInt("REEF_TAIL_LINES", 5), "max trade/event rows per tail poll")
+	flag.IntVar(&cfg.ProfileMixMM, "profile-mm-pct", envInt("REEF_PROFILE_MM_PCT", 35), "market-maker worker percentage")
+	flag.IntVar(&cfg.ProfileMixInst, "profile-inst-pct", envInt("REEF_PROFILE_INST_PCT", 30), "institutional worker percentage")
+	flag.IntVar(&cfg.ProfileMixRetail, "profile-retail-pct", envInt("REEF_PROFILE_RETAIL_PCT", 25), "retail worker percentage")
+	flag.IntVar(&cfg.ProfileMixNoise, "profile-noise-pct", envInt("REEF_PROFILE_NOISE_PCT", 10), "noise worker percentage")
 	flag.Parse()
 
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
@@ -269,6 +295,9 @@ func parseConfig() (Config, error) {
 	if cfg.TailLines <= 0 {
 		return cfg, errors.New("tail-lines must be > 0")
 	}
+	if cfg.ProfileMixMM+cfg.ProfileMixInst+cfg.ProfileMixRetail+cfg.ProfileMixNoise != 100 {
+		return cfg, errors.New("profile mix percentages must sum to 100")
+	}
 	return cfg, nil
 }
 
@@ -277,6 +306,7 @@ func runWorker(
 	client *http.Client,
 	cfg Config,
 	workerID int,
+	profile string,
 	counter *int64,
 	rateCh <-chan struct{},
 	results chan<- requestResult,
@@ -298,12 +328,13 @@ func runWorker(
 			}
 		}
 
-		action := chooseAction(rng, cfg, len(state.orders) > 0)
+		action := chooseActionForProfile(rng, cfg, len(state.orders) > 0, profile)
 		reqID := atomic.AddInt64(counter, 1)
 		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
 		commandID := fmt.Sprintf("cmd-%d-%d", workerID, reqID)
 		start := time.Now()
 		result := requestResult{
+			Profile:   profile,
 			Action:    action,
 			TraceID:   traceID,
 			CommandID: commandID,
@@ -325,8 +356,8 @@ func runWorker(
 				"accountId":     cfg.AccountID,
 				"side":          chooseSide(rng),
 				"orderType":     "LIMIT",
-				"quantityUnits": fmt.Sprintf("%d", randomInt(rng, cfg.QuantityMin, cfg.QuantityMax)),
-				"limitPrice":    fmt.Sprintf("%d", randomInt64(rng, cfg.PriceMin, cfg.PriceMax)),
+				"quantityUnits": fmt.Sprintf("%d", profileQuantity(rng, cfg, profile)),
+				"limitPrice":    fmt.Sprintf("%d", profilePrice(rng, cfg, profile)),
 				"currency":      "USD",
 				"timeInForce":   "DAY",
 			})
@@ -349,8 +380,8 @@ func runWorker(
 				"actorId":       fmt.Sprintf("bot-%d", workerID),
 				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
 				"orderId":       orderID,
-				"quantityUnits": fmt.Sprintf("%d", randomInt(rng, cfg.QuantityMin, cfg.QuantityMax)),
-				"limitPrice":    fmt.Sprintf("%d", randomInt64(rng, cfg.PriceMin, cfg.PriceMax)),
+				"quantityUnits": fmt.Sprintf("%d", profileQuantity(rng, cfg, profile)),
+				"limitPrice":    fmt.Sprintf("%d", profilePrice(rng, cfg, profile)),
 			})
 			fillResult(&result, status, body, err, start)
 			if result.Success {
@@ -429,6 +460,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 			ActionModify: {},
 			ActionCancel: {},
 		},
+		ByProfile: map[string]profileSummary{},
 		StatusCodes: make(map[int]int64),
 	}
 
@@ -440,12 +472,14 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		ActionModify: {},
 		ActionCancel: {},
 	}
+	profileLatencies := map[string][]float64{}
 
 	for _, r := range results {
 		report.TotalRequests++
 		report.StatusCodes[r.StatusCode]++
 		allLatencies = append(allLatencies, r.Latency.Seconds()*1000)
 		actionLatencies[r.Action] = append(actionLatencies[r.Action], r.Latency.Seconds()*1000)
+		profileLatencies[r.Profile] = append(profileLatencies[r.Profile], r.Latency.Seconds()*1000)
 
 		current := report.ByAction[r.Action]
 		current.Requests++
@@ -467,6 +501,29 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 			}
 		}
 		report.ByAction[r.Action] = current
+
+		pCurrent, ok := report.ByProfile[r.Profile]
+		if !ok {
+			pCurrent = profileSummary{
+				ByAction: map[Action]actionSummary{
+					ActionSubmit: {},
+					ActionModify: {},
+					ActionCancel: {},
+				},
+			}
+		}
+		pCurrent.Requests++
+		pAction := pCurrent.ByAction[r.Action]
+		pAction.Requests++
+		if r.Success {
+			pCurrent.Success++
+			pAction.Success++
+		} else {
+			pCurrent.Failures++
+			pAction.Failures++
+		}
+		pCurrent.ByAction[r.Action] = pAction
+		report.ByProfile[r.Profile] = pCurrent
 	}
 
 	report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
@@ -476,6 +533,21 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		current := report.ByAction[action]
 		current.Latency = computeLatency(values)
 		report.ByAction[action] = current
+	}
+	for profile, values := range profileLatencies {
+		pCurrent := report.ByProfile[profile]
+		pCurrent.Latency = computeLatency(values)
+		for action, actionSummary := range pCurrent.ByAction {
+			actionValues := make([]float64, 0, len(values))
+			for _, r := range results {
+				if r.Profile == profile && r.Action == action {
+					actionValues = append(actionValues, r.Latency.Seconds()*1000)
+				}
+			}
+			actionSummary.Latency = computeLatency(actionValues)
+			pCurrent.ByAction[action] = actionSummary
+		}
+		report.ByProfile[profile] = pCurrent
 	}
 	report.TopErrors = topErrors(errorCounts, 8)
 	report.RejectReasons = topErrors(rejectReasons, 12)
@@ -532,7 +604,7 @@ func tailLoop(ctx context.Context, client *http.Client, cfg Config) {
 }
 
 func fetchNewTrades(client *http.Client, baseURL string, seen map[string]struct{}, limit int) []trade {
-	resp, err := client.Get(baseURL + "/trades")
+	resp, err := client.Get(fmt.Sprintf("%s/trades?limit=%d", baseURL, limit))
 	if err != nil {
 		return nil
 	}
@@ -562,7 +634,7 @@ func fetchNewTrades(client *http.Client, baseURL string, seen map[string]struct{
 }
 
 func fetchNewEvents(client *http.Client, baseURL string, seen map[string]struct{}, limit int) []event {
-	resp, err := client.Get(baseURL + "/events")
+	resp, err := client.Get(fmt.Sprintf("%s/events?limit=%d", baseURL, limit))
 	if err != nil {
 		return nil
 	}
@@ -679,6 +751,35 @@ func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
 	return ActionCancel
 }
 
+func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile string) Action {
+	if cfg.Mode == "strict-lifecycle" && !hasOrders {
+		return ActionSubmit
+	}
+	switch profile {
+	case profileMarketMaker:
+		return weightedAction(rng, 45, 40)
+	case profileInstitutional:
+		return weightedAction(rng, 55, 30)
+	case profileRetail:
+		return weightedAction(rng, 70, 20)
+	case profileNoise:
+		return weightedAction(rng, 50, 20)
+	default:
+		return chooseAction(rng, cfg, hasOrders)
+	}
+}
+
+func weightedAction(rng *rand.Rand, submitPct, modifyPct int) Action {
+	n := rng.Intn(100)
+	if n < submitPct {
+		return ActionSubmit
+	}
+	if n < submitPct+modifyPct {
+		return ActionModify
+	}
+	return ActionCancel
+}
+
 func isTerminalOrderRejection(code string) bool {
 	return code == "INVALID_STATE" || code == "NOT_FOUND"
 }
@@ -690,6 +791,20 @@ func removeOrder(orders []string, orderID string) []string {
 		}
 	}
 	return orders
+}
+
+func profileForWorker(workerID, workers int, cfg Config) string {
+	pct := workerID * 100 / workers
+	if pct < cfg.ProfileMixMM {
+		return profileMarketMaker
+	}
+	if pct < cfg.ProfileMixMM+cfg.ProfileMixInst {
+		return profileInstitutional
+	}
+	if pct < cfg.ProfileMixMM+cfg.ProfileMixInst+cfg.ProfileMixRetail {
+		return profileRetail
+	}
+	return profileNoise
 }
 
 func reverseTrades(values []trade) {
@@ -718,11 +833,52 @@ func randomInt(rng *rand.Rand, min, max int) int {
 	return min + rng.Intn(max-min+1)
 }
 
+func profileQuantity(rng *rand.Rand, cfg Config, profile string) int {
+	switch profile {
+	case profileMarketMaker:
+		return randomInt(rng, maxInt(cfg.QuantityMin, 25), minInt(cfg.QuantityMax, 250))
+	case profileInstitutional:
+		return randomInt(rng, maxInt(cfg.QuantityMin, 200), cfg.QuantityMax)
+	case profileRetail:
+		return randomInt(rng, cfg.QuantityMin, minInt(cfg.QuantityMax, 100))
+	default:
+		return randomInt(rng, cfg.QuantityMin, cfg.QuantityMax)
+	}
+}
+
 func randomInt64(rng *rand.Rand, min, max int64) int64 {
 	if min == max {
 		return min
 	}
 	return min + rng.Int63n(max-min+1)
+}
+
+func profilePrice(rng *rand.Rand, cfg Config, profile string) int64 {
+	switch profile {
+	case profileMarketMaker:
+		mid := (cfg.PriceMin + cfg.PriceMax) / 2
+		span := (cfg.PriceMax - cfg.PriceMin) / 8
+		if span <= 0 {
+			return mid
+		}
+		return randomInt64(rng, mid-span, mid+span)
+	default:
+		return randomInt64(rng, cfg.PriceMin, cfg.PriceMax)
+	}
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func tokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {

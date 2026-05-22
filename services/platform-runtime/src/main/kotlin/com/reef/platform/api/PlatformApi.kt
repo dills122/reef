@@ -152,6 +152,14 @@ class PlatformApi(
         """.trimIndent()
     }
 
+    fun recentEvents(limit: Int): String {
+        return """
+            {
+              "events":${toEventsJson(orderService.recentEvents(limit))}
+            }
+        """.trimIndent()
+    }
+
     fun traceEvents(traceId: String): String {
         return """
             {
@@ -173,6 +181,14 @@ class PlatformApi(
         return """
             {
               "trades":${toTradesJson(orderService.persistedTrades())}
+            }
+        """.trimIndent()
+    }
+
+    fun recentTrades(limit: Int): String {
+        return """
+            {
+              "trades":${toTradesJson(orderService.recentTrades(limit))}
             }
         """.trimIndent()
     }
