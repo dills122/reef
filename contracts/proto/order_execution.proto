@@ -3,6 +3,8 @@ syntax = "proto3";
 package reef.contracts.orderexecution.v1;
 
 option go_package = "github.com/dills122/reef/contracts/proto/orderexecution/v1;orderv1";
+option java_package = "reef.contracts.orderexecution.v1";
+option java_multiple_files = true;
 
 message CommandMetadata {
   string command_id = 1;
