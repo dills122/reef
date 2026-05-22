@@ -15,7 +15,7 @@ import java.util.UUID
 data class AdminActor(
     val actorId: String,
     val correlationId: String = "",
-    val occurredAt: String = Instant.now().toString()
+    val occurredAt: String
 )
 
 class AuthorizationException(message: String) : RuntimeException(message)
@@ -52,7 +52,8 @@ data class SimulationControlState(
 )
 
 class AdminApplicationService(
-    private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence()
+    private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence(),
+    private val now: () -> Instant = { Instant.now() }
 ) {
     private val eventProducer = "platform-runtime-admin"
     private val eventSchemaVersion = "v1"
@@ -162,6 +163,7 @@ class AdminApplicationService(
     fun traceEvents(traceId: String): List<RuntimeEvent> = runtimePersistence.eventsForTrace(traceId)
 
     private fun emitAudit(actor: AdminActor, eventType: String, targetId: String, detail: String) {
+        val eventTime = if (actor.occurredAt.isBlank()) now().toString() else actor.occurredAt
         runtimePersistence.saveEvent(
             RuntimeEvent(
                 eventId = "evt-admin-${UUID.randomUUID()}",
@@ -172,7 +174,7 @@ class AdminApplicationService(
                 correlationId = actor.correlationId,
                 producer = eventProducer,
                 schemaVersion = eventSchemaVersion,
-                occurredAt = actor.occurredAt
+                occurredAt = eventTime
             )
         )
     }

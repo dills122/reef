@@ -9,7 +9,7 @@ Reference sprint doc:
 - [x] Add matching engine gRPC server scaffold
 - [x] Add runtime gRPC client scaffold behind `ENGINE_TRANSPORT`
 - [x] Keep HTTP fallback path active
-- [ ] Add parity contract tests across transports
+- [x] Add parity contract tests across transports
 
 ## Workstream B: External API Boundary Foundation
 
@@ -35,11 +35,11 @@ Reference sprint doc:
 
 ## Workstream D: Hardening and Docs
 
-- [ ] Add integration tests for transport fallback and parity
+- [x] Add integration tests for transport fallback and parity
 - [ ] Add integration tests for boundary idempotency behavior
 - [ ] Add integration tests for admin CLI command flow
-- [ ] Add schema governance checks for contract evolution rules
-- [ ] Document injectable clock policy and determinism guardrails
+- [x] Add schema governance checks for contract evolution rules
+- [x] Document injectable clock policy and determinism guardrails
 - [ ] Define baseline stage SLO targets
 - [ ] Update runbooks/startup docs for new flags and routes
 - [ ] Record any additional major design decisions in `docs/DECISIONS.md`
@@ -52,5 +52,5 @@ Reference sprint doc:
 - [x] Admin CLI runs through reusable application layer modules
 - [ ] Calendar and role/permission admin flows are executable
 - [ ] Idempotency scope and retention behavior are validated
-- [ ] Schema governance and determinism policies are documented
+- [x] Schema governance and determinism policies are documented
 - [ ] CI validates new paths

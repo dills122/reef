@@ -7,7 +7,8 @@ import com.reef.platform.application.admin.UpsertInstrumentCommand
 import com.reef.platform.application.admin.UpsertParticipantCommand
 
 class AdminCliAdapter(
-    private val adminService: AdminApplicationService = AdminApplicationService()
+    private val adminService: AdminApplicationService = AdminApplicationService(),
+    private val now: () -> java.time.Instant = { java.time.Instant.now() }
 ) {
     fun execute(args: List<String>): String {
         if (args.isEmpty()) {
@@ -15,7 +16,7 @@ class AdminCliAdapter(
         }
 
         val actorId = System.getenv("ADMIN_ACTOR_ID") ?: "admin-cli"
-        val actor = AdminActor(actorId = actorId, correlationId = "admin-cli")
+        val actor = AdminActor(actorId = actorId, correlationId = "admin-cli", occurredAt = now().toString())
 
         return when (args[0]) {
             "instrument-upsert" -> {

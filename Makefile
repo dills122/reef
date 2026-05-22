@@ -1,9 +1,12 @@
 GO_MATCHING_ENGINE_DIR := services/matching-engine
 PLATFORM_RUNTIME_DIR := services/platform-runtime
 
-.PHONY: test test-go test-platform-runtime fmt-go
+.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive
 
 test: test-go test-platform-runtime
+
+check-proto-additive:
+	./scripts/check-proto-additive.sh
 
 test-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && GOCACHE=/tmp/reef-go-build-cache go test ./...
