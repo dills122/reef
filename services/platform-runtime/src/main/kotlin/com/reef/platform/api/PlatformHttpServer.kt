@@ -5,20 +5,24 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 
 class PlatformHttpServer(
+    private val port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
-    private val idempotencyStore: IdempotencyStore
+    private val idempotencyStore: IdempotencyStore,
+    private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy
 ) {
     constructor(
+        port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
         api: PlatformApi = PlatformApi()
     ) : this(
+        port = port,
         api = api,
         boundary = defaultBoundary().first,
-        idempotencyStore = defaultBoundary().second
+        idempotencyStore = defaultBoundary().second,
+        idempotencyRetentionPolicy = defaultBoundary().third
     )
 
-    fun start() {
-        val port = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080
+    fun start(): HttpServer {
         val server = HttpServer.create(InetSocketAddress(port), 0)
 
         server.createContext("/health") { exchange ->
@@ -241,6 +245,7 @@ class PlatformHttpServer(
 
         server.start()
         println("platform-runtime listening on :$port")
+        return server
     }
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
@@ -277,17 +282,24 @@ class PlatformHttpServer(
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
         val clientId = boundary.clientId(exchange.requestHeaders) ?: return
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return
-        idempotencyStore.save(clientId, route, idempotencyKey, IdempotencyResult(status, payload))
+        idempotencyStore.save(
+            clientId,
+            route,
+            idempotencyKey,
+            IdempotencyResult(status, payload),
+            idempotencyRetentionPolicy.ttlFor(route)
+        )
     }
 }
 
-private fun defaultBoundary(): Pair<ExternalApiBoundary, IdempotencyStore> {
+private fun defaultBoundary(): Triple<ExternalApiBoundary, IdempotencyStore, IdempotencyRetentionPolicy> {
     val hooks = defaultBoundaryHooks()
-    return Pair(
+    return Triple(
         ExternalApiBoundary(
             authHook = hooks.authHook,
             rateLimitHook = hooks.rateLimitHook
         ),
-        hooks.idempotencyStore
+        hooks.idempotencyStore,
+        hooks.idempotencyRetentionPolicy
     )
 }

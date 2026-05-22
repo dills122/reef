@@ -24,13 +24,42 @@ interface IdempotencyPolicy {
 
 interface IdempotencyStore {
     fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult?
-    fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult)
+    fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult, ttlClass: IdempotencyTtlClass)
+    fun cleanupExpired(now: Instant = Instant.now()) {}
 }
 
 data class IdempotencyResult(
     val status: Int,
     val payload: String
 )
+
+enum class IdempotencyTtlClass {
+    SHORT,
+    STANDARD,
+    LONG
+}
+
+interface IdempotencyRetentionPolicy {
+    fun ttlFor(route: String): IdempotencyTtlClass
+    fun durationSeconds(ttlClass: IdempotencyTtlClass): Long
+}
+
+class DefaultIdempotencyRetentionPolicy : IdempotencyRetentionPolicy {
+    override fun ttlFor(route: String): IdempotencyTtlClass {
+        return when {
+            route.contains("/cancel") || route.contains("/modify") -> IdempotencyTtlClass.STANDARD
+            else -> IdempotencyTtlClass.LONG
+        }
+    }
+
+    override fun durationSeconds(ttlClass: IdempotencyTtlClass): Long {
+        return when (ttlClass) {
+            IdempotencyTtlClass.SHORT -> 15 * 60L
+            IdempotencyTtlClass.STANDARD -> 24 * 60 * 60L
+            IdempotencyTtlClass.LONG -> 7 * 24 * 60 * 60L
+        }
+    }
+}
 
 class AllowAllAuthHook : AuthHook {
     override fun authorize(clientId: String, token: String?): BoundaryError? = null
@@ -86,21 +115,35 @@ class RequiredIdempotencyPolicy : IdempotencyPolicy {
 }
 
 class InMemoryIdempotencyStore : IdempotencyStore {
-    private val results = java.util.concurrent.ConcurrentHashMap<String, IdempotencyResult>()
+    private data class Entry(val result: IdempotencyResult, val expiresAtEpochSeconds: Long)
+
+    private val results = java.util.concurrent.ConcurrentHashMap<String, Entry>()
+    private val retentionPolicy: IdempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy()
 
     override fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult? {
-        return results["$clientId|$route|$idempotencyKey"]
+        val entry = results["$clientId|$route|$idempotencyKey"] ?: return null
+        if (entry.expiresAtEpochSeconds <= Instant.now().epochSecond) {
+            results.remove("$clientId|$route|$idempotencyKey")
+            return null
+        }
+        return entry.result
     }
 
-    override fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult) {
-        results.putIfAbsent("$clientId|$route|$idempotencyKey", result)
+    override fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult, ttlClass: IdempotencyTtlClass) {
+        val expiresAt = Instant.now().epochSecond + retentionPolicy.durationSeconds(ttlClass)
+        results.putIfAbsent("$clientId|$route|$idempotencyKey", Entry(result, expiresAt))
+    }
+
+    override fun cleanupExpired(now: Instant) {
+        results.entries.removeIf { it.value.expiresAtEpochSeconds <= now.epochSecond }
     }
 }
 
 class PostgresIdempotencyStore(
     private val jdbcUrl: String,
     private val dbUser: String,
-    private val dbPassword: String
+    private val dbPassword: String,
+    private val retentionPolicy: IdempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy()
 ) : IdempotencyStore {
     init {
         connection().use { conn ->
@@ -114,6 +157,7 @@ class PostgresIdempotencyStore(
                       status INTEGER NOT NULL,
                       payload TEXT NOT NULL,
                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      expires_at TIMESTAMPTZ NOT NULL,
                       PRIMARY KEY (client_id, route, idempotency_key)
                     )
                     """.trimIndent()
@@ -129,6 +173,7 @@ class PostgresIdempotencyStore(
                 SELECT status, payload
                 FROM api_idempotency_records
                 WHERE client_id = ? AND route = ? AND idempotency_key = ?
+                  AND expires_at > NOW()
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, clientId)
@@ -145,12 +190,13 @@ class PostgresIdempotencyStore(
         }
     }
 
-    override fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult) {
+    override fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult, ttlClass: IdempotencyTtlClass) {
+        val ttlSeconds = retentionPolicy.durationSeconds(ttlClass)
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO api_idempotency_records(client_id, route, idempotency_key, status, payload)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO api_idempotency_records(client_id, route, idempotency_key, status, payload, expires_at)
+                VALUES (?, ?, ?, ?, ?, NOW() + (? * INTERVAL '1 second'))
                 ON CONFLICT (client_id, route, idempotency_key) DO NOTHING
                 """.trimIndent()
             ).use { ps ->
@@ -159,6 +205,18 @@ class PostgresIdempotencyStore(
                 ps.setString(3, idempotencyKey)
                 ps.setInt(4, result.status)
                 ps.setString(5, result.payload)
+                ps.setLong(6, ttlSeconds)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun cleanupExpired(now: Instant) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                "DELETE FROM api_idempotency_records WHERE expires_at <= to_timestamp(?)"
+            ).use { ps ->
+                ps.setLong(1, now.epochSecond)
                 ps.executeUpdate()
             }
         }
@@ -219,7 +277,8 @@ private fun Headers.firstValue(name: String): String? {
 data class BoundaryHooks(
     val authHook: AuthHook,
     val rateLimitHook: RateLimitHook,
-    val idempotencyStore: IdempotencyStore
+    val idempotencyStore: IdempotencyStore,
+    val idempotencyRetentionPolicy: IdempotencyRetentionPolicy
 )
 
 fun defaultBoundaryHooks(): BoundaryHooks {
@@ -240,11 +299,12 @@ fun defaultBoundaryHooks(): BoundaryHooks {
     }
 
     val idempotencyMode = (System.getenv("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
+    val retentionPolicy = DefaultIdempotencyRetentionPolicy()
     val idempotencyStore = if (idempotencyMode == "postgres") {
         val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
         val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
         val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
-        PostgresIdempotencyStore(jdbcUrl, dbUser, dbPassword)
+        PostgresIdempotencyStore(jdbcUrl, dbUser, dbPassword, retentionPolicy)
     } else {
         InMemoryIdempotencyStore()
     }
@@ -252,7 +312,8 @@ fun defaultBoundaryHooks(): BoundaryHooks {
     return BoundaryHooks(
         authHook = authHook,
         rateLimitHook = rateLimitHook,
-        idempotencyStore = idempotencyStore
+        idempotencyStore = idempotencyStore,
+        idempotencyRetentionPolicy = retentionPolicy
     )
 }
 

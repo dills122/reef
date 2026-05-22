@@ -64,7 +64,8 @@ class ExternalApiBoundaryTest {
             clientId = "client-1",
             route = "/api/v1/orders/submit",
             idempotencyKey = "idem-1",
-            result = IdempotencyResult(200, """{"ok":true}""")
+            result = IdempotencyResult(200, """{"ok":true}"""),
+            ttlClass = IdempotencyTtlClass.STANDARD
         )
 
         val found = store.find("client-1", "/api/v1/orders/submit", "idem-1")
