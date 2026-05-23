@@ -258,6 +258,33 @@ To simulate a production-shaped U.S. equities post-trade lifecycle, Reef should 
 Design rule:
 - each stage must remain independently observable and replayable; no hidden "black-box" transition from trade to settled.
 
+### 7.2 V1 vertical slice (locked scope)
+
+The first milestone is one deterministic lifecycle scenario, not broad feature coverage.
+
+V1 baseline:
+- one instrument profile
+- hidden midpoint cross behavior
+- one complete happy path
+- one deterministic broken path with operator repair
+
+Command-level target flow:
+1. `SubmitOrder`
+2. `MatchOrders` (engine output)
+3. `CreateTrade`
+4. `AllocateTrade`
+5. `GenerateConfirmation`
+6. `AffirmTrade` or `MismatchTrade`
+7. `CreateSettlementObligation`
+8. `CompleteSettlement` or `FailSettlement`
+9. `OpenException` and `ResolveException` when required
+
+V1 acceptance criteria:
+- same seed produces the same event sequence
+- each command/event carries `scenarioRunId`, `correlationId`, and `causationId`
+- broken path always opens an exception and supports repair-driven settlement completion
+- full lifecycle is visible in timeline and current-state read models
+
 ## 8. Suggested Event Model
 
 The system should use explicit commands and events.
@@ -329,9 +356,27 @@ All meaningful domain events must carry:
 - `traceId`
 - `causationId`
 - `correlationId`
+- `scenarioRunId` (required for scenario-driven activity)
 - `occurredAt`
 - producer/service identity
 - schema version
+
+### 8.5 Canonical identifier strategy
+
+Use stable business identifiers from the beginning to avoid replay and traceability churn.
+
+Required identifiers:
+- `orderId`
+- `clientOrderId`
+- `executionId`
+- `tradeId`
+- `allocationId`
+- `confirmationId`
+- `settlementObligationId`
+- `exceptionId`
+- `scenarioRunId`
+- `correlationId`
+- `causationId`
 
 ## 9. State Machines
 
@@ -554,49 +599,42 @@ Initial acceptable options:
 Likely preferred medium-term option:
 - protobuf contracts with gRPC or NATS-backed messaging
 
-## 14.1 Post-match engines design (Kotlin runtime modules first)
+## 14.1 Runner-first post-match architecture (Kotlin runtime modules first)
 
-The first implementation should keep these engines as bounded modules inside the Kotlin runtime, with extraction optional later.
+Do not create deployable engines for every stage in v1. Use one orchestrator runner with extraction-ready module seams.
 
-### A. Trade Processing Engine
+### A. Lifecycle runner
 Responsibilities:
-- execution normalization and enrichment
-- allocation and booking workflows
-- commission and fee placeholder application
-- transition trades into compare-ready state
+- own end-to-end workflow progression
+- invoke bounded modules in-process using command interfaces
+- enforce deterministic sequencing and idempotent command handling
 
-### B. Compare and Affirmation Engine
-Responsibilities:
-- confirmation generation
-- affirmation tracking and deadline handling
-- mismatch detection and exception opening
-- compare-state read models for operations
+Suggested names:
+- `LifecycleRunner`
+- `PostTradeRunner`
+- `WorkflowRunner`
 
-### C. Clearing Engine
-Responsibilities:
-- submit eligible trades to clearing workflow
-- record clearing acceptance and rejection
-- maintain novation state transitions
-- emit clearing risk or validation failures
+### B. Bounded modules (initial in-process seams)
+Required modules:
+- `OrderExecutionModule`
+- `TradeProcessingModule`
+- `PostTradeModule` (confirmation and affirmation)
+- `SettlementModule`
+- `ExceptionModule`
+- `SimulationControlModule`
 
-### D. Netting Engine
-Responsibilities:
-- aggregate gross obligations into net obligations
-- maintain netting batches and adjustment events
-- publish settlement-ready obligation groups
+Module rules:
+- module interaction is command/event based, not direct table mutation
+- each module owns invariants and state transitions
+- write paths are idempotency-safe by command ID
+- contracts are transport-neutral and versioned for later extraction
 
-### E. Settlement Engine
-Responsibilities:
-- instruction creation and queueing
-- settlement attempts and partial-settle handling
-- fail aging and operator repair integration
-- final settlement completion and closure
-
-### Cross-engine design rules
-- engines communicate through commands and immutable events, not direct table writes into each other's modules.
-- all write paths are idempotency-safe by command ID.
-- each engine owns its state machine and validation invariants.
-- each stage publishes queue-oriented read models for UI and admin operations.
+### C. Service extraction criteria (future)
+Split a module into its own service only when one or more are true:
+- scale profile diverges from runtime core
+- failure isolation is required
+- team ownership requires independent deploy cadence
+- async transport provides measurable operational value
 
 ## 14.2 Environment model: production-shaped and simulation modes
 
@@ -616,6 +654,9 @@ Reef should support two modes without changing core domain behavior:
 
 Mode rule:
 - both modes must execute the same application commands and state machines; mode only adjusts timing, adapters, and failure injection profiles.
+
+Policy rule:
+- deadlines and settlement-cycle behavior (for example affirmation cutoffs and `T+1`) must be configuration-driven, not hardcoded.
 
 ## 14.3 Settlement ledger adapter strategy
 

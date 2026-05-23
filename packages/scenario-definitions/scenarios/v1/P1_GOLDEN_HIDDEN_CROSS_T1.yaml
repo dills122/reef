@@ -1,0 +1,123 @@
+schemaVersion: "1.0"
+pathId: "P1_GOLDEN_HIDDEN_CROSS_T1"
+name: "Golden Hidden Midpoint Cross T+1"
+businessGoal: "Prove baseline order-to-settlement lifecycle correctness with deterministic replay."
+seed: 424242
+
+preconditions:
+  market:
+    assetClass: "US_EQ"
+    settlementCycle: "T+1"
+    venueType: "DARK_POOL_SIM"
+    matchingMode: "HIDDEN_MIDPOINT_CROSS"
+  referenceData:
+    instruments:
+      - instrumentId: "XYZ"
+        symbol: "XYZ"
+    participants:
+      - participantId: "BUY_SIDE_1"
+      - participantId: "SELL_SIDE_1"
+    accounts:
+      - accountId: "BUY_SIDE_1_MAIN"
+        participantId: "BUY_SIDE_1"
+      - accountId: "SELL_SIDE_1_MAIN"
+        participantId: "SELL_SIDE_1"
+
+runContext:
+  clock:
+    mode: "SIMULATED"
+    timezone: "America/New_York"
+  actorDefaults:
+    initiatingActorType: "BOT"
+  metadata:
+    scenarioRunRequiredFields:
+      - "scenarioRunId"
+      - "seed"
+      - "correlationId"
+      - "causationId"
+
+faultInjection:
+  enabled: false
+  faults: []
+
+steps:
+  - sequence: 1
+    command: "SubmitOrder"
+    description: "Submit hidden buy order."
+    payload:
+      side: "BUY"
+      instrumentId: "XYZ"
+      quantity: 1000
+      orderType: "LIMIT_HIDDEN"
+      limitPrice: "MIDPOINT"
+      accountId: "BUY_SIDE_1_MAIN"
+  - sequence: 2
+    command: "SubmitOrder"
+    description: "Submit hidden sell order."
+    payload:
+      side: "SELL"
+      instrumentId: "XYZ"
+      quantity: 1000
+      orderType: "LIMIT_HIDDEN"
+      limitPrice: "MIDPOINT"
+      accountId: "SELL_SIDE_1_MAIN"
+  - sequence: 3
+    command: "MatchOrders"
+    description: "Engine matches orders and emits execution."
+  - sequence: 4
+    command: "CreateTrade"
+  - sequence: 5
+    command: "AllocateTrade"
+  - sequence: 6
+    command: "GenerateConfirmation"
+  - sequence: 7
+    command: "AffirmTrade"
+  - sequence: 8
+    command: "CreateSettlementObligation"
+  - sequence: 9
+    command: "CompleteSettlement"
+  - sequence: 10
+    command: "CompleteScenarioRun"
+
+expectedEvents:
+  - "ScenarioRunStarted"
+  - "OrderSubmitted"
+  - "OrderAccepted"
+  - "OrderSubmitted"
+  - "OrderAccepted"
+  - "ExecutionCreated"
+  - "TradeCreated"
+  - "TradeAllocated"
+  - "ConfirmationGenerated"
+  - "TradeAffirmed"
+  - "SettlementObligationCreated"
+  - "SettlementCompleted"
+  - "ScenarioRunCompleted"
+
+expectedFinalStates:
+  trade: "AFFIRMED"
+  settlement: "SETTLED"
+  exception: "NONE"
+  scenarioRun: "COMPLETED"
+
+invariants:
+  - "No settlement before trade is AFFIRMED."
+  - "Exactly one trade is created for the matched execution pair."
+  - "All scenario-driven events contain scenarioRunId/correlationId/causationId."
+
+uiAssertions:
+  - "Timeline shows complete order -> settlement chain for one tradeId."
+  - "No open exceptions shown in exception workbench."
+  - "Scenario run detail shows seed=424242 and status=COMPLETED."
+
+replayAssertions:
+  - "Given seed=424242 and same preconditions, expectedEvents sequence is identical."
+  - "Event payload identity fields are stable across replay for business entities."
+
+idempotencyAssertions:
+  - command: "SubmitOrder"
+    assertion: "Duplicate commandId does not create a second order."
+  - command: "CreateTrade"
+    assertion: "Duplicate commandId does not create a second trade."
+  - command: "CompleteSettlement"
+    assertion: "Duplicate commandId does not produce duplicate settlement completion transitions."

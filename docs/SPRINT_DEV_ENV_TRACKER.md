@@ -15,6 +15,10 @@ Reference sprint doc:
 - [ ] Add runtime DB initialization/migration path for local startup
 - [ ] Add deterministic seed data path for required reference entities
 - [ ] Add `make dev-reset` with volume reset + reseed
+- [ ] Create one Postgres instance with domain schemas (`runtime`, `auth`, `admin`, `boundary`)
+- [ ] Split migrations by domain folder with forward-only conventions
+- [ ] Unify DB env var contract across runtime/admin/boundary persistence
+- [ ] Add guardrail checks/docs for split-readiness (no cross-domain FK coupling, no cross-domain repository coupling)
 
 ## Workstream C: Developer Entry Points and Smoke Validation
 
@@ -47,3 +51,4 @@ Reference sprint doc:
 - [ ] Optional observability profile validated and documented
 - [ ] `make dev-reset` returns environment to deterministic clean state
 - [ ] `make dev-stress` produces repeatable baseline envelope metrics
+- [ ] Postgres setup remains single-instance now but is config/migration-ready for future scoped-instance extraction

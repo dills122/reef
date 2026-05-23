@@ -85,6 +85,11 @@ Exit criteria:
 - at least one failure path is modeled and visible in the UI
 - event history explains both happy-path and exception-path outcomes
 
+Implementation posture:
+- use one in-process lifecycle runner with bounded modules, not separate deployable engines per stage
+- deliver exactly two scenario paths first: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
+- expand through scenario waves only after deterministic replay and timeline assertions are stable
+
 ## Phase 3: Simulation Control Plane
 
 Goal: add deterministic scenario execution without bypassing platform APIs.
@@ -109,6 +114,12 @@ Exit criteria:
 - a scenario can be run deterministically from a seed
 - a run can be paused, resumed, and replayed
 - the same execution and post-trade read models work for manual and simulated activity
+
+Scenario expansion order:
+1. Wave 1: `P1`, `P2`
+2. Wave 2: `P3`, `P4`, `P5`
+3. Wave 3: `P6`, `P7`, `P8`
+4. Wave 4: `P9`, `P10`
 
 ## Phase 4: Asynchronous Expansion
 
