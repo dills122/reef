@@ -122,3 +122,7 @@ Postgres init creates domain schemas:
 `.env` support:
 - all `scripts/dev/*.mjs` load `.env` and `.env.local` automatically
 - explicit shell environment variables still override file-based values
+
+Related:
+- [DB split-readiness guardrails](./DB_SPLIT_READINESS.md)
+- [Observability dev profile runbook](./OBSERVABILITY_DEV_PROFILE.md)

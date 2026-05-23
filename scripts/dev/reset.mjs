@@ -13,4 +13,5 @@ console.log("starting stack...");
 await run("docker", ["compose", "up", "-d", "--build"]);
 
 console.log("running smoke verification...");
-await run("bun", ["run", "scripts/dev/smoke.mjs"]);
+const jsRuntime = env("JS_RUNTIME", "bun");
+await run(jsRuntime, ["scripts/dev/smoke.mjs"]);

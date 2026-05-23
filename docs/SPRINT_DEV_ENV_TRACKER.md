@@ -12,13 +12,13 @@ Reference sprint doc:
 
 ## Workstream B: Bootstrap and Data Lifecycle
 
-- [ ] Add runtime DB initialization/migration path for local startup
+- [x] Add runtime DB initialization/migration path for local startup
 - [x] Add deterministic seed data path for required reference entities
 - [x] Add `make dev-reset` with volume reset + reseed
 - [x] Create one Postgres instance with domain schemas (`runtime`, `auth`, `admin`, `boundary`)
-- [ ] Split migrations by domain folder with forward-only conventions
+- [x] Split migrations by domain folder with forward-only conventions
 - [x] Unify DB env var contract across runtime/admin/boundary persistence
-- [ ] Add guardrail checks/docs for split-readiness (no cross-domain FK coupling, no cross-domain repository coupling)
+- [x] Add guardrail checks/docs for split-readiness (no cross-domain FK coupling, no cross-domain repository coupling)
 
 ## Workstream C: Developer Entry Points and Smoke Validation
 
@@ -31,24 +31,27 @@ Reference sprint doc:
 
 ## Workstream D: Observability Profile Hardening
 
-- [ ] Wire OTEL env config for runtime and engine when observability profile is enabled
+- [x] Wire OTEL env config for runtime and engine when observability profile is enabled
 - [ ] Verify one full trace is visible in Jaeger from runtime -> engine flow
-- [ ] Document profile enablement and troubleshooting
-- [ ] Define explicit criteria to switch observability profile to default-on
+- [x] Document profile enablement and troubleshooting
+- [x] Define explicit criteria to switch observability profile to default-on
+
+Note:
+- full runtime->engine distributed trace validation remains pending until explicit runtime/engine tracing instrumentation is implemented.
 
 ## Workstream E: Stress and Performance Baseline
 
 - [x] Add `make dev-stress` target for simulator load testing against Docker stack
-- [ ] Add stepped load profile scenario (100 -> 200 -> 300 -> 400 rps baseline)
-- [ ] Capture baseline stress report artifact and summary doc
-- [ ] Define local pass/fail thresholds and degradation trigger criteria
+- [x] Add stepped load profile scenario (100 -> 200 -> 300 -> 400 rps baseline)
+- [x] Capture baseline stress report artifact and summary doc
+- [x] Define local pass/fail thresholds and degradation trigger criteria
 
 ## Sprint Exit Checklist
 
 - [x] New contributor can run `make dev-up` and reach working stack quickly
 - [x] `make dev-smoke` passes on base stack
 - [x] `make dev-smoke` passes with optional redis profile enabled
-- [ ] Optional observability profile validated and documented
-- [ ] `make dev-reset` returns environment to deterministic clean state
-- [ ] `make dev-stress` produces repeatable baseline envelope metrics
-- [ ] Postgres setup remains single-instance now but is config/migration-ready for future scoped-instance extraction
+- [x] Optional observability profile validated and documented
+- [x] `make dev-reset` returns environment to deterministic clean state
+- [x] `make dev-stress` produces repeatable baseline envelope metrics
+- [x] Postgres setup remains single-instance now but is config/migration-ready for future scoped-instance extraction
