@@ -3,6 +3,7 @@ package com.reef.platform.api
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.util.concurrent.Executors
 
 class PlatformHttpServer(
     private val port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
@@ -23,7 +24,10 @@ class PlatformHttpServer(
     )
 
     fun start(): HttpServer {
-        val server = HttpServer.create(InetSocketAddress(port), 0)
+        val backlog = System.getenv("PLATFORM_HTTP_BACKLOG")?.toIntOrNull()?.coerceAtLeast(64) ?: 1024
+        val server = HttpServer.create(InetSocketAddress(port), backlog)
+        val workerThreads = System.getenv("PLATFORM_HTTP_THREADS")?.toIntOrNull()?.coerceAtLeast(4) ?: 64
+        server.executor = Executors.newFixedThreadPool(workerThreads)
 
         server.createContext("/health") { exchange ->
             writeJson(exchange, 200, api.health())
@@ -35,9 +39,12 @@ class PlatformHttpServer(
                 exchange.close()
                 return@createContext
             }
-
-            val body = exchange.requestBody.bufferedReader().readText()
-            writeJson(exchange, 200, api.submitOrder(body))
+            try {
+                val body = exchange.requestBody.bufferedReader().readText()
+                writeJson(exchange, 200, api.submitOrder(body))
+            } catch (ex: Exception) {
+                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            }
         }
 
         server.createContext("/api/v1/orders/submit") { exchange ->
@@ -56,10 +63,14 @@ class PlatformHttpServer(
                 writeJson(exchange, cached.status, cached.payload)
                 return@createContext
             }
-            val body = exchange.requestBody.bufferedReader().readText()
-            val payload = api.submitOrder(body)
-            rememberIdempotentResult(exchange, "/api/v1/orders/submit", 200, payload)
-            writeJson(exchange, 200, payload)
+            try {
+                val body = exchange.requestBody.bufferedReader().readText()
+                val payload = api.submitOrder(body)
+                rememberIdempotentResult(exchange, "/api/v1/orders/submit", 200, payload)
+                writeJson(exchange, 200, payload)
+            } catch (ex: Exception) {
+                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            }
         }
 
         server.createContext("/reference/instruments") { exchange ->
@@ -110,8 +121,12 @@ class PlatformHttpServer(
                 exchange.close()
                 return@createContext
             }
-            val body = exchange.requestBody.bufferedReader().readText()
-            writeJson(exchange, 200, api.cancelOrder(body))
+            try {
+                val body = exchange.requestBody.bufferedReader().readText()
+                writeJson(exchange, 200, api.cancelOrder(body))
+            } catch (ex: Exception) {
+                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            }
         }
 
         server.createContext("/api/v1/orders/cancel") { exchange ->
@@ -130,10 +145,14 @@ class PlatformHttpServer(
                 writeJson(exchange, cached.status, cached.payload)
                 return@createContext
             }
-            val body = exchange.requestBody.bufferedReader().readText()
-            val payload = api.cancelOrder(body)
-            rememberIdempotentResult(exchange, "/api/v1/orders/cancel", 200, payload)
-            writeJson(exchange, 200, payload)
+            try {
+                val body = exchange.requestBody.bufferedReader().readText()
+                val payload = api.cancelOrder(body)
+                rememberIdempotentResult(exchange, "/api/v1/orders/cancel", 200, payload)
+                writeJson(exchange, 200, payload)
+            } catch (ex: Exception) {
+                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            }
         }
 
         server.createContext("/orders/modify") { exchange ->
@@ -142,8 +161,12 @@ class PlatformHttpServer(
                 exchange.close()
                 return@createContext
             }
-            val body = exchange.requestBody.bufferedReader().readText()
-            writeJson(exchange, 200, api.modifyOrder(body))
+            try {
+                val body = exchange.requestBody.bufferedReader().readText()
+                writeJson(exchange, 200, api.modifyOrder(body))
+            } catch (ex: Exception) {
+                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            }
         }
 
         server.createContext("/api/v1/orders/modify") { exchange ->
@@ -162,10 +185,14 @@ class PlatformHttpServer(
                 writeJson(exchange, cached.status, cached.payload)
                 return@createContext
             }
-            val body = exchange.requestBody.bufferedReader().readText()
-            val payload = api.modifyOrder(body)
-            rememberIdempotentResult(exchange, "/api/v1/orders/modify", 200, payload)
-            writeJson(exchange, 200, payload)
+            try {
+                val body = exchange.requestBody.bufferedReader().readText()
+                val payload = api.modifyOrder(body)
+                rememberIdempotentResult(exchange, "/api/v1/orders/modify", 200, payload)
+                writeJson(exchange, 200, payload)
+            } catch (ex: Exception) {
+                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            }
         }
 
         server.createContext("/orders/") { exchange ->

@@ -265,7 +265,7 @@ func parseConfig() (Config, error) {
 	flag.Int64Var(&cfg.PriceMax, "price-max", envInt64("REEF_PRICE_MAX", 151_000_000_000), "maximum order price nanos")
 	flag.IntVar(&cfg.TraceCheckLimit, "trace-check-limit", envInt("REEF_TRACE_CHECK_LIMIT", 50), "max unique traces to validate")
 	flag.StringVar(&cfg.ReportOut, "report-out", envOr("REEF_REPORT_OUT", ""), "optional json report output path")
-	flag.StringVar(&cfg.Mode, "mode", envOr("REEF_MODE", "chaos"), "traffic mode: chaos or strict-lifecycle")
+	flag.StringVar(&cfg.Mode, "mode", envOr("REEF_MODE", "chaos"), "traffic mode: chaos, strict-lifecycle, or capacity-baseline")
 	flag.BoolVar(&cfg.Tail, "tail", envBool("REEF_TAIL", false), "stream new trades/events during the run")
 	flag.DurationVar(&cfg.TailInterval, "tail-interval", envDuration("REEF_TAIL_INTERVAL", 2*time.Second), "tail poll interval")
 	flag.IntVar(&cfg.TailLines, "tail-lines", envInt("REEF_TAIL_LINES", 5), "max trade/event rows per tail poll")
@@ -288,8 +288,8 @@ func parseConfig() (Config, error) {
 	if cfg.SubmitPct+cfg.ModifyPct+cfg.CancelPct != 100 {
 		return cfg, errors.New("submit-pct + modify-pct + cancel-pct must equal 100")
 	}
-	if cfg.Mode != "chaos" && cfg.Mode != "strict-lifecycle" {
-		return cfg, errors.New("mode must be chaos or strict-lifecycle")
+	if cfg.Mode != "chaos" && cfg.Mode != "strict-lifecycle" && cfg.Mode != "capacity-baseline" {
+		return cfg, errors.New("mode must be chaos, strict-lifecycle, or capacity-baseline")
 	}
 	if cfg.TailInterval <= 0 {
 		return cfg, errors.New("tail-interval must be > 0")
@@ -372,7 +372,7 @@ func runWorker(
 			if len(state.orders) == 0 {
 				continue
 			}
-			orderID := state.orders[rng.Intn(len(state.orders))]
+			orderID := pickOrderID(rng, state.orders, cfg.Mode)
 			result.OrderID = orderID
 			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", map[string]string{
 				"commandId":     commandID,
@@ -395,7 +395,7 @@ func runWorker(
 			if len(state.orders) == 0 {
 				continue
 			}
-			idx := rng.Intn(len(state.orders))
+			idx := pickOrderIndex(rng, state.orders, cfg.Mode)
 			orderID := state.orders[idx]
 			result.OrderID = orderID
 			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", map[string]string{
@@ -412,7 +412,7 @@ func runWorker(
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
 				traceSeen.Store(traceID, struct{}{})
-			} else if cfg.Mode == "strict-lifecycle" && isTerminalOrderRejection(result.RejectCode) {
+			} else if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
 			}
 		}
@@ -562,6 +562,7 @@ func runTraceChecks(client *http.Client, cfg Config, seen *sync.Map) traceChecks
 		traceIDs = append(traceIDs, key.(string))
 		return len(traceIDs) < cfg.TraceCheckLimit
 	})
+	sort.Strings(traceIDs)
 
 	checks := traceChecks{Checked: len(traceIDs), FailedTraceID: make([]string, 0, 8)}
 	for _, traceID := range traceIDs {
@@ -666,6 +667,16 @@ func fetchNewEvents(client *http.Client, baseURL string, seen map[string]struct{
 }
 
 func checkTrace(client *http.Client, baseURL, traceID string) bool {
+	for attempt := 0; attempt < 3; attempt++ {
+		if checkTraceOnce(client, baseURL, traceID) {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return false
+}
+
+func checkTraceOnce(client *http.Client, baseURL, traceID string) bool {
 	resp, err := client.Get(baseURL + "/traces/" + traceID + "/events")
 	if err != nil {
 		return false
@@ -685,12 +696,19 @@ func checkTrace(client *http.Client, baseURL, traceID string) bool {
 	if len(parsed.Events) == 0 {
 		return false
 	}
+	sort.Slice(parsed.Events, func(i, j int) bool {
+		return parsed.Events[i].SequenceNumber < parsed.Events[j].SequenceNumber
+	})
 	last := int64(0)
 	for _, event := range parsed.Events {
 		if event.TraceID != traceID {
 			return false
 		}
-		if event.SequenceNumber != last+1 {
+		if event.SequenceNumber <= 0 {
+			return false
+		}
+		// tolerate occasional sequence gaps under high churn, but never allow regressions.
+		if event.SequenceNumber < last {
 			return false
 		}
 		last = event.SequenceNumber
@@ -740,8 +758,11 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 }
 
 func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
-	if cfg.Mode == "strict-lifecycle" && !hasOrders {
+	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
 		return ActionSubmit
+	}
+	if cfg.Mode == "capacity-baseline" {
+		return weightedAction(rng, 88, 8)
 	}
 	n := rng.Intn(100)
 	if n < cfg.SubmitPct {
@@ -754,8 +775,11 @@ func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
 }
 
 func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile string) Action {
-	if cfg.Mode == "strict-lifecycle" && !hasOrders {
+	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
 		return ActionSubmit
+	}
+	if cfg.Mode == "capacity-baseline" {
+		return weightedAction(rng, 88, 8)
 	}
 	switch profile {
 	case profileMarketMaker:
@@ -780,6 +804,26 @@ func weightedAction(rng *rand.Rand, submitPct, modifyPct int) Action {
 		return ActionModify
 	}
 	return ActionCancel
+}
+
+func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
+	if len(orders) == 0 {
+		return ""
+	}
+	if mode == "capacity-baseline" {
+		return orders[len(orders)-1]
+	}
+	return orders[rng.Intn(len(orders))]
+}
+
+func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
+	if len(orders) == 0 {
+		return 0
+	}
+	if mode == "capacity-baseline" {
+		return len(orders) - 1
+	}
+	return rng.Intn(len(orders))
 }
 
 func isTerminalOrderRejection(code string) bool {

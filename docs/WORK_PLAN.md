@@ -59,6 +59,9 @@ Current execution sprint for this sequence:
 Bridging sprint before post-match:
 - [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
 
+Performance guardrails and PR checklist:
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+
 Next planned sprint block:
 - [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
 

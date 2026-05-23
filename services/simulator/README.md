@@ -39,7 +39,7 @@ go run ./cmd/load-tester \
 - `--rate`: global requests/sec (`0` = unthrottled)
 - `--timeout`: per-request timeout
 - `--submit-pct`, `--modify-pct`, `--cancel-pct`: must sum to `100`
-- `--mode`: `chaos` or `strict-lifecycle`
+- `--mode`: `chaos`, `strict-lifecycle`, or `capacity-baseline`
 - `--profile-mm-pct`, `--profile-inst-pct`, `--profile-retail-pct`, `--profile-noise-pct`: worker profile mix, must sum to `100`
 - `--tail`: stream newly observed trades/events while running
 - `--tail-interval`: tail poll frequency (for example `2s`)
@@ -54,6 +54,7 @@ go run ./cmd/load-tester \
 
 - `chaos`: randomized actions regardless of order lifecycle state; useful for resilience and rejection-path testing.
 - `strict-lifecycle`: forces submit when no local live orders exist and prunes clearly terminal rejected orders from worker state; useful for cleaner business-throughput measurements.
+- `capacity-baseline`: throughput-focused profile with submit-heavy behavior and reduced invalid modify/cancel noise; useful for capacity benchmarking.
 
 ### Profile Model
 

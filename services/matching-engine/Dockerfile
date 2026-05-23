@@ -1,11 +1,14 @@
-FROM golang:1.23-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS build
 WORKDIR /app
+
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/matching-engine ./cmd/matching-engine
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /out/matching-engine ./cmd/matching-engine
 
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates wget

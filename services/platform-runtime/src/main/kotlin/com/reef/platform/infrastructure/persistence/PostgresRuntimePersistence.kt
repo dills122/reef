@@ -13,12 +13,10 @@ import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import java.sql.Connection
-import java.sql.DriverManager
+import javax.sql.DataSource
 
 class PostgresRuntimePersistence(
-    private val jdbcUrl: String,
-    private val dbUser: String,
-    private val dbPassword: String
+    private val dataSource: DataSource
 ) : RuntimePersistence {
     init {
         connection().use { conn ->
@@ -125,6 +123,14 @@ class PostgresRuntimePersistence(
                       schema_version TEXT NOT NULL,
                       sequence_number BIGINT NOT NULL,
                       occurred_at TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS runtime_trace_sequences (
+                      trace_id TEXT PRIMARY KEY,
+                      next_sequence BIGINT NOT NULL
                     )
                     """.trimIndent()
                 )
@@ -356,15 +362,16 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveExecutions(executions: List<ExecutionCreated>) {
+        if (executions.isEmpty()) return
         connection().use { conn ->
-            executions.forEach { execution ->
-                conn.prepareStatement(
-                    """
-                    INSERT INTO executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (event_id) DO NOTHING
-                    """.trimIndent()
-                ).use { ps ->
+            conn.prepareStatement(
+                """
+                INSERT INTO executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (event_id) DO NOTHING
+                """.trimIndent()
+            ).use { ps ->
+                executions.forEach { execution ->
                     ps.setString(1, execution.eventId)
                     ps.setString(2, execution.executionId)
                     ps.setString(3, execution.orderId)
@@ -373,22 +380,24 @@ class PostgresRuntimePersistence(
                     ps.setString(6, execution.executionPrice)
                     ps.setString(7, execution.currency)
                     ps.setString(8, execution.occurredAt)
-                    ps.executeUpdate()
+                    ps.addBatch()
                 }
+                ps.executeBatch()
             }
         }
     }
 
     override fun saveTrades(trades: List<TradeCreated>) {
+        if (trades.isEmpty()) return
         connection().use { conn ->
-            trades.forEach { trade ->
-                conn.prepareStatement(
-                    """
-                    INSERT INTO trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (event_id) DO NOTHING
-                    """.trimIndent()
-                ).use { ps ->
+            conn.prepareStatement(
+                """
+                INSERT INTO trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (event_id) DO NOTHING
+                """.trimIndent()
+            ).use { ps ->
+                trades.forEach { trade ->
                     ps.setString(1, trade.eventId)
                     ps.setString(2, trade.tradeId)
                     ps.setString(3, trade.executionId)
@@ -399,42 +408,73 @@ class PostgresRuntimePersistence(
                     ps.setString(8, trade.price)
                     ps.setString(9, trade.currency)
                     ps.setString(10, trade.occurredAt)
-                    ps.executeUpdate()
+                    ps.addBatch()
                 }
+                ps.executeBatch()
             }
         }
     }
 
     override fun saveEvent(event: RuntimeEvent) {
-        connection().use { conn ->
-            val nextSequence = conn.prepareStatement(
-                "SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_sequence FROM runtime_events WHERE trace_id = ?"
-            ).use { ps ->
-                ps.setString(1, event.traceId)
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    rs.getLong("next_sequence")
-                }
-            }
+        saveEvents(listOf(event))
+    }
 
-            conn.prepareStatement(
-                """
-                INSERT INTO runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (event_id) DO NOTHING
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, event.eventId)
-                ps.setString(2, event.eventType)
-                ps.setString(3, event.orderId)
-                ps.setString(4, event.traceId)
-                ps.setString(5, event.causationId)
-                ps.setString(6, event.correlationId)
-                ps.setString(7, event.producer)
-                ps.setString(8, event.schemaVersion)
-                ps.setLong(9, nextSequence)
-                ps.setString(10, event.occurredAt)
-                ps.executeUpdate()
+    override fun saveEvents(events: List<RuntimeEvent>) {
+        if (events.isEmpty()) return
+        connection().use { conn ->
+            conn.autoCommit = false
+            try {
+                val startByTrace = mutableMapOf<String, Long>()
+                events.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
+                    conn.prepareStatement(
+                        """
+                        INSERT INTO runtime_trace_sequences(trace_id, next_sequence)
+                        VALUES (?, ?)
+                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = runtime_trace_sequences.next_sequence + EXCLUDED.next_sequence
+                        RETURNING next_sequence
+                        """.trimIndent()
+                    ).use { ps ->
+                        ps.setString(1, traceId)
+                        ps.setLong(2, traceEvents.size.toLong())
+                        ps.executeQuery().use { rs ->
+                            rs.next()
+                            val sequenceHigh = rs.getLong("next_sequence")
+                            startByTrace[traceId] = sequenceHigh - traceEvents.size + 1
+                        }
+                    }
+                }
+
+                val nextByTrace = startByTrace.toMutableMap()
+                conn.prepareStatement(
+                    """
+                    INSERT INTO runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (event_id) DO NOTHING
+                    """.trimIndent()
+                ).use { ps ->
+                    events.forEach { event ->
+                        val sequence = nextByTrace.getValue(event.traceId)
+                        nextByTrace[event.traceId] = sequence + 1
+                        ps.setString(1, event.eventId)
+                        ps.setString(2, event.eventType)
+                        ps.setString(3, event.orderId)
+                        ps.setString(4, event.traceId)
+                        ps.setString(5, event.causationId)
+                        ps.setString(6, event.correlationId)
+                        ps.setString(7, event.producer)
+                        ps.setString(8, event.schemaVersion)
+                        ps.setLong(9, sequence)
+                        ps.setString(10, event.occurredAt)
+                        ps.addBatch()
+                    }
+                    ps.executeBatch()
+                }
+                conn.commit()
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = true
             }
         }
     }
@@ -639,5 +679,5 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun connection(): Connection = DriverManager.getConnection(jdbcUrl, dbUser, dbPassword)
+    private fun connection(): Connection = dataSource.connection
 }

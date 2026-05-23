@@ -1,8 +1,9 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
-import java.sql.DriverManager
 import java.time.Instant
+import javax.sql.DataSource
 
 data class BoundaryError(
     val status: Int,
@@ -140,9 +141,7 @@ class InMemoryIdempotencyStore : IdempotencyStore {
 }
 
 class PostgresIdempotencyStore(
-    private val jdbcUrl: String,
-    private val dbUser: String,
-    private val dbPassword: String,
+    private val dataSource: DataSource,
     private val retentionPolicy: IdempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy()
 ) : IdempotencyStore {
     init {
@@ -222,7 +221,7 @@ class PostgresIdempotencyStore(
         }
     }
 
-    private fun connection() = DriverManager.getConnection(jdbcUrl, dbUser, dbPassword)
+    private fun connection() = dataSource.connection
 }
 
 interface RateLimitStore {
@@ -304,7 +303,7 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
         val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
         val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
-        PostgresIdempotencyStore(jdbcUrl, dbUser, dbPassword, retentionPolicy)
+        PostgresIdempotencyStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword), retentionPolicy)
     } else {
         InMemoryIdempotencyStore()
     }

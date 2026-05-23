@@ -202,6 +202,17 @@ Favor a layered approach:
 
 Simulation tests must verify determinism, not just activity generation.
 
+## Performance Discipline
+
+Performance is a first-class architecture concern for Reef's lifecycle-heavy paths.
+
+Use [`docs/PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md) as normative guidance for:
+
+- throughput and latency budgets
+- benchmark methodology
+- write-path optimization defaults (pooling, batching, counter-based sequencing)
+- PR-level performance evidence requirements
+
 ## Non-Goals For Early Phases
 
 Avoid early investment in:

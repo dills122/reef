@@ -8,6 +8,7 @@ import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
+import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import java.time.Instant
 import java.util.UUID
@@ -209,5 +210,5 @@ private fun defaultRuntimePersistence(): RuntimePersistence {
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
     val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
     val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
-    return PostgresRuntimePersistence(jdbcUrl, user, password)
+    return PostgresRuntimePersistence(RuntimeDataSources.dataSource(jdbcUrl, user, password))
 }

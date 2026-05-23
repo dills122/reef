@@ -10,6 +10,7 @@ repositories {
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.postgresql:postgresql:42.7.4")
+    implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("io.grpc:grpc-netty-shaded:1.73.0")
     implementation("io.grpc:grpc-protobuf:1.73.0")
     implementation("io.grpc:grpc-stub:1.73.0")
