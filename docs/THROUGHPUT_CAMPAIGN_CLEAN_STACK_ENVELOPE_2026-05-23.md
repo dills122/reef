@@ -12,6 +12,12 @@ Capture a clean-stack throughput envelope after simulator lane improvements and 
 make dev-reset JS_RUNTIME=node
 ```
 
+Equivalent single-step campaign entrypoint:
+
+```bash
+DEV_CAMPAIGN_RESET_STACK=1 make dev-throughput-campaign JS_RUNTIME=node
+```
+
 ### 2) Clean baseline check (`1100 rps`, `workers=64`)
 
 ```bash
@@ -84,11 +90,34 @@ Artifacts:
 - Capacity-heavy benchmark target point: `rate=1300`, `workers=64`
 - Run `make dev-reset` before long/high-rate comparison campaigns to avoid stale-state drift between sweeps.
 
+## Implementation Update (2026-05-23)
+
+Completed:
+1. Added pre-campaign reset control to throughput campaign tooling:
+   - `DEV_CAMPAIGN_RESET_STACK=1`
+2. Tuned `capacity-heavy` action mix from `60/30/10` to `68/24/8` (`submit/modify/cancel`).
+
+Verification run:
+
+```bash
+DEV_CAMPAIGN_RESET_STACK=1 \
+DEV_CAMPAIGN_DURATION=30s \
+DEV_CAMPAIGN_RATES=1300,1500 \
+DEV_CAMPAIGN_WORKERS=64 \
+DEV_CAMPAIGN_TRACE_CHECK_LIMIT=100 \
+DEV_CAMPAIGN_ARTIFACT_DIR=/tmp/reef-throughput-campaign-capmix-tuned \
+make dev-throughput-campaign JS_RUNTIME=node
+```
+
+Results:
+- quality lane peak: `1320.57 rps`, accepted `1210.46 rps`, success `91.66%`
+- capacity lane peak: `1370.17 rps`, accepted `1243.12 rps`, success `90.73%`
+
 ## Next Actions
 
-1. Add explicit pre-campaign reset option in throughput tooling (`DEV_CAMPAIGN_RESET_STACK=1`) to standardize fair-run methodology.
+1. Add side-by-side campaign comparator output (old vs new artifact directories) so tuning deltas are explicit in one report.
 2. Split campaign goal reporting into:
    - raw throughput goal
    - accepted throughput goal
    to avoid ambiguity when success-rate and accept-reject mix shift.
-3. Tune capacity-heavy action mix separately (or add lane-specific strategy profile overrides) so capacity lane can move closer to quality-lane throughput without dropping below `90%` success.
+3. Add optional lane-level action mix overrides (`DEV_CAMPAIGN_CAPACITY_SUBMIT_PCT`, etc.) to support controlled experiments without code edits.
