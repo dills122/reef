@@ -179,6 +179,23 @@ func TestChooseActionForActorDirectStrategyID(t *testing.T) {
 	}
 }
 
+func TestChooseActionForProfileUsesConfigMixWhenNoSessionConfig(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: false,
+		Mode:             "strict-lifecycle",
+		SubmitPct:        100,
+		ModifyPct:        0,
+		CancelPct:        0,
+	}
+	rng := rand.New(rand.NewSource(9))
+	for i := 0; i < 20; i++ {
+		action := chooseActionForProfile(rng, cfg, true, profileMarketMaker)
+		if action != ActionSubmit {
+			t.Fatalf("expected config-driven submit action, got %s", action)
+		}
+	}
+}
+
 func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 	rng := rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
 	out := make([]string, 0, count)

@@ -1110,6 +1110,9 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
 		return ActionSubmit
 	}
+	if !cfg.HasSessionConfig {
+		return chooseAction(rng, cfg, hasOrders)
+	}
 	if cfg.Mode == "capacity-baseline" {
 		return weightedAction(rng, 88, 8)
 	}
