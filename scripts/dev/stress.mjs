@@ -16,6 +16,7 @@ const out = env("DEV_STRESS_REPORT_OUT", "/tmp/reef-load-report-dev-stress.json"
 const mode = env("DEV_STRESS_MODE", "strict-lifecycle");
 const profile = env("DEV_STRESS_PROFILE", "default");
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
+const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
 const sweepWorkers = parseCsvInts(env("DEV_STRESS_SWEEP_WORKERS", ""));
 const rates = parseCsvInts(env("DEV_STRESS_RATES", "100,200,300,400"));
 const artifactDir = env("DEV_STRESS_ARTIFACT_DIR", "/tmp");
@@ -91,6 +92,14 @@ if (recommendation) {
     `  workers=${recommendation.workers} rate=${recommendation.rate} throughput=${recommendation.throughputRps.toFixed(2)} accepted=${recommendation.acceptedRps.toFixed(2)} p95=${recommendation.p95Ms.toFixed(2)}ms p99=${recommendation.p99Ms.toFixed(2)}ms score=${recommendation.score.toFixed(2)}`,
   );
   console.log(`  ${recommendationOut}`);
+}
+const guardrail = evaluateSuccessGuardrail(reportFiles, minSuccessRatePct);
+if (!guardrail.pass) {
+  console.error(`success-rate guardrail failed (min=${minSuccessRatePct}%)`);
+  for (const failure of guardrail.failures) {
+    console.error(`  - ${failure}`);
+  }
+  process.exitCode = 1;
 }
 
 function parseCsvInts(raw) {
@@ -245,12 +254,17 @@ function buildRecommendation(reportFiles) {
       const workerMatch = path.match(/workers-(\d+)\.json$/);
       const rateMatch = path.match(/rate-(\d+)/);
       rows.push({
+        path,
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
         rate: rateMatch ? Number(rateMatch[1]) : Number(report.config?.ratePerSecond ?? 0),
         throughputRps: Number(report.throughputRps ?? 0),
         acceptedRps: Number(report.acceptedBusinessOpsRps ?? 0),
         p95Ms: Number(report.latencyMs?.p95 ?? 0),
         p99Ms: Number(report.latencyMs?.p99 ?? 0),
+        successRatePct:
+          Number(report.totalRequests ?? 0) > 0
+            ? (Number(report.totalSuccess ?? 0) / Number(report.totalRequests)) * 100
+            : 0,
       });
     } catch {
       // skip unreadable report
@@ -284,4 +298,26 @@ function buildRecommendation(reportFiles) {
     score: scored[0].score,
     topSamples: scored.slice(0, 5),
   };
+}
+
+function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct) {
+  if (!Number.isFinite(minSuccessRatePct) || minSuccessRatePct <= 0) {
+    return { pass: true, failures: [] };
+  }
+  const failures = [];
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      const successRatePct =
+        Number(report.totalRequests ?? 0) > 0
+          ? (Number(report.totalSuccess ?? 0) / Number(report.totalRequests)) * 100
+          : 0;
+      if (successRatePct < minSuccessRatePct) {
+        failures.push(`${path}: success-rate ${successRatePct.toFixed(2)}% < ${minSuccessRatePct}%`);
+      }
+    } catch {
+      failures.push(`${path}: unable to parse report for guardrail check`);
+    }
+  }
+  return { pass: failures.length === 0, failures };
 }

@@ -255,6 +255,32 @@ func TestShouldPruneTerminalOrder(t *testing.T) {
 	}
 }
 
+func TestHasActionableOrders(t *testing.T) {
+	cfg := Config{Mode: "strict-lifecycle", StrictMinLiveOrders: 2}
+	if hasActionableOrders(cfg, workerState{orders: []string{"o1"}}) {
+		t.Fatal("expected strict mode to require min live orders")
+	}
+	if !hasActionableOrders(cfg, workerState{orders: []string{"o1", "o2"}}) {
+		t.Fatal("expected strict mode with sufficient orders to be actionable")
+	}
+	if !hasActionableOrders(Config{Mode: "chaos", StrictMinLiveOrders: 2}, workerState{orders: []string{"o1"}}) {
+		t.Fatal("expected non-strict mode to allow any non-empty order set")
+	}
+}
+
+func TestUpdateRecoveryState(t *testing.T) {
+	state := workerState{rejectStreak: 2}
+	updateRecoveryState(&state, Config{Mode: "strict-lifecycle"})
+	if state.submitOnlyTicks != 5 || state.rejectStreak != 0 {
+		t.Fatalf("expected recovery submit-only window, got %+v", state)
+	}
+	state = workerState{rejectStreak: 2}
+	updateRecoveryState(&state, Config{Mode: "chaos"})
+	if state.submitOnlyTicks != 0 || state.rejectStreak != 2 {
+		t.Fatalf("expected no recovery mutation outside strict-lifecycle, got %+v", state)
+	}
+}
+
 func TestApplyFlagOverridesUsesParsedValues(t *testing.T) {
 	cfg := Config{Workers: 24, RatePerSecond: 450, PrettySummary: false, ReportOut: ""}
 	parsed := Config{Workers: 12, RatePerSecond: 150, PrettySummary: true, ReportOut: "/tmp/report.json"}

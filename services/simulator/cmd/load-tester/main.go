@@ -52,6 +52,7 @@ type Config struct {
 	PriceMin          int64
 	PriceMax          int64
 	TraceCheckLimit   int
+	StrictMinLiveOrders int
 	ReportOut         string
 	Mode              string
 	Tail              bool
@@ -150,7 +151,9 @@ type traceEventsResponse struct {
 }
 
 type workerState struct {
-	orders []string
+	orders          []string
+	rejectStreak    int
+	submitOnlyTicks int
 }
 
 const (
@@ -281,6 +284,7 @@ func parseConfig() (Config, error) {
 	flag.Int64Var(&cfg.PriceMin, "price-min", cfg.PriceMin, "minimum order price nanos")
 	flag.Int64Var(&cfg.PriceMax, "price-max", cfg.PriceMax, "maximum order price nanos")
 	flag.IntVar(&cfg.TraceCheckLimit, "trace-check-limit", cfg.TraceCheckLimit, "max unique traces to validate")
+	flag.IntVar(&cfg.StrictMinLiveOrders, "strict-min-live-orders", cfg.StrictMinLiveOrders, "minimum local live-order depth before modify/cancel in strict modes")
 	flag.StringVar(&cfg.ReportOut, "report-out", cfg.ReportOut, "optional json report output path")
 	flag.StringVar(&cfg.Mode, "mode", cfg.Mode, "traffic mode: chaos, strict-lifecycle, or capacity-baseline")
 	flag.BoolVar(&cfg.Tail, "tail", cfg.Tail, "stream new trades/events during the run")
@@ -338,6 +342,9 @@ func parseConfig() (Config, error) {
 	if cfg.ProfileMixMM+cfg.ProfileMixInst+cfg.ProfileMixRetail+cfg.ProfileMixNoise != 100 {
 		return cfg, errors.New("profile mix percentages must sum to 100")
 	}
+	if cfg.StrictMinLiveOrders <= 0 {
+		return cfg, errors.New("strict-min-live-orders must be > 0")
+	}
 	return cfg, nil
 }
 
@@ -361,6 +368,7 @@ func defaultConfigFromEnv() Config {
 		PriceMin:         envInt64("REEF_PRICE_MIN", 149_000_000_000),
 		PriceMax:         envInt64("REEF_PRICE_MAX", 151_000_000_000),
 		TraceCheckLimit:  envInt("REEF_TRACE_CHECK_LIMIT", 50),
+		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 2),
 		ReportOut:        envOr("REEF_REPORT_OUT", ""),
 		Mode:             envOr("REEF_MODE", "chaos"),
 		Tail:             envBool("REEF_TAIL", false),
@@ -459,6 +467,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	if explicit["trace-check-limit"] {
 		cfg.TraceCheckLimit = parsed.TraceCheckLimit
 	}
+	if explicit["strict-min-live-orders"] {
+		cfg.StrictMinLiveOrders = parsed.StrictMinLiveOrders
+	}
 	if explicit["report-out"] {
 		cfg.ReportOut = parsed.ReportOut
 	}
@@ -526,7 +537,11 @@ func runWorker(
 		if actor != nil {
 			effectiveProfile = actor.ActorType
 		}
-		action := chooseActionForActor(rng, cfg, len(state.orders) > 0, effectiveProfile, actor)
+		action := chooseActionForActor(rng, cfg, hasActionableOrders(cfg, state), effectiveProfile, actor)
+		if state.submitOnlyTicks > 0 {
+			action = ActionSubmit
+			state.submitOnlyTicks--
+		}
 		reqID := atomic.AddInt64(counter, 1)
 		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
 		commandID := fmt.Sprintf("cmd-%d-%d", workerID, reqID)
@@ -583,7 +598,10 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
+				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
+			} else if isTerminalOrderRejection(result.RejectCode) {
+				updateRecoveryState(&state, cfg)
 			}
 		case ActionModify:
 			if len(state.orders) == 0 {
@@ -606,9 +624,11 @@ func runWorker(
 			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
+				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				updateRecoveryState(&state, cfg)
 			}
 		case ActionCancel:
 			if len(state.orders) == 0 {
@@ -632,9 +652,11 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
+				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				updateRecoveryState(&state, cfg)
 			}
 		}
 		results <- result
@@ -1155,7 +1177,7 @@ func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
 	if len(orders) == 0 {
 		return ""
 	}
-	if mode == "capacity-baseline" {
+	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
 		return orders[len(orders)-1]
 	}
 	return orders[rng.Intn(len(orders))]
@@ -1165,10 +1187,31 @@ func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
 	if len(orders) == 0 {
 		return 0
 	}
-	if mode == "capacity-baseline" {
+	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
 		return len(orders) - 1
 	}
 	return rng.Intn(len(orders))
+}
+
+func hasActionableOrders(cfg Config, state workerState) bool {
+	if len(state.orders) == 0 {
+		return false
+	}
+	if cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline" {
+		return len(state.orders) >= cfg.StrictMinLiveOrders
+	}
+	return true
+}
+
+func updateRecoveryState(state *workerState, cfg Config) {
+	if cfg.Mode != "strict-lifecycle" {
+		return
+	}
+	state.rejectStreak++
+	if state.rejectStreak >= 3 {
+		state.submitOnlyTicks = 5
+		state.rejectStreak = 0
+	}
 }
 
 func isTerminalOrderRejection(code string) bool {

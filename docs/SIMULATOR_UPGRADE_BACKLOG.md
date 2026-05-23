@@ -63,6 +63,11 @@ Finding:
 - liquidity tiers by symbol/actor type
 - fault library (latency spikes, endpoint degradation, reject bursts)
 - actor timeline export for post-run explainability
+- configurable circuit-breaker catalog for junk traffic control:
+  - per-client reject-rate monitor over rolling window
+  - configurable actions: `throttle`, `block`, escalation policy
+  - simulator-level toggles (global + per-breaker on/off)
+  - breaker telemetry in run summaries (`trips`, `active`, `released`)
 
 ### Tier 3: UX and Integrations
 - docs-site scenario catalog pages generated from scenario files
