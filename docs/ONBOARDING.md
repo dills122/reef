@@ -78,6 +78,12 @@ Replay baseline drift check:
 make dev-replay
 ```
 
+Throughput campaign baseline (quality + capacity lanes):
+
+```bash
+make dev-throughput-campaign
+```
+
 Admin commands against active dev env:
 
 ```bash
