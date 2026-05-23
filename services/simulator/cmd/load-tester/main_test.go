@@ -276,6 +276,11 @@ func TestUpdateRecoveryState(t *testing.T) {
 		t.Fatalf("expected recovery submit-only window, got %+v", state)
 	}
 	state = workerState{rejectStreak: 2}
+	updateRecoveryState(&state, Config{Mode: "capacity-baseline"})
+	if state.submitOnlyTicks != 0 || state.rejectStreak != 2 {
+		t.Fatalf("expected no recovery mutation outside strict-lifecycle, got %+v", state)
+	}
+	state = workerState{rejectStreak: 2}
 	updateRecoveryState(&state, Config{Mode: "chaos"})
 	if state.submitOnlyTicks != 0 || state.rejectStreak != 2 {
 		t.Fatalf("expected no recovery mutation outside strict-lifecycle, got %+v", state)
@@ -284,8 +289,7 @@ func TestUpdateRecoveryState(t *testing.T) {
 
 func TestShouldAllowLifecycleAction(t *testing.T) {
 	cfg := Config{Mode: "strict-lifecycle", StrictMinLiveOrders: 4}
-	rng := rand.New(rand.NewSource(12))
-	if shouldAllowLifecycleAction(rng, cfg, workerState{orders: []string{"o1", "o2", "o3"}}) {
+	if shouldAllowLifecycleAction(rand.New(rand.NewSource(12)), cfg, workerState{orders: []string{"o1", "o2", "o3"}}) {
 		t.Fatal("expected lifecycle action to be blocked when live-order depth is below strict minimum")
 	}
 	if !shouldAllowLifecycleAction(rand.New(rand.NewSource(1)), Config{Mode: "chaos", StrictMinLiveOrders: 4}, workerState{orders: []string{"o1"}}) {
@@ -305,6 +309,22 @@ func TestCompactTrackedOrders(t *testing.T) {
 	}
 	if compacted[0] != "o-8" || compacted[len(compacted)-1] != "o-39" {
 		t.Fatalf("unexpected compacted order slice: first=%s last=%s", compacted[0], compacted[len(compacted)-1])
+	}
+	compactedCapacity := compactTrackedOrders(orders, Config{Mode: "capacity-baseline", StrictMinLiveOrders: 4})
+	if len(compactedCapacity) != len(orders) {
+		t.Fatalf("expected capacity mode to skip compaction, got %d", len(compactedCapacity))
+	}
+}
+
+func TestRecentOrderWindowStart(t *testing.T) {
+	if got := recentOrderWindowStart(40, 8); got != 32 {
+		t.Fatalf("expected window start 32, got %d", got)
+	}
+	if got := recentOrderWindowStart(8, 8); got != 0 {
+		t.Fatalf("expected full-window start at 0, got %d", got)
+	}
+	if got := recentOrderWindowStart(1, 8); got != 0 {
+		t.Fatalf("expected singleton window start at 0, got %d", got)
 	}
 }
 

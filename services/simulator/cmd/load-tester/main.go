@@ -1117,7 +1117,7 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 }
 
 func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
-	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+	if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 		return ActionSubmit
 	}
 	if cfg.Mode == "capacity-baseline" {
@@ -1134,7 +1134,7 @@ func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
 }
 
 func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile string) Action {
-	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+	if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 		return ActionSubmit
 	}
 	if !cfg.HasSessionConfig {
@@ -1159,7 +1159,7 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 
 func chooseActionForActor(rng *rand.Rand, cfg Config, hasOrders bool, profile string, actor *sessionconfig.Actor) Action {
 	if mix, ok := strategy.ResolveActionMix(actor, cfg.StrategyProfiles); ok {
-		if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+		if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 			return ActionSubmit
 		}
 		return weightedAction(rng, mix.SubmitPct, mix.ModifyPct)
@@ -1183,7 +1183,8 @@ func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
 		return ""
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
-		return orders[len(orders)-1]
+		start := recentOrderWindowStart(len(orders), 8)
+		return orders[start+rng.Intn(len(orders)-start)]
 	}
 	return orders[rng.Intn(len(orders))]
 }
@@ -1193,16 +1194,24 @@ func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
 		return 0
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
-		return len(orders) - 1
+		start := recentOrderWindowStart(len(orders), 8)
+		return start + rng.Intn(len(orders)-start)
 	}
 	return rng.Intn(len(orders))
+}
+
+func recentOrderWindowStart(total, window int) int {
+	if total <= 1 || window <= 0 || total <= window {
+		return 0
+	}
+	return total - window
 }
 
 func hasActionableOrders(cfg Config, state workerState) bool {
 	if len(state.orders) == 0 {
 		return false
 	}
-	if cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline" {
+	if isLifecycleManagedMode(cfg.Mode) {
 		return len(state.orders) >= cfg.StrictMinLiveOrders
 	}
 	return true
@@ -1254,8 +1263,12 @@ func isTerminalOrderRejection(code string) bool {
 	return code == "INVALID_STATE" || code == "NOT_FOUND"
 }
 
-func shouldPruneTerminalOrder(mode string) bool {
+func isLifecycleManagedMode(mode string) bool {
 	return mode == "strict-lifecycle" || mode == "capacity-baseline"
+}
+
+func shouldPruneTerminalOrder(mode string) bool {
+	return isLifecycleManagedMode(mode)
 }
 
 func removeOrder(orders []string, orderID string) []string {
