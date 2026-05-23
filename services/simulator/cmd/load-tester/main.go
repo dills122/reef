@@ -559,26 +559,18 @@ func runWorker(
 			if instrument != nil {
 				instrumentID = instrument.InstrumentID
 			}
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/submit", map[string]string{
-				"commandId":     commandID,
-				"traceId":       traceID,
-				"causationId":   "",
-				"correlationId": traceID,
-				"actorId":       actorID,
-				"actorType":     actorType,
-				"strategyId":    strategyID,
-				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
-				"orderId":       orderID,
-				"instrumentId":  instrumentID,
-				"participantId": cfg.ParticipantID,
-				"accountId":     cfg.AccountID,
-				"side":          chooseSideForConfig(rng, cfg),
-				"orderType":     "LIMIT",
-				"quantityUnits": fmt.Sprintf("%d", profileQuantity(rng, cfg, profile)),
-				"limitPrice":    fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrument)),
-				"currency":      "USD",
-				"timeInForce":   "DAY",
-			})
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
+			payload["orderId"] = orderID
+			payload["instrumentId"] = instrumentID
+			payload["participantId"] = cfg.ParticipantID
+			payload["accountId"] = cfg.AccountID
+			payload["side"] = chooseSideForConfig(rng, cfg)
+			payload["orderType"] = "LIMIT"
+			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
+			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrument))
+			payload["currency"] = "USD"
+			payload["timeInForce"] = "DAY"
+			status, body, err := doPOST(client, cfg.BaseURL+"/orders/submit", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
@@ -590,19 +582,11 @@ func runWorker(
 			}
 			orderID := pickOrderID(rng, state.orders, cfg.Mode)
 			result.OrderID = orderID
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", map[string]string{
-				"commandId":     commandID,
-				"traceId":       traceID,
-				"causationId":   "",
-				"correlationId": traceID,
-				"actorId":       actorID,
-				"actorType":     actorType,
-				"strategyId":    strategyID,
-				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
-				"orderId":       orderID,
-				"quantityUnits": fmt.Sprintf("%d", profileQuantity(rng, cfg, profile)),
-				"limitPrice":    fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil)),
-			})
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
+			payload["orderId"] = orderID
+			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
+			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
+			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				traceSeen.Store(traceID, struct{}{})
@@ -616,18 +600,10 @@ func runWorker(
 			idx := pickOrderIndex(rng, state.orders, cfg.Mode)
 			orderID := state.orders[idx]
 			result.OrderID = orderID
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", map[string]string{
-				"commandId":     commandID,
-				"traceId":       traceID,
-				"causationId":   "",
-				"correlationId": traceID,
-				"actorId":       actorID,
-				"actorType":     actorType,
-				"strategyId":    strategyID,
-				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
-				"orderId":       orderID,
-				"reason":        "load test",
-			})
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
+			payload["orderId"] = orderID
+			payload["reason"] = "load test"
+			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
@@ -1042,6 +1018,26 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	return resp.StatusCode, respBody, err
+}
+
+func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, strategyID string) map[string]string {
+	payload := map[string]string{
+		"commandId":     commandID,
+		"traceId":       traceID,
+		"causationId":   "",
+		"correlationId": traceID,
+		"actorId":       actorID,
+		"actorType":     actorType,
+		"strategyId":    strategyID,
+		"occurredAt":    time.Now().UTC().Format(time.RFC3339),
+	}
+	if cfg.ScenarioRunID != "" {
+		payload["scenarioRunId"] = cfg.ScenarioRunID
+	}
+	if cfg.Seed != 0 {
+		payload["seed"] = strconv.FormatInt(cfg.Seed, 10)
+	}
+	return payload
 }
 
 func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
