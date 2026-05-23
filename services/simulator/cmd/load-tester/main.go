@@ -19,33 +19,34 @@ import (
 )
 
 type Config struct {
-	BaseURL         string
-	Duration        time.Duration
-	Workers         int
-	RatePerSecond   int
-	RequestTimeout  time.Duration
-	SubmitPct       int
-	ModifyPct       int
-	CancelPct       int
-	InstrumentID    string
+	BaseURL          string
+	Duration         time.Duration
+	Workers          int
+	RatePerSecond    int
+	RequestTimeout   time.Duration
+	SubmitPct        int
+	ModifyPct        int
+	CancelPct        int
+	InstrumentID     string
 	InstrumentSymbol string
-	ParticipantID   string
-	ParticipantName string
-	AccountID       string
-	QuantityMin     int
-	QuantityMax     int
-	PriceMin        int64
-	PriceMax        int64
-	TraceCheckLimit int
-	ReportOut       string
-	Mode            string
-	Tail            bool
-	TailInterval    time.Duration
-	TailLines       int
-	ProfileMixMM    int
-	ProfileMixInst  int
+	ParticipantID    string
+	ParticipantName  string
+	AccountID        string
+	QuantityMin      int
+	QuantityMax      int
+	PriceMin         int64
+	PriceMax         int64
+	TraceCheckLimit  int
+	ReportOut        string
+	Mode             string
+	Tail             bool
+	TailInterval     time.Duration
+	TailLines        int
+	ProfileMixMM     int
+	ProfileMixInst   int
 	ProfileMixRetail int
-	ProfileMixNoise int
+	ProfileMixNoise  int
+	PrettySummary    bool
 }
 
 type Action string
@@ -58,36 +59,36 @@ const (
 
 type requestResult struct {
 	Profile      string
-	Action      Action
-	Success     bool
-	StatusCode  int
-	Latency     time.Duration
-	ErrorText   string
-	TraceID     string
-	OrderID     string
-	CommandID   string
-	RejectCode  string
+	Action       Action
+	Success      bool
+	StatusCode   int
+	Latency      time.Duration
+	ErrorText    string
+	TraceID      string
+	OrderID      string
+	CommandID    string
+	RejectCode   string
 	RejectReason string
 }
 
 type summary struct {
-	SessionID       string                      `json:"sessionId"`
-	StartedAt       time.Time                   `json:"startedAt"`
-	FinishedAt      time.Time                   `json:"finishedAt"`
-	DurationSeconds float64                     `json:"durationSeconds"`
-	Config          Config                      `json:"config"`
-	ThroughputRPS   float64                     `json:"throughputRps"`
-	AcceptedBusinessOpsRPS float64              `json:"acceptedBusinessOpsRps"`
-	TotalRequests   int64                       `json:"totalRequests"`
-	TotalSuccess    int64                       `json:"totalSuccess"`
-	TotalFailures   int64                       `json:"totalFailures"`
-	ByAction        map[Action]actionSummary    `json:"byAction"`
-	ByProfile       map[string]profileSummary   `json:"byProfile"`
-	StatusCodes     map[int]int64               `json:"statusCodes"`
-	TopErrors       []errorSummary              `json:"topErrors"`
-	RejectReasons   []errorSummary              `json:"rejectReasons"`
-	LatencyMs       latencySummary              `json:"latencyMs"`
-	TraceChecks     traceChecks                 `json:"traceChecks"`
+	SessionID              string                    `json:"sessionId"`
+	StartedAt              time.Time                 `json:"startedAt"`
+	FinishedAt             time.Time                 `json:"finishedAt"`
+	DurationSeconds        float64                   `json:"durationSeconds"`
+	Config                 Config                    `json:"config"`
+	ThroughputRPS          float64                   `json:"throughputRps"`
+	AcceptedBusinessOpsRPS float64                   `json:"acceptedBusinessOpsRps"`
+	TotalRequests          int64                     `json:"totalRequests"`
+	TotalSuccess           int64                     `json:"totalSuccess"`
+	TotalFailures          int64                     `json:"totalFailures"`
+	ByAction               map[Action]actionSummary  `json:"byAction"`
+	ByProfile              map[string]profileSummary `json:"byProfile"`
+	StatusCodes            map[int]int64             `json:"statusCodes"`
+	TopErrors              []errorSummary            `json:"topErrors"`
+	RejectReasons          []errorSummary            `json:"rejectReasons"`
+	LatencyMs              latencySummary            `json:"latencyMs"`
+	TraceChecks            traceChecks               `json:"traceChecks"`
 }
 
 type profileSummary struct {
@@ -99,9 +100,9 @@ type profileSummary struct {
 }
 
 type actionSummary struct {
-	Requests int64         `json:"requests"`
-	Success  int64         `json:"success"`
-	Failures int64         `json:"failures"`
+	Requests int64          `json:"requests"`
+	Success  int64          `json:"success"`
+	Failures int64          `json:"failures"`
 	Latency  latencySummary `json:"latencyMs"`
 }
 
@@ -139,10 +140,10 @@ type workerState struct {
 }
 
 const (
-	profileMarketMaker  = "market-maker"
+	profileMarketMaker   = "market-maker"
 	profileInstitutional = "institutional"
-	profileRetail       = "retail"
-	profileNoise        = "noise"
+	profileRetail        = "retail"
+	profileNoise         = "noise"
 )
 
 type trade struct {
@@ -272,6 +273,7 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.ProfileMixInst, "profile-inst-pct", envInt("REEF_PROFILE_INST_PCT", 30), "institutional worker percentage")
 	flag.IntVar(&cfg.ProfileMixRetail, "profile-retail-pct", envInt("REEF_PROFILE_RETAIL_PCT", 25), "retail worker percentage")
 	flag.IntVar(&cfg.ProfileMixNoise, "profile-noise-pct", envInt("REEF_PROFILE_NOISE_PCT", 10), "noise worker percentage")
+	flag.BoolVar(&cfg.PrettySummary, "pretty-summary", envBool("REEF_PRETTY_SUMMARY", false), "print a human-readable console summary (default prints JSON)")
 	flag.Parse()
 
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
@@ -460,7 +462,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 			ActionModify: {},
 			ActionCancel: {},
 		},
-		ByProfile: map[string]profileSummary{},
+		ByProfile:   map[string]profileSummary{},
 		StatusCodes: make(map[int]int64),
 	}
 
@@ -948,8 +950,110 @@ func topErrors(m map[string]int64, limit int) []errorSummary {
 }
 
 func printSummary(report summary) {
+	if report.Config.PrettySummary {
+		printPrettySummary(report)
+		return
+	}
 	blob, _ := json.MarshalIndent(report, "", "  ")
 	fmt.Println(string(blob))
+}
+
+func printPrettySummary(report summary) {
+	successRate := 0.0
+	if report.TotalRequests > 0 {
+		successRate = (float64(report.TotalSuccess) / float64(report.TotalRequests)) * 100
+	}
+	tracePassRate := 0.0
+	if report.TraceChecks.Checked > 0 {
+		tracePassRate = (float64(report.TraceChecks.Pass) / float64(report.TraceChecks.Checked)) * 100
+	}
+
+	fmt.Printf("\nReef Load Test Summary\n")
+	fmt.Printf("Session: %s\n", report.SessionID)
+	fmt.Printf("Window : %s -> %s (%.1fs)\n", report.StartedAt.Format(time.RFC3339), report.FinishedAt.Format(time.RFC3339), report.DurationSeconds)
+	fmt.Printf("Mode   : %s | Workers: %d | Rate: %d rps\n", report.Config.Mode, report.Config.Workers, report.Config.RatePerSecond)
+	fmt.Printf("Mix    : mm=%d inst=%d retail=%d noise=%d\n\n", report.Config.ProfileMixMM, report.Config.ProfileMixInst, report.Config.ProfileMixRetail, report.Config.ProfileMixNoise)
+
+	fmt.Printf("Totals\n")
+	fmt.Printf("  requests=%d success=%d failures=%d throughput=%.2f rps accepted=%.2f rps\n",
+		report.TotalRequests, report.TotalSuccess, report.TotalFailures, report.ThroughputRPS, report.AcceptedBusinessOpsRPS)
+	fmt.Printf("  success-rate=%.2f%%\n", successRate)
+	fmt.Printf("  latency(ms): min=%.2f p50=%.2f p95=%.2f p99=%.2f max=%.2f\n\n",
+		report.LatencyMs.Min, report.LatencyMs.P50, report.LatencyMs.P95, report.LatencyMs.P99, report.LatencyMs.Max)
+
+	fmt.Printf("By Action\n")
+	fmt.Printf("  %-8s %10s %10s %10s %10s %10s %10s\n", "action", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+	actions := []Action{ActionSubmit, ActionModify, ActionCancel}
+	for _, action := range actions {
+		v := report.ByAction[action]
+		fmt.Printf("  %-8s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+			action, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("By Profile\n")
+	fmt.Printf("  %-14s %10s %10s %10s %10s %10s %10s\n", "profile", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+	profiles := []string{profileMarketMaker, profileInstitutional, profileRetail, profileNoise}
+	for _, profile := range profiles {
+		v, ok := report.ByProfile[profile]
+		if !ok {
+			continue
+		}
+		fmt.Printf("  %-14s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+			profile, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+	}
+	fmt.Printf("\n")
+
+	if len(report.StatusCodes) > 0 {
+		fmt.Printf("Status Codes\n")
+		codes := make([]int, 0, len(report.StatusCodes))
+		for code := range report.StatusCodes {
+			codes = append(codes, code)
+		}
+		sort.Ints(codes)
+		for _, code := range codes {
+			fmt.Printf("  %d: %d\n", code, report.StatusCodes[code])
+		}
+		fmt.Printf("\n")
+	}
+
+	fmt.Printf("Trace Checks\n")
+	fmt.Printf("  checked=%d pass=%d fail=%d\n", report.TraceChecks.Checked, report.TraceChecks.Pass, report.TraceChecks.Fail)
+	fmt.Printf("  pass-rate=%.2f%%\n", tracePassRate)
+	if len(report.TraceChecks.FailedTraceID) > 0 {
+		limit := len(report.TraceChecks.FailedTraceID)
+		if limit > 5 {
+			limit = 5
+		}
+		fmt.Printf("  failed trace sample: %s\n", strings.Join(report.TraceChecks.FailedTraceID[:limit], ", "))
+	}
+	fmt.Printf("\n")
+
+	if len(report.RejectReasons) > 0 {
+		fmt.Printf("Top Reject Reasons\n")
+		limit := len(report.RejectReasons)
+		if limit > 8 {
+			limit = 8
+		}
+		for i := 0; i < limit; i++ {
+			item := report.RejectReasons[i]
+			fmt.Printf("  %2d. %s (%d)\n", i+1, item.Error, item.Count)
+		}
+		fmt.Printf("\n")
+	}
+
+	if len(report.TopErrors) > 0 {
+		fmt.Printf("Top Errors\n")
+		limit := len(report.TopErrors)
+		if limit > 8 {
+			limit = 8
+		}
+		for i := 0; i < limit; i++ {
+			item := report.TopErrors[i]
+			fmt.Printf("  %2d. %s (%d)\n", i+1, item.Error, item.Count)
+		}
+		fmt.Printf("\n")
+	}
 }
 
 func writeReport(path string, report summary) error {
