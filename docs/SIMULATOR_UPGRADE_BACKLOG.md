@@ -22,6 +22,35 @@ Still pending for core persona/session upgrade:
 - replay pack/golden scenario regression harness
 - pretty console attribution output (`byActor`, `byStrategy`)
 
+## Stress Findings (2026-05-23)
+
+### Throttled Ramp (`20s`, `workers=32`, `capacity-baseline`)
+- `rate=500`: throughput `469.09 rps`, accepted `434.93 rps`, fail rate `7.28%`
+- `rate=1000`: throughput `869.69 rps`, accepted `808.96 rps`, fail rate `6.98%`
+- `rate=2000`: throughput `876.50 rps`, accepted `813.10 rps`, fail rate `7.23%`
+
+Finding:
+- on this dev stack shape, throttled runs saturate around `~870-880 rps` total and `~810-813 rps` accepted business ops.
+
+### Unthrottled Ceiling Sweep (`20s`, `capacity-baseline`)
+- `workers=32`: throughput `832.21 rps`, accepted `772.31 rps`, p95 `56.85ms`, p99 `59.25ms`
+- `workers=64`: throughput `1579.09 rps`, accepted `1469.58 rps`, p95 `59.08ms`, p99 `73.00ms`
+- `workers=96`: throughput `1818.47 rps`, accepted `1684.28 rps`, p95 `82.14ms`, p99 `127.17ms`
+
+Finding:
+- higher unthrottled throughput is achievable by raising worker parallelism, but latency tails degrade materially at `workers=96`.
+
+### Resource Snapshot Notes
+- point-in-time `docker stats --no-stream` snapshots show memory growth and DB block I/O growth across tiers.
+- snapshots are not peak CPU telemetry; add continuous sampling/profiling for bottleneck attribution.
+
+## Follow-Up Enhancements From Stress Runs
+
+1. add continuous runtime/engine/db telemetry capture during stress runs (not just point-in-time snapshots)
+2. add worker-sweep automation that outputs throughput/latency knee recommendations
+3. add optional strict-lifecycle stress profile that reduces expected INVALID_STATE noise
+4. add report fields for explicit business-reject taxonomy percentages by mode
+
 ## Nice-To-Haves (Future)
 
 ### Tier 1: High-Leverage
