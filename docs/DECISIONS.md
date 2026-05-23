@@ -334,3 +334,61 @@ Summary:
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
 - [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
+
+### D-024: Event Durability and Distribution Pattern
+
+Status: accepted
+
+Summary:
+- Postgres append-only event persistence is the canonical event history.
+- NATS (JetStream) is the asynchronous distribution backbone, not the sole source of truth.
+- domain state changes and corresponding outbox records must be committed atomically to avoid state/event divergence.
+- event delivery semantics are at-least-once; consumers must be idempotent by `eventId`.
+
+Primary references:
+- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+
+### D-025: EOD Data Lifecycle Policy
+
+Status: accepted
+
+Summary:
+- EOD workflows produce archive and analytics derivatives from already-persisted intraday data.
+- EOD is not permitted to be first-time persistence for trading lifecycle events.
+- three-tier data posture is adopted:
+  - hot operational store (real-time canonical writes)
+  - analytics projections (transformed query-optimized views)
+  - immutable archive artifacts (compressed file-based partitions with manifest/checksums)
+
+Primary references:
+- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+
+### D-026: Minimal Scheduler/Orchestration Policy
+
+Status: accepted
+
+Summary:
+- recurring operational jobs should run through a lightweight job-runner with DB-backed run state.
+- scheduler jobs must be idempotent, resumable, and auditable, keyed by business identifiers (for example `market_date`).
+- initial implementation should avoid heavyweight orchestration frameworks unless proven necessary by scale/operational complexity.
+- orchestration persistence belongs to an isolated `orchestration` domain schema.
+
+Primary references:
+- [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
+- [`docs/ROADMAP.md`](./ROADMAP.md)
+
+### D-027: Postgres Procedure-First Persistence Policy
+
+Status: accepted
+
+Summary:
+- Reef should prefer Postgres stored procedures/functions (PL/pgSQL) for write-path mutations and operational job state transitions.
+- service code should call stable database routines for critical write workflows rather than assembling ad hoc multi-statement SQL sequences.
+- read-only query surfaces may continue to use parameterized SQL, but cross-table mutation orchestration belongs in database routines.
+- procedure contracts are versioned and forward-additive; breaking changes require versioned routine names and migration notes.
+
+Primary references:
+- [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
+- [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
