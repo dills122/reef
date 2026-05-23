@@ -72,6 +72,12 @@ Load baseline:
 make dev-stress
 ```
 
+Replay baseline drift check:
+
+```bash
+make dev-replay
+```
+
 Admin commands against active dev env:
 
 ```bash

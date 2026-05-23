@@ -82,6 +82,12 @@ Run stepped load profile (100 -> 200 -> 300 -> 400 rps):
 make dev-stress
 ```
 
+Run replay-pack drift validation against baseline scenario:
+
+```bash
+make dev-replay
+```
+
 Run ad hoc simulator load against active dev env:
 
 ```bash
@@ -104,6 +110,10 @@ Reports are written to `/tmp` as:
 - `/tmp/reef-load-report-dev-stress-rate-200.json`
 - `/tmp/reef-load-report-dev-stress-rate-300.json`
 - `/tmp/reef-load-report-dev-stress-rate-400.json`
+
+Additional stress artifacts:
+- `/tmp/reef-load-report-dev-stress-telemetry.ndjson`
+- `/tmp/reef-load-report-dev-stress-recommendation.json`
 
 ## Environment contract
 

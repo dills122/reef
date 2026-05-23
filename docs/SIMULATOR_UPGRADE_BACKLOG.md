@@ -12,15 +12,25 @@ Implemented:
 - actor-weighted routing from session actors
 - multi-instrument seeding and actor symbol eligibility routing
 - actor/strategy attribution in JSON summary
+- persona attribution in JSON summary
+- pretty summary attribution for actors/strategies/personas
 - deterministic decision-sequence test coverage for fixed seeds
-
-Still pending for core persona/session upgrade:
-- real strategy module execution (strategy behavior tied to `strategyId`, not profile fallback)
-- `strategyProfiles` config resolution + strict reference validation
+- strategy behavior resolution by `strategyId` (direct and profile-backed)
+- `strategyProfiles` strict validation
 - `actorGroups` deterministic expansion
-- deterministic `faults` execution engine
-- replay pack/golden scenario regression harness
-- pretty console attribution output (`byActor`, `byStrategy`)
+- deterministic faults support for `reject_submit`, `reject_modify`, `reject_cancel`
+- replay pack/golden scenario regression harness (`make dev-replay`)
+- reject taxonomy breakdown in run summary
+- stress telemetry capture (Docker + runtime/engine endpoint probes)
+- worker sweep + recommendation artifact generation
+- strict-lifecycle min-live-order gating and adaptive recovery guardrails
+- initial runtime system tuning pass (indexes + runtime/db concurrency defaults)
+
+Still pending for the next wave:
+- quality-lane + capacity-lane throughput campaign automation and baseline publication
+- stricter lifecycle-valid traffic shaping to consistently exceed `>=90%` success
+- configurable circuit-breaker framework for junk-traffic throttling/blocking
+- deeper runtime hot-path optimization after lane baselines are locked
 
 ## Stress Findings (2026-05-23)
 
@@ -46,10 +56,12 @@ Finding:
 
 ## Follow-Up Enhancements From Stress Runs
 
-1. add continuous runtime/engine/db telemetry capture during stress runs (not just point-in-time snapshots)
-2. add worker-sweep automation that outputs throughput/latency knee recommendations
-3. add optional strict-lifecycle stress profile that reduces expected INVALID_STATE noise
-4. add report fields for explicit business-reject taxonomy percentages by mode
+- [x] continuous runtime/engine/db telemetry capture during stress runs
+- [x] worker-sweep automation with recommendation output
+- [x] strict-lifecycle stress profile option (`strict-clean`)
+- [x] explicit reject taxonomy percentages in reports
+- [ ] throughput lane baseline pack (`quality` vs `capacity`) with published caps
+- [ ] automated success-rate guardrails tied to throughput campaign targets
 
 ## Nice-To-Haves (Future)
 
@@ -92,7 +104,7 @@ Finding:
   - `internal/report`
   - `internal/transport`
 - extract decision engine interfaces for deterministic unit tests independent of HTTP
-- move summary aggregation into standalone report package with focused tests
+- [x] move summary aggregation helpers into `internal/report` with focused tests
 
 ### Near-Term
 - replace ad hoc payload maps with typed request builders
@@ -161,9 +173,40 @@ Indicators favoring stabilization/refactor mode:
 
 ## Recommended Sequence (Next)
 
-1. `strategyProfiles` resolution + strategy module abstraction
-2. `actorGroups` deterministic expansion
-3. replay harness + golden scenario tests
-4. deterministic faults engine
-5. runner/package refactor completion
+1. throughput campaign lanes (`quality` + `capacity`) and cap report publication
+2. lifecycle-valid traffic shaping improvements to push success rate toward `>=90%`
+3. circuit-breaker feature (`reject-rate` throttle/block) with simulator toggles
+4. runtime hot-path tuning based on lane-specific telemetry bottlenecks
+5. remaining runner/package refactors (`runtime`, `actor`, `transport`)
 6. realism nice-to-haves (regimes/liquidity/fault library expansion)
+
+## Next Effort: Throughput and Capacity Campaign
+
+### Campaign Goals
+
+- success-rate floor: `>= 90%`
+- preferred success-rate: `>= 95%`
+- minimum throughput target: `1250-1500 rps`
+- preferred throughput target: `~2000 rps`
+
+### Feasibility Framing (Current Stack)
+
+- `>=90%` success is realistic with current architecture when benchmark traffic is lifecycle-valid and strict-mode action quality is improved.
+- `>=95%` success is realistic for quality-lane runs that reduce invalid modify/cancel pressure and keep order-state decisions coherent.
+- `1250-1500 rps` is realistic in capacity-lane conditions on current local stack shape (submit-dominant and low invalid-state churn).
+- `~2000 rps` is plausible as a stretch target, but likely requires focused tuning and may require host/runtime/db configuration changes; treat as preferred, not guaranteed, without broader structural changes.
+
+### Execution Plan
+
+1. Define two benchmark lanes:
+   - `quality lane`: strict-lifecycle realism and success-rate target validation
+   - `capacity lane`: high-validity traffic to map infrastructure TPS ceiling
+2. Run worker/rate matrix and identify:
+   - quality cap (meets `>=90%` success-rate floor)
+   - stretch cap (`>=95%` success where possible)
+   - hard throughput cap (latency and acceptance knee)
+3. Produce a repeatable baseline artifact set:
+   - commands/config
+   - summary tables
+   - telemetry snapshots
+   - regression budgets for accepted TPS + latency + success-rate

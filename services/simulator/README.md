@@ -47,6 +47,7 @@ go run ./cmd/load-tester \
 - `--qty-min`, `--qty-max`: quantity randomization range
 - `--price-min`, `--price-max`: price randomization range
 - `--trace-check-limit`: number of unique traces validated at end of run
+- `--strict-min-live-orders`: strict-mode minimum local live-order depth required before modify/cancel
 - `--report-out`: optional JSON report file path
 - `--pretty-summary`: print a human-readable summary in console (JSON remains default output)
 
@@ -68,6 +69,7 @@ The tester now assigns workers to four behavior profiles:
 
 - `acceptedBusinessOpsRps`: successful business operations per second
 - `rejectReasons`: grouped rejection code/reason breakdown
+- `rejectTaxonomy`: reject-code counts with percentage-of-failures/rejects
 
 Tail usage example:
 
@@ -96,9 +98,9 @@ go run ./cmd/load-tester \
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
 
-## Persona Session Direction
+## Persona Session Support
 
-The next simulator upgrade is config-driven persona sessions (named actors + strategy params + market universe).
+The load tester supports config-driven persona sessions (named actors, strategies, market universe, groups, deterministic seeds, and deterministic faults).
 
 Planning/spec:
 - [`docs/SIMULATOR_PERSONA_CONFIG.md`](../../docs/SIMULATOR_PERSONA_CONFIG.md)
@@ -106,6 +108,12 @@ Planning/spec:
 
 Example session file:
 - [`packages/scenario-definitions/persona-session.example.yaml`](../../packages/scenario-definitions/persona-session.example.yaml)
+
+Replay drift check against baseline:
+
+```bash
+make dev-replay
+```
 
 Reference:
 
