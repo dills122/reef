@@ -108,6 +108,7 @@ type summary struct {
 	StatusCodes            map[int]int64             `json:"statusCodes"`
 	TopErrors              []errorSummary            `json:"topErrors"`
 	RejectReasons          []errorSummary            `json:"rejectReasons"`
+	RejectTaxonomy         []rejectTaxonomySummary   `json:"rejectTaxonomy"`
 	LatencyMs              latencySummary            `json:"latencyMs"`
 	TraceChecks            traceChecks               `json:"traceChecks"`
 }
@@ -138,6 +139,13 @@ type latencySummary struct {
 type errorSummary struct {
 	Error string `json:"error"`
 	Count int64  `json:"count"`
+}
+
+type rejectTaxonomySummary struct {
+	Code               string  `json:"code"`
+	Count              int64   `json:"count"`
+	PercentOfFailures  float64 `json:"percentOfFailures"`
+	PercentOfRejects   float64 `json:"percentOfRejects"`
 }
 
 type traceChecks struct {
@@ -683,6 +691,8 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 
 	errorCounts := make(map[string]int64)
 	rejectReasons := make(map[string]int64)
+	rejectCodes := make(map[string]int64)
+	totalRejects := int64(0)
 	allLatencies := make([]float64, 0, len(results))
 	actionLatencies := map[Action][]float64{
 		ActionSubmit: {},
@@ -722,6 +732,8 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 				errorCounts[r.ErrorText]++
 			}
 			if r.RejectCode != "" {
+				rejectCodes[r.RejectCode]++
+				totalRejects++
 				key := r.RejectCode
 				if r.RejectReason != "" {
 					key = key + ": " + r.RejectReason
@@ -792,7 +804,42 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	}
 	report.TopErrors = topErrors(errorCounts, 8)
 	report.RejectReasons = topErrors(rejectReasons, 12)
+	report.RejectTaxonomy = summarizeRejectTaxonomy(rejectCodes, report.TotalFailures, totalRejects, 12)
 	return report
+}
+
+func summarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []rejectTaxonomySummary {
+	if len(rejectCodes) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(rejectCodes))
+	for code := range rejectCodes {
+		keys = append(keys, code)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		left := rejectCodes[keys[i]]
+		right := rejectCodes[keys[j]]
+		if left == right {
+			return keys[i] < keys[j]
+		}
+		return left > right
+	})
+	if len(keys) > limit {
+		keys = keys[:limit]
+	}
+	out := make([]rejectTaxonomySummary, 0, len(keys))
+	for _, code := range keys {
+		count := rejectCodes[code]
+		row := rejectTaxonomySummary{Code: code, Count: count}
+		if totalFailures > 0 {
+			row.PercentOfFailures = (float64(count) / float64(totalFailures)) * 100
+		}
+		if totalRejects > 0 {
+			row.PercentOfRejects = (float64(count) / float64(totalRejects)) * 100
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 func updateDimensionSummary(target map[string]profileSummary, key string, action Action, success bool) {
@@ -1557,6 +1604,15 @@ func printPrettySummary(report summary) {
 		for i := 0; i < limit; i++ {
 			item := report.RejectReasons[i]
 			fmt.Printf("  %2d. %s (%d)\n", i+1, item.Error, item.Count)
+		}
+		fmt.Printf("\n")
+	}
+
+	if len(report.RejectTaxonomy) > 0 {
+		fmt.Printf("Reject Taxonomy\n")
+		fmt.Printf("  %-22s %10s %10s %10s\n", "code", "count", "fail%", "reject%")
+		for _, item := range report.RejectTaxonomy {
+			fmt.Printf("  %-22s %10d %9.2f%% %9.2f%%\n", item.Code, item.Count, item.PercentOfFailures, item.PercentOfRejects)
 		}
 		fmt.Printf("\n")
 	}

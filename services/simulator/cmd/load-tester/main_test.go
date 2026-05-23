@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -85,6 +86,39 @@ func TestBuildSummaryIncludesActorAndStrategyAttribution(t *testing.T) {
 	if report.ByPersona["electronic_liquidity_provider"].Requests != 2 {
 		t.Fatalf("expected persona attribution, got %+v", report.ByPersona["electronic_liquidity_provider"])
 	}
+}
+
+func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
+	start := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Second)
+	results := []requestResult{
+		{Profile: "retail", Action: ActionSubmit, Success: false, Latency: 10 * time.Millisecond, StatusCode: 409, ErrorText: "rejected:INVALID_STATE", RejectCode: "INVALID_STATE"},
+		{Profile: "retail", Action: ActionModify, Success: false, Latency: 10 * time.Millisecond, StatusCode: 409, ErrorText: "rejected:INVALID_STATE", RejectCode: "INVALID_STATE"},
+		{Profile: "retail", Action: ActionCancel, Success: false, Latency: 10 * time.Millisecond, StatusCode: 409, ErrorText: "rejected:NOT_FOUND", RejectCode: "NOT_FOUND"},
+		{Profile: "retail", Action: ActionSubmit, Success: false, Latency: 10 * time.Millisecond, StatusCode: 500, ErrorText: "http 500"},
+	}
+	report := buildSummary("s-1", start, end, Config{}, results)
+	if len(report.RejectTaxonomy) != 2 {
+		t.Fatalf("expected 2 reject taxonomy rows, got %d", len(report.RejectTaxonomy))
+	}
+	first := report.RejectTaxonomy[0]
+	second := report.RejectTaxonomy[1]
+	if first.Code != "INVALID_STATE" || first.Count != 2 {
+		t.Fatalf("unexpected first reject taxonomy row: %+v", first)
+	}
+	if !approxEqual(first.PercentOfFailures, 50) || !approxEqual(first.PercentOfRejects, 66.66666666666666) {
+		t.Fatalf("unexpected first row percentages: %+v", first)
+	}
+	if second.Code != "NOT_FOUND" || second.Count != 1 {
+		t.Fatalf("unexpected second reject taxonomy row: %+v", second)
+	}
+	if !approxEqual(second.PercentOfFailures, 25) || !approxEqual(second.PercentOfRejects, 33.33333333333333) {
+		t.Fatalf("unexpected second row percentages: %+v", second)
+	}
+}
+
+func approxEqual(a, b float64) bool {
+	return math.Abs(a-b) < 0.000001
 }
 
 func TestDeterministicSelectionWithFixedSeed(t *testing.T) {
