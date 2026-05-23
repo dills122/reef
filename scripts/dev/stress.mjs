@@ -116,7 +116,7 @@ function resolveActionMix(profileName) {
     return { submit: "80", modify: "15", cancel: "5" };
   }
   if (profileName === "capacity-heavy") {
-    return { submit: "60", modify: "30", cancel: "10" };
+    return { submit: "68", modify: "24", cancel: "8" };
   }
   return { submit: "70", modify: "20", cancel: "10" };
 }

@@ -10,8 +10,14 @@ const rates = env("DEV_CAMPAIGN_RATES", "300,500,800,1000,1250,1500");
 const workers = env("DEV_CAMPAIGN_WORKERS", "32,64");
 const traceLimit = env("DEV_CAMPAIGN_TRACE_CHECK_LIMIT", "100");
 const jsRuntime = env("DEV_CAMPAIGN_JS_RUNTIME", process.execPath);
+const resetStack = envFlag("DEV_CAMPAIGN_RESET_STACK", false);
 
 mkdirSync(artifactDir, { recursive: true });
+
+if (resetStack) {
+  console.log("resetting stack before campaign (DEV_CAMPAIGN_RESET_STACK=1)");
+  await run("make", [`JS_RUNTIME=${jsRuntime}`, "dev-reset"]);
+}
 
 const lanes = [
   {
@@ -199,4 +205,9 @@ function parseCsvInts(raw) {
     .filter(Boolean)
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+function envFlag(name, fallback) {
+  const raw = env(name, fallback ? "1" : "0").toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
