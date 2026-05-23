@@ -88,6 +88,7 @@ Related docs:
 - [`docs/steering/external-api-boundary.md`](./docs/steering/external-api-boundary.md)
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./docs/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`docs/DECISIONS.md`](./docs/DECISIONS.md)
+- [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
 
 ## Steering
 

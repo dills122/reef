@@ -167,6 +167,12 @@ For communication and API specifics, treat these as normative companions:
 - [`inter-service-communication.md`](./inter-service-communication.md)
 - [`external-api-boundary.md`](./external-api-boundary.md)
 
+## Tooling and Automation
+
+- development and operational automation should default to `bun`-executed scripts under `scripts/`
+- `make` targets should delegate to those scripts and remain lightweight wrappers
+- deterministic environment setup/reset/smoke flows are required for local-first development
+
 ## Observability and Audit
 
 Every service should make it easy to answer:

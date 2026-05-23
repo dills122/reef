@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reef-postgres
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - reef-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  matching-engine:
+    build:
+      context: ./services/matching-engine
+      dockerfile: Dockerfile
+    container_name: reef-matching-engine
+    environment:
+      MATCHING_ENGINE_ADDR: ":8081"
+    ports:
+      - "${REEF_MATCHING_ENGINE_HOST_PORT:-8081}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  platform-runtime:
+    build:
+      context: ./services/platform-runtime
+      dockerfile: Dockerfile
+    container_name: reef-platform-runtime
+    environment:
+      PLATFORM_RUNTIME_PORT: "8080"
+      ENGINE_TRANSPORT: "http"
+      MATCHING_ENGINE_BASE_URL: "http://matching-engine:8081"
+      RUNTIME_PERSISTENCE: "postgres"
+      RUNTIME_POSTGRES_JDBC_URL: "jdbc:postgresql://postgres:5432/reef?currentSchema=runtime"
+      RUNTIME_POSTGRES_USER: "reef"
+      RUNTIME_POSTGRES_PASSWORD: "reef"
+      EXTERNAL_API_IDEMPOTENCY_STORE: "postgres"
+      RUNTIME_DB_URL: "jdbc:postgresql://postgres:5432/reef?currentSchema=boundary"
+      RUNTIME_DB_USER: "reef"
+      RUNTIME_DB_PASSWORD: "reef"
+    ports:
+      - "${REEF_PLATFORM_RUNTIME_HOST_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      matching-engine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: reef-redis
+    profiles: ["redis"]
+    ports:
+      - "${REEF_REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: reef-jaeger
+    profiles: ["observability"]
+    ports:
+      - "${REEF_JAEGER_UI_HOST_PORT:-16686}:16686"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.105.0
+    container_name: reef-otel-collector
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./scripts/dev/otel/collector-config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+    ports:
+      - "${REEF_OTEL_GRPC_HOST_PORT:-4317}:4317"
+      - "${REEF_OTEL_HTTP_HOST_PORT:-4318}:4318"
+
+volumes:
+  reef-postgres-data:
