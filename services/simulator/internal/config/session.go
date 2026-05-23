@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -87,7 +90,12 @@ type StrategyProfile struct {
 }
 
 type ActorGroup struct {
-	ID string `json:"id" yaml:"id"`
+	ID                          string             `json:"id" yaml:"id"`
+	ActorType                   string             `json:"actorType,omitempty" yaml:"actorType,omitempty"`
+	Count                       int                `json:"count,omitempty" yaml:"count,omitempty"`
+	Symbols                     []string           `json:"symbols,omitempty" yaml:"symbols,omitempty"`
+	PersonaDistribution         map[string]float64 `json:"personaDistribution,omitempty" yaml:"personaDistribution,omitempty"`
+	StrategyProfileDistribution map[string]float64 `json:"strategyProfileDistribution,omitempty" yaml:"strategyProfileDistribution,omitempty"`
 }
 
 type FaultRule struct {
@@ -198,7 +206,9 @@ func ValidateSessionFile(cfg SessionFile) error {
 		symbols[eq.Symbol] = struct{}{}
 	}
 	if len(cfg.Actors) == 0 {
-		return errors.New("actors must include at least one actor")
+		if len(cfg.ActorGroups) == 0 {
+			return errors.New("actors or actorGroups must include at least one actor definition")
+		}
 	}
 	actorIDs := make(map[string]struct{}, len(cfg.Actors))
 	weights := 0
@@ -224,7 +234,9 @@ func ValidateSessionFile(cfg SessionFile) error {
 		}
 	}
 	if weights <= 0 {
-		return errors.New("actors total weight must be > 0")
+		if len(cfg.ActorGroups) == 0 {
+			return errors.New("actors total weight must be > 0")
+		}
 	}
 	if cfg.Mix.Actions.SubmitPct+cfg.Mix.Actions.ModifyPct+cfg.Mix.Actions.CancelPct != 100 {
 		return errors.New("mix.actions submitPct+modifyPct+cancelPct must equal 100")
@@ -233,6 +245,9 @@ func ValidateSessionFile(cfg SessionFile) error {
 		return errors.New("mix.sideBias buyPct+sellPct must equal 100")
 	}
 	if err := validateStrategyProfiles(cfg.Actors, cfg.StrategyProfiles); err != nil {
+		return err
+	}
+	if err := validateActorGroups(cfg.ActorGroups, symbols, cfg.StrategyProfiles); err != nil {
 		return err
 	}
 	return nil
@@ -251,6 +266,66 @@ func validateStrategyProfiles(actors []Actor, profiles map[string]StrategyProfil
 		if profile.Strategy == "" {
 			return fmt.Errorf("strategyProfiles[%s].strategy is required", name)
 		}
+	}
+	return nil
+}
+
+func validateActorGroups(groups []ActorGroup, marketSymbols map[string]struct{}, profiles map[string]StrategyProfile) error {
+	if len(groups) == 0 {
+		return nil
+	}
+	groupIDs := make(map[string]struct{}, len(groups))
+	for _, group := range groups {
+		if group.ID == "" {
+			return errors.New("actorGroups[].id is required")
+		}
+		if _, exists := groupIDs[group.ID]; exists {
+			return fmt.Errorf("duplicate actorGroup id: %s", group.ID)
+		}
+		groupIDs[group.ID] = struct{}{}
+		if group.ActorType == "" {
+			return fmt.Errorf("actorGroups[%s].actorType is required", group.ID)
+		}
+		if group.Count <= 0 {
+			return fmt.Errorf("actorGroups[%s].count must be > 0", group.ID)
+		}
+		for _, symbol := range group.Symbols {
+			if _, ok := marketSymbols[symbol]; !ok {
+				return fmt.Errorf("actorGroups[%s] references unknown symbol: %s", group.ID, symbol)
+			}
+		}
+		if err := validateDistributionSum(group.ID, "personaDistribution", group.PersonaDistribution); err != nil {
+			return err
+		}
+		if err := validateDistributionSum(group.ID, "strategyProfileDistribution", group.StrategyProfileDistribution); err != nil {
+			return err
+		}
+		if len(group.StrategyProfileDistribution) > 0 {
+			for strategyID := range group.StrategyProfileDistribution {
+				if len(profiles) > 0 {
+					if _, ok := profiles[strategyID]; !ok {
+						return fmt.Errorf("actorGroups[%s] references unknown strategy profile: %s", group.ID, strategyID)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func validateDistributionSum(groupID, field string, values map[string]float64) error {
+	if len(values) == 0 {
+		return nil
+	}
+	sum := 0.0
+	for _, value := range values {
+		if value < 0 {
+			return fmt.Errorf("actorGroups[%s].%s values must be >= 0", groupID, field)
+		}
+		sum += value
+	}
+	if sum < 0.9999 || sum > 1.0001 {
+		return fmt.Errorf("actorGroups[%s].%s must sum to 1.0", groupID, field)
 	}
 	return nil
 }
@@ -274,6 +349,11 @@ func ToRuntimeConfig(session SessionFile) (RuntimeConfig, error) {
 			priceMax = eq.StartingPriceNanos
 		}
 	}
+	expandedActors := expandActorGroups(session.Session.Seed, session.ActorGroups)
+	runtimeActors := make([]Actor, 0, len(session.Actors)+len(expandedActors))
+	runtimeActors = append(runtimeActors, session.Actors...)
+	runtimeActors = append(runtimeActors, expandedActors...)
+
 	return RuntimeConfig{
 		SessionName:      session.Session.Name,
 		ScenarioRunID:    session.Session.ScenarioRunID,
@@ -293,8 +373,55 @@ func ToRuntimeConfig(session SessionFile) (RuntimeConfig, error) {
 		PriceMin:         priceMin,
 		PriceMax:         priceMax,
 		SideBiasBuyPct:   session.Mix.SideBias.BuyPct,
-		Actors:           session.Actors,
+		Actors:           runtimeActors,
 		Equities:         append([]Equity(nil), session.Market.Equities...),
 		StrategyProfiles: session.StrategyProfiles,
 	}, nil
+}
+
+func expandActorGroups(seed int64, groups []ActorGroup) []Actor {
+	out := make([]Actor, 0)
+	for _, group := range groups {
+		rng := rand.New(rand.NewSource(seed + hashID(group.ID)))
+		for i := 1; i <= group.Count; i++ {
+			actorID := fmt.Sprintf("%s-%03d", group.ID, i)
+			out = append(out, Actor{
+				ActorID:    actorID,
+				ActorType:  group.ActorType,
+				StrategyID: chooseWeightedKey(rng, group.StrategyProfileDistribution),
+				Weight:     1,
+				Symbols:    append([]string(nil), group.Symbols...),
+				Params: map[string]interface{}{
+					"persona": chooseWeightedKey(rng, group.PersonaDistribution),
+				},
+			})
+		}
+	}
+	return out
+}
+
+func chooseWeightedKey(rng *rand.Rand, dist map[string]float64) string {
+	if len(dist) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(dist))
+	for key := range dist {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	target := rng.Float64()
+	running := 0.0
+	for _, key := range keys {
+		running += dist[key]
+		if target <= running {
+			return key
+		}
+	}
+	return keys[len(keys)-1]
+}
+
+func hashID(value string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(value))
+	return int64(h.Sum64())
 }

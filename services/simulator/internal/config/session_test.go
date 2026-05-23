@@ -105,6 +105,78 @@ func TestLoadSessionFileRejectsUnknownStrategyProfile(t *testing.T) {
 	}
 }
 
+func TestActorGroupsExpandDeterministically(t *testing.T) {
+	input := `session:
+  name: grouped
+  scenarioRunId: sim-1
+  seed: 4242
+  mode: chaos
+runtime:
+  baseUrl: http://localhost:8080
+  duration: 30s
+  workers: 4
+  ratePerSecond: 20
+  timeout: 5s
+  traceCheckLimit: 10
+market:
+  timezone: America/New_York
+  equities:
+    - symbol: AAPL
+      instrumentId: AAPL
+      startingPriceNanos: 100
+      avgDailyVolume: 1
+      sharesOutstanding: 1
+      marketCap: 1
+      volatilityBps: 100
+      spreadBps: 5
+strategyProfiles:
+  passive:
+    strategy: passive_limit
+  aggressive:
+    strategy: momentum_follow
+actorGroups:
+  - id: retail-crowd
+    actorType: retail
+    count: 3
+    symbols: [AAPL]
+    personaDistribution:
+      dip_buyer: 0.5
+      passive_limit: 0.5
+    strategyProfileDistribution:
+      passive: 0.7
+      aggressive: 0.3
+mix:
+  actions:
+    submitPct: 70
+    modifyPct: 20
+    cancelPct: 10
+  sideBias:
+    buyPct: 50
+    sellPct: 50
+`
+	path := writeFile(t, "grouped.yaml", input)
+	s, err := LoadSessionFile(path)
+	if err != nil {
+		t.Fatalf("LoadSessionFile error: %v", err)
+	}
+	r1, err := ToRuntimeConfig(s)
+	if err != nil {
+		t.Fatalf("ToRuntimeConfig error: %v", err)
+	}
+	r2, err := ToRuntimeConfig(s)
+	if err != nil {
+		t.Fatalf("ToRuntimeConfig error: %v", err)
+	}
+	if len(r1.Actors) != 3 || len(r2.Actors) != 3 {
+		t.Fatalf("expected 3 expanded actors: %d, %d", len(r1.Actors), len(r2.Actors))
+	}
+	for i := range r1.Actors {
+		if r1.Actors[i].ActorID != r2.Actors[i].ActorID || r1.Actors[i].StrategyID != r2.Actors[i].StrategyID {
+			t.Fatalf("non-deterministic expansion at %d: %+v vs %+v", i, r1.Actors[i], r2.Actors[i])
+		}
+	}
+}
+
 func writeFile(t *testing.T, name, content string) string {
 	t.Helper()
 	d := t.TempDir()
