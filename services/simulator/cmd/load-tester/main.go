@@ -297,6 +297,7 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.ProfileMixNoise, "profile-noise-pct", cfg.ProfileMixNoise, "noise worker percentage")
 	flag.BoolVar(&cfg.PrettySummary, "pretty-summary", cfg.PrettySummary, "print a human-readable console summary (default prints JSON)")
 	flag.Parse()
+	parsedConfig := cfg
 
 	explicitFlags := make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
@@ -315,7 +316,7 @@ func parseConfig() (Config, error) {
 		}
 		cfg = mergeSessionConfig(defaults, runtimeConfig)
 		cfg.SessionConfigPath = requestedSessionPath
-		applyFlagOverrides(&cfg, explicitFlags)
+		applyFlagOverrides(&cfg, parsedConfig, explicitFlags)
 	}
 
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
@@ -408,90 +409,90 @@ func mergeSessionConfig(defaults Config, session sessionconfig.RuntimeConfig) Co
 	return cfg
 }
 
-func applyFlagOverrides(cfg *Config, explicit map[string]bool) {
+func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	if explicit["base-url"] {
-		cfg.BaseURL = flag.Lookup("base-url").Value.String()
+		cfg.BaseURL = parsed.BaseURL
 	}
 	if explicit["duration"] {
-		cfg.Duration = mustParseDuration(flag.Lookup("duration").Value.String())
+		cfg.Duration = parsed.Duration
 	}
 	if explicit["workers"] {
-		cfg.Workers = mustParseInt(flag.Lookup("workers").Value.String())
+		cfg.Workers = parsed.Workers
 	}
 	if explicit["rate"] {
-		cfg.RatePerSecond = mustParseInt(flag.Lookup("rate").Value.String())
+		cfg.RatePerSecond = parsed.RatePerSecond
 	}
 	if explicit["timeout"] {
-		cfg.RequestTimeout = mustParseDuration(flag.Lookup("timeout").Value.String())
+		cfg.RequestTimeout = parsed.RequestTimeout
 	}
 	if explicit["submit-pct"] {
-		cfg.SubmitPct = mustParseInt(flag.Lookup("submit-pct").Value.String())
+		cfg.SubmitPct = parsed.SubmitPct
 	}
 	if explicit["modify-pct"] {
-		cfg.ModifyPct = mustParseInt(flag.Lookup("modify-pct").Value.String())
+		cfg.ModifyPct = parsed.ModifyPct
 	}
 	if explicit["cancel-pct"] {
-		cfg.CancelPct = mustParseInt(flag.Lookup("cancel-pct").Value.String())
+		cfg.CancelPct = parsed.CancelPct
 	}
 	if explicit["instrument-id"] {
-		cfg.InstrumentID = flag.Lookup("instrument-id").Value.String()
+		cfg.InstrumentID = parsed.InstrumentID
 	}
 	if explicit["instrument-symbol"] {
-		cfg.InstrumentSymbol = flag.Lookup("instrument-symbol").Value.String()
+		cfg.InstrumentSymbol = parsed.InstrumentSymbol
 	}
 	if explicit["participant-id"] {
-		cfg.ParticipantID = flag.Lookup("participant-id").Value.String()
+		cfg.ParticipantID = parsed.ParticipantID
 	}
 	if explicit["participant-name"] {
-		cfg.ParticipantName = flag.Lookup("participant-name").Value.String()
+		cfg.ParticipantName = parsed.ParticipantName
 	}
 	if explicit["account-id"] {
-		cfg.AccountID = flag.Lookup("account-id").Value.String()
+		cfg.AccountID = parsed.AccountID
 	}
 	if explicit["qty-min"] {
-		cfg.QuantityMin = mustParseInt(flag.Lookup("qty-min").Value.String())
+		cfg.QuantityMin = parsed.QuantityMin
 	}
 	if explicit["qty-max"] {
-		cfg.QuantityMax = mustParseInt(flag.Lookup("qty-max").Value.String())
+		cfg.QuantityMax = parsed.QuantityMax
 	}
 	if explicit["price-min"] {
-		cfg.PriceMin = mustParseInt64(flag.Lookup("price-min").Value.String())
+		cfg.PriceMin = parsed.PriceMin
 	}
 	if explicit["price-max"] {
-		cfg.PriceMax = mustParseInt64(flag.Lookup("price-max").Value.String())
+		cfg.PriceMax = parsed.PriceMax
 	}
 	if explicit["trace-check-limit"] {
-		cfg.TraceCheckLimit = mustParseInt(flag.Lookup("trace-check-limit").Value.String())
+		cfg.TraceCheckLimit = parsed.TraceCheckLimit
 	}
 	if explicit["report-out"] {
-		cfg.ReportOut = flag.Lookup("report-out").Value.String()
+		cfg.ReportOut = parsed.ReportOut
 	}
 	if explicit["mode"] {
-		cfg.Mode = flag.Lookup("mode").Value.String()
+		cfg.Mode = parsed.Mode
 	}
 	if explicit["tail"] {
-		cfg.Tail = mustParseBool(flag.Lookup("tail").Value.String())
+		cfg.Tail = parsed.Tail
 	}
 	if explicit["tail-interval"] {
-		cfg.TailInterval = mustParseDuration(flag.Lookup("tail-interval").Value.String())
+		cfg.TailInterval = parsed.TailInterval
 	}
 	if explicit["tail-lines"] {
-		cfg.TailLines = mustParseInt(flag.Lookup("tail-lines").Value.String())
+		cfg.TailLines = parsed.TailLines
 	}
 	if explicit["profile-mm-pct"] {
-		cfg.ProfileMixMM = mustParseInt(flag.Lookup("profile-mm-pct").Value.String())
+		cfg.ProfileMixMM = parsed.ProfileMixMM
 	}
 	if explicit["profile-inst-pct"] {
-		cfg.ProfileMixInst = mustParseInt(flag.Lookup("profile-inst-pct").Value.String())
+		cfg.ProfileMixInst = parsed.ProfileMixInst
 	}
 	if explicit["profile-retail-pct"] {
-		cfg.ProfileMixRetail = mustParseInt(flag.Lookup("profile-retail-pct").Value.String())
+		cfg.ProfileMixRetail = parsed.ProfileMixRetail
 	}
 	if explicit["profile-noise-pct"] {
-		cfg.ProfileMixNoise = mustParseInt(flag.Lookup("profile-noise-pct").Value.String())
+		cfg.ProfileMixNoise = parsed.ProfileMixNoise
 	}
 	if explicit["pretty-summary"] {
-		cfg.PrettySummary = mustParseBool(flag.Lookup("pretty-summary").Value.String())
+		cfg.PrettySummary = parsed.PrettySummary
 	}
 }
 
@@ -1564,38 +1565,6 @@ func writeReport(path string, report summary) error {
 		return err
 	}
 	return os.WriteFile(path, blob, 0o644)
-}
-
-func mustParseInt(raw string) int {
-	parsed, err := strconv.Atoi(raw)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
-func mustParseInt64(raw string) int64 {
-	parsed, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
-func mustParseDuration(raw string) time.Duration {
-	parsed, err := time.ParseDuration(raw)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
-func mustParseBool(raw string) bool {
-	parsed, err := strconv.ParseBool(raw)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
 }
 
 func envOr(key, fallback string) string {

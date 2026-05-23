@@ -177,6 +177,21 @@ func TestTopProfileKeysSortsByRequests(t *testing.T) {
 	}
 }
 
+func TestApplyFlagOverridesUsesParsedValues(t *testing.T) {
+	cfg := Config{Workers: 24, RatePerSecond: 450, PrettySummary: false, ReportOut: ""}
+	parsed := Config{Workers: 12, RatePerSecond: 150, PrettySummary: true, ReportOut: "/tmp/report.json"}
+	explicit := map[string]bool{
+		"workers":        true,
+		"rate":           true,
+		"pretty-summary": true,
+		"report-out":     true,
+	}
+	applyFlagOverrides(&cfg, parsed, explicit)
+	if cfg.Workers != 12 || cfg.RatePerSecond != 150 || !cfg.PrettySummary || cfg.ReportOut != "/tmp/report.json" {
+		t.Fatalf("overrides not applied correctly: %+v", cfg)
+	}
+}
+
 func TestDeterministicSequenceFromExampleSession(t *testing.T) {
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
