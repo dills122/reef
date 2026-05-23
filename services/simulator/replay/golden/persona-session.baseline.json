@@ -1,6 +1,6 @@
 {
   "scenarioName": "persona-session-example",
-  "sessionConfig": "packages/scenario-definitions/persona-session.example.yaml",
+  "sessionConfig": "../../packages/scenario-definitions/persona-session.example.yaml",
   "thresholds": {
     "minThroughputRps": 80,
     "minAcceptedBusinessOpsRps": 60,
