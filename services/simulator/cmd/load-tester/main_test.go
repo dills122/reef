@@ -1,0 +1,149 @@
+package main
+
+import (
+	"math/rand"
+	"testing"
+	"time"
+
+	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
+)
+
+func TestChooseSessionActorWeighted(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: true,
+		SessionActors: []sessionconfig.Actor{
+			{ActorID: "a", ActorType: "market_maker", Weight: 80},
+			{ActorID: "b", ActorType: "retail", Weight: 20},
+		},
+	}
+	rng := rand.New(rand.NewSource(42))
+	countA := 0
+	countB := 0
+	for i := 0; i < 1000; i++ {
+		picked := chooseSessionActor(rng, cfg)
+		if picked == nil {
+			t.Fatal("expected actor")
+		}
+		switch picked.ActorID {
+		case "a":
+			countA++
+		case "b":
+			countB++
+		}
+	}
+	if countA <= countB {
+		t.Fatalf("expected actor a to dominate: a=%d b=%d", countA, countB)
+	}
+}
+
+func TestChooseSideForConfigRespectsBias(t *testing.T) {
+	cfg := Config{HasSessionConfig: true, SideBiasBuyPct: 100}
+	rng := rand.New(rand.NewSource(7))
+	for i := 0; i < 20; i++ {
+		if got := chooseSideForConfig(rng, cfg); got != "BUY" {
+			t.Fatalf("expected BUY, got %s", got)
+		}
+	}
+}
+
+func TestChooseInstrumentForActorEligibility(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: true,
+		MarketEquities: []sessionconfig.Equity{
+			{Symbol: "AAPL", InstrumentID: "AAPL", StartingPriceNanos: 100},
+			{Symbol: "MSFT", InstrumentID: "MSFT", StartingPriceNanos: 200},
+		},
+	}
+	actor := &sessionconfig.Actor{ActorID: "mm-1", Symbols: []string{"MSFT"}}
+	rng := rand.New(rand.NewSource(11))
+	for i := 0; i < 20; i++ {
+		eq := chooseInstrumentForActor(rng, cfg, actor)
+		if eq == nil || eq.Symbol != "MSFT" {
+			t.Fatalf("expected MSFT, got %+v", eq)
+		}
+	}
+}
+
+func TestBuildSummaryIncludesActorAndStrategyAttribution(t *testing.T) {
+	start := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Second)
+	results := []requestResult{
+		{ActorID: "mm-1", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionSubmit, Success: true, Latency: 10 * time.Millisecond, StatusCode: 200},
+		{ActorID: "mm-1", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionModify, Success: false, Latency: 20 * time.Millisecond, StatusCode: 409, ErrorText: "rejected"},
+		{ActorID: "ret-1", StrategyID: "dip_buyer", Profile: "retail", Action: ActionSubmit, Success: true, Latency: 12 * time.Millisecond, StatusCode: 200},
+	}
+	report := buildSummary("s-1", start, end, Config{}, results)
+	if report.ByActor["mm-1"].Requests != 2 {
+		t.Fatalf("expected actor attribution, got %+v", report.ByActor["mm-1"])
+	}
+	if report.ByStrategy["two_sided_quote"].Requests != 2 {
+		t.Fatalf("expected strategy attribution, got %+v", report.ByStrategy["two_sided_quote"])
+	}
+}
+
+func TestDeterministicSelectionWithFixedSeed(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: true,
+		Seed:             424242,
+		SubmitPct:        60,
+		ModifyPct:        30,
+		CancelPct:        10,
+		SideBiasBuyPct:   65,
+		SessionActors: []sessionconfig.Actor{
+			{ActorID: "a", ActorType: "market_maker", Weight: 70},
+			{ActorID: "b", ActorType: "retail", Weight: 30},
+		},
+		MarketEquities: []sessionconfig.Equity{
+			{Symbol: "AAPL", InstrumentID: "AAPL", StartingPriceNanos: 100, VolatilityBps: 100},
+			{Symbol: "MSFT", InstrumentID: "MSFT", StartingPriceNanos: 200, VolatilityBps: 100},
+		},
+	}
+	seq1 := generateDecisionSequence(cfg, 0, 20)
+	seq2 := generateDecisionSequence(cfg, 0, 20)
+	for i := range seq1 {
+		if seq1[i] != seq2[i] {
+			t.Fatalf("sequence mismatch at %d: %q vs %q", i, seq1[i], seq2[i])
+		}
+	}
+}
+
+func TestChooseActionForActorStrategyMix(t *testing.T) {
+	cfg := Config{
+		Mode: "chaos",
+		StrategyProfiles: map[string]sessionconfig.StrategyProfile{
+			"mm-tight": {
+				Strategy: "two_sided_quote",
+				Params:   map[string]interface{}{"submitPct": 0, "modifyPct": 100, "cancelPct": 0},
+			},
+		},
+	}
+	actor := &sessionconfig.Actor{ActorID: "mm-1", StrategyID: "mm-tight", ActorType: "market_maker"}
+	rng := rand.New(rand.NewSource(123))
+	for i := 0; i < 10; i++ {
+		action := chooseActionForActor(rng, cfg, true, "market_maker", actor)
+		if action != ActionModify {
+			t.Fatalf("expected strategy-driven modify action, got %s", action)
+		}
+	}
+}
+
+func generateDecisionSequence(cfg Config, workerID int, count int) []string {
+	rng := rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
+	out := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		actor := chooseSessionActor(rng, cfg)
+		profile := "noise"
+		if actor != nil {
+			profile = actor.ActorType
+		}
+		action := chooseActionForProfile(rng, cfg, true, profile)
+		instrument := chooseInstrumentForActor(rng, cfg, actor)
+		side := chooseSideForConfig(rng, cfg)
+		symbol := ""
+		if instrument != nil {
+			symbol = instrument.Symbol
+		}
+		out = append(out, actor.ActorID+"|"+string(action)+"|"+symbol+"|"+side)
+	}
+	return out
+}
