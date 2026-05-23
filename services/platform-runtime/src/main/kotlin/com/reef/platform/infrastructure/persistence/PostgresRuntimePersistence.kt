@@ -136,6 +136,42 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_trace_sequence
+                    ON runtime_events(trace_id, sequence_number)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_order_trace_sequence
+                    ON runtime_events(order_id, trace_id, sequence_number)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_event
+                    ON runtime_events(occurred_at DESC, event_id DESC)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_executions_order_occurred
+                    ON executions(order_id, occurred_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_buy_order_occurred
+                    ON trades(buy_order_id, occurred_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_sell_order_occurred
+                    ON trades(sell_order_id, occurred_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS submit_results (
                       command_id TEXT PRIMARY KEY,
                       result_type TEXT NOT NULL,
