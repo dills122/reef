@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 loadDotEnv();
-const { runtimeUrl } = deriveDevUrls();
+const { runtimeUrl, engineUrl } = deriveDevUrls();
 const duration = env("DEV_STRESS_DURATION", "30s");
 const workers = env("DEV_STRESS_WORKERS", "12");
 const traceLimit = env("DEV_STRESS_TRACE_CHECK_LIMIT", "100");
@@ -31,6 +31,8 @@ console.log(`running stepped stress profile against ${runtimeUrl} (mode=${mode},
 const telemetry = startTelemetryCapture({
   outPath: telemetryOut,
   intervalMs: telemetryIntervalMs,
+  runtimeUrl,
+  engineUrl,
 });
 try {
   for (const rate of rates) {
@@ -151,12 +153,16 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, mode, traceL
   );
 }
 
-function startTelemetryCapture({ outPath, intervalMs }) {
+function startTelemetryCapture({ outPath, intervalMs, runtimeUrl, engineUrl }) {
   let stopped = false;
   const loop = (async () => {
     while (!stopped) {
       const sampledAt = new Date().toISOString();
-      const sample = await sampleDockerStats(sampledAt);
+      const [docker, app] = await Promise.all([
+        sampleDockerStats(sampledAt),
+        sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl),
+      ]);
+      const sample = { sampledAt, docker, app };
       appendFileSync(outPath, JSON.stringify(sample) + "\n");
       await sleep(intervalMs);
     }
@@ -167,6 +173,36 @@ function startTelemetryCapture({ outPath, intervalMs }) {
       await loop;
     },
   };
+}
+
+async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
+  const probes = [
+    { name: "runtime.health", url: `${runtimeUrl}/health` },
+    { name: "runtime.metrics", url: `${runtimeUrl}/actuator/prometheus` },
+    { name: "engine.health", url: `${engineUrl}/health` },
+    { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
+  ];
+  const results = [];
+  for (const probe of probes) {
+    const started = Date.now();
+    try {
+      const response = await fetch(probe.url, { method: "GET" });
+      results.push({
+        name: probe.name,
+        status: response.status,
+        ok: response.ok,
+        latencyMs: Date.now() - started,
+      });
+    } catch (error) {
+      results.push({
+        name: probe.name,
+        ok: false,
+        latencyMs: Date.now() - started,
+        error: String(error.message || error),
+      });
+    }
+  }
+  return { sampledAt, probes: results };
 }
 
 async function sampleDockerStats(sampledAt) {
