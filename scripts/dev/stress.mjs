@@ -86,7 +86,7 @@ if (recommendation) {
   writeFileSync(recommendationOut, JSON.stringify(recommendation, null, 2));
   console.log("recommended settings:");
   console.log(
-    `  workers=${recommendation.workers} rate=${recommendation.rate} throughput=${recommendation.throughputRps.toFixed(2)} p95=${recommendation.p95Ms.toFixed(2)}ms`,
+    `  workers=${recommendation.workers} rate=${recommendation.rate} throughput=${recommendation.throughputRps.toFixed(2)} accepted=${recommendation.acceptedRps.toFixed(2)} p95=${recommendation.p95Ms.toFixed(2)}ms p99=${recommendation.p99Ms.toFixed(2)}ms score=${recommendation.score.toFixed(2)}`,
   );
   console.log(`  ${recommendationOut}`);
 }
@@ -212,7 +212,9 @@ function buildRecommendation(reportFiles) {
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
         rate: rateMatch ? Number(rateMatch[1]) : Number(report.config?.ratePerSecond ?? 0),
         throughputRps: Number(report.throughputRps ?? 0),
+        acceptedRps: Number(report.acceptedBusinessOpsRps ?? 0),
         p95Ms: Number(report.latencyMs?.p95 ?? 0),
+        p99Ms: Number(report.latencyMs?.p99 ?? 0),
       });
     } catch {
       // skip unreadable report
@@ -220,20 +222,30 @@ function buildRecommendation(reportFiles) {
   }
   if (rows.length === 0) return null;
   const latencyTargetMs = 100;
-  const acceptable = rows.filter((row) => row.p95Ms <= latencyTargetMs);
+  const acceptable = rows.filter((row) => row.p95Ms <= latencyTargetMs && row.p99Ms <= latencyTargetMs * 1.5);
   const candidates = acceptable.length > 0 ? acceptable : rows;
-  candidates.sort((a, b) => {
-    if (a.throughputRps === b.throughputRps) return a.p95Ms - b.p95Ms;
-    return b.throughputRps - a.throughputRps;
+  const scored = candidates.map((row) => ({
+    ...row,
+    score:
+      row.acceptedRps -
+      Math.max(0, row.p95Ms-latencyTargetMs)*0.75 -
+      Math.max(0, row.p99Ms-latencyTargetMs*1.5)*0.5,
+  }));
+  scored.sort((a, b) => {
+    if (a.score === b.score) return a.p95Ms - b.p95Ms;
+    return b.score - a.score;
   });
   return {
     selectedAt: new Date().toISOString(),
     latencyTargetMs,
     totalSamples: rows.length,
-    workers: candidates[0].workers,
-    rate: candidates[0].rate,
-    throughputRps: candidates[0].throughputRps,
-    p95Ms: candidates[0].p95Ms,
-    topSamples: candidates.slice(0, 5),
+    workers: scored[0].workers,
+    rate: scored[0].rate,
+    throughputRps: scored[0].throughputRps,
+    acceptedRps: scored[0].acceptedRps,
+    p95Ms: scored[0].p95Ms,
+    p99Ms: scored[0].p99Ms,
+    score: scored[0].score,
+    topSamples: scored.slice(0, 5),
   };
 }
