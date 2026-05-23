@@ -71,9 +71,9 @@ func TestBuildSummaryIncludesActorAndStrategyAttribution(t *testing.T) {
 	start := time.Date(2026, 5, 23, 12, 0, 0, 0, time.UTC)
 	end := start.Add(2 * time.Second)
 	results := []requestResult{
-		{ActorID: "mm-1", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionSubmit, Success: true, Latency: 10 * time.Millisecond, StatusCode: 200},
-		{ActorID: "mm-1", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionModify, Success: false, Latency: 20 * time.Millisecond, StatusCode: 409, ErrorText: "rejected"},
-		{ActorID: "ret-1", StrategyID: "dip_buyer", Profile: "retail", Action: ActionSubmit, Success: true, Latency: 12 * time.Millisecond, StatusCode: 200},
+		{ActorID: "mm-1", Persona: "electronic_liquidity_provider", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionSubmit, Success: true, Latency: 10 * time.Millisecond, StatusCode: 200},
+		{ActorID: "mm-1", Persona: "electronic_liquidity_provider", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionModify, Success: false, Latency: 20 * time.Millisecond, StatusCode: 409, ErrorText: "rejected"},
+		{ActorID: "ret-1", Persona: "dip_buyer", StrategyID: "dip_buyer", Profile: "retail", Action: ActionSubmit, Success: true, Latency: 12 * time.Millisecond, StatusCode: 200},
 	}
 	report := buildSummary("s-1", start, end, Config{}, results)
 	if report.ByActor["mm-1"].Requests != 2 {
@@ -81,6 +81,9 @@ func TestBuildSummaryIncludesActorAndStrategyAttribution(t *testing.T) {
 	}
 	if report.ByStrategy["two_sided_quote"].Requests != 2 {
 		t.Fatalf("expected strategy attribution, got %+v", report.ByStrategy["two_sided_quote"])
+	}
+	if report.ByPersona["electronic_liquidity_provider"].Requests != 2 {
+		t.Fatalf("expected persona attribution, got %+v", report.ByPersona["electronic_liquidity_provider"])
 	}
 }
 
@@ -153,7 +156,7 @@ func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 
 func TestBuildCommandPayloadIncludesScenarioMetadata(t *testing.T) {
 	cfg := Config{ScenarioRunID: "sim-1", Seed: 4242}
-	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer")
+	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer")
 	if payload["scenarioRunId"] != "sim-1" {
 		t.Fatalf("expected scenarioRunId, got: %+v", payload)
 	}

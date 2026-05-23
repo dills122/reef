@@ -174,6 +174,9 @@ mix:
 		if r1.Actors[i].ActorID != r2.Actors[i].ActorID || r1.Actors[i].StrategyID != r2.Actors[i].StrategyID {
 			t.Fatalf("non-deterministic expansion at %d: %+v vs %+v", i, r1.Actors[i], r2.Actors[i])
 		}
+		if r1.Actors[i].Persona == "" {
+			t.Fatalf("expected expanded actor persona to be set: %+v", r1.Actors[i])
+		}
 	}
 }
 

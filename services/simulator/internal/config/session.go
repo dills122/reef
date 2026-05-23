@@ -62,6 +62,7 @@ type Equity struct {
 type Actor struct {
 	ActorID    string                 `json:"actorId" yaml:"actorId"`
 	ActorType  string                 `json:"actorType" yaml:"actorType"`
+	Persona    string                 `json:"persona,omitempty" yaml:"persona,omitempty"`
 	StrategyID string                 `json:"strategyId" yaml:"strategyId"`
 	Weight     int                    `json:"weight" yaml:"weight"`
 	Symbols    []string               `json:"symbols,omitempty" yaml:"symbols,omitempty"`
@@ -416,12 +417,10 @@ func expandActorGroups(seed int64, groups []ActorGroup) []Actor {
 			out = append(out, Actor{
 				ActorID:    actorID,
 				ActorType:  group.ActorType,
+				Persona:    chooseWeightedKey(rng, group.PersonaDistribution),
 				StrategyID: chooseWeightedKey(rng, group.StrategyProfileDistribution),
 				Weight:     1,
 				Symbols:    append([]string(nil), group.Symbols...),
-				Params: map[string]interface{}{
-					"persona": chooseWeightedKey(rng, group.PersonaDistribution),
-				},
 			})
 		}
 	}

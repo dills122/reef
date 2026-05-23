@@ -75,6 +75,7 @@ type requestResult struct {
 	Profile      string
 	ActorID      string
 	ActorType    string
+	Persona      string
 	StrategyID   string
 	Action       Action
 	Success      bool
@@ -102,6 +103,7 @@ type summary struct {
 	ByAction               map[Action]actionSummary  `json:"byAction"`
 	ByProfile              map[string]profileSummary `json:"byProfile"`
 	ByActor                map[string]profileSummary `json:"byActor"`
+	ByPersona              map[string]profileSummary `json:"byPersona"`
 	ByStrategy             map[string]profileSummary `json:"byStrategy"`
 	StatusCodes            map[int]int64             `json:"statusCodes"`
 	TopErrors              []errorSummary            `json:"topErrors"`
@@ -538,16 +540,19 @@ func runWorker(
 		start := time.Now()
 		actorID := fmt.Sprintf("bot-%d", workerID)
 		actorType := effectiveProfile
+		persona := ""
 		strategyID := ""
 		if actor != nil {
 			actorID = actor.ActorID
 			actorType = actor.ActorType
+			persona = actor.Persona
 			strategyID = actor.StrategyID
 		}
 		result := requestResult{
 			Profile:    effectiveProfile,
 			ActorID:    actorID,
 			ActorType:  actorType,
+			Persona:    persona,
 			StrategyID: strategyID,
 			Action:     action,
 			TraceID:    traceID,
@@ -570,7 +575,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
 			payload["orderId"] = orderID
 			payload["instrumentId"] = instrumentID
 			payload["participantId"] = cfg.ParticipantID
@@ -593,7 +598,7 @@ func runWorker(
 			}
 			orderID := pickOrderID(rng, state.orders, cfg.Mode)
 			result.OrderID = orderID
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
 			payload["orderId"] = orderID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
@@ -611,7 +616,7 @@ func runWorker(
 			idx := pickOrderIndex(rng, state.orders, cfg.Mode)
 			orderID := state.orders[idx]
 			result.OrderID = orderID
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
 			payload["orderId"] = orderID
 			payload["reason"] = "load test"
 			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", payload)
@@ -671,6 +676,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		},
 		ByProfile:   map[string]profileSummary{},
 		ByActor:     map[string]profileSummary{},
+		ByPersona:   map[string]profileSummary{},
 		ByStrategy:  map[string]profileSummary{},
 		StatusCodes: make(map[int]int64),
 	}
@@ -685,6 +691,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	}
 	profileLatencies := map[string][]float64{}
 	actorLatencies := map[string][]float64{}
+	personaLatencies := map[string][]float64{}
 	strategyLatencies := map[string][]float64{}
 
 	for _, r := range results {
@@ -695,6 +702,9 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		profileLatencies[r.Profile] = append(profileLatencies[r.Profile], r.Latency.Seconds()*1000)
 		if r.ActorID != "" {
 			actorLatencies[r.ActorID] = append(actorLatencies[r.ActorID], r.Latency.Seconds()*1000)
+		}
+		if r.Persona != "" {
+			personaLatencies[r.Persona] = append(personaLatencies[r.Persona], r.Latency.Seconds()*1000)
 		}
 		if r.StrategyID != "" {
 			strategyLatencies[r.StrategyID] = append(strategyLatencies[r.StrategyID], r.Latency.Seconds()*1000)
@@ -744,6 +754,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		pCurrent.ByAction[r.Action] = pAction
 		report.ByProfile[r.Profile] = pCurrent
 		updateDimensionSummary(report.ByActor, r.ActorID, r.Action, r.Success)
+		updateDimensionSummary(report.ByPersona, r.Persona, r.Action, r.Success)
 		updateDimensionSummary(report.ByStrategy, r.StrategyID, r.Action, r.Success)
 	}
 
@@ -766,6 +777,12 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		pCurrent.Latency = computeLatency(values)
 		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.ActorID == actorID })
 		report.ByActor[actorID] = pCurrent
+	}
+	for persona, values := range personaLatencies {
+		pCurrent := report.ByPersona[persona]
+		pCurrent.Latency = computeLatency(values)
+		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.Persona == persona })
+		report.ByPersona[persona] = pCurrent
 	}
 	for strategyID, values := range strategyLatencies {
 		pCurrent := report.ByStrategy[strategyID]
@@ -1031,7 +1048,7 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 	return resp.StatusCode, respBody, err
 }
 
-func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, strategyID string) map[string]string {
+func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, persona, strategyID string) map[string]string {
 	payload := map[string]string{
 		"commandId":     commandID,
 		"traceId":       traceID,
@@ -1041,6 +1058,9 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, str
 		"actorType":     actorType,
 		"strategyId":    strategyID,
 		"occurredAt":    time.Now().UTC().Format(time.RFC3339),
+	}
+	if persona != "" {
+		payload["persona"] = persona
 	}
 	if cfg.ScenarioRunID != "" {
 		payload["scenarioRunId"] = cfg.ScenarioRunID
@@ -1484,6 +1504,17 @@ func printPrettySummary(report summary) {
 			v := report.ByStrategy[strategyID]
 			fmt.Printf("  %-20s %10d %10d %10d %10.2f %10.2f %10.2f\n",
 				strategyID, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+		}
+		fmt.Printf("\n")
+	}
+
+	if len(report.ByPersona) > 0 {
+		fmt.Printf("Top Personas\n")
+		fmt.Printf("  %-24s %10s %10s %10s %10s %10s %10s\n", "persona", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+		for _, persona := range topProfileKeys(report.ByPersona, 8) {
+			v := report.ByPersona[persona]
+			fmt.Printf("  %-24s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+				persona, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
 		}
 		fmt.Printf("\n")
 	}
