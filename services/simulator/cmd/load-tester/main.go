@@ -368,7 +368,7 @@ func defaultConfigFromEnv() Config {
 		PriceMin:         envInt64("REEF_PRICE_MIN", 149_000_000_000),
 		PriceMax:         envInt64("REEF_PRICE_MAX", 151_000_000_000),
 		TraceCheckLimit:  envInt("REEF_TRACE_CHECK_LIMIT", 50),
-		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 2),
+		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 4),
 		ReportOut:        envOr("REEF_REPORT_OUT", ""),
 		Mode:             envOr("REEF_MODE", "chaos"),
 		Tail:             envBool("REEF_TAIL", false),
@@ -541,6 +541,8 @@ func runWorker(
 		if state.submitOnlyTicks > 0 {
 			action = ActionSubmit
 			state.submitOnlyTicks--
+		} else if action != ActionSubmit && !shouldAllowLifecycleAction(rng, cfg, state) {
+			action = ActionSubmit
 		}
 		reqID := atomic.AddInt64(counter, 1)
 		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
@@ -598,6 +600,7 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
+				state.orders = compactTrackedOrders(state.orders, cfg)
 				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
 			} else if isTerminalOrderRejection(result.RejectCode) {
@@ -628,6 +631,7 @@ func runWorker(
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				state.orders = compactTrackedOrders(state.orders, cfg)
 				updateRecoveryState(&state, cfg)
 			}
 		case ActionCancel:
@@ -656,6 +660,7 @@ func runWorker(
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				state.orders = compactTrackedOrders(state.orders, cfg)
 				updateRecoveryState(&state, cfg)
 			}
 		}
@@ -1203,15 +1208,46 @@ func hasActionableOrders(cfg Config, state workerState) bool {
 	return true
 }
 
+func shouldAllowLifecycleAction(rng *rand.Rand, cfg Config, state workerState) bool {
+	if cfg.Mode != "strict-lifecycle" {
+		return true
+	}
+	if len(state.orders) < cfg.StrictMinLiveOrders {
+		return false
+	}
+	allowPct := 40
+	if len(state.orders) >= cfg.StrictMinLiveOrders*3 {
+		allowPct = 55
+	}
+	if state.rejectStreak > 0 {
+		allowPct -= 20
+	}
+	if allowPct < 5 {
+		allowPct = 5
+	}
+	return rng.Intn(100) < allowPct
+}
+
 func updateRecoveryState(state *workerState, cfg Config) {
 	if cfg.Mode != "strict-lifecycle" {
 		return
 	}
 	state.rejectStreak++
 	if state.rejectStreak >= 3 {
-		state.submitOnlyTicks = 5
+		state.submitOnlyTicks = 20
 		state.rejectStreak = 0
 	}
+}
+
+func compactTrackedOrders(orders []string, cfg Config) []string {
+	if cfg.Mode != "strict-lifecycle" {
+		return orders
+	}
+	maxTracked := maxInt(cfg.StrictMinLiveOrders*2, 32)
+	if len(orders) <= maxTracked {
+		return orders
+	}
+	return append([]string(nil), orders[len(orders)-maxTracked:]...)
 }
 
 func isTerminalOrderRejection(code string) bool {
