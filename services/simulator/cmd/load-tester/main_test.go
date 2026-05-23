@@ -2,6 +2,9 @@ package main
 
 import (
 	"math/rand"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -171,5 +174,44 @@ func TestTopProfileKeysSortsByRequests(t *testing.T) {
 	}
 	if keys[0] != "a" || keys[1] != "b" || keys[2] != "c" {
 		t.Fatalf("unexpected order: %+v", keys)
+	}
+}
+
+func TestDeterministicSequenceFromExampleSession(t *testing.T) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	sessionPath := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "../../../../packages/scenario-definitions/persona-session.example.yaml"))
+	if _, err := os.Stat(sessionPath); err != nil {
+		t.Fatalf("missing scenario example file: %v", err)
+	}
+	loaded, err := sessionconfig.LoadSessionFile(sessionPath)
+	if err != nil {
+		t.Fatalf("LoadSessionFile error: %v", err)
+	}
+	runtimeCfg, err := sessionconfig.ToRuntimeConfig(loaded)
+	if err != nil {
+		t.Fatalf("ToRuntimeConfig error: %v", err)
+	}
+	cfg := mergeSessionConfig(defaultConfigFromEnv(), runtimeCfg)
+	seq := generateDecisionSequence(cfg, 0, 8)
+	expected := []string{
+		"inst-mutual-01|submit|META|BUY",
+		"inst-hedge-01|submit|META|BUY",
+		"algo-momo-01|submit|NVDA|SELL",
+		"algo-momo-01|submit|MSFT|SELL",
+		"retail-passive-01|submit|META|SELL",
+		"retail-breakout-01|submit|MSFT|SELL",
+		"retail-dip-01|submit|AAPL|BUY",
+		"mm-02|submit|AMZN|BUY",
+	}
+	if len(seq) != len(expected) {
+		t.Fatalf("sequence length mismatch: got %d want %d", len(seq), len(expected))
+	}
+	for i := range expected {
+		if seq[i] != expected[i] {
+			t.Fatalf("sequence mismatch at %d: got %q want %q", i, seq[i], expected[i])
+		}
 	}
 }
