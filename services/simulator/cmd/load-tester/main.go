@@ -19,6 +19,7 @@ import (
 	"time"
 
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
+	reporting "github.com/dills122/reef/services/simulator/internal/report"
 	"github.com/dills122/reef/services/simulator/internal/strategy"
 )
 
@@ -128,25 +129,9 @@ type actionSummary struct {
 	Latency  latencySummary `json:"latencyMs"`
 }
 
-type latencySummary struct {
-	Min float64 `json:"min"`
-	P50 float64 `json:"p50"`
-	P95 float64 `json:"p95"`
-	P99 float64 `json:"p99"`
-	Max float64 `json:"max"`
-}
-
-type errorSummary struct {
-	Error string `json:"error"`
-	Count int64  `json:"count"`
-}
-
-type rejectTaxonomySummary struct {
-	Code               string  `json:"code"`
-	Count              int64   `json:"count"`
-	PercentOfFailures  float64 `json:"percentOfFailures"`
-	PercentOfRejects   float64 `json:"percentOfRejects"`
-}
+type latencySummary = reporting.LatencySummary
+type errorSummary = reporting.ErrorSummary
+type rejectTaxonomySummary = reporting.RejectTaxonomySummary
 
 type traceChecks struct {
 	Checked       int      `json:"checked"`
@@ -825,37 +810,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 }
 
 func summarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []rejectTaxonomySummary {
-	if len(rejectCodes) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(rejectCodes))
-	for code := range rejectCodes {
-		keys = append(keys, code)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		left := rejectCodes[keys[i]]
-		right := rejectCodes[keys[j]]
-		if left == right {
-			return keys[i] < keys[j]
-		}
-		return left > right
-	})
-	if len(keys) > limit {
-		keys = keys[:limit]
-	}
-	out := make([]rejectTaxonomySummary, 0, len(keys))
-	for _, code := range keys {
-		count := rejectCodes[code]
-		row := rejectTaxonomySummary{Code: code, Count: count}
-		if totalFailures > 0 {
-			row.PercentOfFailures = (float64(count) / float64(totalFailures)) * 100
-		}
-		if totalRejects > 0 {
-			row.PercentOfRejects = (float64(count) / float64(totalRejects)) * 100
-		}
-		out = append(out, row)
-	}
-	return out
+	return reporting.SummarizeRejectTaxonomy(rejectCodes, totalFailures, totalRejects, limit)
 }
 
 func updateDimensionSummary(target map[string]profileSummary, key string, action Action, success bool) {
@@ -1460,49 +1415,11 @@ func tokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
 }
 
 func computeLatency(values []float64) latencySummary {
-	if len(values) == 0 {
-		return latencySummary{}
-	}
-	sorted := append([]float64(nil), values...)
-	sort.Float64s(sorted)
-	return latencySummary{
-		Min: sorted[0],
-		P50: percentile(sorted, 50),
-		P95: percentile(sorted, 95),
-		P99: percentile(sorted, 99),
-		Max: sorted[len(sorted)-1],
-	}
-}
-
-func percentile(sorted []float64, p float64) float64 {
-	if len(sorted) == 0 {
-		return 0
-	}
-	rank := p / 100 * float64(len(sorted)-1)
-	lo := int(rank)
-	hi := lo + 1
-	if hi >= len(sorted) {
-		return sorted[lo]
-	}
-	frac := rank - float64(lo)
-	return sorted[lo] + (sorted[hi]-sorted[lo])*frac
+	return reporting.ComputeLatency(values)
 }
 
 func topErrors(m map[string]int64, limit int) []errorSummary {
-	values := make([]errorSummary, 0, len(m))
-	for errText, count := range m {
-		values = append(values, errorSummary{Error: errText, Count: count})
-	}
-	sort.Slice(values, func(i, j int) bool {
-		if values[i].Count == values[j].Count {
-			return values[i].Error < values[j].Error
-		}
-		return values[i].Count > values[j].Count
-	})
-	if len(values) > limit {
-		values = values[:limit]
-	}
-	return values
+	return reporting.TopErrors(m, limit)
 }
 
 func printSummary(report summary) {
