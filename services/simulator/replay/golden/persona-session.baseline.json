@@ -1,0 +1,12 @@
+{
+  "scenarioName": "persona-session-example",
+  "sessionConfig": "../../packages/scenario-definitions/persona-session.example.yaml",
+  "thresholds": {
+    "minThroughputRps": 80,
+    "minAcceptedBusinessOpsRps": 60,
+    "maxP95LatencyMs": 250,
+    "minTracePassRatePct": 90
+  },
+  "requiredRejectCodes": ["INVALID_STATE", "NOT_FOUND"],
+  "requiredAttribution": ["byActor", "byStrategy"]
+}

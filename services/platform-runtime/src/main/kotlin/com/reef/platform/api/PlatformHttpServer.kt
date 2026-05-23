@@ -26,7 +26,7 @@ class PlatformHttpServer(
     fun start(): HttpServer {
         val backlog = System.getenv("PLATFORM_HTTP_BACKLOG")?.toIntOrNull()?.coerceAtLeast(64) ?: 1024
         val server = HttpServer.create(InetSocketAddress(port), backlog)
-        val workerThreads = System.getenv("PLATFORM_HTTP_THREADS")?.toIntOrNull()?.coerceAtLeast(4) ?: 64
+        val workerThreads = System.getenv("PLATFORM_HTTP_THREADS")?.toIntOrNull()?.coerceAtLeast(4) ?: 32
         server.executor = Executors.newFixedThreadPool(workerThreads)
 
         server.createContext("/health") { exchange ->

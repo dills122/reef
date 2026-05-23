@@ -127,10 +127,11 @@ Goal: introduce messaging where it meaningfully improves separation and observab
 
 Scope:
 
-- NATS-backed event publication where async boundaries help
+- NATS (JetStream)-backed event publication where async boundaries help
 - background workers for read-model building or workflow processing
 - explicit protobuf contracts between Kotlin runtime and Go engine
 - clearer service startup and health management
+- outbox relay pattern for reliable event publication
 
 Constraints:
 
@@ -143,6 +144,32 @@ Exit criteria:
 - service boundaries are explicit
 - contracts are versioned
 - async flows remain understandable and testable locally
+- runtime write path persists domain state + event log + outbox atomically
+- outbox relay drains backlog with retry/backoff and measurable lag
+
+## Phase 5: Data Lifecycle and Scheduled Operations
+
+Goal: harden retention, analytics usability, and EOD operations without overbuilding platform complexity.
+
+Scope:
+
+- EOD archive export job with integrity manifest and checksums
+- analytics refresh pipeline from the same market-day cutoff snapshot
+- scheduler/job-runner service for recurring jobs (EOD export, analytics refresh, maintenance)
+- archival layout and retention tiering strategy
+
+Rules:
+
+- EOD export is rollup/archive only, never first-time persistence
+- intraday lifecycle events and state must persist in real time
+- scheduler jobs must be idempotent, resumable, and auditable
+
+Exit criteria:
+
+- market-date EOD job can be run safely once with duplicate prevention
+- archive artifacts include manifest, checksums, and reconciliation counts
+- analytics views/tables are refreshed from reconciled EOD data
+- run history and failure states are queryable for operators
 
 ## Cross-Cutting Workstreams
 
@@ -183,6 +210,9 @@ Early simplification is acceptable:
 - the simulator may begin as a module inside the Kotlin runtime
 - protobuf may follow HTTP JSON contracts first, then harden later
 - a single Angular app can host multiple operational surfaces before splitting
+
+Implementation detail reference:
+- [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
 
 ## Near-Term Priority Order
 

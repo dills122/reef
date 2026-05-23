@@ -12,41 +12,57 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
+	reporting "github.com/dills122/reef/services/simulator/internal/report"
+	"github.com/dills122/reef/services/simulator/internal/strategy"
 )
 
 type Config struct {
-	BaseURL          string
-	Duration         time.Duration
-	Workers          int
-	RatePerSecond    int
-	RequestTimeout   time.Duration
-	SubmitPct        int
-	ModifyPct        int
-	CancelPct        int
-	InstrumentID     string
-	InstrumentSymbol string
-	ParticipantID    string
-	ParticipantName  string
-	AccountID        string
-	QuantityMin      int
-	QuantityMax      int
-	PriceMin         int64
-	PriceMax         int64
-	TraceCheckLimit  int
-	ReportOut        string
-	Mode             string
-	Tail             bool
-	TailInterval     time.Duration
-	TailLines        int
-	ProfileMixMM     int
-	ProfileMixInst   int
-	ProfileMixRetail int
-	ProfileMixNoise  int
-	PrettySummary    bool
+	SessionConfigPath string
+	SessionName       string
+	ScenarioRunID     string
+	Seed              int64
+	HasSessionConfig  bool
+	SideBiasBuyPct    int
+	SessionActors     []sessionconfig.Actor
+	MarketEquities    []sessionconfig.Equity
+	StrategyProfiles  map[string]sessionconfig.StrategyProfile
+	Faults            []sessionconfig.FaultRule
+	BaseURL           string
+	Duration          time.Duration
+	Workers           int
+	RatePerSecond     int
+	RequestTimeout    time.Duration
+	SubmitPct         int
+	ModifyPct         int
+	CancelPct         int
+	InstrumentID      string
+	InstrumentSymbol  string
+	ParticipantID     string
+	ParticipantName   string
+	AccountID         string
+	QuantityMin       int
+	QuantityMax       int
+	PriceMin          int64
+	PriceMax          int64
+	TraceCheckLimit   int
+	StrictMinLiveOrders int
+	ReportOut         string
+	Mode              string
+	Tail              bool
+	TailInterval      time.Duration
+	TailLines         int
+	ProfileMixMM      int
+	ProfileMixInst    int
+	ProfileMixRetail  int
+	ProfileMixNoise   int
+	PrettySummary     bool
 }
 
 type Action string
@@ -59,6 +75,10 @@ const (
 
 type requestResult struct {
 	Profile      string
+	ActorID      string
+	ActorType    string
+	Persona      string
+	StrategyID   string
 	Action       Action
 	Success      bool
 	StatusCode   int
@@ -84,9 +104,13 @@ type summary struct {
 	TotalFailures          int64                     `json:"totalFailures"`
 	ByAction               map[Action]actionSummary  `json:"byAction"`
 	ByProfile              map[string]profileSummary `json:"byProfile"`
+	ByActor                map[string]profileSummary `json:"byActor"`
+	ByPersona              map[string]profileSummary `json:"byPersona"`
+	ByStrategy             map[string]profileSummary `json:"byStrategy"`
 	StatusCodes            map[int]int64             `json:"statusCodes"`
 	TopErrors              []errorSummary            `json:"topErrors"`
 	RejectReasons          []errorSummary            `json:"rejectReasons"`
+	RejectTaxonomy         []rejectTaxonomySummary   `json:"rejectTaxonomy"`
 	LatencyMs              latencySummary            `json:"latencyMs"`
 	TraceChecks            traceChecks               `json:"traceChecks"`
 }
@@ -106,18 +130,9 @@ type actionSummary struct {
 	Latency  latencySummary `json:"latencyMs"`
 }
 
-type latencySummary struct {
-	Min float64 `json:"min"`
-	P50 float64 `json:"p50"`
-	P95 float64 `json:"p95"`
-	P99 float64 `json:"p99"`
-	Max float64 `json:"max"`
-}
-
-type errorSummary struct {
-	Error string `json:"error"`
-	Count int64  `json:"count"`
-}
+type latencySummary = reporting.LatencySummary
+type errorSummary = reporting.ErrorSummary
+type rejectTaxonomySummary = reporting.RejectTaxonomySummary
 
 type traceChecks struct {
 	Checked       int      `json:"checked"`
@@ -136,7 +151,9 @@ type traceEventsResponse struct {
 }
 
 type workerState struct {
-	orders []string
+	orders          []string
+	rejectStreak    int
+	submitOnlyTicks int
 }
 
 const (
@@ -245,36 +262,61 @@ func main() {
 }
 
 func parseConfig() (Config, error) {
-	cfg := Config{}
-	flag.StringVar(&cfg.BaseURL, "base-url", envOr("REEF_BASE_URL", "http://localhost:8080"), "platform runtime base url")
-	flag.DurationVar(&cfg.Duration, "duration", envDuration("REEF_DURATION", 30*time.Second), "test duration")
-	flag.IntVar(&cfg.Workers, "workers", envInt("REEF_WORKERS", 8), "concurrent workers")
-	flag.IntVar(&cfg.RatePerSecond, "rate", envInt("REEF_RATE", 0), "global request rate per second (0 = unthrottled)")
-	flag.DurationVar(&cfg.RequestTimeout, "timeout", envDuration("REEF_TIMEOUT", 5*time.Second), "request timeout")
-	flag.IntVar(&cfg.SubmitPct, "submit-pct", envInt("REEF_SUBMIT_PCT", 60), "submit action percentage")
-	flag.IntVar(&cfg.ModifyPct, "modify-pct", envInt("REEF_MODIFY_PCT", 25), "modify action percentage")
-	flag.IntVar(&cfg.CancelPct, "cancel-pct", envInt("REEF_CANCEL_PCT", 15), "cancel action percentage")
-	flag.StringVar(&cfg.InstrumentID, "instrument-id", envOr("REEF_INSTRUMENT_ID", "AAPL"), "instrument id used for orders")
-	flag.StringVar(&cfg.InstrumentSymbol, "instrument-symbol", envOr("REEF_INSTRUMENT_SYMBOL", "AAPL"), "instrument symbol")
-	flag.StringVar(&cfg.ParticipantID, "participant-id", envOr("REEF_PARTICIPANT_ID", "participant-1"), "participant id")
-	flag.StringVar(&cfg.ParticipantName, "participant-name", envOr("REEF_PARTICIPANT_NAME", "Participant 1"), "participant name")
-	flag.StringVar(&cfg.AccountID, "account-id", envOr("REEF_ACCOUNT_ID", "account-1"), "account id")
-	flag.IntVar(&cfg.QuantityMin, "qty-min", envInt("REEF_QTY_MIN", 10), "minimum order quantity")
-	flag.IntVar(&cfg.QuantityMax, "qty-max", envInt("REEF_QTY_MAX", 1000), "maximum order quantity")
-	flag.Int64Var(&cfg.PriceMin, "price-min", envInt64("REEF_PRICE_MIN", 149_000_000_000), "minimum order price nanos")
-	flag.Int64Var(&cfg.PriceMax, "price-max", envInt64("REEF_PRICE_MAX", 151_000_000_000), "maximum order price nanos")
-	flag.IntVar(&cfg.TraceCheckLimit, "trace-check-limit", envInt("REEF_TRACE_CHECK_LIMIT", 50), "max unique traces to validate")
-	flag.StringVar(&cfg.ReportOut, "report-out", envOr("REEF_REPORT_OUT", ""), "optional json report output path")
-	flag.StringVar(&cfg.Mode, "mode", envOr("REEF_MODE", "chaos"), "traffic mode: chaos, strict-lifecycle, or capacity-baseline")
-	flag.BoolVar(&cfg.Tail, "tail", envBool("REEF_TAIL", false), "stream new trades/events during the run")
-	flag.DurationVar(&cfg.TailInterval, "tail-interval", envDuration("REEF_TAIL_INTERVAL", 2*time.Second), "tail poll interval")
-	flag.IntVar(&cfg.TailLines, "tail-lines", envInt("REEF_TAIL_LINES", 5), "max trade/event rows per tail poll")
-	flag.IntVar(&cfg.ProfileMixMM, "profile-mm-pct", envInt("REEF_PROFILE_MM_PCT", 35), "market-maker worker percentage")
-	flag.IntVar(&cfg.ProfileMixInst, "profile-inst-pct", envInt("REEF_PROFILE_INST_PCT", 30), "institutional worker percentage")
-	flag.IntVar(&cfg.ProfileMixRetail, "profile-retail-pct", envInt("REEF_PROFILE_RETAIL_PCT", 25), "retail worker percentage")
-	flag.IntVar(&cfg.ProfileMixNoise, "profile-noise-pct", envInt("REEF_PROFILE_NOISE_PCT", 10), "noise worker percentage")
-	flag.BoolVar(&cfg.PrettySummary, "pretty-summary", envBool("REEF_PRETTY_SUMMARY", false), "print a human-readable console summary (default prints JSON)")
+	defaults := defaultConfigFromEnv()
+	cfg := defaults
+
+	flag.StringVar(&cfg.SessionConfigPath, "session-config", envOr("REEF_SESSION_CONFIG", ""), "path to persona session config (yaml/json)")
+	flag.StringVar(&cfg.BaseURL, "base-url", cfg.BaseURL, "platform runtime base url")
+	flag.DurationVar(&cfg.Duration, "duration", cfg.Duration, "test duration")
+	flag.IntVar(&cfg.Workers, "workers", cfg.Workers, "concurrent workers")
+	flag.IntVar(&cfg.RatePerSecond, "rate", cfg.RatePerSecond, "global request rate per second (0 = unthrottled)")
+	flag.DurationVar(&cfg.RequestTimeout, "timeout", cfg.RequestTimeout, "request timeout")
+	flag.IntVar(&cfg.SubmitPct, "submit-pct", cfg.SubmitPct, "submit action percentage")
+	flag.IntVar(&cfg.ModifyPct, "modify-pct", cfg.ModifyPct, "modify action percentage")
+	flag.IntVar(&cfg.CancelPct, "cancel-pct", cfg.CancelPct, "cancel action percentage")
+	flag.StringVar(&cfg.InstrumentID, "instrument-id", cfg.InstrumentID, "instrument id used for orders")
+	flag.StringVar(&cfg.InstrumentSymbol, "instrument-symbol", cfg.InstrumentSymbol, "instrument symbol")
+	flag.StringVar(&cfg.ParticipantID, "participant-id", cfg.ParticipantID, "participant id")
+	flag.StringVar(&cfg.ParticipantName, "participant-name", cfg.ParticipantName, "participant name")
+	flag.StringVar(&cfg.AccountID, "account-id", cfg.AccountID, "account id")
+	flag.IntVar(&cfg.QuantityMin, "qty-min", cfg.QuantityMin, "minimum order quantity")
+	flag.IntVar(&cfg.QuantityMax, "qty-max", cfg.QuantityMax, "maximum order quantity")
+	flag.Int64Var(&cfg.PriceMin, "price-min", cfg.PriceMin, "minimum order price nanos")
+	flag.Int64Var(&cfg.PriceMax, "price-max", cfg.PriceMax, "maximum order price nanos")
+	flag.IntVar(&cfg.TraceCheckLimit, "trace-check-limit", cfg.TraceCheckLimit, "max unique traces to validate")
+	flag.IntVar(&cfg.StrictMinLiveOrders, "strict-min-live-orders", cfg.StrictMinLiveOrders, "minimum local live-order depth before modify/cancel in strict modes")
+	flag.StringVar(&cfg.ReportOut, "report-out", cfg.ReportOut, "optional json report output path")
+	flag.StringVar(&cfg.Mode, "mode", cfg.Mode, "traffic mode: chaos, strict-lifecycle, or capacity-baseline")
+	flag.BoolVar(&cfg.Tail, "tail", cfg.Tail, "stream new trades/events during the run")
+	flag.DurationVar(&cfg.TailInterval, "tail-interval", cfg.TailInterval, "tail poll interval")
+	flag.IntVar(&cfg.TailLines, "tail-lines", cfg.TailLines, "max trade/event rows per tail poll")
+	flag.IntVar(&cfg.ProfileMixMM, "profile-mm-pct", cfg.ProfileMixMM, "market-maker worker percentage")
+	flag.IntVar(&cfg.ProfileMixInst, "profile-inst-pct", cfg.ProfileMixInst, "institutional worker percentage")
+	flag.IntVar(&cfg.ProfileMixRetail, "profile-retail-pct", cfg.ProfileMixRetail, "retail worker percentage")
+	flag.IntVar(&cfg.ProfileMixNoise, "profile-noise-pct", cfg.ProfileMixNoise, "noise worker percentage")
+	flag.BoolVar(&cfg.PrettySummary, "pretty-summary", cfg.PrettySummary, "print a human-readable console summary (default prints JSON)")
 	flag.Parse()
+	parsedConfig := cfg
+
+	explicitFlags := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) {
+		explicitFlags[f.Name] = true
+	})
+
+	if cfg.SessionConfigPath != "" {
+		requestedSessionPath := cfg.SessionConfigPath
+		session, err := sessionconfig.LoadSessionFile(cfg.SessionConfigPath)
+		if err != nil {
+			return cfg, err
+		}
+		runtimeConfig, err := sessionconfig.ToRuntimeConfig(session)
+		if err != nil {
+			return cfg, err
+		}
+		cfg = mergeSessionConfig(defaults, runtimeConfig)
+		cfg.SessionConfigPath = requestedSessionPath
+		applyFlagOverrides(&cfg, parsedConfig, explicitFlags)
+	}
 
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
 		return cfg, errors.New("duration and workers must be > 0")
@@ -300,7 +342,164 @@ func parseConfig() (Config, error) {
 	if cfg.ProfileMixMM+cfg.ProfileMixInst+cfg.ProfileMixRetail+cfg.ProfileMixNoise != 100 {
 		return cfg, errors.New("profile mix percentages must sum to 100")
 	}
+	if cfg.StrictMinLiveOrders <= 0 {
+		return cfg, errors.New("strict-min-live-orders must be > 0")
+	}
 	return cfg, nil
+}
+
+func defaultConfigFromEnv() Config {
+	return Config{
+		BaseURL:          envOr("REEF_BASE_URL", "http://localhost:8080"),
+		Duration:         envDuration("REEF_DURATION", 30*time.Second),
+		Workers:          envInt("REEF_WORKERS", 8),
+		RatePerSecond:    envInt("REEF_RATE", 0),
+		RequestTimeout:   envDuration("REEF_TIMEOUT", 5*time.Second),
+		SubmitPct:        envInt("REEF_SUBMIT_PCT", 60),
+		ModifyPct:        envInt("REEF_MODIFY_PCT", 25),
+		CancelPct:        envInt("REEF_CANCEL_PCT", 15),
+		InstrumentID:     envOr("REEF_INSTRUMENT_ID", "AAPL"),
+		InstrumentSymbol: envOr("REEF_INSTRUMENT_SYMBOL", "AAPL"),
+		ParticipantID:    envOr("REEF_PARTICIPANT_ID", "participant-1"),
+		ParticipantName:  envOr("REEF_PARTICIPANT_NAME", "Participant 1"),
+		AccountID:        envOr("REEF_ACCOUNT_ID", "account-1"),
+		QuantityMin:      envInt("REEF_QTY_MIN", 10),
+		QuantityMax:      envInt("REEF_QTY_MAX", 1000),
+		PriceMin:         envInt64("REEF_PRICE_MIN", 149_000_000_000),
+		PriceMax:         envInt64("REEF_PRICE_MAX", 151_000_000_000),
+		TraceCheckLimit:  envInt("REEF_TRACE_CHECK_LIMIT", 50),
+		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 2),
+		ReportOut:        envOr("REEF_REPORT_OUT", ""),
+		Mode:             envOr("REEF_MODE", "chaos"),
+		Tail:             envBool("REEF_TAIL", false),
+		TailInterval:     envDuration("REEF_TAIL_INTERVAL", 2*time.Second),
+		TailLines:        envInt("REEF_TAIL_LINES", 5),
+		ProfileMixMM:     envInt("REEF_PROFILE_MM_PCT", 35),
+		ProfileMixInst:   envInt("REEF_PROFILE_INST_PCT", 30),
+		ProfileMixRetail: envInt("REEF_PROFILE_RETAIL_PCT", 25),
+		ProfileMixNoise:  envInt("REEF_PROFILE_NOISE_PCT", 10),
+		PrettySummary:    envBool("REEF_PRETTY_SUMMARY", false),
+	}
+}
+
+func mergeSessionConfig(defaults Config, session sessionconfig.RuntimeConfig) Config {
+	cfg := defaults
+	cfg.SessionName = session.SessionName
+	cfg.ScenarioRunID = session.ScenarioRunID
+	cfg.Seed = session.Seed
+	cfg.BaseURL = session.BaseURL
+	cfg.Duration = session.Duration
+	cfg.Workers = session.Workers
+	cfg.RatePerSecond = session.RatePerSecond
+	cfg.RequestTimeout = session.RequestTimeout
+	cfg.TraceCheckLimit = session.TraceCheckLimit
+	cfg.SubmitPct = session.SubmitPct
+	cfg.ModifyPct = session.ModifyPct
+	cfg.CancelPct = session.CancelPct
+	cfg.InstrumentID = session.InstrumentID
+	cfg.InstrumentSymbol = session.InstrumentSymbol
+	cfg.PriceMin = session.PriceMin
+	cfg.PriceMax = session.PriceMax
+	cfg.SideBiasBuyPct = session.SideBiasBuyPct
+	cfg.SessionActors = append([]sessionconfig.Actor(nil), session.Actors...)
+	cfg.MarketEquities = append([]sessionconfig.Equity(nil), session.Equities...)
+	cfg.StrategyProfiles = session.StrategyProfiles
+	cfg.Faults = append([]sessionconfig.FaultRule(nil), session.Faults...)
+	cfg.HasSessionConfig = true
+	if session.Mode != "" {
+		cfg.Mode = session.Mode
+	}
+	return cfg
+}
+
+func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
+	if explicit["base-url"] {
+		cfg.BaseURL = parsed.BaseURL
+	}
+	if explicit["duration"] {
+		cfg.Duration = parsed.Duration
+	}
+	if explicit["workers"] {
+		cfg.Workers = parsed.Workers
+	}
+	if explicit["rate"] {
+		cfg.RatePerSecond = parsed.RatePerSecond
+	}
+	if explicit["timeout"] {
+		cfg.RequestTimeout = parsed.RequestTimeout
+	}
+	if explicit["submit-pct"] {
+		cfg.SubmitPct = parsed.SubmitPct
+	}
+	if explicit["modify-pct"] {
+		cfg.ModifyPct = parsed.ModifyPct
+	}
+	if explicit["cancel-pct"] {
+		cfg.CancelPct = parsed.CancelPct
+	}
+	if explicit["instrument-id"] {
+		cfg.InstrumentID = parsed.InstrumentID
+	}
+	if explicit["instrument-symbol"] {
+		cfg.InstrumentSymbol = parsed.InstrumentSymbol
+	}
+	if explicit["participant-id"] {
+		cfg.ParticipantID = parsed.ParticipantID
+	}
+	if explicit["participant-name"] {
+		cfg.ParticipantName = parsed.ParticipantName
+	}
+	if explicit["account-id"] {
+		cfg.AccountID = parsed.AccountID
+	}
+	if explicit["qty-min"] {
+		cfg.QuantityMin = parsed.QuantityMin
+	}
+	if explicit["qty-max"] {
+		cfg.QuantityMax = parsed.QuantityMax
+	}
+	if explicit["price-min"] {
+		cfg.PriceMin = parsed.PriceMin
+	}
+	if explicit["price-max"] {
+		cfg.PriceMax = parsed.PriceMax
+	}
+	if explicit["trace-check-limit"] {
+		cfg.TraceCheckLimit = parsed.TraceCheckLimit
+	}
+	if explicit["strict-min-live-orders"] {
+		cfg.StrictMinLiveOrders = parsed.StrictMinLiveOrders
+	}
+	if explicit["report-out"] {
+		cfg.ReportOut = parsed.ReportOut
+	}
+	if explicit["mode"] {
+		cfg.Mode = parsed.Mode
+	}
+	if explicit["tail"] {
+		cfg.Tail = parsed.Tail
+	}
+	if explicit["tail-interval"] {
+		cfg.TailInterval = parsed.TailInterval
+	}
+	if explicit["tail-lines"] {
+		cfg.TailLines = parsed.TailLines
+	}
+	if explicit["profile-mm-pct"] {
+		cfg.ProfileMixMM = parsed.ProfileMixMM
+	}
+	if explicit["profile-inst-pct"] {
+		cfg.ProfileMixInst = parsed.ProfileMixInst
+	}
+	if explicit["profile-retail-pct"] {
+		cfg.ProfileMixRetail = parsed.ProfileMixRetail
+	}
+	if explicit["profile-noise-pct"] {
+		cfg.ProfileMixNoise = parsed.ProfileMixNoise
+	}
+	if explicit["pretty-summary"] {
+		cfg.PrettySummary = parsed.PrettySummary
+	}
 }
 
 func runWorker(
@@ -315,6 +514,9 @@ func runWorker(
 	traceSeen *sync.Map,
 ) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)*7919))
+	if cfg.HasSessionConfig && cfg.Seed != 0 {
+		rng = rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
+	}
 	state := workerState{orders: make([]string, 0, 128)}
 	for {
 		select {
@@ -330,43 +532,76 @@ func runWorker(
 			}
 		}
 
-		action := chooseActionForProfile(rng, cfg, len(state.orders) > 0, profile)
+		actor := chooseSessionActor(rng, cfg)
+		effectiveProfile := profile
+		if actor != nil {
+			effectiveProfile = actor.ActorType
+		}
+		action := chooseActionForActor(rng, cfg, hasActionableOrders(cfg, state), effectiveProfile, actor)
+		if state.submitOnlyTicks > 0 {
+			action = ActionSubmit
+			state.submitOnlyTicks--
+		}
 		reqID := atomic.AddInt64(counter, 1)
 		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
 		commandID := fmt.Sprintf("cmd-%d-%d", workerID, reqID)
 		start := time.Now()
+		actorID := fmt.Sprintf("bot-%d", workerID)
+		actorType := effectiveProfile
+		persona := ""
+		strategyID := ""
+		if actor != nil {
+			actorID = actor.ActorID
+			actorType = actor.ActorType
+			persona = actor.Persona
+			strategyID = actor.StrategyID
+		}
 		result := requestResult{
-			Profile:   profile,
-			Action:    action,
-			TraceID:   traceID,
-			CommandID: commandID,
+			Profile:    effectiveProfile,
+			ActorID:    actorID,
+			ActorType:  actorType,
+			Persona:    persona,
+			StrategyID: strategyID,
+			Action:     action,
+			TraceID:    traceID,
+			CommandID:  commandID,
 		}
 		switch action {
 		case ActionSubmit:
 			orderID := fmt.Sprintf("ord-%d-%d", workerID, reqID)
 			result.OrderID = orderID
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/submit", map[string]string{
-				"commandId":     commandID,
-				"traceId":       traceID,
-				"causationId":   "",
-				"correlationId": traceID,
-				"actorId":       fmt.Sprintf("bot-%d", workerID),
-				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
-				"orderId":       orderID,
-				"instrumentId":  cfg.InstrumentID,
-				"participantId": cfg.ParticipantID,
-				"accountId":     cfg.AccountID,
-				"side":          chooseSide(rng),
-				"orderType":     "LIMIT",
-				"quantityUnits": fmt.Sprintf("%d", profileQuantity(rng, cfg, profile)),
-				"limitPrice":    fmt.Sprintf("%d", profilePrice(rng, cfg, profile)),
-				"currency":      "USD",
-				"timeInForce":   "DAY",
-			})
+			instrumentID := cfg.InstrumentID
+			instrument := chooseInstrumentForActor(rng, cfg, actor)
+			if instrument != nil {
+				instrumentID = instrument.InstrumentID
+			}
+			if shouldInjectFault(rng, cfg, "reject_submit", instrumentID) {
+				result.StatusCode = 200
+				result.ErrorText = "rejected:INJECTED_FAULT"
+				result.RejectCode = "INJECTED_FAULT"
+				result.RejectReason = "deterministic fault injection"
+				results <- result
+				continue
+			}
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
+			payload["orderId"] = orderID
+			payload["instrumentId"] = instrumentID
+			payload["participantId"] = cfg.ParticipantID
+			payload["accountId"] = cfg.AccountID
+			payload["side"] = chooseSideForConfig(rng, cfg)
+			payload["orderType"] = "LIMIT"
+			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
+			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrument))
+			payload["currency"] = "USD"
+			payload["timeInForce"] = "DAY"
+			status, body, err := doPOST(client, cfg.BaseURL+"/orders/submit", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
+				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
+			} else if isTerminalOrderRejection(result.RejectCode) {
+				updateRecoveryState(&state, cfg)
 			}
 		case ActionModify:
 			if len(state.orders) == 0 {
@@ -374,22 +609,26 @@ func runWorker(
 			}
 			orderID := pickOrderID(rng, state.orders, cfg.Mode)
 			result.OrderID = orderID
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", map[string]string{
-				"commandId":     commandID,
-				"traceId":       traceID,
-				"causationId":   "",
-				"correlationId": traceID,
-				"actorId":       fmt.Sprintf("bot-%d", workerID),
-				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
-				"orderId":       orderID,
-				"quantityUnits": fmt.Sprintf("%d", profileQuantity(rng, cfg, profile)),
-				"limitPrice":    fmt.Sprintf("%d", profilePrice(rng, cfg, profile)),
-			})
+			if shouldInjectFault(rng, cfg, "reject_modify", cfg.InstrumentID) {
+				result.StatusCode = 200
+				result.ErrorText = "rejected:INJECTED_FAULT"
+				result.RejectCode = "INJECTED_FAULT"
+				result.RejectReason = "deterministic fault injection"
+				results <- result
+				continue
+			}
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
+			payload["orderId"] = orderID
+			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
+			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
+			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
+				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
-			} else if cfg.Mode == "strict-lifecycle" && isTerminalOrderRejection(result.RejectCode) {
+			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				updateRecoveryState(&state, cfg)
 			}
 		case ActionCancel:
 			if len(state.orders) == 0 {
@@ -398,22 +637,26 @@ func runWorker(
 			idx := pickOrderIndex(rng, state.orders, cfg.Mode)
 			orderID := state.orders[idx]
 			result.OrderID = orderID
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", map[string]string{
-				"commandId":     commandID,
-				"traceId":       traceID,
-				"causationId":   "",
-				"correlationId": traceID,
-				"actorId":       fmt.Sprintf("bot-%d", workerID),
-				"occurredAt":    time.Now().UTC().Format(time.RFC3339),
-				"orderId":       orderID,
-				"reason":        "load test",
-			})
+			if shouldInjectFault(rng, cfg, "reject_cancel", cfg.InstrumentID) {
+				result.StatusCode = 200
+				result.ErrorText = "rejected:INJECTED_FAULT"
+				result.RejectCode = "INJECTED_FAULT"
+				result.RejectReason = "deterministic fault injection"
+				results <- result
+				continue
+			}
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
+			payload["orderId"] = orderID
+			payload["reason"] = "load test"
+			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", payload)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
+				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
-			} else if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && isTerminalOrderRejection(result.RejectCode) {
+			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				updateRecoveryState(&state, cfg)
 			}
 		}
 		results <- result
@@ -463,11 +706,16 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 			ActionCancel: {},
 		},
 		ByProfile:   map[string]profileSummary{},
+		ByActor:     map[string]profileSummary{},
+		ByPersona:   map[string]profileSummary{},
+		ByStrategy:  map[string]profileSummary{},
 		StatusCodes: make(map[int]int64),
 	}
 
 	errorCounts := make(map[string]int64)
 	rejectReasons := make(map[string]int64)
+	rejectCodes := make(map[string]int64)
+	totalRejects := int64(0)
 	allLatencies := make([]float64, 0, len(results))
 	actionLatencies := map[Action][]float64{
 		ActionSubmit: {},
@@ -475,6 +723,9 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		ActionCancel: {},
 	}
 	profileLatencies := map[string][]float64{}
+	actorLatencies := map[string][]float64{}
+	personaLatencies := map[string][]float64{}
+	strategyLatencies := map[string][]float64{}
 
 	for _, r := range results {
 		report.TotalRequests++
@@ -482,6 +733,15 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		allLatencies = append(allLatencies, r.Latency.Seconds()*1000)
 		actionLatencies[r.Action] = append(actionLatencies[r.Action], r.Latency.Seconds()*1000)
 		profileLatencies[r.Profile] = append(profileLatencies[r.Profile], r.Latency.Seconds()*1000)
+		if r.ActorID != "" {
+			actorLatencies[r.ActorID] = append(actorLatencies[r.ActorID], r.Latency.Seconds()*1000)
+		}
+		if r.Persona != "" {
+			personaLatencies[r.Persona] = append(personaLatencies[r.Persona], r.Latency.Seconds()*1000)
+		}
+		if r.StrategyID != "" {
+			strategyLatencies[r.StrategyID] = append(strategyLatencies[r.StrategyID], r.Latency.Seconds()*1000)
+		}
 
 		current := report.ByAction[r.Action]
 		current.Requests++
@@ -495,6 +755,8 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 				errorCounts[r.ErrorText]++
 			}
 			if r.RejectCode != "" {
+				rejectCodes[r.RejectCode]++
+				totalRejects++
 				key := r.RejectCode
 				if r.RejectReason != "" {
 					key = key + ": " + r.RejectReason
@@ -526,6 +788,9 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 		}
 		pCurrent.ByAction[r.Action] = pAction
 		report.ByProfile[r.Profile] = pCurrent
+		updateDimensionSummary(report.ByActor, r.ActorID, r.Action, r.Success)
+		updateDimensionSummary(report.ByPersona, r.Persona, r.Action, r.Success)
+		updateDimensionSummary(report.ByStrategy, r.StrategyID, r.Action, r.Success)
 	}
 
 	report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
@@ -539,21 +804,76 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	for profile, values := range profileLatencies {
 		pCurrent := report.ByProfile[profile]
 		pCurrent.Latency = computeLatency(values)
-		for action, actionSummary := range pCurrent.ByAction {
-			actionValues := make([]float64, 0, len(values))
-			for _, r := range results {
-				if r.Profile == profile && r.Action == action {
-					actionValues = append(actionValues, r.Latency.Seconds()*1000)
-				}
-			}
-			actionSummary.Latency = computeLatency(actionValues)
-			pCurrent.ByAction[action] = actionSummary
-		}
+		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.Profile == profile })
 		report.ByProfile[profile] = pCurrent
+	}
+	for actorID, values := range actorLatencies {
+		pCurrent := report.ByActor[actorID]
+		pCurrent.Latency = computeLatency(values)
+		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.ActorID == actorID })
+		report.ByActor[actorID] = pCurrent
+	}
+	for persona, values := range personaLatencies {
+		pCurrent := report.ByPersona[persona]
+		pCurrent.Latency = computeLatency(values)
+		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.Persona == persona })
+		report.ByPersona[persona] = pCurrent
+	}
+	for strategyID, values := range strategyLatencies {
+		pCurrent := report.ByStrategy[strategyID]
+		pCurrent.Latency = computeLatency(values)
+		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.StrategyID == strategyID })
+		report.ByStrategy[strategyID] = pCurrent
 	}
 	report.TopErrors = topErrors(errorCounts, 8)
 	report.RejectReasons = topErrors(rejectReasons, 12)
+	report.RejectTaxonomy = summarizeRejectTaxonomy(rejectCodes, report.TotalFailures, totalRejects, 12)
 	return report
+}
+
+func summarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []rejectTaxonomySummary {
+	return reporting.SummarizeRejectTaxonomy(rejectCodes, totalFailures, totalRejects, limit)
+}
+
+func updateDimensionSummary(target map[string]profileSummary, key string, action Action, success bool) {
+	if key == "" {
+		return
+	}
+	current, ok := target[key]
+	if !ok {
+		current = profileSummary{
+			ByAction: map[Action]actionSummary{
+				ActionSubmit: {},
+				ActionModify: {},
+				ActionCancel: {},
+			},
+		}
+	}
+	current.Requests++
+	actionRow := current.ByAction[action]
+	actionRow.Requests++
+	if success {
+		current.Success++
+		actionRow.Success++
+	} else {
+		current.Failures++
+		actionRow.Failures++
+	}
+	current.ByAction[action] = actionRow
+	target[key] = current
+}
+
+func applyActionLatencies(current *profileSummary, results []requestResult, match func(requestResult) bool) {
+	for action, actionSummary := range current.ByAction {
+		actionValues := make([]float64, 0, len(results))
+		for _, r := range results {
+			if match(r) && r.Action == action {
+				actionValues = append(actionValues, r.Latency.Seconds()*1000)
+			}
+		}
+		actionSummary.Latency = computeLatency(actionValues)
+		current.ByAction[action] = actionSummary
+	}
 }
 
 func runTraceChecks(client *http.Client, cfg Config, seen *sync.Map) traceChecks {
@@ -717,11 +1037,22 @@ func checkTraceOnce(client *http.Client, baseURL, traceID string) bool {
 }
 
 func seedReferenceData(client *http.Client, cfg Config) error {
-	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
-		"instrumentId": cfg.InstrumentID,
-		"symbol":       cfg.InstrumentSymbol,
-	}); err != nil {
-		return err
+	if cfg.HasSessionConfig && len(cfg.MarketEquities) > 0 {
+		for _, eq := range cfg.MarketEquities {
+			if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
+				"instrumentId": eq.InstrumentID,
+				"symbol":       eq.Symbol,
+			}); err != nil {
+				return err
+			}
+		}
+	} else {
+		if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
+			"instrumentId": cfg.InstrumentID,
+			"symbol":       cfg.InstrumentSymbol,
+		}); err != nil {
+			return err
+		}
 	}
 	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
 		"participantId": cfg.ParticipantID,
@@ -757,6 +1088,29 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 	return resp.StatusCode, respBody, err
 }
 
+func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, persona, strategyID string) map[string]string {
+	payload := map[string]string{
+		"commandId":     commandID,
+		"traceId":       traceID,
+		"causationId":   "",
+		"correlationId": traceID,
+		"actorId":       actorID,
+		"actorType":     actorType,
+		"strategyId":    strategyID,
+		"occurredAt":    time.Now().UTC().Format(time.RFC3339),
+	}
+	if persona != "" {
+		payload["persona"] = persona
+	}
+	if cfg.ScenarioRunID != "" {
+		payload["scenarioRunId"] = cfg.ScenarioRunID
+	}
+	if cfg.Seed != 0 {
+		payload["seed"] = strconv.FormatInt(cfg.Seed, 10)
+	}
+	return payload
+}
+
 func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
 	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
 		return ActionSubmit
@@ -778,6 +1132,9 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
 		return ActionSubmit
 	}
+	if !cfg.HasSessionConfig {
+		return chooseAction(rng, cfg, hasOrders)
+	}
 	if cfg.Mode == "capacity-baseline" {
 		return weightedAction(rng, 88, 8)
 	}
@@ -795,6 +1152,16 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 	}
 }
 
+func chooseActionForActor(rng *rand.Rand, cfg Config, hasOrders bool, profile string, actor *sessionconfig.Actor) Action {
+	if mix, ok := strategy.ResolveActionMix(actor, cfg.StrategyProfiles); ok {
+		if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+			return ActionSubmit
+		}
+		return weightedAction(rng, mix.SubmitPct, mix.ModifyPct)
+	}
+	return chooseActionForProfile(rng, cfg, hasOrders, normalizeProfile(profile))
+}
+
 func weightedAction(rng *rand.Rand, submitPct, modifyPct int) Action {
 	n := rng.Intn(100)
 	if n < submitPct {
@@ -810,7 +1177,7 @@ func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
 	if len(orders) == 0 {
 		return ""
 	}
-	if mode == "capacity-baseline" {
+	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
 		return orders[len(orders)-1]
 	}
 	return orders[rng.Intn(len(orders))]
@@ -820,14 +1187,39 @@ func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
 	if len(orders) == 0 {
 		return 0
 	}
-	if mode == "capacity-baseline" {
+	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
 		return len(orders) - 1
 	}
 	return rng.Intn(len(orders))
 }
 
+func hasActionableOrders(cfg Config, state workerState) bool {
+	if len(state.orders) == 0 {
+		return false
+	}
+	if cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline" {
+		return len(state.orders) >= cfg.StrictMinLiveOrders
+	}
+	return true
+}
+
+func updateRecoveryState(state *workerState, cfg Config) {
+	if cfg.Mode != "strict-lifecycle" {
+		return
+	}
+	state.rejectStreak++
+	if state.rejectStreak >= 3 {
+		state.submitOnlyTicks = 5
+		state.rejectStreak = 0
+	}
+}
+
 func isTerminalOrderRejection(code string) bool {
 	return code == "INVALID_STATE" || code == "NOT_FOUND"
+}
+
+func shouldPruneTerminalOrder(mode string) bool {
+	return mode == "strict-lifecycle" || mode == "capacity-baseline"
 }
 
 func removeOrder(orders []string, orderID string) []string {
@@ -872,6 +1264,44 @@ func chooseSide(rng *rand.Rand) string {
 	return "SELL"
 }
 
+func chooseSideForConfig(rng *rand.Rand, cfg Config) string {
+	if cfg.HasSessionConfig {
+		if cfg.SideBiasBuyPct <= 0 {
+			return "SELL"
+		}
+		if cfg.SideBiasBuyPct >= 100 {
+			return "BUY"
+		}
+		if rng.Intn(100) < cfg.SideBiasBuyPct {
+			return "BUY"
+		}
+		return "SELL"
+	}
+	return chooseSide(rng)
+}
+
+func chooseSessionActor(rng *rand.Rand, cfg Config) *sessionconfig.Actor {
+	if !cfg.HasSessionConfig || len(cfg.SessionActors) == 0 {
+		return nil
+	}
+	total := 0
+	for _, actor := range cfg.SessionActors {
+		total += actor.Weight
+	}
+	if total <= 0 {
+		return nil
+	}
+	pick := rng.Intn(total)
+	running := 0
+	for i := range cfg.SessionActors {
+		running += cfg.SessionActors[i].Weight
+		if pick < running {
+			return &cfg.SessionActors[i]
+		}
+	}
+	return &cfg.SessionActors[len(cfg.SessionActors)-1]
+}
+
 func randomInt(rng *rand.Rand, min, max int) int {
 	if min == max {
 		return min
@@ -899,7 +1329,22 @@ func randomInt64(rng *rand.Rand, min, max int64) int64 {
 	return min + rng.Int63n(max-min+1)
 }
 
-func profilePrice(rng *rand.Rand, cfg Config, profile string) int64 {
+func profilePrice(rng *rand.Rand, cfg Config, profile string, instrument *sessionconfig.Equity) int64 {
+	if instrument != nil {
+		base := instrument.StartingPriceNanos
+		if base <= 0 {
+			base = cfg.PriceMin
+		}
+		volBps := instrument.VolatilityBps
+		if volBps <= 0 {
+			volBps = 100
+		}
+		span := (base * int64(volBps)) / 10_000
+		if span <= 0 {
+			span = maxInt64(1, (cfg.PriceMax-cfg.PriceMin)/10)
+		}
+		return randomInt64(rng, maxInt64(1, base-span), base+span)
+	}
 	switch profile {
 	case profileMarketMaker:
 		mid := (cfg.PriceMin + cfg.PriceMax) / 2
@@ -913,6 +1358,67 @@ func profilePrice(rng *rand.Rand, cfg Config, profile string) int64 {
 	}
 }
 
+func chooseInstrumentForActor(rng *rand.Rand, cfg Config, actor *sessionconfig.Actor) *sessionconfig.Equity {
+	if !cfg.HasSessionConfig || len(cfg.MarketEquities) == 0 {
+		return nil
+	}
+	if actor == nil || len(actor.Symbols) == 0 {
+		return &cfg.MarketEquities[rng.Intn(len(cfg.MarketEquities))]
+	}
+	eligible := make([]sessionconfig.Equity, 0, len(cfg.MarketEquities))
+	allow := make(map[string]struct{}, len(actor.Symbols))
+	for _, symbol := range actor.Symbols {
+		allow[symbol] = struct{}{}
+	}
+	for _, eq := range cfg.MarketEquities {
+		if _, ok := allow[eq.Symbol]; ok {
+			eligible = append(eligible, eq)
+		}
+	}
+	if len(eligible) == 0 {
+		return &cfg.MarketEquities[rng.Intn(len(cfg.MarketEquities))]
+	}
+	return &eligible[rng.Intn(len(eligible))]
+}
+
+func shouldInjectFault(rng *rand.Rand, cfg Config, faultType, instrumentID string) bool {
+	if !cfg.HasSessionConfig || len(cfg.Faults) == 0 {
+		return false
+	}
+	symbol := instrumentID
+	for _, eq := range cfg.MarketEquities {
+		if eq.InstrumentID == instrumentID {
+			symbol = eq.Symbol
+			break
+		}
+	}
+	for _, fault := range cfg.Faults {
+		if fault.Type != faultType {
+			continue
+		}
+		if fault.Symbol != "" && fault.Symbol != symbol {
+			continue
+		}
+		probability := fault.Probability
+		if probability <= 0 {
+			probability = 1.0
+		}
+		if rng.Float64() <= probability {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeProfile(profile string) string {
+	switch profile {
+	case "market_maker":
+		return profileMarketMaker
+	default:
+		return profile
+	}
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a
@@ -921,6 +1427,13 @@ func minInt(a, b int) int {
 }
 
 func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func maxInt64(a, b int64) int64 {
 	if a > b {
 		return a
 	}
@@ -948,49 +1461,11 @@ func tokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
 }
 
 func computeLatency(values []float64) latencySummary {
-	if len(values) == 0 {
-		return latencySummary{}
-	}
-	sorted := append([]float64(nil), values...)
-	sort.Float64s(sorted)
-	return latencySummary{
-		Min: sorted[0],
-		P50: percentile(sorted, 50),
-		P95: percentile(sorted, 95),
-		P99: percentile(sorted, 99),
-		Max: sorted[len(sorted)-1],
-	}
-}
-
-func percentile(sorted []float64, p float64) float64 {
-	if len(sorted) == 0 {
-		return 0
-	}
-	rank := p / 100 * float64(len(sorted)-1)
-	lo := int(rank)
-	hi := lo + 1
-	if hi >= len(sorted) {
-		return sorted[lo]
-	}
-	frac := rank - float64(lo)
-	return sorted[lo] + (sorted[hi]-sorted[lo])*frac
+	return reporting.ComputeLatency(values)
 }
 
 func topErrors(m map[string]int64, limit int) []errorSummary {
-	values := make([]errorSummary, 0, len(m))
-	for errText, count := range m {
-		values = append(values, errorSummary{Error: errText, Count: count})
-	}
-	sort.Slice(values, func(i, j int) bool {
-		if values[i].Count == values[j].Count {
-			return values[i].Error < values[j].Error
-		}
-		return values[i].Count > values[j].Count
-	})
-	if len(values) > limit {
-		values = values[:limit]
-	}
-	return values
+	return reporting.TopErrors(m, limit)
 }
 
 func printSummary(report summary) {
@@ -1048,6 +1523,39 @@ func printPrettySummary(report summary) {
 	}
 	fmt.Printf("\n")
 
+	if len(report.ByActor) > 0 {
+		fmt.Printf("Top Actors\n")
+		fmt.Printf("  %-20s %10s %10s %10s %10s %10s %10s\n", "actor", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+		for _, actorID := range topProfileKeys(report.ByActor, 8) {
+			v := report.ByActor[actorID]
+			fmt.Printf("  %-20s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+				actorID, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+		}
+		fmt.Printf("\n")
+	}
+
+	if len(report.ByStrategy) > 0 {
+		fmt.Printf("Top Strategies\n")
+		fmt.Printf("  %-20s %10s %10s %10s %10s %10s %10s\n", "strategy", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+		for _, strategyID := range topProfileKeys(report.ByStrategy, 8) {
+			v := report.ByStrategy[strategyID]
+			fmt.Printf("  %-20s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+				strategyID, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+		}
+		fmt.Printf("\n")
+	}
+
+	if len(report.ByPersona) > 0 {
+		fmt.Printf("Top Personas\n")
+		fmt.Printf("  %-24s %10s %10s %10s %10s %10s %10s\n", "persona", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+		for _, persona := range topProfileKeys(report.ByPersona, 8) {
+			v := report.ByPersona[persona]
+			fmt.Printf("  %-24s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+				persona, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+		}
+		fmt.Printf("\n")
+	}
+
 	if len(report.StatusCodes) > 0 {
 		fmt.Printf("Status Codes\n")
 		codes := make([]int, 0, len(report.StatusCodes))
@@ -1086,6 +1594,15 @@ func printPrettySummary(report summary) {
 		fmt.Printf("\n")
 	}
 
+	if len(report.RejectTaxonomy) > 0 {
+		fmt.Printf("Reject Taxonomy\n")
+		fmt.Printf("  %-22s %10s %10s %10s\n", "code", "count", "fail%", "reject%")
+		for _, item := range report.RejectTaxonomy {
+			fmt.Printf("  %-22s %10d %9.2f%% %9.2f%%\n", item.Code, item.Count, item.PercentOfFailures, item.PercentOfRejects)
+		}
+		fmt.Printf("\n")
+	}
+
 	if len(report.TopErrors) > 0 {
 		fmt.Printf("Top Errors\n")
 		limit := len(report.TopErrors)
@@ -1098,6 +1615,25 @@ func printPrettySummary(report summary) {
 		}
 		fmt.Printf("\n")
 	}
+}
+
+func topProfileKeys(values map[string]profileSummary, limit int) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		left := values[keys[i]]
+		right := values[keys[j]]
+		if left.Requests == right.Requests {
+			return keys[i] < keys[j]
+		}
+		return left.Requests > right.Requests
+	})
+	if len(keys) > limit {
+		return keys[:limit]
+	}
+	return keys
 }
 
 func writeReport(path string, report summary) error {

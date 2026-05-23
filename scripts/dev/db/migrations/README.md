@@ -7,6 +7,8 @@ Domain folders:
 - `auth/`
 - `admin/`
 - `boundary/`
+- `orchestration/`
+- `analytics/` (planned)
 
 Rules:
 - place SQL files in the owning domain folder only

@@ -15,8 +15,8 @@ object RuntimeDataSources {
                 this.jdbcUrl = jdbcUrl
                 username = user
                 this.password = password
-                maximumPoolSize = System.getenv("RUNTIME_DB_POOL_MAX")?.toIntOrNull() ?: 48
-                minimumIdle = System.getenv("RUNTIME_DB_POOL_MIN_IDLE")?.toIntOrNull() ?: 8
+                maximumPoolSize = System.getenv("RUNTIME_DB_POOL_MAX")?.toIntOrNull() ?: 24
+                minimumIdle = System.getenv("RUNTIME_DB_POOL_MIN_IDLE")?.toIntOrNull() ?: 4
                 connectionTimeout = System.getenv("RUNTIME_DB_POOL_CONN_TIMEOUT_MS")?.toLongOrNull() ?: 2000L
                 idleTimeout = System.getenv("RUNTIME_DB_POOL_IDLE_TIMEOUT_MS")?.toLongOrNull() ?: 120000L
                 maxLifetime = System.getenv("RUNTIME_DB_POOL_MAX_LIFETIME_MS")?.toLongOrNull() ?: 600000L

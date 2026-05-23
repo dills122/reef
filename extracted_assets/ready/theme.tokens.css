@@ -1,0 +1,43 @@
+:root {
+  --reef-cyan-500: #00E5FF;
+  --reef-cyan-600: #00B4DB;
+  --reef-blue-700: #0077B6;
+  --reef-purple-500: #6A5AE0;
+  --reef-violet-500: #A855F7;
+  --reef-teal-500: #22D3EE;
+  --reef-navy-950: #0B1220;
+
+  --reef-bg: var(--reef-navy-950);
+  --reef-fg: var(--reef-cyan-500);
+  --reef-fg-muted: var(--reef-cyan-600);
+  --reef-accent: var(--reef-violet-500);
+  --reef-success: #22C55E;
+  --reef-warning: #F59E0B;
+  --reef-danger: #EF4444;
+}
+
+[data-theme="light"] {
+  --reef-bg: #F6FBFF;
+  --reef-fg: var(--reef-blue-700);
+  --reef-fg-muted: #0284C7;
+  --reef-accent: var(--reef-purple-500);
+}
+
+[data-theme="dark"] {
+  --reef-bg: var(--reef-navy-950);
+  --reef-fg: var(--reef-cyan-500);
+  --reef-fg-muted: var(--reef-cyan-600);
+  --reef-accent: var(--reef-violet-500);
+}
+
+.icon-reef {
+  color: var(--reef-fg);
+}
+
+.icon-reef-muted {
+  color: var(--reef-fg-muted);
+}
+
+.icon-reef-accent {
+  color: var(--reef-accent);
+}

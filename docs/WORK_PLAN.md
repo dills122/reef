@@ -62,8 +62,13 @@ Bridging sprint before post-match:
 Performance guardrails and PR checklist:
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
+Engineering delivery mode and test policy:
+- [`docs/ENGINEERING_DELIVERY_POLICY.md`](./ENGINEERING_DELIVERY_POLICY.md)
+
 Next planned sprint block:
 - [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
+- [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
 
 ## Major Workstreams
 
@@ -219,6 +224,28 @@ Exit criteria:
 - runs are deterministic from a seed
 - runs are replayable and inspectable
 
+### Workstream I: Event Backbone and Data Lifecycle Operations
+
+Goal:
+deliver reliable event distribution, durable auditability, and practical data lifecycle operations for scale growth.
+
+Scope:
+
+- outbox-backed event publication from runtime to NATS (JetStream)
+- idempotent consumer pattern for read-model and downstream processors
+- EOD archive export flow (manifest, checksum, reconciliation)
+- analytics projection refresh from EOD snapshot
+- scheduler/job-runner with persistent run-state machine
+- retention policy knobs for hot, analytics, and archive tiers
+
+Exit criteria:
+
+- domain state + event log + outbox write in one transaction
+- relay worker supports retry/backoff and backlog observability
+- EOD export is idempotent by `market_date` and resumable after failure
+- analytics refresh runs from reconciled, sealed EOD cutoff
+- scheduler maintains run history, status transitions, attempts, and artifact pointers
+
 ## Work Breakdown By Phase
 
 ## Phase 1A: Close the Core Venue Loop
@@ -247,6 +274,20 @@ Concrete tasks:
 Checkpoint:
 
 - API-only end-to-end demo exists without UI
+
+## Cross-Phase Delivery Constraints for Event/Data Work
+
+1. Do not defer first persistence to EOD
+- intraday writes must persist in real time to the canonical hot store
+- EOD jobs produce derived analytics and archive artifacts only
+
+2. Keep NATS as distribution, not sole source of truth
+- canonical audit/event history remains in Postgres append-only tables
+- NATS retention can remain short-lived for replay window and fanout
+
+3. Keep scheduler infrastructure intentionally small
+- one job-runner with DB-backed state machine is preferred initially
+- avoid heavyweight orchestration platforms until scale/complexity proves need
 
 ## Phase 1B: Reference Data and Operational UI
 

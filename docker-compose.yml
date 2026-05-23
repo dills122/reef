@@ -58,6 +58,10 @@ services:
       RUNTIME_DB_URL: "jdbc:postgresql://postgres:5432/reef?currentSchema=boundary"
       RUNTIME_DB_USER: "reef"
       RUNTIME_DB_PASSWORD: "reef"
+      PLATFORM_HTTP_THREADS: "${PLATFORM_HTTP_THREADS:-32}"
+      RUNTIME_DB_POOL_MAX: "${RUNTIME_DB_POOL_MAX:-24}"
+      RUNTIME_DB_POOL_MIN_IDLE: "${RUNTIME_DB_POOL_MIN_IDLE:-4}"
+      RUNTIME_DB_POOL_CONN_TIMEOUT_MS: "${RUNTIME_DB_POOL_CONN_TIMEOUT_MS:-2000}"
     ports:
       - "${REEF_PLATFORM_RUNTIME_HOST_PORT:-8080}:8080"
     depends_on:
