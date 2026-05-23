@@ -180,6 +180,18 @@ func TestTopProfileKeysSortsByRequests(t *testing.T) {
 	}
 }
 
+func TestShouldPruneTerminalOrder(t *testing.T) {
+	if !shouldPruneTerminalOrder("strict-lifecycle") {
+		t.Fatal("strict-lifecycle should prune terminal orders")
+	}
+	if !shouldPruneTerminalOrder("capacity-baseline") {
+		t.Fatal("capacity-baseline should prune terminal orders")
+	}
+	if shouldPruneTerminalOrder("chaos") {
+		t.Fatal("chaos should not prune terminal orders")
+	}
+}
+
 func TestApplyFlagOverridesUsesParsedValues(t *testing.T) {
 	cfg := Config{Workers: 24, RatePerSecond: 450, PrettySummary: false, ReportOut: ""}
 	parsed := Config{Workers: 12, RatePerSecond: 150, PrettySummary: true, ReportOut: "/tmp/report.json"}

@@ -606,7 +606,7 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				traceSeen.Store(traceID, struct{}{})
-			} else if cfg.Mode == "strict-lifecycle" && isTerminalOrderRejection(result.RejectCode) {
+			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
 			}
 		case ActionCancel:
@@ -624,7 +624,7 @@ func runWorker(
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
 				traceSeen.Store(traceID, struct{}{})
-			} else if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && isTerminalOrderRejection(result.RejectCode) {
+			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
 			}
 		}
@@ -1154,6 +1154,10 @@ func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
 
 func isTerminalOrderRejection(code string) bool {
 	return code == "INVALID_STATE" || code == "NOT_FOUND"
+}
+
+func shouldPruneTerminalOrder(mode string) bool {
+	return mode == "strict-lifecycle" || mode == "capacity-baseline"
 }
 
 func removeOrder(orders []string, orderID string) []string {
