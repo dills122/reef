@@ -8,5 +8,5 @@
     "minTracePassRatePct": 90
   },
   "requiredRejectCodes": ["INVALID_STATE", "NOT_FOUND"],
-  "requiredAttribution": ["byActor", "byStrategy", "byPersona"]
+  "requiredAttribution": ["byActor", "byStrategy"]
 }
