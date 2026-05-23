@@ -50,6 +50,9 @@ The most effective sequence is:
 5. add deterministic simulation and replay
 6. only then introduce more distributed infrastructure
 
+Execution rule:
+- keep v1 brutally small and deterministic; add breadth via scenario packs only after the first end-to-end lifecycle is complete and replay-stable.
+
 Current execution sprint for this sequence:
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
 
@@ -289,6 +292,30 @@ Checkpoint:
 
 - matched trades create downstream workflow records automatically
 
+### Phase 2A.1: Locked V1 lifecycle scenario
+
+Priority:
+highest within post-trade work
+
+Deliverables:
+
+- one deterministic hidden midpoint cross scenario
+- one complete happy path (`order -> execution -> trade -> allocation -> confirmation -> affirmation -> settlement complete`)
+- one deterministic broken path (`settlement fail -> exception open -> repair -> settlement complete`)
+- timeline/read models proving full causation chain
+
+Concrete tasks:
+
+1. add `ScenarioRun` aggregate metadata (`scenarioRunId`, `seed`, `clock`, `actorType`)
+2. enforce canonical IDs on all lifecycle records and events
+3. add deterministic fault injection point at settlement step
+4. implement exception repair command path and settlement retry
+5. add replay test to assert stable ordered event sequence by seed
+
+Checkpoint:
+
+- one command can run the scenario end to end and both paths are inspectable in UI/API
+
 ## Phase 2B: Clearing and Netting Foundations
 
 Priority:
@@ -411,6 +438,78 @@ Checkpoint:
 - seeded randomness strategy
 - replay metadata
 
+## Scenario Path Catalog
+
+Path definitions should be implemented as scenario packs, not as ad hoc one-off code branches.
+
+1. `P1_GOLDEN_HIDDEN_CROSS_T1`
+- hidden midpoint cross, affirmation complete, settle `T+1`
+- purpose: baseline lifecycle correctness
+
+2. `P2_SETTLEMENT_BREAK_REPAIR`
+- deterministic settlement failure, exception repair, retry success
+- purpose: exception lifecycle and repair workflow
+
+3. `P3_PARTIAL_FILL_MULTI_ALLOC`
+- partial fills across multiple executions and multi-account allocations
+- purpose: execution-to-allocation complexity
+
+4. `P4_AFFIRMATION_DEADLINE_BREACH`
+- affirmation misses policy cutoff and opens timed exception
+- purpose: policy-time realism and deadline enforcement
+
+5. `P5_SSI_MISMATCH_DK_FLOW`
+- affirmed trade fails due to SSI mismatch, then corrected and reprocessed
+- purpose: realistic settlement-break handling
+
+6. `P6_CANCEL_REPLACE_RACE`
+- deterministic sequencing around cancel/replace near match boundary
+- purpose: lifecycle concurrency correctness
+
+7. `P7_DUPLICATE_COMMAND_IDEMPOTENCY`
+- duplicate commands injected at critical steps
+- purpose: idempotency guarantees
+
+8. `P8_OUT_OF_ORDER_EVENT_RECOVERY`
+- event delivery order perturbed and reconciled
+- purpose: event robustness and recovery behavior
+
+9. `P9_PARTIAL_SETTLEMENT_RESIDUAL`
+- partial settlement success with residual failure and remediation
+- purpose: obligation decomposition and residual handling
+
+10. `P10_RISK_GATE_REJECTION`
+- risk/limit policy blocks order pre-trade with audit trail
+- purpose: control-plane realism and explainability
+
+## Scenario Wave Plan
+
+Implement in this order:
+
+1. Wave 1: `P1`, `P2`
+2. Wave 2: `P3`, `P4`, `P5`
+3. Wave 3: `P6`, `P7`, `P8`
+4. Wave 4: `P9`, `P10`
+
+Wave rule:
+- no new wave starts until prior wave has deterministic replay tests and timeline UI assertions passing.
+
+## Scenario Specification Template
+
+Each path spec should include:
+- `pathId`
+- `businessGoal`
+- `seed`
+- `preconditions`
+- `faultInjection`
+- `steps` (command sequence)
+- `expectedEvents` (ordered)
+- `expectedFinalStates`
+- `invariants`
+- `uiAssertions`
+- `replayAssertions`
+- `idempotencyAssertions`
+
 ### Audit and Analytics
 
 - append-only event store
@@ -446,11 +545,11 @@ Reason:
 
 After the current communication/boundary/admin sprint completes, recommended next sprint:
 
-1. implement post-match engine skeletons in runtime modules
-2. land compare and affirmation happy-path plus mismatch routing
-3. land clearing submission and acceptance/rejection lifecycle
-4. land first netting pass and settlement-intake handoff
-5. add simulation controls for post-match clock acceleration and fault injection
+1. implement `LifecycleRunner` orchestration with module seams inside runtime
+2. deliver `P1_GOLDEN_HIDDEN_CROSS_T1`
+3. deliver `P2_SETTLEMENT_BREAK_REPAIR`
+4. add timeline + exception workbench assertions for both paths
+5. only then start Wave 2 scenario paths
 
 ## Definition of Done For Early Features
 
