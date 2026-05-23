@@ -10,9 +10,8 @@ import (
 )
 
 type Service struct {
-	mu     sync.Mutex
-	books  map[string]*orderBook
-	orders map[string]*orderRecord
+	books  sync.Map // map[string]*orderBook
+	orders sync.Map // map[string]*orderRecord
 }
 
 type restingOrder struct {
@@ -20,6 +19,7 @@ type restingOrder struct {
 }
 
 type orderBook struct {
+	mu    sync.Mutex
 	buys  []*restingOrder
 	sells []*restingOrder
 }
@@ -37,16 +37,10 @@ type orderRecord struct {
 }
 
 func NewService() *Service {
-	return &Service{
-		books:  make(map[string]*orderBook),
-		orders: make(map[string]*orderRecord),
-	}
+	return &Service{}
 }
 
 func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	if cmd.OrderID == "" {
@@ -121,6 +115,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	}
 
 	book := s.bookFor(cmd.InstrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
+
 	record := &orderRecord{
 		OrderID:           cmd.OrderID,
 		InstrumentID:      cmd.InstrumentID,
@@ -132,7 +129,7 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 		Status:            domain.OrderStatusAccepted,
 		LastUpdatedAt:     now,
 	}
-	s.orders[cmd.OrderID] = record
+	s.storeOrder(record)
 	incoming := &restingOrder{OrderID: cmd.OrderID}
 
 	if record.Side == domain.SideBuy {
@@ -153,15 +150,20 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now().UTC().Format(time.RFC3339)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
 
-	record, ok := s.orders[cmd.OrderID]
+	record, ok := s.loadOrder(cmd.OrderID)
+	if !ok {
+		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	book := s.bookFor(record.InstrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
+
+	record, ok = s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
 	}
@@ -173,7 +175,6 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 		return rejectedResult("evt-reject-order-cancelled", cmd.OrderID, "INVALID_STATE", "order already cancelled", now)
 	}
 
-	book := s.bookFor(record.InstrumentID)
 	s.removeRestingOrder(book, record)
 	record.RemainingQuantity = 0
 	record.Status = domain.OrderStatusCancelled
@@ -190,15 +191,20 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now().UTC().Format(time.RFC3339)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
 
-	record, ok := s.orders[cmd.OrderID]
+	record, ok := s.loadOrder(cmd.OrderID)
+	if !ok {
+		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	book := s.bookFor(record.InstrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
+
+	record, ok = s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
 	}
@@ -222,7 +228,6 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 		return rejectedResult("evt-reject-invalid-modify-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must remain above already filled quantity", now)
 	}
 
-	book := s.bookFor(record.InstrumentID)
 	s.removeRestingOrder(book, record)
 
 	record.OriginalQuantity = quantityUnits
@@ -251,13 +256,9 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	book := s.books[instrumentID]
-	if book == nil {
-		return 0
-	}
+	book := s.bookFor(instrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
 
 	if side == domain.SideBuy {
 		return len(book.buys)
@@ -267,10 +268,15 @@ func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
 }
 
 func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	record, ok := s.loadOrder(orderID)
+	if !ok {
+		return domain.OrderState{}, false
+	}
+	book := s.bookFor(record.InstrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
 
-	record, ok := s.orders[orderID]
+	record, ok = s.loadOrder(orderID)
 	if !ok {
 		return domain.OrderState{}, false
 	}
@@ -289,20 +295,27 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 }
 
 func (s *Service) bookFor(instrumentID string) *orderBook {
-	book := s.books[instrumentID]
-	if book == nil {
-		book = &orderBook{}
-		s.books[instrumentID] = book
+	if existing, ok := s.books.Load(instrumentID); ok {
+		return existing.(*orderBook)
 	}
-	return book
+	book := &orderBook{}
+	actual, _ := s.books.LoadOrStore(instrumentID, book)
+	return actual.(*orderBook)
 }
 
 func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
-	incomingRecord := s.orders[incoming.OrderID]
+	incomingRecord, ok := s.loadOrder(incoming.OrderID)
+	if !ok {
+		return
+	}
 
 	for incomingRecord.RemainingQuantity > 0 && len(book.sells) > 0 {
 		resting := book.sells[0]
-		restingRecord := s.orders[resting.OrderID]
+		restingRecord, ok := s.loadOrder(resting.OrderID)
+		if !ok {
+			book.sells = book.sells[1:]
+			continue
+		}
 		if incomingRecord.LimitPrice < restingRecord.LimitPrice {
 			return
 		}
@@ -324,11 +337,18 @@ func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *doma
 }
 
 func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
-	incomingRecord := s.orders[incoming.OrderID]
+	incomingRecord, ok := s.loadOrder(incoming.OrderID)
+	if !ok {
+		return
+	}
 
 	for incomingRecord.RemainingQuantity > 0 && len(book.buys) > 0 {
 		resting := book.buys[0]
-		restingRecord := s.orders[resting.OrderID]
+		restingRecord, ok := s.loadOrder(resting.OrderID)
+		if !ok {
+			book.buys = book.buys[1:]
+			continue
+		}
 		if incomingRecord.LimitPrice > restingRecord.LimitPrice {
 			return
 		}
@@ -410,7 +430,12 @@ func minInt64(a int64, b int64) int64 {
 
 func (s *Service) insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
 	for idx, order := range existing {
-		if s.orders[incoming.OrderID].LimitPrice > s.orders[order.OrderID].LimitPrice {
+		incomingRecord, okIncoming := s.loadOrder(incoming.OrderID)
+		currentRecord, okCurrent := s.loadOrder(order.OrderID)
+		if !okIncoming || !okCurrent {
+			continue
+		}
+		if incomingRecord.LimitPrice > currentRecord.LimitPrice {
 			return insertAt(existing, incoming, idx)
 		}
 	}
@@ -420,7 +445,12 @@ func (s *Service) insertBuy(existing []*restingOrder, incoming *restingOrder) []
 
 func (s *Service) insertSell(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
 	for idx, order := range existing {
-		if s.orders[incoming.OrderID].LimitPrice < s.orders[order.OrderID].LimitPrice {
+		incomingRecord, okIncoming := s.loadOrder(incoming.OrderID)
+		currentRecord, okCurrent := s.loadOrder(order.OrderID)
+		if !okIncoming || !okCurrent {
+			continue
+		}
+		if incomingRecord.LimitPrice < currentRecord.LimitPrice {
 			return insertAt(existing, incoming, idx)
 		}
 	}
@@ -462,4 +492,17 @@ func removeOrderByID(existing []*restingOrder, orderID string) []*restingOrder {
 		}
 	}
 	return existing
+}
+
+func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {
+	value, ok := s.orders.Load(orderID)
+	if !ok {
+		return nil, false
+	}
+	record, castOk := value.(*orderRecord)
+	return record, castOk
+}
+
+func (s *Service) storeOrder(record *orderRecord) {
+	s.orders.Store(record.OrderID, record)
 }

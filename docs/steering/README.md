@@ -4,6 +4,7 @@ These documents define how Reef should be built as the repository grows into the
 
 ## Documents
 
+- [Onboarding](../ONBOARDING.md): contributor ramp-up path, prerequisites, first-run, and troubleshooting
 - [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules
 - [Inter-Service Communication](./inter-service-communication.md): service transport, protobuf/gRPC direction, metadata/idempotency standards
 - [External API Boundary](./external-api-boundary.md): user-facing API architecture, versioning, auth/idempotency/rate-limit standards
@@ -13,6 +14,7 @@ These documents define how Reef should be built as the repository grows into the
 - [Angular](./angular.md): operational UI guidance
 - [Astro](./astro.md): docs and marketing site guidance
 - [Post-Match Standards](../POST_MATCH_STANDARDS.md): normative post-match roles, calendar/time config, observability, exception taxonomy, and ledger standards
+- [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes
 
 ## How To Use These
 

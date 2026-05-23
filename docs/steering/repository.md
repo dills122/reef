@@ -11,6 +11,14 @@ This file captures repo-level conventions that apply regardless of language.
 - use `contracts/` for shared schemas and inter-service contracts
 - use `packages/` for reusable internal libraries or shared models
 - use `docs/` for roadmap, steering, architecture notes, and project documentation
+- use `scripts/` for operational/dev automation entrypoints
+
+## Scripting Standard
+
+- prefer `bun`-executed JavaScript/TypeScript scripts for repository automation
+- keep `make` targets as thin wrappers around versioned scripts in `scripts/`
+- avoid adding new shell-heavy automation unless there is a clear platform/runtime reason
+- when scripts call external tools (for example Docker/Go), keep argument handling explicit and cross-platform friendly
 
 ## Naming
 

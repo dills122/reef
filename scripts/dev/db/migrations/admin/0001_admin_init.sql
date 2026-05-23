@@ -1,0 +1,2 @@
+-- Admin domain migrations live here.
+-- Admin operational data must not couple directly to runtime write-model tables.

@@ -1,0 +1,2 @@
+-- Auth domain migrations live here.
+-- Keep auth role/binding schema changes isolated from runtime/admin/boundary domains.

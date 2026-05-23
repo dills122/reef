@@ -1,0 +1,148 @@
+# Reef Onboarding
+
+This guide is the quickest path to a working local Reef environment.
+
+## 1. Prerequisites
+
+Install and verify:
+
+- Git
+- Docker Desktop (or Docker Engine + Compose plugin)
+- Bun (preferred JS runtime for repo automation)
+- Go 1.23+ (needed for `make dev-stress`)
+- Java 21 (needed for direct local runtime development outside Docker)
+
+Quick checks:
+
+```bash
+git --version
+docker --version
+docker compose version
+bun --version
+go version
+java -version
+```
+
+If Bun is not available yet, you can temporarily run dev automation with:
+- `JS_RUNTIME=node`
+
+## 2. Clone And Enter Repo
+
+```bash
+git clone https://github.com/dills122/reef.git
+cd reef
+cp .env.example .env
+```
+
+## 3. Read Core Docs First
+
+- [Technical Design](../REEF_TECHNICAL_DESIGN.md)
+- [Roadmap](./ROADMAP.md)
+- [Steering Index](./steering/README.md)
+- [Dev Environment Runbook](./DEV_ENV.md)
+
+## 4. Start Local Stack
+
+Default path:
+
+```bash
+make dev-up
+make dev-smoke
+```
+
+If Bun is missing locally:
+
+```bash
+JS_RUNTIME=node make dev-up
+JS_RUNTIME=node make dev-smoke
+```
+
+## 5. Common Daily Commands
+
+```bash
+make dev-down
+make dev-reset
+make test
+```
+
+Load baseline:
+
+```bash
+make dev-stress
+```
+
+Admin commands against active dev env:
+
+```bash
+make dev-admin CMD="events 10"
+```
+
+Simulator run against active dev env:
+
+```bash
+make dev-sim ARGS="--duration 20s --workers 6 --rate 80 --mode strict-lifecycle --pretty-summary"
+```
+
+## 6. Optional Compose Profiles
+
+Redis:
+
+```bash
+DEV_COMPOSE_PROFILES=redis make dev-up
+```
+
+Observability:
+
+```bash
+DEV_COMPOSE_PROFILES=observability make dev-up
+```
+
+Multiple:
+
+```bash
+DEV_COMPOSE_PROFILES=redis,observability make dev-up
+```
+
+## 7. Port Override Pattern
+
+If local defaults are occupied:
+
+```bash
+REEF_PLATFORM_RUNTIME_HOST_PORT=18080 \
+REEF_MATCHING_ENGINE_HOST_PORT=18081 \
+REEF_POSTGRES_HOST_PORT=15432 \
+make dev-up
+```
+
+Use matching smoke endpoints:
+
+```bash
+RUNTIME_BASE_URL=http://localhost:18080 \
+ENGINE_BASE_URL=http://localhost:18081 \
+make dev-smoke
+```
+
+## 8. Architecture Basics For Contributors
+
+- Keep domain boundaries clean (runtime modules first, extraction later).
+- Simulation/scenario behavior must use real command paths.
+- New repo automation should be Bun-based scripts under `scripts/`.
+- `make` targets are wrappers around versioned scripts, not logic centers.
+
+## 9. Troubleshooting
+
+`bun: command not found`
+- Install Bun or run commands with `JS_RUNTIME=node` temporarily.
+
+`bind: address already in use`
+- Use host port overrides (see section 7).
+
+`smoke` fails at submit/cancel
+- Check service health:
+  - `curl http://localhost:8080/health`
+  - `curl http://localhost:8081/health`
+- Ensure reference seeding endpoints are reachable.
+
+Docker build failure
+- Run `make dev-down` and retry `make dev-up`.
+- If needed: `docker system prune` (careful: removes unused artifacts).

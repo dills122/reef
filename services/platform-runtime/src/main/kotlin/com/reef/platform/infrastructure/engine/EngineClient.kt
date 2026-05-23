@@ -9,9 +9,18 @@ import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import java.time.Instant
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
 
 class EngineClient : EngineGateway {
     private val engineBaseUrl: String
+    private val httpClient: HttpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(2))
+        .build()
 
     constructor() {
         engineBaseUrl = System.getenv("MATCHING_ENGINE_BASE_URL") ?: "http://localhost:8081"
@@ -82,16 +91,29 @@ class EngineClient : EngineGateway {
     }
 
     private fun postAndParse(path: String, payload: String): SubmitOrderResult {
-        val connection = java.net.URI.create("$engineBaseUrl$path").toURL().openConnection() as java.net.HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.doOutput = true
-        connection.setRequestProperty("Content-Type", "application/json")
-        connection.outputStream.use { output ->
-            output.write(payload.toByteArray())
-        }
+        return try {
+            val request = HttpRequest.newBuilder(URI.create("$engineBaseUrl$path"))
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build()
 
-        val responseBody = connection.inputStream.bufferedReader().readText()
-        return parseSubmitOrderResult(responseBody)
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            val responseBody = response.body()
+            parseSubmitOrderResult(responseBody)
+        } catch (ex: Exception) {
+            SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-engine-transport-error",
+                    orderId = JsonFields.extract(payload, "orderId"),
+                    code = "ENGINE_UNAVAILABLE",
+                    reason = ex.message ?: "engine transport error",
+                    occurredAt = Instant.now().toString()
+                ),
+                executions = emptyList(),
+                trades = emptyList()
+            )
+        }
     }
 
     internal fun parseSubmitOrderResult(body: String): SubmitOrderResult {

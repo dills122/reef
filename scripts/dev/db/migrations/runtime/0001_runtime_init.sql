@@ -1,0 +1,3 @@
+-- Runtime domain migrations live here.
+-- Local table bootstrap is currently handled by runtime persistence initialization.
+-- Add forward-only runtime schema migrations in this folder as persistence evolves.

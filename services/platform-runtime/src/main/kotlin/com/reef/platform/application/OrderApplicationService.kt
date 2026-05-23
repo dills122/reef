@@ -15,6 +15,7 @@ import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
+import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 
 class OrderApplicationService(
@@ -71,7 +72,7 @@ class OrderApplicationService(
             )
             runtimePersistence.saveExecutions(result.executions)
             runtimePersistence.saveTrades(result.trades)
-            runtimePersistence.saveEvent(
+            val lifecycleEvents = mutableListOf(
                 RuntimeEvent(
                     eventId = accepted.eventId,
                     eventType = "OrderAccepted",
@@ -85,7 +86,7 @@ class OrderApplicationService(
                 )
             )
             result.executions.forEach { execution ->
-                runtimePersistence.saveEvent(
+                lifecycleEvents.add(
                     RuntimeEvent(
                         eventId = execution.eventId,
                         eventType = "ExecutionCreated",
@@ -100,7 +101,7 @@ class OrderApplicationService(
                 )
             }
             result.trades.forEach { trade ->
-                runtimePersistence.saveEvent(
+                lifecycleEvents.add(
                     RuntimeEvent(
                         eventId = trade.eventId,
                         eventType = "TradeCreated",
@@ -114,6 +115,7 @@ class OrderApplicationService(
                     )
                 )
             }
+            runtimePersistence.saveEvents(lifecycleEvents)
         } else {
             val rejected = result.rejected
             if (rejected != null) {
@@ -307,5 +309,5 @@ private fun defaultRuntimePersistence(): RuntimePersistence {
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
     val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
     val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
-    return PostgresRuntimePersistence(jdbcUrl, user, password)
+    return PostgresRuntimePersistence(RuntimeDataSources.dataSource(jdbcUrl, user, password))
 }

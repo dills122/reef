@@ -167,6 +167,12 @@ For communication and API specifics, treat these as normative companions:
 - [`inter-service-communication.md`](./inter-service-communication.md)
 - [`external-api-boundary.md`](./external-api-boundary.md)
 
+## Tooling and Automation
+
+- development and operational automation should default to `bun`-executed scripts under `scripts/`
+- `make` targets should delegate to those scripts and remain lightweight wrappers
+- deterministic environment setup/reset/smoke flows are required for local-first development
+
 ## Observability and Audit
 
 Every service should make it easy to answer:
@@ -195,6 +201,17 @@ Favor a layered approach:
 - scenario tests for deterministic replay behavior
 
 Simulation tests must verify determinism, not just activity generation.
+
+## Performance Discipline
+
+Performance is a first-class architecture concern for Reef's lifecycle-heavy paths.
+
+Use [`docs/PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md) as normative guidance for:
+
+- throughput and latency budgets
+- benchmark methodology
+- write-path optimization defaults (pooling, batching, counter-based sequencing)
+- PR-level performance evidence requirements
 
 ## Non-Goals For Early Phases
 

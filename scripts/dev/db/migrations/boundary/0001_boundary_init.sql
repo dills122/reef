@@ -1,0 +1,2 @@
+-- Boundary domain migrations live here.
+-- API boundary concerns (idempotency/rate-limit persistence) belong in this schema.
