@@ -6,7 +6,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay
+.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay dev-throughput-campaign
 
 test: test-go test-platform-runtime
 
@@ -57,3 +57,7 @@ dev-sim:
 dev-replay:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/replay-pack.mjs
+
+dev-throughput-campaign:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/throughput-campaign.mjs

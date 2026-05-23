@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 import { execFile } from "node:child_process";
@@ -116,7 +116,7 @@ function resolveActionMix(profileName) {
     return { submit: "80", modify: "15", cancel: "5" };
   }
   if (profileName === "capacity-heavy") {
-    return { submit: "60", modify: "30", cancel: "10" };
+    return { submit: "68", modify: "24", cancel: "8" };
   }
   return { submit: "70", modify: "20", cancel: "10" };
 }
@@ -251,8 +251,9 @@ function buildRecommendation(reportFiles) {
   for (const path of reportFiles) {
     try {
       const report = JSON.parse(readFileSync(path, "utf8"));
-      const workerMatch = path.match(/workers-(\d+)\.json$/);
-      const rateMatch = path.match(/rate-(\d+)/);
+      const filename = basename(path);
+      const workerMatch = filename.match(/workers-(\d+)\.json$/);
+      const rateMatch = filename.match(/rate-(\d+)/);
       rows.push({
         path,
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),

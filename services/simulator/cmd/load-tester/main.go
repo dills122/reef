@@ -368,7 +368,7 @@ func defaultConfigFromEnv() Config {
 		PriceMin:         envInt64("REEF_PRICE_MIN", 149_000_000_000),
 		PriceMax:         envInt64("REEF_PRICE_MAX", 151_000_000_000),
 		TraceCheckLimit:  envInt("REEF_TRACE_CHECK_LIMIT", 50),
-		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 2),
+		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 4),
 		ReportOut:        envOr("REEF_REPORT_OUT", ""),
 		Mode:             envOr("REEF_MODE", "chaos"),
 		Tail:             envBool("REEF_TAIL", false),
@@ -541,6 +541,8 @@ func runWorker(
 		if state.submitOnlyTicks > 0 {
 			action = ActionSubmit
 			state.submitOnlyTicks--
+		} else if action != ActionSubmit && !shouldAllowLifecycleAction(rng, cfg, state) {
+			action = ActionSubmit
 		}
 		reqID := atomic.AddInt64(counter, 1)
 		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
@@ -598,6 +600,7 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
+				state.orders = compactTrackedOrders(state.orders, cfg)
 				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
 			} else if isTerminalOrderRejection(result.RejectCode) {
@@ -628,6 +631,7 @@ func runWorker(
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				state.orders = compactTrackedOrders(state.orders, cfg)
 				updateRecoveryState(&state, cfg)
 			}
 		case ActionCancel:
@@ -656,6 +660,7 @@ func runWorker(
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, orderID)
+				state.orders = compactTrackedOrders(state.orders, cfg)
 				updateRecoveryState(&state, cfg)
 			}
 		}
@@ -1112,7 +1117,7 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 }
 
 func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
-	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+	if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 		return ActionSubmit
 	}
 	if cfg.Mode == "capacity-baseline" {
@@ -1129,7 +1134,7 @@ func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
 }
 
 func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile string) Action {
-	if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+	if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 		return ActionSubmit
 	}
 	if !cfg.HasSessionConfig {
@@ -1154,7 +1159,7 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 
 func chooseActionForActor(rng *rand.Rand, cfg Config, hasOrders bool, profile string, actor *sessionconfig.Actor) Action {
 	if mix, ok := strategy.ResolveActionMix(actor, cfg.StrategyProfiles); ok {
-		if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+		if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 			return ActionSubmit
 		}
 		return weightedAction(rng, mix.SubmitPct, mix.ModifyPct)
@@ -1178,7 +1183,8 @@ func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
 		return ""
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
-		return orders[len(orders)-1]
+		start := recentOrderWindowStart(len(orders), 8)
+		return orders[start+rng.Intn(len(orders)-start)]
 	}
 	return orders[rng.Intn(len(orders))]
 }
@@ -1188,19 +1194,47 @@ func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
 		return 0
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
-		return len(orders) - 1
+		start := recentOrderWindowStart(len(orders), 8)
+		return start + rng.Intn(len(orders)-start)
 	}
 	return rng.Intn(len(orders))
+}
+
+func recentOrderWindowStart(total, window int) int {
+	if total <= 1 || window <= 0 || total <= window {
+		return 0
+	}
+	return total - window
 }
 
 func hasActionableOrders(cfg Config, state workerState) bool {
 	if len(state.orders) == 0 {
 		return false
 	}
-	if cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline" {
+	if isLifecycleManagedMode(cfg.Mode) {
 		return len(state.orders) >= cfg.StrictMinLiveOrders
 	}
 	return true
+}
+
+func shouldAllowLifecycleAction(rng *rand.Rand, cfg Config, state workerState) bool {
+	if cfg.Mode != "strict-lifecycle" {
+		return true
+	}
+	if len(state.orders) < cfg.StrictMinLiveOrders {
+		return false
+	}
+	allowPct := 40
+	if len(state.orders) >= cfg.StrictMinLiveOrders*3 {
+		allowPct = 55
+	}
+	if state.rejectStreak > 0 {
+		allowPct -= 20
+	}
+	if allowPct < 5 {
+		allowPct = 5
+	}
+	return rng.Intn(100) < allowPct
 }
 
 func updateRecoveryState(state *workerState, cfg Config) {
@@ -1209,17 +1243,32 @@ func updateRecoveryState(state *workerState, cfg Config) {
 	}
 	state.rejectStreak++
 	if state.rejectStreak >= 3 {
-		state.submitOnlyTicks = 5
+		state.submitOnlyTicks = 20
 		state.rejectStreak = 0
 	}
+}
+
+func compactTrackedOrders(orders []string, cfg Config) []string {
+	if cfg.Mode != "strict-lifecycle" {
+		return orders
+	}
+	maxTracked := maxInt(cfg.StrictMinLiveOrders*2, 32)
+	if len(orders) <= maxTracked {
+		return orders
+	}
+	return append([]string(nil), orders[len(orders)-maxTracked:]...)
 }
 
 func isTerminalOrderRejection(code string) bool {
 	return code == "INVALID_STATE" || code == "NOT_FOUND"
 }
 
-func shouldPruneTerminalOrder(mode string) bool {
+func isLifecycleManagedMode(mode string) bool {
 	return mode == "strict-lifecycle" || mode == "capacity-baseline"
+}
+
+func shouldPruneTerminalOrder(mode string) bool {
+	return isLifecycleManagedMode(mode)
 }
 
 func removeOrder(orders []string, orderID string) []string {

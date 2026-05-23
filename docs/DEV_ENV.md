@@ -88,6 +88,18 @@ Run replay-pack drift validation against baseline scenario:
 make dev-replay
 ```
 
+Run the throughput campaign (quality + capacity lanes with cap summary):
+
+```bash
+make dev-throughput-campaign
+```
+
+Run campaign with an automatic clean reset first (recommended for fair high-rate comparisons):
+
+```bash
+DEV_CAMPAIGN_RESET_STACK=1 make dev-throughput-campaign
+```
+
 Run ad hoc simulator load against active dev env:
 
 ```bash
