@@ -32,6 +32,7 @@ type Config struct {
 	SessionActors     []sessionconfig.Actor
 	MarketEquities    []sessionconfig.Equity
 	StrategyProfiles  map[string]sessionconfig.StrategyProfile
+	Faults            []sessionconfig.FaultRule
 	BaseURL           string
 	Duration          time.Duration
 	Workers           int
@@ -399,6 +400,7 @@ func mergeSessionConfig(defaults Config, session sessionconfig.RuntimeConfig) Co
 	cfg.SessionActors = append([]sessionconfig.Actor(nil), session.Actors...)
 	cfg.MarketEquities = append([]sessionconfig.Equity(nil), session.Equities...)
 	cfg.StrategyProfiles = session.StrategyProfiles
+	cfg.Faults = append([]sessionconfig.FaultRule(nil), session.Faults...)
 	cfg.HasSessionConfig = true
 	if session.Mode != "" {
 		cfg.Mode = session.Mode
@@ -558,6 +560,14 @@ func runWorker(
 			instrument := chooseInstrumentForActor(rng, cfg, actor)
 			if instrument != nil {
 				instrumentID = instrument.InstrumentID
+			}
+			if shouldInjectSubmitFault(rng, cfg, instrumentID) {
+				result.StatusCode = 200
+				result.ErrorText = "rejected:INJECTED_FAULT"
+				result.RejectCode = "INJECTED_FAULT"
+				result.RejectReason = "deterministic fault injection"
+				results <- result
+				continue
 			}
 			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, strategyID)
 			payload["orderId"] = orderID
@@ -1282,6 +1292,35 @@ func chooseInstrumentForActor(rng *rand.Rand, cfg Config, actor *sessionconfig.A
 		return &cfg.MarketEquities[rng.Intn(len(cfg.MarketEquities))]
 	}
 	return &eligible[rng.Intn(len(eligible))]
+}
+
+func shouldInjectSubmitFault(rng *rand.Rand, cfg Config, instrumentID string) bool {
+	if !cfg.HasSessionConfig || len(cfg.Faults) == 0 {
+		return false
+	}
+	symbol := instrumentID
+	for _, eq := range cfg.MarketEquities {
+		if eq.InstrumentID == instrumentID {
+			symbol = eq.Symbol
+			break
+		}
+	}
+	for _, fault := range cfg.Faults {
+		if fault.Type != "reject_submit" {
+			continue
+		}
+		if fault.Symbol != "" && fault.Symbol != symbol {
+			continue
+		}
+		probability := fault.Probability
+		if probability <= 0 {
+			probability = 1.0
+		}
+		if rng.Float64() <= probability {
+			return true
+		}
+	}
+	return false
 }
 
 func minInt(a, b int) int {

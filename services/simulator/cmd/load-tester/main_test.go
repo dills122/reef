@@ -215,3 +215,19 @@ func TestDeterministicSequenceFromExampleSession(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldInjectSubmitFault(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: true,
+		MarketEquities: []sessionconfig.Equity{
+			{Symbol: "AAPL", InstrumentID: "AAPL"},
+		},
+		Faults: []sessionconfig.FaultRule{
+			{ID: "f1", Type: "reject_submit", Probability: 1.0, Symbol: "AAPL"},
+		},
+	}
+	rng := rand.New(rand.NewSource(1))
+	if !shouldInjectSubmitFault(rng, cfg, "AAPL") {
+		t.Fatal("expected fault injection for matching symbol and probability=1")
+	}
+}

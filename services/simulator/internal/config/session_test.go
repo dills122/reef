@@ -177,6 +177,54 @@ mix:
 	}
 }
 
+func TestLoadSessionFileRejectsInvalidFaultProbability(t *testing.T) {
+	input := `session:
+  name: invalid-fault
+  scenarioRunId: sim-1
+  seed: 1
+runtime:
+  baseUrl: http://localhost:8080
+  duration: 10s
+  workers: 1
+  ratePerSecond: 1
+  timeout: 1s
+  traceCheckLimit: 1
+market:
+  timezone: America/New_York
+  equities:
+    - symbol: AAPL
+      instrumentId: AAPL
+      startingPriceNanos: 100
+      avgDailyVolume: 1
+      sharesOutstanding: 1
+      marketCap: 1
+      volatilityBps: 100
+      spreadBps: 5
+actors:
+  - actorId: a1
+    actorType: retail
+    strategyId: s1
+    weight: 1
+mix:
+  actions:
+    submitPct: 70
+    modifyPct: 20
+    cancelPct: 10
+  sideBias:
+    buyPct: 50
+    sellPct: 50
+faults:
+  - id: f1
+    type: reject_submit
+    probability: 1.2
+`
+	path := writeFile(t, "bad-fault.yaml", input)
+	_, err := LoadSessionFile(path)
+	if err == nil || !strings.Contains(err.Error(), "probability") {
+		t.Fatalf("expected probability validation error, got: %v", err)
+	}
+}
+
 func writeFile(t *testing.T, name, content string) string {
 	t.Helper()
 	d := t.TempDir()

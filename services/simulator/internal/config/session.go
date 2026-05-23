@@ -99,7 +99,10 @@ type ActorGroup struct {
 }
 
 type FaultRule struct {
-	ID string `json:"id" yaml:"id"`
+	ID          string  `json:"id" yaml:"id"`
+	Type        string  `json:"type" yaml:"type"`
+	Probability float64 `json:"probability,omitempty" yaml:"probability,omitempty"`
+	Symbol      string  `json:"symbol,omitempty" yaml:"symbol,omitempty"`
 }
 
 type RuntimeConfig struct {
@@ -124,6 +127,7 @@ type RuntimeConfig struct {
 	Actors           []Actor
 	Equities         []Equity
 	StrategyProfiles map[string]StrategyProfile
+	Faults           []FaultRule
 }
 
 func LoadSessionFile(path string) (SessionFile, error) {
@@ -250,6 +254,9 @@ func ValidateSessionFile(cfg SessionFile) error {
 	if err := validateActorGroups(cfg.ActorGroups, symbols, cfg.StrategyProfiles); err != nil {
 		return err
 	}
+	if err := validateFaultRules(cfg.Faults, symbols); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -330,6 +337,26 @@ func validateDistributionSum(groupID, field string, values map[string]float64) e
 	return nil
 }
 
+func validateFaultRules(faults []FaultRule, marketSymbols map[string]struct{}) error {
+	for _, fault := range faults {
+		if fault.ID == "" {
+			return errors.New("faults[].id is required")
+		}
+		if fault.Type == "" {
+			return fmt.Errorf("faults[%s].type is required", fault.ID)
+		}
+		if fault.Probability < 0 || fault.Probability > 1 {
+			return fmt.Errorf("faults[%s].probability must be between 0 and 1", fault.ID)
+		}
+		if fault.Symbol != "" {
+			if _, ok := marketSymbols[fault.Symbol]; !ok {
+				return fmt.Errorf("faults[%s] references unknown symbol: %s", fault.ID, fault.Symbol)
+			}
+		}
+	}
+	return nil
+}
+
 func ToRuntimeConfig(session SessionFile) (RuntimeConfig, error) {
 	duration, err := time.ParseDuration(session.Runtime.Duration)
 	if err != nil {
@@ -376,6 +403,7 @@ func ToRuntimeConfig(session SessionFile) (RuntimeConfig, error) {
 		Actors:           runtimeActors,
 		Equities:         append([]Equity(nil), session.Market.Equities...),
 		StrategyProfiles: session.StrategyProfiles,
+		Faults:           append([]FaultRule(nil), session.Faults...),
 	}, nil
 }
 
