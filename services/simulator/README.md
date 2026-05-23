@@ -48,6 +48,7 @@ go run ./cmd/load-tester \
 - `--price-min`, `--price-max`: price randomization range
 - `--trace-check-limit`: number of unique traces validated at end of run
 - `--report-out`: optional JSON report file path
+- `--pretty-summary`: print a human-readable summary in console (JSON remains default output)
 
 ### Mode Guidance
 
@@ -78,6 +79,18 @@ go run ./cmd/load-tester \
   --tail \
   --tail-interval 2s \
   --tail-lines 4
+```
+
+Pretty summary example:
+
+```bash
+go run ./cmd/load-tester \
+  --base-url http://localhost:8080 \
+  --duration 30s \
+  --workers 8 \
+  --rate 100 \
+  --mode strict-lifecycle \
+  --pretty-summary
 ```
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
