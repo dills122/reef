@@ -9,6 +9,31 @@ The project is being rebuilt from an early prototype into a production-shaped lo
 - deterministic scenario execution and replay
 - audit-friendly event trails and operational views
 
+## Getting Started
+
+For a full local setup and first-run path, start with:
+- [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
+
+For local environment operations and troubleshooting details:
+- [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
+
+Quick start:
+
+```bash
+cp .env.example .env
+make dev-up
+make dev-smoke
+```
+
+## Docs Map
+
+- onboarding and local setup: [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
+- dev environment runbook: [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
+- delivery policy and test expectations: [`docs/ENGINEERING_DELIVERY_POLICY.md`](./docs/ENGINEERING_DELIVERY_POLICY.md)
+- roadmap and sequencing: [`docs/ROADMAP.md`](./docs/ROADMAP.md), [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
+- simulator persona/session plan: [`docs/SIMULATOR_PERSONA_CONFIG.md`](./docs/SIMULATOR_PERSONA_CONFIG.md)
+- simulator backlog and execution policy: [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./docs/SIMULATOR_UPGRADE_BACKLOG.md)
+
 ## Current State
 
 The repository is in early Phase 1 implementation (API-first venue slice).

@@ -62,6 +62,9 @@ Bridging sprint before post-match:
 Performance guardrails and PR checklist:
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
+Engineering delivery mode and test policy:
+- [`docs/ENGINEERING_DELIVERY_POLICY.md`](./ENGINEERING_DELIVERY_POLICY.md)
+
 Next planned sprint block:
 - [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
 

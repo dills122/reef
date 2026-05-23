@@ -40,6 +40,7 @@ cp .env.example .env
 - [Roadmap](./ROADMAP.md)
 - [Steering Index](./steering/README.md)
 - [Dev Environment Runbook](./DEV_ENV.md)
+- [Engineering Delivery Policy](./ENGINEERING_DELIVERY_POLICY.md)
 
 ## 4. Start Local Stack
 

@@ -96,6 +96,17 @@ go run ./cmd/load-tester \
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
 
+## Persona Session Direction
+
+The next simulator upgrade is config-driven persona sessions (named actors + strategy params + market universe).
+
+Planning/spec:
+- [`docs/SIMULATOR_PERSONA_CONFIG.md`](../../docs/SIMULATOR_PERSONA_CONFIG.md)
+- [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](../../docs/SIMULATOR_UPGRADE_BACKLOG.md)
+
+Example session file:
+- [`packages/scenario-definitions/persona-session.example.yaml`](../../packages/scenario-definitions/persona-session.example.yaml)
+
 Reference:
 
 - [`docs/ROADMAP.md`](../../docs/ROADMAP.md)

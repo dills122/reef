@@ -1,0 +1,141 @@
+session:
+  name: us-equities-persona-baseline
+  scenarioRunId: sim-2026-05-22-a
+  seed: 424242
+  mode: capacity-baseline
+
+runtime:
+  baseUrl: http://localhost:8080
+  duration: 60s
+  workers: 24
+  ratePerSecond: 450
+  timeout: 5s
+  traceCheckLimit: 100
+
+market:
+  timezone: America/New_York
+  equities:
+    - symbol: AAPL
+      instrumentId: AAPL
+      startingPriceNanos: 190000000000
+      avgDailyVolume: 60000000
+      sharesOutstanding: 15400000000
+      marketCap: 2926000000000
+      volatilityBps: 110
+      spreadBps: 4
+    - symbol: MSFT
+      instrumentId: MSFT
+      startingPriceNanos: 420000000000
+      avgDailyVolume: 22000000
+      sharesOutstanding: 7440000000
+      marketCap: 3124000000000
+      volatilityBps: 95
+      spreadBps: 4
+    - symbol: NVDA
+      instrumentId: NVDA
+      startingPriceNanos: 1030000000000
+      avgDailyVolume: 45000000
+      sharesOutstanding: 24600000000
+      marketCap: 2534000000000
+      volatilityBps: 185
+      spreadBps: 6
+    - symbol: AMZN
+      instrumentId: AMZN
+      startingPriceNanos: 185000000000
+      avgDailyVolume: 40000000
+      sharesOutstanding: 10500000000
+      marketCap: 1943000000000
+      volatilityBps: 130
+      spreadBps: 5
+    - symbol: META
+      instrumentId: META
+      startingPriceNanos: 480000000000
+      avgDailyVolume: 17000000
+      sharesOutstanding: 2550000000
+      marketCap: 1224000000000
+      volatilityBps: 140
+      spreadBps: 5
+
+actors:
+  - actorId: mm-01
+    actorType: market_maker
+    strategyId: two_sided_quote
+    weight: 18
+    params:
+      quoteWidthBps: 5
+      requoteMs: 250
+      maxInventoryUnits: 15000
+  - actorId: mm-02
+    actorType: market_maker
+    strategyId: inventory_skew_quote
+    weight: 12
+    params:
+      quoteWidthBps: 6
+      requoteMs: 300
+      maxInventoryUnits: 12000
+  - actorId: algo-momo-01
+    actorType: algo
+    strategyId: momentum_follow
+    weight: 12
+    params:
+      lookbackTicks: 8
+      aggressionBps: 7
+      maxParticipationPct: 8
+  - actorId: algo-undercut-01
+    actorType: algo
+    strategyId: undercut_spread
+    weight: 10
+    params:
+      undercutBps: 2
+      cancelRepostMs: 300
+  - actorId: inst-mutual-01
+    actorType: institutional
+    strategyId: vwap_slice
+    weight: 12
+    params:
+      childOrderUnits: 2500
+      urgency: low
+  - actorId: inst-hedge-01
+    actorType: institutional
+    strategyId: tactical_entry
+    weight: 10
+    params:
+      childOrderUnits: 1800
+      urgency: medium
+  - actorId: inst-day-01
+    actorType: institutional
+    strategyId: intraday_rotation
+    weight: 8
+    params:
+      childOrderUnits: 900
+      urgency: high
+  - actorId: retail-dip-01
+    actorType: retail
+    strategyId: dip_buyer
+    weight: 8
+    params:
+      maxOrderUnits: 120
+      buyBiasPct: 65
+  - actorId: retail-breakout-01
+    actorType: retail
+    strategyId: breakout_chaser
+    weight: 6
+    params:
+      maxOrderUnits: 90
+      buyBiasPct: 55
+  - actorId: retail-passive-01
+    actorType: retail
+    strategyId: passive_limit
+    weight: 4
+    params:
+      maxOrderUnits: 70
+      buyBiasPct: 50
+
+mix:
+  actions:
+    submitPct: 82
+    modifyPct: 12
+    cancelPct: 6
+  sideBias:
+    buyPct: 51
+    sellPct: 49
