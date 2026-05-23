@@ -158,3 +158,18 @@ func TestBuildCommandPayloadIncludesScenarioMetadata(t *testing.T) {
 		t.Fatalf("expected seed metadata, got: %+v", payload)
 	}
 }
+
+func TestTopProfileKeysSortsByRequests(t *testing.T) {
+	values := map[string]profileSummary{
+		"a": {Requests: 2},
+		"c": {Requests: 1},
+		"b": {Requests: 2},
+	}
+	keys := topProfileKeys(values, 3)
+	if len(keys) != 3 {
+		t.Fatalf("unexpected keys length: %d", len(keys))
+	}
+	if keys[0] != "a" || keys[1] != "b" || keys[2] != "c" {
+		t.Fatalf("unexpected order: %+v", keys)
+	}
+}

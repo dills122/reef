@@ -1426,6 +1426,28 @@ func printPrettySummary(report summary) {
 	}
 	fmt.Printf("\n")
 
+	if len(report.ByActor) > 0 {
+		fmt.Printf("Top Actors\n")
+		fmt.Printf("  %-20s %10s %10s %10s %10s %10s %10s\n", "actor", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+		for _, actorID := range topProfileKeys(report.ByActor, 8) {
+			v := report.ByActor[actorID]
+			fmt.Printf("  %-20s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+				actorID, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+		}
+		fmt.Printf("\n")
+	}
+
+	if len(report.ByStrategy) > 0 {
+		fmt.Printf("Top Strategies\n")
+		fmt.Printf("  %-20s %10s %10s %10s %10s %10s %10s\n", "strategy", "req", "ok", "fail", "p50ms", "p95ms", "p99ms")
+		for _, strategyID := range topProfileKeys(report.ByStrategy, 8) {
+			v := report.ByStrategy[strategyID]
+			fmt.Printf("  %-20s %10d %10d %10d %10.2f %10.2f %10.2f\n",
+				strategyID, v.Requests, v.Success, v.Failures, v.Latency.P50, v.Latency.P95, v.Latency.P99)
+		}
+		fmt.Printf("\n")
+	}
+
 	if len(report.StatusCodes) > 0 {
 		fmt.Printf("Status Codes\n")
 		codes := make([]int, 0, len(report.StatusCodes))
@@ -1476,6 +1498,25 @@ func printPrettySummary(report summary) {
 		}
 		fmt.Printf("\n")
 	}
+}
+
+func topProfileKeys(values map[string]profileSummary, limit int) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		left := values[keys[i]]
+		right := values[keys[j]]
+		if left.Requests == right.Requests {
+			return keys[i] < keys[j]
+		}
+		return left.Requests > right.Requests
+	})
+	if len(keys) > limit {
+		return keys[:limit]
+	}
+	return keys
 }
 
 func writeReport(path string, report summary) error {
