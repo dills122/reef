@@ -2,7 +2,7 @@ import { deriveDevUrls, env, loadDotEnv, waitForHttp } from "./lib/dev-utils.mjs
 
 loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
-const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
+const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "300"));
 
 async function postJson(url, payload, headers = {}) {
   const response = await fetch(url, {

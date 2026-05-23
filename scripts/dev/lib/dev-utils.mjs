@@ -34,8 +34,8 @@ export function deriveDevUrls() {
   const runtimeHostPort = env("REEF_PLATFORM_RUNTIME_HOST_PORT", "8080");
   const engineHostPort = env("REEF_MATCHING_ENGINE_HOST_PORT", "8081");
   return {
-    runtimeUrl: env("RUNTIME_BASE_URL", `http://localhost:${runtimeHostPort}`),
-    engineUrl: env("ENGINE_BASE_URL", `http://localhost:${engineHostPort}`),
+    runtimeUrl: env("RUNTIME_BASE_URL", `http://127.0.0.1:${runtimeHostPort}`),
+    engineUrl: env("ENGINE_BASE_URL", `http://127.0.0.1:${engineHostPort}`),
   };
 }
 
