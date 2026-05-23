@@ -262,17 +262,22 @@ func ValidateSessionFile(cfg SessionFile) error {
 }
 
 func validateStrategyProfiles(actors []Actor, profiles map[string]StrategyProfile) error {
-	if len(profiles) == 0 {
-		return nil
-	}
 	for _, actor := range actors {
-		if _, ok := profiles[actor.StrategyID]; !ok {
-			return fmt.Errorf("actors[%s] references unknown strategy profile: %s", actor.ActorID, actor.StrategyID)
+		if len(profiles) > 0 {
+			if _, ok := profiles[actor.StrategyID]; ok {
+				continue
+			}
+		}
+		if !isKnownStrategyName(actor.StrategyID) {
+			return fmt.Errorf("actors[%s] references unknown strategy profile or strategy: %s", actor.ActorID, actor.StrategyID)
 		}
 	}
 	for name, profile := range profiles {
 		if profile.Strategy == "" {
 			return fmt.Errorf("strategyProfiles[%s].strategy is required", name)
+		}
+		if !isKnownStrategyName(profile.Strategy) {
+			return fmt.Errorf("strategyProfiles[%s].strategy is unknown: %s", name, profile.Strategy)
 		}
 	}
 	return nil
@@ -312,8 +317,12 @@ func validateActorGroups(groups []ActorGroup, marketSymbols map[string]struct{},
 			for strategyID := range group.StrategyProfileDistribution {
 				if len(profiles) > 0 {
 					if _, ok := profiles[strategyID]; !ok {
-						return fmt.Errorf("actorGroups[%s] references unknown strategy profile: %s", group.ID, strategyID)
+						if !isKnownStrategyName(strategyID) {
+							return fmt.Errorf("actorGroups[%s] references unknown strategy profile or strategy: %s", group.ID, strategyID)
+						}
 					}
+				} else if !isKnownStrategyName(strategyID) {
+					return fmt.Errorf("actorGroups[%s] references unknown strategy profile or strategy: %s", group.ID, strategyID)
 				}
 			}
 		}
@@ -346,6 +355,11 @@ func validateFaultRules(faults []FaultRule, marketSymbols map[string]struct{}) e
 		if fault.Type == "" {
 			return fmt.Errorf("faults[%s].type is required", fault.ID)
 		}
+		switch fault.Type {
+		case "reject_submit", "reject_modify", "reject_cancel":
+		default:
+			return fmt.Errorf("faults[%s].type is unsupported: %s", fault.ID, fault.Type)
+		}
 		if fault.Probability < 0 || fault.Probability > 1 {
 			return fmt.Errorf("faults[%s].probability must be between 0 and 1", fault.ID)
 		}
@@ -356,6 +370,25 @@ func validateFaultRules(faults []FaultRule, marketSymbols map[string]struct{}) e
 		}
 	}
 	return nil
+}
+
+func isKnownStrategyName(name string) bool {
+	switch name {
+	case "two_sided_quote",
+		"inventory_skew_quote",
+		"undercut_spread",
+		"momentum_taker",
+		"momentum_follow",
+		"vwap_slice",
+		"tactical_entry",
+		"intraday_rotation",
+		"dip_buyer",
+		"breakout_chaser",
+		"passive_limit":
+		return true
+	default:
+		return false
+	}
 }
 
 func ToRuntimeConfig(session SessionFile) (RuntimeConfig, error) {

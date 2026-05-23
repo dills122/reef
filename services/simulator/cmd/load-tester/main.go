@@ -575,7 +575,7 @@ func runWorker(
 			if instrument != nil {
 				instrumentID = instrument.InstrumentID
 			}
-			if shouldInjectSubmitFault(rng, cfg, instrumentID) {
+			if shouldInjectFault(rng, cfg, "reject_submit", instrumentID) {
 				result.StatusCode = 200
 				result.ErrorText = "rejected:INJECTED_FAULT"
 				result.RejectCode = "INJECTED_FAULT"
@@ -606,6 +606,14 @@ func runWorker(
 			}
 			orderID := pickOrderID(rng, state.orders, cfg.Mode)
 			result.OrderID = orderID
+			if shouldInjectFault(rng, cfg, "reject_modify", cfg.InstrumentID) {
+				result.StatusCode = 200
+				result.ErrorText = "rejected:INJECTED_FAULT"
+				result.RejectCode = "INJECTED_FAULT"
+				result.RejectReason = "deterministic fault injection"
+				results <- result
+				continue
+			}
 			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
 			payload["orderId"] = orderID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
@@ -624,6 +632,14 @@ func runWorker(
 			idx := pickOrderIndex(rng, state.orders, cfg.Mode)
 			orderID := state.orders[idx]
 			result.OrderID = orderID
+			if shouldInjectFault(rng, cfg, "reject_cancel", cfg.InstrumentID) {
+				result.StatusCode = 200
+				result.ErrorText = "rejected:INJECTED_FAULT"
+				result.RejectCode = "INJECTED_FAULT"
+				result.RejectReason = "deterministic fault injection"
+				results <- result
+				continue
+			}
 			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
 			payload["orderId"] = orderID
 			payload["reason"] = "load test"
@@ -1157,15 +1173,13 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 }
 
 func chooseActionForActor(rng *rand.Rand, cfg Config, hasOrders bool, profile string, actor *sessionconfig.Actor) Action {
-	if actor != nil {
-		if mix, ok := strategy.ActionMixForActor(*actor, cfg.StrategyProfiles); ok {
-			if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
-				return ActionSubmit
-			}
-			return weightedAction(rng, mix.SubmitPct, mix.ModifyPct)
+	if mix, ok := strategy.ResolveActionMix(actor, cfg.StrategyProfiles); ok {
+		if (cfg.Mode == "strict-lifecycle" || cfg.Mode == "capacity-baseline") && !hasOrders {
+			return ActionSubmit
 		}
+		return weightedAction(rng, mix.SubmitPct, mix.ModifyPct)
 	}
-	return chooseActionForProfile(rng, cfg, hasOrders, profile)
+	return chooseActionForProfile(rng, cfg, hasOrders, normalizeProfile(profile))
 }
 
 func weightedAction(rng *rand.Rand, submitPct, modifyPct int) Action {
@@ -1366,7 +1380,7 @@ func chooseInstrumentForActor(rng *rand.Rand, cfg Config, actor *sessionconfig.A
 	return &eligible[rng.Intn(len(eligible))]
 }
 
-func shouldInjectSubmitFault(rng *rand.Rand, cfg Config, instrumentID string) bool {
+func shouldInjectFault(rng *rand.Rand, cfg Config, faultType, instrumentID string) bool {
 	if !cfg.HasSessionConfig || len(cfg.Faults) == 0 {
 		return false
 	}
@@ -1378,7 +1392,7 @@ func shouldInjectSubmitFault(rng *rand.Rand, cfg Config, instrumentID string) bo
 		}
 	}
 	for _, fault := range cfg.Faults {
-		if fault.Type != "reject_submit" {
+		if fault.Type != faultType {
 			continue
 		}
 		if fault.Symbol != "" && fault.Symbol != symbol {
@@ -1393,6 +1407,15 @@ func shouldInjectSubmitFault(rng *rand.Rand, cfg Config, instrumentID string) bo
 		}
 	}
 	return false
+}
+
+func normalizeProfile(profile string) string {
+	switch profile {
+	case "market_maker":
+		return profileMarketMaker
+	default:
+		return profile
+	}
 }
 
 func minInt(a, b int) int {

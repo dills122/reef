@@ -167,6 +167,18 @@ func TestChooseActionForActorStrategyMix(t *testing.T) {
 	}
 }
 
+func TestChooseActionForActorDirectStrategyID(t *testing.T) {
+	cfg := Config{Mode: "chaos"}
+	actor := &sessionconfig.Actor{ActorID: "ret-1", StrategyID: "dip_buyer", ActorType: "retail"}
+	rng := rand.New(rand.NewSource(77))
+	for i := 0; i < 10; i++ {
+		action := chooseActionForActor(rng, cfg, true, "retail", actor)
+		if action == ActionCancel {
+			t.Fatalf("expected dip_buyer strategy to bias away from cancel, got %s", action)
+		}
+	}
+}
+
 func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 	rng := rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
 	out := make([]string, 0, count)
@@ -280,7 +292,7 @@ func TestDeterministicSequenceFromExampleSession(t *testing.T) {
 	}
 }
 
-func TestShouldInjectSubmitFault(t *testing.T) {
+func TestShouldInjectFault(t *testing.T) {
 	cfg := Config{
 		HasSessionConfig: true,
 		MarketEquities: []sessionconfig.Equity{
@@ -288,10 +300,17 @@ func TestShouldInjectSubmitFault(t *testing.T) {
 		},
 		Faults: []sessionconfig.FaultRule{
 			{ID: "f1", Type: "reject_submit", Probability: 1.0, Symbol: "AAPL"},
+			{ID: "f2", Type: "reject_modify", Probability: 1.0, Symbol: "AAPL"},
 		},
 	}
 	rng := rand.New(rand.NewSource(1))
-	if !shouldInjectSubmitFault(rng, cfg, "AAPL") {
+	if !shouldInjectFault(rng, cfg, "reject_submit", "AAPL") {
 		t.Fatal("expected fault injection for matching symbol and probability=1")
+	}
+	if !shouldInjectFault(rng, cfg, "reject_modify", "AAPL") {
+		t.Fatal("expected modify fault injection for matching symbol and probability=1")
+	}
+	if shouldInjectFault(rng, cfg, "reject_cancel", "AAPL") {
+		t.Fatal("did not expect cancel fault injection when rule is absent")
 	}
 }

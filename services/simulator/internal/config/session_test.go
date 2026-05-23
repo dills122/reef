@@ -97,10 +97,11 @@ func TestToRuntimeConfig(t *testing.T) {
 }
 
 func TestLoadSessionFileRejectsUnknownStrategyProfile(t *testing.T) {
-	input := strings.Replace(validYAML, "mix:\n", "strategyProfiles:\n  known:\n    strategy: two_sided_quote\n    params:\n      submitPct: 40\n      modifyPct: 40\n      cancelPct: 20\nmix:\n", 1)
+	input := strings.Replace(validYAML, "strategyId: dip_buyer", "strategyId: profile-only", 1)
+	input = strings.Replace(input, "mix:\n", "strategyProfiles:\n  known:\n    strategy: two_sided_quote\n    params:\n      submitPct: 40\n      modifyPct: 40\n      cancelPct: 20\nmix:\n", 1)
 	path := writeFile(t, "bad-strategy.yaml", input)
 	_, err := LoadSessionFile(path)
-	if err == nil || !strings.Contains(err.Error(), "unknown strategy profile") {
+	if err == nil || !strings.Contains(err.Error(), "unknown strategy profile or strategy") {
 		t.Fatalf("expected unknown strategy profile error, got: %v", err)
 	}
 }
@@ -131,9 +132,9 @@ market:
       spreadBps: 5
 strategyProfiles:
   passive:
-    strategy: passive_limit
+    strategy: two_sided_quote
   aggressive:
-    strategy: momentum_follow
+    strategy: momentum_taker
 actorGroups:
   - id: retail-crowd
     actorType: retail
@@ -206,7 +207,7 @@ market:
 actors:
   - actorId: a1
     actorType: retail
-    strategyId: s1
+    strategyId: dip_buyer
     weight: 1
 mix:
   actions:
@@ -225,6 +226,15 @@ faults:
 	_, err := LoadSessionFile(path)
 	if err == nil || !strings.Contains(err.Error(), "probability") {
 		t.Fatalf("expected probability validation error, got: %v", err)
+	}
+}
+
+func TestLoadSessionFileRejectsUnsupportedFaultType(t *testing.T) {
+	input := strings.Replace(validYAML, "mix:\n", "faults:\n  - id: f1\n    type: latency_spike\n    probability: 0.4\nmix:\n", 1)
+	path := writeFile(t, "bad-fault-type.yaml", input)
+	_, err := LoadSessionFile(path)
+	if err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("expected unsupported fault type error, got: %v", err)
 	}
 }
 
