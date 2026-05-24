@@ -32,6 +32,9 @@ jobs:
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
       - name: Run Go tests
         run: go test ./...
+      - name: Run matching-engine benchmark guardrail
+        working-directory: .
+        run: ./scripts/ci/check-matching-bench.sh
 
   kotlin-platform-runtime:
     runs-on: ubuntu-latest

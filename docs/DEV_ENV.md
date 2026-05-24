@@ -88,6 +88,18 @@ Run replay-pack drift validation against baseline scenario:
 make dev-replay
 ```
 
+Run matching-engine benchmark baseline:
+
+```bash
+make bench-matching-engine
+```
+
+Run matching-engine benchmark guardrail check (CI-equivalent):
+
+```bash
+make bench-matching-engine-check
+```
+
 Run the throughput campaign (quality + capacity lanes with cap summary):
 
 ```bash
