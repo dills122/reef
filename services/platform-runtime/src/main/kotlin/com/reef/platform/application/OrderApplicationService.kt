@@ -30,11 +30,11 @@ class OrderApplicationService(
         if (existingResult != null) {
             return existingResult
         }
+        val traceId = traceId(command.traceId, command.orderId)
 
         val validationError = validateReferenceData(command)
         if (validationError != null) {
             runtimePersistence.saveSubmitResult(command.commandId, validationError)
-            val traceId = command.traceId.ifBlank { command.orderId }
             appendLifecycleEvent(
                 command.orderId,
                 command.commandId,
@@ -49,7 +49,6 @@ class OrderApplicationService(
         }
 
         val result = engineGateway.submitOrder(command)
-        val traceId = command.traceId.ifBlank { command.orderId }
         runtimePersistence.saveSubmitResult(command.commandId, result)
 
         val accepted = result.accepted
@@ -72,45 +71,42 @@ class OrderApplicationService(
             )
             runtimePersistence.saveExecutions(result.executions)
             runtimePersistence.saveTrades(result.trades)
-            val lifecycleEvents = mutableListOf(
-                RuntimeEvent(
+            val lifecycleEvents = ArrayList<RuntimeEvent>(
+                1 + result.executions.size + result.trades.size
+            )
+            lifecycleEvents.add(
+                lifecycleEvent(
                     eventId = accepted.eventId,
                     eventType = "OrderAccepted",
                     orderId = accepted.orderId,
                     traceId = traceId,
                     causationId = command.commandId,
                     correlationId = command.correlationId,
-                    producer = eventProducer,
-                    schemaVersion = eventSchemaVersion,
                     occurredAt = accepted.occurredAt
                 )
             )
             result.executions.forEach { execution ->
                 lifecycleEvents.add(
-                    RuntimeEvent(
+                    lifecycleEvent(
                         eventId = execution.eventId,
                         eventType = "ExecutionCreated",
                         orderId = execution.orderId,
                         traceId = traceId,
                         causationId = accepted.eventId,
                         correlationId = command.correlationId,
-                        producer = eventProducer,
-                        schemaVersion = eventSchemaVersion,
                         occurredAt = execution.occurredAt
                     )
                 )
             }
             result.trades.forEach { trade ->
                 lifecycleEvents.add(
-                    RuntimeEvent(
+                    lifecycleEvent(
                         eventId = trade.eventId,
                         eventType = "TradeCreated",
                         orderId = command.orderId,
                         traceId = traceId,
                         causationId = accepted.eventId,
                         correlationId = command.correlationId,
-                        producer = eventProducer,
-                        schemaVersion = eventSchemaVersion,
                         occurredAt = trade.occurredAt
                     )
                 )
@@ -120,15 +116,13 @@ class OrderApplicationService(
             val rejected = result.rejected
             if (rejected != null) {
                 runtimePersistence.saveEvent(
-                    RuntimeEvent(
+                    lifecycleEvent(
                         eventId = rejected.eventId,
                         eventType = "OrderRejected",
                         orderId = rejected.orderId,
                         traceId = traceId,
                         causationId = command.commandId,
                         correlationId = command.correlationId,
-                        producer = eventProducer,
-                        schemaVersion = eventSchemaVersion,
                         occurredAt = rejected.occurredAt
                     )
                 )
@@ -145,7 +139,7 @@ class OrderApplicationService(
         }
 
         val result = engineGateway.cancelOrder(command)
-        val traceId = command.traceId.ifBlank { command.orderId }
+        val traceId = traceId(command.traceId, command.orderId)
         runtimePersistence.saveSubmitResult(command.commandId, result)
         appendLifecycleEvent(
             command.orderId,
@@ -167,7 +161,7 @@ class OrderApplicationService(
         }
 
         val result = engineGateway.modifyOrder(command)
-        val traceId = command.traceId.ifBlank { command.orderId }
+        val traceId = traceId(command.traceId, command.orderId)
         runtimePersistence.saveSubmitResult(command.commandId, result)
         appendLifecycleEvent(
             command.orderId,
@@ -194,15 +188,13 @@ class OrderApplicationService(
     ) {
         if (accepted != null) {
             runtimePersistence.saveEvent(
-                RuntimeEvent(
+                lifecycleEvent(
                     eventId = accepted.eventId,
                     eventType = acceptedEventType,
                     orderId = accepted.orderId.ifBlank { defaultOrderId },
                     traceId = traceId,
                     causationId = commandId,
                     correlationId = correlationId,
-                    producer = eventProducer,
-                    schemaVersion = eventSchemaVersion,
                     occurredAt = accepted.occurredAt
                 )
             )
@@ -211,19 +203,43 @@ class OrderApplicationService(
 
         if (rejected != null) {
             runtimePersistence.saveEvent(
-                RuntimeEvent(
+                lifecycleEvent(
                     eventId = rejected.eventId,
                     eventType = rejectedEventType,
                     orderId = rejected.orderId.ifBlank { defaultOrderId },
                     traceId = traceId,
                     causationId = commandId,
                     correlationId = correlationId,
-                    producer = eventProducer,
-                    schemaVersion = eventSchemaVersion,
                     occurredAt = rejected.occurredAt
                 )
             )
         }
+    }
+
+    private fun lifecycleEvent(
+        eventId: String,
+        eventType: String,
+        orderId: String,
+        traceId: String,
+        causationId: String,
+        correlationId: String,
+        occurredAt: String
+    ): RuntimeEvent {
+        return RuntimeEvent(
+            eventId = eventId,
+            eventType = eventType,
+            orderId = orderId,
+            traceId = traceId,
+            causationId = causationId,
+            correlationId = correlationId,
+            producer = eventProducer,
+            schemaVersion = eventSchemaVersion,
+            occurredAt = occurredAt
+        )
+    }
+
+    private fun traceId(traceId: String, orderId: String): String {
+        return traceId.ifBlank { orderId }
     }
 
     fun persistedOrder(orderId: String) = runtimePersistence.acceptedOrder(orderId)

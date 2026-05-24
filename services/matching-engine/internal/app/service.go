@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -15,7 +16,8 @@ type Service struct {
 }
 
 type restingOrder struct {
-	OrderID string
+	OrderID    string
+	LimitPrice int64
 }
 
 type orderBook struct {
@@ -44,65 +46,25 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	if cmd.OrderID == "" {
-		return domain.SubmitOrderResult{
-			Rejected: &domain.OrderRejected{
-				EventID:    "evt-reject-missing-order-id",
-				OrderID:    cmd.OrderID,
-				Code:       "VALIDATION_ERROR",
-				Reason:     "orderId is required",
-				OccurredAt: now,
-			},
-		}
+		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
 
 	if cmd.InstrumentID == "" {
-		return domain.SubmitOrderResult{
-			Rejected: &domain.OrderRejected{
-				EventID:    "evt-reject-missing-instrument",
-				OrderID:    cmd.OrderID,
-				Code:       "VALIDATION_ERROR",
-				Reason:     "instrumentId is required",
-				OccurredAt: now,
-			},
-		}
+		return rejectedResult("evt-reject-missing-instrument", cmd.OrderID, "VALIDATION_ERROR", "instrumentId is required", now)
 	}
 
 	if cmd.Side != domain.SideBuy && cmd.Side != domain.SideSell {
-		return domain.SubmitOrderResult{
-			Rejected: &domain.OrderRejected{
-				EventID:    "evt-reject-invalid-side",
-				OrderID:    cmd.OrderID,
-				Code:       "VALIDATION_ERROR",
-				Reason:     "side must be BUY or SELL",
-				OccurredAt: now,
-			},
-		}
+		return rejectedResult("evt-reject-invalid-side", cmd.OrderID, "VALIDATION_ERROR", "side must be BUY or SELL", now)
 	}
 
-	quantityUnits, err := strconv.ParseInt(cmd.QuantityUnits, 10, 64)
-	if err != nil || quantityUnits <= 0 {
-		return domain.SubmitOrderResult{
-			Rejected: &domain.OrderRejected{
-				EventID:    "evt-reject-invalid-quantity",
-				OrderID:    cmd.OrderID,
-				Code:       "VALIDATION_ERROR",
-				Reason:     "quantityUnits must be a positive integer",
-				OccurredAt: now,
-			},
-		}
+	quantityUnits, ok := parsePositiveInt(cmd.QuantityUnits)
+	if !ok {
+		return rejectedResult("evt-reject-invalid-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must be a positive integer", now)
 	}
 
-	limitPrice, err := strconv.ParseInt(cmd.LimitPrice, 10, 64)
-	if err != nil || limitPrice <= 0 {
-		return domain.SubmitOrderResult{
-			Rejected: &domain.OrderRejected{
-				EventID:    "evt-reject-invalid-price",
-				OrderID:    cmd.OrderID,
-				Code:       "VALIDATION_ERROR",
-				Reason:     "limitPrice must be a positive integer",
-				OccurredAt: now,
-			},
-		}
+	limitPrice, ok := parsePositiveInt(cmd.LimitPrice)
+	if !ok {
+		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
 	}
 
 	result := domain.SubmitOrderResult{
@@ -130,7 +92,7 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 		LastUpdatedAt:     now,
 	}
 	s.storeOrder(record)
-	incoming := &restingOrder{OrderID: cmd.OrderID}
+	incoming := &restingOrder{OrderID: cmd.OrderID, LimitPrice: record.LimitPrice}
 
 	if record.Side == domain.SideBuy {
 		s.matchBuy(book, incoming, &result, now)
@@ -213,13 +175,13 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 		return rejectedResult("evt-reject-order-not-modifiable", cmd.OrderID, "INVALID_STATE", "order is not modifiable", now)
 	}
 
-	quantityUnits, err := strconv.ParseInt(cmd.QuantityUnits, 10, 64)
-	if err != nil || quantityUnits <= 0 {
+	quantityUnits, ok := parsePositiveInt(cmd.QuantityUnits)
+	if !ok {
 		return rejectedResult("evt-reject-invalid-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must be a positive integer", now)
 	}
 
-	limitPrice, err := strconv.ParseInt(cmd.LimitPrice, 10, 64)
-	if err != nil || limitPrice <= 0 {
+	limitPrice, ok := parsePositiveInt(cmd.LimitPrice)
+	if !ok {
 		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
 	}
 
@@ -237,7 +199,7 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	s.refreshOrderStatus(record)
 
 	if record.RemainingQuantity > 0 {
-		incoming := &restingOrder{OrderID: cmd.OrderID}
+		incoming := &restingOrder{OrderID: cmd.OrderID, LimitPrice: record.LimitPrice}
 		if record.Side == domain.SideBuy {
 			book.buys = s.insertBuy(book.buys, incoming)
 		} else {
@@ -372,6 +334,8 @@ func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *dom
 func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, matchedUnits int64, executionPrice int64, occurredAt string) {
 	executionID := fmt.Sprintf("exec-%s-%s-%d", buyOrder.OrderID, sellOrder.OrderID, len(result.Trades)+1)
 	tradeID := fmt.Sprintf("trade-%s-%s-%d", buyOrder.OrderID, sellOrder.OrderID, len(result.Trades)+1)
+	matchedUnitsStr := strconv.FormatInt(matchedUnits, 10)
+	executionPriceStr := strconv.FormatInt(executionPrice, 10)
 
 	result.Executions = append(result.Executions,
 		domain.ExecutionCreated{
@@ -379,8 +343,8 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 			ExecutionID:    executionID + "-buy",
 			OrderID:        buyOrder.OrderID,
 			InstrumentID:   buyOrder.InstrumentID,
-			QuantityUnits:  strconv.FormatInt(matchedUnits, 10),
-			ExecutionPrice: strconv.FormatInt(executionPrice, 10),
+			QuantityUnits:  matchedUnitsStr,
+			ExecutionPrice: executionPriceStr,
 			Currency:       buyOrder.Currency,
 			OccurredAt:     occurredAt,
 		},
@@ -389,8 +353,8 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 			ExecutionID:    executionID + "-sell",
 			OrderID:        sellOrder.OrderID,
 			InstrumentID:   sellOrder.InstrumentID,
-			QuantityUnits:  strconv.FormatInt(matchedUnits, 10),
-			ExecutionPrice: strconv.FormatInt(executionPrice, 10),
+			QuantityUnits:  matchedUnitsStr,
+			ExecutionPrice: executionPriceStr,
 			Currency:       sellOrder.Currency,
 			OccurredAt:     occurredAt,
 		},
@@ -403,8 +367,8 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 		BuyOrderID:    buyOrder.OrderID,
 		SellOrderID:   sellOrder.OrderID,
 		InstrumentID:  buyOrder.InstrumentID,
-		QuantityUnits: strconv.FormatInt(matchedUnits, 10),
-		Price:         strconv.FormatInt(executionPrice, 10),
+		QuantityUnits: matchedUnitsStr,
+		Price:         executionPriceStr,
 		Currency:      buyOrder.Currency,
 		OccurredAt:    occurredAt,
 	})
@@ -429,40 +393,38 @@ func minInt64(a int64, b int64) int64 {
 }
 
 func (s *Service) insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
-	for idx, order := range existing {
-		incomingRecord, okIncoming := s.loadOrder(incoming.OrderID)
-		currentRecord, okCurrent := s.loadOrder(order.OrderID)
-		if !okIncoming || !okCurrent {
-			continue
-		}
-		if incomingRecord.LimitPrice > currentRecord.LimitPrice {
-			return insertAt(existing, incoming, idx)
-		}
-	}
-
-	return append(existing, incoming)
+	// Price-time priority: higher bid first, FIFO at equal price.
+	idx := sort.Search(len(existing), func(i int) bool {
+		return existing[i].LimitPrice < incoming.LimitPrice
+	})
+	return insertAt(existing, incoming, idx)
 }
 
 func (s *Service) insertSell(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
-	for idx, order := range existing {
-		incomingRecord, okIncoming := s.loadOrder(incoming.OrderID)
-		currentRecord, okCurrent := s.loadOrder(order.OrderID)
-		if !okIncoming || !okCurrent {
-			continue
-		}
-		if incomingRecord.LimitPrice < currentRecord.LimitPrice {
-			return insertAt(existing, incoming, idx)
-		}
-	}
-
-	return append(existing, incoming)
+	// Price-time priority: lower ask first, FIFO at equal price.
+	idx := sort.Search(len(existing), func(i int) bool {
+		return existing[i].LimitPrice > incoming.LimitPrice
+	})
+	return insertAt(existing, incoming, idx)
 }
 
-func insertAt(existing []*restingOrder, incoming *restingOrder, idx int) []*restingOrder {
-	existing = append(existing, nil)
+func insertAt[T any](existing []T, incoming T, idx int) []T {
+	if idx < 0 || idx > len(existing) {
+		idx = len(existing)
+	}
+	var zero T
+	existing = append(existing, zero)
 	copy(existing[idx+1:], existing[idx:])
 	existing[idx] = incoming
 	return existing
+}
+
+func parsePositiveInt(value string) (int64, bool) {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func rejectedResult(eventID string, orderID string, code string, reason string, occurredAt string) domain.SubmitOrderResult {
