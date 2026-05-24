@@ -112,6 +112,14 @@ Run campaign with an automatic clean reset first (recommended for fair high-rate
 DEV_CAMPAIGN_RESET_STACK=1 make dev-throughput-campaign
 ```
 
+Compare two throughput campaign summaries (baseline vs candidate):
+
+```bash
+DEV_CAMPAIGN_BASELINE_SUMMARY=/tmp/reef-throughput-campaign-baseline/throughput-campaign-summary.json \
+DEV_CAMPAIGN_CANDIDATE_SUMMARY=/tmp/reef-throughput-campaign/throughput-campaign-summary.json \
+make dev-throughput-compare
+```
+
 Run ad hoc simulator load against active dev env:
 
 ```bash
