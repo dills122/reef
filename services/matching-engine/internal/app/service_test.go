@@ -294,3 +294,60 @@ func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 		t.Fatalf("unexpected modified state: %#v", state)
 	}
 }
+
+func TestInsertBuyPriceTimePriority(t *testing.T) {
+	service := NewService()
+	orders := []*restingOrder{
+		{OrderID: "b1", LimitPrice: 101},
+		{OrderID: "b2", LimitPrice: 100},
+	}
+
+	orders = service.insertBuy(orders, &restingOrder{OrderID: "b3", LimitPrice: 102})
+	if orders[0].OrderID != "b3" {
+		t.Fatalf("expected highest bid first, got %#v", orders)
+	}
+
+	orders = service.insertBuy(orders, &restingOrder{OrderID: "b4", LimitPrice: 100})
+	ids := []string{orders[0].OrderID, orders[1].OrderID, orders[2].OrderID, orders[3].OrderID}
+	expected := []string{"b3", "b1", "b2", "b4"}
+	for i := range expected {
+		if ids[i] != expected[i] {
+			t.Fatalf("unexpected buy book ordering: got %#v want %#v", ids, expected)
+		}
+	}
+}
+
+func TestInsertSellPriceTimePriority(t *testing.T) {
+	service := NewService()
+	orders := []*restingOrder{
+		{OrderID: "s1", LimitPrice: 100},
+		{OrderID: "s2", LimitPrice: 101},
+	}
+
+	orders = service.insertSell(orders, &restingOrder{OrderID: "s3", LimitPrice: 99})
+	if orders[0].OrderID != "s3" {
+		t.Fatalf("expected lowest ask first, got %#v", orders)
+	}
+
+	orders = service.insertSell(orders, &restingOrder{OrderID: "s4", LimitPrice: 101})
+	ids := []string{orders[0].OrderID, orders[1].OrderID, orders[2].OrderID, orders[3].OrderID}
+	expected := []string{"s3", "s1", "s2", "s4"}
+	for i := range expected {
+		if ids[i] != expected[i] {
+			t.Fatalf("unexpected sell book ordering: got %#v want %#v", ids, expected)
+		}
+	}
+}
+
+func TestParsePositiveInt(t *testing.T) {
+	if _, ok := parsePositiveInt(""); ok {
+		t.Fatal("expected empty input to fail")
+	}
+	if _, ok := parsePositiveInt("-2"); ok {
+		t.Fatal("expected negative input to fail")
+	}
+	value, ok := parsePositiveInt("42")
+	if !ok || value != 42 {
+		t.Fatalf("expected parsed value 42, got value=%d ok=%v", value, ok)
+	}
+}

@@ -88,6 +88,18 @@ Run replay-pack drift validation against baseline scenario:
 make dev-replay
 ```
 
+Run matching-engine benchmark baseline:
+
+```bash
+make bench-matching-engine
+```
+
+Run matching-engine benchmark guardrail check (CI-equivalent):
+
+```bash
+make bench-matching-engine-check
+```
+
 Run the throughput campaign (quality + capacity lanes with cap summary):
 
 ```bash
@@ -98,6 +110,14 @@ Run campaign with an automatic clean reset first (recommended for fair high-rate
 
 ```bash
 DEV_CAMPAIGN_RESET_STACK=1 make dev-throughput-campaign
+```
+
+Compare two throughput campaign summaries (baseline vs candidate):
+
+```bash
+DEV_CAMPAIGN_BASELINE_SUMMARY=/tmp/reef-throughput-campaign-baseline/throughput-campaign-summary.json \
+DEV_CAMPAIGN_CANDIDATE_SUMMARY=/tmp/reef-throughput-campaign/throughput-campaign-summary.json \
+make dev-throughput-compare
 ```
 
 Run ad hoc simulator load against active dev env:
@@ -126,6 +146,8 @@ Reports are written to `/tmp` as:
 Additional stress artifacts:
 - `/tmp/reef-load-report-dev-stress-telemetry.ndjson`
 - `/tmp/reef-load-report-dev-stress-recommendation.json`
+- `/tmp/reef-load-report-dev-stress-kpi.json`
+- `/tmp/reef-load-report-dev-stress-kpi.md`
 
 ## Environment contract
 
@@ -148,3 +170,4 @@ Postgres init creates domain schemas:
 Related:
 - [DB split-readiness guardrails](./DB_SPLIT_READINESS.md)
 - [Observability dev profile runbook](./OBSERVABILITY_DEV_PROFILE.md)
+- [Simulation + app KPI matrix](./SIMULATION_KPIS.md)

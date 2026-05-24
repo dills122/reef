@@ -6,7 +6,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay dev-throughput-campaign
+.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
 
 test: test-go test-platform-runtime
 
@@ -15,6 +15,15 @@ check-proto-additive:
 
 test-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && GOCACHE=/tmp/reef-go-build-cache go test ./...
+
+bench-matching-engine:
+	cd $(GO_MATCHING_ENGINE_DIR) && go test -run '^$$' -bench 'BenchmarkSubmitOrderResting|BenchmarkSubmitOrderMatchAgainstResting|BenchmarkModifyOrder' -benchmem ./internal/app
+
+bench-matching-engine-check:
+	./scripts/ci/check-matching-bench.sh
+
+bench-platform-runtime-check:
+	./scripts/ci/check-runtime-bench.sh
 
 test-platform-runtime:
 	cd $(PLATFORM_RUNTIME_DIR) && GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
@@ -61,3 +70,7 @@ dev-replay:
 dev-throughput-campaign:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/throughput-campaign.mjs
+
+dev-throughput-compare:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/throughput-compare.mjs

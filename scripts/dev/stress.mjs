@@ -25,7 +25,16 @@ const baseOut = out.replace(/\.json$/, "");
 mkdirSync(artifactDir, { recursive: true });
 const telemetryOut = join(artifactDir, `${baseOut.split("/").pop()}-telemetry.ndjson`);
 const recommendationOut = join(artifactDir, `${baseOut.split("/").pop()}-recommendation.json`);
+const kpiOutJson = join(artifactDir, `${baseOut.split("/").pop()}-kpi.json`);
+const kpiOutMd = join(artifactDir, `${baseOut.split("/").pop()}-kpi.md`);
 const actionMix = resolveActionMix(profile);
+const invalidIntentCodes = env(
+  "DEV_STRESS_INVALID_INTENT_CODES",
+  "INVALID_STATE,NOT_FOUND,VALIDATION_ERROR",
+)
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 console.log(`running stepped stress profile against ${runtimeUrl} (mode=${mode}, profile=${profile})`);
 
@@ -93,6 +102,19 @@ if (recommendation) {
   );
   console.log(`  ${recommendationOut}`);
 }
+
+const kpiSummary = buildKpiSummary(reportFiles, invalidIntentCodes);
+if (kpiSummary) {
+  writeFileSync(kpiOutJson, JSON.stringify(kpiSummary, null, 2));
+  writeFileSync(kpiOutMd, toKpiMarkdown(kpiSummary));
+  console.log("kpi summary:");
+  console.log(
+    `  best-throughput=${kpiSummary.bestByThroughput.rate}rps/${kpiSummary.bestByThroughput.workers}w throughput=${kpiSummary.bestByThroughput.throughputRps.toFixed(2)} success=${kpiSummary.bestByThroughput.endToEndSuccessRatePct.toFixed(2)}% valid-intent=${kpiSummary.bestByThroughput.validIntentSuccessRatePct.toFixed(2)}%`,
+  );
+  console.log(`  ${kpiOutJson}`);
+  console.log(`  ${kpiOutMd}`);
+}
+
 const guardrail = evaluateSuccessGuardrail(reportFiles, minSuccessRatePct);
 if (!guardrail.pass) {
   console.error(`success-rate guardrail failed (min=${minSuccessRatePct}%)`);
@@ -321,4 +343,144 @@ function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct) {
     }
   }
   return { pass: failures.length === 0, failures };
+}
+
+function buildKpiSummary(reportFiles, invalidCodes) {
+  const samples = [];
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      const filename = basename(path);
+      const workerMatch = filename.match(/workers-(\d+)\.json$/);
+      const rateMatch = filename.match(/rate-(\d+)/);
+      const totalRequests = Number(report.totalRequests ?? 0);
+      const totalSuccess = Number(report.totalSuccess ?? 0);
+      const totalFailures = Number(report.totalFailures ?? 0);
+      const invalidIntentRejectCount = invalidCodes.reduce(
+        (acc, code) => acc + rejectCount(report, code),
+        0,
+      );
+      const validIntentRequestCount = Math.max(totalRequests - invalidIntentRejectCount, 0);
+      const validIntentSuccessRatePct =
+        validIntentRequestCount > 0 ? (totalSuccess / validIntentRequestCount) * 100 : 0;
+      const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0);
+      const traceChecked = Number(report.traceChecks?.checked ?? 0);
+      const tracePass = Number(report.traceChecks?.pass ?? 0);
+      samples.push({
+        path,
+        rate: rateMatch ? Number(rateMatch[1]) : Number(report.config?.ratePerSecond ?? 0),
+        workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
+        throughputRps: Number(report.throughputRps ?? 0),
+        acceptedBusinessOpsRps: Number(report.acceptedBusinessOpsRps ?? 0),
+        endToEndSuccessRatePct: totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0,
+        validIntentSuccessRatePct,
+        invalidIntentRatePct: totalRequests > 0 ? (invalidIntentRejectCount / totalRequests) * 100 : 0,
+        systemFailureRateProxyPct: totalRequests > 0 ? (systemFailureProxyCount / totalRequests) * 100 : 0,
+        tracePassRatePct: traceChecked > 0 ? (tracePass / traceChecked) * 100 : 100,
+        p95LatencyMs: Number(report.latencyMs?.p95 ?? 0),
+        p99LatencyMs: Number(report.latencyMs?.p99 ?? 0),
+        rejectTaxonomy: report.rejectTaxonomy ?? [],
+      });
+    } catch {
+      // skip unreadable report
+    }
+  }
+  if (samples.length === 0) return null;
+
+  const bestByThroughput = [...samples].sort((a, b) => b.throughputRps - a.throughputRps)[0];
+  const bestByAccepted = [...samples].sort((a, b) => b.acceptedBusinessOpsRps - a.acceptedBusinessOpsRps)[0];
+  const quality90 = [...samples]
+    .filter((sample) => sample.endToEndSuccessRatePct >= 90)
+    .sort((a, b) => b.throughputRps - a.throughputRps)[0] ?? null;
+  const quality95 = [...samples]
+    .filter((sample) => sample.endToEndSuccessRatePct >= 95)
+    .sort((a, b) => b.throughputRps - a.throughputRps)[0] ?? null;
+
+  const averages = {
+    throughputRps: avg(samples.map((sample) => sample.throughputRps)),
+    acceptedBusinessOpsRps: avg(samples.map((sample) => sample.acceptedBusinessOpsRps)),
+    endToEndSuccessRatePct: avg(samples.map((sample) => sample.endToEndSuccessRatePct)),
+    validIntentSuccessRatePct: avg(samples.map((sample) => sample.validIntentSuccessRatePct)),
+    invalidIntentRatePct: avg(samples.map((sample) => sample.invalidIntentRatePct)),
+    systemFailureRateProxyPct: avg(samples.map((sample) => sample.systemFailureRateProxyPct)),
+    tracePassRatePct: avg(samples.map((sample) => sample.tracePassRatePct)),
+    p95LatencyMs: avg(samples.map((sample) => sample.p95LatencyMs)),
+    p99LatencyMs: avg(samples.map((sample) => sample.p99LatencyMs)),
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    invalidIntentCodes: invalidCodes,
+    sampleCount: samples.length,
+    averages,
+    bestByThroughput,
+    bestByAccepted,
+    qualityCap90: quality90,
+    qualityCap95: quality95,
+    samples,
+  };
+}
+
+function rejectCount(report, code) {
+  const rows = Array.isArray(report.rejectTaxonomy) ? report.rejectTaxonomy : [];
+  const hit = rows.find((row) => row?.code === code);
+  return Number(hit?.count ?? 0);
+}
+
+function avg(values) {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function toKpiMarkdown(kpiSummary) {
+  const lines = [];
+  lines.push("# Stress KPI Summary");
+  lines.push("");
+  lines.push(`Generated: ${kpiSummary.generatedAt}`);
+  lines.push(`Samples: ${kpiSummary.sampleCount}`);
+  lines.push(`Invalid-intent reject codes: ${kpiSummary.invalidIntentCodes.join(", ")}`);
+  lines.push("");
+  lines.push("## Averages");
+  lines.push(`- ingress throughput: ${kpiSummary.averages.throughputRps.toFixed(2)} rps`);
+  lines.push(`- accepted throughput: ${kpiSummary.averages.acceptedBusinessOpsRps.toFixed(2)} rps`);
+  lines.push(`- end-to-end success-rate: ${kpiSummary.averages.endToEndSuccessRatePct.toFixed(2)}%`);
+  lines.push(`- valid-intent success-rate (proxy): ${kpiSummary.averages.validIntentSuccessRatePct.toFixed(2)}%`);
+  lines.push(`- invalid-intent rate: ${kpiSummary.averages.invalidIntentRatePct.toFixed(2)}%`);
+  lines.push(`- system-failure rate (proxy): ${kpiSummary.averages.systemFailureRateProxyPct.toFixed(2)}%`);
+  lines.push(`- trace pass-rate: ${kpiSummary.averages.tracePassRatePct.toFixed(2)}%`);
+  lines.push(`- p95 latency: ${kpiSummary.averages.p95LatencyMs.toFixed(2)} ms`);
+  lines.push(`- p99 latency: ${kpiSummary.averages.p99LatencyMs.toFixed(2)} ms`);
+  lines.push("");
+  lines.push("## Best Samples");
+  lines.push(
+    `- best throughput: rate=${kpiSummary.bestByThroughput.rate} workers=${kpiSummary.bestByThroughput.workers} throughput=${kpiSummary.bestByThroughput.throughputRps.toFixed(2)} accepted=${kpiSummary.bestByThroughput.acceptedBusinessOpsRps.toFixed(2)} success=${kpiSummary.bestByThroughput.endToEndSuccessRatePct.toFixed(2)}%`,
+  );
+  lines.push(
+    `- best accepted: rate=${kpiSummary.bestByAccepted.rate} workers=${kpiSummary.bestByAccepted.workers} throughput=${kpiSummary.bestByAccepted.throughputRps.toFixed(2)} accepted=${kpiSummary.bestByAccepted.acceptedBusinessOpsRps.toFixed(2)} success=${kpiSummary.bestByAccepted.endToEndSuccessRatePct.toFixed(2)}%`,
+  );
+  lines.push(
+    `- quality cap >=90%: ${
+      kpiSummary.qualityCap90
+        ? `rate=${kpiSummary.qualityCap90.rate} workers=${kpiSummary.qualityCap90.workers} throughput=${kpiSummary.qualityCap90.throughputRps.toFixed(2)}`
+        : "not reached"
+    }`,
+  );
+  lines.push(
+    `- quality cap >=95%: ${
+      kpiSummary.qualityCap95
+        ? `rate=${kpiSummary.qualityCap95.rate} workers=${kpiSummary.qualityCap95.workers} throughput=${kpiSummary.qualityCap95.throughputRps.toFixed(2)}`
+        : "not reached"
+    }`,
+  );
+  lines.push("");
+  lines.push("## Per Sample");
+  lines.push("| Rate | Workers | Throughput RPS | Accepted RPS | E2E Success % | Valid-Intent Success % | Invalid-Intent % | System-Failure % (proxy) | p95 ms | p99 ms |");
+  lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+  for (const sample of kpiSummary.samples) {
+    lines.push(
+      `| ${sample.rate} | ${sample.workers} | ${sample.throughputRps.toFixed(2)} | ${sample.acceptedBusinessOpsRps.toFixed(2)} | ${sample.endToEndSuccessRatePct.toFixed(2)} | ${sample.validIntentSuccessRatePct.toFixed(2)} | ${sample.invalidIntentRatePct.toFixed(2)} | ${sample.systemFailureRateProxyPct.toFixed(2)} | ${sample.p95LatencyMs.toFixed(2)} | ${sample.p99LatencyMs.toFixed(2)} |`,
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
 }
