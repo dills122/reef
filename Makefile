@@ -6,7 +6,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay dev-throughput-campaign
+.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay dev-throughput-campaign
 
 test: test-go test-platform-runtime
 
@@ -21,6 +21,9 @@ bench-matching-engine:
 
 bench-matching-engine-check:
 	./scripts/ci/check-matching-bench.sh
+
+bench-platform-runtime-check:
+	./scripts/ci/check-runtime-bench.sh
 
 test-platform-runtime:
 	cd $(PLATFORM_RUNTIME_DIR) && GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test

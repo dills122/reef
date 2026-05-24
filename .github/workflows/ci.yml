@@ -52,3 +52,6 @@ jobs:
         uses: gradle/actions/wrapper-validation@v4
       - name: Run Kotlin tests
         run: ./gradlew --no-daemon test
+      - name: Run platform-runtime performance guardrail
+        working-directory: .
+        run: ./scripts/ci/check-runtime-bench.sh
