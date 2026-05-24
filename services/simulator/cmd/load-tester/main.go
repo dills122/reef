@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -62,6 +63,10 @@ type Config struct {
 	ProfileMixRetail    int
 	ProfileMixNoise     int
 	PrettySummary       bool
+	HTTPMaxIdleConns    int
+	HTTPIdleConnsHost   int
+	HTTPMaxConnsHost    int
+	HTTPIdleConnTimeout time.Duration
 }
 
 type Action string
@@ -207,7 +212,8 @@ func main() {
 
 	started := time.Now().UTC()
 	sessionID := fmt.Sprintf("load-%d", started.UnixNano())
-	client := &http.Client{Timeout: cfg.RequestTimeout}
+	client := buildHTTPClient(cfg)
+	defer client.CloseIdleConnections()
 
 	if err := seedReferenceData(client, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "reference data seed failed: %v\n", err)
@@ -294,6 +300,10 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.ProfileMixRetail, "profile-retail-pct", cfg.ProfileMixRetail, "retail worker percentage")
 	flag.IntVar(&cfg.ProfileMixNoise, "profile-noise-pct", cfg.ProfileMixNoise, "noise worker percentage")
 	flag.BoolVar(&cfg.PrettySummary, "pretty-summary", cfg.PrettySummary, "print a human-readable console summary (default prints JSON)")
+	flag.IntVar(&cfg.HTTPMaxIdleConns, "http-max-idle-conns", cfg.HTTPMaxIdleConns, "http client transport max idle connections")
+	flag.IntVar(&cfg.HTTPIdleConnsHost, "http-max-idle-conns-per-host", cfg.HTTPIdleConnsHost, "http client transport max idle connections per host")
+	flag.IntVar(&cfg.HTTPMaxConnsHost, "http-max-conns-per-host", cfg.HTTPMaxConnsHost, "http client transport max total connections per host (0 = no transport-side limit)")
+	flag.DurationVar(&cfg.HTTPIdleConnTimeout, "http-idle-conn-timeout", cfg.HTTPIdleConnTimeout, "http client idle connection timeout")
 	flag.Parse()
 	parsedConfig := cfg
 
@@ -344,6 +354,18 @@ func parseConfig() (Config, error) {
 	if cfg.StrictMinLiveOrders <= 0 {
 		return cfg, errors.New("strict-min-live-orders must be > 0")
 	}
+	if cfg.HTTPMaxIdleConns < 0 {
+		return cfg, errors.New("http-max-idle-conns must be >= 0")
+	}
+	if cfg.HTTPIdleConnsHost < 0 {
+		return cfg, errors.New("http-max-idle-conns-per-host must be >= 0")
+	}
+	if cfg.HTTPMaxConnsHost < 0 {
+		return cfg, errors.New("http-max-conns-per-host must be >= 0")
+	}
+	if cfg.HTTPIdleConnTimeout <= 0 {
+		return cfg, errors.New("http-idle-conn-timeout must be > 0")
+	}
 	return cfg, nil
 }
 
@@ -378,6 +400,10 @@ func defaultConfigFromEnv() Config {
 		ProfileMixRetail:    envInt("REEF_PROFILE_RETAIL_PCT", 25),
 		ProfileMixNoise:     envInt("REEF_PROFILE_NOISE_PCT", 10),
 		PrettySummary:       envBool("REEF_PRETTY_SUMMARY", false),
+		HTTPMaxIdleConns:    envInt("REEF_HTTP_MAX_IDLE_CONNS", 2048),
+		HTTPIdleConnsHost:   envInt("REEF_HTTP_MAX_IDLE_CONNS_PER_HOST", 512),
+		HTTPMaxConnsHost:    envInt("REEF_HTTP_MAX_CONNS_PER_HOST", 0),
+		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
 	}
 }
 
@@ -498,6 +524,40 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["pretty-summary"] {
 		cfg.PrettySummary = parsed.PrettySummary
+	}
+	if explicit["http-max-idle-conns"] {
+		cfg.HTTPMaxIdleConns = parsed.HTTPMaxIdleConns
+	}
+	if explicit["http-max-idle-conns-per-host"] {
+		cfg.HTTPIdleConnsHost = parsed.HTTPIdleConnsHost
+	}
+	if explicit["http-max-conns-per-host"] {
+		cfg.HTTPMaxConnsHost = parsed.HTTPMaxConnsHost
+	}
+	if explicit["http-idle-conn-timeout"] {
+		cfg.HTTPIdleConnTimeout = parsed.HTTPIdleConnTimeout
+	}
+}
+
+func buildHTTPClient(cfg Config) *http.Client {
+	dialer := &net.Dialer{
+		Timeout:   cfg.RequestTimeout,
+		KeepAlive: 30 * time.Second,
+	}
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          cfg.HTTPMaxIdleConns,
+		MaxIdleConnsPerHost:   cfg.HTTPIdleConnsHost,
+		MaxConnsPerHost:       cfg.HTTPMaxConnsHost,
+		IdleConnTimeout:       cfg.HTTPIdleConnTimeout,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	return &http.Client{
+		Timeout:   cfg.RequestTimeout,
+		Transport: transport,
 	}
 }
 

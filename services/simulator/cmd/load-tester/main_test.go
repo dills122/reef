@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -340,6 +341,36 @@ func TestApplyFlagOverridesUsesParsedValues(t *testing.T) {
 	applyFlagOverrides(&cfg, parsed, explicit)
 	if cfg.Workers != 12 || cfg.RatePerSecond != 150 || !cfg.PrettySummary || cfg.ReportOut != "/tmp/report.json" {
 		t.Fatalf("overrides not applied correctly: %+v", cfg)
+	}
+}
+
+func TestBuildHTTPClientUsesConfiguredTransport(t *testing.T) {
+	cfg := Config{
+		RequestTimeout:      7 * time.Second,
+		HTTPMaxIdleConns:    123,
+		HTTPIdleConnsHost:   45,
+		HTTPMaxConnsHost:    67,
+		HTTPIdleConnTimeout: 22 * time.Second,
+	}
+	client := buildHTTPClient(cfg)
+	if client.Timeout != 7*time.Second {
+		t.Fatalf("unexpected client timeout: %s", client.Timeout)
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+	if transport.MaxIdleConns != 123 {
+		t.Fatalf("unexpected MaxIdleConns: %d", transport.MaxIdleConns)
+	}
+	if transport.MaxIdleConnsPerHost != 45 {
+		t.Fatalf("unexpected MaxIdleConnsPerHost: %d", transport.MaxIdleConnsPerHost)
+	}
+	if transport.MaxConnsPerHost != 67 {
+		t.Fatalf("unexpected MaxConnsPerHost: %d", transport.MaxConnsPerHost)
+	}
+	if transport.IdleConnTimeout != 22*time.Second {
+		t.Fatalf("unexpected IdleConnTimeout: %s", transport.IdleConnTimeout)
 	}
 }
 
