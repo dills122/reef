@@ -11,7 +11,8 @@ Targeted hot-path audit and refactor across:
 1. Matching engine insertion path had repeated `sync.Map` lookups inside each book scan (`insertBuy` / `insertSell`), causing avoidable overhead per submit/modify.
 2. Matching engine matching path repeatedly formatted identical numeric strings per match event.
 3. Matching engine validation/parsing logic duplicated positive integer parsing and rejection handling.
-4. Runtime order service duplicated lifecycle event assembly logic and allocated dynamic event lists without capacity hints.
+4. Matching engine cancel/modify/order-state paths reloaded order records unnecessarily after lock acquisition.
+5. Runtime order service duplicated lifecycle event assembly logic and allocated dynamic event lists without capacity hints.
 
 ## Refactors Implemented
 
@@ -27,7 +28,9 @@ Changes:
 - Added generic helper `insertAt[T any]` for reusable ordered insertion mechanics.
 - Added `parsePositiveInt` helper to reduce parse/validation duplication.
 - Reused parsed match quantities/prices as strings in `appendMatch` to avoid repeated conversions.
+- Removed redundant order reloads in `CancelOrder`, `ModifyOrder`, and `OrderState`.
 - Added tests for buy/sell price-time insertion and parse helper.
+- Added microbenchmarks (`service_benchmark_test.go`) for resting submit, crossing submit+match, and modify paths.
 
 ### Platform Runtime
 
@@ -44,6 +47,12 @@ Changes:
 - `go test ./...` in `services/matching-engine` passed.
 - `go test -race ./internal/app` in `services/matching-engine` passed.
 - `./gradlew test --tests com.reef.platform.application.OrderApplicationServiceTest` in `services/platform-runtime` passed.
+
+## Baseline Benchmarks (Apple M1 Max, `go test -benchmem`)
+
+- `BenchmarkSubmitOrderResting`: `1309 ns/op`, `592 B/op`, `14 allocs/op`
+- `BenchmarkSubmitOrderMatchAgainstResting`: `2703 ns/op`, `1524 B/op`, `32 allocs/op`
+- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op`
 
 ## Deferred High-Impact Candidates
 

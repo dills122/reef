@@ -125,11 +125,6 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 	book.mu.Lock()
 	defer book.mu.Unlock()
 
-	record, ok = s.loadOrder(cmd.OrderID)
-	if !ok {
-		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
-	}
-
 	if record.Status == domain.OrderStatusFilled {
 		return rejectedResult("evt-reject-order-filled", cmd.OrderID, "INVALID_STATE", "filled order cannot be cancelled", now)
 	}
@@ -165,11 +160,6 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	book := s.bookFor(record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
-
-	record, ok = s.loadOrder(cmd.OrderID)
-	if !ok {
-		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
-	}
 
 	if record.Status == domain.OrderStatusFilled || record.Status == domain.OrderStatusCancelled {
 		return rejectedResult("evt-reject-order-not-modifiable", cmd.OrderID, "INVALID_STATE", "order is not modifiable", now)
@@ -237,11 +227,6 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 	book := s.bookFor(record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
-
-	record, ok = s.loadOrder(orderID)
-	if !ok {
-		return domain.OrderState{}, false
-	}
 
 	return domain.OrderState{
 		OrderID:           record.OrderID,
