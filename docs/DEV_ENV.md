@@ -146,6 +146,8 @@ Reports are written to `/tmp` as:
 Additional stress artifacts:
 - `/tmp/reef-load-report-dev-stress-telemetry.ndjson`
 - `/tmp/reef-load-report-dev-stress-recommendation.json`
+- `/tmp/reef-load-report-dev-stress-kpi.json`
+- `/tmp/reef-load-report-dev-stress-kpi.md`
 
 ## Environment contract
 
@@ -168,3 +170,4 @@ Postgres init creates domain schemas:
 Related:
 - [DB split-readiness guardrails](./DB_SPLIT_READINESS.md)
 - [Observability dev profile runbook](./OBSERVABILITY_DEV_PROFILE.md)
+- [Simulation + app KPI matrix](./SIMULATION_KPIS.md)
