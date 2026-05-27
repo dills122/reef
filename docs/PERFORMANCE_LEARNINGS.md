@@ -33,6 +33,22 @@ Immediate implications:
 1. Throughput target is reachable, but long-run stability depends on datastore lifecycle controls.
 2. Postgres WAL/checkpoint tuning and data retention/partitioning are not optional follow-up items.
 
+## Industry Patterns To Apply
+
+Use these patterns as implementation priorities for sustained high-throughput operation:
+
+1. Keep hot write paths single-purpose and append-friendly; defer non-critical fan-out work asynchronously.
+2. Partition and age off high-volume runtime tables so long soaks do not force full-table growth in the hot path.
+3. Tune checkpoint/WAL behavior for sustained write workloads, then validate with soak diagnostics (not just short burst tests).
+4. Add explicit ingress protection (rate limits/circuit breakers) so malformed or abusive client traffic cannot starve valid flow.
+5. Use disciplined retry/backoff behavior to avoid synchronized retry storms under partial failure.
+
+Reef mapping (near-term):
+
+1. Keep `dev-stress` as the primary harness, and run with DB diagnostics enabled before long soak campaigns.
+2. Prioritize runtime event lifecycle controls (partitioning/retention/archival) as the first DB durability milestone.
+3. Treat `checkpoints_req` growth and rapid table-size expansion as release-blocking signals for sustained-rate goals.
+
 ## Performance Budgets
 
 Use these as initial guardrails for simulator/dev-env iteration:

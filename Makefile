@@ -6,7 +6,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-smoke dev-stress dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
+.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-smoke dev-stress dev-stress-diagnostics dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
 
 test: test-go test-platform-runtime
 
@@ -53,6 +53,10 @@ dev-smoke:
 dev-stress:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/stress.mjs
+
+dev-stress-diagnostics:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1 $(JS_RUNTIME) scripts/dev/stress.mjs
 
 dev-admin:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

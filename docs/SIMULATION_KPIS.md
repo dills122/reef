@@ -54,6 +54,8 @@ This defines the canonical metrics for simulator-driven performance runs so we c
 3. Recommendation: `/tmp/reef-load-report-dev-stress-recommendation.json`
 4. KPI summary JSON: `/tmp/reef-load-report-dev-stress-kpi.json`
 5. KPI summary Markdown: `/tmp/reef-load-report-dev-stress-kpi.md`
+6. Optional DB diagnostics directory (when `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`):
+   - `/tmp/<report-base>-diagnostics/`
 
 ## Comparator Usage
 
