@@ -13,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class PlatformHttpServerBoundaryTest {
     @Test
@@ -183,6 +184,7 @@ class PlatformHttpServerBoundaryTest {
             windowSeconds = 60,
             blockSeconds = 120,
             trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
             clock = { java.time.Instant.ofEpochSecond(100) }
         )
         val server = testServerWithGateway(
@@ -228,6 +230,59 @@ class PlatformHttpServerBoundaryTest {
         }
     }
 
+    @Test
+    fun internalAbuseStatsEndpointReturnsCountersAndConfig() {
+        var now = java.time.Instant.ofEpochSecond(300)
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 1,
+            windowSeconds = 60,
+            blockSeconds = 30,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
+            clock = { now }
+        )
+        val server = testServerWithGateway(
+            gateway = StaticRejectedEngineGateway("INVALID_STATE", "invalid transition"),
+            abuseProtectionHook = hook
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val headers = mapOf("X-Client-Id" to "client-stats")
+            post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-stats-1"),
+                body = validSubmitBody("cmd-stats-1", "trace-stats-1", "ord-stats-1")
+            )
+            post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-stats-2"),
+                body = validSubmitBody("cmd-stats-2", "trace-stats-2", "ord-stats-2")
+            )
+            val blocked = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-stats-3"),
+                body = validSubmitBody("cmd-stats-3", "trace-stats-3", "ord-stats-3")
+            )
+            assertEquals(429, blocked.status)
+
+            val statsResponse = get(server.address.port, "/internal/boundary/abuse/stats")
+            assertEquals(200, statsResponse.status)
+            assertContains(statsResponse.body, "\"mode\":\"reject-rate\"")
+            assertContains(statsResponse.body, "\"enabled\":true")
+            assertContains(statsResponse.body, "\"trackedRoutes\":[\"/api/v1/orders/submit\"]")
+            assertContains(statsResponse.body, "\"trips\":1")
+            assertContains(statsResponse.body, "\"activeBlockedClients\":1")
+
+            now = now.plusSeconds(40)
+            assertFalse(hook.allow("client-stats", "/api/v1/orders/submit")?.code == "ABUSE_BLOCKED")
+        } finally {
+            server.stop(0)
+        }
+    }
+
     data class HttpResponse(val status: Int, val body: String)
 
     private fun testServer(boundary: ExternalApiBoundary = ExternalApiBoundary()): com.sun.net.httpserver.HttpServer {
@@ -262,6 +317,14 @@ class PlatformHttpServerBoundaryTest {
         connection.doOutput = true
         headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
         connection.outputStream.use { it.write(body.toByteArray()) }
+        val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
+        val text = stream.bufferedReader().readText()
+        return HttpResponse(connection.responseCode, text)
+    }
+
+    private fun get(port: Int, path: String): HttpResponse {
+        val connection = java.net.URI.create("http://localhost:$port$path").toURL().openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream.bufferedReader().readText()
         return HttpResponse(connection.responseCode, text)

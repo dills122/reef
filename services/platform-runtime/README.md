@@ -54,8 +54,12 @@ External boundary config:
 - `EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS` (default `30`)
 - `EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS` (default `60`)
 - `EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES` comma list (default `INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR`)
+- `EXTERNAL_API_ABUSE_BREAKER_ROUTES` comma list (default `/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel`)
 - `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
+
+Operational stats endpoint:
+- `GET /internal/boundary/abuse/stats` (returns breaker mode/config and counters: `trips`, `blocks`, `releases`, `activeBlockedClients`)
 
 When `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`, the runtime reuses:
 

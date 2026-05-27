@@ -26,7 +26,23 @@ interface IdempotencyPolicy {
 interface AbuseProtectionHook {
     fun allow(clientId: String, route: String): BoundaryError?
     fun observe(clientId: String, route: String, responseStatus: Int, rejectCode: String?)
+    fun stats(): AbuseProtectionStats
 }
+
+data class AbuseProtectionStats(
+    val mode: String,
+    val enabled: Boolean,
+    val warningOnly: Boolean,
+    val maxRejects: Int,
+    val windowSeconds: Long,
+    val blockSeconds: Long,
+    val trackedRejectCodes: Set<String>,
+    val trackedRoutes: Set<String>,
+    val trips: Long,
+    val blocks: Long,
+    val releases: Long,
+    val activeBlockedClients: Int
+)
 
 interface IdempotencyStore {
     fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult?
@@ -93,6 +109,23 @@ class AllowAllAbuseProtectionHook : AbuseProtectionHook {
     override fun allow(clientId: String, route: String): BoundaryError? = null
 
     override fun observe(clientId: String, route: String, responseStatus: Int, rejectCode: String?) {}
+
+    override fun stats(): AbuseProtectionStats {
+        return AbuseProtectionStats(
+            mode = "off",
+            enabled = false,
+            warningOnly = false,
+            maxRejects = 0,
+            windowSeconds = 0,
+            blockSeconds = 0,
+            trackedRejectCodes = emptySet(),
+            trackedRoutes = emptySet(),
+            trips = 0,
+            blocks = 0,
+            releases = 0,
+            activeBlockedClients = 0
+        )
+    }
 }
 
 class FixedWindowRateLimitHook(
@@ -253,6 +286,7 @@ class RejectRateAbuseProtectionHook(
     private val windowSeconds: Long,
     private val blockSeconds: Long,
     private val trackedRejectCodes: Set<String>,
+    private val trackedRoutes: Set<String>,
     private val warningOnly: Boolean = false,
     private val clock: () -> Instant = { Instant.now() }
 ) : AbuseProtectionHook {
@@ -270,6 +304,7 @@ class RejectRateAbuseProtectionHook(
 
     override fun allow(clientId: String, route: String): BoundaryError? {
         if (!isConfigured()) return null
+        if (!tracksRoute(route)) return null
         val now = clock().epochSecond
         val key = key(clientId, route)
         val state = states.computeIfPresent(key) { _, current ->
@@ -290,6 +325,7 @@ class RejectRateAbuseProtectionHook(
 
     override fun observe(clientId: String, route: String, responseStatus: Int, rejectCode: String?) {
         if (!isConfigured()) return
+        if (!tracksRoute(route)) return
         if (responseStatus < 200 || responseStatus >= 300) return
         val normalizedCode = rejectCode?.uppercase()?.trim().orEmpty()
         if (normalizedCode.isBlank() || !trackedRejectCodes.contains(normalizedCode)) return
@@ -331,8 +367,32 @@ class RejectRateAbuseProtectionHook(
         }
     }
 
+    override fun stats(): AbuseProtectionStats {
+        val now = clock().epochSecond
+        val activeBlockedClients = states.values.count { it.blockedUntilEpochSeconds > now }
+        return AbuseProtectionStats(
+            mode = "reject-rate",
+            enabled = isConfigured(),
+            warningOnly = warningOnly,
+            maxRejects = maxRejects,
+            windowSeconds = windowSeconds,
+            blockSeconds = blockSeconds,
+            trackedRejectCodes = trackedRejectCodes,
+            trackedRoutes = trackedRoutes,
+            trips = tripCount.get(),
+            blocks = blockedCount.get(),
+            releases = releaseCount.get(),
+            activeBlockedClients = activeBlockedClients
+        )
+    }
+
     private fun isConfigured(): Boolean {
         return maxRejects > 0 && windowSeconds > 0 && blockSeconds > 0 && trackedRejectCodes.isNotEmpty()
+    }
+
+    private fun tracksRoute(route: String): Boolean {
+        if (trackedRoutes.isEmpty()) return true
+        return trackedRoutes.contains(route)
     }
 
     private fun key(clientId: String, route: String): String {
@@ -415,11 +475,13 @@ fun defaultBoundaryHooks(): BoundaryHooks {
                 val blockSeconds = System.getenv("EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS")?.toLongOrNull() ?: 60L
                 val warningOnly = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY"), false)
                 val codes = parseRejectCodes(System.getenv("EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES"))
+                val routes = parseTrackedRoutes(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ROUTES"))
                 RejectRateAbuseProtectionHook(
                     maxRejects = maxRejects,
                     windowSeconds = windowSeconds,
                     blockSeconds = blockSeconds,
                     trackedRejectCodes = codes,
+                    trackedRoutes = routes,
                     warningOnly = warningOnly
                 )
             }
@@ -467,6 +529,20 @@ private fun parseRejectCodes(raw: String?): Set<String> {
     if (raw.isNullOrBlank()) return fallback
     val values = raw.split(",")
         .map { it.trim().uppercase() }
+        .filter { it.isNotBlank() }
+        .toSet()
+    return if (values.isEmpty()) fallback else values
+}
+
+private fun parseTrackedRoutes(raw: String?): Set<String> {
+    val fallback = setOf(
+        "/api/v1/orders/submit",
+        "/api/v1/orders/modify",
+        "/api/v1/orders/cancel"
+    )
+    if (raw.isNullOrBlank()) return fallback
+    val values = raw.split(",")
+        .map { it.trim() }
         .filter { it.isNotBlank() }
         .toSet()
     return if (values.isEmpty()) fallback else values

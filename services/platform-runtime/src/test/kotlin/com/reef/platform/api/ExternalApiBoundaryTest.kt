@@ -108,6 +108,7 @@ class ExternalApiBoundaryTest {
             windowSeconds = 60,
             blockSeconds = 30,
             trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
             clock = { now }
         )
 
@@ -131,10 +132,32 @@ class ExternalApiBoundaryTest {
             windowSeconds = 60,
             blockSeconds = 30,
             trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
             clock = { Instant.ofEpochSecond(200) }
         )
 
         hook.observe("client-1", "/api/v1/orders/submit", 200, "NOT_FOUND")
         assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+    }
+
+    @Test
+    fun rejectRateAbuseHookScopesByTrackedRoutes() {
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 1,
+            windowSeconds = 60,
+            blockSeconds = 30,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
+            clock = { Instant.ofEpochSecond(240) }
+        )
+
+        hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
+        assertNull(hook.allow("client-1", "/api/v1/orders/modify"))
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        assertEquals("ABUSE_BLOCKED", hook.allow("client-1", "/api/v1/orders/submit")?.code)
     }
 }

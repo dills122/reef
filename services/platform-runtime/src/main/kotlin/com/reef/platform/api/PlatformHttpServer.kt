@@ -38,6 +38,15 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.health())
         }
 
+        server.createContext("/internal/boundary/abuse/stats") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                exchange.sendResponseHeaders(405, -1)
+                exchange.close()
+                return@createContext
+            }
+            writeJson(exchange, 200, abuseStatsJson(abuseProtectionHook.stats()))
+        }
+
         server.createContext("/orders/submit") { exchange ->
             if (exchange.requestMethod != "POST") {
                 exchange.sendResponseHeaders(405, -1)
@@ -328,6 +337,31 @@ class PlatformHttpServer(
     private fun rejectCode(payload: String): String? {
         if (!payload.contains("\"rejected\"")) return null
         return JsonFields.extract(payload, "code").ifBlank { null }
+    }
+
+    private fun abuseStatsJson(stats: AbuseProtectionStats): String {
+        val trackedCodes = stats.trackedRejectCodes.sorted().joinToString(prefix = "[", postfix = "]") { code ->
+            """"${JsonFields.escape(code)}""""
+        }
+        val trackedRoutes = stats.trackedRoutes.sorted().joinToString(prefix = "[", postfix = "]") { route ->
+            """"${JsonFields.escape(route)}""""
+        }
+        return """
+            {
+              "mode":"${JsonFields.escape(stats.mode)}",
+              "enabled":${stats.enabled},
+              "warningOnly":${stats.warningOnly},
+              "maxRejects":${stats.maxRejects},
+              "windowSeconds":${stats.windowSeconds},
+              "blockSeconds":${stats.blockSeconds},
+              "trackedRejectCodes":$trackedCodes,
+              "trackedRoutes":$trackedRoutes,
+              "trips":${stats.trips},
+              "blocks":${stats.blocks},
+              "releases":${stats.releases},
+              "activeBlockedClients":${stats.activeBlockedClients}
+            }
+        """.trimIndent()
     }
 }
 

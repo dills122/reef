@@ -221,3 +221,10 @@ Indicators favoring stabilization/refactor mode:
 - breaker behavior is deterministic under replay
 - simulator can toggle breakers without code changes
 - no regression in baseline happy-path throughput profile
+
+### Progress Checkpoint (2026-05-27)
+
+- implemented reject-rate breaker with global/per-feature toggles and route scoping
+- exposed runtime breaker telemetry snapshot endpoint: `GET /internal/boundary/abuse/stats`
+- completed short non-tripping overhead A/B run:
+  - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./ABUSE_BREAKER_COMPARISON_2026-05-27.md)
