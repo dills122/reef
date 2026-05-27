@@ -47,6 +47,20 @@ interface RuntimePersistence {
     fun saveEvents(events: List<RuntimeEvent>) {
         events.forEach { saveEvent(it) }
     }
+    fun persistSubmitOutcome(
+        commandId: String,
+        result: SubmitOrderResult,
+        acceptedOrder: PersistedOrder?,
+        lifecycleEvents: List<RuntimeEvent>
+    ) {
+        saveSubmitResult(commandId, result)
+        if (acceptedOrder != null) {
+            saveAcceptedOrder(acceptedOrder)
+            saveExecutions(result.executions)
+            saveTrades(result.trades)
+        }
+        saveEvents(lifecycleEvents)
+    }
     fun acceptedOrder(orderId: String): PersistedOrder?
     fun acceptedOrders(): List<PersistedOrder>
     fun executionsForOrder(orderId: String): List<ExecutionCreated>

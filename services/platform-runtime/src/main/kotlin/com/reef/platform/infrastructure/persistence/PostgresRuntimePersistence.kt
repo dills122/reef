@@ -206,6 +206,164 @@ class PostgresRuntimePersistence(
                     $$;
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION runtime_persist_submit_outcome(
+                      p_command_id TEXT,
+                      p_result_type TEXT,
+                      p_result_event_id TEXT,
+                      p_result_order_id TEXT,
+                      p_result_engine_order_id TEXT,
+                      p_result_code TEXT,
+                      p_result_reason TEXT,
+                      p_result_occurred_at TEXT,
+                      p_accepted_order JSONB,
+                      p_executions JSONB,
+                      p_trades JSONB,
+                      p_events JSONB
+                    )
+                    RETURNS VOID
+                    LANGUAGE plpgsql
+                    AS $$
+                    BEGIN
+                      INSERT INTO submit_results(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
+                      VALUES (
+                        p_command_id,
+                        p_result_type,
+                        p_result_event_id,
+                        p_result_order_id,
+                        p_result_engine_order_id,
+                        p_result_code,
+                        p_result_reason,
+                        p_result_occurred_at
+                      )
+                      ON CONFLICT (command_id) DO UPDATE SET
+                        result_type = EXCLUDED.result_type,
+                        event_id = EXCLUDED.event_id,
+                        order_id = EXCLUDED.order_id,
+                        engine_order_id = EXCLUDED.engine_order_id,
+                        code = EXCLUDED.code,
+                        reason = EXCLUDED.reason,
+                        occurred_at = EXCLUDED.occurred_at;
+
+                      IF p_accepted_order IS NOT NULL THEN
+                        INSERT INTO orders(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
+                        VALUES (
+                          p_accepted_order->>'orderId',
+                          p_accepted_order->>'engineOrderId',
+                          p_accepted_order->>'instrumentId',
+                          p_accepted_order->>'participantId',
+                          p_accepted_order->>'accountId',
+                          p_accepted_order->>'side',
+                          p_accepted_order->>'orderType',
+                          p_accepted_order->>'quantityUnits',
+                          p_accepted_order->>'limitPrice',
+                          p_accepted_order->>'currency',
+                          p_accepted_order->>'timeInForce',
+                          p_accepted_order->>'acceptedAt'
+                        )
+                        ON CONFLICT (order_id) DO UPDATE SET
+                          engine_order_id = EXCLUDED.engine_order_id,
+                          instrument_id = EXCLUDED.instrument_id,
+                          participant_id = EXCLUDED.participant_id,
+                          account_id = EXCLUDED.account_id,
+                          side = EXCLUDED.side,
+                          order_type = EXCLUDED.order_type,
+                          quantity_units = EXCLUDED.quantity_units,
+                          limit_price = EXCLUDED.limit_price,
+                          currency = EXCLUDED.currency,
+                          time_in_force = EXCLUDED.time_in_force,
+                          accepted_at = EXCLUDED.accepted_at;
+                      END IF;
+
+                      IF p_executions IS NOT NULL AND jsonb_array_length(p_executions) > 0 THEN
+                        INSERT INTO executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
+                        SELECT
+                          execution->>'eventId',
+                          execution->>'executionId',
+                          execution->>'orderId',
+                          execution->>'instrumentId',
+                          execution->>'quantityUnits',
+                          execution->>'executionPrice',
+                          execution->>'currency',
+                          execution->>'occurredAt'
+                        FROM jsonb_array_elements(p_executions) AS execution
+                        ON CONFLICT (event_id) DO NOTHING;
+                      END IF;
+
+                      IF p_trades IS NOT NULL AND jsonb_array_length(p_trades) > 0 THEN
+                        INSERT INTO trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
+                        SELECT
+                          trade->>'eventId',
+                          trade->>'tradeId',
+                          trade->>'executionId',
+                          trade->>'buyOrderId',
+                          trade->>'sellOrderId',
+                          trade->>'instrumentId',
+                          trade->>'quantityUnits',
+                          trade->>'price',
+                          trade->>'currency',
+                          trade->>'occurredAt'
+                        FROM jsonb_array_elements(p_trades) AS trade
+                        ON CONFLICT (event_id) DO NOTHING;
+                      END IF;
+
+                      IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
+                        RETURN;
+                      END IF;
+
+                      WITH parsed_events AS (
+                        SELECT event, ordinality
+                        FROM jsonb_array_elements(p_events) WITH ORDINALITY AS event_rows(event, ordinality)
+                      ),
+                      trace_counts AS (
+                        SELECT event->>'traceId' AS trace_id, COUNT(*)::BIGINT AS event_count
+                        FROM parsed_events
+                        GROUP BY event->>'traceId'
+                      ),
+                      trace_allocations AS (
+                        INSERT INTO runtime_trace_sequences(trace_id, next_sequence)
+                        SELECT trace_id, event_count FROM trace_counts
+                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = runtime_trace_sequences.next_sequence + EXCLUDED.next_sequence
+                        RETURNING trace_id, next_sequence
+                      ),
+                      trace_starts AS (
+                        SELECT
+                          counts.trace_id,
+                          allocations.next_sequence - counts.event_count + 1 AS start_sequence
+                        FROM trace_counts counts
+                        JOIN trace_allocations allocations ON allocations.trace_id = counts.trace_id
+                      ),
+                      ordered_events AS (
+                        SELECT
+                          parsed.event,
+                          parsed.ordinality,
+                          row_number() OVER (
+                            PARTITION BY parsed.event->>'traceId'
+                            ORDER BY parsed.ordinality
+                          ) - 1 AS trace_offset
+                        FROM parsed_events parsed
+                      )
+                      INSERT INTO runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
+                      SELECT
+                        event->>'eventId',
+                        event->>'eventType',
+                        event->>'orderId',
+                        event->>'traceId',
+                        event->>'causationId',
+                        event->>'correlationId',
+                        event->>'producer',
+                        event->>'schemaVersion',
+                        trace_starts.start_sequence + ordered_events.trace_offset,
+                        event->>'occurredAt'
+                      FROM ordered_events
+                      JOIN trace_starts ON trace_starts.trace_id = ordered_events.event->>'traceId'
+                      ORDER BY ordered_events.ordinality
+                      ON CONFLICT (event_id) DO NOTHING;
+                    END;
+                    $$;
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -401,6 +559,41 @@ class PostgresRuntimePersistence(
                         accountExists = rs.getBoolean("account_exists")
                     )
                 }
+            }
+        }
+    }
+
+    override fun persistSubmitOutcome(
+        commandId: String,
+        result: SubmitOrderResult,
+        acceptedOrder: PersistedOrder?,
+        lifecycleEvents: List<RuntimeEvent>
+    ) {
+        val accepted = result.accepted
+        val rejected = result.rejected
+        val resultType = if (accepted != null) "accepted" else "rejected"
+
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT runtime_persist_submit_outcome(
+                  ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb
+                )
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.setString(2, resultType)
+                ps.setString(3, accepted?.eventId ?: rejected?.eventId.orEmpty())
+                ps.setString(4, accepted?.orderId ?: rejected?.orderId.orEmpty())
+                ps.setString(5, accepted?.engineOrderId.orEmpty())
+                ps.setString(6, rejected?.code.orEmpty())
+                ps.setString(7, rejected?.reason.orEmpty())
+                ps.setString(8, accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
+                ps.setString(9, acceptedOrder?.toJsonObject())
+                ps.setString(10, result.executions.toJsonArray { it.toJsonObject() })
+                ps.setString(11, result.trades.toJsonArray { it.toJsonObject() })
+                ps.setString(12, lifecycleEvents.toJsonArray { it.toJsonObject() })
+                ps.execute()
             }
         }
     }
@@ -755,6 +948,85 @@ class PostgresRuntimePersistence(
                     val rows = mutableListOf<T>()
                     while (rs.next()) rows.add(rs.map())
                     return rows
+                }
+            }
+        }
+    }
+
+    private fun PersistedOrder.toJsonObject(): String = jsonObject(
+        "orderId" to orderId,
+        "engineOrderId" to engineOrderId,
+        "instrumentId" to instrumentId,
+        "participantId" to participantId,
+        "accountId" to accountId,
+        "side" to side,
+        "orderType" to orderType,
+        "quantityUnits" to quantityUnits,
+        "limitPrice" to limitPrice,
+        "currency" to currency,
+        "timeInForce" to timeInForce,
+        "acceptedAt" to acceptedAt
+    )
+
+    private fun ExecutionCreated.toJsonObject(): String = jsonObject(
+        "eventId" to eventId,
+        "executionId" to executionId,
+        "orderId" to orderId,
+        "instrumentId" to instrumentId,
+        "quantityUnits" to quantityUnits,
+        "executionPrice" to executionPrice,
+        "currency" to currency,
+        "occurredAt" to occurredAt
+    )
+
+    private fun TradeCreated.toJsonObject(): String = jsonObject(
+        "eventId" to eventId,
+        "tradeId" to tradeId,
+        "executionId" to executionId,
+        "buyOrderId" to buyOrderId,
+        "sellOrderId" to sellOrderId,
+        "instrumentId" to instrumentId,
+        "quantityUnits" to quantityUnits,
+        "price" to price,
+        "currency" to currency,
+        "occurredAt" to occurredAt
+    )
+
+    private fun RuntimeEvent.toJsonObject(): String = jsonObject(
+        "eventId" to eventId,
+        "eventType" to eventType,
+        "orderId" to orderId,
+        "traceId" to traceId,
+        "causationId" to causationId,
+        "correlationId" to correlationId,
+        "producer" to producer,
+        "schemaVersion" to schemaVersion,
+        "occurredAt" to occurredAt
+    )
+
+    private fun <T> List<T>.toJsonArray(toObject: (T) -> String): String {
+        if (isEmpty()) return "[]"
+        return joinToString(prefix = "[", postfix = "]") { toObject(it) }
+    }
+
+    private fun jsonObject(vararg fields: Pair<String, String>): String {
+        return fields.joinToString(prefix = "{", postfix = "}") { (key, value) ->
+            "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+    }
+
+    private fun escapeJson(value: String): String {
+        return buildString(value.length + 8) {
+            value.forEach { ch ->
+                when (ch) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\b' -> append("\\b")
+                    '\u000C' -> append("\\f")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
                 }
             }
         }
