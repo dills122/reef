@@ -177,6 +177,24 @@ Simulator mutating traffic uses `/api/v1` routes by default (idempotency + clien
 - `--use-api-v1=true` (default)
 - `--client-id-prefix=sim-client` (default)
 
+Optional abuse-breaker guardrail for `/api/v1` writes:
+- `EXTERNAL_API_ABUSE_BREAKER_MODE=off|reject-rate` (default `off`)
+- `EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS` (default `50`)
+- `EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS` (default `30`)
+- `EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS` (default `60`)
+- `EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES` (default `INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR`)
+- `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
+
+Example enablement:
+
+```bash
+EXTERNAL_API_ABUSE_BREAKER_MODE=reject-rate \
+EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS=25 \
+EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS=30 \
+EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS=90 \
+make dev-up
+```
+
 Disable boundary route usage only for legacy comparison/debug:
 
 ```bash
