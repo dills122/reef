@@ -47,6 +47,14 @@ External boundary config:
 - `EXTERNAL_API_RATE_LIMIT_MODE=allow-all|fixed-window` (default `allow-all`)
 - `EXTERNAL_API_RATE_LIMIT_MAX` (default `120`)
 - `EXTERNAL_API_RATE_LIMIT_WINDOW_SECONDS` (default `60`)
+- `EXTERNAL_API_ABUSE_BREAKER_MODE=off|reject-rate` (default `off`)
+- `EXTERNAL_API_ABUSE_BREAKER_ENABLED=true|false` (default `true` when mode is `reject-rate`)
+- `EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED=true|false` (default `true`)
+- `EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS` (default `50`)
+- `EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS` (default `30`)
+- `EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS` (default `60`)
+- `EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES` comma list (default `INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR`)
+- `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
 
 When `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`, the runtime reuses:

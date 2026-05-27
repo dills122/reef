@@ -3,6 +3,7 @@ package com.reef.platform.api
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
+import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
@@ -174,6 +175,59 @@ class PlatformHttpServerBoundaryTest {
         }
     }
 
+    @Test
+    fun apiV1SubmitBlocksClientAfterRejectRateThreshold() {
+        val captureStore = RecordingCommandCaptureStore()
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 1,
+            windowSeconds = 60,
+            blockSeconds = 120,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            clock = { java.time.Instant.ofEpochSecond(100) }
+        )
+        val server = testServerWithGateway(
+            gateway = StaticRejectedEngineGateway("INVALID_STATE", "invalid transition"),
+            captureStore = captureStore,
+            abuseProtectionHook = hook
+        )
+        try {
+            val headers = mapOf("X-Client-Id" to "client-1")
+            seedReferenceData(server.address.port)
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-breaker-1"),
+                body = validSubmitBody("cmd-breaker-1", "trace-breaker-1", "ord-breaker-1")
+            )
+            assertEquals(200, first.status)
+            assertContains(first.body, "\"rejected\"")
+            assertContains(first.body, "\"code\":\"INVALID_STATE\"")
+
+            val second = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-breaker-2"),
+                body = validSubmitBody("cmd-breaker-2", "trace-breaker-2", "ord-breaker-2")
+            )
+            assertEquals(200, second.status)
+            assertContains(second.body, "\"code\":\"INVALID_STATE\"")
+
+            val third = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers + ("Idempotency-Key" to "idem-breaker-3"),
+                body = validSubmitBody("cmd-breaker-3", "trace-breaker-3", "ord-breaker-3")
+            )
+            assertEquals(429, third.status)
+            assertContains(third.body, "\"code\":\"ABUSE_BLOCKED\"")
+            assertEquals(3, captureStore.receivedCalls)
+            assertEquals(2, captureStore.completedCalls)
+            assertEquals(1, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     data class HttpResponse(val status: Int, val body: String)
 
     private fun testServer(boundary: ExternalApiBoundary = ExternalApiBoundary()): com.sun.net.httpserver.HttpServer {
@@ -183,7 +237,8 @@ class PlatformHttpServerBoundaryTest {
     private fun testServerWithGateway(
         gateway: EngineGateway,
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
-        captureStore: CommandCaptureStore = NoopCommandCaptureStore()
+        captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
+        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook()
     ): com.sun.net.httpserver.HttpServer {
         val api = PlatformApi(
             OrderApplicationService(
@@ -194,6 +249,7 @@ class PlatformHttpServerBoundaryTest {
             port = 0,
             api = api,
             boundary = boundary,
+            abuseProtectionHook = abuseProtectionHook,
             idempotencyStore = InMemoryIdempotencyStore(),
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore
@@ -209,6 +265,50 @@ class PlatformHttpServerBoundaryTest {
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream.bufferedReader().readText()
         return HttpResponse(connection.responseCode, text)
+    }
+
+    private fun validSubmitBody(commandId: String, traceId: String, orderId: String): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"$traceId",
+              "causationId":"",
+              "correlationId":"$traceId",
+              "actorId":"bot-capture-1",
+              "occurredAt":"2026-05-22T00:00:00Z",
+              "orderId":"$orderId",
+              "instrumentId":"AAPL",
+              "participantId":"participant-1",
+              "accountId":"account-1",
+              "side":"BUY",
+              "orderType":"LIMIT",
+              "quantityUnits":"100",
+              "limitPrice":"150250000000",
+              "currency":"USD",
+              "timeInForce":"DAY"
+            }
+        """.trimIndent()
+    }
+
+    private fun seedReferenceData(port: Int) {
+        post(
+            port = port,
+            path = "/reference/instruments",
+            headers = emptyMap(),
+            body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
+        )
+        post(
+            port = port,
+            path = "/reference/participants",
+            headers = emptyMap(),
+            body = """{"participantId":"participant-1","name":"Participant 1"}"""
+        )
+        post(
+            port = port,
+            path = "/reference/accounts",
+            headers = emptyMap(),
+            body = """{"accountId":"account-1","participantId":"participant-1"}"""
+        )
     }
 }
 
@@ -279,6 +379,31 @@ private class EchoOrderEngineGateway : EngineGateway {
                 eventId = "evt-${command.orderId}",
                 orderId = command.orderId,
                 engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-05-22T00:00:00Z"
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
+}
+
+private class StaticRejectedEngineGateway(
+    private val code: String,
+    private val reason: String
+) : EngineGateway {
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        return SubmitOrderResult(
+            rejected = EngineOrderRejected(
+                eventId = "evt-rejected-${command.orderId}",
+                orderId = command.orderId,
+                code = code,
+                reason = reason,
                 occurredAt = "2026-05-22T00:00:00Z"
             )
         )

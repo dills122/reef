@@ -9,6 +9,7 @@ class PlatformHttpServer(
     private val port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
+    private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore()
@@ -21,6 +22,7 @@ class PlatformHttpServer(
         port = port,
         api = api,
         boundary = deps.boundary,
+        abuseProtectionHook = deps.abuseProtectionHook,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore
@@ -280,6 +282,13 @@ class PlatformHttpServer(
             return
         }
 
+        val abuseViolation = abuseProtectionHook.allow(clientId, route)
+        if (abuseViolation != null) {
+            commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
+            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            return
+        }
+
         val cached = idempotencyStore.find(clientId, route, idempotencyKey)
         if (cached != null) {
             commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
@@ -289,6 +298,7 @@ class PlatformHttpServer(
 
         try {
             val payload = operation(body)
+            abuseProtectionHook.observe(clientId, route, 200, rejectCode(payload))
             rememberIdempotentResult(exchange, route, 200, payload)
             commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
             writeJson(exchange, 200, payload)
@@ -314,6 +324,11 @@ class PlatformHttpServer(
             idempotencyRetentionPolicy.ttlFor(route)
         )
     }
+
+    private fun rejectCode(payload: String): String? {
+        if (!payload.contains("\"rejected\"")) return null
+        return JsonFields.extract(payload, "code").ifBlank { null }
+    }
 }
 
 private fun defaultBoundary(): ServerBoundaryDeps {
@@ -323,6 +338,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
             authHook = hooks.authHook,
             rateLimitHook = hooks.rateLimitHook
         ),
+        abuseProtectionHook = hooks.abuseProtectionHook,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore
@@ -331,6 +347,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
 
 data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
+    val abuseProtectionHook: AbuseProtectionHook,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore
