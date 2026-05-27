@@ -185,14 +185,12 @@ Indicators favoring stabilization/refactor mode:
 - reference doc: [`docs/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md`](./THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md)
 - scenario: `capacity-baseline`, `5m`, `rate=5000`, `workers=512`, clean reset before run
 - post-tuning result:
-  - throughput: `2478.04 rps`
-  - accepted throughput: `2439.98 rps`
-  - success rate: `98.46%`
+  - throughput: `2694.15 rps`
+  - accepted throughput: `2655.29 rps`
+  - success rate: `98.56%`
   - trace checks: `50/50` pass
-- delta versus pre-tuning baseline:
-  - throughput: `+386.15 rps`
-  - success rate: `+8.36 pts`
-  - failures: `-50,786`
+- post-fix quality note:
+  - `REFERENCE_DATA_ERROR` rejects: `0` in the latest 5-minute run
 
 ## Next Effort: Throughput and Capacity Campaign
 

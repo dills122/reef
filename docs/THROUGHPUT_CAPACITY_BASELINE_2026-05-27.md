@@ -50,3 +50,27 @@ node scripts/dev/sim-run.mjs --duration 5m --mode capacity-baseline --rate 5000 
 1. Current tuning meets the short-term success objective (`>=95%`) in this high-rate profile.
 2. Trace integrity remained stable (`50/50` pass in both runs).
 3. Remaining rejects are still mostly lifecycle-state business outcomes, not transport/runtime instability.
+
+## Post-Fix Validation (ID Namespacing + Clean Reset)
+
+- artifact: `/private/tmp/reef-sim-5k-5m-post-fix.json`
+- throughput: `2694.15 rps`
+- accepted throughput: `2655.29 rps`
+- success rate: `98.56%`
+- p95 / p99 latency: `236.28ms / 354.31ms`
+- failures: `11,668`
+- reject taxonomy: `INVALID_STATE` only (`11,668`, `100%`)
+- trace integrity: `50/50` pass
+
+### Comparator (Post-Fix - Post-Tuning Candidate)
+
+- throughput: `+216.11 rps`
+- accepted throughput: `+215.31 rps`
+- success rate: `+0.10 pts`
+- p95 latency: `-49.58ms`
+- p99 latency: `-62.05ms`
+- failures: `+240` (with materially higher total throughput)
+
+### Key Outcome
+
+- `REFERENCE_DATA_ERROR` rejects dropped to `0` in the 5-minute high-load run.
