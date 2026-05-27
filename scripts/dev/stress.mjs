@@ -293,6 +293,9 @@ function resolveActionMix(profileName) {
   if (profileName === "capacity-heavy") {
     return { submit: "68", modify: "24", cancel: "8" };
   }
+  if (profileName === "abuse-trip") {
+    return { submit: "35", modify: "45", cancel: "20" };
+  }
   return { submit: "70", modify: "20", cancel: "10" };
 }
 

@@ -23,6 +23,28 @@ interface IdempotencyPolicy {
     fun validate(clientId: String, route: String, idempotencyKey: String?): BoundaryError?
 }
 
+interface AbuseProtectionHook {
+    fun allow(clientId: String, route: String): BoundaryError?
+    fun observe(clientId: String, route: String, responseStatus: Int, rejectCode: String?)
+    fun stats(): AbuseProtectionStats
+}
+
+data class AbuseProtectionStats(
+    val mode: String,
+    val enabled: Boolean,
+    val warningOnly: Boolean,
+    val maxRejects: Int,
+    val windowSeconds: Long,
+    val blockSeconds: Long,
+    val trackedRejectCodes: Set<String>,
+    val trackedRoutes: Set<String>,
+    val routePolicyOverrides: Map<String, String>,
+    val trips: Long,
+    val blocks: Long,
+    val releases: Long,
+    val activeBlockedClients: Int
+)
+
 interface IdempotencyStore {
     fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult?
     fun save(clientId: String, route: String, idempotencyKey: String, result: IdempotencyResult, ttlClass: IdempotencyTtlClass)
@@ -82,6 +104,30 @@ class StaticTokenAuthHook(
 
 class AllowAllRateLimitHook : RateLimitHook {
     override fun allow(clientId: String, route: String): BoundaryError? = null
+}
+
+class AllowAllAbuseProtectionHook : AbuseProtectionHook {
+    override fun allow(clientId: String, route: String): BoundaryError? = null
+
+    override fun observe(clientId: String, route: String, responseStatus: Int, rejectCode: String?) {}
+
+    override fun stats(): AbuseProtectionStats {
+        return AbuseProtectionStats(
+            mode = "off",
+            enabled = false,
+            warningOnly = false,
+            maxRejects = 0,
+            windowSeconds = 0,
+            blockSeconds = 0,
+            trackedRejectCodes = emptySet(),
+            trackedRoutes = emptySet(),
+            routePolicyOverrides = emptyMap(),
+            trips = 0,
+            blocks = 0,
+            releases = 0,
+            activeBlockedClients = 0
+        )
+    }
 }
 
 class FixedWindowRateLimitHook(
@@ -237,6 +283,144 @@ class InMemoryRateLimitStore : RateLimitStore {
     }
 }
 
+data class RejectRatePolicy(
+    val maxRejects: Int,
+    val windowSeconds: Long,
+    val blockSeconds: Long
+)
+
+class RejectRateAbuseProtectionHook(
+    private val maxRejects: Int,
+    private val windowSeconds: Long,
+    private val blockSeconds: Long,
+    private val trackedRejectCodes: Set<String>,
+    private val trackedRoutes: Set<String>,
+    private val routePolicies: Map<String, RejectRatePolicy> = emptyMap(),
+    private val warningOnly: Boolean = false,
+    private val clock: () -> Instant = { Instant.now() }
+) : AbuseProtectionHook {
+    private data class RejectState(
+        val windowStartEpochSeconds: Long,
+        val rejectCount: Int,
+        val blockedUntilEpochSeconds: Long,
+        val warnedInWindow: Boolean
+    )
+
+    private val states = java.util.concurrent.ConcurrentHashMap<String, RejectState>()
+    private val tripCount = java.util.concurrent.atomic.AtomicLong(0)
+    private val blockedCount = java.util.concurrent.atomic.AtomicLong(0)
+    private val releaseCount = java.util.concurrent.atomic.AtomicLong(0)
+
+    override fun allow(clientId: String, route: String): BoundaryError? {
+        if (!isConfigured()) return null
+        if (!tracksRoute(route)) return null
+        val now = clock().epochSecond
+        val key = key(clientId, route)
+        val state = states.computeIfPresent(key) { _, current ->
+            if (current.blockedUntilEpochSeconds > 0 && now >= current.blockedUntilEpochSeconds) {
+                releaseCount.incrementAndGet()
+                current.copy(blockedUntilEpochSeconds = 0, warnedInWindow = false)
+            } else {
+                current
+            }
+        }
+        if (state != null && state.blockedUntilEpochSeconds > now) {
+            blockedCount.incrementAndGet()
+            val secondsRemaining = state.blockedUntilEpochSeconds - now
+            return BoundaryError(429, "ABUSE_BLOCKED", "client temporarily blocked for abusive traffic ($secondsRemaining seconds remaining)")
+        }
+        return null
+    }
+
+    override fun observe(clientId: String, route: String, responseStatus: Int, rejectCode: String?) {
+        if (!tracksRoute(route)) return
+        val policy = policyFor(route) ?: return
+        if (responseStatus < 200 || responseStatus >= 300) return
+        val normalizedCode = rejectCode?.uppercase()?.trim().orEmpty()
+        if (normalizedCode.isBlank() || !trackedRejectCodes.contains(normalizedCode)) return
+
+        val now = clock().epochSecond
+        val currentWindowStart = now / policy.windowSeconds * policy.windowSeconds
+        val key = key(clientId, route)
+        states.compute(key) { _, current ->
+            val base = when {
+                current == null -> RejectState(currentWindowStart, 0, 0, false)
+                current.windowStartEpochSeconds != currentWindowStart -> RejectState(currentWindowStart, 0, 0, false)
+                current.blockedUntilEpochSeconds > 0 && now >= current.blockedUntilEpochSeconds -> current.copy(blockedUntilEpochSeconds = 0, warnedInWindow = false)
+                else -> current
+            }
+            val updatedCount = base.rejectCount + 1
+            if (updatedCount <= policy.maxRejects) {
+                return@compute base.copy(rejectCount = updatedCount)
+            }
+
+            if (warningOnly) {
+                if (!base.warnedInWindow) {
+                    System.err.println(
+                        "abuse_breaker_warning mode=reject-rate clientId=$clientId route=$route rejectCode=$normalizedCode rejects=$updatedCount windowSeconds=${policy.windowSeconds}"
+                    )
+                }
+                return@compute base.copy(rejectCount = updatedCount, warnedInWindow = true)
+            }
+
+            if (base.blockedUntilEpochSeconds > now) {
+                return@compute base
+            }
+
+            val blockedUntil = now + policy.blockSeconds
+            val trips = tripCount.incrementAndGet()
+            System.err.println(
+                "abuse_breaker_trip mode=reject-rate clientId=$clientId route=$route rejectCode=$normalizedCode rejects=$updatedCount maxRejects=${policy.maxRejects} windowSeconds=${policy.windowSeconds} blockSeconds=${policy.blockSeconds} trips=$trips"
+            )
+            base.copy(rejectCount = updatedCount, blockedUntilEpochSeconds = blockedUntil, warnedInWindow = false)
+        }
+    }
+
+    override fun stats(): AbuseProtectionStats {
+        val now = clock().epochSecond
+        val activeBlockedClients = states.values.count { it.blockedUntilEpochSeconds > now }
+        return AbuseProtectionStats(
+            mode = "reject-rate",
+            enabled = isConfigured(),
+            warningOnly = warningOnly,
+            maxRejects = maxRejects,
+            windowSeconds = windowSeconds,
+            blockSeconds = blockSeconds,
+            trackedRejectCodes = trackedRejectCodes,
+            trackedRoutes = trackedRoutes,
+            routePolicyOverrides = routePolicies.mapValues { (_, policy) ->
+                "${policy.maxRejects}/${policy.windowSeconds}/${policy.blockSeconds}"
+            },
+            trips = tripCount.get(),
+            blocks = blockedCount.get(),
+            releases = releaseCount.get(),
+            activeBlockedClients = activeBlockedClients
+        )
+    }
+
+    private fun isConfigured(): Boolean {
+        return maxRejects > 0 && windowSeconds > 0 && blockSeconds > 0 && trackedRejectCodes.isNotEmpty()
+    }
+
+    private fun policyFor(route: String): RejectRatePolicy? {
+        val defaultPolicy = if (isConfigured()) {
+            RejectRatePolicy(maxRejects, windowSeconds, blockSeconds)
+        } else {
+            null
+        }
+        return routePolicies[route] ?: defaultPolicy
+    }
+
+    private fun tracksRoute(route: String): Boolean {
+        if (trackedRoutes.isEmpty()) return true
+        return trackedRoutes.contains(route)
+    }
+
+    private fun key(clientId: String, route: String): String {
+        return "$clientId|$route"
+    }
+}
+
 class ExternalApiBoundary(
     private val authHook: AuthHook = AllowAllAuthHook(),
     private val rateLimitHook: RateLimitHook = AllowAllRateLimitHook(),
@@ -276,6 +460,7 @@ private fun Headers.firstValue(name: String): String? {
 data class BoundaryHooks(
     val authHook: AuthHook,
     val rateLimitHook: RateLimitHook,
+    val abuseProtectionHook: AbuseProtectionHook,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore
@@ -298,6 +483,35 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllRateLimitHook()
     }
 
+    val abuseMode = (System.getenv("EXTERNAL_API_ABUSE_BREAKER_MODE") ?: "off").lowercase()
+    val abuseProtectionHook = when (abuseMode) {
+        "reject-rate" -> {
+            val enabled = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ENABLED"), true)
+            val rejectRateEnabled = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED"), true)
+            if (!enabled || !rejectRateEnabled) {
+                AllowAllAbuseProtectionHook()
+            } else {
+                val maxRejects = System.getenv("EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS")?.toIntOrNull() ?: 50
+                val windowSeconds = System.getenv("EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS")?.toLongOrNull() ?: 30L
+                val blockSeconds = System.getenv("EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS")?.toLongOrNull() ?: 60L
+                val warningOnly = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY"), false)
+                val codes = parseRejectCodes(System.getenv("EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES"))
+                val routes = parseTrackedRoutes(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ROUTES"))
+                val routePolicies = parseRoutePolicies(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES"))
+                RejectRateAbuseProtectionHook(
+                    maxRejects = maxRejects,
+                    windowSeconds = windowSeconds,
+                    blockSeconds = blockSeconds,
+                    trackedRejectCodes = codes,
+                    trackedRoutes = routes,
+                    routePolicies = routePolicies,
+                    warningOnly = warningOnly
+                )
+            }
+        }
+        else -> AllowAllAbuseProtectionHook()
+    }
+
     val idempotencyMode = (System.getenv("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
     val retentionPolicy = DefaultIdempotencyRetentionPolicy()
     val idempotencyStore = if (idempotencyMode == "postgres") {
@@ -312,6 +526,7 @@ fun defaultBoundaryHooks(): BoundaryHooks {
     return BoundaryHooks(
         authHook = authHook,
         rateLimitHook = rateLimitHook,
+        abuseProtectionHook = abuseProtectionHook,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
         commandCaptureStore = defaultCommandCaptureStore()
@@ -330,4 +545,57 @@ private fun parseStaticTokens(raw: String?): Map<String, String> {
             clientId to token
         }
         .toMap()
+}
+
+private fun parseRejectCodes(raw: String?): Set<String> {
+    val fallback = setOf("INVALID_STATE", "NOT_FOUND", "REFERENCE_DATA_ERROR", "VALIDATION_ERROR")
+    if (raw.isNullOrBlank()) return fallback
+    val values = raw.split(",")
+        .map { it.trim().uppercase() }
+        .filter { it.isNotBlank() }
+        .toSet()
+    return if (values.isEmpty()) fallback else values
+}
+
+private fun parseTrackedRoutes(raw: String?): Set<String> {
+    val fallback = setOf(
+        "/api/v1/orders/submit",
+        "/api/v1/orders/modify",
+        "/api/v1/orders/cancel"
+    )
+    if (raw.isNullOrBlank()) return fallback
+    val values = raw.split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toSet()
+    return if (values.isEmpty()) fallback else values
+}
+
+private fun parseRoutePolicies(raw: String?): Map<String, RejectRatePolicy> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    val parsed = mutableMapOf<String, RejectRatePolicy>()
+    for (entry in raw.split(",")) {
+        val item = entry.trim()
+        if (item.isBlank()) continue
+        val parts = item.split(":", limit = 2)
+        if (parts.size != 2) continue
+        val route = parts[0].trim()
+        val policyParts = parts[1].split("/", limit = 3)
+        if (route.isBlank() || policyParts.size != 3) continue
+        val maxRejects = policyParts[0].trim().toIntOrNull() ?: continue
+        val windowSeconds = policyParts[1].trim().toLongOrNull() ?: continue
+        val blockSeconds = policyParts[2].trim().toLongOrNull() ?: continue
+        if (maxRejects <= 0 || windowSeconds <= 0 || blockSeconds <= 0) continue
+        parsed[route] = RejectRatePolicy(maxRejects, windowSeconds, blockSeconds)
+    }
+    return parsed
+}
+
+private fun envBool(raw: String?, defaultValue: Boolean): Boolean {
+    if (raw.isNullOrBlank()) return defaultValue
+    return when (raw.trim().lowercase()) {
+        "1", "true", "yes", "on" -> true
+        "0", "false", "no", "off" -> false
+        else -> defaultValue
+    }
 }

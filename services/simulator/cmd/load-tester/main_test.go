@@ -119,6 +119,49 @@ func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
 	}
 }
 
+func TestFillResultParsesBoundaryErrorEnvelope(t *testing.T) {
+	result := requestResult{}
+	fillResult(
+		&result,
+		429,
+		[]byte(`{"code":"ABUSE_BLOCKED","message":"temporarily blocked","correlationId":"trace-1"}`),
+		nil,
+		time.Now(),
+	)
+	if result.ErrorText != "http_429:ABUSE_BLOCKED" {
+		t.Fatalf("unexpected error text: %s", result.ErrorText)
+	}
+	if result.RejectCode != "ABUSE_BLOCKED" {
+		t.Fatalf("expected reject code ABUSE_BLOCKED, got %s", result.RejectCode)
+	}
+	if result.RejectReason != "temporarily blocked" {
+		t.Fatalf("expected reject reason to be populated, got %s", result.RejectReason)
+	}
+}
+
+func TestFillResultParsesRuntimeRejectedEnvelope(t *testing.T) {
+	result := requestResult{}
+	fillResult(
+		&result,
+		200,
+		[]byte(`{"rejected":{"code":"INVALID_STATE","reason":"order already terminal"}}`),
+		nil,
+		time.Now(),
+	)
+	if result.Success {
+		t.Fatal("expected rejected response to remain unsuccessful")
+	}
+	if result.ErrorText != "rejected:INVALID_STATE" {
+		t.Fatalf("unexpected error text: %s", result.ErrorText)
+	}
+	if result.RejectCode != "INVALID_STATE" {
+		t.Fatalf("expected reject code INVALID_STATE, got %s", result.RejectCode)
+	}
+	if result.RejectReason != "order already terminal" {
+		t.Fatalf("expected reject reason from payload, got %s", result.RejectReason)
+	}
+}
+
 func approxEqual(a, b float64) bool {
 	return math.Abs(a-b) < 0.000001
 }

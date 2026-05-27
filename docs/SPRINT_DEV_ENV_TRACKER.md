@@ -14,7 +14,7 @@ Reference sprint doc:
 
 - [x] Add runtime DB initialization/migration path for local startup
 - [x] Add deterministic seed data path for required reference entities
-- [x] Add `make dev-reset` with volume reset + reseed
+- [x] Add `make dev-reset` with volume reset + rebuild + compose health wait
 - [x] Create one Postgres instance with domain schemas (`runtime`, `auth`, `admin`, `boundary`)
 - [x] Split migrations by domain folder with forward-only conventions
 - [x] Unify DB env var contract across runtime/admin/boundary persistence
@@ -52,6 +52,6 @@ Note:
 - [x] `make dev-smoke` passes on base stack
 - [x] `make dev-smoke` passes with optional redis profile enabled
 - [x] Optional observability profile validated and documented
-- [x] `make dev-reset` returns environment to deterministic clean state
+- [x] `make dev-reset` returns environment to deterministic clean state (smoke remains explicit or opt-in)
 - [x] `make dev-stress` produces repeatable baseline envelope metrics
 - [x] Postgres setup remains single-instance now but is config/migration-ready for future scoped-instance extraction

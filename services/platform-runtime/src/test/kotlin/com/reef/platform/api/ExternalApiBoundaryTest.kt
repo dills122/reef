@@ -99,4 +99,88 @@ class ExternalApiBoundaryTest {
         val limited = hook.allow("client-1", "/api/v1/orders/submit")
         assertEquals("RATE_LIMITED", limited?.code)
     }
+
+    @Test
+    fun rejectRateAbuseHookBlocksClientAfterTrackedRejectThreshold() {
+        var now = Instant.ofEpochSecond(120)
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 2,
+            windowSeconds = 60,
+            blockSeconds = 30,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
+            clock = { now }
+        )
+
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+
+        val blocked = hook.allow("client-1", "/api/v1/orders/submit")
+        assertEquals("ABUSE_BLOCKED", blocked?.code)
+
+        now = Instant.ofEpochSecond(151)
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+    }
+
+    @Test
+    fun rejectRateAbuseHookIgnoresNonTrackedRejectCodes() {
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 1,
+            windowSeconds = 60,
+            blockSeconds = 30,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
+            clock = { Instant.ofEpochSecond(200) }
+        )
+
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "NOT_FOUND")
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+    }
+
+    @Test
+    fun rejectRateAbuseHookScopesByTrackedRoutes() {
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 1,
+            windowSeconds = 60,
+            blockSeconds = 30,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
+            clock = { Instant.ofEpochSecond(240) }
+        )
+
+        hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
+        assertNull(hook.allow("client-1", "/api/v1/orders/modify"))
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        assertEquals("ABUSE_BLOCKED", hook.allow("client-1", "/api/v1/orders/submit")?.code)
+    }
+
+    @Test
+    fun rejectRateAbuseHookAppliesRoutePolicyOverrides() {
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 10,
+            windowSeconds = 60,
+            blockSeconds = 30,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit", "/api/v1/orders/modify"),
+            routePolicies = mapOf(
+                "/api/v1/orders/modify" to RejectRatePolicy(maxRejects = 1, windowSeconds = 30, blockSeconds = 45)
+            ),
+            clock = { Instant.ofEpochSecond(360) }
+        )
+
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+
+        hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
+        assertEquals("ABUSE_BLOCKED", hook.allow("client-1", "/api/v1/orders/modify")?.code)
+    }
 }

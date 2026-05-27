@@ -173,12 +173,10 @@ Indicators favoring stabilization/refactor mode:
 
 ## Recommended Sequence (Next)
 
-1. throughput campaign lanes (`quality` + `capacity`) and cap report publication
-2. lifecycle-valid traffic shaping improvements to push success rate toward `>=90%`
-3. circuit-breaker feature (`reject-rate` throttle/block) with simulator toggles
-4. runtime hot-path tuning based on lane-specific telemetry bottlenecks
-5. remaining runner/package refactors (`runtime`, `actor`, `transport`)
-6. realism nice-to-haves (regimes/liquidity/fault library expansion)
+1. circuit-breaker feature (`reject-rate` throttle/block) with simulator toggles
+2. runtime hot-path tuning based on lane-specific telemetry bottlenecks
+3. remaining runner/package refactors (`runtime`, `actor`, `transport`)
+4. realism nice-to-haves (regimes/liquidity/fault library expansion)
 
 ## Latest Locked Run (2026-05-27)
 
@@ -192,33 +190,45 @@ Indicators favoring stabilization/refactor mode:
 - post-fix quality note:
   - `REFERENCE_DATA_ERROR` rejects: `0` in the latest 5-minute run
 
-## Next Effort: Throughput and Capacity Campaign
+## Next Effort: Abuse-Control Circuit Breakers
 
-### Campaign Goals
+### Goals
 
-- success-rate floor: `>= 90%`
-- preferred success-rate: `>= 95%`
-- minimum throughput target: `1250-1500 rps`
-- preferred throughput target: `~2000 rps`
+- add configurable boundary guardrails for junk-traffic spikes without impacting normal simulator flows
+- support global enable/disable and per-breaker toggle behavior
+- preserve command capture integrity and throughput while blocking abusive client patterns
 
-### Feasibility Framing (Current Stack)
+### Initial Scope
 
-- `>=90%` success is realistic with current architecture when benchmark traffic is lifecycle-valid and strict-mode action quality is improved.
-- `>=95%` success is realistic for quality-lane runs that reduce invalid modify/cancel pressure and keep order-state decisions coherent.
-- `1250-1500 rps` is realistic in capacity-lane conditions on current local stack shape (submit-dominant and low invalid-state churn).
-- `~2000 rps` is plausible as a stretch target, but likely requires focused tuning and may require host/runtime/db configuration changes; treat as preferred, not guaranteed, without broader structural changes.
+1. breaker policy model:
+   - reject-rate window threshold
+   - block duration
+   - optional warning-only mode
+2. boundary enforcement path:
+   - identify client via `X-Client-Id`
+   - evaluate breaker state before command processing
+   - emit deterministic reject response + reason code when blocked
+3. simulator controls:
+   - enable/disable breaker globally
+   - per-run tuning knobs for threshold/window/block duration
+4. observability:
+   - breaker hit counters
+   - blocked client cardinality
+   - clear log signal for tuning and incident debugging
 
-### Execution Plan
+### Exit Criteria
 
-1. Define two benchmark lanes:
-   - `quality lane`: strict-lifecycle realism and success-rate target validation
-   - `capacity lane`: high-validity traffic to map infrastructure TPS ceiling
-2. Run worker/rate matrix and identify:
-   - quality cap (meets `>=90%` success-rate floor)
-   - stretch cap (`>=95%` success where possible)
-   - hard throughput cap (latency and acceptance knee)
-3. Produce a repeatable baseline artifact set:
-   - commands/config
-   - summary tables
-   - telemetry snapshots
-   - regression budgets for accepted TPS + latency + success-rate
+- breaker behavior is deterministic under replay
+- simulator can toggle breakers without code changes
+- no regression in baseline happy-path throughput profile
+
+### Progress Checkpoint (2026-05-27)
+
+- implemented reject-rate breaker with global/per-feature toggles and route scoping
+- exposed runtime breaker telemetry snapshot endpoint: `GET /internal/boundary/abuse/stats`
+- completed short non-tripping overhead A/B run:
+  - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./ABUSE_BREAKER_COMPARISON_2026-05-27.md)
+- completed intentional-trip campaign lane with breaker counters captured per lane artifact:
+  - reference: [`docs/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md`](./ABUSE_BREAKER_TRIP_LANE_2026-05-27.md)
+- completed long-soak intentional-trip validation with release-cycle evidence (`releases > 0`):
+  - reference: [`docs/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md`](./ABUSE_BREAKER_LONG_SOAK_2026-05-27.md)

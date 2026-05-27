@@ -153,6 +153,22 @@ Run the throughput campaign (quality + capacity lanes with cap summary):
 make dev-throughput-campaign
 ```
 
+Run campaign with optional intentional-trip abuse lane:
+
+```bash
+DEV_CAMPAIGN_INCLUDE_ABUSE_TRIP=1 \
+DEV_CAMPAIGN_ABUSE_TRIP_RATES=1200 \
+DEV_CAMPAIGN_ABUSE_TRIP_WORKERS=128 \
+make dev-throughput-campaign
+```
+
+Optional guardrails for intentional-trip lane (enabled by default):
+
+- `DEV_CAMPAIGN_ENFORCE_ABUSE_TRIP_GUARDRAIL=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT=1`
+
 Run campaign with an automatic clean reset first (recommended for fair high-rate comparisons):
 
 ```bash
@@ -176,6 +192,32 @@ make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode strict-lifecycle
 Simulator mutating traffic uses `/api/v1` routes by default (idempotency + client headers enabled):
 - `--use-api-v1=true` (default)
 - `--client-id-prefix=sim-client` (default)
+
+Optional abuse-breaker guardrail for `/api/v1` writes:
+- `EXTERNAL_API_ABUSE_BREAKER_MODE=off|reject-rate` (default `off`)
+- `EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS` (default `50`)
+- `EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS` (default `30`)
+- `EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS` (default `60`)
+- `EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES` (default `INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR`)
+- `EXTERNAL_API_ABUSE_BREAKER_ROUTES` (default `/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel`)
+- `EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES` (optional `route:maxRejects/windowSeconds/blockSeconds` list)
+- `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
+
+Example enablement:
+
+```bash
+EXTERNAL_API_ABUSE_BREAKER_MODE=reject-rate \
+EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS=25 \
+EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS=30 \
+EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS=90 \
+make dev-up
+```
+
+Breaker telemetry snapshot:
+
+```bash
+curl -s http://127.0.0.1:8080/internal/boundary/abuse/stats
+```
 
 Disable boundary route usage only for legacy comparison/debug:
 
