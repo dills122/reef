@@ -14,7 +14,7 @@ func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
 		return ActionSubmit
 	}
 	if cfg.Mode == "capacity-baseline" {
-		return weightedAction(rng, 88, 8)
+		return weightedAction(rng, 94, 4)
 	}
 	n := rng.Intn(100)
 	if n < cfg.SubmitPct {
@@ -34,7 +34,7 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 		return chooseAction(rng, cfg, hasOrders)
 	}
 	if cfg.Mode == "capacity-baseline" {
-		return weightedAction(rng, 88, 8)
+		return weightedAction(rng, 94, 4)
 	}
 	switch profile {
 	case profileMarketMaker:
@@ -76,7 +76,7 @@ func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
 		return ""
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
-		start := recentOrderWindowStart(len(orders), 8)
+		start := recentOrderWindowStart(len(orders), lifecycleOrderWindow(mode))
 		return orders[start+rng.Intn(len(orders)-start)]
 	}
 	return orders[rng.Intn(len(orders))]
@@ -87,10 +87,17 @@ func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
 		return 0
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
-		start := recentOrderWindowStart(len(orders), 8)
+		start := recentOrderWindowStart(len(orders), lifecycleOrderWindow(mode))
 		return start + rng.Intn(len(orders)-start)
 	}
 	return rng.Intn(len(orders))
+}
+
+func lifecycleOrderWindow(mode string) int {
+	if mode == "capacity-baseline" {
+		return 4
+	}
+	return 8
 }
 
 func recentOrderWindowStart(total, window int) int {
@@ -111,18 +118,29 @@ func hasActionableOrders(cfg Config, state workerState) bool {
 }
 
 func shouldAllowLifecycleAction(rng *rand.Rand, cfg Config, state workerState) bool {
-	if cfg.Mode != "strict-lifecycle" {
+	if !isLifecycleManagedMode(cfg.Mode) {
 		return true
 	}
 	if len(state.orders) < cfg.StrictMinLiveOrders {
 		return false
 	}
 	allowPct := 40
-	if len(state.orders) >= cfg.StrictMinLiveOrders*3 {
+	if cfg.Mode == "capacity-baseline" {
+		allowPct = 18
+		if len(state.orders) >= cfg.StrictMinLiveOrders*3 {
+			allowPct = 30
+		} else if len(state.orders) >= cfg.StrictMinLiveOrders*2 {
+			allowPct = 24
+		}
+	} else if len(state.orders) >= cfg.StrictMinLiveOrders*3 {
 		allowPct = 55
 	}
 	if state.rejectStreak > 0 {
-		allowPct -= 20
+		if cfg.Mode == "capacity-baseline" {
+			allowPct -= 10
+		} else {
+			allowPct -= 20
+		}
 	}
 	if allowPct < 5 {
 		allowPct = 5
@@ -131,21 +149,28 @@ func shouldAllowLifecycleAction(rng *rand.Rand, cfg Config, state workerState) b
 }
 
 func updateRecoveryState(state *workerState, cfg Config) {
-	if cfg.Mode != "strict-lifecycle" {
+	if !isLifecycleManagedMode(cfg.Mode) {
 		return
 	}
 	state.rejectStreak++
 	if state.rejectStreak >= 3 {
-		state.submitOnlyTicks = 20
+		if cfg.Mode == "capacity-baseline" {
+			state.submitOnlyTicks = 36
+		} else {
+			state.submitOnlyTicks = 20
+		}
 		state.rejectStreak = 0
 	}
 }
 
 func compactTrackedOrders(orders []string, cfg Config) []string {
-	if cfg.Mode != "strict-lifecycle" {
+	if !isLifecycleManagedMode(cfg.Mode) {
 		return orders
 	}
 	maxTracked := maxInt(cfg.StrictMinLiveOrders*2, 32)
+	if cfg.Mode == "capacity-baseline" {
+		maxTracked = maxInt(cfg.StrictMinLiveOrders*2, 16)
+	}
 	if len(orders) <= maxTracked {
 		return orders
 	}

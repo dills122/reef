@@ -278,13 +278,13 @@ func TestUpdateRecoveryState(t *testing.T) {
 	}
 	state = workerState{rejectStreak: 2}
 	updateRecoveryState(&state, Config{Mode: "capacity-baseline"})
-	if state.submitOnlyTicks != 0 || state.rejectStreak != 2 {
-		t.Fatalf("expected no recovery mutation outside strict-lifecycle, got %+v", state)
+	if state.submitOnlyTicks != 36 || state.rejectStreak != 0 {
+		t.Fatalf("expected stronger capacity-baseline recovery window, got %+v", state)
 	}
 	state = workerState{rejectStreak: 2}
 	updateRecoveryState(&state, Config{Mode: "chaos"})
 	if state.submitOnlyTicks != 0 || state.rejectStreak != 2 {
-		t.Fatalf("expected no recovery mutation outside strict-lifecycle, got %+v", state)
+		t.Fatalf("expected no recovery mutation outside lifecycle-managed modes, got %+v", state)
 	}
 }
 
@@ -312,8 +312,23 @@ func TestCompactTrackedOrders(t *testing.T) {
 		t.Fatalf("unexpected compacted order slice: first=%s last=%s", compacted[0], compacted[len(compacted)-1])
 	}
 	compactedCapacity := compactTrackedOrders(orders, Config{Mode: "capacity-baseline", StrictMinLiveOrders: 4})
-	if len(compactedCapacity) != len(orders) {
-		t.Fatalf("expected capacity mode to skip compaction, got %d", len(compactedCapacity))
+	if len(compactedCapacity) != 16 {
+		t.Fatalf("expected capacity mode compaction length 16, got %d", len(compactedCapacity))
+	}
+	if compactedCapacity[0] != "o-24" || compactedCapacity[len(compactedCapacity)-1] != "o-39" {
+		t.Fatalf("unexpected capacity compacted order slice: first=%s last=%s", compactedCapacity[0], compactedCapacity[len(compactedCapacity)-1])
+	}
+}
+
+func TestLifecycleOrderWindowByMode(t *testing.T) {
+	if got := lifecycleOrderWindow("capacity-baseline"); got != 4 {
+		t.Fatalf("expected capacity-baseline window=4, got %d", got)
+	}
+	if got := lifecycleOrderWindow("strict-lifecycle"); got != 8 {
+		t.Fatalf("expected strict-lifecycle window=8, got %d", got)
+	}
+	if got := lifecycleOrderWindow("chaos"); got != 8 {
+		t.Fatalf("expected default window=8, got %d", got)
 	}
 }
 

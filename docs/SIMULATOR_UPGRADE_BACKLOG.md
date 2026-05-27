@@ -180,6 +180,20 @@ Indicators favoring stabilization/refactor mode:
 5. remaining runner/package refactors (`runtime`, `actor`, `transport`)
 6. realism nice-to-haves (regimes/liquidity/fault library expansion)
 
+## Latest Locked Run (2026-05-27)
+
+- reference doc: [`docs/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md`](./THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md)
+- scenario: `capacity-baseline`, `5m`, `rate=5000`, `workers=512`, clean reset before run
+- post-tuning result:
+  - throughput: `2478.04 rps`
+  - accepted throughput: `2439.98 rps`
+  - success rate: `98.46%`
+  - trace checks: `50/50` pass
+- delta versus pre-tuning baseline:
+  - throughput: `+386.15 rps`
+  - success rate: `+8.36 pts`
+  - failures: `-50,786`
+
 ## Next Effort: Throughput and Capacity Campaign
 
 ### Campaign Goals
