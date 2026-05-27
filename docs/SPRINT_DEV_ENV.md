@@ -40,7 +40,7 @@ Out of scope:
 
 By end of sprint, Reef should have:
 - one-command local startup and shutdown
-- deterministic reset/reseed path
+- deterministic reset path with optional inline smoke verification
 - optional Redis and observability profiles that are test-verified
 - smoke coverage for core API flow under Docker
 - repeatable stress-test profile and baseline performance report under Docker
@@ -70,7 +70,7 @@ ensure repeatable local state setup.
 Tasks:
 1. Add DB initialization/migration scripts for required runtime tables.
 2. Add seed scripts for required reference data.
-3. Add `dev-reset` path (down + volume cleanup + reseed).
+3. Add `dev-reset` path (down + volume cleanup + rebuild + compose health wait).
 4. Create domain schemas (`runtime`, `auth`, `admin`, `boundary`) in one Postgres instance.
 5. Organize migrations by domain (separate folders, forward-only).
 6. Define canonical DB env var contract and map all runtime/admin/boundary persistence to it.

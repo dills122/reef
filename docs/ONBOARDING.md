@@ -66,6 +66,17 @@ make dev-reset
 make test
 ```
 
+Reset + verify flow (recommended):
+
+```bash
+make dev-reset
+make dev-smoke
+```
+
+Note:
+- `dev-reset` now performs clean rebuild + compose health wait.
+- inline smoke during reset is opt-in: `DEV_RESET_RUN_SMOKE=1 make dev-reset`.
+
 Load baseline:
 
 ```bash
