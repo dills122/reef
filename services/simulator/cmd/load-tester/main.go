@@ -242,7 +242,7 @@ func main() {
 		profile := profileForWorker(workerID, cfg.Workers, cfg)
 		go func(id int, workerProfile string) {
 			defer wg.Done()
-			runWorker(ctx, client, cfg, id, workerProfile, &counter, rateCh, results, &traceSeen)
+			runWorker(ctx, client, cfg, sessionID, id, workerProfile, &counter, rateCh, results, &traceSeen)
 		}(workerID, profile)
 	}
 
@@ -580,6 +580,7 @@ func runWorker(
 	ctx context.Context,
 	client *http.Client,
 	cfg Config,
+	sessionID string,
 	workerID int,
 	profile string,
 	counter *int64,
@@ -619,8 +620,8 @@ func runWorker(
 			action = ActionSubmit
 		}
 		reqID := atomic.AddInt64(counter, 1)
-		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
-		commandID := fmt.Sprintf("cmd-%d-%d", workerID, reqID)
+		traceID := fmt.Sprintf("%s-trace-%d-%d", sessionID, workerID, reqID)
+		commandID := fmt.Sprintf("%s-cmd-%d-%d", sessionID, workerID, reqID)
 		start := time.Now()
 		actorID := fmt.Sprintf("bot-%d", workerID)
 		actorType := effectiveProfile
@@ -644,7 +645,7 @@ func runWorker(
 		}
 		switch action {
 		case ActionSubmit:
-			orderID := fmt.Sprintf("ord-%d-%d", workerID, reqID)
+			orderID := fmt.Sprintf("%s-ord-%d-%d", sessionID, workerID, reqID)
 			result.OrderID = orderID
 			instrumentID := cfg.InstrumentID
 			instrument := chooseInstrumentForActor(rng, cfg, actor)
