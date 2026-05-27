@@ -184,6 +184,28 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION runtime_validate_reference_data(
+                      p_instrument_id TEXT,
+                      p_participant_id TEXT,
+                      p_account_id TEXT
+                    )
+                    RETURNS TABLE(
+                      instrument_exists BOOLEAN,
+                      participant_exists BOOLEAN,
+                      account_exists BOOLEAN
+                    )
+                    LANGUAGE SQL
+                    STABLE
+                    AS $$
+                      SELECT
+                        EXISTS(SELECT 1 FROM reference_instruments WHERE instrument_id = p_instrument_id),
+                        EXISTS(SELECT 1 FROM reference_participants WHERE participant_id = p_participant_id),
+                        EXISTS(SELECT 1 FROM reference_accounts WHERE account_id = p_account_id)
+                    $$;
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -359,6 +381,29 @@ class PostgresRuntimePersistence(
     override fun hasParticipant(participantId: String): Boolean = exists("reference_participants", "participant_id", participantId)
 
     override fun hasAccount(accountId: String): Boolean = exists("reference_accounts", "account_id", accountId)
+
+    override fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT instrument_exists, participant_exists, account_exists
+                FROM runtime_validate_reference_data(?, ?, ?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, instrumentId)
+                ps.setString(2, participantId)
+                ps.setString(3, accountId)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return ReferenceDataValidation(
+                        instrumentExists = rs.getBoolean("instrument_exists"),
+                        participantExists = rs.getBoolean("participant_exists"),
+                        accountExists = rs.getBoolean("account_exists")
+                    )
+                }
+            }
+        }
+    }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
         connection().use { conn ->

@@ -11,6 +11,12 @@ import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 
+data class ReferenceDataValidation(
+    val instrumentExists: Boolean,
+    val participantExists: Boolean,
+    val accountExists: Boolean
+)
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -27,6 +33,13 @@ interface RuntimePersistence {
     fun hasInstrument(instrumentId: String): Boolean
     fun hasParticipant(participantId: String): Boolean
     fun hasAccount(accountId: String): Boolean
+    fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation {
+        return ReferenceDataValidation(
+            instrumentExists = hasInstrument(instrumentId),
+            participantExists = hasParticipant(participantId),
+            accountExists = hasAccount(accountId)
+        )
+    }
     fun saveAcceptedOrder(order: PersistedOrder)
     fun saveExecutions(executions: List<ExecutionCreated>)
     fun saveTrades(trades: List<TradeCreated>)

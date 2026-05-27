@@ -276,7 +276,12 @@ class OrderApplicationService(
 
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt
-        if (!runtimePersistence.hasInstrument(command.instrumentId)) {
+        val validation = runtimePersistence.validateReferenceData(
+            instrumentId = command.instrumentId,
+            participantId = command.participantId,
+            accountId = command.accountId
+        )
+        if (!validation.instrumentExists) {
             return SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-reject-missing-instrument-ref-${command.orderId}",
@@ -288,7 +293,7 @@ class OrderApplicationService(
             )
         }
 
-        if (!runtimePersistence.hasParticipant(command.participantId)) {
+        if (!validation.participantExists) {
             return SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-reject-missing-participant-ref-${command.orderId}",
@@ -300,7 +305,7 @@ class OrderApplicationService(
             )
         }
 
-        if (!runtimePersistence.hasAccount(command.accountId)) {
+        if (!validation.accountExists) {
             return SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-reject-missing-account-ref-${command.orderId}",
