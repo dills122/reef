@@ -2,6 +2,20 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: reef-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_wal_size=${REEF_PG_MAX_WAL_SIZE:-16GB}"
+      - "-c"
+      - "min_wal_size=${REEF_PG_MIN_WAL_SIZE:-4GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_PG_LOG_CHECKPOINTS:-on}"
     environment:
       POSTGRES_DB: reef
       POSTGRES_USER: reef

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
@@ -20,13 +20,21 @@ const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
 const sweepWorkers = parseCsvInts(env("DEV_STRESS_SWEEP_WORKERS", ""));
 const rates = parseCsvInts(env("DEV_STRESS_RATES", "100,200,300,400"));
 const artifactDir = env("DEV_STRESS_ARTIFACT_DIR", "/tmp");
+const captureDbDiagnostics = env("DEV_STRESS_CAPTURE_DB_DIAGNOSTICS", "0") === "1";
+const dbDiagnosticsService = env("DEV_STRESS_DB_SERVICE", "postgres");
+const dbDiagnosticsUser = env("DEV_STRESS_DB_USER", "reef");
+const dbDiagnosticsName = env("DEV_STRESS_DB_NAME", "reef");
+const dbDiagnosticsSchema = env("DEV_STRESS_DB_SCHEMA", "runtime");
+const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 
 const baseOut = out.replace(/\.json$/, "");
+const reportBaseName = basename(baseOut);
 mkdirSync(artifactDir, { recursive: true });
-const telemetryOut = join(artifactDir, `${baseOut.split("/").pop()}-telemetry.ndjson`);
-const recommendationOut = join(artifactDir, `${baseOut.split("/").pop()}-recommendation.json`);
-const kpiOutJson = join(artifactDir, `${baseOut.split("/").pop()}-kpi.json`);
-const kpiOutMd = join(artifactDir, `${baseOut.split("/").pop()}-kpi.md`);
+const telemetryOut = join(artifactDir, `${reportBaseName}-telemetry.ndjson`);
+const recommendationOut = join(artifactDir, `${reportBaseName}-recommendation.json`);
+const kpiOutJson = join(artifactDir, `${reportBaseName}-kpi.json`);
+const kpiOutMd = join(artifactDir, `${reportBaseName}-kpi.md`);
+const diagnosticsDir = join(artifactDir, `${reportBaseName}-diagnostics`);
 const actionMix = resolveActionMix(profile);
 const invalidIntentCodes = env(
   "DEV_STRESS_INVALID_INTENT_CODES",
@@ -44,6 +52,17 @@ const telemetry = startTelemetryCapture({
   runtimeUrl,
   engineUrl,
 });
+if (captureDbDiagnostics) {
+  resetDir(diagnosticsDir);
+  await captureDbDiagnosticsSnapshot({
+    diagnosticsDir,
+    stage: "pre",
+    service: dbDiagnosticsService,
+    dbUser: dbDiagnosticsUser,
+    dbName: dbDiagnosticsName,
+    schema: dbDiagnosticsSchema,
+  });
+}
 try {
   for (const rate of rates) {
     if (sweepWorkers.length > 0) {
@@ -74,6 +93,21 @@ try {
   }
 } finally {
   await telemetry.stop();
+  if (captureDbDiagnostics) {
+    await captureDbDiagnosticsSnapshot({
+      diagnosticsDir,
+      stage: "post",
+      service: dbDiagnosticsService,
+      dbUser: dbDiagnosticsUser,
+      dbName: dbDiagnosticsName,
+      schema: dbDiagnosticsSchema,
+    });
+    await captureDbDiagnosticsLogs({
+      diagnosticsDir,
+      service: dbDiagnosticsService,
+      since: dbDiagnosticsLogSince,
+    });
+  }
 }
 
 console.log("stress run complete. reports:");
@@ -92,6 +126,9 @@ for (const rate of rates) {
   }
 }
 console.log(`  ${telemetryOut}`);
+if (captureDbDiagnostics) {
+  console.log(`  ${diagnosticsDir}`);
+}
 
 const recommendation = buildRecommendation(reportFiles);
 if (recommendation) {
@@ -131,6 +168,122 @@ function parseCsvInts(raw) {
     .filter(Boolean)
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+function resetDir(path) {
+  rmSync(path, { recursive: true, force: true });
+  mkdirSync(path, { recursive: true });
+}
+
+async function captureDbDiagnosticsSnapshot({ diagnosticsDir, stage, service, dbUser, dbName, schema }) {
+  mkdirSync(diagnosticsDir, { recursive: true });
+  const info = { capturedAt: new Date().toISOString(), stage, service, dbUser, dbName, schema };
+  try {
+    const safeSchema = normalizeSchemaName(schema);
+    const serverVersion = await queryDbCsv({
+      service,
+      dbUser,
+      dbName,
+      sql: "show server_version_num;",
+    });
+    const bgwriterRows = await queryDbCsv({
+      service,
+      dbUser,
+      dbName,
+      sql: "select * from pg_stat_bgwriter;",
+    });
+    const checkpointerRows = await queryDbCsv({
+      service,
+      dbUser,
+      dbName,
+      sql:
+        "select coalesce((select count(1) from pg_catalog.pg_views where schemaname='pg_catalog' and viewname='pg_stat_checkpointer'),0);",
+    });
+    const hasCheckpointer = Number(checkpointerRows[0] ?? 0) > 0;
+    const checkpointerData = hasCheckpointer
+      ? await queryDbCsv({
+          service,
+          dbUser,
+          dbName,
+          sql: "select * from pg_stat_checkpointer;",
+        })
+      : [];
+    const tableSizes = await queryDbCsv({
+      service,
+      dbUser,
+      dbName,
+      sql: `
+select c.relname, pg_total_relation_size(c.oid) as bytes
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname='${safeSchema}' and c.relkind='r'
+order by pg_total_relation_size(c.oid) desc
+limit 20;`,
+    });
+    const tableCounts = await queryDbCsv({
+      service,
+      dbUser,
+      dbName,
+      sql: `
+select relname, n_live_tup
+from pg_stat_user_tables
+where schemaname='${safeSchema}'
+order by n_live_tup desc
+limit 20;`,
+    });
+
+    writeFileSync(join(diagnosticsDir, `${stage}-meta.json`), JSON.stringify({ ...info, serverVersion }, null, 2));
+    writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_bgwriter.csv`), bgwriterRows.join("\n") + "\n");
+    if (hasCheckpointer) {
+      writeFileSync(
+        join(diagnosticsDir, `${stage}-pg_stat_checkpointer.csv`),
+        checkpointerData.join("\n") + "\n",
+      );
+    }
+    writeFileSync(join(diagnosticsDir, `${stage}-table-sizes.csv`), tableSizes.join("\n") + "\n");
+    writeFileSync(join(diagnosticsDir, `${stage}-table-count-estimates.csv`), tableCounts.join("\n") + "\n");
+  } catch (error) {
+    writeFileSync(
+      join(diagnosticsDir, `${stage}-capture-error.txt`),
+      `${new Date().toISOString()} ${String(error?.message || error)}\n`,
+    );
+  }
+}
+
+function normalizeSchemaName(raw) {
+  const value = String(raw ?? "").trim();
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+    throw new Error(`invalid schema identifier: ${value}`);
+  }
+  return value;
+}
+
+async function captureDbDiagnosticsLogs({ diagnosticsDir, service, since }) {
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      "docker",
+      ["compose", "-f", "docker-compose.yml", "logs", "--since", since, service],
+      { cwd: process.cwd() },
+    );
+    writeFileSync(join(diagnosticsDir, "postgres-logs.txt"), `${stdout}${stderr}`);
+  } catch (error) {
+    writeFileSync(
+      join(diagnosticsDir, "postgres-logs-error.txt"),
+      `${new Date().toISOString()} ${String(error?.message || error)}\n`,
+    );
+  }
+}
+
+async function queryDbCsv({ service, dbUser, dbName, sql }) {
+  const { stdout } = await execFileAsync(
+    "docker",
+    ["compose", "-f", "docker-compose.yml", "exec", "-T", service, "psql", "-U", dbUser, "-d", dbName, "-At", "-F", ",", "-c", sql],
+    { cwd: process.cwd() },
+  );
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function resolveActionMix(profileName) {

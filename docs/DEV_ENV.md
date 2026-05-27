@@ -52,6 +52,25 @@ Deterministic reset (down + volume wipe + rebuild + smoke):
 make dev-reset
 ```
 
+## Postgres tuning knobs
+
+Compose applies WAL/checkpoint defaults optimized for local soak runs:
+
+- `REEF_PG_MAX_WAL_SIZE=16GB`
+- `REEF_PG_MIN_WAL_SIZE=4GB`
+- `REEF_PG_CHECKPOINT_TIMEOUT=15min`
+- `REEF_PG_CHECKPOINT_COMPLETION_TARGET=0.9`
+- `REEF_PG_WAL_COMPRESSION=on`
+- `REEF_PG_LOG_CHECKPOINTS=on`
+
+Override per run:
+
+```bash
+REEF_PG_MAX_WAL_SIZE=24GB \
+REEF_PG_CHECKPOINT_TIMEOUT=20min \
+make dev-reset
+```
+
 ## Optional profiles
 
 Enable optional services using `DEV_COMPOSE_PROFILES`.
@@ -81,6 +100,28 @@ Run stepped load profile (100 -> 200 -> 300 -> 400 rps):
 ```bash
 make dev-stress
 ```
+
+Run stress with automatic pre/post DB diagnostics capture:
+
+```bash
+make dev-stress-diagnostics
+```
+
+Diagnostic artifacts are written under the stress artifact root with suffix `-diagnostics`:
+- `pre-meta.json`, `post-meta.json`
+- `pre-pg_stat_bgwriter.csv`, `post-pg_stat_bgwriter.csv`
+- `pre-pg_stat_checkpointer.csv`, `post-pg_stat_checkpointer.csv` (Postgres 17+ when available)
+- `pre-table-sizes.csv`, `post-table-sizes.csv`
+- `pre-table-count-estimates.csv`, `post-table-count-estimates.csv`
+- `postgres-logs.txt`
+
+Tune diagnostics capture knobs (optional):
+- `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
+- `DEV_STRESS_DB_SERVICE=postgres`
+- `DEV_STRESS_DB_USER=reef`
+- `DEV_STRESS_DB_NAME=reef`
+- `DEV_STRESS_DB_SCHEMA=runtime`
+- `DEV_STRESS_DB_LOG_SINCE=30m`
 
 Run replay-pack drift validation against baseline scenario:
 
@@ -124,6 +165,38 @@ Run ad hoc simulator load against active dev env:
 
 ```bash
 make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode strict-lifecycle --pretty-summary"
+```
+
+30-minute fixed-load soak (clean reset recommended first):
+
+```bash
+DEV_STRESS_DURATION=30m \
+DEV_STRESS_MODE=capacity-baseline \
+DEV_STRESS_PROFILE=capacity-heavy \
+DEV_STRESS_RATES=2500 \
+DEV_STRESS_SWEEP_WORKERS=128 \
+DEV_STRESS_TRACE_CHECK_LIMIT=500 \
+DEV_STRESS_TELEMETRY_INTERVAL_MS=1000 \
+DEV_STRESS_MIN_SUCCESS_RATE_PCT=0 \
+DEV_STRESS_ARTIFACT_DIR=/tmp/reef-soak-30m-$(date +%Y%m%d-%H%M%S) \
+DEV_STRESS_REPORT_OUT=/tmp/reef-soak-30m.json \
+make dev-stress JS_RUNTIME=node
+```
+
+10-minute investigative soak with DB diagnostics (fast root-cause pass before long soak):
+
+```bash
+DEV_STRESS_DURATION=10m \
+DEV_STRESS_MODE=capacity-baseline \
+DEV_STRESS_PROFILE=capacity-heavy \
+DEV_STRESS_RATES=2500 \
+DEV_STRESS_SWEEP_WORKERS=128 \
+DEV_STRESS_TRACE_CHECK_LIMIT=500 \
+DEV_STRESS_TELEMETRY_INTERVAL_MS=1000 \
+DEV_STRESS_MIN_SUCCESS_RATE_PCT=0 \
+DEV_STRESS_ARTIFACT_DIR=/tmp/reef-soak-diagnostics-$(date +%Y%m%d-%H%M%S) \
+DEV_STRESS_REPORT_OUT=/tmp/reef-soak-diagnostics.json \
+make dev-stress-diagnostics JS_RUNTIME=node
 ```
 
 ## Admin CLI To Dev Env
