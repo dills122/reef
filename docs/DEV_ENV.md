@@ -162,6 +162,13 @@ DEV_CAMPAIGN_ABUSE_TRIP_WORKERS=128 \
 make dev-throughput-campaign
 ```
 
+Optional guardrails for intentional-trip lane (enabled by default):
+
+- `DEV_CAMPAIGN_ENFORCE_ABUSE_TRIP_GUARDRAIL=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT=20`
+
 Run campaign with an automatic clean reset first (recommended for fair high-rate comparisons):
 
 ```bash

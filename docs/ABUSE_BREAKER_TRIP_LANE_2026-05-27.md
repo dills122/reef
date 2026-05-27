@@ -68,6 +68,14 @@ Breaker counters captured in lane artifact (`abuseStats`):
 ## Follow-up
 
 1. Add a longer intentional-trip lane (5-10m) to validate block-release cycles (`releases > 0`).
-2. Add pass/fail assertions for expected minimum `trips` and `ABUSE_BLOCKED` presence in trip lanes.
-3. Keep non-tripping overhead lane as separate baseline reference:
+2. Keep non-tripping overhead lane as separate baseline reference:
    - [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./ABUSE_BREAKER_COMPARISON_2026-05-27.md)
+
+## Update (2026-05-27)
+
+Campaign script now enforces optional trip-lane assertions (default enabled when trip lane is included):
+
+- `DEV_CAMPAIGN_ENFORCE_ABUSE_TRIP_GUARDRAIL=1`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT`
