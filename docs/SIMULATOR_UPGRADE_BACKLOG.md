@@ -228,3 +228,5 @@ Indicators favoring stabilization/refactor mode:
 - exposed runtime breaker telemetry snapshot endpoint: `GET /internal/boundary/abuse/stats`
 - completed short non-tripping overhead A/B run:
   - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./ABUSE_BREAKER_COMPARISON_2026-05-27.md)
+- completed intentional-trip campaign lane with breaker counters captured per lane artifact:
+  - reference: [`docs/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md`](./ABUSE_BREAKER_TRIP_LANE_2026-05-27.md)

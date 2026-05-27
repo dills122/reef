@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import http from "node:http";
+import { env, loadDotEnv, run, waitForHttp } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 
@@ -11,6 +12,9 @@ const workers = env("DEV_CAMPAIGN_WORKERS", "32,64");
 const traceLimit = env("DEV_CAMPAIGN_TRACE_CHECK_LIMIT", "100");
 const jsRuntime = env("DEV_CAMPAIGN_JS_RUNTIME", process.execPath);
 const resetStack = envFlag("DEV_CAMPAIGN_RESET_STACK", false);
+const includeAbuseTripLane = envFlag("DEV_CAMPAIGN_INCLUDE_ABUSE_TRIP", false);
+const abuseTripRates = env("DEV_CAMPAIGN_ABUSE_TRIP_RATES", "1200");
+const abuseTripWorkers = env("DEV_CAMPAIGN_ABUSE_TRIP_WORKERS", "128");
 
 mkdirSync(artifactDir, { recursive: true });
 
@@ -24,18 +28,48 @@ const lanes = [
     id: "quality",
     mode: "strict-lifecycle",
     profile: "strict-clean",
+    boundaryEnv: {
+      EXTERNAL_API_ABUSE_BREAKER_MODE: "off",
+    },
   },
   {
     id: "capacity",
     mode: "capacity-baseline",
     profile: "capacity-heavy",
+    boundaryEnv: {
+      EXTERNAL_API_ABUSE_BREAKER_MODE: "off",
+    },
   },
 ];
+
+if (includeAbuseTripLane) {
+  lanes.push({
+    id: "abuse-trip",
+    mode: "chaos",
+    profile: "abuse-trip",
+    rates: abuseTripRates,
+    workers: abuseTripWorkers,
+    boundaryEnv: {
+      EXTERNAL_API_ABUSE_BREAKER_MODE: "reject-rate",
+      EXTERNAL_API_ABUSE_BREAKER_ENABLED: "true",
+      EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED: "true",
+      EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS: "20",
+      EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS: "30",
+      EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS: "60",
+      EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES: "INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR",
+      EXTERNAL_API_ABUSE_BREAKER_ROUTES: "/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel",
+      EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY: "false",
+    },
+  });
+}
 
 const laneResults = [];
 for (const lane of lanes) {
   laneResults.push(await runLane(lane));
 }
+
+// Return runtime config to default for local follow-up commands.
+await configureRuntimeBoundary({ EXTERNAL_API_ABUSE_BREAKER_MODE: "off" });
 
 const campaign = summarizeCampaign(laneResults);
 const summaryJson = join(artifactDir, "throughput-campaign-summary.json");
@@ -53,11 +87,16 @@ for (const lane of campaign.lanes) {
 }
 
 async function runLane(lane) {
+  if (lane.boundaryEnv) {
+    await configureRuntimeBoundary(lane.boundaryEnv);
+  }
   const baseReport = join(artifactDir, `reef-${lane.id}.json`);
+  const laneRates = lane.rates ?? rates;
+  const laneWorkers = lane.workers ?? workers;
   const laneEnv = {
     DEV_STRESS_DURATION: duration,
-    DEV_STRESS_RATES: rates,
-    DEV_STRESS_SWEEP_WORKERS: workers,
+    DEV_STRESS_RATES: laneRates,
+    DEV_STRESS_SWEEP_WORKERS: laneWorkers,
     DEV_STRESS_TRACE_CHECK_LIMIT: traceLimit,
     DEV_STRESS_MODE: lane.mode,
     DEV_STRESS_PROFILE: lane.profile,
@@ -85,8 +124,8 @@ async function runLane(lane) {
   }
 
   const samples = [];
-  for (const rate of parseCsvInts(rates)) {
-    for (const worker of parseCsvInts(workers)) {
+  for (const rate of parseCsvInts(laneRates)) {
+    for (const worker of parseCsvInts(laneWorkers)) {
       const path = baseReport.replace(/\.json$/, "") + `-rate-${rate}-workers-${worker}.json`;
       try {
         const report = JSON.parse(readFileSync(path, "utf8"));
@@ -109,7 +148,34 @@ async function runLane(lane) {
     }
   }
 
-  return { ...lane, samples };
+  let abuseStats = null;
+  try {
+    abuseStats = await fetchJson("http://127.0.0.1:8080/internal/boundary/abuse/stats");
+  } catch {
+    // ignore optional snapshot failures
+  }
+
+  return { ...lane, samples, abuseStats };
+}
+
+async function configureRuntimeBoundary(overrides) {
+  const previous = {};
+  for (const [key, value] of Object.entries(overrides)) {
+    previous[key] = process.env[key];
+    process.env[key] = value;
+  }
+  try {
+    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-runtime"]);
+    await waitForHttp("http://127.0.0.1:8080/health", 90, 2000);
+  } finally {
+    for (const key of Object.keys(overrides)) {
+      if (previous[key] == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
 }
 
 function summarizeCampaign(lanesIn) {
@@ -150,6 +216,7 @@ function summarizeLane(lane) {
     mode: lane.mode,
     profile: lane.profile,
     samples: lane.samples,
+    abuseStats: lane.abuseStats ?? null,
     peaks: {
       throughputRps: sorted[0]?.throughputRps ?? 0,
       acceptedRps: byAccepted[0]?.acceptedRps ?? 0,
@@ -193,6 +260,11 @@ function toMarkdown(campaign) {
         lane.qualityCap95 ? `${lane.qualityCap95.throughputRps.toFixed(2)} rps @ rate=${lane.qualityCap95.rate}, workers=${lane.qualityCap95.workers}` : "not reached"
       }`,
     );
+    if (lane.abuseStats) {
+      lines.push(
+        `- breaker stats: mode=${lane.abuseStats.mode}, enabled=${lane.abuseStats.enabled}, trips=${lane.abuseStats.trips}, blocks=${lane.abuseStats.blocks}, releases=${lane.abuseStats.releases}, activeBlockedClients=${lane.abuseStats.activeBlockedClients}`,
+      );
+    }
     lines.push("");
   }
   return lines.join("\n");
@@ -210,4 +282,32 @@ function parseCsvInts(raw) {
 function envFlag(name, fallback) {
   const raw = env(name, fallback ? "1" : "0").toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+async function fetchJson(url, timeoutMs = 2000) {
+  return await new Promise((resolve, reject) => {
+    const req = http.request(url, { method: "GET", timeout: timeoutMs }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`unexpected status ${res.statusCode ?? "unknown"}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    req.on("timeout", () => {
+      req.destroy(new Error(`request timeout after ${timeoutMs}ms`));
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }

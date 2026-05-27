@@ -153,6 +153,15 @@ Run the throughput campaign (quality + capacity lanes with cap summary):
 make dev-throughput-campaign
 ```
 
+Run campaign with optional intentional-trip abuse lane:
+
+```bash
+DEV_CAMPAIGN_INCLUDE_ABUSE_TRIP=1 \
+DEV_CAMPAIGN_ABUSE_TRIP_RATES=1200 \
+DEV_CAMPAIGN_ABUSE_TRIP_WORKERS=128 \
+make dev-throughput-campaign
+```
+
 Run campaign with an automatic clean reset first (recommended for fair high-rate comparisons):
 
 ```bash
