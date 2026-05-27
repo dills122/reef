@@ -69,7 +69,7 @@ The tester now assigns workers to four behavior profiles:
 
 - `acceptedBusinessOpsRps`: successful business operations per second
 - `rejectReasons`: grouped rejection code/reason breakdown
-- `rejectTaxonomy`: reject-code counts with percentage-of-failures/rejects
+- `rejectTaxonomy`: reject-code counts with percentage-of-failures/rejects (includes boundary error envelopes such as `ABUSE_BLOCKED` on non-2xx responses when present)
 
 Tail usage example:
 

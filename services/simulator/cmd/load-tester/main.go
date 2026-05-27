@@ -205,6 +205,11 @@ type runtimeResponse struct {
 	Rejected *runtimeReject `json:"rejected,omitempty"`
 }
 
+type boundaryErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 func main() {
 	cfg, err := parseConfig()
 	if err != nil {
@@ -766,7 +771,14 @@ func fillResult(result *requestResult, status int, body []byte, err error, start
 		return
 	}
 	if status < 200 || status >= 300 {
-		result.ErrorText = fmt.Sprintf("http_%d", status)
+		var boundaryError boundaryErrorResponse
+		if jsonErr := json.Unmarshal(body, &boundaryError); jsonErr == nil && boundaryError.Code != "" {
+			result.RejectCode = boundaryError.Code
+			result.RejectReason = boundaryError.Message
+			result.ErrorText = fmt.Sprintf("http_%d:%s", status, boundaryError.Code)
+		} else {
+			result.ErrorText = fmt.Sprintf("http_%d", status)
+		}
 		return
 	}
 	text := string(body)
