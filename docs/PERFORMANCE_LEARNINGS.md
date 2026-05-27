@@ -15,6 +15,23 @@ Capture practical speed and impact lessons so performance stays a design constra
 7. Keep benchmark modes explicit:
    - `capacity` mode to stress infra limits
    - `strict-lifecycle` mode to stress correctness and state-machine behavior
+8. Always compare clean-reset and aged-state runs. Short tests can look healthy while persistence pressure is building.
+
+## Aged-State Soak Learnings (May 26, 2026)
+
+From a 30-minute fixed-load soak (`capacity-baseline`, `capacity-heavy`, `2500 rps`, `workers=128`):
+
+1. Runtime sustained ~`2412 rps` total and ~`2179 rps` accepted with `p95 ~59ms`.
+2. Infra remained stable (no transport failure burst), but Postgres showed heavy WAL/checkpoint pressure:
+   - frequent WAL-triggered checkpoints (~every 35-40s)
+   - large write amplification in `buffers_backend` and `buffers_alloc`
+3. Runtime domain tables grew rapidly (GB-scale in a single soak):
+   - `runtime_events`, `executions`, `trades`, `submit_results`, `orders`
+
+Immediate implications:
+
+1. Throughput target is reachable, but long-run stability depends on datastore lifecycle controls.
+2. Postgres WAL/checkpoint tuning and data retention/partitioning are not optional follow-up items.
 
 ## Performance Budgets
 
