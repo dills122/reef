@@ -58,12 +58,15 @@ export async function run(cmd, args = [], options = {}) {
   });
 }
 
-export async function waitForHttp(url, timeoutSeconds = 90) {
+export async function waitForHttp(url, timeoutSeconds = 90, requestTimeoutMs = 2000) {
   const started = Date.now();
   const timeoutMs = timeoutSeconds * 1000;
   while (Date.now() - started < timeoutMs) {
     try {
-      const res = await fetch(url, { method: "GET" });
+      const res = await fetch(url, {
+        method: "GET",
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
       if (res.ok) return;
     } catch {
       // retry

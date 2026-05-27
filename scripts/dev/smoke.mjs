@@ -11,6 +11,7 @@ async function postJson(url, payload, headers = {}) {
       "content-type": "application/json",
       ...headers,
     },
+    signal: AbortSignal.timeout(5000),
     body: JSON.stringify(payload),
   });
   if (!response.ok) {

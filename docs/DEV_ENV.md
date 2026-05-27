@@ -46,10 +46,16 @@ Shutdown:
 make dev-down
 ```
 
-Deterministic reset (down + volume wipe + rebuild + smoke):
+Deterministic reset (down + volume wipe + rebuild + compose health wait):
 
 ```bash
 make dev-reset
+```
+
+Optional inline smoke during reset:
+
+```bash
+DEV_RESET_RUN_SMOKE=1 make dev-reset
 ```
 
 ## Postgres tuning knobs
