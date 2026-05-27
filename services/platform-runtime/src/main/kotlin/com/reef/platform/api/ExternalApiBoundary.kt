@@ -277,7 +277,8 @@ data class BoundaryHooks(
     val authHook: AuthHook,
     val rateLimitHook: RateLimitHook,
     val idempotencyStore: IdempotencyStore,
-    val idempotencyRetentionPolicy: IdempotencyRetentionPolicy
+    val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
+    val commandCaptureStore: CommandCaptureStore
 )
 
 fun defaultBoundaryHooks(): BoundaryHooks {
@@ -312,7 +313,8 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         authHook = authHook,
         rateLimitHook = rateLimitHook,
         idempotencyStore = idempotencyStore,
-        idempotencyRetentionPolicy = retentionPolicy
+        idempotencyRetentionPolicy = retentionPolicy,
+        commandCaptureStore = defaultCommandCaptureStore()
     )
 }
 

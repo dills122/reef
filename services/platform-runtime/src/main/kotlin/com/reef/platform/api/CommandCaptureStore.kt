@@ -1,0 +1,304 @@
+package com.reef.platform.api
+
+import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import java.time.Instant
+import javax.sql.DataSource
+
+interface CommandCaptureStore {
+    fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    )
+
+    fun markCompleted(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        responsePayload: String
+    )
+
+    fun markFailed(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        errorClass: String,
+        errorMessage: String
+    )
+}
+
+class NoopCommandCaptureStore : CommandCaptureStore {
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+    }
+
+    override fun markCompleted(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        responsePayload: String
+    ) {
+    }
+
+    override fun markFailed(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        errorClass: String,
+        errorMessage: String
+    ) {
+    }
+}
+
+class InMemoryCommandCaptureStore : CommandCaptureStore {
+    private data class CapturedCommand(
+        val clientId: String,
+        val route: String,
+        val idempotencyKey: String,
+        val correlationId: String,
+        val requestPayload: String,
+        val receivedAtEpochSeconds: Long,
+        val status: String,
+        val responseStatus: Int,
+        val responsePayload: String,
+        val errorClass: String,
+        val errorMessage: String,
+        val updatedAtEpochSeconds: Long
+    )
+
+    private val records = java.util.concurrent.ConcurrentHashMap<String, CapturedCommand>()
+
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+        val now = Instant.now().epochSecond
+        val key = key(clientId, route, idempotencyKey)
+        records.compute(key) { _, existing ->
+            if (existing == null) {
+                CapturedCommand(
+                    clientId = clientId,
+                    route = route,
+                    idempotencyKey = idempotencyKey,
+                    correlationId = correlationId,
+                    requestPayload = requestPayload,
+                    receivedAtEpochSeconds = now,
+                    status = "RECEIVED",
+                    responseStatus = 0,
+                    responsePayload = "",
+                    errorClass = "",
+                    errorMessage = "",
+                    updatedAtEpochSeconds = now
+                )
+            } else {
+                existing.copy(updatedAtEpochSeconds = now)
+            }
+        }
+    }
+
+    override fun markCompleted(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        responsePayload: String
+    ) {
+        val now = Instant.now().epochSecond
+        val key = key(clientId, route, idempotencyKey)
+        records.computeIfPresent(key) { _, existing ->
+            existing.copy(
+                status = "COMPLETED",
+                responseStatus = responseStatus,
+                responsePayload = responsePayload,
+                errorClass = "",
+                errorMessage = "",
+                updatedAtEpochSeconds = now
+            )
+        }
+    }
+
+    override fun markFailed(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        errorClass: String,
+        errorMessage: String
+    ) {
+        val now = Instant.now().epochSecond
+        val key = key(clientId, route, idempotencyKey)
+        records.computeIfPresent(key) { _, existing ->
+            existing.copy(
+                status = "FAILED",
+                responseStatus = responseStatus,
+                errorClass = errorClass,
+                errorMessage = errorMessage,
+                updatedAtEpochSeconds = now
+            )
+        }
+    }
+
+    private fun key(clientId: String, route: String, idempotencyKey: String): String {
+        return "$clientId|$route|$idempotencyKey"
+    }
+}
+
+class PostgresCommandCaptureStore(
+    private val dataSource: DataSource
+) : CommandCaptureStore {
+    init {
+        connection().use { conn ->
+            conn.createStatement().use { stmt ->
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS api_command_captures (
+                      client_id TEXT NOT NULL,
+                      route TEXT NOT NULL,
+                      idempotency_key TEXT NOT NULL,
+                      correlation_id TEXT NOT NULL,
+                      request_payload TEXT NOT NULL,
+                      status TEXT NOT NULL,
+                      response_status INTEGER NOT NULL DEFAULT 0,
+                      response_payload TEXT NOT NULL DEFAULT '',
+                      error_class TEXT NOT NULL DEFAULT '',
+                      error_message TEXT NOT NULL DEFAULT '',
+                      first_received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      last_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      PRIMARY KEY (client_id, route, idempotency_key)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_api_command_captures_status_updated
+                    ON api_command_captures(status, last_updated_at DESC)
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO api_command_captures(
+                  client_id,
+                  route,
+                  idempotency_key,
+                  correlation_id,
+                  request_payload,
+                  status
+                )
+                VALUES (?, ?, ?, ?, ?, 'RECEIVED')
+                ON CONFLICT (client_id, route, idempotency_key) DO UPDATE SET
+                  last_updated_at = NOW()
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, clientId)
+                ps.setString(2, route)
+                ps.setString(3, idempotencyKey)
+                ps.setString(4, correlationId)
+                ps.setString(5, requestPayload)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun markCompleted(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        responsePayload: String
+    ) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE api_command_captures
+                SET status = 'COMPLETED',
+                    response_status = ?,
+                    response_payload = ?,
+                    error_class = '',
+                    error_message = '',
+                    last_updated_at = NOW()
+                WHERE client_id = ? AND route = ? AND idempotency_key = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, responseStatus)
+                ps.setString(2, responsePayload)
+                ps.setString(3, clientId)
+                ps.setString(4, route)
+                ps.setString(5, idempotencyKey)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun markFailed(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        errorClass: String,
+        errorMessage: String
+    ) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE api_command_captures
+                SET status = 'FAILED',
+                    response_status = ?,
+                    error_class = ?,
+                    error_message = ?,
+                    last_updated_at = NOW()
+                WHERE client_id = ? AND route = ? AND idempotency_key = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, responseStatus)
+                ps.setString(2, errorClass)
+                ps.setString(3, errorMessage)
+                ps.setString(4, clientId)
+                ps.setString(5, route)
+                ps.setString(6, idempotencyKey)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    private fun connection() = dataSource.connection
+}
+
+fun defaultCommandCaptureStore(): CommandCaptureStore {
+    val mode = (System.getenv("EXTERNAL_API_COMMAND_CAPTURE_MODE") ?: "postgres").lowercase()
+    return when (mode) {
+        "disabled", "off", "none" -> NoopCommandCaptureStore()
+        "inmemory" -> InMemoryCommandCaptureStore()
+        else -> {
+            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword))
+        }
+    }
+}

@@ -11,6 +11,7 @@ import java.net.HttpURLConnection
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class PlatformHttpServerBoundaryTest {
     @Test
@@ -127,6 +128,52 @@ class PlatformHttpServerBoundaryTest {
         }
     }
 
+    @Test
+    fun apiV1SubmitCapturesReceivedAndCompletedLifecycle() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-capture-1"
+                ),
+                body = """
+                    {
+                      "commandId":"cmd-capture-1",
+                      "traceId":"trace-capture-1",
+                      "causationId":"",
+                      "correlationId":"corr-capture-1",
+                      "actorId":"bot-capture-1",
+                      "occurredAt":"2026-05-22T00:00:00Z",
+                      "orderId":"ord-capture-1",
+                      "instrumentId":"AAPL",
+                      "participantId":"participant-1",
+                      "accountId":"account-1",
+                      "side":"BUY",
+                      "orderType":"LIMIT",
+                      "quantityUnits":"100",
+                      "limitPrice":"150250000000",
+                      "currency":"USD",
+                      "timeInForce":"DAY"
+                    }
+                """.trimIndent()
+            )
+            assertEquals(200, response.status)
+            assertEquals(1, captureStore.receivedCalls)
+            assertEquals(1, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+            assertTrue(captureStore.lastReceivedPayload.contains("\"commandId\":\"cmd-capture-1\""))
+        } finally {
+            server.stop(0)
+        }
+    }
+
     data class HttpResponse(val status: Int, val body: String)
 
     private fun testServer(boundary: ExternalApiBoundary = ExternalApiBoundary()): com.sun.net.httpserver.HttpServer {
@@ -135,7 +182,8 @@ class PlatformHttpServerBoundaryTest {
 
     private fun testServerWithGateway(
         gateway: EngineGateway,
-        boundary: ExternalApiBoundary = ExternalApiBoundary()
+        boundary: ExternalApiBoundary = ExternalApiBoundary(),
+        captureStore: CommandCaptureStore = NoopCommandCaptureStore()
     ): com.sun.net.httpserver.HttpServer {
         val api = PlatformApi(
             OrderApplicationService(
@@ -147,7 +195,8 @@ class PlatformHttpServerBoundaryTest {
             api = api,
             boundary = boundary,
             idempotencyStore = InMemoryIdempotencyStore(),
-            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy()
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            commandCaptureStore = captureStore
         ).start()
     }
 
@@ -160,6 +209,45 @@ class PlatformHttpServerBoundaryTest {
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream.bufferedReader().readText()
         return HttpResponse(connection.responseCode, text)
+    }
+}
+
+private class RecordingCommandCaptureStore : CommandCaptureStore {
+    var receivedCalls: Int = 0
+    var completedCalls: Int = 0
+    var failedCalls: Int = 0
+    var lastReceivedPayload: String = ""
+
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+        receivedCalls++
+        lastReceivedPayload = requestPayload
+    }
+
+    override fun markCompleted(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        responsePayload: String
+    ) {
+        completedCalls++
+    }
+
+    override fun markFailed(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        errorClass: String,
+        errorMessage: String
+    ) {
+        failedCalls++
     }
 }
 

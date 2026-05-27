@@ -46,10 +46,16 @@ Shutdown:
 make dev-down
 ```
 
-Deterministic reset (down + volume wipe + rebuild + smoke):
+Deterministic reset (down + volume wipe + rebuild + compose health wait):
 
 ```bash
 make dev-reset
+```
+
+Optional inline smoke during reset:
+
+```bash
+DEV_RESET_RUN_SMOKE=1 make dev-reset
 ```
 
 ## Postgres tuning knobs
@@ -167,6 +173,16 @@ Run ad hoc simulator load against active dev env:
 make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode strict-lifecycle --pretty-summary"
 ```
 
+Simulator mutating traffic uses `/api/v1` routes by default (idempotency + client headers enabled):
+- `--use-api-v1=true` (default)
+- `--client-id-prefix=sim-client` (default)
+
+Disable boundary route usage only for legacy comparison/debug:
+
+```bash
+make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode capacity-baseline --use-api-v1=false --pretty-summary"
+```
+
 30-minute fixed-load soak (clean reset recommended first):
 
 ```bash
@@ -228,6 +244,7 @@ Compose sets:
 - runtime persistence: `RUNTIME_PERSISTENCE=postgres`
 - runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime`)
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
+- boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary`)
 
 Postgres init creates domain schemas:

@@ -67,6 +67,8 @@ type Config struct {
 	HTTPIdleConnsHost   int
 	HTTPMaxConnsHost    int
 	HTTPIdleConnTimeout time.Duration
+	UseApiV1            bool
+	ClientIDPrefix      string
 }
 
 type Action string
@@ -240,7 +242,7 @@ func main() {
 		profile := profileForWorker(workerID, cfg.Workers, cfg)
 		go func(id int, workerProfile string) {
 			defer wg.Done()
-			runWorker(ctx, client, cfg, id, workerProfile, &counter, rateCh, results, &traceSeen)
+			runWorker(ctx, client, cfg, sessionID, id, workerProfile, &counter, rateCh, results, &traceSeen)
 		}(workerID, profile)
 	}
 
@@ -304,6 +306,8 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.HTTPIdleConnsHost, "http-max-idle-conns-per-host", cfg.HTTPIdleConnsHost, "http client transport max idle connections per host")
 	flag.IntVar(&cfg.HTTPMaxConnsHost, "http-max-conns-per-host", cfg.HTTPMaxConnsHost, "http client transport max total connections per host (0 = no transport-side limit)")
 	flag.DurationVar(&cfg.HTTPIdleConnTimeout, "http-idle-conn-timeout", cfg.HTTPIdleConnTimeout, "http client idle connection timeout")
+	flag.BoolVar(&cfg.UseApiV1, "use-api-v1", cfg.UseApiV1, "submit/modify/cancel via /api/v1 boundary routes")
+	flag.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix used for /api/v1 traffic")
 	flag.Parse()
 	parsedConfig := cfg
 
@@ -366,6 +370,9 @@ func parseConfig() (Config, error) {
 	if cfg.HTTPIdleConnTimeout <= 0 {
 		return cfg, errors.New("http-idle-conn-timeout must be > 0")
 	}
+	if cfg.UseApiV1 && strings.TrimSpace(cfg.ClientIDPrefix) == "" {
+		return cfg, errors.New("client-id-prefix must be non-empty when use-api-v1=true")
+	}
 	return cfg, nil
 }
 
@@ -404,6 +411,8 @@ func defaultConfigFromEnv() Config {
 		HTTPIdleConnsHost:   envInt("REEF_HTTP_MAX_IDLE_CONNS_PER_HOST", 512),
 		HTTPMaxConnsHost:    envInt("REEF_HTTP_MAX_CONNS_PER_HOST", 0),
 		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
+		UseApiV1:            envBool("REEF_USE_API_V1", true),
+		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
 	}
 }
 
@@ -537,6 +546,12 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	if explicit["http-idle-conn-timeout"] {
 		cfg.HTTPIdleConnTimeout = parsed.HTTPIdleConnTimeout
 	}
+	if explicit["use-api-v1"] {
+		cfg.UseApiV1 = parsed.UseApiV1
+	}
+	if explicit["client-id-prefix"] {
+		cfg.ClientIDPrefix = parsed.ClientIDPrefix
+	}
 }
 
 func buildHTTPClient(cfg Config) *http.Client {
@@ -565,6 +580,7 @@ func runWorker(
 	ctx context.Context,
 	client *http.Client,
 	cfg Config,
+	sessionID string,
 	workerID int,
 	profile string,
 	counter *int64,
@@ -604,8 +620,8 @@ func runWorker(
 			action = ActionSubmit
 		}
 		reqID := atomic.AddInt64(counter, 1)
-		traceID := fmt.Sprintf("trace-%d-%d", workerID, reqID)
-		commandID := fmt.Sprintf("cmd-%d-%d", workerID, reqID)
+		traceID := fmt.Sprintf("%s-trace-%d-%d", sessionID, workerID, reqID)
+		commandID := fmt.Sprintf("%s-cmd-%d-%d", sessionID, workerID, reqID)
 		start := time.Now()
 		actorID := fmt.Sprintf("bot-%d", workerID)
 		actorType := effectiveProfile
@@ -629,7 +645,7 @@ func runWorker(
 		}
 		switch action {
 		case ActionSubmit:
-			orderID := fmt.Sprintf("ord-%d-%d", workerID, reqID)
+			orderID := fmt.Sprintf("%s-ord-%d-%d", sessionID, workerID, reqID)
 			result.OrderID = orderID
 			instrumentID := cfg.InstrumentID
 			instrument := chooseInstrumentForActor(rng, cfg, actor)
@@ -655,7 +671,12 @@ func runWorker(
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrument))
 			payload["currency"] = "USD"
 			payload["timeInForce"] = "DAY"
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/submit", payload)
+			status, body, err := doPOST(
+				client,
+				cfg.BaseURL+commandRoute(cfg, ActionSubmit),
+				payload,
+				commandHeaders(cfg, workerID, commandID, traceID),
+			)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
@@ -683,7 +704,12 @@ func runWorker(
 			payload["orderId"] = orderID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/modify", payload)
+			status, body, err := doPOST(
+				client,
+				cfg.BaseURL+commandRoute(cfg, ActionModify),
+				payload,
+				commandHeaders(cfg, workerID, commandID, traceID),
+			)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.rejectStreak = 0
@@ -711,7 +737,12 @@ func runWorker(
 			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
 			payload["orderId"] = orderID
 			payload["reason"] = "load test"
-			status, body, err := doPOST(client, cfg.BaseURL+"/orders/cancel", payload)
+			status, body, err := doPOST(
+				client,
+				cfg.BaseURL+commandRoute(cfg, ActionCancel),
+				payload,
+				commandHeaders(cfg, workerID, commandID, traceID),
+			)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
@@ -1106,7 +1137,7 @@ func seedReferenceData(client *http.Client, cfg Config) error {
 			if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
 				"instrumentId": eq.InstrumentID,
 				"symbol":       eq.Symbol,
-			}); err != nil {
+			}, nil); err != nil {
 				return err
 			}
 		}
@@ -1114,26 +1145,26 @@ func seedReferenceData(client *http.Client, cfg Config) error {
 		if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
 			"instrumentId": cfg.InstrumentID,
 			"symbol":       cfg.InstrumentSymbol,
-		}); err != nil {
+		}, nil); err != nil {
 			return err
 		}
 	}
 	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
 		"participantId": cfg.ParticipantID,
 		"name":          cfg.ParticipantName,
-	}); err != nil {
+	}, nil); err != nil {
 		return err
 	}
 	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
 		"accountId":     cfg.AccountID,
 		"participantId": cfg.ParticipantID,
-	}); err != nil {
+	}, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-func doPOST(client *http.Client, url string, payload map[string]string) (int, []byte, error) {
+func doPOST(client *http.Client, url string, payload map[string]string, headers map[string]string) (int, []byte, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return 0, nil, err
@@ -1143,6 +1174,9 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, err
@@ -1150,6 +1184,38 @@ func doPOST(client *http.Client, url string, payload map[string]string) (int, []
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(resp.Body)
 	return resp.StatusCode, respBody, err
+}
+
+func commandRoute(cfg Config, action Action) string {
+	if cfg.UseApiV1 {
+		switch action {
+		case ActionModify:
+			return "/api/v1/orders/modify"
+		case ActionCancel:
+			return "/api/v1/orders/cancel"
+		default:
+			return "/api/v1/orders/submit"
+		}
+	}
+	switch action {
+	case ActionModify:
+		return "/orders/modify"
+	case ActionCancel:
+		return "/orders/cancel"
+	default:
+		return "/orders/submit"
+	}
+}
+
+func commandHeaders(cfg Config, workerID int, commandID, traceID string) map[string]string {
+	if !cfg.UseApiV1 {
+		return nil
+	}
+	return map[string]string{
+		"X-Client-Id":      fmt.Sprintf("%s-%d", cfg.ClientIDPrefix, workerID),
+		"Idempotency-Key":  commandID,
+		"X-Correlation-Id": traceID,
+	}
 }
 
 func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, persona, strategyID string) map[string]string {

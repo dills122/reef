@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 
 export function env(name, fallback = "") {
   const value = process.env[name];
@@ -58,21 +60,56 @@ export async function run(cmd, args = [], options = {}) {
   });
 }
 
-export async function waitForHttp(url, timeoutSeconds = 90) {
+export async function waitForHttp(url, timeoutSeconds = 90, requestTimeoutMs = 2000) {
   const started = Date.now();
   const timeoutMs = timeoutSeconds * 1000;
+  let lastStatus = null;
+  let lastError = "";
   while (Date.now() - started < timeoutMs) {
-    try {
-      const res = await fetch(url, { method: "GET" });
-      if (res.ok) return;
-    } catch {
-      // retry
+    const probe = await probeHttp(url, requestTimeoutMs);
+    if (probe.ok) {
+      return;
+    }
+    if (probe.status != null) {
+      lastStatus = probe.status;
+      lastError = "";
+    } else if (probe.error) {
+      lastError = probe.error;
     }
     await sleep(2000);
   }
-  throw new Error(`timeout waiting for ${url} after ${timeoutSeconds}s`);
+  const tail = lastStatus != null ? ` (last status: ${lastStatus})` : (lastError ? ` (last error: ${lastError})` : "");
+  throw new Error(`timeout waiting for ${url} after ${timeoutSeconds}s${tail}`);
 }
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function probeHttp(url, timeoutMs) {
+  return new Promise((resolve) => {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (error) {
+      resolve({ ok: false, error: error?.message ?? "invalid url" });
+      return;
+    }
+    const transport = parsed.protocol === "https:" ? https : http;
+    const req = transport.request(
+      parsed,
+      { method: "GET", timeout: timeoutMs },
+      (res) => {
+        res.resume();
+        resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode ?? 0 });
+      },
+    );
+    req.on("timeout", () => {
+      req.destroy(new Error(`request timeout after ${timeoutMs}ms`));
+    });
+    req.on("error", (error) => {
+      resolve({ ok: false, error: error?.message ?? "request error" });
+    });
+    req.end();
+  });
 }

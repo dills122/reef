@@ -34,45 +34,49 @@ class OrderApplicationService(
 
         val validationError = validateReferenceData(command)
         if (validationError != null) {
-            runtimePersistence.saveSubmitResult(command.commandId, validationError)
-            appendLifecycleEvent(
-                command.orderId,
-                command.commandId,
-                command.correlationId,
-                traceId,
-                validationError.accepted,
-                validationError.rejected,
-                "OrderAccepted",
-                "OrderRejected"
+            val rejected = validationError.rejected
+            val lifecycleEvents = if (rejected != null) {
+                listOf(
+                    lifecycleEvent(
+                        eventId = rejected.eventId,
+                        eventType = "OrderRejected",
+                        orderId = rejected.orderId,
+                        traceId = traceId,
+                        causationId = command.commandId,
+                        correlationId = command.correlationId,
+                        occurredAt = rejected.occurredAt
+                    )
+                )
+            } else {
+                emptyList()
+            }
+            runtimePersistence.persistSubmitOutcome(
+                commandId = command.commandId,
+                result = validationError,
+                acceptedOrder = null,
+                lifecycleEvents = lifecycleEvents
             )
             return validationError
         }
 
         val result = engineGateway.submitOrder(command)
-        runtimePersistence.saveSubmitResult(command.commandId, result)
-
         val accepted = result.accepted
+        var acceptedOrder: PersistedOrder? = null
+        val lifecycleEvents = mutableListOf<RuntimeEvent>()
         if (accepted != null) {
-            runtimePersistence.saveAcceptedOrder(
-                PersistedOrder(
-                    orderId = command.orderId,
-                    engineOrderId = accepted.engineOrderId,
-                    instrumentId = command.instrumentId,
-                    participantId = command.participantId,
-                    accountId = command.accountId,
-                    side = command.side,
-                    orderType = command.orderType,
-                    quantityUnits = command.quantityUnits,
-                    limitPrice = command.limitPrice,
-                    currency = command.currency,
-                    timeInForce = command.timeInForce,
-                    acceptedAt = accepted.occurredAt
-                )
-            )
-            runtimePersistence.saveExecutions(result.executions)
-            runtimePersistence.saveTrades(result.trades)
-            val lifecycleEvents = ArrayList<RuntimeEvent>(
-                1 + result.executions.size + result.trades.size
+            acceptedOrder = PersistedOrder(
+                orderId = command.orderId,
+                engineOrderId = accepted.engineOrderId,
+                instrumentId = command.instrumentId,
+                participantId = command.participantId,
+                accountId = command.accountId,
+                side = command.side,
+                orderType = command.orderType,
+                quantityUnits = command.quantityUnits,
+                limitPrice = command.limitPrice,
+                currency = command.currency,
+                timeInForce = command.timeInForce,
+                acceptedAt = accepted.occurredAt
             )
             lifecycleEvents.add(
                 lifecycleEvent(
@@ -85,8 +89,12 @@ class OrderApplicationService(
                     occurredAt = accepted.occurredAt
                 )
             )
+            val capacity = ArrayList<RuntimeEvent>(
+                1 + result.executions.size + result.trades.size
+            )
+            capacity.addAll(lifecycleEvents)
             result.executions.forEach { execution ->
-                lifecycleEvents.add(
+                capacity.add(
                     lifecycleEvent(
                         eventId = execution.eventId,
                         eventType = "ExecutionCreated",
@@ -99,7 +107,7 @@ class OrderApplicationService(
                 )
             }
             result.trades.forEach { trade ->
-                lifecycleEvents.add(
+                capacity.add(
                     lifecycleEvent(
                         eventId = trade.eventId,
                         eventType = "TradeCreated",
@@ -111,11 +119,12 @@ class OrderApplicationService(
                     )
                 )
             }
-            runtimePersistence.saveEvents(lifecycleEvents)
+            lifecycleEvents.clear()
+            lifecycleEvents.addAll(capacity)
         } else {
             val rejected = result.rejected
             if (rejected != null) {
-                runtimePersistence.saveEvent(
+                lifecycleEvents.add(
                     lifecycleEvent(
                         eventId = rejected.eventId,
                         eventType = "OrderRejected",
@@ -128,6 +137,13 @@ class OrderApplicationService(
                 )
             }
         }
+
+        runtimePersistence.persistSubmitOutcome(
+            commandId = command.commandId,
+            result = result,
+            acceptedOrder = acceptedOrder,
+            lifecycleEvents = lifecycleEvents
+        )
 
         return result
     }
@@ -276,7 +292,12 @@ class OrderApplicationService(
 
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt
-        if (!runtimePersistence.hasInstrument(command.instrumentId)) {
+        val validation = runtimePersistence.validateReferenceData(
+            instrumentId = command.instrumentId,
+            participantId = command.participantId,
+            accountId = command.accountId
+        )
+        if (!validation.instrumentExists) {
             return SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-reject-missing-instrument-ref-${command.orderId}",
@@ -288,7 +309,7 @@ class OrderApplicationService(
             )
         }
 
-        if (!runtimePersistence.hasParticipant(command.participantId)) {
+        if (!validation.participantExists) {
             return SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-reject-missing-participant-ref-${command.orderId}",
@@ -300,7 +321,7 @@ class OrderApplicationService(
             )
         }
 
-        if (!runtimePersistence.hasAccount(command.accountId)) {
+        if (!validation.accountExists) {
             return SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-reject-missing-account-ref-${command.orderId}",
