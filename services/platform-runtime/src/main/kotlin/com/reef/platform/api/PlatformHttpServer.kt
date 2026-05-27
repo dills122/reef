@@ -10,17 +10,20 @@ class PlatformHttpServer(
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
     private val idempotencyStore: IdempotencyStore,
-    private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy
+    private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
+    private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore()
 ) {
     constructor(
         port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
-        api: PlatformApi = PlatformApi()
+        api: PlatformApi = PlatformApi(),
+        deps: ServerBoundaryDeps = defaultBoundary()
     ) : this(
         port = port,
         api = api,
-        boundary = defaultBoundary().first,
-        idempotencyStore = defaultBoundary().second,
-        idempotencyRetentionPolicy = defaultBoundary().third
+        boundary = deps.boundary,
+        idempotencyStore = deps.idempotencyStore,
+        idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
+        commandCaptureStore = deps.commandCaptureStore
     )
 
     fun start(): HttpServer {
@@ -48,28 +51,8 @@ class PlatformHttpServer(
         }
 
         server.createContext("/api/v1/orders/submit") { exchange ->
-            if (exchange.requestMethod != "POST") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
-                return@createContext
-            }
-            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/submit")
-            if (violation != null) {
-                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
-                return@createContext
-            }
-            val cached = readIdempotentResult(exchange, "/api/v1/orders/submit")
-            if (cached != null) {
-                writeJson(exchange, cached.status, cached.payload)
-                return@createContext
-            }
-            try {
-                val body = exchange.requestBody.bufferedReader().readText()
-                val payload = api.submitOrder(body)
-                rememberIdempotentResult(exchange, "/api/v1/orders/submit", 200, payload)
-                writeJson(exchange, 200, payload)
-            } catch (ex: Exception) {
-                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            handleApiV1Mutation(exchange, "/api/v1/orders/submit") { body ->
+                api.submitOrder(body)
             }
         }
 
@@ -130,28 +113,8 @@ class PlatformHttpServer(
         }
 
         server.createContext("/api/v1/orders/cancel") { exchange ->
-            if (exchange.requestMethod != "POST") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
-                return@createContext
-            }
-            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/cancel")
-            if (violation != null) {
-                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
-                return@createContext
-            }
-            val cached = readIdempotentResult(exchange, "/api/v1/orders/cancel")
-            if (cached != null) {
-                writeJson(exchange, cached.status, cached.payload)
-                return@createContext
-            }
-            try {
-                val body = exchange.requestBody.bufferedReader().readText()
-                val payload = api.cancelOrder(body)
-                rememberIdempotentResult(exchange, "/api/v1/orders/cancel", 200, payload)
-                writeJson(exchange, 200, payload)
-            } catch (ex: Exception) {
-                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            handleApiV1Mutation(exchange, "/api/v1/orders/cancel") { body ->
+                api.cancelOrder(body)
             }
         }
 
@@ -170,28 +133,8 @@ class PlatformHttpServer(
         }
 
         server.createContext("/api/v1/orders/modify") { exchange ->
-            if (exchange.requestMethod != "POST") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
-                return@createContext
-            }
-            val violation = boundary.checkWrite(exchange.requestHeaders, "/api/v1/orders/modify")
-            if (violation != null) {
-                writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
-                return@createContext
-            }
-            val cached = readIdempotentResult(exchange, "/api/v1/orders/modify")
-            if (cached != null) {
-                writeJson(exchange, cached.status, cached.payload)
-                return@createContext
-            }
-            try {
-                val body = exchange.requestBody.bufferedReader().readText()
-                val payload = api.modifyOrder(body)
-                rememberIdempotentResult(exchange, "/api/v1/orders/modify", 200, payload)
-                writeJson(exchange, 200, payload)
-            } catch (ex: Exception) {
-                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+            handleApiV1Mutation(exchange, "/api/v1/orders/modify") { body ->
+                api.modifyOrder(body)
             }
         }
 
@@ -300,10 +243,50 @@ class PlatformHttpServer(
         return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
     }
 
-    private fun readIdempotentResult(exchange: HttpExchange, route: String): IdempotencyResult? {
-        val clientId = boundary.clientId(exchange.requestHeaders) ?: return null
-        val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return null
-        return idempotencyStore.find(clientId, route, idempotencyKey)
+    private fun handleApiV1Mutation(
+        exchange: HttpExchange,
+        route: String,
+        operation: (String) -> String
+    ) {
+        if (exchange.requestMethod != "POST") {
+            exchange.sendResponseHeaders(405, -1)
+            exchange.close()
+            return
+        }
+
+        val violation = boundary.checkWrite(exchange.requestHeaders, route)
+        if (violation != null) {
+            writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
+            return
+        }
+
+        val clientId = boundary.clientId(exchange.requestHeaders).orEmpty()
+        val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders).orEmpty()
+        val correlationId = correlationId(exchange)
+        val body = exchange.requestBody.bufferedReader().readText()
+        commandCaptureStore.captureReceived(clientId, route, idempotencyKey, correlationId, body)
+
+        val cached = idempotencyStore.find(clientId, route, idempotencyKey)
+        if (cached != null) {
+            commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
+            writeJson(exchange, cached.status, cached.payload)
+            return
+        }
+
+        try {
+            val payload = operation(body)
+            rememberIdempotentResult(exchange, route, 200, payload)
+            commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
+            writeJson(exchange, 200, payload)
+        } catch (ex: Exception) {
+            val errorClass = ex::class.simpleName ?: "Exception"
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+            )
+            commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
+            writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(errorMessage)}"}""")
+        }
     }
 
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
@@ -319,14 +302,22 @@ class PlatformHttpServer(
     }
 }
 
-private fun defaultBoundary(): Triple<ExternalApiBoundary, IdempotencyStore, IdempotencyRetentionPolicy> {
+private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
-    return Triple(
-        ExternalApiBoundary(
+    return ServerBoundaryDeps(
+        boundary = ExternalApiBoundary(
             authHook = hooks.authHook,
             rateLimitHook = hooks.rateLimitHook
         ),
-        hooks.idempotencyStore,
-        hooks.idempotencyRetentionPolicy
+        idempotencyStore = hooks.idempotencyStore,
+        idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
+        commandCaptureStore = hooks.commandCaptureStore
     )
 }
+
+data class ServerBoundaryDeps(
+    val boundary: ExternalApiBoundary,
+    val idempotencyStore: IdempotencyStore,
+    val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
+    val commandCaptureStore: CommandCaptureStore
+)
