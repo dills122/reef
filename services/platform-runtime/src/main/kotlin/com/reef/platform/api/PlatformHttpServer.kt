@@ -264,7 +264,21 @@ class PlatformHttpServer(
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders).orEmpty()
         val correlationId = correlationId(exchange)
         val body = exchange.requestBody.bufferedReader().readText()
-        commandCaptureStore.captureReceived(clientId, route, idempotencyKey, correlationId, body)
+        try {
+            commandCaptureStore.captureReceived(clientId, route, idempotencyKey, correlationId, body)
+        } catch (ex: Exception) {
+            val errorClass = ex::class.simpleName ?: "Exception"
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+            )
+            writeJson(
+                exchange,
+                503,
+                """{"error":"command capture unavailable","message":"${JsonFields.escape(errorMessage)}"}"""
+            )
+            return
+        }
 
         val cached = idempotencyStore.find(clientId, route, idempotencyKey)
         if (cached != null) {
