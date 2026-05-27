@@ -1,24 +1,58 @@
 import { deriveDevUrls, env, loadDotEnv, waitForHttp } from "./lib/dev-utils.mjs";
+import http from "node:http";
+import https from "node:https";
 
 loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
-const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "300"));
+const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
 
 async function postJson(url, payload, headers = {}) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...headers,
-    },
-    signal: AbortSignal.timeout(5000),
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`POST ${url} failed (${response.status}): ${text}`);
+  const response = await requestJson("POST", url, payload, headers, 5000);
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`POST ${url} failed (${response.statusCode}): ${response.body}`);
   }
-  return await response.text();
+  return response.body;
+}
+
+function requestJson(method, url, payload, headers = {}, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    const body = JSON.stringify(payload);
+    const transport = parsed.protocol === "https:" ? https : http;
+    const req = transport.request(parsed, {
+      method,
+      timeout: timeoutMs,
+      headers: {
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(body),
+        ...headers,
+      },
+    }, (res) => {
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        resolve({
+          statusCode: res.statusCode ?? 0,
+          body: data,
+        });
+      });
+    });
+    req.on("timeout", () => {
+      req.destroy(new Error(`request timeout after ${timeoutMs}ms`));
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
 }
 
 console.log("waiting for matching-engine health...");
