@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
@@ -53,6 +53,7 @@ const telemetry = startTelemetryCapture({
   engineUrl,
 });
 if (captureDbDiagnostics) {
+  resetDir(diagnosticsDir);
   await captureDbDiagnosticsSnapshot({
     diagnosticsDir,
     stage: "pre",
@@ -167,6 +168,11 @@ function parseCsvInts(raw) {
     .filter(Boolean)
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+function resetDir(path) {
+  rmSync(path, { recursive: true, force: true });
+  mkdirSync(path, { recursive: true });
 }
 
 async function captureDbDiagnosticsSnapshot({ diagnosticsDir, stage, service, dbUser, dbName, schema }) {
