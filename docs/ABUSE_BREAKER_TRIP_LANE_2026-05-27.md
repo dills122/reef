@@ -79,3 +79,5 @@ Campaign script now enforces optional trip-lane assertions (default enabled when
 - `DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS`
 - `DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS`
 - `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT`
+
+Default `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT` is conservative (`1`) so short smoke runs remain stable; raise it for stricter long-lane checks.

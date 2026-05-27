@@ -346,6 +346,11 @@ class PlatformHttpServer(
         val trackedRoutes = stats.trackedRoutes.sorted().joinToString(prefix = "[", postfix = "]") { route ->
             """"${JsonFields.escape(route)}""""
         }
+        val routePolicyOverrides = stats.routePolicyOverrides.entries
+            .sortedBy { it.key }
+            .joinToString(prefix = "{", postfix = "}") { (route, policy) ->
+                """"${JsonFields.escape(route)}":"${JsonFields.escape(policy)}""""
+            }
         return """
             {
               "mode":"${JsonFields.escape(stats.mode)}",
@@ -356,6 +361,7 @@ class PlatformHttpServer(
               "blockSeconds":${stats.blockSeconds},
               "trackedRejectCodes":$trackedCodes,
               "trackedRoutes":$trackedRoutes,
+              "routePolicyOverrides":$routePolicyOverrides,
               "trips":${stats.trips},
               "blocks":${stats.blocks},
               "releases":${stats.releases},

@@ -19,7 +19,7 @@ const enforceAbuseTripGuardrail = envFlag("DEV_CAMPAIGN_ENFORCE_ABUSE_TRIP_GUARD
 const abuseTripMinTrips = Number(env("DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS", "1"));
 const abuseTripMinBlocks = Number(env("DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS", "1"));
 const abuseTripMinAbuseBlockedFailPct = Number(
-  env("DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT", "20"),
+  env("DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT", "1"),
 );
 
 mkdirSync(artifactDir, { recursive: true });

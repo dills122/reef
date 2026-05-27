@@ -239,6 +239,9 @@ class PlatformHttpServerBoundaryTest {
             blockSeconds = 30,
             trackedRejectCodes = setOf("INVALID_STATE"),
             trackedRoutes = setOf("/api/v1/orders/submit"),
+            routePolicies = mapOf(
+                "/api/v1/orders/submit" to RejectRatePolicy(1, 60, 30)
+            ),
             clock = { now }
         )
         val server = testServerWithGateway(
@@ -273,6 +276,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(statsResponse.body, "\"mode\":\"reject-rate\"")
             assertContains(statsResponse.body, "\"enabled\":true")
             assertContains(statsResponse.body, "\"trackedRoutes\":[\"/api/v1/orders/submit\"]")
+            assertContains(statsResponse.body, "\"routePolicyOverrides\":{\"/api/v1/orders/submit\":\"1/60/30\"}")
             assertContains(statsResponse.body, "\"trips\":1")
             assertContains(statsResponse.body, "\"activeBlockedClients\":1")
 

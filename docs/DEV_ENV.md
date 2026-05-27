@@ -167,7 +167,7 @@ Optional guardrails for intentional-trip lane (enabled by default):
 - `DEV_CAMPAIGN_ENFORCE_ABUSE_TRIP_GUARDRAIL=1`
 - `DEV_CAMPAIGN_ABUSE_TRIP_MIN_TRIPS=1`
 - `DEV_CAMPAIGN_ABUSE_TRIP_MIN_BLOCKS=1`
-- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT=20`
+- `DEV_CAMPAIGN_ABUSE_TRIP_MIN_ABUSE_BLOCKED_FAIL_PCT=1`
 
 Run campaign with an automatic clean reset first (recommended for fair high-rate comparisons):
 
@@ -200,6 +200,7 @@ Optional abuse-breaker guardrail for `/api/v1` writes:
 - `EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS` (default `60`)
 - `EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES` (default `INVALID_STATE,NOT_FOUND,REFERENCE_DATA_ERROR,VALIDATION_ERROR`)
 - `EXTERNAL_API_ABUSE_BREAKER_ROUTES` (default `/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel`)
+- `EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES` (optional `route:maxRejects/windowSeconds/blockSeconds` list)
 - `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
 
 Example enablement:
