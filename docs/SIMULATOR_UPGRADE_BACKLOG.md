@@ -7,6 +7,7 @@ Capture post-v1 simulator enhancements, known pitfalls, and an execution policy 
 ## Current Status (as of 2026-05-23)
 
 Implemented:
+
 - `--session-config` (YAML/JSON) parsing and validation
 - config + CLI override precedence
 - actor-weighted routing from session actors
@@ -27,6 +28,7 @@ Implemented:
 - initial runtime system tuning pass (indexes + runtime/db concurrency defaults)
 
 Still pending for the next wave:
+
 - quality-lane + capacity-lane throughput campaign automation and baseline publication
 - stricter lifecycle-valid traffic shaping to consistently exceed `>=90%` success
 - configurable circuit-breaker framework for junk-traffic throttling/blocking
@@ -35,22 +37,27 @@ Still pending for the next wave:
 ## Stress Findings (2026-05-23)
 
 ### Throttled Ramp (`20s`, `workers=32`, `capacity-baseline`)
+
 - `rate=500`: throughput `469.09 rps`, accepted `434.93 rps`, fail rate `7.28%`
 - `rate=1000`: throughput `869.69 rps`, accepted `808.96 rps`, fail rate `6.98%`
 - `rate=2000`: throughput `876.50 rps`, accepted `813.10 rps`, fail rate `7.23%`
 
 Finding:
+
 - on this dev stack shape, throttled runs saturate around `~870-880 rps` total and `~810-813 rps` accepted business ops.
 
 ### Unthrottled Ceiling Sweep (`20s`, `capacity-baseline`)
+
 - `workers=32`: throughput `832.21 rps`, accepted `772.31 rps`, p95 `56.85ms`, p99 `59.25ms`
 - `workers=64`: throughput `1579.09 rps`, accepted `1469.58 rps`, p95 `59.08ms`, p99 `73.00ms`
 - `workers=96`: throughput `1818.47 rps`, accepted `1684.28 rps`, p95 `82.14ms`, p99 `127.17ms`
 
 Finding:
+
 - higher unthrottled throughput is achievable by raising worker parallelism, but latency tails degrade materially at `workers=96`.
 
 ### Resource Snapshot Notes
+
 - point-in-time `docker stats --no-stream` snapshots show memory growth and DB block I/O growth across tiers.
 - snapshots are not peak CPU telemetry; add continuous sampling/profiling for bottleneck attribution.
 
@@ -66,11 +73,13 @@ Finding:
 ## Nice-To-Haves (Future)
 
 ### Tier 1: High-Leverage
+
 - multi-seed batch runner with aggregate reports
 - scenario baseline drift detection (compare against saved golden summaries)
 - richer replay artifact bundle (decision stream + summary + trace sample)
 
 ### Tier 2: Realism and Operability
+
 - regime-aware volatility/spread shifts over session clock
 - liquidity tiers by symbol/actor type
 - fault library (latency spikes, endpoint degradation, reject bursts)
@@ -82,6 +91,7 @@ Finding:
   - breaker telemetry in run summaries (`trips`, `active`, `released`)
 
 ### Tier 3: UX and Integrations
+
 - docs-site scenario catalog pages generated from scenario files
 - run tags/metadata for CI and benchmark dashboards
 - optional stochastic mode (non-deterministic jitter) for long soak tests
@@ -97,6 +107,7 @@ Finding:
 ## Refactor Candidates
 
 ### Immediate
+
 - split `services/simulator/cmd/load-tester/main.go` into packages:
   - `internal/runtime`
   - `internal/actor`
@@ -107,6 +118,7 @@ Finding:
 - [x] move summary aggregation helpers into `internal/report` with focused tests
 
 ### Near-Term
+
 - replace ad hoc payload maps with typed request builders
 - split legacy profile runner and session runner behind a shared runner interface
 - centralize config resolution/override policy in `internal/config/resolver.go`
@@ -114,23 +126,28 @@ Finding:
 ## Execution Policy: New Work vs Refactors
 
 Use a 70/20/10 allocation per sprint:
+
 - 70%: net-new simulator capability on critical path
 - 20%: structural refactors that reduce immediate delivery risk
 - 10%: hardening/tests/cleanup
 
 Refactor trigger rule:
+
 - if a feature needs more than 2 invasive edits in `main.go`, do the enabling refactor first
 
 Non-negotiable test rule:
+
 - all new feature work must include tests for the newly introduced behavior
 - this rule applies in every delivery mode (feature-heavy, balanced, stabilization)
 
 Definition of test hardening:
+
 - test hardening does not replace tests for new features
 - test hardening means improving existing test reliability, depth, and coverage
 - examples: reducing flaky tests, adding edge-case coverage to existing paths, stronger determinism assertions, improving fixtures/golden comparisons
 
 Definition of Done gate for each new simulator feature:
+
 - deterministic behavior test added or updated
 - summary/report attribution updated if new runtime dimension is introduced
 - config validation updated for any new input shape
@@ -139,25 +156,31 @@ Definition of Done gate for each new simulator feature:
 ## Delivery Mode Matrix
 
 Default mode:
+
 - balanced mode (`70/20/10`)
 
 Feature-heavy mode:
+
 - split: `85/10/5`
 - use when: deadline pressure is high and quality indicators are stable
 
 Balanced mode:
+
 - split: `70/20/10`
 - use when: roadmap delivery is steady with moderate complexity/risk
 
 Stabilization/refactor mode:
+
 - split: `40/40/20` or `30/50/20`
 - use when: delivery friction and regression risk are materially increasing
 
 Mode selection indicators:
+
 - use a binary scorecard each sprint planning (0/1 per indicator)
 - switch to a mode when 3+ indicators in that direction are true
 
 Indicators favoring feature-heavy mode:
+
 - lead time is stable
 - escaped-defect rate is low
 - CI/test reliability is high
@@ -165,6 +188,7 @@ Indicators favoring feature-heavy mode:
 - little rework from recent feature merges
 
 Indicators favoring stabilization/refactor mode:
+
 - repeated defects in the same subsystem
 - increasing hotfix/rollback frequency
 - test flakiness or low CI confidence
