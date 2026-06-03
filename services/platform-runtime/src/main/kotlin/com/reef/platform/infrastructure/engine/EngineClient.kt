@@ -32,27 +32,7 @@ class EngineClient : EngineGateway {
     }
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
-        return postAndParse(
-            "/orders/submit",
-            JsonCodec.writeObject(
-                "commandId" to command.commandId,
-                "traceId" to command.traceId,
-                "causationId" to command.causationId,
-                "correlationId" to command.correlationId,
-                "actorId" to command.actorId,
-                "occurredAt" to command.occurredAt,
-                "orderId" to command.orderId,
-                "instrumentId" to command.instrumentId,
-                "participantId" to command.participantId,
-                "accountId" to command.accountId,
-                "side" to command.side,
-                "orderType" to command.orderType,
-                "quantityUnits" to command.quantityUnits,
-                "limitPrice" to command.limitPrice,
-                "currency" to command.currency,
-                "timeInForce" to command.timeInForce
-            )
-        )
+        return postAndParse("/orders/submit", submitPayload(command))
     }
 
     override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
@@ -85,6 +65,25 @@ class EngineClient : EngineGateway {
                 "quantityUnits" to command.quantityUnits,
                 "limitPrice" to command.limitPrice
             )
+        )
+    }
+
+    internal fun submitPayload(command: SubmitOrderCommand): String {
+        return JsonCodec.writeObject(
+            "commandId" to command.commandId,
+            "correlationId" to command.correlationId,
+            "actorId" to command.actorId,
+            "occurredAt" to command.occurredAt,
+            "orderId" to command.orderId,
+            "instrumentId" to command.instrumentId,
+            "participantId" to command.participantId,
+            "accountId" to command.accountId,
+            "side" to command.side,
+            "orderType" to command.orderType,
+            "quantityUnits" to command.quantityUnits,
+            "limitPrice" to command.limitPrice,
+            "currency" to command.currency,
+            "timeInForce" to command.timeInForce
         )
     }
 
