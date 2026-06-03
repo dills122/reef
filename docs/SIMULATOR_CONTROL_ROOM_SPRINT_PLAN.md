@@ -60,6 +60,38 @@ connect to local env
   -> export reproduction command/artifacts
 ```
 
+## Mockup Direction
+
+The preferred visual direction is a dark operator-console control room, not a generic analytics dashboard.
+
+The first mockups should prioritize:
+- `Home / Control Room`
+- `Run Builder`
+- `Active Run`
+- `Run Results`
+- `Compare Runs`
+- `Trace Explorer`
+
+The mockup direction should emphasize:
+- developer testing and QA workflows
+- trace/debug visibility
+- throughput and correctness side by side
+- local environment safety
+- reproducible run artifacts
+- clear distinction between per-instance and cluster-wide metrics
+
+Metric realism:
+- local single-instance examples should use realistic current/target ranges, roughly `2.9k-5k` accepted rps.
+- any higher numbers should be explicitly labeled as future hosted/cluster-wide examples.
+- `Accepted RPS` should remain the primary throughput number for business capacity.
+- use `Submitted RPS` or `Request RPS` instead of ambiguous `Total RPS`.
+
+Important UI labels:
+- `Run Type`: load, stress, spike, soak.
+- `Simulation Mode`: `capacity-baseline`, `strict-lifecycle`, `chaos`.
+- `Metric Scope`: per instance or cluster-wide.
+- `Runtime Instance Count`: visible in run setup and results.
+
 ## Product Principles
 
 1. CLI parity first.
@@ -170,23 +202,29 @@ Run metadata should include:
 - `command`
 - artifact paths
 
-## MVP Screens
+## Planned Views
 
-### 1. Environment Overview
+### 1. Home / Control Room
 
 Purpose:
+- provide the landing overview for local environment and active simulation state.
 - answer "is local dev healthy enough to run a simulation?"
 
 Widgets:
 - platform runtime health
 - matching engine health
 - Postgres/container status if available
+- control API health
 - current branch/commit
 - base URL
 - last reset time if known
 - active run status
+- latest run result summary
+- metric scope: per instance or cluster-wide
 
 Actions:
+- start simulation
+- view runs
 - run smoke check
 - open raw health response
 - optional reset trigger behind confirmation
@@ -196,16 +234,22 @@ MVP source:
 - runtime health endpoints
 - Docker status where safe/available
 
-### 2. Run Builder
+Mockup notes:
+- this should feel like the top-level cockpit.
+- the active simulation card should show accepted rps, submitted rps, success rate, p99, and a small throughput trend.
+
+### 2. Simulate / Run Builder
 
 Purpose:
 - configure a simulation without remembering flags.
 
 Controls:
-- mode: `chaos`, `strict-lifecycle`, `capacity-baseline`
+- run type: load, stress, spike, soak
+- simulation mode: `chaos`, `strict-lifecycle`, `capacity-baseline`
 - duration
 - rate
 - workers
+- runtime instance count
 - timeout
 - trace check limit
 - reset before run
@@ -214,13 +258,22 @@ Controls:
 - report name/tag
 - session config picker
 - persona/profile mix if using config-driven sessions
+- seed
+- telemetry/tracing toggles
 
 Output:
 - generated CLI command preview
 - validation warnings
 - estimated intensity label: quality, capacity, ceiling, soak
+- scenario summary
+- expected accepted rps range when known
+- metric scope: per instance or cluster-wide
 
-### 3. Active Run Console
+Mockup notes:
+- generated command preview is non-negotiable.
+- validation should warn about destructive reset, unrealistic load, missing scenario config, or stale dev health.
+
+### 3. Simulate / Active Run
 
 Purpose:
 - monitor a running simulation.
@@ -230,24 +283,37 @@ Panels:
 - elapsed time
 - current stdout/stderr stream
 - latest telemetry sample
-- provisional throughput if available
+- submitted rps
+- accepted rps
+- success/fail rate
+- p95/p99 latency
+- backpressure indicator
+- trace status
+- top errors/rejects during run
 - stop button
 
 Important constraint:
 - "stop" should terminate the simulator process cleanly and mark the run as stopped, not delete artifacts.
 
-### 4. Run Results
+Mockup notes:
+- backpressure should be first-class, not buried in telemetry.
+- trace status should show passed/failed/in-progress/pending counts.
+- destructive stop action needs an explicit confirmation.
+
+### 4. Observe / Run Results
 
 Purpose:
 - make reports readable immediately after a run.
 
 Cards:
-- total throughput
+- submitted rps
 - accepted business ops rps
 - success rate
 - fail rate
 - p50/p95/p99
 - trace pass rate
+- runtime instance count
+- metric scope
 - top reject reasons
 - top transport/application failures
 
@@ -260,25 +326,84 @@ Tables:
 Links:
 - raw `report.json`
 - telemetry file
+- diagnostics bundle
 - reproduction command
 
-### 5. Compare Runs
+Reproducibility block:
+- branch
+- commit
+- seed
+- run type
+- simulation mode
+- session config
+- generated CLI command
+
+Mockup notes:
+- show latency distribution and throughput over time.
+- separate business rejects from transport/system failures.
+
+### 5. Observe / Compare Runs
 
 Purpose:
 - make regression analysis cheap.
 
 Initial comparison:
 - selected run vs baseline run
-- throughput delta
+- submitted rps delta
 - accepted throughput delta
 - p95/p99 delta
 - success-rate delta
 - trace-pass delta
 - reject taxonomy delta
+- backpressure delta where available
 
 MVP does not need full charting. A clear delta table is enough.
 
-### 6. Scenario Catalog
+Mockup notes:
+- make improvement/regression obvious with explicit callouts.
+- always show baseline and candidate branch/commit.
+- explain whether the candidate is better overall or only better on one metric.
+
+### 6. Observe / Trace Explorer
+
+Purpose:
+- debug individual requests/orders and understand exactly where time or failure occurred.
+
+Search fields:
+- trace ID
+- command ID
+- order ID
+- actor
+- scenario
+- status
+
+Timeline:
+- API boundary received
+- validation
+- idempotency check
+- command capture
+- engine call
+- runtime persistence
+- event/trade creation
+- trace validation
+
+Details:
+- actor/persona
+- scenario
+- command ID
+- order ID
+- instrument
+- side/quantity/price
+- order type
+- client IP or source
+- per-phase duration
+- raw trace JSON link
+
+Mockup notes:
+- this is one of the key developer/testing selling points.
+- phase duration should be visible directly in the timeline.
+
+### 7. Simulate / Scenario Catalog
 
 Purpose:
 - make persona/session configs discoverable.
@@ -287,6 +412,95 @@ Initial scope:
 - list known scenario files from `packages/scenario-definitions`
 - show name, description, actors, strategies, instruments, seed
 - launch a run using selected config
+
+Mockup notes:
+- keep this read-only for MVP.
+- later this can become a scenario builder/editor.
+
+### 8. Observe / Run History
+
+Purpose:
+- provide a searchable index of prior simulation runs.
+
+Columns:
+- run ID
+- tag
+- scenario
+- run type
+- simulation mode
+- duration
+- rate
+- workers
+- runtime instance count
+- accepted rps
+- success rate
+- p99
+- trace pass
+- status
+- branch/commit
+- created time
+
+Actions:
+- view result
+- compare
+- rerun
+- copy reproduction command
+
+### 9. Operate / Environment Health
+
+Purpose:
+- show local stack status and readiness for simulation.
+
+Widgets:
+- runtime health
+- matching engine health
+- database health
+- control API health
+- configured endpoints
+- versions
+- branch/commit
+- active containers/services where available
+
+Actions:
+- smoke check
+- refresh health
+- open logs
+
+### 10. Operate / Dev Controls
+
+Purpose:
+- expose safe local developer/admin actions.
+
+Initial controls:
+- reset dev environment
+- stop active run
+- run smoke
+- run replay pack
+- clear old artifacts
+
+Safety:
+- destructive actions require warning copy and confirmation.
+- reset, stop, and clear-artifacts should preserve enough audit metadata to explain what happened.
+- controls must map to allowlisted local API commands.
+
+### 11. Operate / Runtime Config Snapshot
+
+Purpose:
+- show the current runtime/simulator configuration without requiring shell inspection.
+
+Fields:
+- runtime threads
+- DB pool size
+- engine transport
+- simulator defaults
+- active flags
+- base URLs
+- artifact root
+- control API version
+
+MVP stance:
+- read-only first.
+- editable tuning can come later once audit/safety and rollback behavior are defined.
 
 ## Control API Endpoints
 
@@ -351,7 +565,13 @@ Safety rules:
 - key metric delta table
 - baseline marker
 
-6. Update docs and scripts.
+6. Implement trace explorer MVP.
+- trace search by ID fields
+- timeline rendering from existing trace/event data
+- raw trace link
+- per-phase duration placeholders where data exists
+
+7. Update docs and scripts.
 - `make dev-control` or equivalent
 - README setup instructions
 - simulator control room usage doc
@@ -458,6 +678,7 @@ Manual acceptance:
 - launch `30s` capacity-baseline run
 - view results
 - compare against prior run
+- inspect one trace from the run
 - copy reproduction command and run it from CLI
 
 ## Definition Of Done
@@ -467,7 +688,9 @@ Manual acceptance:
 - run history survives control API restart through artifact metadata files.
 - reset/smoke controls are allowlisted and local-only.
 - results view exposes accepted rps, success rate, p95/p99, trace pass, and reject taxonomy.
+- active run view exposes submitted rps, accepted rps, p95/p99, trace status, and backpressure indicator.
 - compare view shows deltas for the same core metrics.
+- trace explorer can find and render at least one trace timeline.
 - docs explain setup and local safety model.
 - tests cover command validation, path safety, report parsing, and key UI states.
 

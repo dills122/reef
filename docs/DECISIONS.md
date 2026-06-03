@@ -421,9 +421,12 @@ Summary:
 - UI-launched runs must produce the same report artifacts and reproduction commands as CLI-launched runs.
 - the control API must use allowlisted commands and artifact path guardrails; no arbitrary shell execution from the browser.
 - GitHub Pages is reserved for project overview/docs; running simulations requires a local control API or a future fully hosted Reef environment.
+- the first UI slice should prioritize developer testing views: control-room overview, run builder, active run, run results, compare runs, and trace explorer.
+- accepted rps, submitted/request rps, backpressure, trace status, runtime instance count, and per-instance vs cluster-wide scope must be visible in the relevant views.
 - this sprint supports the throughput track by making stress runs, comparisons, diagnostics, and scenario execution easier to repeat.
 
 Primary references:
+- [`docs/PROJECT_PITCH.md`](./PROJECT_PITCH.md)
 - [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 - [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
 - [`apps/platform-ui/README.md`](../apps/platform-ui/README.md)
