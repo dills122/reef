@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Track architecture work needed to move beyond the current tuned `~3k rps` local throughput profile toward sustained `4k-5k+` accepted throughput while preserving command capture, auditability, and deterministic simulation.
+Track architecture work needed to move beyond the current tuned `~3k rps` single-instance local throughput profile toward sustained `5k` accepted requests per second per runtime instance while preserving command capture, auditability, and deterministic simulation.
 
 Primary plan:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
@@ -10,6 +10,12 @@ Primary plan:
 Current measured reference:
 - best local ceiling probe: `2961.43 rps` total, `2919.27 rps` accepted, `98.58%` success
 - profile: `capacity-baseline`, target `6500`, workers `768`, gRPC runtime-engine, runtime threads `64`, DB pool max `48`
+- capacity model: all targets in this tracker are per runtime + engine instance unless explicitly labeled cluster-wide
+
+Scaling intent:
+- reach stable `5k` accepted rps per instance before relying on horizontal scale-out.
+- use per-instance throughput as the unit that cluster capacity multiplies.
+- keep cluster-wide tests separate from single-instance ceiling and quality gates.
 
 ## Workstream Status
 
@@ -137,6 +143,7 @@ Exit criteria:
 Every throughput architecture PR should include:
 
 - [ ] Baseline command and candidate command.
+- [ ] Runtime instance count and whether the metric is per-instance or cluster-wide.
 - [ ] Accepted throughput delta.
 - [ ] p95/p99 delta.
 - [ ] Success-rate delta.

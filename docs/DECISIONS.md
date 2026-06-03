@@ -329,7 +329,8 @@ Status: accepted
 
 Summary:
 - Reef should track a concrete single-instance throughput objective before horizontal scale-out.
-- planning anchor target is 2,000 req/s per instance, with staged near-term and stretch targets documented in SLO baselines.
+- planning anchor target is 5,000 accepted req/s per runtime + engine instance, with staged near-term and stretch targets documented in SLO baselines.
+- horizontal scaling should multiply this strong per-instance unit rather than compensate for unresolved single-node bottlenecks.
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
@@ -398,7 +399,8 @@ Primary references:
 Status: accepted
 
 Summary:
-- after reaching the tuned local `~3k rps` capacity profile, further throughput work should prioritize architecture changes over more thread/pool tuning.
+- after reaching the tuned local `~3k rps` single-instance capacity profile, further throughput work should prioritize architecture changes over more thread/pool tuning.
+- the active target is `5k` accepted requests per second per runtime + engine instance before relying on horizontal scale-out.
 - Reef should separate durable command intake from downstream runtime persistence through an append-only `command_log` slice.
 - synchronous command-result behavior remains available for compatibility and deterministic tests.
 - async/batched runtime persistence and read-model projection isolation are the next major scaling levers.

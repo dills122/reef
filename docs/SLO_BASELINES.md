@@ -55,5 +55,6 @@ Targets:
 - maintain stable error rates and acceptable latency envelopes
 
 Planning anchor:
-- product planning objective is 2,000 req/s per instance.
-- higher throughput is treated as optimization upside, not a baseline dependency.
+- product planning objective is 5,000 accepted req/s per runtime + engine instance.
+- horizontal scale-out should multiply this per-instance unit after durability, p99 latency, and success rate are stable.
+- higher single-instance throughput remains optimization upside, but 5,000 accepted req/s is the architecture target for this phase.

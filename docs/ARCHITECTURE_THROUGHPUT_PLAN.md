@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Define the next architecture improvements after the local dev stack reached roughly `3k rps` with `98%+` success in capacity-baseline simulation.
+Define the next architecture improvements after one local runtime + engine instance reached roughly `3k rps` with `98%+` success in capacity-baseline simulation.
 
-The goal is to move from tuned synchronous throughput to a production-shaped write architecture that can sustain higher load, preserve command capture guarantees, and keep DB growth from degrading the environment over time.
+The goal is to move from tuned synchronous throughput to a production-shaped write architecture that can sustain `5k` accepted requests per second per runtime instance, preserve command capture guarantees, and keep DB growth from degrading the environment over time.
 
 ## Current Baseline
 
@@ -25,6 +25,18 @@ Interpretation:
 - The current stack is healthy enough that the next gains should target architecture, not only tuning.
 - The write path is likely dominated by synchronous boundary capture, idempotency, runtime persistence, and event/table growth.
 - Further worker/rate increases already show diminishing returns and worse p99.
+
+## Per-Instance Scaling Model
+
+The planning target is `5k` accepted requests per second for each runtime + engine instance.
+
+This matters because horizontal scaling should multiply a strong node, not compensate for a weak one. A scaled cluster with `N` runtime instances should be planned as roughly `N * per-instance-capacity`, with overhead reserved for routing, partition ownership, database contention, and failover.
+
+Implications:
+- performance reports must state whether throughput is per instance or cluster-wide.
+- single-instance tuning remains the primary benchmark until the `5k` target is stable.
+- horizontal scaling work should not hide hot-path bottlenecks in command capture, idempotency, engine calls, or runtime persistence.
+- DB slice decisions should be evaluated against per-instance pressure first, then aggregate cluster pressure.
 
 ## Guiding Constraints
 
@@ -261,19 +273,19 @@ Introduce NATS JetStream when internal queues and DB-backed processing need dist
 ## Target Metrics
 
 Near target:
-- `4k rps` accepted throughput
+- `4k rps` accepted throughput per runtime instance
 - success rate `>= 95%`
 - trace pass `>= 99%`
 - p99 under `750ms` in local high-load profile
 
 Preferred target:
-- `5k rps` accepted throughput
+- `5k rps` accepted throughput per runtime instance
 - success rate `>= 98%`
 - trace pass `>= 99%`
 - p99 under `500ms` in local high-load profile
 
 Longer-term stretch:
-- `8k-10k rps` accepted throughput after async command pipeline and partitioned persistence
+- `8k-10k rps` accepted throughput per runtime instance after async command pipeline and partitioned persistence
 - requires deeper command processing and write-model redesign
 
 ## Decision Gates
