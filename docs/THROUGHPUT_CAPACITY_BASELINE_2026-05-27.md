@@ -74,3 +74,18 @@ node scripts/dev/sim-run.mjs --duration 5m --mode capacity-baseline --rate 5000 
 ### Key Outcome
 
 - `REFERENCE_DATA_ERROR` rejects dropped to `0` in the 5-minute high-load run.
+
+## Quick-Win Transport + Pool Sweep (2026-06-03)
+
+Clean `60s` capacity-baseline checks on branch `codex/throughput-quick-wins`:
+
+| Profile | Throughput | Accepted | Success | p95 | p99 |
+|---|---:|---:|---:|---:|---:|
+| HTTP defaults (`32` runtime threads, DB pool `24`) | `2233.25 rps` | `2202.08 rps` | `98.60%` | `337.33ms` | `539.87ms` |
+| gRPC transport (`32` runtime threads, DB pool `24`) | `2421.76 rps` | `2387.20 rps` | `98.57%` | `296.61ms` | `396.38ms` |
+| gRPC + tuned runtime (`64` runtime threads, DB pool `48`, min idle `16`) | `2852.64 rps` | `2810.50 rps` | `98.52%` | `249.13ms` | `387.92ms` |
+
+Outcome:
+- gRPC + tuned runtime improved accepted throughput by `+27.6%` over same-run HTTP defaults.
+- The tuned profile also cleared the prior 5-minute post-fix accepted baseline by `+5.8%`.
+- Docker dev defaults now use the tuned profile; override `ENGINE_TRANSPORT=http`, `MATCHING_ENGINE_ENABLE_GRPC=0`, `PLATFORM_HTTP_THREADS=32`, `RUNTIME_DB_POOL_MAX=24`, and `RUNTIME_DB_POOL_MIN_IDLE=4` to reproduce the old HTTP profile.
