@@ -410,3 +410,19 @@ Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
+
+### D-029: Simulator Control Room Before Next Throughput Architecture Sprint
+
+Status: accepted
+
+Summary:
+- the next high-value sprint should build a local simulator testing/admin UI before deeper `5k` architecture changes.
+- the UI should orchestrate existing simulator/dev scripts through a local-only control API rather than replacing the CLI.
+- UI-launched runs must produce the same report artifacts and reproduction commands as CLI-launched runs.
+- the control API must use allowlisted commands and artifact path guardrails; no arbitrary shell execution from the browser.
+- this sprint supports the throughput track by making stress runs, comparisons, diagnostics, and scenario execution easier to repeat.
+
+Primary references:
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
+- [`apps/platform-ui/README.md`](../apps/platform-ui/README.md)

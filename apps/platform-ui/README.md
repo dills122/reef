@@ -11,6 +11,10 @@ Planned surfaces:
 - simulation control room
 - audit and event explorer
 
+Simulator control room planning:
+
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](../../docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+
 Build guidance:
 
 - follow [`docs/steering/angular.md`](../../docs/steering/angular.md)

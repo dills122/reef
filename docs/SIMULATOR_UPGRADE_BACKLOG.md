@@ -92,9 +92,18 @@ Finding:
 
 ### Tier 3: UX and Integrations
 
+- simulator control room MVP:
+  - local-only control API around allowlisted dev/simulator commands
+  - run builder for stress/persona sessions
+  - active run console with logs/status
+  - report summary and run comparison views
+  - scenario catalog backed by session config files
 - docs-site scenario catalog pages generated from scenario files
 - run tags/metadata for CI and benchmark dashboards
 - optional stochastic mode (non-deterministic jitter) for long soak tests
+
+Primary plan:
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 
 ## Learnings and Pitfalls
 
