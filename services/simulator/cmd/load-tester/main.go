@@ -38,6 +38,7 @@ type Config struct {
 	Duration            time.Duration
 	Workers             int
 	RatePerSecond       int
+	RateSchedule        string
 	RequestTimeout      time.Duration
 	SubmitPct           int
 	ModifyPct           int
@@ -234,9 +235,9 @@ func main() {
 	var counter int64
 	traceSeen := sync.Map{}
 	var wg sync.WaitGroup
-	rateCh := make(chan struct{}, 1)
+	rateCh := make(chan struct{}, rateChannelDepth(cfg))
 	if cfg.RatePerSecond > 0 {
-		go tokenFeeder(ctx, cfg.RatePerSecond, rateCh)
+		go tokenFeeder(ctx, cfg.RatePerSecond, cfg.RateSchedule, rateCh)
 	}
 	if cfg.Tail {
 		go tailLoop(ctx, client, cfg)
@@ -282,6 +283,7 @@ func parseConfig() (Config, error) {
 	flag.DurationVar(&cfg.Duration, "duration", cfg.Duration, "test duration")
 	flag.IntVar(&cfg.Workers, "workers", cfg.Workers, "concurrent workers")
 	flag.IntVar(&cfg.RatePerSecond, "rate", cfg.RatePerSecond, "global request rate per second (0 = unthrottled)")
+	flag.StringVar(&cfg.RateSchedule, "rate-schedule", cfg.RateSchedule, "rate scheduler: drop or precise")
 	flag.DurationVar(&cfg.RequestTimeout, "timeout", cfg.RequestTimeout, "request timeout")
 	flag.IntVar(&cfg.SubmitPct, "submit-pct", cfg.SubmitPct, "submit action percentage")
 	flag.IntVar(&cfg.ModifyPct, "modify-pct", cfg.ModifyPct, "modify action percentage")
@@ -348,6 +350,9 @@ func parseConfig() (Config, error) {
 	if cfg.SubmitPct+cfg.ModifyPct+cfg.CancelPct != 100 {
 		return cfg, errors.New("submit-pct + modify-pct + cancel-pct must equal 100")
 	}
+	if !isValidRateSchedule(cfg.RateSchedule) {
+		return cfg, errors.New("rate-schedule must be drop or precise")
+	}
 	if cfg.Mode != "chaos" && cfg.Mode != "strict-lifecycle" && cfg.Mode != "capacity-baseline" {
 		return cfg, errors.New("mode must be chaos, strict-lifecycle, or capacity-baseline")
 	}
@@ -387,6 +392,7 @@ func defaultConfigFromEnv() Config {
 		Duration:            envDuration("REEF_DURATION", 30*time.Second),
 		Workers:             envInt("REEF_WORKERS", 8),
 		RatePerSecond:       envInt("REEF_RATE", 0),
+		RateSchedule:        envOr("REEF_RATE_SCHEDULE", rateScheduleDrop),
 		RequestTimeout:      envDuration("REEF_TIMEOUT", 5*time.Second),
 		SubmitPct:           envInt("REEF_SUBMIT_PCT", 60),
 		ModifyPct:           envInt("REEF_MODIFY_PCT", 25),
@@ -463,6 +469,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["rate"] {
 		cfg.RatePerSecond = parsed.RatePerSecond
+	}
+	if explicit["rate-schedule"] {
+		cfg.RateSchedule = parsed.RateSchedule
 	}
 	if explicit["timeout"] {
 		cfg.RequestTimeout = parsed.RequestTimeout
@@ -833,21 +842,30 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	actorLatencies := map[string][]float64{}
 	personaLatencies := map[string][]float64{}
 	strategyLatencies := map[string][]float64{}
+	profileActionLatencies := map[string]map[Action][]float64{}
+	actorActionLatencies := map[string]map[Action][]float64{}
+	personaActionLatencies := map[string]map[Action][]float64{}
+	strategyActionLatencies := map[string]map[Action][]float64{}
 
 	for _, r := range results {
+		latencyMs := r.Latency.Seconds() * 1000
 		report.TotalRequests++
 		report.StatusCodes[r.StatusCode]++
-		allLatencies = append(allLatencies, r.Latency.Seconds()*1000)
-		actionLatencies[r.Action] = append(actionLatencies[r.Action], r.Latency.Seconds()*1000)
-		profileLatencies[r.Profile] = append(profileLatencies[r.Profile], r.Latency.Seconds()*1000)
+		allLatencies = append(allLatencies, latencyMs)
+		actionLatencies[r.Action] = append(actionLatencies[r.Action], latencyMs)
+		profileLatencies[r.Profile] = append(profileLatencies[r.Profile], latencyMs)
+		appendActionLatency(profileActionLatencies, r.Profile, r.Action, latencyMs)
 		if r.ActorID != "" {
-			actorLatencies[r.ActorID] = append(actorLatencies[r.ActorID], r.Latency.Seconds()*1000)
+			actorLatencies[r.ActorID] = append(actorLatencies[r.ActorID], latencyMs)
+			appendActionLatency(actorActionLatencies, r.ActorID, r.Action, latencyMs)
 		}
 		if r.Persona != "" {
-			personaLatencies[r.Persona] = append(personaLatencies[r.Persona], r.Latency.Seconds()*1000)
+			personaLatencies[r.Persona] = append(personaLatencies[r.Persona], latencyMs)
+			appendActionLatency(personaActionLatencies, r.Persona, r.Action, latencyMs)
 		}
 		if r.StrategyID != "" {
-			strategyLatencies[r.StrategyID] = append(strategyLatencies[r.StrategyID], r.Latency.Seconds()*1000)
+			strategyLatencies[r.StrategyID] = append(strategyLatencies[r.StrategyID], latencyMs)
+			appendActionLatency(strategyActionLatencies, r.StrategyID, r.Action, latencyMs)
 		}
 
 		current := report.ByAction[r.Action]
@@ -911,25 +929,25 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	for profile, values := range profileLatencies {
 		pCurrent := report.ByProfile[profile]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.Profile == profile })
+		applyActionLatencyBuckets(&pCurrent, profileActionLatencies[profile])
 		report.ByProfile[profile] = pCurrent
 	}
 	for actorID, values := range actorLatencies {
 		pCurrent := report.ByActor[actorID]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.ActorID == actorID })
+		applyActionLatencyBuckets(&pCurrent, actorActionLatencies[actorID])
 		report.ByActor[actorID] = pCurrent
 	}
 	for persona, values := range personaLatencies {
 		pCurrent := report.ByPersona[persona]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.Persona == persona })
+		applyActionLatencyBuckets(&pCurrent, personaActionLatencies[persona])
 		report.ByPersona[persona] = pCurrent
 	}
 	for strategyID, values := range strategyLatencies {
 		pCurrent := report.ByStrategy[strategyID]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencies(&pCurrent, results, func(r requestResult) bool { return r.StrategyID == strategyID })
+		applyActionLatencyBuckets(&pCurrent, strategyActionLatencies[strategyID])
 		report.ByStrategy[strategyID] = pCurrent
 	}
 	report.TopErrors = topErrors(errorCounts, 8)
@@ -970,15 +988,18 @@ func updateDimensionSummary(target map[string]profileSummary, key string, action
 	target[key] = current
 }
 
-func applyActionLatencies(current *profileSummary, results []requestResult, match func(requestResult) bool) {
+func appendActionLatency(target map[string]map[Action][]float64, key string, action Action, latencyMs float64) {
+	byAction := target[key]
+	if byAction == nil {
+		byAction = map[Action][]float64{}
+		target[key] = byAction
+	}
+	byAction[action] = append(byAction[action], latencyMs)
+}
+
+func applyActionLatencyBuckets(current *profileSummary, buckets map[Action][]float64) {
 	for action, actionSummary := range current.ByAction {
-		actionValues := make([]float64, 0, len(results))
-		for _, r := range results {
-			if match(r) && r.Action == action {
-				actionValues = append(actionValues, r.Latency.Seconds()*1000)
-			}
-		}
-		actionSummary.Latency = computeLatency(actionValues)
+		actionSummary.Latency = computeLatency(buckets[action])
 		current.ByAction[action] = actionSummary
 	}
 }

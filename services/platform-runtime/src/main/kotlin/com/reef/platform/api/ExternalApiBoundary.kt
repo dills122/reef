@@ -140,7 +140,7 @@ class FixedWindowRateLimitHook(
         if (maxRequests <= 0 || windowSeconds <= 0) return null
         val now = clock()
         val windowStart = now.epochSecond / windowSeconds * windowSeconds
-        val count = store.increment(clientId, route, windowStart)
+        val count = store.increment(clientId, route, windowStart, windowSeconds)
         if (count > maxRequests) {
             return BoundaryError(429, "RATE_LIMITED", "rate limit exceeded")
         }
@@ -271,15 +271,27 @@ class PostgresIdempotencyStore(
 }
 
 interface RateLimitStore {
-    fun increment(clientId: String, route: String, windowStartEpochSeconds: Long): Int
+    fun increment(clientId: String, route: String, windowStartEpochSeconds: Long, windowSeconds: Long): Long
 }
 
-class InMemoryRateLimitStore : RateLimitStore {
-    private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+class InMemoryRateLimitStore(
+    private val retainedWindows: Long = 2
+) : RateLimitStore {
+    private val counts = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    override fun increment(clientId: String, route: String, windowStartEpochSeconds: Long): Int {
+    override fun increment(clientId: String, route: String, windowStartEpochSeconds: Long, windowSeconds: Long): Long {
+        cleanupBefore(windowStartEpochSeconds - (windowSeconds * (retainedWindows - 1).coerceAtLeast(0)))
         val key = "$clientId|$route|$windowStartEpochSeconds"
-        return counts.merge(key, 1) { current, one -> current + one } ?: 1
+        return counts.merge(key, 1L) { current, one -> current + one } ?: 1L
+    }
+
+    internal fun entryCount(): Int = counts.size
+
+    private fun cleanupBefore(minWindowStartEpochSeconds: Long) {
+        counts.keys.removeIf { key ->
+            val windowStart = key.substringAfterLast('|').toLongOrNull() ?: return@removeIf true
+            windowStart < minWindowStartEpochSeconds
+        }
     }
 }
 
@@ -300,6 +312,7 @@ class RejectRateAbuseProtectionHook(
     private val clock: () -> Instant = { Instant.now() }
 ) : AbuseProtectionHook {
     private data class RejectState(
+        val route: String,
         val windowStartEpochSeconds: Long,
         val rejectCount: Int,
         val blockedUntilEpochSeconds: Long,
@@ -316,10 +329,18 @@ class RejectRateAbuseProtectionHook(
         if (!tracksRoute(route)) return null
         val now = clock().epochSecond
         val key = key(clientId, route)
+        val policy = policyFor(route) ?: return null
         val state = states.computeIfPresent(key) { _, current ->
             if (current.blockedUntilEpochSeconds > 0 && now >= current.blockedUntilEpochSeconds) {
                 releaseCount.incrementAndGet()
-                current.copy(blockedUntilEpochSeconds = 0, warnedInWindow = false)
+                val currentWindowStart = currentWindowStart(now, policy)
+                if (current.windowStartEpochSeconds == currentWindowStart) {
+                    current.copy(blockedUntilEpochSeconds = 0, warnedInWindow = false)
+                } else {
+                    null
+                }
+            } else if (current.blockedUntilEpochSeconds == 0L && stateWindowExpired(current, policy, now)) {
+                null
             } else {
                 current
             }
@@ -340,12 +361,12 @@ class RejectRateAbuseProtectionHook(
         if (normalizedCode.isBlank() || !trackedRejectCodes.contains(normalizedCode)) return
 
         val now = clock().epochSecond
-        val currentWindowStart = now / policy.windowSeconds * policy.windowSeconds
+        val currentWindowStart = currentWindowStart(now, policy)
         val key = key(clientId, route)
         states.compute(key) { _, current ->
             val base = when {
-                current == null -> RejectState(currentWindowStart, 0, 0, false)
-                current.windowStartEpochSeconds != currentWindowStart -> RejectState(currentWindowStart, 0, 0, false)
+                current == null -> RejectState(route, currentWindowStart, 0, 0, false)
+                current.windowStartEpochSeconds != currentWindowStart -> RejectState(route, currentWindowStart, 0, 0, false)
                 current.blockedUntilEpochSeconds > 0 && now >= current.blockedUntilEpochSeconds -> current.copy(blockedUntilEpochSeconds = 0, warnedInWindow = false)
                 else -> current
             }
@@ -378,6 +399,7 @@ class RejectRateAbuseProtectionHook(
 
     override fun stats(): AbuseProtectionStats {
         val now = clock().epochSecond
+        cleanupExpiredStates(now)
         val activeBlockedClients = states.values.count { it.blockedUntilEpochSeconds > now }
         return AbuseProtectionStats(
             mode = "reject-rate",
@@ -414,6 +436,37 @@ class RejectRateAbuseProtectionHook(
     private fun tracksRoute(route: String): Boolean {
         if (trackedRoutes.isEmpty()) return true
         return trackedRoutes.contains(route)
+    }
+
+    internal fun trackedStateCount(): Int = states.size
+
+    private fun cleanupExpiredStates(now: Long) {
+        for (key in states.keys) {
+            states.computeIfPresent(key) { _, state ->
+                val policy = policyFor(state.route) ?: return@computeIfPresent null
+                if (state.blockedUntilEpochSeconds > 0 && now >= state.blockedUntilEpochSeconds) {
+                    releaseCount.incrementAndGet()
+                    return@computeIfPresent if (stateWindowExpired(state, policy, now)) {
+                        null
+                    } else {
+                        state.copy(blockedUntilEpochSeconds = 0, warnedInWindow = false)
+                    }
+                }
+                if (state.blockedUntilEpochSeconds == 0L && stateWindowExpired(state, policy, now)) {
+                    null
+                } else {
+                    state
+                }
+            }
+        }
+    }
+
+    private fun stateWindowExpired(state: RejectState, policy: RejectRatePolicy, now: Long): Boolean {
+        return now >= state.windowStartEpochSeconds + policy.windowSeconds
+    }
+
+    private fun currentWindowStart(now: Long, policy: RejectRatePolicy): Long {
+        return now / policy.windowSeconds * policy.windowSeconds
     }
 
     private fun key(clientId: String, route: String): String {

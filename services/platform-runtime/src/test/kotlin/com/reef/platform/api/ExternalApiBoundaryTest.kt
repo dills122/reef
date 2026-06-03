@@ -101,6 +101,19 @@ class ExternalApiBoundaryTest {
     }
 
     @Test
+    fun inMemoryRateLimitStorePrunesOldWindows() {
+        val store = InMemoryRateLimitStore(retainedWindows = 2)
+
+        assertEquals(1L, store.increment("client-1", "/api/v1/orders/submit", 0, 60))
+        assertEquals(1L, store.increment("client-2", "/api/v1/orders/submit", 60, 60))
+        assertEquals(2, store.entryCount())
+
+        assertEquals(1L, store.increment("client-3", "/api/v1/orders/submit", 120, 60))
+
+        assertEquals(2, store.entryCount())
+    }
+
+    @Test
     fun rejectRateAbuseHookBlocksClientAfterTrackedRejectThreshold() {
         var now = Instant.ofEpochSecond(120)
         val hook = RejectRateAbuseProtectionHook(
@@ -123,6 +136,35 @@ class ExternalApiBoundaryTest {
 
         now = Instant.ofEpochSecond(151)
         assertNull(hook.allow("client-1", "/api/v1/orders/submit"))
+    }
+
+    @Test
+    fun rejectRateAbuseHookCleansExpiredStateWithoutDoubleCountingRelease() {
+        var now = Instant.ofEpochSecond(100)
+        val hook = RejectRateAbuseProtectionHook(
+            maxRejects = 1,
+            windowSeconds = 10,
+            blockSeconds = 5,
+            trackedRejectCodes = setOf("INVALID_STATE"),
+            trackedRoutes = setOf("/api/v1/orders/submit"),
+            clock = { now }
+        )
+
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        hook.observe("client-1", "/api/v1/orders/submit", 200, "INVALID_STATE")
+        assertEquals(1, hook.trackedStateCount())
+        assertEquals(1, hook.stats().activeBlockedClients)
+
+        now = Instant.ofEpochSecond(106)
+        val released = hook.stats()
+        assertEquals(0, released.activeBlockedClients)
+        assertEquals(1, released.releases)
+        assertEquals(1, hook.trackedStateCount())
+        assertEquals(1, hook.stats().releases)
+
+        now = Instant.ofEpochSecond(111)
+        hook.stats()
+        assertEquals(0, hook.trackedStateCount())
     }
 
     @Test

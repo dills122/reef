@@ -3,10 +3,16 @@ package main
 import (
 	"context"
 	"math/rand"
+	"strings"
 	"time"
 
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
 	"github.com/dills122/reef/services/simulator/internal/strategy"
+)
+
+const (
+	rateScheduleDrop    = "drop"
+	rateSchedulePrecise = "precise"
 )
 
 func chooseAction(rng *rand.Rand, cfg Config, hasOrders bool) Action {
@@ -407,7 +413,31 @@ func maxInt64(a, b int64) int64 {
 	return b
 }
 
-func tokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
+func isValidRateSchedule(schedule string) bool {
+	switch strings.ToLower(strings.TrimSpace(schedule)) {
+	case rateScheduleDrop, rateSchedulePrecise:
+		return true
+	default:
+		return false
+	}
+}
+
+func rateChannelDepth(cfg Config) int {
+	if strings.EqualFold(strings.TrimSpace(cfg.RateSchedule), rateSchedulePrecise) {
+		return maxInt(cfg.Workers*2, 1)
+	}
+	return 1
+}
+
+func tokenFeeder(ctx context.Context, rate int, schedule string, out chan<- struct{}) {
+	if strings.EqualFold(strings.TrimSpace(schedule), rateSchedulePrecise) {
+		preciseTokenFeeder(ctx, rate, out)
+		return
+	}
+	dropTokenFeeder(ctx, rate, out)
+}
+
+func dropTokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
 	period := time.Second / time.Duration(rate)
 	if period <= 0 {
 		period = time.Microsecond
@@ -423,6 +453,34 @@ func tokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
 			case out <- struct{}{}:
 			default:
 			}
+		}
+	}
+}
+
+func preciseTokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
+	period := time.Second / time.Duration(rate)
+	if period <= 0 {
+		period = time.Microsecond
+	}
+	next := time.Now()
+	for {
+		next = next.Add(period)
+		if delay := time.Until(next); delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case out <- struct{}{}:
+		}
+		if time.Since(next) > period {
+			next = time.Now()
 		}
 	}
 }

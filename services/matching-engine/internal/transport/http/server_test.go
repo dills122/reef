@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
@@ -53,6 +54,61 @@ func TestSubmitOrder(t *testing.T) {
 
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`"accepted"`)) {
 		t.Fatalf("expected accepted payload, got %s", rec.Body.String())
+	}
+}
+
+func TestSubmitOrderRejectsUnknownFields(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	body := []byte(`{
+		"orderId":"ord-1",
+		"instrumentId":"AAPL",
+		"side":"BUY",
+		"quantityUnits":"100",
+		"limitPrice":"150250000000",
+		"currency":"USD",
+		"unexpected":"field"
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSubmitOrderRejectsMultipleJSONValues(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	body := []byte(`{"orderId":"ord-1","instrumentId":"AAPL","side":"BUY","quantityUnits":"100","limitPrice":"150250000000","currency":"USD"} {"orderId":"ord-2"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSubmitOrderRejectsOversizedBody(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	body := `{"orderId":"ord-1","instrumentId":"AAPL","side":"BUY","quantityUnits":"100","limitPrice":"150250000000","currency":"` +
+		strings.Repeat("x", int(maxRequestBodyBytes)) +
+		`"}`
+
+	req := httptest.NewRequest(http.MethodPost, "/orders/submit", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
