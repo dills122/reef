@@ -392,3 +392,19 @@ Summary:
 Primary references:
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
 - [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
+
+### D-028: Throughput Architecture Progression
+
+Status: accepted
+
+Summary:
+- after reaching the tuned local `~3k rps` capacity profile, further throughput work should prioritize architecture changes over more thread/pool tuning.
+- Reef should separate durable command intake from downstream runtime persistence through an append-only `command_log` slice.
+- synchronous command-result behavior remains available for compatibility and deterministic tests.
+- async/batched runtime persistence and read-model projection isolation are the next major scaling levers.
+- physical database splitting is deferred until schema-level diagnostics prove contention that cannot be solved with logical isolation, partitioning, and batching.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
