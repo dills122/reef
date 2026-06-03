@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
@@ -7,7 +8,7 @@ import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 
 class PlatformHttpServer(
-    private val port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
+    private val port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
@@ -16,10 +17,10 @@ class PlatformHttpServer(
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore()
 ) {
     private val maxRequestBodyBytes: Int =
-        System.getenv("PLATFORM_HTTP_MAX_REQUEST_BYTES")?.toIntOrNull()?.coerceAtLeast(1024) ?: (1024 * 1024)
+        RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
 
     constructor(
-        port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
+        port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
         api: PlatformApi = PlatformApi(),
         deps: ServerBoundaryDeps = defaultBoundary()
     ) : this(
@@ -33,9 +34,9 @@ class PlatformHttpServer(
     )
 
     fun start(): HttpServer {
-        val backlog = System.getenv("PLATFORM_HTTP_BACKLOG")?.toIntOrNull()?.coerceAtLeast(64) ?: 1024
+        val backlog = RuntimeEnv.int("PLATFORM_HTTP_BACKLOG", 1024, min = 64)
         val server = HttpServer.create(InetSocketAddress(port), backlog)
-        val workerThreads = System.getenv("PLATFORM_HTTP_THREADS")?.toIntOrNull()?.coerceAtLeast(4) ?: 32
+        val workerThreads = RuntimeEnv.int("PLATFORM_HTTP_THREADS", 32, min = 4)
         server.executor = Executors.newFixedThreadPool(workerThreads)
 
         server.createContext("/health") { exchange ->

@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import java.util.concurrent.ConcurrentHashMap
@@ -15,11 +16,11 @@ object RuntimeDataSources {
                 this.jdbcUrl = jdbcUrl
                 username = user
                 this.password = password
-                maximumPoolSize = System.getenv("RUNTIME_DB_POOL_MAX")?.toIntOrNull() ?: 24
-                minimumIdle = System.getenv("RUNTIME_DB_POOL_MIN_IDLE")?.toIntOrNull() ?: 4
-                connectionTimeout = System.getenv("RUNTIME_DB_POOL_CONN_TIMEOUT_MS")?.toLongOrNull() ?: 2000L
-                idleTimeout = System.getenv("RUNTIME_DB_POOL_IDLE_TIMEOUT_MS")?.toLongOrNull() ?: 120000L
-                maxLifetime = System.getenv("RUNTIME_DB_POOL_MAX_LIFETIME_MS")?.toLongOrNull() ?: 600000L
+                maximumPoolSize = RuntimeEnv.int("RUNTIME_DB_POOL_MAX", 24)
+                minimumIdle = RuntimeEnv.int("RUNTIME_DB_POOL_MIN_IDLE", 4)
+                connectionTimeout = RuntimeEnv.long("RUNTIME_DB_POOL_CONN_TIMEOUT_MS", 2000L)
+                idleTimeout = RuntimeEnv.long("RUNTIME_DB_POOL_IDLE_TIMEOUT_MS", 120000L)
+                maxLifetime = RuntimeEnv.long("RUNTIME_DB_POOL_MAX_LIFETIME_MS", 600000L)
                 isAutoCommit = true
             }
             HikariDataSource(config)
