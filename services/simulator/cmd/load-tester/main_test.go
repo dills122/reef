@@ -388,17 +388,41 @@ func TestRecentOrderWindowStart(t *testing.T) {
 }
 
 func TestApplyFlagOverridesUsesParsedValues(t *testing.T) {
-	cfg := Config{Workers: 24, RatePerSecond: 450, PrettySummary: false, ReportOut: ""}
-	parsed := Config{Workers: 12, RatePerSecond: 150, PrettySummary: true, ReportOut: "/tmp/report.json"}
+	cfg := Config{Workers: 24, RatePerSecond: 450, RateSchedule: rateScheduleDrop, PrettySummary: false, ReportOut: ""}
+	parsed := Config{Workers: 12, RatePerSecond: 150, RateSchedule: rateSchedulePrecise, PrettySummary: true, ReportOut: "/tmp/report.json"}
 	explicit := map[string]bool{
 		"workers":        true,
 		"rate":           true,
+		"rate-schedule":  true,
 		"pretty-summary": true,
 		"report-out":     true,
 	}
 	applyFlagOverrides(&cfg, parsed, explicit)
-	if cfg.Workers != 12 || cfg.RatePerSecond != 150 || !cfg.PrettySummary || cfg.ReportOut != "/tmp/report.json" {
+	if cfg.Workers != 12 || cfg.RatePerSecond != 150 || cfg.RateSchedule != rateSchedulePrecise || !cfg.PrettySummary || cfg.ReportOut != "/tmp/report.json" {
 		t.Fatalf("overrides not applied correctly: %+v", cfg)
+	}
+}
+
+func TestRateScheduleValidationAndChannelDepth(t *testing.T) {
+	for _, schedule := range []string{rateScheduleDrop, rateSchedulePrecise, " PRECISE "} {
+		if !isValidRateSchedule(schedule) {
+			t.Fatalf("expected valid rate schedule: %q", schedule)
+		}
+	}
+	if isValidRateSchedule("burst") {
+		t.Fatal("unexpected valid rate schedule: burst")
+	}
+	if got := rateChannelDepth(Config{RateSchedule: rateScheduleDrop, Workers: 8}); got != 1 {
+		t.Fatalf("expected drop scheduler channel depth=1, got %d", got)
+	}
+	if got := rateChannelDepth(Config{RateSchedule: rateSchedulePrecise, Workers: 8}); got != 16 {
+		t.Fatalf("expected precise scheduler channel depth=16, got %d", got)
+	}
+	if got := rateChannelDepth(Config{RateSchedule: " PRECISE ", Workers: 8}); got != 16 {
+		t.Fatalf("expected normalized precise scheduler channel depth=16, got %d", got)
+	}
+	if got := rateChannelDepth(Config{RateSchedule: rateSchedulePrecise, Workers: 0}); got != 1 {
+		t.Fatalf("expected precise scheduler minimum channel depth=1, got %d", got)
 	}
 }
 
