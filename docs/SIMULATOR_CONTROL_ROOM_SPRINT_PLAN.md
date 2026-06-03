@@ -25,6 +25,23 @@ Current gaps:
 - test configuration is still mostly CLI flag knowledge.
 - no visual run comparison, no run timeline, no quick "reset + run + compare" workflow.
 
+## Hosting Model
+
+There are two separate hosting tracks:
+
+1. Project site / docs hosting.
+- GitHub Pages is appropriate for project overview, docs, scenario examples, architecture notes, and public learning material.
+- GitHub Pages should not be treated as the execution environment for simulations.
+
+2. Platform control room hosting.
+- Local developer mode runs the UI against a local `127.0.0.1` control API.
+- Future public/demo mode requires a fully hosted Reef environment with a hosted control API, runtime, engine, database, worker orchestration, auth/safety controls, quotas, and artifact storage.
+- The hosted simulation environment is a separate platform lift, not a static-site deployment.
+
+Implication:
+- the MVP should keep UI components portable, but all execution controls must go through an environment-specific backend.
+- static docs can explain and showcase the simulator; the control room needs a live backend to run it.
+
 ## Sprint Pitch
 
 Build a local-only Simulator Control Room MVP.
@@ -88,6 +105,11 @@ Responsibilities:
 - visualize report summaries
 - compare runs and baseline drift
 - link to raw artifacts and reproduction commands
+
+Deployment stance:
+- local dev first.
+- reusable UI shell for future hosted environments.
+- GitHub Pages is for project/docs pages, not for running simulations directly.
 
 ### Local Control API
 
@@ -338,7 +360,7 @@ Safety rules:
 
 - production authentication
 - multi-user collaboration
-- cloud execution
+- hosted/cloud execution environment
 - Kubernetes/job orchestration
 - persisted database-backed run history
 - complex charting library adoption

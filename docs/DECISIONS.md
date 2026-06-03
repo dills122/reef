@@ -420,6 +420,7 @@ Summary:
 - the UI should orchestrate existing simulator/dev scripts through a local-only control API rather than replacing the CLI.
 - UI-launched runs must produce the same report artifacts and reproduction commands as CLI-launched runs.
 - the control API must use allowlisted commands and artifact path guardrails; no arbitrary shell execution from the browser.
+- GitHub Pages is reserved for project overview/docs; running simulations requires a local control API or a future fully hosted Reef environment.
 - this sprint supports the throughput track by making stress runs, comparisons, diagnostics, and scenario execution easier to repeat.
 
 Primary references:

@@ -2,6 +2,12 @@
 
 This application will host Reef's Angular-based operational UI.
 
+Initial deployment target:
+
+- local developer control room backed by a local control API
+- future hosted simulation environment only after a separate backend/platform lift
+- GitHub Pages is reserved for project overview/docs, not for running simulations directly
+
 Planned surfaces:
 
 - order entry and blotter views
