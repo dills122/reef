@@ -2,7 +2,6 @@ package com.reef.platform.infrastructure.engine
 
 import com.reef.platform.api.JsonCodec
 import com.reef.platform.api.JsonDocument
-import com.reef.platform.api.JsonFields
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
@@ -33,63 +32,60 @@ class EngineClient : EngineGateway {
     }
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
-        val payload = """
-            {
-              "commandId":"${JsonFields.escape(command.commandId)}",
-              "traceId":"${JsonFields.escape(command.traceId)}",
-              "causationId":"${JsonFields.escape(command.causationId)}",
-              "correlationId":"${JsonFields.escape(command.correlationId)}",
-              "actorId":"${JsonFields.escape(command.actorId)}",
-              "occurredAt":"${JsonFields.escape(command.occurredAt)}",
-              "orderId":"${JsonFields.escape(command.orderId)}",
-              "instrumentId":"${JsonFields.escape(command.instrumentId)}",
-              "participantId":"${JsonFields.escape(command.participantId)}",
-              "accountId":"${JsonFields.escape(command.accountId)}",
-              "side":"${JsonFields.escape(command.side)}",
-              "orderType":"${JsonFields.escape(command.orderType)}",
-              "quantityUnits":"${JsonFields.escape(command.quantityUnits)}",
-              "limitPrice":"${JsonFields.escape(command.limitPrice)}",
-              "currency":"${JsonFields.escape(command.currency)}",
-              "timeInForce":"${JsonFields.escape(command.timeInForce)}"
-            }
-        """.trimIndent()
-
-        return postAndParse("/orders/submit", payload)
+        return postAndParse(
+            "/orders/submit",
+            JsonCodec.writeObject(
+                "commandId" to command.commandId,
+                "traceId" to command.traceId,
+                "causationId" to command.causationId,
+                "correlationId" to command.correlationId,
+                "actorId" to command.actorId,
+                "occurredAt" to command.occurredAt,
+                "orderId" to command.orderId,
+                "instrumentId" to command.instrumentId,
+                "participantId" to command.participantId,
+                "accountId" to command.accountId,
+                "side" to command.side,
+                "orderType" to command.orderType,
+                "quantityUnits" to command.quantityUnits,
+                "limitPrice" to command.limitPrice,
+                "currency" to command.currency,
+                "timeInForce" to command.timeInForce
+            )
+        )
     }
 
     override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
-        val payload = """
-            {
-              "commandId":"${JsonFields.escape(command.commandId)}",
-              "traceId":"${JsonFields.escape(command.traceId)}",
-              "causationId":"${JsonFields.escape(command.causationId)}",
-              "correlationId":"${JsonFields.escape(command.correlationId)}",
-              "actorId":"${JsonFields.escape(command.actorId)}",
-              "occurredAt":"${JsonFields.escape(command.occurredAt)}",
-              "orderId":"${JsonFields.escape(command.orderId)}",
-              "reason":"${JsonFields.escape(command.reason)}"
-            }
-        """.trimIndent()
-
-        return postAndParse("/orders/cancel", payload)
+        return postAndParse(
+            "/orders/cancel",
+            JsonCodec.writeObject(
+                "commandId" to command.commandId,
+                "traceId" to command.traceId,
+                "causationId" to command.causationId,
+                "correlationId" to command.correlationId,
+                "actorId" to command.actorId,
+                "occurredAt" to command.occurredAt,
+                "orderId" to command.orderId,
+                "reason" to command.reason
+            )
+        )
     }
 
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
-        val payload = """
-            {
-              "commandId":"${JsonFields.escape(command.commandId)}",
-              "traceId":"${JsonFields.escape(command.traceId)}",
-              "causationId":"${JsonFields.escape(command.causationId)}",
-              "correlationId":"${JsonFields.escape(command.correlationId)}",
-              "actorId":"${JsonFields.escape(command.actorId)}",
-              "occurredAt":"${JsonFields.escape(command.occurredAt)}",
-              "orderId":"${JsonFields.escape(command.orderId)}",
-              "quantityUnits":"${JsonFields.escape(command.quantityUnits)}",
-              "limitPrice":"${JsonFields.escape(command.limitPrice)}"
-            }
-        """.trimIndent()
-
-        return postAndParse("/orders/modify", payload)
+        return postAndParse(
+            "/orders/modify",
+            JsonCodec.writeObject(
+                "commandId" to command.commandId,
+                "traceId" to command.traceId,
+                "causationId" to command.causationId,
+                "correlationId" to command.correlationId,
+                "actorId" to command.actorId,
+                "occurredAt" to command.occurredAt,
+                "orderId" to command.orderId,
+                "quantityUnits" to command.quantityUnits,
+                "limitPrice" to command.limitPrice
+            )
+        )
     }
 
     private fun postAndParse(path: String, payload: String): SubmitOrderResult {
