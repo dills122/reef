@@ -44,8 +44,7 @@ class PlatformHttpServer(
 
         server.createContext("/internal/boundary/abuse/stats") { exchange ->
             if (exchange.requestMethod != "GET") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             writeJson(exchange, 200, abuseStatsJson(abuseProtectionHook.stats()))
@@ -53,15 +52,14 @@ class PlatformHttpServer(
 
         server.createContext("/orders/submit") { exchange ->
             if (exchange.requestMethod != "POST") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.submitOrder(body))
             } catch (ex: Exception) {
-                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+                writeJson(exchange, 503, runtimeUnavailableJson(ex))
             }
         }
 
@@ -78,10 +76,7 @@ class PlatformHttpServer(
                     writeJson(exchange, 200, api.createInstrument(body))
                 }
                 "GET" -> writeJson(exchange, 200, api.instruments())
-                else -> {
-                    exchange.sendResponseHeaders(405, -1)
-                    exchange.close()
-                }
+                else -> methodNotAllowed(exchange)
             }
         }
 
@@ -92,10 +87,7 @@ class PlatformHttpServer(
                     writeJson(exchange, 200, api.createParticipant(body))
                 }
                 "GET" -> writeJson(exchange, 200, api.participants())
-                else -> {
-                    exchange.sendResponseHeaders(405, -1)
-                    exchange.close()
-                }
+                else -> methodNotAllowed(exchange)
             }
         }
 
@@ -106,24 +98,20 @@ class PlatformHttpServer(
                     writeJson(exchange, 200, api.createAccount(body))
                 }
                 "GET" -> writeJson(exchange, 200, api.accounts())
-                else -> {
-                    exchange.sendResponseHeaders(405, -1)
-                    exchange.close()
-                }
+                else -> methodNotAllowed(exchange)
             }
         }
 
         server.createContext("/orders/cancel") { exchange ->
             if (exchange.requestMethod != "POST") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.cancelOrder(body))
             } catch (ex: Exception) {
-                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+                writeJson(exchange, 503, runtimeUnavailableJson(ex))
             }
         }
 
@@ -135,15 +123,14 @@ class PlatformHttpServer(
 
         server.createContext("/orders/modify") { exchange ->
             if (exchange.requestMethod != "POST") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.modifyOrder(body))
             } catch (ex: Exception) {
-                writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
+                writeJson(exchange, 503, runtimeUnavailableJson(ex))
             }
         }
 
@@ -155,8 +142,7 @@ class PlatformHttpServer(
 
         server.createContext("/orders/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
 
@@ -175,8 +161,7 @@ class PlatformHttpServer(
 
         server.createContext("/orders") { exchange ->
             if (exchange.requestMethod != "GET") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             writeJson(exchange, 200, api.orders())
@@ -184,8 +169,7 @@ class PlatformHttpServer(
 
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             val limit = queryLimit(exchange, 0)
@@ -198,8 +182,7 @@ class PlatformHttpServer(
 
         server.createContext("/events") { exchange ->
             if (exchange.requestMethod != "GET") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
             val limit = queryLimit(exchange, 0)
@@ -212,8 +195,7 @@ class PlatformHttpServer(
 
         server.createContext("/traces/") { exchange ->
             if (exchange.requestMethod != "GET") {
-                exchange.sendResponseHeaders(405, -1)
-                exchange.close()
+                methodNotAllowed(exchange)
                 return@createContext
             }
 
@@ -242,6 +224,23 @@ class PlatformHttpServer(
         }
     }
 
+    private fun methodNotAllowed(exchange: HttpExchange) {
+        exchange.sendResponseHeaders(405, -1)
+        exchange.close()
+    }
+
+    private fun simpleErrorJson(error: String, message: String? = null): String {
+        return if (message == null) {
+            JsonCodec.writeObject("error" to error)
+        } else {
+            JsonCodec.writeObject("error" to error, "message" to message)
+        }
+    }
+
+    private fun runtimeUnavailableJson(ex: Exception): String {
+        return simpleErrorJson("runtime unavailable", ex.message ?: "unknown")
+    }
+
     private fun readRequestBody(exchange: HttpExchange): String? {
         val buffer = ByteArray(DEFAULT_BODY_BUFFER_BYTES)
         val out = ByteArrayOutputStream()
@@ -253,7 +252,7 @@ class PlatformHttpServer(
             }
             total += read
             if (total > maxRequestBodyBytes) {
-                writeJson(exchange, 413, """{"error":"request body too large","maxBytes":$maxRequestBodyBytes}""")
+                writeJson(exchange, 413, JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes))
                 return null
             }
             out.write(buffer, 0, read)
@@ -282,8 +281,7 @@ class PlatformHttpServer(
         operation: (String) -> String
     ) {
         if (exchange.requestMethod != "POST") {
-            exchange.sendResponseHeaders(405, -1)
-            exchange.close()
+            methodNotAllowed(exchange)
             return
         }
 
@@ -308,7 +306,7 @@ class PlatformHttpServer(
             writeJson(
                 exchange,
                 503,
-                """{"error":"command capture unavailable","message":"${JsonFields.escape(errorMessage)}"}"""
+                simpleErrorJson("command capture unavailable", errorMessage)
             )
             return
         }
@@ -340,7 +338,7 @@ class PlatformHttpServer(
                 "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
             )
             commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
-            writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(errorMessage)}"}""")
+            writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
         }
     }
 
@@ -362,34 +360,21 @@ class PlatformHttpServer(
     }
 
     private fun abuseStatsJson(stats: AbuseProtectionStats): String {
-        val trackedCodes = stats.trackedRejectCodes.sorted().joinToString(prefix = "[", postfix = "]") { code ->
-            """"${JsonFields.escape(code)}""""
-        }
-        val trackedRoutes = stats.trackedRoutes.sorted().joinToString(prefix = "[", postfix = "]") { route ->
-            """"${JsonFields.escape(route)}""""
-        }
-        val routePolicyOverrides = stats.routePolicyOverrides.entries
-            .sortedBy { it.key }
-            .joinToString(prefix = "{", postfix = "}") { (route, policy) ->
-                """"${JsonFields.escape(route)}":"${JsonFields.escape(policy)}""""
-            }
-        return """
-            {
-              "mode":"${JsonFields.escape(stats.mode)}",
-              "enabled":${stats.enabled},
-              "warningOnly":${stats.warningOnly},
-              "maxRejects":${stats.maxRejects},
-              "windowSeconds":${stats.windowSeconds},
-              "blockSeconds":${stats.blockSeconds},
-              "trackedRejectCodes":$trackedCodes,
-              "trackedRoutes":$trackedRoutes,
-              "routePolicyOverrides":$routePolicyOverrides,
-              "trips":${stats.trips},
-              "blocks":${stats.blocks},
-              "releases":${stats.releases},
-              "activeBlockedClients":${stats.activeBlockedClients}
-            }
-        """.trimIndent()
+        return JsonCodec.writeObject(
+            "mode" to stats.mode,
+            "enabled" to stats.enabled,
+            "warningOnly" to stats.warningOnly,
+            "maxRejects" to stats.maxRejects,
+            "windowSeconds" to stats.windowSeconds,
+            "blockSeconds" to stats.blockSeconds,
+            "trackedRejectCodes" to stats.trackedRejectCodes.sorted(),
+            "trackedRoutes" to stats.trackedRoutes.sorted(),
+            "routePolicyOverrides" to stats.routePolicyOverrides.toSortedMap(),
+            "trips" to stats.trips,
+            "blocks" to stats.blocks,
+            "releases" to stats.releases,
+            "activeBlockedClients" to stats.activeBlockedClients
+        )
     }
 }
 
