@@ -240,6 +240,66 @@ func TestSubmitOrderRejectsMissingInstrument(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderRejectsDuplicateOrderIDWithoutMutatingBook(t *testing.T) {
+	service := NewService()
+
+	first := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-dup",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	if first.Accepted == nil {
+		t.Fatalf("expected first order to be accepted, got %#v", first)
+	}
+
+	duplicate := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-dup",
+		InstrumentID:  "MSFT",
+		Side:          domain.SideSell,
+		QuantityUnits: "999",
+		LimitPrice:    "1",
+		Currency:      "USD",
+	})
+	if duplicate.Rejected == nil {
+		t.Fatalf("expected duplicate order to be rejected, got %#v", duplicate)
+	}
+	if duplicate.Rejected.Code != "DUPLICATE_ORDER_ID" {
+		t.Fatalf("expected duplicate order code, got %s", duplicate.Rejected.Code)
+	}
+
+	state, ok := service.OrderState("ord-dup")
+	if !ok {
+		t.Fatal("expected original order state to remain")
+	}
+	if state.InstrumentID != "AAPL" || state.Side != domain.SideBuy || state.RemainingQuantity != "100" || state.LimitPrice != "150250000000" {
+		t.Fatalf("duplicate mutated original state: %#v", state)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected original resting order to remain on AAPL buy book")
+	}
+	if service.RestingOrders("MSFT", domain.SideSell) != 0 {
+		t.Fatalf("expected duplicate to add no MSFT sell liquidity")
+	}
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-cross",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if match.Accepted == nil || len(match.Trades) != 1 {
+		t.Fatalf("expected original order to match exactly once, got %#v", match)
+	}
+	if match.Trades[0].BuyOrderID != "ord-dup" || match.Trades[0].SellOrderID != "ord-cross" {
+		t.Fatalf("unexpected trade parties after duplicate rejection: %#v", match.Trades[0])
+	}
+}
+
 func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{

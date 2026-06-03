@@ -91,7 +91,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 		Status:            domain.OrderStatusAccepted,
 		LastUpdatedAt:     now,
 	}
-	s.storeOrder(record)
+	if !s.reserveOrder(record) {
+		return rejectedResult("evt-reject-duplicate-order-id", cmd.OrderID, "DUPLICATE_ORDER_ID", "orderId already exists", now)
+	}
 	incoming := &restingOrder{OrderID: cmd.OrderID, LimitPrice: record.LimitPrice}
 
 	if record.Side == domain.SideBuy {
@@ -450,6 +452,7 @@ func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {
 	return record, castOk
 }
 
-func (s *Service) storeOrder(record *orderRecord) {
-	s.orders.Store(record.OrderID, record)
+func (s *Service) reserveOrder(record *orderRecord) bool {
+	_, loaded := s.orders.LoadOrStore(record.OrderID, record)
+	return !loaded
 }

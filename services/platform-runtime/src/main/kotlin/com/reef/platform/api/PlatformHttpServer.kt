@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 
@@ -14,6 +15,9 @@ class PlatformHttpServer(
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore()
 ) {
+    private val maxRequestBodyBytes: Int =
+        System.getenv("PLATFORM_HTTP_MAX_REQUEST_BYTES")?.toIntOrNull()?.coerceAtLeast(1024) ?: (1024 * 1024)
+
     constructor(
         port: Int = System.getenv("PLATFORM_RUNTIME_PORT")?.toIntOrNull() ?: 8080,
         api: PlatformApi = PlatformApi(),
@@ -54,7 +58,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             try {
-                val body = exchange.requestBody.bufferedReader().readText()
+                val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.submitOrder(body))
             } catch (ex: Exception) {
                 writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
@@ -70,7 +74,7 @@ class PlatformHttpServer(
         server.createContext("/reference/instruments") { exchange ->
             when (exchange.requestMethod) {
                 "POST" -> {
-                    val body = exchange.requestBody.bufferedReader().readText()
+                    val body = readRequestBody(exchange) ?: return@createContext
                     writeJson(exchange, 200, api.createInstrument(body))
                 }
                 "GET" -> writeJson(exchange, 200, api.instruments())
@@ -84,7 +88,7 @@ class PlatformHttpServer(
         server.createContext("/reference/participants") { exchange ->
             when (exchange.requestMethod) {
                 "POST" -> {
-                    val body = exchange.requestBody.bufferedReader().readText()
+                    val body = readRequestBody(exchange) ?: return@createContext
                     writeJson(exchange, 200, api.createParticipant(body))
                 }
                 "GET" -> writeJson(exchange, 200, api.participants())
@@ -98,7 +102,7 @@ class PlatformHttpServer(
         server.createContext("/reference/accounts") { exchange ->
             when (exchange.requestMethod) {
                 "POST" -> {
-                    val body = exchange.requestBody.bufferedReader().readText()
+                    val body = readRequestBody(exchange) ?: return@createContext
                     writeJson(exchange, 200, api.createAccount(body))
                 }
                 "GET" -> writeJson(exchange, 200, api.accounts())
@@ -116,7 +120,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             try {
-                val body = exchange.requestBody.bufferedReader().readText()
+                val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.cancelOrder(body))
             } catch (ex: Exception) {
                 writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
@@ -136,7 +140,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             try {
-                val body = exchange.requestBody.bufferedReader().readText()
+                val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.modifyOrder(body))
             } catch (ex: Exception) {
                 writeJson(exchange, 503, """{"error":"runtime unavailable","message":"${JsonFields.escape(ex.message ?: "unknown")}"}""")
@@ -238,6 +242,24 @@ class PlatformHttpServer(
         }
     }
 
+    private fun readRequestBody(exchange: HttpExchange): String? {
+        val buffer = ByteArray(DEFAULT_BODY_BUFFER_BYTES)
+        val out = ByteArrayOutputStream()
+        var total = 0
+        while (true) {
+            val read = exchange.requestBody.read(buffer)
+            if (read < 0) {
+                return out.toString(Charsets.UTF_8.name())
+            }
+            total += read
+            if (total > maxRequestBodyBytes) {
+                writeJson(exchange, 413, """{"error":"request body too large","maxBytes":$maxRequestBodyBytes}""")
+                return null
+            }
+            out.write(buffer, 0, read)
+        }
+    }
+
     private fun queryLimit(exchange: HttpExchange, defaultValue: Int): Int {
         val query = exchange.requestURI.query ?: return defaultValue
         val values = query.split("&")
@@ -274,7 +296,7 @@ class PlatformHttpServer(
         val clientId = boundary.clientId(exchange.requestHeaders).orEmpty()
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders).orEmpty()
         val correlationId = correlationId(exchange)
-        val body = exchange.requestBody.bufferedReader().readText()
+        val body = readRequestBody(exchange) ?: return
         try {
             commandCaptureStore.captureReceived(clientId, route, idempotencyKey, correlationId, body)
         } catch (ex: Exception) {
@@ -370,6 +392,8 @@ class PlatformHttpServer(
         """.trimIndent()
     }
 }
+
+private const val DEFAULT_BODY_BUFFER_BYTES = 8192
 
 private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()

@@ -177,6 +177,33 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1SubmitRejectsOversizedBodyBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-too-large"
+                ),
+                body = """{"payload":"${"x".repeat(1024 * 1024)}"}"""
+            )
+            assertEquals(413, response.status)
+            assertContains(response.body, "\"error\":\"request body too large\"")
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1SubmitBlocksClientAfterRejectRateThreshold() {
         val captureStore = RecordingCommandCaptureStore()
         val hook = RejectRateAbuseProtectionHook(
