@@ -5,6 +5,8 @@ This document defines constraints for the single-Postgres local model so future 
 ## Current domain schemas
 
 - `runtime`
+- `command_log` (planned; immutable inbound command capture)
+- `read_model` (planned; query/UI projections)
 - `auth`
 - `admin`
 - `boundary`
@@ -46,11 +48,23 @@ This document defines constraints for the single-Postgres local model so future 
 - ad hoc multi-statement mutation logic in service code is disallowed for critical workflows
 - routine ownership follows domain schema ownership to keep future DB extraction low-friction
 
+9. Command-log isolation
+- inbound client commands belong in an append-only `command_log` slice
+- command-log tables should not depend on runtime write-model tables through foreign keys
+- command intake should be able to scale and retain independently from downstream domain processing
+
+10. Read-model isolation
+- UI/query projections belong in `read_model`
+- read-model writes must not be required for the order-command hot path to acknowledge or complete
+- projections should be rebuildable from runtime state/events
+
 ## Current local bootstrap model
 
 - schema creation: `scripts/dev/db/init/001_create_domain_schemas.sql`
 - runtime/admin table bootstrap: runtime persistence initialization
 - boundary idempotency table bootstrap: boundary idempotency persistence initialization
+- command log bootstrap: planned under `command_log`
+- read-model bootstrap: planned under `read_model`
 
 This is acceptable for current phase, with the migration folders now established for forward-only evolution.
 
@@ -61,3 +75,5 @@ This is acceptable for current phase, with the migration folders now established
 3. no cross-schema joins in hot write-path queries
 4. migration PRs touch one domain folder unless explicitly approved
 5. critical write-path changes include routine contract tests
+6. command-log writes remain append-only except explicit status/attempt transitions
+7. read-model migrations do not add dependencies to hot runtime write paths
