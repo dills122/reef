@@ -74,3 +74,21 @@ node scripts/dev/sim-run.mjs --duration 5m --mode capacity-baseline --rate 5000 
 ### Key Outcome
 
 - `REFERENCE_DATA_ERROR` rejects dropped to `0` in the 5-minute high-load run.
+
+## Quick-Win Transport + Pool Sweep (2026-06-03)
+
+Clean `60s` capacity-baseline checks on branch `codex/throughput-quick-wins`:
+
+| Profile | Throughput | Accepted | Success | p95 | p99 |
+|---|---:|---:|---:|---:|---:|
+| HTTP defaults (`32` runtime threads, DB pool `24`) | `2233.25 rps` | `2202.08 rps` | `98.60%` | `337.33ms` | `539.87ms` |
+| gRPC transport (`32` runtime threads, DB pool `24`) | `2421.76 rps` | `2387.20 rps` | `98.57%` | `296.61ms` | `396.38ms` |
+| gRPC + tuned runtime (`64` runtime threads, DB pool `48`, min idle `16`) | `2852.64 rps` | `2810.50 rps` | `98.52%` | `249.13ms` | `387.92ms` |
+| gRPC + tuned runtime ceiling (`6500` target, `768` workers) | `2961.43 rps` | `2919.27 rps` | `98.58%` | `325.39ms` | `484.59ms` |
+| gRPC + tuned runtime overdrive (`8000` target, `1024` workers) | `2868.83 rps` | `2828.26 rps` | `98.59%` | `474.70ms` | `701.00ms` |
+
+Outcome:
+- gRPC + tuned runtime improved accepted throughput by `+27.6%` over same-run HTTP defaults.
+- The tuned profile also cleared the prior 5-minute post-fix accepted baseline by `+5.8%`.
+- The best measured ceiling point in this sweep was `6500` target / `768` workers; pushing to `8000` / `1024` reduced accepted throughput and materially worsened p99.
+- Docker dev defaults now use the tuned profile; override `ENGINE_TRANSPORT=http`, `MATCHING_ENGINE_ENABLE_GRPC=0`, `PLATFORM_HTTP_THREADS=32`, `RUNTIME_DB_POOL_MAX=24`, and `RUNTIME_DB_POOL_MIN_IDLE=4` to reproduce the old HTTP profile.

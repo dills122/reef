@@ -35,8 +35,8 @@ GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
 
 Transport config:
 
-- `ENGINE_TRANSPORT=http` (default)
-- `ENGINE_TRANSPORT=grpc` (real gRPC client path to matching-engine)
+- `ENGINE_TRANSPORT=grpc` (Docker dev default; real gRPC client path to matching-engine)
+- `ENGINE_TRANSPORT=http` (legacy HTTP client path, useful for A/B comparisons)
 - `MATCHING_ENGINE_BASE_URL` for HTTP transport (default `http://localhost:8081`)
 - `MATCHING_ENGINE_GRPC_TARGET` for gRPC transport target (default `localhost:9081`)
 
