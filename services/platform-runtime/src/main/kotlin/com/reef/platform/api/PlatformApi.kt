@@ -21,79 +21,85 @@ class PlatformApi(
     }
 
     fun submitOrder(body: String): String {
+        val json = JsonCodec.parseObjectOrEmpty(body)
         val command = SubmitOrderCommand(
-            commandId = JsonFields.extract(body, "commandId"),
-            traceId = JsonFields.extract(body, "traceId"),
-            causationId = JsonFields.extract(body, "causationId"),
-            correlationId = JsonFields.extract(body, "correlationId"),
-            actorId = JsonFields.extract(body, "actorId"),
-            occurredAt = JsonFields.extract(body, "occurredAt"),
-            orderId = JsonFields.extract(body, "orderId"),
-            instrumentId = JsonFields.extract(body, "instrumentId"),
-            participantId = JsonFields.extract(body, "participantId"),
-            accountId = JsonFields.extract(body, "accountId"),
-            side = JsonFields.extract(body, "side"),
-            orderType = JsonFields.extract(body, "orderType"),
-            quantityUnits = JsonFields.extract(body, "quantityUnits"),
-            limitPrice = JsonFields.extract(body, "limitPrice"),
-            currency = JsonFields.extract(body, "currency"),
-            timeInForce = JsonFields.extract(body, "timeInForce")
+            commandId = json.string("commandId"),
+            traceId = json.string("traceId"),
+            causationId = json.string("causationId"),
+            correlationId = json.string("correlationId"),
+            actorId = json.string("actorId"),
+            occurredAt = json.string("occurredAt"),
+            orderId = json.string("orderId"),
+            instrumentId = json.string("instrumentId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId"),
+            side = json.string("side"),
+            orderType = json.string("orderType"),
+            quantityUnits = json.string("quantityUnits"),
+            limitPrice = json.string("limitPrice"),
+            currency = json.string("currency"),
+            timeInForce = json.string("timeInForce")
         )
 
         return toJson(orderService.submitOrder(command))
     }
 
     fun cancelOrder(body: String): String {
+        val json = JsonCodec.parseObjectOrEmpty(body)
         val command = CancelOrderCommand(
-            commandId = JsonFields.extract(body, "commandId"),
-            traceId = JsonFields.extract(body, "traceId"),
-            causationId = JsonFields.extract(body, "causationId"),
-            correlationId = JsonFields.extract(body, "correlationId"),
-            actorId = JsonFields.extract(body, "actorId"),
-            occurredAt = JsonFields.extract(body, "occurredAt"),
-            orderId = JsonFields.extract(body, "orderId"),
-            reason = JsonFields.extract(body, "reason")
+            commandId = json.string("commandId"),
+            traceId = json.string("traceId"),
+            causationId = json.string("causationId"),
+            correlationId = json.string("correlationId"),
+            actorId = json.string("actorId"),
+            occurredAt = json.string("occurredAt"),
+            orderId = json.string("orderId"),
+            reason = json.string("reason")
         )
         return toJson(orderService.cancelOrder(command))
     }
 
     fun modifyOrder(body: String): String {
+        val json = JsonCodec.parseObjectOrEmpty(body)
         val command = ModifyOrderCommand(
-            commandId = JsonFields.extract(body, "commandId"),
-            traceId = JsonFields.extract(body, "traceId"),
-            causationId = JsonFields.extract(body, "causationId"),
-            correlationId = JsonFields.extract(body, "correlationId"),
-            actorId = JsonFields.extract(body, "actorId"),
-            occurredAt = JsonFields.extract(body, "occurredAt"),
-            orderId = JsonFields.extract(body, "orderId"),
-            quantityUnits = JsonFields.extract(body, "quantityUnits"),
-            limitPrice = JsonFields.extract(body, "limitPrice")
+            commandId = json.string("commandId"),
+            traceId = json.string("traceId"),
+            causationId = json.string("causationId"),
+            correlationId = json.string("correlationId"),
+            actorId = json.string("actorId"),
+            occurredAt = json.string("occurredAt"),
+            orderId = json.string("orderId"),
+            quantityUnits = json.string("quantityUnits"),
+            limitPrice = json.string("limitPrice")
         )
         return toJson(orderService.modifyOrder(command))
     }
 
     fun createInstrument(body: String): String {
+        val json = JsonCodec.parseObjectOrEmpty(body)
         val instrument = Instrument(
-            instrumentId = JsonFields.extract(body, "instrumentId"),
-            symbol = JsonFields.extract(body, "symbol")
+            instrumentId = json.string("instrumentId"),
+            symbol = json.string("symbol")
         )
         orderService.createInstrument(instrument)
         return """{"instrumentId":"${JsonFields.escape(instrument.instrumentId)}"}"""
     }
 
     fun createParticipant(body: String): String {
+        val json = JsonCodec.parseObjectOrEmpty(body)
         val participant = Participant(
-            participantId = JsonFields.extract(body, "participantId"),
-            name = JsonFields.extract(body, "name")
+            participantId = json.string("participantId"),
+            name = json.string("name")
         )
         orderService.createParticipant(participant)
         return """{"participantId":"${JsonFields.escape(participant.participantId)}"}"""
     }
 
     fun createAccount(body: String): String {
+        val json = JsonCodec.parseObjectOrEmpty(body)
         val account = Account(
-            accountId = JsonFields.extract(body, "accountId"),
-            participantId = JsonFields.extract(body, "participantId")
+            accountId = json.string("accountId"),
+            participantId = json.string("participantId")
         )
         orderService.createAccount(account)
         return """{"accountId":"${JsonFields.escape(account.accountId)}"}"""

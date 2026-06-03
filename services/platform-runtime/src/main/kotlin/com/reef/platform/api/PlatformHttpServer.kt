@@ -358,7 +358,7 @@ class PlatformHttpServer(
 
     private fun rejectCode(payload: String): String? {
         if (!payload.contains("\"rejected\"")) return null
-        return JsonFields.extract(payload, "code").ifBlank { null }
+        return JsonCodec.parseObjectOrEmpty(payload).obj("rejected").string("code").ifBlank { null }
     }
 
     private fun abuseStatsJson(stats: AbuseProtectionStats): String {

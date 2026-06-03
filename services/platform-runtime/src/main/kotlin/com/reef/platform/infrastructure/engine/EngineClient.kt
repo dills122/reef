@@ -1,5 +1,7 @@
 package com.reef.platform.infrastructure.engine
 
+import com.reef.platform.api.JsonCodec
+import com.reef.platform.api.JsonDocument
 import com.reef.platform.api.JsonFields
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
@@ -105,7 +107,7 @@ class EngineClient : EngineGateway {
             SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = "evt-engine-transport-error",
-                    orderId = JsonFields.extract(payload, "orderId"),
+                    orderId = JsonCodec.parseObjectOrEmpty(payload).string("orderId"),
                     code = "ENGINE_UNAVAILABLE",
                     reason = ex.message ?: "engine transport error",
                     occurredAt = Instant.now().toString()
@@ -117,71 +119,64 @@ class EngineClient : EngineGateway {
     }
 
     internal fun parseSubmitOrderResult(body: String): SubmitOrderResult {
-        if (body.contains("\"accepted\"")) {
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        if (json.has("accepted")) {
+            val accepted = json.obj("accepted")
             return SubmitOrderResult(
                 accepted = EngineOrderAccepted(
-                    eventId = JsonFields.extract(body, "eventId"),
-                    orderId = JsonFields.extract(body, "orderId"),
-                    engineOrderId = JsonFields.extract(body, "engineOrderId"),
-                    occurredAt = extractLast(body, "occurredAt")
+                    eventId = accepted.string("eventId"),
+                    orderId = accepted.string("orderId"),
+                    engineOrderId = accepted.string("engineOrderId"),
+                    occurredAt = accepted.string("occurredAt")
                 ),
-                executions = parseExecutions(body),
-                trades = parseTrades(body)
+                executions = parseExecutions(json),
+                trades = parseTrades(json)
             )
         }
 
+        val rejected = json.obj("rejected")
         return SubmitOrderResult(
             rejected = EngineOrderRejected(
-                eventId = JsonFields.extract(body, "eventId"),
-                orderId = JsonFields.extract(body, "orderId"),
-                code = JsonFields.extract(body, "code"),
-                reason = JsonFields.extract(body, "reason"),
-                occurredAt = extractLast(body, "occurredAt")
+                eventId = rejected.string("eventId"),
+                orderId = rejected.string("orderId"),
+                code = rejected.string("code"),
+                reason = rejected.string("reason"),
+                occurredAt = rejected.string("occurredAt")
             ),
             executions = emptyList(),
             trades = emptyList()
         )
     }
 
-    private fun parseExecutions(body: String): List<ExecutionCreated> {
-        return JsonFields.extractObjects(body, "executions").map { execution ->
+    private fun parseExecutions(body: JsonDocument): List<ExecutionCreated> {
+        return body.objectDocuments("executions").map { execution ->
             ExecutionCreated(
-                eventId = JsonFields.extract(execution, "eventId"),
-                executionId = JsonFields.extract(execution, "executionId"),
-                orderId = JsonFields.extract(execution, "orderId"),
-                instrumentId = JsonFields.extract(execution, "instrumentId"),
-                quantityUnits = JsonFields.extract(execution, "quantityUnits"),
-                executionPrice = JsonFields.extract(execution, "executionPrice"),
-                currency = JsonFields.extract(execution, "currency"),
-                occurredAt = JsonFields.extract(execution, "occurredAt")
+                eventId = execution.string("eventId"),
+                executionId = execution.string("executionId"),
+                orderId = execution.string("orderId"),
+                instrumentId = execution.string("instrumentId"),
+                quantityUnits = execution.string("quantityUnits"),
+                executionPrice = execution.string("executionPrice"),
+                currency = execution.string("currency"),
+                occurredAt = execution.string("occurredAt")
             )
         }
     }
 
-    private fun parseTrades(body: String): List<TradeCreated> {
-        return JsonFields.extractObjects(body, "trades").map { trade ->
+    private fun parseTrades(body: JsonDocument): List<TradeCreated> {
+        return body.objectDocuments("trades").map { trade ->
             TradeCreated(
-                eventId = JsonFields.extract(trade, "eventId"),
-                tradeId = JsonFields.extract(trade, "tradeId"),
-                executionId = JsonFields.extract(trade, "executionId"),
-                buyOrderId = JsonFields.extract(trade, "buyOrderId"),
-                sellOrderId = JsonFields.extract(trade, "sellOrderId"),
-                instrumentId = JsonFields.extract(trade, "instrumentId"),
-                quantityUnits = JsonFields.extract(trade, "quantityUnits"),
-                price = JsonFields.extract(trade, "price"),
-                currency = JsonFields.extract(trade, "currency"),
-                occurredAt = JsonFields.extract(trade, "occurredAt")
+                eventId = trade.string("eventId"),
+                tradeId = trade.string("tradeId"),
+                executionId = trade.string("executionId"),
+                buyOrderId = trade.string("buyOrderId"),
+                sellOrderId = trade.string("sellOrderId"),
+                instrumentId = trade.string("instrumentId"),
+                quantityUnits = trade.string("quantityUnits"),
+                price = trade.string("price"),
+                currency = trade.string("currency"),
+                occurredAt = trade.string("occurredAt")
             )
         }
-    }
-
-    private fun extractLast(body: String, key: String): String {
-        val marker = "\"$key\":\""
-        val start = body.lastIndexOf(marker)
-        if (start < 0) return ""
-        val valueStart = start + marker.length
-        val end = body.indexOf('"', valueStart)
-        if (end < 0) return ""
-        return body.substring(valueStart, end)
     }
 }
