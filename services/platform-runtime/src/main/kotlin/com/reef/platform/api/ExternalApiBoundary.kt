@@ -188,14 +188,20 @@ class InMemoryIdempotencyStore : IdempotencyStore {
 
 class PostgresIdempotencyStore(
     private val dataSource: DataSource,
-    private val retentionPolicy: IdempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy()
+    private val retentionPolicy: IdempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames()
 ) : IdempotencyStore {
     init {
         connection().use { conn ->
             conn.createStatement().use { stmt ->
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS api_idempotency_records (
+                    CREATE SCHEMA IF NOT EXISTS ${names.schemaName}
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.idempotencyRecords} (
                       client_id TEXT NOT NULL,
                       route TEXT NOT NULL,
                       idempotency_key TEXT NOT NULL,
@@ -216,7 +222,7 @@ class PostgresIdempotencyStore(
             conn.prepareStatement(
                 """
                 SELECT status, payload
-                FROM api_idempotency_records
+                FROM ${names.idempotencyRecords}
                 WHERE client_id = ? AND route = ? AND idempotency_key = ?
                   AND expires_at > NOW()
                 """.trimIndent()
@@ -240,7 +246,7 @@ class PostgresIdempotencyStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO api_idempotency_records(client_id, route, idempotency_key, status, payload, expires_at)
+                INSERT INTO ${names.idempotencyRecords}(client_id, route, idempotency_key, status, payload, expires_at)
                 VALUES (?, ?, ?, ?, ?, NOW() + (? * INTERVAL '1 second'))
                 ON CONFLICT (client_id, route, idempotency_key) DO NOTHING
                 """.trimIndent()
@@ -259,7 +265,7 @@ class PostgresIdempotencyStore(
     override fun cleanupExpired(now: Instant) {
         connection().use { conn ->
             conn.prepareStatement(
-                "DELETE FROM api_idempotency_records WHERE expires_at <= to_timestamp(?)"
+                "DELETE FROM ${names.idempotencyRecords} WHERE expires_at <= to_timestamp(?)"
             ).use { ps ->
                 ps.setLong(1, now.epochSecond)
                 ps.executeUpdate()

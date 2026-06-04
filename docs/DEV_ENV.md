@@ -284,16 +284,18 @@ Additional stress artifacts:
 
 Compose sets:
 - runtime persistence: `RUNTIME_PERSISTENCE=postgres`
-- runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime`)
+- runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime` remains configured, but runtime storage uses explicit `runtime.*` and `auth.*` names)
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
-- boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary`)
+- boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 
 Postgres init creates domain schemas:
 - `runtime`
 - `auth`
 - `admin`
 - `boundary`
+
+Runtime, auth, and boundary service bootstrap creates schema-qualified compatibility tables today. Forward-only migration ownership is still the target for durable schema changes.
 
 `.env` support:
 - all `scripts/dev/*.mjs` load `.env` and `.env.local` automatically

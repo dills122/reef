@@ -32,6 +32,8 @@ Current state:
 Current persistence caveat:
 
 - durable mode still has transitional service-side table bootstrap in addition to migration files
+- runtime, boundary, and auth bootstrap now uses explicit domain-schema table names instead of relying on JDBC `currentSchema`
+- migration-owned tables and a deterministic migration runner are still pending before service-side bootstrap can be removed
 - the intended direction is split-ready domain schemas (`runtime`, `boundary`, `auth`, `admin`) with migration-owned tables and procedure-first critical write paths
 
 Run locally when Gradle is available:
@@ -76,6 +78,8 @@ When `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`, the runtime reuses:
 - `RUNTIME_DB_URL`
 - `RUNTIME_DB_USER`
 - `RUNTIME_DB_PASSWORD`
+
+The Postgres boundary stores create/read `boundary.api_idempotency_records` and `boundary.api_command_captures` by default.
 
 Current limitation:
 

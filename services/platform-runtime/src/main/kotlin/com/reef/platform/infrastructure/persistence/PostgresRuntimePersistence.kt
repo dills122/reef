@@ -16,14 +16,25 @@ import java.sql.Connection
 import javax.sql.DataSource
 
 class PostgresRuntimePersistence(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
+    private val names: PostgresRuntimeSqlNames = PostgresRuntimeSqlNames()
 ) : RuntimePersistence {
     init {
         connection().use { conn ->
             conn.createStatement().use { stmt ->
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS reference_instruments (
+                    CREATE SCHEMA IF NOT EXISTS ${names.runtimeSchemaName}
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE SCHEMA IF NOT EXISTS ${names.authSchemaName}
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.referenceInstruments} (
                       instrument_id TEXT PRIMARY KEY,
                       symbol TEXT NOT NULL
                     )
@@ -31,7 +42,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS reference_participants (
+                    CREATE TABLE IF NOT EXISTS ${names.referenceParticipants} (
                       participant_id TEXT PRIMARY KEY,
                       name TEXT NOT NULL
                     )
@@ -39,7 +50,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS reference_accounts (
+                    CREATE TABLE IF NOT EXISTS ${names.referenceAccounts} (
                       account_id TEXT PRIMARY KEY,
                       participant_id TEXT NOT NULL
                     )
@@ -47,7 +58,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS auth_roles (
+                    CREATE TABLE IF NOT EXISTS ${names.authRoles} (
                       role_id TEXT PRIMARY KEY,
                       permissions TEXT NOT NULL
                     )
@@ -55,7 +66,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS auth_actor_roles (
+                    CREATE TABLE IF NOT EXISTS ${names.authActorRoles} (
                       actor_id TEXT NOT NULL,
                       role_id TEXT NOT NULL,
                       PRIMARY KEY (actor_id, role_id)
@@ -64,7 +75,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS orders (
+                    CREATE TABLE IF NOT EXISTS ${names.orders} (
                       order_id TEXT PRIMARY KEY,
                       engine_order_id TEXT NOT NULL,
                       instrument_id TEXT NOT NULL,
@@ -82,7 +93,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS executions (
+                    CREATE TABLE IF NOT EXISTS ${names.executions} (
                       event_id TEXT PRIMARY KEY,
                       execution_id TEXT NOT NULL,
                       order_id TEXT NOT NULL,
@@ -96,7 +107,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS trades (
+                    CREATE TABLE IF NOT EXISTS ${names.trades} (
                       event_id TEXT PRIMARY KEY,
                       trade_id TEXT NOT NULL,
                       execution_id TEXT NOT NULL,
@@ -112,7 +123,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS runtime_events (
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeEvents} (
                       event_id TEXT PRIMARY KEY,
                       event_type TEXT NOT NULL,
                       order_id TEXT NOT NULL,
@@ -128,7 +139,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS runtime_trace_sequences (
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeTraceSequences} (
                       trace_id TEXT PRIMARY KEY,
                       next_sequence BIGINT NOT NULL
                     )
@@ -137,42 +148,42 @@ class PostgresRuntimePersistence(
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_trace_sequence
-                    ON runtime_events(trace_id, sequence_number)
+                    ON ${names.runtimeEvents}(trace_id, sequence_number)
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_order_trace_sequence
-                    ON runtime_events(order_id, trace_id, sequence_number)
+                    ON ${names.runtimeEvents}(order_id, trace_id, sequence_number)
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_event
-                    ON runtime_events(occurred_at DESC, event_id DESC)
+                    ON ${names.runtimeEvents}(occurred_at DESC, event_id DESC)
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_executions_order_occurred
-                    ON executions(order_id, occurred_at)
+                    ON ${names.executions}(order_id, occurred_at)
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_trades_buy_order_occurred
-                    ON trades(buy_order_id, occurred_at)
+                    ON ${names.trades}(buy_order_id, occurred_at)
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_trades_sell_order_occurred
-                    ON trades(sell_order_id, occurred_at)
+                    ON ${names.trades}(sell_order_id, occurred_at)
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS submit_results (
+                    CREATE TABLE IF NOT EXISTS ${names.submitResults} (
                       command_id TEXT PRIMARY KEY,
                       result_type TEXT NOT NULL,
                       event_id TEXT NOT NULL,
@@ -186,7 +197,7 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE OR REPLACE FUNCTION runtime_validate_reference_data(
+                    CREATE OR REPLACE FUNCTION ${names.validateReferenceDataFunction}(
                       p_instrument_id TEXT,
                       p_participant_id TEXT,
                       p_account_id TEXT
@@ -200,15 +211,15 @@ class PostgresRuntimePersistence(
                     STABLE
                     AS $$
                       SELECT
-                        EXISTS(SELECT 1 FROM reference_instruments WHERE instrument_id = p_instrument_id),
-                        EXISTS(SELECT 1 FROM reference_participants WHERE participant_id = p_participant_id),
-                        EXISTS(SELECT 1 FROM reference_accounts WHERE account_id = p_account_id)
+                        EXISTS(SELECT 1 FROM ${names.referenceInstruments} WHERE instrument_id = p_instrument_id),
+                        EXISTS(SELECT 1 FROM ${names.referenceParticipants} WHERE participant_id = p_participant_id),
+                        EXISTS(SELECT 1 FROM ${names.referenceAccounts} WHERE account_id = p_account_id)
                     $$;
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
-                    CREATE OR REPLACE FUNCTION runtime_persist_submit_outcome(
+                    CREATE OR REPLACE FUNCTION ${names.persistSubmitOutcomeFunction}(
                       p_command_id TEXT,
                       p_result_type TEXT,
                       p_result_event_id TEXT,
@@ -226,7 +237,7 @@ class PostgresRuntimePersistence(
                     LANGUAGE plpgsql
                     AS $$
                     BEGIN
-                      INSERT INTO submit_results(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
+                      INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
                       VALUES (
                         p_command_id,
                         p_result_type,
@@ -247,7 +258,7 @@ class PostgresRuntimePersistence(
                         occurred_at = EXCLUDED.occurred_at;
 
                       IF p_accepted_order IS NOT NULL THEN
-                        INSERT INTO orders(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
+                        INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
                         VALUES (
                           p_accepted_order->>'orderId',
                           p_accepted_order->>'engineOrderId',
@@ -277,7 +288,7 @@ class PostgresRuntimePersistence(
                       END IF;
 
                       IF p_executions IS NOT NULL AND jsonb_array_length(p_executions) > 0 THEN
-                        INSERT INTO executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
+                        INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
                         SELECT
                           execution->>'eventId',
                           execution->>'executionId',
@@ -292,7 +303,7 @@ class PostgresRuntimePersistence(
                       END IF;
 
                       IF p_trades IS NOT NULL AND jsonb_array_length(p_trades) > 0 THEN
-                        INSERT INTO trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
+                        INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
                         SELECT
                           trade->>'eventId',
                           trade->>'tradeId',
@@ -322,9 +333,9 @@ class PostgresRuntimePersistence(
                         GROUP BY event->>'traceId'
                       ),
                       trace_allocations AS (
-                        INSERT INTO runtime_trace_sequences(trace_id, next_sequence)
+                        INSERT INTO ${names.runtimeTraceSequences} AS trace_sequence(trace_id, next_sequence)
                         SELECT trace_id, event_count FROM trace_counts
-                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = runtime_trace_sequences.next_sequence + EXCLUDED.next_sequence
+                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = trace_sequence.next_sequence + EXCLUDED.next_sequence
                         RETURNING trace_id, next_sequence
                       ),
                       trace_starts AS (
@@ -344,7 +355,7 @@ class PostgresRuntimePersistence(
                           ) - 1 AS trace_offset
                         FROM parsed_events parsed
                       )
-                      INSERT INTO runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
+                      INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
                       SELECT
                         event->>'eventId',
                         event->>'eventType',
@@ -375,7 +386,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO submit_results(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
+                INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (command_id) DO UPDATE SET
                   result_type = EXCLUDED.result_type,
@@ -403,7 +414,7 @@ class PostgresRuntimePersistence(
     override fun submitResult(commandId: String): SubmitOrderResult? {
         connection().use { conn ->
             conn.prepareStatement(
-                "SELECT result_type, event_id, order_id, engine_order_id, code, reason, occurred_at FROM submit_results WHERE command_id = ?"
+                "SELECT result_type, event_id, order_id, engine_order_id, code, reason, occurred_at FROM ${names.submitResults} WHERE command_id = ?"
             ).use { ps ->
                 ps.setString(1, commandId)
                 ps.executeQuery().use { rs ->
@@ -438,18 +449,18 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveInstrument(instrument: Instrument) {
-        upsert("reference_instruments", "instrument_id", instrument.instrumentId, instrument.symbol)
+        upsert("${names.referenceInstruments}", "instrument_id", instrument.instrumentId, instrument.symbol)
     }
 
     override fun saveParticipant(participant: Participant) {
-        upsert("reference_participants", "participant_id", participant.participantId, participant.name)
+        upsert("${names.referenceParticipants}", "participant_id", participant.participantId, participant.name)
     }
 
     override fun saveAccount(account: Account) {
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO reference_accounts(account_id, participant_id)
+                INSERT INTO ${names.referenceAccounts}(account_id, participant_id)
                 VALUES (?, ?)
                 ON CONFLICT (account_id) DO UPDATE SET participant_id = EXCLUDED.participant_id
                 """.trimIndent()
@@ -465,7 +476,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO auth_roles(role_id, permissions)
+                INSERT INTO ${names.authRoles}(role_id, permissions)
                 VALUES (?, ?)
                 ON CONFLICT (role_id) DO UPDATE SET permissions = EXCLUDED.permissions
                 """.trimIndent()
@@ -481,7 +492,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO auth_actor_roles(actor_id, role_id)
+                INSERT INTO ${names.authActorRoles}(actor_id, role_id)
                 VALUES (?, ?)
                 ON CONFLICT (actor_id, role_id) DO NOTHING
                 """.trimIndent()
@@ -493,19 +504,19 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun instruments(): List<Instrument> = queryList("SELECT instrument_id, symbol FROM reference_instruments") {
+    override fun instruments(): List<Instrument> = queryList("SELECT instrument_id, symbol FROM ${names.referenceInstruments}") {
         Instrument(getString("instrument_id"), getString("symbol"))
     }
 
-    override fun participants(): List<Participant> = queryList("SELECT participant_id, name FROM reference_participants") {
+    override fun participants(): List<Participant> = queryList("SELECT participant_id, name FROM ${names.referenceParticipants}") {
         Participant(getString("participant_id"), getString("name"))
     }
 
-    override fun accounts(): List<Account> = queryList("SELECT account_id, participant_id FROM reference_accounts") {
+    override fun accounts(): List<Account> = queryList("SELECT account_id, participant_id FROM ${names.referenceAccounts}") {
         Account(getString("account_id"), getString("participant_id"))
     }
 
-    override fun roles(): List<RoleDefinition> = queryList("SELECT role_id, permissions FROM auth_roles") {
+    override fun roles(): List<RoleDefinition> = queryList("SELECT role_id, permissions FROM ${names.authRoles}") {
         RoleDefinition(
             roleId = getString("role_id"),
             permissions = getString("permissions").split(",").filter { it.isNotBlank() }
@@ -515,7 +526,7 @@ class PostgresRuntimePersistence(
     override fun actorRoleBindings(actorId: String): List<ActorRoleBinding> {
         connection().use { conn ->
             conn.prepareStatement(
-                "SELECT actor_id, role_id FROM auth_actor_roles WHERE actor_id = ?"
+                "SELECT actor_id, role_id FROM ${names.authActorRoles} WHERE actor_id = ?"
             ).use { ps ->
                 ps.setString(1, actorId)
                 ps.executeQuery().use { rs ->
@@ -534,18 +545,18 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun hasInstrument(instrumentId: String): Boolean = exists("reference_instruments", "instrument_id", instrumentId)
+    override fun hasInstrument(instrumentId: String): Boolean = exists("${names.referenceInstruments}", "instrument_id", instrumentId)
 
-    override fun hasParticipant(participantId: String): Boolean = exists("reference_participants", "participant_id", participantId)
+    override fun hasParticipant(participantId: String): Boolean = exists("${names.referenceParticipants}", "participant_id", participantId)
 
-    override fun hasAccount(accountId: String): Boolean = exists("reference_accounts", "account_id", accountId)
+    override fun hasAccount(accountId: String): Boolean = exists("${names.referenceAccounts}", "account_id", accountId)
 
     override fun validateReferenceData(instrumentId: String, participantId: String, accountId: String): ReferenceDataValidation {
         connection().use { conn ->
             conn.prepareStatement(
                 """
                 SELECT instrument_exists, participant_exists, account_exists
-                FROM runtime_validate_reference_data(?, ?, ?)
+                FROM ${names.validateReferenceDataFunction}(?, ?, ?)
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, instrumentId)
@@ -576,7 +587,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT runtime_persist_submit_outcome(
+                SELECT ${names.persistSubmitOutcomeFunction}(
                   ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb
                 )
                 """.trimIndent()
@@ -602,7 +613,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO orders(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
+                INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (order_id) DO UPDATE SET
                   engine_order_id = EXCLUDED.engine_order_id,
@@ -640,7 +651,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO executions(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
+                INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO NOTHING
                 """.trimIndent()
@@ -666,7 +677,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO trades(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
+                INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (event_id) DO NOTHING
                 """.trimIndent()
@@ -702,9 +713,9 @@ class PostgresRuntimePersistence(
                 events.groupBy { it.traceId }.forEach { (traceId, traceEvents) ->
                     conn.prepareStatement(
                         """
-                        INSERT INTO runtime_trace_sequences(trace_id, next_sequence)
+                        INSERT INTO ${names.runtimeTraceSequences} AS trace_sequence(trace_id, next_sequence)
                         VALUES (?, ?)
-                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = runtime_trace_sequences.next_sequence + EXCLUDED.next_sequence
+                        ON CONFLICT (trace_id) DO UPDATE SET next_sequence = trace_sequence.next_sequence + EXCLUDED.next_sequence
                         RETURNING next_sequence
                         """.trimIndent()
                     ).use { ps ->
@@ -721,7 +732,7 @@ class PostgresRuntimePersistence(
                 val nextByTrace = startByTrace.toMutableMap()
                 conn.prepareStatement(
                     """
-                    INSERT INTO runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
+                    INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (event_id) DO NOTHING
                     """.trimIndent()
@@ -758,7 +769,7 @@ class PostgresRuntimePersistence(
             conn.prepareStatement(
                 """
                 SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at
-                FROM orders WHERE order_id = ?
+                FROM ${names.orders} WHERE order_id = ?
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, orderId)
@@ -786,7 +797,7 @@ class PostgresRuntimePersistence(
     override fun acceptedOrders(): List<PersistedOrder> = queryList(
         """
         SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at
-        FROM orders ORDER BY accepted_at
+        FROM ${names.orders} ORDER BY accepted_at
         """.trimIndent()
     ) {
         PersistedOrder(
@@ -806,7 +817,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> = queryList(
-        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM executions WHERE order_id = ? ORDER BY occurred_at",
+        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at",
         orderId
     ) {
         ExecutionCreated(
@@ -822,7 +833,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun trades(): List<TradeCreated> = queryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM trades ORDER BY occurred_at"
+        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at"
     ) {
         TradeCreated(
             eventId = getString("event_id"),
@@ -839,7 +850,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun recentTrades(limit: Int): List<TradeCreated> = queryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM trades ORDER BY occurred_at DESC LIMIT ?",
+        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?",
         limit.coerceAtLeast(0).toString()
     ) {
         TradeCreated(
@@ -859,7 +870,7 @@ class PostgresRuntimePersistence(
     override fun tradesForOrder(orderId: String): List<TradeCreated> = queryList(
         """
         SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at
-        FROM trades WHERE buy_order_id = ? OR sell_order_id = ? ORDER BY occurred_at
+        FROM ${names.trades} WHERE buy_order_id = ? OR sell_order_id = ? ORDER BY occurred_at
         """.trimIndent(),
         orderId,
         orderId
@@ -879,21 +890,21 @@ class PostgresRuntimePersistence(
     }
 
     override fun eventsForOrder(orderId: String): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM runtime_events WHERE order_id = ? ORDER BY trace_id, sequence_number",
+        "SELECT * FROM ${names.runtimeEvents} WHERE order_id = ? ORDER BY trace_id, sequence_number",
         orderId
     )
 
     override fun eventsForTrace(traceId: String): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM runtime_events WHERE trace_id = ? ORDER BY sequence_number",
+        "SELECT * FROM ${names.runtimeEvents} WHERE trace_id = ? ORDER BY sequence_number",
         traceId
     )
 
     override fun events(): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM runtime_events ORDER BY trace_id, sequence_number"
+        "SELECT * FROM ${names.runtimeEvents} ORDER BY trace_id, sequence_number"
     )
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM runtime_events ORDER BY occurred_at DESC, event_id DESC LIMIT ?",
+        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at DESC, event_id DESC LIMIT ?",
         limit.coerceAtLeast(0).toString()
     ).asReversed()
 

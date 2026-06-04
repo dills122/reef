@@ -32,7 +32,7 @@ Current implementation checkpoint:
 - `/api/v1/orders/submit`, `/api/v1/orders/cancel`, and `/api/v1/orders/modify` exist
 - writes require `X-Client-Id` and `Idempotency-Key`
 - auth, rate-limit, idempotency, abuse-protection, and command-capture hooks exist in the runtime boundary layer
-- durable boundary storage is still in transition toward the domain-schema migration model
+- durable boundary storage uses explicit `boundary.*` table names today and remains in transition toward migration-owned tables
 
 Target deployable shape (later):
 - API boundary/gateway service (edge)

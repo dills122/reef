@@ -61,12 +61,31 @@ This document defines constraints for the single-Postgres local model so future 
 ## Current local bootstrap model
 
 - schema creation: `scripts/dev/db/init/001_create_domain_schemas.sql`
-- runtime/admin table bootstrap: runtime persistence initialization
-- boundary idempotency table bootstrap: boundary idempotency persistence initialization
+- runtime table bootstrap: runtime persistence initialization creates schema-qualified `runtime.*` tables and runtime routines for local compatibility
+- auth table bootstrap: runtime persistence initialization creates schema-qualified `auth.*` role tables for local compatibility
+- boundary table bootstrap: boundary idempotency and command-capture persistence initialize schema-qualified `boundary.*` tables for local compatibility
+- admin table bootstrap: admin-specific durable tables are still planned unless explicitly covered by runtime/auth storage
 - command log bootstrap: planned under `command_log`
 - read-model bootstrap: planned under `read_model`
 
-This is transitional only. The next persistence-alignment sprint should move durable runtime, boundary, auth, and admin tables into migration-owned domain schemas and stop adding new service-side root-level table bootstrap. Existing bootstrap can remain only long enough to preserve local compatibility during migration.
+This is transitional only. Runtime, boundary, and auth bootstrap now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. The next persistence-alignment step should make these tables migration-owned, reconcile migration table shapes with the live runtime schema, and stop adding new service-side table bootstrap except as compatibility fallback during migration.
+
+## Current implementation checkpoint
+
+- `PostgresRuntimePersistence` uses explicit `runtime.*` table/routine names for orders, executions, trades, runtime events, trace sequences, submit results, and reference data.
+- `PostgresRuntimePersistence` uses explicit `auth.*` table names for roles and actor-role bindings.
+- `PostgresIdempotencyStore` uses explicit `boundary.api_idempotency_records`.
+- `PostgresCommandCaptureStore` uses explicit `boundary.api_command_captures`.
+- Schema-name overrides are limited to simple identifiers before SQL interpolation.
+- Existing domain migration folders remain the target ownership model; service-side bootstrap remains a compatibility bridge, not the steady state.
+
+## Next persistence-alignment work
+
+1. Add or adjust forward-only migrations so live runtime/boundary/auth table shapes are represented by the owning domain folders.
+2. Reconcile the existing `runtime.runtime_events` migration shape with the current runtime event identifiers and ordering contract.
+3. Introduce a local migration runner or deterministic migration command before service startup relies on migration-owned tables.
+4. Add Postgres integration tests that prove tables land in domain schemas without requiring JDBC `currentSchema`.
+5. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration ownership.
 
 ## Split readiness checks to enforce in CI
 

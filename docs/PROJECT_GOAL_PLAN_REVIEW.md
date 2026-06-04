@@ -37,7 +37,7 @@ Implemented or materially started:
 
 Material gaps:
 
-- The runtime still has transitional root-level table initialization in service code while migration docs and schema blueprints target domain schemas such as `runtime.*`, `boundary.*`, and `auth.*`.
+- Runtime, boundary, and auth durable bootstrap now targets explicit domain schemas such as `runtime.*`, `boundary.*`, and `auth.*`, but table ownership has not fully moved to forward-only migrations.
 - Event log persistence exists for queryability, but the outbox-backed event distribution path is only partially represented by migrations/specs and is not yet the runtime write path.
 - Cancel/modify operations emit lifecycle events but do not yet keep a complete persisted order-state projection equivalent to the engine state.
 - The platform UI is still a README-level placeholder; the currently planned UI is a simulator/control-room surface before full order/post-trade operator workflows.
@@ -73,7 +73,7 @@ The plan needs a current execution ladder:
 The accepted architecture says Postgres is canonical, domain schemas should be split-ready, and procedure-first write paths should protect critical mutations. Current code still mixes:
 
 - service-side table bootstrap
-- root-level tables
+- schema-qualified runtime/boundary/auth tables
 - migration-defined schema tables
 - procedure-first specs that are not yet uniformly called by runtime code
 
@@ -108,9 +108,9 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- Runtime persistence no longer relies on root-level table bootstrap for durable mode.
+- Runtime persistence no longer relies on root-level or search-path-dependent table bootstrap for durable mode.
 - Domain schemas match the migration blueprint: `runtime`, `boundary`, `auth`, and `admin`.
-- Idempotency storage uses the documented `boundary` schema or the docs explicitly mark the current table as transitional.
+- Idempotency storage uses the documented `boundary` schema and the remaining transitional concern is migration ownership.
 - Critical write paths have a clear migration plan to schema-owned routines.
 
 ### Track 3: Simulator Control Room MVP
