@@ -28,6 +28,12 @@ For the current project phase:
 - implement boundary logic in the Kotlin runtime first
 - preserve a clean module boundary so this can be extracted into a dedicated gateway later
 
+Current implementation checkpoint:
+- `/api/v1/orders/submit`, `/api/v1/orders/cancel`, and `/api/v1/orders/modify` exist
+- writes require `X-Client-Id` and `Idempotency-Key`
+- auth, rate-limit, idempotency, abuse-protection, and command-capture hooks exist in the runtime boundary layer
+- durable boundary storage is still in transition toward the domain-schema migration model
+
 Target deployable shape (later):
 - API boundary/gateway service (edge)
 - platform runtime service (orchestration)

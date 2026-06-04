@@ -2,7 +2,7 @@
 
 ## Scope
 
-Kotlin is the implementation language for the platform runtime and, initially, the simulation harness.
+Kotlin is the implementation language for the platform runtime and workflow orchestration. Simulator tooling currently lives in the Go `services/simulator` CLI; any Kotlin simulation-control code should remain a platform client/orchestrator, not a shortcut around runtime command paths.
 
 ## Role In Reef
 
@@ -15,7 +15,7 @@ The Kotlin runtime owns:
 - workflow state transitions outside the matching engine
 - read-model creation for UI surfaces
 - integration with the Go engine
-- simulation control, until or unless it is extracted
+- simulation-control APIs or orchestration hooks when they belong inside the runtime boundary
 
 ## Framework Guidance
 
@@ -37,7 +37,7 @@ services/platform-runtime/
     domain/
     infrastructure/
     readmodel/
-    simulation/
+    simulation/           # optional runtime-side control/orchestration hooks
 ```
 
 Guidance:
@@ -47,7 +47,7 @@ Guidance:
 - `api/` contains HTTP or WebSocket endpoints and DTO mapping
 - `infrastructure/` contains persistence, messaging, and engine adapters
 - `readmodel/` contains query-side projections
-- `simulation/` contains scenario execution and bot orchestration
+- `simulation/` contains only runtime-side control/orchestration hooks when needed; simulator actors still use platform commands/APIs
 
 ## Design Rules
 

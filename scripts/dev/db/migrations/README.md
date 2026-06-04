@@ -10,6 +10,10 @@ Domain folders:
 - `orchestration/`
 - `analytics/` (planned)
 
+Current implementation note:
+- some durable tables are still created by runtime/boundary service initialization for local compatibility
+- new durable schema work should prefer these migration folders and domain schemas instead of adding more root-level bootstrap tables
+
 Rules:
 - place SQL files in the owning domain folder only
 - use monotonic prefixes (`0001_`, `0002_`, ...)

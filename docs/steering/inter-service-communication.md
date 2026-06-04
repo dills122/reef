@@ -44,7 +44,9 @@ Retries must not create duplicate business effects.
 ## Current and Target State
 
 Current state:
-- runtime and engine communicate via HTTP/JSON adapters
+- runtime and engine support HTTP/JSON and gRPC adapter paths behind transport configuration
+- protobuf contracts cover submit, cancel, modify, and health-check paths
+- HTTP remains useful for local fallback and parity comparisons
 
 Target state:
 - runtime and engine communicate via gRPC + Protobuf contracts

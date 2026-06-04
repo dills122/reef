@@ -7,8 +7,12 @@ Current state:
 - runnable HTTP service
 - `GET /health`
 - `POST /orders/submit`
+- `POST /orders/cancel`
+- `POST /orders/modify`
 - gRPC server scaffold behind env flag (`MATCHING_ENGINE_ENABLE_GRPC=1`)
-- placeholder acceptance and validation logic only
+- hidden-book matching behavior with price-time ordering
+- partial-fill and multi-match behavior
+- engine-side order state for rest/fill/cancel/modify paths
 - tested with `go test ./...`
 
 Run locally:

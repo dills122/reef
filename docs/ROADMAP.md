@@ -11,6 +11,28 @@ It is intentionally biased toward:
 - deterministic simulation
 - inspectable workflows and event trails
 
+## Current Execution Checkpoint
+
+As of 2026-06-04, Reef is no longer just a repository skeleton. The current implementation has:
+
+- Kotlin runtime submit/cancel/modify command paths
+- `/api/v1` boundary routes with idempotency, auth/rate-limit hooks, abuse protection, and command capture
+- reference data endpoints and admin CLI scaffolding
+- runtime order/trade/event/trace query endpoints
+- Go matching engine hidden-book behavior with partial-fill, multi-match, cancel, modify, HTTP, and gRPC scaffold paths
+- Docker-first dev stack, smoke, stress, replay, and throughput campaign automation
+- Go simulator/load tester with persona/session configuration and trace validation
+
+The main execution gap is not service startup. It is alignment between current transitional storage code and the split-ready schema/procedure-first persistence direction.
+
+Current priority order:
+
+1. align runtime, boundary, auth, and admin durable persistence with domain schemas and migrations
+2. deliver the local simulator control-room MVP over existing CLI/report artifacts
+3. complete venue lifecycle projections for submit/cancel/modify state
+4. lock deterministic replay for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
+5. start broader post-trade modules only after the timeline/replay path proves causation end to end
+
 ## Phase 0: Foundation Reset
 
 Goal: prepare the repository for the actual architecture described in the project docs.
@@ -56,6 +78,18 @@ Exit criteria:
 - one user can drive the complete trade lifecycle from UI to engine and back
 - every significant state change is queryable through the platform
 - simulation is not required yet, but the command path is simulation-ready
+
+Current status:
+- API-first command and query paths are substantially implemented.
+- UI delivery is not complete.
+- persisted order lifecycle projection still needs to represent cancel/modify/current engine state consistently.
+- durable persistence needs schema alignment before more lifecycle tables are added.
+
+Recommended remaining sequence:
+1. schema alignment and migration cleanup
+2. venue lifecycle projection completion
+3. simulator control room around existing scripts/artifacts
+4. first scenario-locked lifecycle tests
 
 ## Phase 2: Post-Trade Slice
 

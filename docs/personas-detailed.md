@@ -343,16 +343,10 @@ Validation rules:
 ### Phase 4: Faults + Replay Packs
 
 - Add deterministic fault injection by `scenarioRunId`
-- Support scenario fixture files under something like:
+- Support scenario fixture files under:
 
 ```text
 packages/scenario-definitions
-```
-
-or:
-
-```text
-libs/reef-scenarios
 ```
 
 - Add golden scenario regression tests

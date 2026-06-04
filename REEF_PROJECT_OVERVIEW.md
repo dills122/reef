@@ -212,7 +212,8 @@ A trade should be traceable from initial order intent to final outcome through s
 - **Astro** for a static marketing/documentation site
 
 ### Backend and orchestration
-- **Kotlin** for the main platform API/runtime and the simulator harness
+- **Kotlin** for the main platform API/runtime and workflow orchestration
+- **Go** currently also powers the simulator/load-testing CLI; simulator code may remain separate as long as it drives platform command paths
 - likely **Ktor** rather than Spring Boot for a lighter-weight, framework-thinner architecture
 
 ### Engine

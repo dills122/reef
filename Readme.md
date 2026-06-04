@@ -38,7 +38,7 @@ make dev-smoke
 
 ## Current State
 
-The repository is in early Phase 1 implementation (API-first venue slice).
+The repository is in Phase 1 implementation with a working API-first venue slice and an increasingly capable local simulation/stress harness.
 
 What exists now:
 
@@ -46,9 +46,13 @@ What exists now:
 - technical design in [`REEF_TECHNICAL_DESIGN.md`](./REEF_TECHNICAL_DESIGN.md)
 - implementation roadmap in [`docs/ROADMAP.md`](./docs/ROADMAP.md)
 - architecture and language steering in [`docs/steering/`](./docs/steering/)
-- load/simulation CLI in [`services/simulator/`](./services/simulator/)
+- Kotlin platform runtime with `/api/v1` submit/cancel/modify routes, idempotency hooks, query/read endpoints, reference data endpoints, abuse-protection telemetry, and admin CLI support
+- Go matching engine with hidden-book matching, partial-fill/multi-match behavior, cancel/modify support, HTTP transport, and gRPC scaffold
+- load/simulation CLI and replay/stress workflows in [`services/simulator/`](./services/simulator/)
+- Docker-first local stack and smoke/stress/replay automation through `make` targets
 
-The old Go prototype has been retired so the repository can be rebuilt around the current architecture intentionally.
+Current planning review:
+- [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./docs/PROJECT_GOAL_PLAN_REVIEW.md)
 
 ## Planned Repository Shape
 
@@ -70,15 +74,13 @@ docs/
 
 ## Near-Term Build Plan
 
-1. Stand up the repo skeleton and service/app shells.
-2. Define the first runtime-to-engine contracts.
-3. Implement the first end-to-end venue slice:
-   - reference data
-   - order submission
-   - matching
-   - executions and trades
-   - event timeline views
-4. Extend into post-trade workflows and simulation control.
+1. Align durable runtime/boundary/auth/admin persistence with the split-ready schema and migration plan.
+2. Build the simulator control-room MVP over existing CLI scripts and report artifacts.
+3. Complete venue lifecycle projections for submit/cancel/modify and expose stable query/timeline views.
+4. Deliver the first deterministic lifecycle scenarios:
+   - `P1_GOLDEN_HIDDEN_CROSS_T1`
+   - `P2_SETTLEMENT_BREAK_REPAIR`
+5. Extend into post-trade workflows once replay/timeline assertions are stable.
 
 ## Current Development Commands
 

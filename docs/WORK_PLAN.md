@@ -19,25 +19,34 @@ It is intended to answer:
   - one Postgres database
   - one Angular application
 - contracts may remain HTTP JSON initially, but should evolve toward protobuf once shapes stabilize
-- simulation remains in the Kotlin runtime until there is a clear reason to extract it
+- simulation tooling may remain a separate Go CLI/control-plane client as long as it uses real runtime command paths and preserves deterministic run artifacts
 - auditability and inspectability are treated as product requirements, not afterthoughts
 
 ## Current Status
 
-Completed baseline:
+Completed baseline as of 2026-06-04:
 
 - repo skeleton and steering docs
-- initial runtime and matching engine shells
-- CI and test scaffolding
-- initial in-memory order submission flow
+- runtime and matching engine service implementation beyond initial shells
+- CI/test scaffolding and local Docker automation
+- initial order submission flow
 - partial fills and multi-match behavior
 - explicit engine-side order state
-- runtime-side in-memory persistence for accepted orders, executions, and trades
+- cancel and modify paths through runtime and engine
+- runtime-side persistence for accepted orders, executions, trades, and lifecycle events
+- query endpoints for orders, trades, events, and trace timelines
+- `/api/v1` boundary routes with idempotency, auth/rate-limit hooks, abuse protection, and command capture
+- admin CLI scaffolding for reference data, roles, calendars, overrides, simulation controls, and trace inspection
+- simulator/load tester with strict lifecycle, capacity baseline, persona/session config, deterministic replay, and throughput reports
 
 Immediate implication:
 
-- the system has a write path and internal persistence path
-- the next missing piece is a proper query/read path and event visibility
+- the system has a working API-first venue slice and strong simulator/stress tooling
+- the next missing piece is storage/schema convergence and a complete persisted order lifecycle projection for submit/cancel/modify
+- the UI should first expose local simulator/control-room workflows over existing artifacts before broad post-trade screens are added
+
+Current planning review:
+- [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./PROJECT_GOAL_PLAN_REVIEW.md)
 
 ## Delivery Strategy
 
@@ -69,6 +78,11 @@ Next planned sprint block:
 - [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
 - [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
+
+Current execution checkpoint before that block:
+- align durable runtime/boundary/auth/admin persistence with domain schemas and migrations
+- deliver the simulator control-room MVP over existing CLI/report artifacts
+- complete venue order-state projections for submit/cancel/modify
 
 ## Major Workstreams
 
@@ -111,6 +125,10 @@ Exit criteria:
 - each meaningful transition creates an event record
 - a trade can be traced from command to current state
 
+Status:
+- mostly implemented for submit/order/trade/event/trace queryability
+- remaining gap is complete current-state projection for cancel/modify and durable outbox-backed publication
+
 ### Workstream B: Reference Data Foundation
 
 Goal:
@@ -149,6 +167,11 @@ Exit criteria:
 - runtime and engine stay consistent across lifecycle transitions
 - query APIs reflect current order state and history
 
+Status:
+- engine supports submit, rest, partial fill, fill, cancel, modify, and reject behavior
+- runtime can call submit/cancel/modify and persist lifecycle events
+- remaining gap is a full persisted current-state projection that reflects cancel/modify/fill state, not only accepted-order intake state
+
 ### Workstream D: Angular Operational Shell
 
 Goal:
@@ -167,6 +190,32 @@ Exit criteria:
 - a user can create reference data
 - a user can submit orders and view outcomes
 - a user can inspect current order and trade state in the UI
+
+Status:
+- platform UI is still a placeholder
+- current accepted next UI direction is a local simulator control room before broad operational order/post-trade screens
+- the UI must preserve CLI/report parity and must not bypass platform command paths
+
+### Workstream J: Simulator Control Room
+
+Goal:
+turn existing simulator, stress, replay, and throughput scripts into a local operator-style UI without changing simulator semantics.
+
+Scope:
+- local-only control API around allowlisted commands
+- run builder for load/stress/spike/soak modes
+- active run status/log stream
+- run result summary and compare-runs views
+- trace explorer over existing runtime trace/event APIs
+- artifact indexing under a stable local artifact root
+
+Exit criteria:
+- UI-launched runs emit the same report artifacts and reproduction command as CLI-launched runs
+- run records include seed/session config, git metadata, metric scope, runtime instance count, and artifact paths
+- compare view covers accepted RPS, submitted RPS, success rate, p95/p99, reject taxonomy, and trace-check pass rate
+
+Primary plan:
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 
 ### Workstream E: Post-Trade Core
 
@@ -576,18 +625,19 @@ Each path spec should include:
 
 Recommended next block of work:
 
-1. runtime query endpoints for persisted venue artifacts
-2. append-only event log for order and trade flow
-3. cancel order path through runtime and engine
-4. Angular shell for order entry and blotter
+1. align durable persistence with split-ready domain schemas and migration-owned tables
+2. complete current-state order lifecycle projections for submit/cancel/modify/fill/reject
+3. build the simulator control-room MVP over existing dev/simulator scripts and artifacts
+4. add deterministic scenario assertions for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
 
 Reason:
 
+- it removes the biggest architecture drift before adding post-trade storage
 - it completes the inspectability promise of the current venue slice
-- it avoids starting reference data or UI work on top of an opaque backend
+- it turns the existing simulator strength into a repeatable operator workflow
 - it keeps the platform close to the technical design's audit-first intent
 
-After the current communication/boundary/admin sprint completes, recommended next sprint:
+After that checkpoint, recommended post-trade sprint:
 
 1. implement `LifecycleRunner` orchestration with module seams inside runtime
 2. deliver `P1_GOLDEN_HIDDEN_CROSS_T1`
