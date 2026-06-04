@@ -81,6 +81,7 @@ This is transitional only. Runtime, boundary, and auth bootstrap now targets exp
 - `make dev-db-migrate` applies migrations in deterministic domain order and records checksums in `public.reef_schema_migrations`.
 - Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
 - `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries and schema-owned table placement with a JDBC URL that does not set `currentSchema`.
+- Full local-stack smoke passed after applying migrations, including boundary command capture and `/api/v1` submit/cancel flow.
 - Service-side bootstrap remains a compatibility bridge, not the steady state.
 
 ## Next persistence-alignment work

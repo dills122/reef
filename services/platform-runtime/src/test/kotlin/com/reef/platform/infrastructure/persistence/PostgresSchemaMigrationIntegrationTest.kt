@@ -20,7 +20,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 WHERE migration_id IN (
                   'runtime/0003_live_runtime_persistence.sql',
                   'auth/0002_live_auth_tables.sql',
-                  'boundary/0002_live_boundary_tables.sql'
+                  'boundary/0002_live_boundary_tables.sql',
+                  'boundary/0003_command_capture_live_shape.sql',
+                  'boundary/0004_command_capture_legacy_defaults.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -36,6 +38,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 listOf(
                     "auth/0002_live_auth_tables.sql",
                     "boundary/0002_live_boundary_tables.sql",
+                    "boundary/0003_command_capture_live_shape.sql",
+                    "boundary/0004_command_capture_legacy_defaults.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations
@@ -81,6 +85,50 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertEquals(expectedTables, actualTables)
+
+            val commandCaptureColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'boundary'
+                  AND table_name = 'api_command_captures'
+                  AND column_name IN (
+                    'command_id',
+                    'correlation_id',
+                    'created_at',
+                    'request_payload',
+                    'response_status',
+                    'response_payload',
+                    'error_class',
+                    'error_message',
+                    'first_received_at',
+                    'last_updated_at'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "command_id:text",
+                    "correlation_id:text",
+                    "created_at:text",
+                    "error_class:text",
+                    "error_message:text",
+                    "first_received_at:timestamp with time zone",
+                    "last_updated_at:timestamp with time zone",
+                    "request_payload:text",
+                    "response_payload:text",
+                    "response_status:integer"
+                ),
+                commandCaptureColumns
+            )
 
             val publicTables = conn.prepareStatement(
                 """
