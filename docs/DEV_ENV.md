@@ -52,6 +52,12 @@ Deterministic reset (down + volume wipe + rebuild + compose health wait):
 make dev-reset
 ```
 
+Apply forward-only DB migrations after Postgres is available:
+
+```bash
+make dev-db-migrate
+```
+
 Optional inline smoke during reset:
 
 ```bash
@@ -296,6 +302,8 @@ Postgres init creates domain schemas:
 - `boundary`
 
 Runtime, auth, and boundary service bootstrap creates schema-qualified compatibility tables today. Forward-only migration ownership is still the target for durable schema changes.
+
+`make dev-db-migrate` applies SQL files under `scripts/dev/db/migrations/` in deterministic domain order and records checksums in `public.reef_schema_migrations`. Use `$(JS_RUNTIME) scripts/dev/db/migrate.mjs --dry-run` to validate order/checksums without touching Docker.
 
 `.env` support:
 - all `scripts/dev/*.mjs` load `.env` and `.env.local` automatically

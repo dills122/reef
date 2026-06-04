@@ -7,6 +7,7 @@
     "dev:up": "bun scripts/dev/up.mjs",
     "dev:down": "bun scripts/dev/down.mjs",
     "dev:reset": "bun scripts/dev/reset.mjs",
+    "dev:db:migrate": "bun scripts/dev/db/migrate.mjs",
     "dev:smoke": "bun scripts/dev/smoke.mjs",
     "dev:stress": "bun scripts/dev/stress.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",

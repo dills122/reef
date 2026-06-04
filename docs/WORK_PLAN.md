@@ -80,7 +80,7 @@ Next planned sprint block:
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
 
 Current execution checkpoint before that block:
-- complete migration ownership for durable runtime/boundary/auth/admin persistence now that compatibility bootstrap uses explicit domain schemas
+- verify migration-owned runtime/boundary/auth/admin persistence on a clean stack and then narrow service-side bootstrap
 - run the runtime DB/JSON/HTTP library benchmark gate before committing to hot-path library swaps
 - deliver the simulator control-room MVP over existing CLI/report artifacts
 - complete venue order-state projections for submit/cancel/modify

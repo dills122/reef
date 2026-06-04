@@ -81,6 +81,7 @@ JS_RUNTIME=node make dev-smoke
 ```bash
 make dev-down
 make dev-reset
+make dev-db-migrate
 make test
 ```
 

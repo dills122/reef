@@ -114,6 +114,12 @@ Repository check:
 make test
 ```
 
+Local DB migrations:
+
+```bash
+make dev-db-migrate
+```
+
 ## Current Defaults
 
 - runtime-to-engine transport currently defaults to HTTP adapter, with gRPC direction documented for migration

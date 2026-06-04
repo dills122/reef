@@ -68,7 +68,7 @@ This document defines constraints for the single-Postgres local model so future 
 - command log bootstrap: planned under `command_log`
 - read-model bootstrap: planned under `read_model`
 
-This is transitional only. Runtime, boundary, and auth bootstrap now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. The next persistence-alignment step should make these tables migration-owned, reconcile migration table shapes with the live runtime schema, and stop adding new service-side table bootstrap except as compatibility fallback during migration.
+This is transitional only. Runtime, boundary, and auth bootstrap now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files now represent the live table shapes, but local startup still keeps service-side bootstrap as a compatibility fallback until the migration runner is verified against a clean stack.
 
 ## Current implementation checkpoint
 
@@ -77,15 +77,17 @@ This is transitional only. Runtime, boundary, and auth bootstrap now targets exp
 - `PostgresIdempotencyStore` uses explicit `boundary.api_idempotency_records`.
 - `PostgresCommandCaptureStore` uses explicit `boundary.api_command_captures`.
 - Schema-name overrides are limited to simple identifiers before SQL interpolation.
-- Existing domain migration folders remain the target ownership model; service-side bootstrap remains a compatibility bridge, not the steady state.
+- Domain migration files now represent the live runtime, auth, and boundary table shapes.
+- `make dev-db-migrate` applies migrations in deterministic domain order and records checksums in `public.reef_schema_migrations`.
+- Service-side bootstrap remains a compatibility bridge, not the steady state.
 
 ## Next persistence-alignment work
 
-1. Add or adjust forward-only migrations so live runtime/boundary/auth table shapes are represented by the owning domain folders.
-2. Reconcile the existing `runtime.runtime_events` migration shape with the current runtime event identifiers and ordering contract.
-3. Introduce a local migration runner or deterministic migration command before service startup relies on migration-owned tables.
-4. Add Postgres integration tests that prove tables land in domain schemas without requiring JDBC `currentSchema`.
-5. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration ownership.
+1. Run the migration command against a clean local Postgres stack and record evidence in the persistence sprint notes.
+2. Add Postgres integration tests that prove tables land in domain schemas without requiring JDBC `currentSchema`.
+3. Decide whether migrations run automatically in `dev-up`/runtime startup or remain an explicit setup command.
+4. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration ownership.
+5. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
 
 ## Split readiness checks to enforce in CI
 
