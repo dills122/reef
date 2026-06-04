@@ -1,5 +1,9 @@
 # Reef
 
+<p align="center">
+  <img src="./reef-logo-main.png" alt="Project Logo" width="300" height="300" />
+</p>
+
 Reef is a simulation-first institutional trading venue and post-trade platform.
 
 The project is being rebuilt from an early prototype into a production-shaped local platform for:
@@ -12,9 +16,11 @@ The project is being rebuilt from an early prototype into a production-shaped lo
 ## Getting Started
 
 For a full local setup and first-run path, start with:
+
 - [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
 
 For local environment operations and troubleshooting details:
+
 - [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
 
 Quick start:
@@ -52,6 +58,7 @@ What exists now:
 - Docker-first local stack and smoke/stress/replay automation through `make` targets
 
 Current planning review:
+
 - [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./docs/PROJECT_GOAL_PLAN_REVIEW.md)
 
 ## Planned Repository Shape
@@ -113,6 +120,7 @@ make test
 - admin surface direction is CLI-first using reusable runtime admin application modules
 
 Related docs:
+
 - [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)
 - [`docs/steering/external-api-boundary.md`](./docs/steering/external-api-boundary.md)
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./docs/SPRINT_COMMUNICATION_API_ADMIN.md)
