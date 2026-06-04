@@ -18,12 +18,21 @@ Current state:
 - Kotlin source and Gradle build scaffold
 - `GET /health`
 - `POST /orders/submit`
+- `POST /orders/cancel`
+- `POST /orders/modify`
 - `POST /api/v1/orders/submit` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/cancel` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/modify` (requires `X-Client-Id` + `Idempotency-Key`)
-- placeholder proxy path to the Go matching engine
+- reference data endpoints for instruments, participants, and accounts
+- query endpoints for orders, trades, events, and trace timelines
+- transport path to the Go matching engine over HTTP or gRPC
 - unit-testable API and application layers
 - runtime-to-engine transport selection (`ENGINE_TRANSPORT=http|grpc`)
+
+Current persistence caveat:
+
+- durable mode still has transitional service-side table bootstrap in addition to migration files
+- the intended direction is split-ready domain schemas (`runtime`, `boundary`, `auth`, `admin`) with migration-owned tables and procedure-first critical write paths
 
 Run locally when Gradle is available:
 

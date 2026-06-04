@@ -66,7 +66,7 @@ This document defines constraints for the single-Postgres local model so future 
 - command log bootstrap: planned under `command_log`
 - read-model bootstrap: planned under `read_model`
 
-This is acceptable for current phase, with the migration folders now established for forward-only evolution.
+This is transitional only. The next persistence-alignment sprint should move durable runtime, boundary, auth, and admin tables into migration-owned domain schemas and stop adding new service-side root-level table bootstrap. Existing bootstrap can remain only long enough to preserve local compatibility during migration.
 
 ## Split readiness checks to enforce in CI
 

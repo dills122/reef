@@ -27,8 +27,9 @@ Reef will be built as a multi-app, multi-language platform with a modular-first 
 
 - **Angular** for operational and simulation UIs
 - **Astro** for the marketing/documentation site
-- **Kotlin** for the platform API/runtime and simulator harness
+- **Kotlin** for the platform API/runtime and workflow orchestration
 - **Go** for the matching/execution engine
+- **Go** currently powers the simulator/load-testing CLI
 - **Postgres** for canonical state
 - **NATS** as the preferred messaging backbone once async service boundaries are introduced
 - **Protobuf** as the preferred shared contract format between Kotlin and Go services
@@ -80,7 +81,7 @@ Responsibilities:
 - manage trading session state relevant to matching
 
 ### 3.4 Simulation harness
-A Kotlin service or module responsible for running deterministic scenarios.
+A simulator harness responsible for running deterministic scenarios. The original target was a Kotlin module inside the runtime; the current implementation uses a separate Go CLI/load-tester under `services/simulator` and should continue to drive the runtime through public command paths.
 
 Responsibilities:
 - load scenario definitions
@@ -89,6 +90,9 @@ Responsibilities:
 - submit commands into the platform
 - inject faults and downstream failures
 - coordinate replay and reset behavior
+
+Design rule:
+- simulator implementation language is less important than command-path parity, deterministic seeds, traceable run artifacts, and replay assertions.
 
 ### 3.5 Admin operations surface (CLI first)
 
@@ -672,9 +676,13 @@ Adapter design rules:
 - blockchain-backed modes are optional experiments and must not block baseline delivery.
 - default v1 implementation is a relational account-style ledger with append-only postings plus compensating corrections.
 
-## 15. Simulation Harness Design (Kotlin)
+## 15. Simulation Harness Design
 
 The simulator harness should act like a specialized control-plane client.
+
+Current implementation note:
+- `services/simulator` is a Go CLI/load-testing harness.
+- future simulator/control-room work may add a local control API and UI, but must preserve the same platform command paths and report artifacts.
 
 ### Responsibilities
 - parse and execute scenario definitions
@@ -764,29 +772,27 @@ A pragmatic monorepo is recommended.
 ```text
 reef/
   apps/
-    reef-sim-ui/          # Angular
-    reef-ops-ui/          # Angular, if later split
-    reef-site/            # Astro
+    platform-ui/          # Angular
+    docs-site/            # Astro
 
   services/
-    reef-api/             # Kotlin platform runtime
-    reef-simulator/       # Kotlin simulation harness
-    reef-engine/          # Go matching engine
+    platform-runtime/     # Kotlin platform runtime
+    simulator/            # Go simulator/load-testing harness
+    matching-engine/      # Go matching engine
 
-  libs/
-    reef-protocol/        # protobuf schemas / shared contracts
-    reef-scenarios/       # scenario definitions and fixtures
-    reef-docs/            # optional markdown/spec assets
+  contracts/
+    proto/                # protobuf schemas / shared contracts
 
-  infra/
-    docker/
+  packages/
+    scenario-definitions/ # scenario definitions and fixtures
+    ui-models/            # shared frontend-facing model definitions
+
+  scripts/
     dev/
-    db/
+    ci/
 
   docs/
-    overview/
-    architecture/
-    decisions/
+    steering/
 ```
 
 ## 20. Development Workflow Goals
