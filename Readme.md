@@ -38,6 +38,7 @@ make dev-smoke
 - dev environment runbook: [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
 - delivery policy and test expectations: [`docs/ENGINEERING_DELIVERY_POLICY.md`](./docs/ENGINEERING_DELIVERY_POLICY.md)
 - roadmap and sequencing: [`docs/ROADMAP.md`](./docs/ROADMAP.md), [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
+- performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./docs/PERFORMANCE_LIBRARY_INVESTIGATION.md)
 - simulator persona/session plan: [`docs/SIMULATOR_PERSONA_CONFIG.md`](./docs/SIMULATOR_PERSONA_CONFIG.md)
 - simulator backlog and execution policy: [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./docs/SIMULATOR_UPGRADE_BACKLOG.md)
 - simulator control room sprint plan: [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)

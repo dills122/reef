@@ -113,6 +113,44 @@ Prove where time is spent before doing invasive refactors.
 - A `5000/512/60s` and `6500/768/60s` run include runtime phase diagnostics.
 - We can distinguish runtime CPU, engine latency, DB latency, and simulator pressure.
 
+## Priority 1A: Runtime Library Benchmark Gate
+
+### Objective
+
+Make the persistence sprint faster without adding speculative library churn.
+
+### Benchmark Areas
+
+- DB writes:
+  - pgjdbc + HikariCP baseline
+  - prepared batches
+  - explicit multi-row inserts
+  - `reWriteBatchedInserts`
+  - `CopyManager`/`COPY` for append-only bulk/report/archive paths only
+- JSON:
+  - current parser/serializer baseline
+  - `kotlinx.serialization`
+  - DSL-JSON for order-command DTO spike only
+- HTTP boundary:
+  - current JDK `HttpServer`
+  - Ktor Netty
+  - Vert.x Web
+
+### Constraints
+
+- Do not start with R2DBC/reactive DB access. The near-term bottleneck is controlled durable batching and stable latency.
+- Do not adopt a faster JSON library unless malformed-input and validation behavior remain acceptable.
+- Do not optimize the HTTP stack before phase timing proves boundary/server overhead is material.
+
+### Acceptance Criteria
+
+- Benchmark results are recorded with the same throughput discipline as stress baselines.
+- Recommendation identifies one default runtime JSON path and one default DB batching path.
+- Any adopted library has rollback/config toggles or a narrow integration surface.
+
+Reference:
+- [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
+
 ## Priority 2: Command Log Slice
 
 ### Objective

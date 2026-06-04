@@ -33,6 +33,34 @@ Immediate implications:
 1. Throughput target is reachable, but long-run stability depends on datastore lifecycle controls.
 2. Postgres WAL/checkpoint tuning and data retention/partitioning are not optional follow-up items.
 
+## Runtime Library Investigation Priorities
+
+Before swapping libraries, benchmark candidates against Reef's actual command, persistence, and simulator workloads.
+
+Priority order:
+
+1. Runtime DB write path and batching:
+   - pgjdbc + HikariCP prepared batches
+   - explicit multi-row inserts
+   - `reWriteBatchedInserts`
+   - `CopyManager`/`COPY` only for append-only bulk, archive, report, and replay-load paths
+2. Runtime JSON parser/serializer:
+   - current baseline
+   - `kotlinx.serialization` as the first typed default candidate
+   - DSL-JSON only for ultra-hot DTO spikes after validation behavior is stable
+3. Runtime HTTP boundary stack:
+   - current JDK `HttpServer`
+   - Ktor Netty
+   - Vert.x Web
+4. Go simulator and fallback codecs:
+   - standard library baseline
+   - `goccy/go-json`, `sonic`, `segmentio/encoding/json`, `easyjson`
+   - tuned `net/http` versus `fasthttp`
+   - `klauspost/compress` for archive/report compression
+
+Reference plan:
+- [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
+
 ## Industry Patterns To Apply
 
 Use these patterns as implementation priorities for sustained high-throughput operation:
@@ -94,4 +122,5 @@ Include this in PR descriptions for runtime/engine/simulator/dev-env changes:
 - Steering index: [`docs/steering/README.md`](./steering/README.md)
 - Architecture steering: [`docs/steering/architecture.md`](./steering/architecture.md)
 - Work plan: [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+- Performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
 - Current stress baseline: [`docs/DEV_STRESS_BASELINE_2026-05-23.md`](./DEV_STRESS_BASELINE_2026-05-23.md)

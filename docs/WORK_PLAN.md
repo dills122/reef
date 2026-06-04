@@ -81,12 +81,35 @@ Next planned sprint block:
 
 Current execution checkpoint before that block:
 - align durable runtime/boundary/auth/admin persistence with domain schemas and migrations
+- run the runtime DB/JSON/HTTP library benchmark gate before committing to hot-path library swaps
 - deliver the simulator control-room MVP over existing CLI/report artifacts
 - complete venue order-state projections for submit/cancel/modify
 
 ## Major Workstreams
 
 Additional active workstream:
+
+### Workstream K: Runtime Performance Library Investigation
+
+Goal:
+choose evidence-backed libraries and DB write strategies for the persistence sprint without speculative dependency churn.
+
+Scope:
+- runtime JSON parser/serializer benchmark
+- runtime DB batching benchmark
+- runtime JSONB payload construction strategy
+- runtime HTTP boundary benchmark
+- Go simulator JSON/client benchmark as a lower-priority follow-up
+
+Exit criteria:
+- pgjdbc prepared batch, explicit multi-row insert, and `reWriteBatchedInserts` results are compared against current write behavior
+- `kotlinx.serialization` is benchmarked as the default typed JSON candidate
+- DSL-JSON is evaluated only for ultra-hot DTOs if baseline JSON remains material
+- Ktor Netty and Vert.x Web are benchmarked only after phase timing confirms HTTP server overhead is meaningful
+- recommendation is recorded before adopting a new hot-path dependency
+
+Primary plan:
+- [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
 
 ### Workstream H: Communication + Boundary + Admin Foundation
 
