@@ -305,6 +305,10 @@ Runtime, auth, and boundary service bootstrap creates schema-qualified compatibi
 
 `make dev-db-migrate` applies SQL files under `scripts/dev/db/migrations/` in deterministic domain order and records checksums in `public.reef_schema_migrations`. Use `$(JS_RUNTIME) scripts/dev/db/migrate.mjs --dry-run` to validate order/checksums without touching Docker.
 
+Schema-placement verification:
+- `PostgresSchemaMigrationIntegrationTest` is opt-in.
+- run it with `RUNTIME_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://localhost:5432/reef`, `RUNTIME_POSTGRES_USER_TEST=reef`, and `RUNTIME_POSTGRES_PASSWORD_TEST=reef` after `make dev-db-migrate`.
+
 `.env` support:
 - all `scripts/dev/*.mjs` load `.env` and `.env.local` automatically
 - explicit shell environment variables still override file-based values

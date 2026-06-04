@@ -79,15 +79,16 @@ This is transitional only. Runtime, boundary, and auth bootstrap now targets exp
 - Schema-name overrides are limited to simple identifiers before SQL interpolation.
 - Domain migration files now represent the live runtime, auth, and boundary table shapes.
 - `make dev-db-migrate` applies migrations in deterministic domain order and records checksums in `public.reef_schema_migrations`.
+- Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
+- `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries and schema-owned table placement with a JDBC URL that does not set `currentSchema`.
 - Service-side bootstrap remains a compatibility bridge, not the steady state.
 
 ## Next persistence-alignment work
 
-1. Run the migration command against a clean local Postgres stack and record evidence in the persistence sprint notes.
-2. Add Postgres integration tests that prove tables land in domain schemas without requiring JDBC `currentSchema`.
-3. Decide whether migrations run automatically in `dev-up`/runtime startup or remain an explicit setup command.
-4. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration ownership.
-5. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
+1. Decide whether migrations run automatically in `dev-up`/runtime startup or remain an explicit setup command.
+2. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration execution order.
+3. Add the schema-placement integration test to a CI lane with an ephemeral Postgres service.
+4. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
 
 ## Split readiness checks to enforce in CI
 
