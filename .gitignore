@@ -4,3 +4,10 @@ build/
 out/
 bin/
 coverage/
+
+# Codex local integration links. These point at user-specific template
+# checkouts and are recreated with `bun run codex:links`.
+.codex/skills/
+.codex/steering/*-steering.md
+!.codex/steering/repository-steering.md
+!.codex/steering/testing-quality-gates-steering.md

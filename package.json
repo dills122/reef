@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "bun@1.1.38",
   "scripts": {
+    "codex:links": "bun scripts/dev/setup-codex-links.mjs",
     "dev:up": "bun scripts/dev/up.mjs",
     "dev:down": "bun scripts/dev/down.mjs",
     "dev:reset": "bun scripts/dev/reset.mjs",
