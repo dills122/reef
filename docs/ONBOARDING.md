@@ -42,7 +42,25 @@ cp .env.example .env
 - [Dev Environment Runbook](./DEV_ENV.md)
 - [Engineering Delivery Policy](./ENGINEERING_DELIVERY_POLICY.md)
 
-## 4. Start Local Stack
+## 4. Optional Codex Local Links
+
+Repo-owned agent guidance lives in `AGENTS.md`, `docs/steering/`, and tracked files under `.codex/steering/`.
+
+User-local Codex skill and template links are intentionally not committed because they point at machine-specific template checkouts. To recreate them locally:
+
+```bash
+bun run codex:links
+```
+
+If your template checkout is somewhere other than `~/Documents/ai-central/templates`:
+
+```bash
+AI_CENTRAL_HOME=/path/to/ai-central/templates bun run codex:links
+```
+
+The command only creates or updates symlinks. It skips real files so repository-owned steering files are not overwritten.
+
+## 5. Start Local Stack
 
 Default path:
 
@@ -58,7 +76,7 @@ JS_RUNTIME=node make dev-up
 JS_RUNTIME=node make dev-smoke
 ```
 
-## 5. Common Daily Commands
+## 6. Common Daily Commands
 
 ```bash
 make dev-down
@@ -113,7 +131,7 @@ Simulator run against active dev env:
 make dev-sim ARGS="--duration 20s --workers 6 --rate 80 --mode strict-lifecycle --pretty-summary"
 ```
 
-## 6. Optional Compose Profiles
+## 7. Optional Compose Profiles
 
 Redis:
 
@@ -133,7 +151,7 @@ Multiple:
 DEV_COMPOSE_PROFILES=redis,observability make dev-up
 ```
 
-## 7. Port Override Pattern
+## 8. Port Override Pattern
 
 If local defaults are occupied:
 
@@ -152,14 +170,14 @@ ENGINE_BASE_URL=http://localhost:18081 \
 make dev-smoke
 ```
 
-## 8. Architecture Basics For Contributors
+## 9. Architecture Basics For Contributors
 
 - Keep domain boundaries clean (runtime modules first, extraction later).
 - Simulation/scenario behavior must use real command paths.
 - New repo automation should be Bun-based scripts under `scripts/`.
 - `make` targets are wrappers around versioned scripts, not logic centers.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 `bun: command not found`
 - Install Bun or run commands with `JS_RUNTIME=node` temporarily.
