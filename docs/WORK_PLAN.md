@@ -65,6 +65,10 @@ Execution rule:
 Current execution sprint for this sequence:
 - [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
 
+Critical quality gate before further expansion:
+- [`docs/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./SPRINT_CRITICAL_QUALITY_HARDENING.md)
+- [`docs/research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md`](./research/CODE_QUALITY_PERFORMANCE_FINDINGS_2026-06-05.md)
+
 Bridging sprint before post-match:
 - [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
 
@@ -80,6 +84,8 @@ Next planned sprint block:
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
 
 Current execution checkpoint before that block:
+- run the critical correctness and boundary hardening gate from the findings dump before starting broader UI or post-match expansion
+- make command idempotency atomic, replay clocks deterministic, and `/api/v1` validation strict enough to support scenario assertions
 - add CI-backed schema-placement validation, then narrow compatibility bootstrap now that local startup runs migrations and validates migrated objects
 - run the runtime DB/JSON/HTTP library benchmark gate before committing to hot-path library swaps
 - deliver the simulator control-room MVP over existing CLI/report artifacts
@@ -648,13 +654,15 @@ Each path spec should include:
 
 Recommended next block of work:
 
-1. align durable persistence with split-ready domain schemas and migration-owned tables
-2. complete current-state order lifecycle projections for submit/cancel/modify/fill/reject
-3. build the simulator control-room MVP over existing dev/simulator scripts and artifacts
-4. add deterministic scenario assertions for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
+1. run a critical correctness and boundary hardening sprint over the current venue slice
+2. align durable persistence with split-ready domain schemas and migration-owned tables
+3. complete current-state order lifecycle projections for submit/cancel/modify/fill/reject
+4. build the simulator control-room MVP over existing dev/simulator scripts and artifacts
+5. add deterministic scenario assertions for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
 
 Reason:
 
+- it protects every later scenario, control-room workflow, and post-match module from non-atomic idempotency, non-deterministic clocks, weak validation, and incomplete authorization
 - it removes the biggest architecture drift before adding post-trade storage
 - it completes the inspectability promise of the current venue slice
 - it turns the existing simulator strength into a repeatable operator workflow

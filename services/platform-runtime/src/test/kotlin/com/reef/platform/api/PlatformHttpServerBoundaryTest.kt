@@ -177,6 +177,115 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1OrderMutationsRejectMalformedJsonBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            listOf(
+                "/api/v1/orders/submit",
+                "/api/v1/orders/cancel",
+                "/api/v1/orders/modify"
+            ).forEachIndexed { index, route ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-malformed-$index",
+                        "X-Correlation-Id" to "corr-malformed-$index"
+                    ),
+                    body = """{"commandId":"""
+                )
+
+                assertEquals(400, response.status)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "\"message\":\"invalid json payload\"")
+                assertContains(response.body, "\"correlationId\":\"corr-malformed-$index\"")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectUnknownFieldsBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val cases = listOf(
+                "/api/v1/orders/submit" to validSubmitBody("cmd-unknown-submit", "trace-unknown-submit", "ord-unknown-submit", extra = ""","unexpected":"value""""),
+                "/api/v1/orders/cancel" to validCancelBody("cmd-unknown-cancel", "trace-unknown-cancel", "ord-unknown-cancel", extra = ""","unexpected":"value""""),
+                "/api/v1/orders/modify" to validModifyBody("cmd-unknown-modify", "trace-unknown-modify", "ord-unknown-modify", extra = ""","unexpected":"value"""")
+            )
+            cases.forEachIndexed { index, (route, body) ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-unknown-$index"
+                    ),
+                    body = body
+                )
+
+                assertEquals(400, response.status)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "\"message\":\"unknown field: unexpected\"")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectMissingRequiredFieldsBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val cases = listOf(
+                "/api/v1/orders/submit" to bodyWithoutField(validSubmitBody("cmd-missing-submit", "trace-missing-submit", "ord-missing-submit"), "orderId"),
+                "/api/v1/orders/cancel" to bodyWithoutField(validCancelBody("cmd-missing-cancel", "trace-missing-cancel", "ord-missing-cancel"), "reason"),
+                "/api/v1/orders/modify" to bodyWithoutField(validModifyBody("cmd-missing-modify", "trace-missing-modify", "ord-missing-modify"), "limitPrice")
+            )
+            cases.forEachIndexed { index, (route, body) ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-missing-$index"
+                    ),
+                    body = body
+                )
+
+                assertEquals(400, response.status, route)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "\"message\":\"missing required field:")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1CommandStatusEndpointReturnsCapturedCommandState() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -561,7 +670,7 @@ class PlatformHttpServerBoundaryTest {
         return HttpResponse(connection.responseCode, text)
     }
 
-    private fun validSubmitBody(commandId: String, traceId: String, orderId: String): String {
+    private fun validSubmitBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
         return """
             {
               "commandId":"$commandId",
@@ -579,9 +688,50 @@ class PlatformHttpServerBoundaryTest {
               "quantityUnits":"100",
               "limitPrice":"150250000000",
               "currency":"USD",
-              "timeInForce":"DAY"
+              "timeInForce":"DAY"$extra
             }
         """.trimIndent()
+    }
+
+    private fun validCancelBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"$traceId",
+              "causationId":"",
+              "correlationId":"$traceId",
+              "actorId":"bot-capture-1",
+              "occurredAt":"2026-05-22T00:00:00Z",
+              "orderId":"$orderId",
+              "reason":"test"$extra
+            }
+        """.trimIndent()
+    }
+
+    private fun validModifyBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"$traceId",
+              "causationId":"",
+              "correlationId":"$traceId",
+              "actorId":"bot-capture-1",
+              "occurredAt":"2026-05-22T00:00:00Z",
+              "orderId":"$orderId",
+              "quantityUnits":"100",
+              "limitPrice":"150250000001"$extra
+            }
+        """.trimIndent()
+    }
+
+    private fun bodyWithoutField(body: String, field: String): String {
+        val withoutField = body
+            .lines()
+            .filterNot { it.trimStart().startsWith("\"$field\":") }
+            .joinToString("\n")
+        return Regex(""",(\s*})""").replace(withoutField) { match ->
+            match.groupValues[1]
+        }
     }
 
     private fun seedReferenceData(port: Int) {

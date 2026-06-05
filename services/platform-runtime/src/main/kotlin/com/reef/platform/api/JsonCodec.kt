@@ -83,6 +83,10 @@ object JsonCodec {
 class JsonDocument internal constructor(
     private val root: JsonNode
 ) {
+    fun fieldNames(): Set<String> {
+        return root.fieldNames().asSequence().toSet()
+    }
+
     fun has(key: String): Boolean {
         return root.has(key)
     }

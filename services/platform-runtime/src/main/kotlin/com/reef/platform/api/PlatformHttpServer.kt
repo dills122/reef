@@ -304,6 +304,11 @@ class PlatformHttpServer(
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders).orEmpty()
         val correlationId = correlationId(exchange)
         val body = readRequestBody(exchange) ?: return
+        val validationError = PlatformCommandParsers.validateApiV1Command(route, body)
+        if (validationError != null) {
+            writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
+            return
+        }
         try {
             commandCaptureStore.captureReceived(clientId, route, idempotencyKey, correlationId, body)
         } catch (ex: Exception) {
