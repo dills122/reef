@@ -120,6 +120,8 @@ Local DB migrations:
 make dev-db-migrate
 ```
 
+`make dev-up` and `make dev-reset` run migrations automatically after Postgres is healthy. Use `make dev-db-migrate` for explicit repair/debug runs.
+
 ## Current Defaults
 
 - runtime-to-engine transport currently defaults to HTTP adapter, with gRPC direction documented for migration

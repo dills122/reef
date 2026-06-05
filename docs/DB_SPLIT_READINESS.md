@@ -68,7 +68,7 @@ This document defines constraints for the single-Postgres local model so future 
 - command log bootstrap: planned under `command_log`
 - read-model bootstrap: planned under `read_model`
 
-This is transitional only. Runtime, boundary, and auth bootstrap now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files now represent the live table shapes, but local startup still keeps service-side bootstrap as a compatibility fallback until the migration runner is verified against a clean stack.
+This is transitional only. Runtime, boundary, and auth bootstrap now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files now represent the live table shapes, and local startup applies migrations before the full stack starts. Service-side bootstrap remains as a compatibility fallback while the auto-migration path soaks.
 
 ## Current implementation checkpoint
 
@@ -82,14 +82,14 @@ This is transitional only. Runtime, boundary, and auth bootstrap now targets exp
 - Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
 - `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries and schema-owned table placement with a JDBC URL that does not set `currentSchema`.
 - Full local-stack smoke passed after applying migrations, including boundary command capture and `/api/v1` submit/cancel flow.
+- `make dev-up` and `make dev-reset` start Postgres, apply migrations, then start the full stack.
 - Service-side bootstrap remains a compatibility bridge, not the steady state.
 
 ## Next persistence-alignment work
 
-1. Decide whether migrations run automatically in `dev-up`/runtime startup or remain an explicit setup command.
-2. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration execution order.
-3. Add the schema-placement integration test to a CI lane with an ephemeral Postgres service.
-4. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
+1. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` bootstrap once local setup and CI prove migration execution order.
+2. Add the schema-placement integration test to a CI lane with an ephemeral Postgres service.
+3. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
 
 ## Split readiness checks to enforce in CI
 

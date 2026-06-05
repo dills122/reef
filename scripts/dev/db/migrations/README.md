@@ -14,8 +14,8 @@ Current implementation note:
 - runtime, boundary, and auth service initialization currently creates schema-qualified domain tables for local compatibility
 - those service-side bootstrap paths are transitional compatibility bridges, not the target ownership model
 - new durable schema work should land in these migration folders and should not add new root-level or search-path-dependent bootstrap tables
-- `make dev-db-migrate` applies migrations through Docker Compose Postgres and records checksums in `public.reef_schema_migrations`
-- clean-stack migration apply and live schema-placement tests are available; before removing service-side bootstrap, decide whether migrations are explicit or automatic during startup
+- `make dev-up`, `make dev-reset`, and `make dev-db-migrate` apply migrations through Docker Compose Postgres and record checksums in `public.reef_schema_migrations`
+- clean-stack migration apply and live schema-placement tests are available; before removing service-side bootstrap, add CI coverage for the migration execution order
 
 Rules:
 - place SQL files in the owning domain folder only

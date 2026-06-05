@@ -23,7 +23,7 @@ As of 2026-06-04, Reef is no longer just a repository skeleton. The current impl
 - Docker-first dev stack, smoke, stress, replay, and throughput campaign automation
 - Go simulator/load tester with persona/session configuration and trace validation
 
-The main execution gap is not service startup. It is completing the move from schema-qualified compatibility bootstrap to verified migration-owned, split-ready, procedure-first persistence.
+The main execution gap is not service startup. It is completing the move from schema-qualified compatibility bootstrap to migration-owned, split-ready, procedure-first persistence.
 
 Current priority order:
 
@@ -83,10 +83,10 @@ Current status:
 - API-first command and query paths are substantially implemented.
 - UI delivery is not complete.
 - persisted order lifecycle projection still needs to represent cancel/modify/current engine state consistently.
-- durable persistence now uses explicit runtime/boundary/auth schemas, migration files represent the live table shapes, and clean-stack migration verification has passed; service-bootstrap removal should happen before more lifecycle tables are added.
+- durable persistence now uses explicit runtime/boundary/auth schemas, migration files represent the live table shapes, and local startup applies migrations; service-bootstrap removal should happen before more lifecycle tables are added.
 
 Recommended remaining sequence:
-1. migration startup policy and runtime bootstrap cleanup
+1. runtime service-bootstrap cleanup
 2. venue lifecycle projection completion
 3. simulator control room around existing scripts/artifacts
 4. first scenario-locked lifecycle tests

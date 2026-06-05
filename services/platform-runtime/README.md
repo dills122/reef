@@ -33,8 +33,8 @@ Current persistence caveat:
 
 - durable mode still has transitional service-side table bootstrap in addition to migration files
 - runtime, boundary, and auth bootstrap now uses explicit domain-schema table names instead of relying on JDBC `currentSchema`
-- migration-owned runtime/auth/boundary table definitions and `make dev-db-migrate` now exist
-- clean-stack migration verification and service-side bootstrap removal are still pending
+- migration-owned runtime/auth/boundary table definitions are applied automatically by local dev startup/reset
+- service-side bootstrap removal is still pending
 - the intended direction is split-ready domain schemas (`runtime`, `boundary`, `auth`, `admin`) with migration-owned tables and procedure-first critical write paths
 
 Run locally when Gradle is available:

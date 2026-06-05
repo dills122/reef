@@ -52,7 +52,7 @@ Deterministic reset (down + volume wipe + rebuild + compose health wait):
 make dev-reset
 ```
 
-Apply forward-only DB migrations after Postgres is available:
+Forward-only DB migrations run automatically during `make dev-up` and `make dev-reset` after Postgres is healthy and before the full stack starts. Manual migration is still available for repair/debug:
 
 ```bash
 make dev-db-migrate
@@ -301,13 +301,13 @@ Postgres init creates domain schemas:
 - `admin`
 - `boundary`
 
-Runtime, auth, and boundary service bootstrap creates schema-qualified compatibility tables today. Forward-only migration ownership is still the target for durable schema changes.
+Runtime, auth, and boundary service bootstrap creates schema-qualified compatibility tables today. Forward-only migration ownership is now part of local startup, and the remaining persistence cleanup is narrowing service-side bootstrap.
 
-`make dev-db-migrate` applies SQL files under `scripts/dev/db/migrations/` in deterministic domain order and records checksums in `public.reef_schema_migrations`. Use `$(JS_RUNTIME) scripts/dev/db/migrate.mjs --dry-run` to validate order/checksums without touching Docker.
+`make dev-up`, `make dev-reset`, and `make dev-db-migrate` apply SQL files under `scripts/dev/db/migrations/` in deterministic domain order and record checksums in `public.reef_schema_migrations`. Use `$(JS_RUNTIME) scripts/dev/db/migrate.mjs --dry-run` to validate order/checksums without touching Docker.
 
 Schema-placement verification:
 - `PostgresSchemaMigrationIntegrationTest` is opt-in.
-- run it with `RUNTIME_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://localhost:5432/reef`, `RUNTIME_POSTGRES_USER_TEST=reef`, and `RUNTIME_POSTGRES_PASSWORD_TEST=reef` after `make dev-db-migrate`.
+- run it with `RUNTIME_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://localhost:5432/reef`, `RUNTIME_POSTGRES_USER_TEST=reef`, and `RUNTIME_POSTGRES_PASSWORD_TEST=reef` after `make dev-up` or `make dev-db-migrate`.
 
 `.env` support:
 - all `scripts/dev/*.mjs` load `.env` and `.env.local` automatically

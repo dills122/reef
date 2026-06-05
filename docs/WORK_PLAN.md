@@ -80,7 +80,7 @@ Next planned sprint block:
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
 
 Current execution checkpoint before that block:
-- choose migration startup policy for runtime/boundary/auth/admin persistence and then narrow service-side bootstrap
+- narrow service-side bootstrap now that runtime/boundary/auth/admin migrations run during local startup
 - run the runtime DB/JSON/HTTP library benchmark gate before committing to hot-path library swaps
 - deliver the simulator control-room MVP over existing CLI/report artifacts
 - complete venue order-state projections for submit/cancel/modify
