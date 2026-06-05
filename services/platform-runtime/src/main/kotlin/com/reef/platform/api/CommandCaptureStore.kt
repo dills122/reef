@@ -18,6 +18,13 @@ interface CommandCaptureStore {
         requestPayload: String
     )
 
+    fun markProcessing(
+        clientId: String,
+        route: String,
+        idempotencyKey: String
+    ) {
+    }
+
     fun markCompleted(
         clientId: String,
         route: String,
@@ -165,8 +172,9 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
 class CommandLogCommandCaptureStore(
     private val delegate: CommandCaptureStore,
     private val commandLogStore: CommandLogStore,
+    private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val clock: () -> Instant = { Instant.now() }
-) : CommandCaptureStore {
+) : CommandCaptureStore, CommandStatusLookup {
     override fun captureReceived(
         clientId: String,
         route: String,
@@ -191,6 +199,13 @@ class CommandLogCommandCaptureStore(
         delegate.captureReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
     }
 
+    override fun markProcessing(clientId: String, route: String, idempotencyKey: String) {
+        commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.let { record ->
+            commandLogStore.markProcessing(record.commandId)
+        }
+        delegate.markProcessing(clientId, route, idempotencyKey)
+    }
+
     override fun markCompleted(
         clientId: String,
         route: String,
@@ -198,6 +213,9 @@ class CommandLogCommandCaptureStore(
         responseStatus: Int,
         responsePayload: String
     ) {
+        commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.let { record ->
+            commandLogStore.markCompleted(record.commandId, responseStatus, payloadJson(responsePayload))
+        }
         delegate.markCompleted(clientId, route, idempotencyKey, responseStatus, responsePayload)
     }
 
@@ -209,7 +227,18 @@ class CommandLogCommandCaptureStore(
         errorClass: String,
         errorMessage: String
     ) {
+        commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.let { record ->
+            commandLogStore.markFailed(record.commandId, responseStatus, errorMessage)
+        }
         delegate.markFailed(clientId, route, idempotencyKey, responseStatus, errorClass, errorMessage)
+    }
+
+    override fun findCommandStatus(commandId: String): CommandStatusView? {
+        return commandLogStore.findByCommandId(commandId)?.toStatusView(commandProcessingMode)
+    }
+
+    override fun findCommandStatus(clientId: String, route: String, idempotencyKey: String): CommandStatusView? {
+        return commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.toStatusView(commandProcessingMode)
     }
 
     private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
@@ -384,11 +413,16 @@ class PostgresCommandCaptureStore(
     private fun connection() = dataSource.connection
 }
 
-fun defaultCommandCaptureStore(): CommandCaptureStore {
-    return defaultCommandCaptureStore { key -> System.getenv(key) }
+fun defaultCommandCaptureStore(
+    commandProcessingMode: CommandProcessingMode = CommandProcessingMode.fromEnv()
+): CommandCaptureStore {
+    return defaultCommandCaptureStore(commandProcessingMode) { key -> System.getenv(key) }
 }
 
-internal fun defaultCommandCaptureStore(lookup: (String) -> String?): CommandCaptureStore {
+internal fun defaultCommandCaptureStore(
+    commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+    lookup: (String) -> String?
+): CommandCaptureStore {
     val mode = (lookup("EXTERNAL_API_COMMAND_CAPTURE_MODE") ?: "postgres").trim().lowercase()
     val captureStore = when (mode) {
         "disabled", "off", "none" -> NoopCommandCaptureStore()
@@ -402,14 +436,19 @@ internal fun defaultCommandCaptureStore(lookup: (String) -> String?): CommandCap
     }
     return when (val commandLogMode = (lookup("EXTERNAL_API_COMMAND_LOG_MODE") ?: "disabled").trim().lowercase()) {
         "disabled", "off", "none" -> captureStore
-        "inmemory" -> CommandLogCommandCaptureStore(captureStore, InMemoryCommandLogStore())
+        "inmemory" -> CommandLogCommandCaptureStore(
+            delegate = captureStore,
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = commandProcessingMode
+        )
         "postgres" -> {
             val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
             val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
             val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             CommandLogCommandCaptureStore(
-                captureStore,
-                PostgresCommandLogStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword))
+                delegate = captureStore,
+                commandLogStore = PostgresCommandLogStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)),
+                commandProcessingMode = commandProcessingMode
             )
         }
         else -> throw IllegalArgumentException("Unsupported EXTERNAL_API_COMMAND_LOG_MODE: $commandLogMode")

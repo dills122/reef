@@ -90,7 +90,9 @@ class PostgresSchemaRequirementsTest {
                 "command_log.commands.status",
                 "command_log.commands.attempt_count",
                 "command_log.commands.last_error",
-                "command_log.commands.created_at"
+                "command_log.commands.created_at",
+                "command_log.commands.response_status",
+                "command_log.commands.response_payload_json"
             ),
             requirements.columns.map { it.qualifiedName }.toSet()
         )

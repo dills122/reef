@@ -28,7 +28,9 @@ data class CommandLogRecord(
     val payloadJson: String,
     val status: CommandLogStatus = CommandLogStatus.RECEIVED,
     val attemptCount: Int = 0,
-    val lastError: String = ""
+    val lastError: String = "",
+    val responseStatus: Int = 0,
+    val responsePayloadJson: String = "{}"
 )
 
 data class CommandLogAppendResult(
@@ -40,6 +42,9 @@ interface CommandLogStore {
     fun append(record: CommandLogRecord): CommandLogAppendResult
     fun findByCommandId(commandId: String): CommandLogRecord?
     fun findByIdempotency(clientId: String, route: String, idempotencyKey: String): CommandLogRecord?
+    fun markProcessing(commandId: String)
+    fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
+    fun markFailed(commandId: String, responseStatus: Int, errorMessage: String)
 }
 
 class InMemoryCommandLogStore : CommandLogStore {
@@ -71,6 +76,37 @@ class InMemoryCommandLogStore : CommandLogStore {
 
     override fun findByIdempotency(clientId: String, route: String, idempotencyKey: String): CommandLogRecord? {
         return idempotencyToCommandId[idempotencyKey(clientId, route, idempotencyKey)]?.let { byCommandId[it] }
+    }
+
+    override fun markProcessing(commandId: String) {
+        byCommandId.computeIfPresent(commandId) { _, existing ->
+            existing.copy(
+                status = CommandLogStatus.PROCESSING,
+                attemptCount = existing.attemptCount + 1,
+                lastError = ""
+            )
+        }
+    }
+
+    override fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String) {
+        byCommandId.computeIfPresent(commandId) { _, existing ->
+            existing.copy(
+                status = CommandLogStatus.COMPLETED,
+                responseStatus = responseStatus,
+                responsePayloadJson = responsePayloadJson,
+                lastError = ""
+            )
+        }
+    }
+
+    override fun markFailed(commandId: String, responseStatus: Int, errorMessage: String) {
+        byCommandId.computeIfPresent(commandId) { _, existing ->
+            existing.copy(
+                status = CommandLogStatus.FAILED,
+                responseStatus = responseStatus,
+                lastError = errorMessage
+            )
+        }
     }
 
     private fun idempotencyKey(clientId: String, route: String, idempotencyKey: String): String {
@@ -107,6 +143,8 @@ class PostgresCommandLogStore(
                       status TEXT NOT NULL,
                       attempt_count INTEGER NOT NULL DEFAULT 0,
                       last_error TEXT NOT NULL DEFAULT '',
+                      response_status INTEGER NOT NULL DEFAULT 0,
+                      response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                       UNIQUE (client_id, route, idempotency_key),
                       CHECK (status IN ('RECEIVED', 'PROCESSING', 'COMPLETED', 'FAILED'))
@@ -117,6 +155,13 @@ class PostgresCommandLogStore(
                     """
                     CREATE INDEX IF NOT EXISTS idx_command_log_commands_status_received
                     ON ${names.commands}(status, received_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.commands}
+                      ADD COLUMN IF NOT EXISTS response_status INTEGER NOT NULL DEFAULT 0,
+                      ADD COLUMN IF NOT EXISTS response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
                     """.trimIndent()
                 )
             }
@@ -206,6 +251,62 @@ class PostgresCommandLogStore(
         }
     }
 
+    override fun markProcessing(commandId: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE ${names.commands}
+                SET status = 'PROCESSING',
+                    attempt_count = attempt_count + 1,
+                    last_error = ''
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE ${names.commands}
+                SET status = 'COMPLETED',
+                    response_status = ?,
+                    response_payload_json = ?::jsonb,
+                    last_error = ''
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, responseStatus)
+                ps.setString(2, responsePayloadJson)
+                ps.setString(3, commandId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun markFailed(commandId: String, responseStatus: Int, errorMessage: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE ${names.commands}
+                SET status = 'FAILED',
+                    response_status = ?,
+                    last_error = ?
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, responseStatus)
+                ps.setString(2, errorMessage)
+                ps.setString(3, commandId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
     private fun ResultSet.toCommandLogRecord(): CommandLogRecord {
         return CommandLogRecord(
             commandId = getString("command_id"),
@@ -220,7 +321,9 @@ class PostgresCommandLogStore(
             payloadJson = getString("payload_json"),
             status = CommandLogStatus.valueOf(getString("status")),
             attemptCount = getInt("attempt_count"),
-            lastError = getString("last_error")
+            lastError = getString("last_error"),
+            responseStatus = getInt("response_status"),
+            responsePayloadJson = getString("response_payload_json")
         )
     }
 }

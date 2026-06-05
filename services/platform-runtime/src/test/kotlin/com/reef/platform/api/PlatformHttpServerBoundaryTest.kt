@@ -177,6 +177,203 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1CommandStatusEndpointReturnsCapturedCommandState() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-status-1"
+                ),
+                body = validSubmitBody("cmd-status-1", "trace-status-1", "ord-status-1")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-1")
+
+            assertEquals(200, response.status)
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-status-1\"")
+            assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"processingMode\":\"captured-sync-engine\"")
+            assertContains(status.body, "\"responseStatus\":200")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedSyncEngineReturnsSynchronousResultAndCompletesCommandStatus() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-sync-engine-1"
+                ),
+                body = validSubmitBody("cmd-sync-engine-1", "trace-sync-engine-1", "ord-sync-engine-1")
+            )
+            val record = commandLogStore.findByCommandId("cmd-sync-engine-1")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"orderId\":\"ord-sync-engine-1\"")
+            assertEquals(CommandLogStatus.COMPLETED, record?.status)
+            assertEquals(1, record?.attemptCount)
+            assertEquals(200, record?.responseStatus)
+            assertTrue(record?.responsePayloadJson?.contains("ord-sync-engine-1") == true)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedAckReturnsAcceptedCommandWithoutExecutingEngine() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-ack-1"
+                ),
+                body = validSubmitBody("cmd-ack-1", "trace-ack-1", "ord-ack-1")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-ack-1")
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-ack-1\"")
+            assertContains(response.body, "\"status\":\"RECEIVED\"")
+            assertContains(response.body, "\"processingMode\":\"captured-ack\"")
+            assertContains(response.body, "\"statusUrl\":\"/api/v1/commands/cmd-ack-1\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"status\":\"RECEIVED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedAckReplaysFirstAcceptedResponseForSameIdempotencyKey() {
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-ack-replay"
+            )
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = validSubmitBody("cmd-ack-first", "trace-ack-first", "ord-ack-first")
+            )
+            val second = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = validSubmitBody("cmd-ack-second", "trace-ack-second", "ord-ack-second")
+            )
+
+            assertEquals(202, first.status)
+            assertEquals(202, second.status)
+            assertEquals(first.body, second.body)
+            assertContains(second.body, "\"commandId\":\"cmd-ack-first\"")
+            assertEquals(0, gateway.submitCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedModesRequireCommandStatusLookup() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = NoopCommandCaptureStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-no-status"
+                ),
+                body = validSubmitBody("cmd-no-status", "trace-no-status", "ord-no-status")
+            )
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"error\":\"command status unavailable\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusEndpointReturnsNotFoundForUnknownCommand() {
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore()
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val response = get(server.address.port, "/api/v1/commands/missing-command")
+
+            assertEquals(404, response.status)
+            assertContains(response.body, "\"error\":\"command not found\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1SubmitRejectsOversizedBodyBeforeCapture() {
         val captureStore = RecordingCommandCaptureStore()
         val server = testServerWithGateway(
@@ -324,7 +521,8 @@ class PlatformHttpServerBoundaryTest {
         gateway: EngineGateway,
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
-        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook()
+        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
     ): com.sun.net.httpserver.HttpServer {
         val api = PlatformApi(
             OrderApplicationService(
@@ -338,7 +536,9 @@ class PlatformHttpServerBoundaryTest {
             abuseProtectionHook = abuseProtectionHook,
             idempotencyStore = InMemoryIdempotencyStore(),
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
-            commandCaptureStore = captureStore
+            commandCaptureStore = captureStore,
+            commandStatusLookup = captureStore as? CommandStatusLookup,
+            commandProcessingMode = commandProcessingMode
         ).start()
     }
 
@@ -423,6 +623,13 @@ private class RecordingCommandCaptureStore : CommandCaptureStore {
         lastReceivedPayload = requestPayload
     }
 
+    override fun markProcessing(
+        clientId: String,
+        route: String,
+        idempotencyKey: String
+    ) {
+    }
+
     override fun markCompleted(
         clientId: String,
         route: String,
@@ -485,6 +692,25 @@ private class EchoOrderEngineGateway : EngineGateway {
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class CountingEngineGateway(
+    private val delegate: EngineGateway
+) : EngineGateway {
+    var submitCalls: Int = 0
+
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        submitCalls++
+        return delegate.submitOrder(command)
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        return delegate.cancelOrder(command)
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        return delegate.modifyOrder(command)
+    }
 }
 
 private class StaticRejectedEngineGateway(
