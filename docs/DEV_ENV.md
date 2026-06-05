@@ -199,6 +199,7 @@ Simulator mutating traffic uses `/api/v1` routes by default (idempotency + clien
 - `--use-api-v1=true` (default)
 - `--client-id-prefix=sim-client` (default)
 - `DEV_SIM_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` recreates `platform-runtime` with that processing mode before running simulator traffic
+- `DEV_SIM_COMMAND_LOG_MODE=postgres|inmemory|disabled` overrides simulator-triggered command-log mode; captured simulator modes default this to `postgres`
 
 Optional abuse-breaker guardrail for `/api/v1` writes:
 - `EXTERNAL_API_ABUSE_BREAKER_MODE=off|reject-rate` (default `off`)

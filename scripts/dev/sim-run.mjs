@@ -3,18 +3,31 @@ import { deriveDevUrls, env, loadDotEnv, run, waitForHttp } from "./lib/dev-util
 loadDotEnv();
 const { runtimeUrl } = deriveDevUrls();
 const commandProcessingMode = env("DEV_SIM_COMMAND_PROCESSING_MODE", "");
+const commandLogMode = env(
+  "DEV_SIM_COMMAND_LOG_MODE",
+  commandProcessingMode && commandProcessingMode !== "sync-result" ? "postgres" : "",
+);
 
 if (commandProcessingMode) {
-  const previous = process.env.EXTERNAL_API_COMMAND_PROCESSING_MODE;
+  const previousProcessingMode = process.env.EXTERNAL_API_COMMAND_PROCESSING_MODE;
+  const previousCommandLogMode = process.env.EXTERNAL_API_COMMAND_LOG_MODE;
   process.env.EXTERNAL_API_COMMAND_PROCESSING_MODE = commandProcessingMode;
+  if (commandLogMode) {
+    process.env.EXTERNAL_API_COMMAND_LOG_MODE = commandLogMode;
+  }
   try {
     await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-runtime"]);
     await waitForHttp(`${runtimeUrl}/health`, 90, 2000);
   } finally {
-    if (previous == null) {
+    if (previousProcessingMode == null) {
       delete process.env.EXTERNAL_API_COMMAND_PROCESSING_MODE;
     } else {
-      process.env.EXTERNAL_API_COMMAND_PROCESSING_MODE = previous;
+      process.env.EXTERNAL_API_COMMAND_PROCESSING_MODE = previousProcessingMode;
+    }
+    if (previousCommandLogMode == null) {
+      delete process.env.EXTERNAL_API_COMMAND_LOG_MODE;
+    } else {
+      process.env.EXTERNAL_API_COMMAND_LOG_MODE = previousCommandLogMode;
     }
   }
 }
