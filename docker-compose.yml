@@ -68,6 +68,7 @@ services:
       ENGINE_TRANSPORT: "${ENGINE_TRANSPORT:-grpc}"
       MATCHING_ENGINE_BASE_URL: "http://matching-engine:8081"
       MATCHING_ENGINE_GRPC_TARGET: "${MATCHING_ENGINE_GRPC_TARGET:-matching-engine:9081}"
+      ENGINE_GRPC_DEADLINE_MS: "${ENGINE_GRPC_DEADLINE_MS:-2000}"
       RUNTIME_PERSISTENCE: "postgres"
       RUNTIME_DB_BOOTSTRAP_MODE: "${RUNTIME_DB_BOOTSTRAP_MODE:-validate}"
       RUNTIME_POSTGRES_JDBC_URL: "jdbc:postgresql://postgres:5432/reef?currentSchema=runtime"

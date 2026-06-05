@@ -78,7 +78,28 @@ object PlatformCommandParsers {
         if (missingField != null) {
             return "missing required field: $missingField"
         }
+        if (route == "/api/v1/orders/submit") {
+            enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return it }
+            enumValidationError(json, "orderType", setOf("LIMIT"))?.let { return it }
+            enumValidationError(json, "timeInForce", setOf("DAY", "IOC"))?.let { return it }
+        }
         return null
+    }
+
+    private fun enumValidationError(json: JsonDocument, field: String, allowed: Set<String>): String? {
+        val value = json.string(field)
+        if (value.uppercase() in allowed) {
+            return null
+        }
+        return "invalid ${fieldMessageName(field)}: $value"
+    }
+
+    private fun fieldMessageName(field: String): String {
+        return when (field) {
+            "orderType" -> "order type"
+            "timeInForce" -> "time in force"
+            else -> field
+        }
     }
 
     private fun apiV1Contract(requiredFields: List<String>): ApiV1CommandContract {

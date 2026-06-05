@@ -348,6 +348,66 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1SubmitRejectsInvalidEnumValuesBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-invalid-enum"
+                ),
+                body = validSubmitBody("cmd-invalid-enum", "trace-invalid-enum", "ord-invalid-enum")
+                    .replace("\"side\":\"BUY\"", "\"side\":\"BID\"")
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "\"message\":\"invalid side: BID\"")
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1SubmitReturnsRetryableErrorWhenEngineTransportFails() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = ThrowingEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-engine-down"
+                ),
+                body = validSubmitBody("cmd-engine-down", "trace-engine-down", "ord-engine-down")
+            )
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"error\":\"runtime unavailable\"")
+            assertFalse(response.body.contains("\"rejected\""))
+            assertEquals(1, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(1, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1CommandStatusEndpointReturnsCapturedCommandState() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1151,4 +1211,18 @@ private class StaticRejectedEngineGateway(
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class ThrowingEngineGateway : EngineGateway {
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        error("engine transport unavailable")
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        error("engine transport unavailable")
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        error("engine transport unavailable")
+    }
 }

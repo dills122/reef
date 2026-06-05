@@ -8,11 +8,16 @@ import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.infrastructure.config.RuntimeEnv
+import io.grpc.CallOptions
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.MethodDescriptor
+import io.grpc.StatusRuntimeException
 import io.grpc.protobuf.ProtoUtils
 import io.grpc.stub.ClientCalls
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 import reef.contracts.orderexecution.v1.CancelOrder
 import reef.contracts.orderexecution.v1.CommandMetadata
 import reef.contracts.orderexecution.v1.ModifyOrder
@@ -31,16 +36,18 @@ fun defaultEngineGateway(): EngineGateway {
     val transport = (System.getenv("ENGINE_TRANSPORT") ?: "http").lowercase()
     val httpBaseUrl = System.getenv("MATCHING_ENGINE_BASE_URL") ?: "http://localhost:8081"
     val grpcTarget = System.getenv("MATCHING_ENGINE_GRPC_TARGET") ?: "localhost:9081"
+    val grpcDeadline = Duration.ofMillis(RuntimeEnv.long("ENGINE_GRPC_DEADLINE_MS", 2_000, min = 1))
 
     return when (transport) {
-        "grpc" -> GrpcEngineClient(grpcTarget)
+        "grpc" -> GrpcEngineClient(grpcTarget, grpcDeadline)
         else -> EngineClient(httpBaseUrl)
     }
 }
 
 class GrpcEngineClient(
-    private val grpcTarget: String
-) : EngineGateway {
+    private val grpcTarget: String,
+    private val requestDeadline: Duration = Duration.ofMillis(RuntimeEnv.long("ENGINE_GRPC_DEADLINE_MS", 2_000, min = 1))
+) : EngineGateway, AutoCloseable {
     private val channel: ManagedChannel = ManagedChannelBuilder.forTarget(grpcTarget).usePlaintext().build()
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
@@ -57,7 +64,7 @@ class GrpcEngineClient(
             .setTimeInForce(command.timeInForce.toProtoTimeInForce())
             .build()
 
-        val response = ClientCalls.blockingUnaryCall(channel, submitMethod, io.grpc.CallOptions.DEFAULT, req)
+        val response = blockingEngineCall("SubmitOrder", submitMethod, req)
         return response.toDomainResult()
     }
 
@@ -68,7 +75,7 @@ class GrpcEngineClient(
             .setReason(command.reason)
             .build()
 
-        val response = ClientCalls.blockingUnaryCall(channel, cancelMethod, io.grpc.CallOptions.DEFAULT, req)
+        val response = blockingEngineCall("CancelOrder", cancelMethod, req)
         return response.toDomainResult()
     }
 
@@ -80,11 +87,40 @@ class GrpcEngineClient(
             .setLimitPrice(Price.newBuilder().setNanos(command.limitPrice).setCurrency("USD").build())
             .build()
 
-        val response = ClientCalls.blockingUnaryCall(channel, modifyMethod, io.grpc.CallOptions.DEFAULT, req)
+        val response = blockingEngineCall("ModifyOrder", modifyMethod, req)
         return response.toDomainResult()
     }
 
     fun target(): String = grpcTarget
+
+    override fun close() {
+        channel.shutdown()
+    }
+
+    internal fun isShutdown(): Boolean = channel.isShutdown
+
+    private fun <RequestT> blockingEngineCall(
+        operation: String,
+        method: MethodDescriptor<RequestT, ProtoSubmitOrderResult>,
+        request: RequestT
+    ): ProtoSubmitOrderResult {
+        val deadlineMs = requestDeadline.toMillis().coerceAtLeast(1)
+        return try {
+            ClientCalls.blockingUnaryCall(
+                channel,
+                method,
+                CallOptions.DEFAULT.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS),
+                request
+            )
+        } catch (ex: StatusRuntimeException) {
+            throw EngineTransportException(
+                "engine gRPC $operation failed with ${ex.status.code}: ${ex.status.description ?: ex.message ?: "unknown"}",
+                ex
+            )
+        } catch (ex: RuntimeException) {
+            throw EngineTransportException("engine gRPC $operation failed: ${ex.message ?: "unknown"}", ex)
+        }
+    }
 
     companion object {
         private const val SERVICE_NAME = "reef.contracts.orderexecution.v1.OrderExecutionService"
@@ -143,20 +179,20 @@ private fun String.toProtoSide(): OrderSide =
     when (uppercase()) {
         "SELL" -> OrderSide.ORDER_SIDE_SELL
         "BUY" -> OrderSide.ORDER_SIDE_BUY
-        else -> OrderSide.ORDER_SIDE_UNSPECIFIED
+        else -> throw EngineTransportException("invalid order side: $this")
     }
 
 private fun String.toProtoOrderType(): OrderType =
     when (uppercase()) {
         "LIMIT" -> OrderType.ORDER_TYPE_LIMIT
-        else -> OrderType.ORDER_TYPE_UNSPECIFIED
+        else -> throw EngineTransportException("invalid order type: $this")
     }
 
 private fun String.toProtoTimeInForce(): TimeInForce =
     when (uppercase()) {
         "IOC" -> TimeInForce.TIME_IN_FORCE_IOC
         "DAY" -> TimeInForce.TIME_IN_FORCE_DAY
-        else -> TimeInForce.TIME_IN_FORCE_UNSPECIFIED
+        else -> throw EngineTransportException("invalid time in force: $this")
     }
 
 private fun ProtoSubmitOrderResult.toDomainResult(): SubmitOrderResult =

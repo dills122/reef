@@ -177,17 +177,17 @@ Separate engine infrastructure failures from domain rejections and bound gRPC
 call duration.
 
 Acceptance criteria:
-- [ ] Engine transport failures surface as retryable runtime/API errors, not
+- [x] Engine transport failures surface as retryable runtime/API errors, not
       cached business rejections.
-- [ ] gRPC calls use explicit configurable deadlines.
-- [ ] Invalid or unspecified proto enum values are rejected by the engine
+- [x] gRPC calls use explicit configurable deadlines.
+- [x] Invalid or unspecified proto enum values are rejected by the engine
       transport.
-- [ ] gRPC channel lifecycle is explicit.
+- [x] gRPC channel lifecycle is explicit.
 
 Verification:
-- [ ] HTTP engine-down test.
-- [ ] Hanging gRPC server deadline test.
-- [ ] HTTP/gRPC parity tests.
+- [x] HTTP engine-down test.
+- [x] Hanging gRPC server deadline test.
+- [x] HTTP/gRPC parity tests.
 
 Dependencies:
 Task 2 preferred before changing retry behavior.

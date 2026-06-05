@@ -5,6 +5,7 @@ import com.reef.platform.domain.SubmitOrderCommand
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -94,6 +95,15 @@ class EngineClientTest {
         assertEquals("VALIDATION_ERROR", result.rejected.code)
         assertTrue(result.executions.isEmpty())
         assertTrue(result.trades.isEmpty())
+    }
+
+    @Test
+    fun submitOrderThrowsTransportExceptionWhenEngineIsUnavailable() {
+        val client = EngineClient("http://127.0.0.1:1")
+
+        assertFailsWith<EngineTransportException> {
+            client.submitOrder(submitCommand())
+        }
     }
 
     private fun submitCommand(): SubmitOrderCommand {

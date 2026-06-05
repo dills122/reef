@@ -51,6 +51,7 @@ Transport config:
 - `ENGINE_TRANSPORT=http` (legacy HTTP client path, useful for A/B comparisons)
 - `MATCHING_ENGINE_BASE_URL` for HTTP transport (default `http://localhost:8081`)
 - `MATCHING_ENGINE_GRPC_TARGET` for gRPC transport target (default `localhost:9081`)
+- `ENGINE_GRPC_DEADLINE_MS` for runtime-to-engine gRPC command deadlines (default `2000`)
 
 External boundary config:
 

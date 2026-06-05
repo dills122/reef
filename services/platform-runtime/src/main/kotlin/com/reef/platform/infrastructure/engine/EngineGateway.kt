@@ -10,3 +10,8 @@ interface EngineGateway {
     fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult
     fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult
 }
+
+class EngineTransportException(
+    message: String,
+    cause: Throwable? = null
+) : RuntimeException(message, cause)
