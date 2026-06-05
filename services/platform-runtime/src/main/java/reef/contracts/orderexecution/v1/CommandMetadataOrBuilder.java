@@ -69,4 +69,28 @@ public interface CommandMetadataOrBuilder extends
    */
   com.google.protobuf.ByteString
       getOccurredAtBytes();
+
+  /**
+   * <code>string trace_id = 6;</code>
+   * @return The traceId.
+   */
+  java.lang.String getTraceId();
+  /**
+   * <code>string trace_id = 6;</code>
+   * @return The bytes for traceId.
+   */
+  com.google.protobuf.ByteString
+      getTraceIdBytes();
+
+  /**
+   * <code>string causation_id = 7;</code>
+   * @return The causationId.
+   */
+  java.lang.String getCausationId();
+  /**
+   * <code>string causation_id = 7;</code>
+   * @return The bytes for causationId.
+   */
+  com.google.protobuf.ByteString
+      getCausationIdBytes();
 }

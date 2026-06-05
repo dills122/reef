@@ -202,14 +202,14 @@ Add trace and causation metadata to protobuf contracts and keep HTTP/gRPC
 command semantics aligned.
 
 Acceptance criteria:
-- [ ] `CommandMetadata` carries trace ID and causation ID additively.
-- [ ] Kotlin and Go generated sources are updated.
-- [ ] HTTP and gRPC parity tests assert metadata propagation.
-- [ ] Proto README reflects current generated-code workflow.
+- [x] `CommandMetadata` carries trace ID and causation ID additively.
+- [x] Kotlin and Go generated sources are updated.
+- [x] HTTP and gRPC parity tests assert metadata propagation.
+- [x] Proto README reflects current generated-code workflow.
 
 Verification:
-- [ ] `make check-proto-additive` with a real base ref in CI.
-- [ ] `make test`
+- [x] `make check-proto-additive` with a real base ref.
+- [x] `make test`
 
 Dependencies:
 Task 6 can be done in parallel if contract shape is agreed first.

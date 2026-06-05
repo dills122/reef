@@ -36,6 +36,8 @@ curl -X POST http://localhost:8081/orders/submit \
   -H 'content-type: application/json' \
   -d '{
     "commandId":"cmd-1",
+    "traceId":"trace-1",
+    "causationId":"cause-1",
     "correlationId":"corr-1",
     "actorId":"trader-1",
     "occurredAt":"2026-03-14T18:00:00Z",

@@ -70,6 +70,8 @@ class EngineClient : EngineGateway {
     internal fun submitPayload(command: SubmitOrderCommand): String {
         return JsonCodec.writeObject(
             "commandId" to command.commandId,
+            "traceId" to command.traceId,
+            "causationId" to command.causationId,
             "correlationId" to command.correlationId,
             "actorId" to command.actorId,
             "occurredAt" to command.occurredAt,

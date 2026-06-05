@@ -154,6 +154,8 @@ class GrpcEngineClient(
 private fun SubmitOrderCommand.toMetadata(): CommandMetadata =
     CommandMetadata.newBuilder()
         .setCommandId(commandId)
+        .setTraceId(traceId)
+        .setCausationId(causationId)
         .setCorrelationId(correlationId)
         .setActorId(actorId)
         .setOccurredAt(occurredAt)
@@ -162,6 +164,8 @@ private fun SubmitOrderCommand.toMetadata(): CommandMetadata =
 private fun CancelOrderCommand.toMetadata(): CommandMetadata =
     CommandMetadata.newBuilder()
         .setCommandId(commandId)
+        .setTraceId(traceId)
+        .setCausationId(causationId)
         .setCorrelationId(correlationId)
         .setActorId(actorId)
         .setOccurredAt(occurredAt)
@@ -170,6 +174,8 @@ private fun CancelOrderCommand.toMetadata(): CommandMetadata =
 private fun ModifyOrderCommand.toMetadata(): CommandMetadata =
     CommandMetadata.newBuilder()
         .setCommandId(commandId)
+        .setTraceId(traceId)
+        .setCausationId(causationId)
         .setCorrelationId(correlationId)
         .setActorId(actorId)
         .setOccurredAt(occurredAt)

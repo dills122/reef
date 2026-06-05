@@ -101,83 +101,84 @@ public final class OrderExecution extends com.google.protobuf.GeneratedFile {
   static {
     java.lang.String[] descriptorData = {
       "\n%contracts/proto/order_execution.proto\022" +
-      " reef.contracts.orderexecution.v1\"x\n\017Com" +
-      "mandMetadata\022\022\n\ncommand_id\030\001 \001(\t\022\026\n\016corr" +
-      "elation_id\030\002 \001(\t\022\020\n\010actor_id\030\003 \001(\t\022\022\n\nac" +
-      "tor_type\030\004 \001(\t\022\023\n\013occurred_at\030\005 \001(\t\"\036\n\rO" +
-      "rderQuantity\022\r\n\005units\030\001 \001(\t\"(\n\005Price\022\r\n\005" +
-      "nanos\030\001 \001(\t\022\020\n\010currency\030\002 \001(\t\"\352\003\n\013Submit" +
-      "Order\022C\n\010metadata\030\001 \001(\01321.reef.contracts" +
-      ".orderexecution.v1.CommandMetadata\022\020\n\010or" +
-      "der_id\030\002 \001(\t\022\025\n\rinstrument_id\030\003 \001(\t\022\026\n\016p" +
-      "articipant_id\030\004 \001(\t\022\022\n\naccount_id\030\005 \001(\t\022" +
-      "9\n\004side\030\006 \001(\0162+.reef.contracts.orderexec" +
-      "ution.v1.OrderSide\022?\n\norder_type\030\007 \001(\0162+" +
-      ".reef.contracts.orderexecution.v1.OrderT" +
-      "ype\022A\n\010quantity\030\010 \001(\0132/.reef.contracts.o" +
-      "rderexecution.v1.OrderQuantity\022<\n\013limit_" +
-      "price\030\t \001(\0132\'.reef.contracts.orderexecut" +
-      "ion.v1.Price\022D\n\rtime_in_force\030\n \001(\0162-.re" +
-      "ef.contracts.orderexecution.v1.TimeInFor" +
-      "ce\"t\n\013CancelOrder\022C\n\010metadata\030\001 \001(\01321.re" +
+      " reef.contracts.orderexecution.v1\"\240\001\n\017Co" +
+      "mmandMetadata\022\022\n\ncommand_id\030\001 \001(\t\022\026\n\016cor" +
+      "relation_id\030\002 \001(\t\022\020\n\010actor_id\030\003 \001(\t\022\022\n\na" +
+      "ctor_type\030\004 \001(\t\022\023\n\013occurred_at\030\005 \001(\t\022\020\n\010" +
+      "trace_id\030\006 \001(\t\022\024\n\014causation_id\030\007 \001(\t\"\036\n\r" +
+      "OrderQuantity\022\r\n\005units\030\001 \001(\t\"(\n\005Price\022\r\n" +
+      "\005nanos\030\001 \001(\t\022\020\n\010currency\030\002 \001(\t\"\352\003\n\013Submi" +
+      "tOrder\022C\n\010metadata\030\001 \001(\01321.reef.contract" +
+      "s.orderexecution.v1.CommandMetadata\022\020\n\010o" +
+      "rder_id\030\002 \001(\t\022\025\n\rinstrument_id\030\003 \001(\t\022\026\n\016" +
+      "participant_id\030\004 \001(\t\022\022\n\naccount_id\030\005 \001(\t" +
+      "\0229\n\004side\030\006 \001(\0162+.reef.contracts.orderexe" +
+      "cution.v1.OrderSide\022?\n\norder_type\030\007 \001(\0162" +
+      "+.reef.contracts.orderexecution.v1.Order" +
+      "Type\022A\n\010quantity\030\010 \001(\0132/.reef.contracts." +
+      "orderexecution.v1.OrderQuantity\022<\n\013limit" +
+      "_price\030\t \001(\0132\'.reef.contracts.orderexecu" +
+      "tion.v1.Price\022D\n\rtime_in_force\030\n \001(\0162-.r" +
+      "eef.contracts.orderexecution.v1.TimeInFo" +
+      "rce\"t\n\013CancelOrder\022C\n\010metadata\030\001 \001(\01321.r" +
+      "eef.contracts.orderexecution.v1.CommandM" +
+      "etadata\022\020\n\010order_id\030\002 \001(\t\022\016\n\006reason\030\003 \001(" +
+      "\t\"\345\001\n\013ModifyOrder\022C\n\010metadata\030\001 \001(\01321.re" +
       "ef.contracts.orderexecution.v1.CommandMe" +
-      "tadata\022\020\n\010order_id\030\002 \001(\t\022\016\n\006reason\030\003 \001(\t" +
-      "\"\345\001\n\013ModifyOrder\022C\n\010metadata\030\001 \001(\01321.ree" +
-      "f.contracts.orderexecution.v1.CommandMet" +
-      "adata\022\020\n\010order_id\030\002 \001(\t\022A\n\010quantity\030\003 \001(" +
-      "\0132/.reef.contracts.orderexecution.v1.Ord" +
-      "erQuantity\022<\n\013limit_price\030\004 \001(\0132\'.reef.c" +
-      "ontracts.orderexecution.v1.Price\"a\n\rOrde" +
-      "rAccepted\022\020\n\010event_id\030\001 \001(\t\022\020\n\010order_id\030" +
-      "\002 \001(\t\022\027\n\017engine_order_id\030\003 \001(\t\022\023\n\013occurr" +
-      "ed_at\030\004 \001(\t\"f\n\rOrderRejected\022\020\n\010event_id" +
-      "\030\001 \001(\t\022\020\n\010order_id\030\002 \001(\t\022\014\n\004code\030\003 \001(\t\022\016" +
-      "\n\006reason\030\004 \001(\t\022\023\n\013occurred_at\030\005 \001(\t\"\375\001\n\020" +
-      "ExecutionCreated\022\020\n\010event_id\030\001 \001(\t\022\024\n\014ex" +
-      "ecution_id\030\002 \001(\t\022\020\n\010order_id\030\003 \001(\t\022\025\n\rin" +
-      "strument_id\030\004 \001(\t\022A\n\010quantity\030\005 \001(\0132/.re" +
-      "ef.contracts.orderexecution.v1.OrderQuan" +
-      "tity\022@\n\017execution_price\030\006 \001(\0132\'.reef.con" +
-      "tracts.orderexecution.v1.Price\022\023\n\013occurr" +
-      "ed_at\030\007 \001(\t\"\234\002\n\014TradeCreated\022\020\n\010event_id" +
-      "\030\001 \001(\t\022\020\n\010trade_id\030\002 \001(\t\022\024\n\014execution_id" +
-      "\030\003 \001(\t\022\024\n\014buy_order_id\030\004 \001(\t\022\025\n\rsell_ord" +
-      "er_id\030\005 \001(\t\022\025\n\rinstrument_id\030\006 \001(\t\022A\n\010qu" +
-      "antity\030\007 \001(\0132/.reef.contracts.orderexecu" +
-      "tion.v1.OrderQuantity\0226\n\005price\030\010 \001(\0132\'.r" +
-      "eef.contracts.orderexecution.v1.Price\022\023\n" +
-      "\013occurred_at\030\t \001(\t\"\260\002\n\021SubmitOrderResult" +
-      "\022C\n\010accepted\030\001 \001(\0132/.reef.contracts.orde" +
-      "rexecution.v1.OrderAcceptedH\000\022C\n\010rejecte" +
-      "d\030\002 \001(\0132/.reef.contracts.orderexecution." +
-      "v1.OrderRejectedH\000\022F\n\nexecutions\030\003 \003(\01322" +
-      ".reef.contracts.orderexecution.v1.Execut" +
-      "ionCreated\022>\n\006trades\030\004 \003(\0132..reef.contra" +
-      "cts.orderexecution.v1.TradeCreatedB\t\n\007ou" +
-      "tcome\"\024\n\022HealthCheckRequest\"6\n\023HealthChe" +
-      "ckResponse\022\017\n\007service\030\001 \001(\t\022\016\n\006status\030\002 " +
-      "\001(\t*P\n\tOrderSide\022\032\n\026ORDER_SIDE_UNSPECIFI" +
-      "ED\020\000\022\022\n\016ORDER_SIDE_BUY\020\001\022\023\n\017ORDER_SIDE_S" +
-      "ELL\020\002*=\n\tOrderType\022\032\n\026ORDER_TYPE_UNSPECI" +
-      "FIED\020\000\022\024\n\020ORDER_TYPE_LIMIT\020\001*Z\n\013TimeInFo" +
-      "rce\022\035\n\031TIME_IN_FORCE_UNSPECIFIED\020\000\022\025\n\021TI" +
-      "ME_IN_FORCE_DAY\020\001\022\025\n\021TIME_IN_FORCE_IOC\020\002" +
-      "2\354\003\n\025OrderExecutionService\022q\n\013SubmitOrde" +
-      "r\022-.reef.contracts.orderexecution.v1.Sub" +
-      "mitOrder\0323.reef.contracts.orderexecution" +
-      ".v1.SubmitOrderResult\022q\n\013CancelOrder\022-.r" +
-      "eef.contracts.orderexecution.v1.CancelOr" +
-      "der\0323.reef.contracts.orderexecution.v1.S" +
-      "ubmitOrderResult\022q\n\013ModifyOrder\022-.reef.c" +
-      "ontracts.orderexecution.v1.ModifyOrder\0323" +
-      ".reef.contracts.orderexecution.v1.Submit" +
-      "OrderResult\022z\n\013HealthCheck\0224.reef.contra" +
-      "cts.orderexecution.v1.HealthCheckRequest" +
-      "\0325.reef.contracts.orderexecution.v1.Heal" +
-      "thCheckResponseBh\n reef.contracts.ordere" +
-      "xecution.v1P\001ZBgithub.com/dills122/reef/" +
-      "contracts/proto/orderexecution/v1;orderv" +
-      "1b\006proto3"
+      "tadata\022\020\n\010order_id\030\002 \001(\t\022A\n\010quantity\030\003 \001" +
+      "(\0132/.reef.contracts.orderexecution.v1.Or" +
+      "derQuantity\022<\n\013limit_price\030\004 \001(\0132\'.reef." +
+      "contracts.orderexecution.v1.Price\"a\n\rOrd" +
+      "erAccepted\022\020\n\010event_id\030\001 \001(\t\022\020\n\010order_id" +
+      "\030\002 \001(\t\022\027\n\017engine_order_id\030\003 \001(\t\022\023\n\013occur" +
+      "red_at\030\004 \001(\t\"f\n\rOrderRejected\022\020\n\010event_i" +
+      "d\030\001 \001(\t\022\020\n\010order_id\030\002 \001(\t\022\014\n\004code\030\003 \001(\t\022" +
+      "\016\n\006reason\030\004 \001(\t\022\023\n\013occurred_at\030\005 \001(\t\"\375\001\n" +
+      "\020ExecutionCreated\022\020\n\010event_id\030\001 \001(\t\022\024\n\014e" +
+      "xecution_id\030\002 \001(\t\022\020\n\010order_id\030\003 \001(\t\022\025\n\ri" +
+      "nstrument_id\030\004 \001(\t\022A\n\010quantity\030\005 \001(\0132/.r" +
+      "eef.contracts.orderexecution.v1.OrderQua" +
+      "ntity\022@\n\017execution_price\030\006 \001(\0132\'.reef.co" +
+      "ntracts.orderexecution.v1.Price\022\023\n\013occur" +
+      "red_at\030\007 \001(\t\"\234\002\n\014TradeCreated\022\020\n\010event_i" +
+      "d\030\001 \001(\t\022\020\n\010trade_id\030\002 \001(\t\022\024\n\014execution_i" +
+      "d\030\003 \001(\t\022\024\n\014buy_order_id\030\004 \001(\t\022\025\n\rsell_or" +
+      "der_id\030\005 \001(\t\022\025\n\rinstrument_id\030\006 \001(\t\022A\n\010q" +
+      "uantity\030\007 \001(\0132/.reef.contracts.orderexec" +
+      "ution.v1.OrderQuantity\0226\n\005price\030\010 \001(\0132\'." +
+      "reef.contracts.orderexecution.v1.Price\022\023" +
+      "\n\013occurred_at\030\t \001(\t\"\260\002\n\021SubmitOrderResul" +
+      "t\022C\n\010accepted\030\001 \001(\0132/.reef.contracts.ord" +
+      "erexecution.v1.OrderAcceptedH\000\022C\n\010reject" +
+      "ed\030\002 \001(\0132/.reef.contracts.orderexecution" +
+      ".v1.OrderRejectedH\000\022F\n\nexecutions\030\003 \003(\0132" +
+      "2.reef.contracts.orderexecution.v1.Execu" +
+      "tionCreated\022>\n\006trades\030\004 \003(\0132..reef.contr" +
+      "acts.orderexecution.v1.TradeCreatedB\t\n\007o" +
+      "utcome\"\024\n\022HealthCheckRequest\"6\n\023HealthCh" +
+      "eckResponse\022\017\n\007service\030\001 \001(\t\022\016\n\006status\030\002" +
+      " \001(\t*P\n\tOrderSide\022\032\n\026ORDER_SIDE_UNSPECIF" +
+      "IED\020\000\022\022\n\016ORDER_SIDE_BUY\020\001\022\023\n\017ORDER_SIDE_" +
+      "SELL\020\002*=\n\tOrderType\022\032\n\026ORDER_TYPE_UNSPEC" +
+      "IFIED\020\000\022\024\n\020ORDER_TYPE_LIMIT\020\001*Z\n\013TimeInF" +
+      "orce\022\035\n\031TIME_IN_FORCE_UNSPECIFIED\020\000\022\025\n\021T" +
+      "IME_IN_FORCE_DAY\020\001\022\025\n\021TIME_IN_FORCE_IOC\020" +
+      "\0022\354\003\n\025OrderExecutionService\022q\n\013SubmitOrd" +
+      "er\022-.reef.contracts.orderexecution.v1.Su" +
+      "bmitOrder\0323.reef.contracts.orderexecutio" +
+      "n.v1.SubmitOrderResult\022q\n\013CancelOrder\022-." +
+      "reef.contracts.orderexecution.v1.CancelO" +
+      "rder\0323.reef.contracts.orderexecution.v1." +
+      "SubmitOrderResult\022q\n\013ModifyOrder\022-.reef." +
+      "contracts.orderexecution.v1.ModifyOrder\032" +
+      "3.reef.contracts.orderexecution.v1.Submi" +
+      "tOrderResult\022z\n\013HealthCheck\0224.reef.contr" +
+      "acts.orderexecution.v1.HealthCheckReques" +
+      "t\0325.reef.contracts.orderexecution.v1.Hea" +
+      "lthCheckResponseBh\n reef.contracts.order" +
+      "execution.v1P\001ZBgithub.com/dills122/reef" +
+      "/contracts/proto/orderexecution/v1;order" +
+      "v1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -188,7 +189,7 @@ public final class OrderExecution extends com.google.protobuf.GeneratedFile {
     internal_static_reef_contracts_orderexecution_v1_CommandMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_reef_contracts_orderexecution_v1_CommandMetadata_descriptor,
-        new java.lang.String[] { "CommandId", "CorrelationId", "ActorId", "ActorType", "OccurredAt", });
+        new java.lang.String[] { "CommandId", "CorrelationId", "ActorId", "ActorType", "OccurredAt", "TraceId", "CausationId", });
     internal_static_reef_contracts_orderexecution_v1_OrderQuantity_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_reef_contracts_orderexecution_v1_OrderQuantity_fieldAccessorTable = new

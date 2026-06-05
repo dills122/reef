@@ -34,7 +34,7 @@ class EngineTransportTest {
                 SubmitOrderCommand(
                     commandId = "cmd-1",
                     traceId = "trace-1",
-                    causationId = "",
+                    causationId = "cause-1",
                     correlationId = "corr-1",
                     actorId = "trader-1",
                     occurredAt = "2026-03-14T18:00:00Z",
@@ -54,6 +54,8 @@ class EngineTransportTest {
             assertEquals("localhost:${server.port}", gateway.target())
             assertNotNull(capture.request)
             assertEquals("cmd-1", capture.request!!.metadata.commandId)
+            assertEquals("trace-1", capture.request!!.metadata.traceId)
+            assertEquals("cause-1", capture.request!!.metadata.causationId)
             assertEquals(OrderSide.ORDER_SIDE_BUY, capture.request!!.side)
             assertEquals(OrderType.ORDER_TYPE_LIMIT, capture.request!!.orderType)
             assertEquals(TimeInForce.TIME_IN_FORCE_DAY, capture.request!!.timeInForce)
@@ -168,7 +170,7 @@ private fun validSubmitCommand(side: String = "BUY"): SubmitOrderCommand {
     return SubmitOrderCommand(
         commandId = "cmd-1",
         traceId = "trace-1",
-        causationId = "",
+        causationId = "cause-1",
         correlationId = "corr-1",
         actorId = "trader-1",
         occurredAt = "2026-03-14T18:00:00Z",

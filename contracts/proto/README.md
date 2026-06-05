@@ -16,12 +16,29 @@ Current scope:
 Current usage model:
 
 - the `.proto` file is the canonical contract draft
-- the first runnable implementation uses HTTP JSON with equivalent shapes
-- protobuf generation can be added once the Kotlin and Go service toolchains are fully bootstrapped
+- the Kotlin runtime and Go matching engine both use generated protobuf sources
+- HTTP JSON remains as a compatibility/fallback transport with equivalent command metadata
+- generated Java sources are checked in under `services/platform-runtime/src/main/java/reef/contracts/orderexecution/v1/`
+- generated Go sources are checked in under `services/matching-engine/internal/transport/grpc/pb/contracts/proto/`
+
+Regenerate checked-in sources from the repository root:
+
+```bash
+protoc -I . \
+  --java_out=services/platform-runtime/src/main/java \
+  contracts/proto/order_execution.proto
+
+PATH=$HOME/go/bin:$PATH protoc -I . \
+  --go_out=services/matching-engine/internal/transport/grpc/pb \
+  --go_opt=paths=source_relative \
+  --go-grpc_out=services/matching-engine/internal/transport/grpc/pb \
+  --go-grpc_opt=paths=source_relative \
+  contracts/proto/order_execution.proto
+```
 
 Contract rules:
 
 - include stable identifiers
-- include actor and correlation metadata
+- include actor, trace, causation, and correlation metadata
 - avoid floating-point price and quantity fields
 - version messages deliberately

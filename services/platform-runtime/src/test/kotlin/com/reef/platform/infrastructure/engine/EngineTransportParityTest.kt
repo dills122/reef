@@ -11,8 +11,10 @@ import io.grpc.protobuf.ProtoUtils
 import io.grpc.stub.ServerCalls
 import java.net.InetSocketAddress
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import reef.contracts.orderexecution.v1.CancelOrder
+import reef.contracts.orderexecution.v1.CommandMetadata
 import reef.contracts.orderexecution.v1.ModifyOrder
 import reef.contracts.orderexecution.v1.OrderAccepted
 import reef.contracts.orderexecution.v1.OrderQuantity
@@ -26,7 +28,9 @@ class EngineTransportParityTest {
     @Test
     fun httpAndGrpcReturnEquivalentSubmitResults() {
         val httpServer = HttpServer.create(InetSocketAddress(0), 0)
+        var httpSubmitBody = ""
         httpServer.createContext("/orders/submit") { exchange ->
+            httpSubmitBody = exchange.requestBody.bufferedReader().readText()
             val response = """
                 {
                   "accepted":{
@@ -69,11 +73,13 @@ class EngineTransportParityTest {
         }
         httpServer.start()
 
+        var grpcSubmitMetadata: CommandMetadata? = null
         val grpcServer = ServerBuilder.forPort(0).directExecutor().addService(
             ServerServiceDefinition.builder(SERVICE_NAME_PARITY)
                 .addMethod(
                     submitMethod(),
                     ServerCalls.asyncUnaryCall { request: SubmitOrder, observer ->
+                        grpcSubmitMetadata = request.metadata
                         observer.onNext(
                             SubmitOrderResult.newBuilder()
                                 .setAccepted(
@@ -122,6 +128,10 @@ class EngineTransportParityTest {
             val httpResult = EngineClient("http://localhost:${httpServer.address.port}").submitOrder(command)
             val grpcResult = GrpcEngineClient("localhost:${grpcServer.port}").submitOrder(command)
             assertEquals(httpResult, grpcResult)
+            assertContains(httpSubmitBody, "\"traceId\":\"trace-1\"")
+            assertContains(httpSubmitBody, "\"causationId\":\"cause-1\"")
+            assertEquals("trace-1", grpcSubmitMetadata?.traceId)
+            assertEquals("cause-1", grpcSubmitMetadata?.causationId)
         } finally {
             httpServer.stop(0)
             grpcServer.shutdownNow()
@@ -131,6 +141,8 @@ class EngineTransportParityTest {
     @Test
     fun httpAndGrpcReturnEquivalentCancelAndModifyResults() {
         val httpServer = HttpServer.create(InetSocketAddress(0), 0)
+        var httpCancelBody = ""
+        var httpModifyBody = ""
         val accepted = """
             {
               "accepted":{
@@ -144,24 +156,30 @@ class EngineTransportParityTest {
             }
         """.trimIndent().toByteArray()
         httpServer.createContext("/orders/cancel") { exchange ->
+            httpCancelBody = exchange.requestBody.bufferedReader().readText()
             exchange.responseHeaders.add("Content-Type", "application/json")
             exchange.sendResponseHeaders(200, accepted.size.toLong())
             exchange.responseBody.use { it.write(accepted) }
         }
         httpServer.createContext("/orders/modify") { exchange ->
+            httpModifyBody = exchange.requestBody.bufferedReader().readText()
             exchange.responseHeaders.add("Content-Type", "application/json")
             exchange.sendResponseHeaders(200, accepted.size.toLong())
             exchange.responseBody.use { it.write(accepted) }
         }
         httpServer.start()
 
+        var grpcCancelMetadata: CommandMetadata? = null
+        var grpcModifyMetadata: CommandMetadata? = null
         val grpcServer = ServerBuilder.forPort(0).directExecutor().addService(
             ServerServiceDefinition.builder(SERVICE_NAME_PARITY)
                 .addMethod(cancelMethod(), ServerCalls.asyncUnaryCall { request: CancelOrder, observer ->
+                    grpcCancelMetadata = request.metadata
                     observer.onNext(simpleAccepted(request.orderId, "evt-2"))
                     observer.onCompleted()
                 })
                 .addMethod(modifyMethod(), ServerCalls.asyncUnaryCall { request: ModifyOrder, observer ->
+                    grpcModifyMetadata = request.metadata
                     observer.onNext(simpleAccepted(request.orderId, "evt-2"))
                     observer.onCompleted()
                 })
@@ -175,8 +193,8 @@ class EngineTransportParityTest {
 
             val cancel = CancelOrderCommand(
                 commandId = "cmd-cancel",
-                traceId = "trace-1",
-                causationId = "",
+                traceId = "trace-cancel",
+                causationId = "cause-cancel",
                 correlationId = "corr-1",
                 actorId = "trader-1",
                 occurredAt = "2026-03-14T18:00:00Z",
@@ -185,8 +203,8 @@ class EngineTransportParityTest {
             )
             val modify = ModifyOrderCommand(
                 commandId = "cmd-modify",
-                traceId = "trace-1",
-                causationId = "",
+                traceId = "trace-modify",
+                causationId = "cause-modify",
                 correlationId = "corr-1",
                 actorId = "trader-1",
                 occurredAt = "2026-03-14T18:00:00Z",
@@ -197,6 +215,14 @@ class EngineTransportParityTest {
 
             assertEquals(http.cancelOrder(cancel), grpc.cancelOrder(cancel))
             assertEquals(http.modifyOrder(modify), grpc.modifyOrder(modify))
+            assertContains(httpCancelBody, "\"traceId\":\"trace-cancel\"")
+            assertContains(httpCancelBody, "\"causationId\":\"cause-cancel\"")
+            assertContains(httpModifyBody, "\"traceId\":\"trace-modify\"")
+            assertContains(httpModifyBody, "\"causationId\":\"cause-modify\"")
+            assertEquals("trace-cancel", grpcCancelMetadata?.traceId)
+            assertEquals("cause-cancel", grpcCancelMetadata?.causationId)
+            assertEquals("trace-modify", grpcModifyMetadata?.traceId)
+            assertEquals("cause-modify", grpcModifyMetadata?.causationId)
         } finally {
             httpServer.stop(0)
             grpcServer.shutdownNow()
@@ -207,7 +233,7 @@ class EngineTransportParityTest {
         return SubmitOrderCommand(
             commandId = "cmd-1",
             traceId = "trace-1",
-            causationId = "",
+            causationId = "cause-1",
             correlationId = "corr-1",
             actorId = "trader-1",
             occurredAt = "2026-03-14T18:00:00Z",
