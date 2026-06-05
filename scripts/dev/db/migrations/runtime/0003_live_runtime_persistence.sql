@@ -121,7 +121,8 @@ CREATE OR REPLACE FUNCTION runtime.runtime_validate_reference_data(
 RETURNS TABLE(
   instrument_exists BOOLEAN,
   participant_exists BOOLEAN,
-  account_exists BOOLEAN
+  account_exists BOOLEAN,
+  account_belongs_to_participant BOOLEAN
 )
 LANGUAGE SQL
 STABLE
@@ -129,7 +130,8 @@ AS $$
   SELECT
     EXISTS(SELECT 1 FROM runtime.reference_instruments WHERE instrument_id = p_instrument_id),
     EXISTS(SELECT 1 FROM runtime.reference_participants WHERE participant_id = p_participant_id),
-    EXISTS(SELECT 1 FROM runtime.reference_accounts WHERE account_id = p_account_id)
+    EXISTS(SELECT 1 FROM runtime.reference_accounts WHERE account_id = p_account_id),
+    EXISTS(SELECT 1 FROM runtime.reference_accounts WHERE account_id = p_account_id AND participant_id = p_participant_id)
 $$;
 
 CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcome(

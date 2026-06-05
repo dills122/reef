@@ -14,7 +14,8 @@ import com.reef.platform.domain.TradeCreated
 data class ReferenceDataValidation(
     val instrumentExists: Boolean,
     val participantExists: Boolean,
-    val accountExists: Boolean
+    val accountExists: Boolean,
+    val accountBelongsToParticipant: Boolean = true
 )
 
 interface RuntimePersistence {
@@ -37,7 +38,10 @@ interface RuntimePersistence {
         return ReferenceDataValidation(
             instrumentExists = hasInstrument(instrumentId),
             participantExists = hasParticipant(participantId),
-            accountExists = hasAccount(accountId)
+            accountExists = hasAccount(accountId),
+            accountBelongsToParticipant = accounts().any { account ->
+                account.accountId == accountId && account.participantId == participantId
+            }
         )
     }
     fun saveAcceptedOrder(order: PersistedOrder)

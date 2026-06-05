@@ -210,6 +210,42 @@ class OrderApplicationServiceTest {
         assertNotNull(result.rejected)
         assertEquals("REFERENCE_DATA_ERROR", result.rejected?.code)
     }
+
+    @Test
+    fun submitOrderRejectsWhenAccountDoesNotBelongToParticipantBeforeEngineCall() {
+        val gateway = RecordingEngineGateway()
+        val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
+        service.createInstrument(Instrument("AAPL", "AAPL"))
+        service.createParticipant(Participant("participant-1", "Participant 1"))
+        service.createParticipant(Participant("participant-2", "Participant 2"))
+        service.createAccount(Account("account-2", "participant-2"))
+
+        val result = service.submitOrder(
+            SubmitOrderCommand(
+                commandId = "cmd-account-mismatch-1",
+                traceId = "trace-account-mismatch-1",
+                causationId = "",
+                correlationId = "corr-account-mismatch-1",
+                actorId = "trader-1",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-account-mismatch-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-2",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY"
+            )
+        )
+
+        assertNotNull(result.rejected)
+        assertEquals("REFERENCE_DATA_ERROR", result.rejected?.code)
+        assertEquals("accountId does not belong to participantId", result.rejected?.reason)
+        assertEquals(0, gateway.submitCalls)
+    }
 }
 
 private fun seedReferenceData(service: OrderApplicationService) {

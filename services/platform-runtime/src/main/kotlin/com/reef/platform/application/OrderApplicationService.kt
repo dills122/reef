@@ -333,6 +333,18 @@ class OrderApplicationService(
             )
         }
 
+        if (!validation.accountBelongsToParticipant) {
+            return SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = "evt-reject-account-participant-mismatch-${command.orderId}",
+                    orderId = command.orderId,
+                    code = "REFERENCE_DATA_ERROR",
+                    reason = "accountId does not belong to participantId",
+                    occurredAt = now
+                )
+            )
+        }
+
         return null
     }
 }

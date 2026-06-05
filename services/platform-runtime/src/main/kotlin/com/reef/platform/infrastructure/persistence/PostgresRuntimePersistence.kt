@@ -210,7 +210,8 @@ class PostgresRuntimePersistence(
                     RETURNS TABLE(
                       instrument_exists BOOLEAN,
                       participant_exists BOOLEAN,
-                      account_exists BOOLEAN
+                      account_exists BOOLEAN,
+                      account_belongs_to_participant BOOLEAN
                     )
                     LANGUAGE SQL
                     STABLE
@@ -218,7 +219,8 @@ class PostgresRuntimePersistence(
                       SELECT
                         EXISTS(SELECT 1 FROM ${names.referenceInstruments} WHERE instrument_id = p_instrument_id),
                         EXISTS(SELECT 1 FROM ${names.referenceParticipants} WHERE participant_id = p_participant_id),
-                        EXISTS(SELECT 1 FROM ${names.referenceAccounts} WHERE account_id = p_account_id)
+                        EXISTS(SELECT 1 FROM ${names.referenceAccounts} WHERE account_id = p_account_id),
+                        EXISTS(SELECT 1 FROM ${names.referenceAccounts} WHERE account_id = p_account_id AND participant_id = p_participant_id)
                     $$;
                     """.trimIndent()
                 )
@@ -560,7 +562,7 @@ class PostgresRuntimePersistence(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT instrument_exists, participant_exists, account_exists
+                SELECT instrument_exists, participant_exists, account_exists, account_belongs_to_participant
                 FROM ${names.validateReferenceDataFunction}(?, ?, ?)
                 """.trimIndent()
             ).use { ps ->
@@ -572,7 +574,8 @@ class PostgresRuntimePersistence(
                     return ReferenceDataValidation(
                         instrumentExists = rs.getBoolean("instrument_exists"),
                         participantExists = rs.getBoolean("participant_exists"),
-                        accountExists = rs.getBoolean("account_exists")
+                        accountExists = rs.getBoolean("account_exists"),
+                        accountBelongsToParticipant = rs.getBoolean("account_belongs_to_participant")
                     )
                 }
             }

@@ -156,13 +156,13 @@ order account belongs to the submitted participant.
 Acceptance criteria:
 - [ ] Submit/cancel/modify enforce role-aware authorization.
 - [ ] Simulator actors can be seeded with the required roles.
-- [ ] Account-participant mismatch rejects before engine invocation.
-- [ ] Admin and reference-data flows remain usable.
+- [x] Account-participant mismatch rejects before engine invocation.
+- [x] Admin and reference-data flows remain usable.
 
 Verification:
 - [ ] Authorization unit tests.
-- [ ] Account ownership validation tests.
-- [ ] `make test-platform-runtime`
+- [x] Account ownership validation tests.
+- [x] `make test-platform-runtime`
 
 Dependencies:
 Task 1.
