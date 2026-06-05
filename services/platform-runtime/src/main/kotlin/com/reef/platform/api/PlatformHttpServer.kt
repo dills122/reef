@@ -14,7 +14,8 @@ class PlatformHttpServer(
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
-    private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore()
+    private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
+    private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 ) {
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
@@ -30,7 +31,8 @@ class PlatformHttpServer(
         abuseProtectionHook = deps.abuseProtectionHook,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
-        commandCaptureStore = deps.commandCaptureStore
+        commandCaptureStore = deps.commandCaptureStore,
+        commandProcessingMode = deps.commandProcessingMode
     )
 
     fun start(): HttpServer {
@@ -391,7 +393,8 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         abuseProtectionHook = hooks.abuseProtectionHook,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
-        commandCaptureStore = hooks.commandCaptureStore
+        commandCaptureStore = hooks.commandCaptureStore,
+        commandProcessingMode = hooks.commandProcessingMode
     )
 }
 
@@ -400,5 +403,6 @@ data class ServerBoundaryDeps(
     val abuseProtectionHook: AbuseProtectionHook,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
-    val commandCaptureStore: CommandCaptureStore
+    val commandCaptureStore: CommandCaptureStore,
+    val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

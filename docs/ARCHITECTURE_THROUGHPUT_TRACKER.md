@@ -25,7 +25,7 @@ Scaling intent:
 | A2 | DB pool/write-path diagnostics in stress telemetry | Not started | feature | Needed for bottleneck proof |
 | A3 | Command log schema and interface | Not started | feature | First DB slice to add |
 | A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
-| A5 | Command processing mode flags | Not started | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
+| A5 | Command processing mode flags | Started | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
 | A6 | Async batched runtime persistence | Not started | architecture | Biggest likely throughput lever |
 | A7 | Runtime event/table partitioning | Not started | architecture | Long-soak stability |
 | A8 | Read-model schema/projection isolation | Not started | architecture | Remove projection writes from hot path |
@@ -73,8 +73,9 @@ Exit criteria:
 
 ### M3: Command Processing Modes
 
+- [x] Add `EXTERNAL_API_COMMAND_PROCESSING_MODE` config.
 - [ ] Define response contracts for each mode.
-- [ ] Implement `sync-result`.
+- [x] Implement `sync-result`.
 - [ ] Implement `captured-sync-engine`.
 - [ ] Prototype `captured-ack`.
 - [ ] Add status lookup API for captured commands.

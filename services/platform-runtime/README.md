@@ -72,6 +72,7 @@ External boundary config:
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes are planned follow-up behavior)
 - `RUNTIME_DB_BOOTSTRAP_MODE=compat|validate` (Docker/local default `validate`; use `compat` only for local repair/debug)
 
 Operational stats endpoint:

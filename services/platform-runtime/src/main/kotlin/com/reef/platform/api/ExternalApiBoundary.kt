@@ -533,7 +533,8 @@ data class BoundaryHooks(
     val abuseProtectionHook: AbuseProtectionHook,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
-    val commandCaptureStore: CommandCaptureStore
+    val commandCaptureStore: CommandCaptureStore,
+    val commandProcessingMode: CommandProcessingMode
 )
 
 fun defaultBoundaryHooks(): BoundaryHooks {
@@ -599,7 +600,8 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         abuseProtectionHook = abuseProtectionHook,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
-        commandCaptureStore = defaultCommandCaptureStore()
+        commandCaptureStore = defaultCommandCaptureStore(),
+        commandProcessingMode = CommandProcessingMode.fromEnv()
     )
 }
 
