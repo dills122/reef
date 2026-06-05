@@ -42,3 +42,11 @@ Contract rules:
 - include actor, trace, causation, and correlation metadata
 - avoid floating-point price and quantity fields
 - version messages deliberately
+
+Compatibility guard:
+
+- `make check-proto-additive` compares against `PROTO_BASE_REF` when set.
+- Without `PROTO_BASE_REF`, it defaults to `origin/HEAD`, then falls back to
+  `origin/main` or `origin/master`.
+- If no base ref is available, the guard prints an explicit skip message and
+  exits successfully rather than pretending a compatibility check ran.

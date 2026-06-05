@@ -247,14 +247,14 @@ Make simulator tests part of normal verification and reduce false confidence in
 contract governance.
 
 Acceptance criteria:
-- [ ] `make test` includes simulator tests.
-- [ ] CI has a simulator test job.
-- [ ] Proto additive check behavior is explicit when the base ref is missing.
-- [ ] Long soaks remain separate from fast gates.
+- [x] `make test` includes simulator tests.
+- [x] CI has a simulator test job.
+- [x] Proto additive check behavior is explicit when the base ref is missing.
+- [x] Long soaks remain separate from fast gates.
 
 Verification:
-- [ ] `make test`
-- [ ] CI workflow review
+- [x] `make test`
+- [x] CI workflow review
 
 Dependencies:
 None.

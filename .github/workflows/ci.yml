@@ -36,6 +36,21 @@ jobs:
         working-directory: .
         run: ./scripts/ci/check-matching-bench.sh
 
+  go-simulator:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/simulator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/simulator/go.mod
+      - name: Check gofmt
+        run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
+      - name: Run simulator Go tests
+        run: go test ./...
+
   kotlin-platform-runtime:
     runs-on: ubuntu-latest
     defaults:

@@ -2,6 +2,20 @@
 
 This directory contains CLI simulation and load-testing tools for Reef.
 
+## Fast Tests And Long Runs
+
+Fast simulator tests are part of the normal repository gate:
+
+```bash
+make test-simulator
+make test
+```
+
+Long-running load, stress, throughput-campaign, and soak runs remain explicit
+developer/operations commands (`make dev-stress`, `make dev-throughput-campaign`,
+and related scripts). Do not move those into the fast test target without a
+separate CI/runtime-budget decision.
+
 ## Load Tester CLI
 
 `cmd/load-tester` drives mixed submit/modify/cancel traffic against the platform runtime API and prints a rich JSON session report.
