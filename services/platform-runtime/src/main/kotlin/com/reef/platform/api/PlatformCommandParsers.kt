@@ -5,7 +5,9 @@ import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
+import com.reef.platform.domain.ActorRoleBinding
 
 object PlatformCommandParsers {
     private val apiV1CommonOptionalFields = setOf(
@@ -181,6 +183,25 @@ object PlatformCommandParsers {
         return Account(
             accountId = json.string("accountId"),
             participantId = json.string("participantId")
+        )
+    }
+
+    fun roleDefinition(body: String): RoleDefinition {
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        return RoleDefinition(
+            roleId = json.string("roleId"),
+            permissions = json.string("permissions")
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+        )
+    }
+
+    fun actorRoleBinding(body: String): ActorRoleBinding {
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        return ActorRoleBinding(
+            actorId = json.string("actorId"),
+            roleId = json.string("roleId")
         )
     }
 

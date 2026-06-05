@@ -23,7 +23,7 @@ separate CI/runtime-budget decision.
 What it includes:
 - configurable concurrency, rate, duration, timeout
 - configurable action mix percentages
-- automatic reference-data seeding
+- automatic reference-data and order-actor role seeding
 - latency percentiles (global + per-action)
 - status-code and error breakdown
 - trace integrity checks (`/traces/{traceId}/events`) for sequence continuity
@@ -78,6 +78,11 @@ The tester now assigns workers to four behavior profiles:
 - `institutional`: larger sizes and more modify activity
 - `retail`: smaller sizes and submit-heavy behavior
 - `noise`: random background flow
+
+Before traffic starts, the load tester seeds an `order_trader` role with
+`order.submit`, `order.cancel`, and `order.modify`, then binds every emitted
+actor ID to that role. Persona sessions seed their named actors; default runs
+seed `bot-{worker}` actors.
 
 ### Report Additions
 

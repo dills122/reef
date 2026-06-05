@@ -1188,7 +1188,7 @@ func seedReferenceData(client *http.Client, cfg Config) error {
 	internalHeaders := map[string]string{"X-Reef-Internal-Route": "true"}
 	if cfg.HasSessionConfig && len(cfg.MarketEquities) > 0 {
 		for _, eq := range cfg.MarketEquities {
-			if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
+			if err := seedPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
 				"instrumentId": eq.InstrumentID,
 				"symbol":       eq.Symbol,
 			}, internalHeaders); err != nil {
@@ -1196,24 +1196,83 @@ func seedReferenceData(client *http.Client, cfg Config) error {
 			}
 		}
 	} else {
-		if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
+		if err := seedPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
 			"instrumentId": cfg.InstrumentID,
 			"symbol":       cfg.InstrumentSymbol,
 		}, internalHeaders); err != nil {
 			return err
 		}
 	}
-	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
+	if err := seedPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
 		"participantId": cfg.ParticipantID,
 		"name":          cfg.ParticipantName,
 	}, internalHeaders); err != nil {
 		return err
 	}
-	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
+	if err := seedPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
 		"accountId":     cfg.AccountID,
 		"participantId": cfg.ParticipantID,
 	}, internalHeaders); err != nil {
 		return err
+	}
+	if err := seedOrderAuthorization(client, cfg, internalHeaders); err != nil {
+		return err
+	}
+	return nil
+}
+
+func seedOrderAuthorization(client *http.Client, cfg Config, internalHeaders map[string]string) error {
+	if err := seedPOST(client, cfg.BaseURL+"/auth/roles", map[string]string{
+		"roleId":      "order_trader",
+		"permissions": "order.submit,order.cancel,order.modify",
+	}, internalHeaders); err != nil {
+		return err
+	}
+	for _, actorID := range orderActorIDs(cfg) {
+		if err := seedPOST(client, cfg.BaseURL+"/auth/actor-roles", map[string]string{
+			"actorId": actorID,
+			"roleId":  "order_trader",
+		}, internalHeaders); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func orderActorIDs(cfg Config) []string {
+	seen := map[string]struct{}{}
+	if cfg.HasSessionConfig {
+		for _, actor := range cfg.SessionActors {
+			actorID := strings.TrimSpace(actor.ActorID)
+			if actorID != "" {
+				seen[actorID] = struct{}{}
+			}
+		}
+	}
+	if len(seen) == 0 {
+		workers := cfg.Workers
+		if workers <= 0 {
+			workers = 1
+		}
+		for workerID := 0; workerID < workers; workerID++ {
+			seen[fmt.Sprintf("bot-%d", workerID)] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for actorID := range seen {
+		out = append(out, actorID)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func seedPOST(client *http.Client, url string, payload map[string]string, headers map[string]string) error {
+	status, body, err := doPOST(client, url, payload, headers)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("seed POST %s failed (%d): %s", url, status, strings.TrimSpace(string(body)))
 	}
 	return nil
 }

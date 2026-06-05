@@ -77,6 +77,14 @@ await postJson(`${runtimeUrl}/reference/accounts`, {
   participantId: "participant-1",
   accountType: "HOUSE",
 }, internalRouteHeaders);
+await postJson(`${runtimeUrl}/auth/roles`, {
+  roleId: "order_trader",
+  permissions: "order.submit,order.cancel,order.modify",
+}, internalRouteHeaders);
+await postJson(`${runtimeUrl}/auth/actor-roles`, {
+  actorId: "smoke-user",
+  roleId: "order_trader",
+}, internalRouteHeaders);
 
 console.log("submitting via /api/v1 boundary...");
 const submitResponse = await postJson(
@@ -116,6 +124,7 @@ const cancelResponse = await postJson(
     actorId: "smoke-user",
     occurredAt: "2026-05-01T13:00:10Z",
     orderId: "smoke-ord-1",
+    reason: "smoke cancel",
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-cancel-1" },
 );

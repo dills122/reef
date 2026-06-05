@@ -154,15 +154,21 @@ Enforce actor/client permission checks on order commands and validate that an
 order account belongs to the submitted participant.
 
 Acceptance criteria:
-- [ ] Submit/cancel/modify enforce role-aware authorization.
-- [ ] Simulator actors can be seeded with the required roles.
+- [x] Submit/cancel/modify enforce role-aware authorization.
+- [x] Simulator actors can be seeded with the required roles.
 - [x] Account-participant mismatch rejects before engine invocation.
 - [x] Admin and reference-data flows remain usable.
 
 Verification:
-- [ ] Authorization unit tests.
+- [x] Authorization unit tests.
 - [x] Account ownership validation tests.
 - [x] `make test-platform-runtime`
+
+Notes:
+- This task now enforces command actor authorization from persisted
+  role/binding data (`order.submit`, `order.cancel`, `order.modify`).
+- A durable client-to-actor grant model is still not present; API client
+  authentication remains delegated to the boundary auth hook.
 
 Dependencies:
 Task 1.
@@ -267,24 +273,24 @@ Small.
 ### Checkpoint 1: Boundary And Gate Baseline
 
 After Tasks 1 and 9:
-- [ ] malformed public API commands fail before domain logic
-- [ ] simulator tests are in default verification
-- [ ] `make test` passes
+- [x] malformed public API commands fail before domain logic
+- [x] simulator tests are in default verification
+- [x] `make test` passes
 
 ### Checkpoint 2: Command Correctness
 
 After Tasks 2, 5, and 6:
-- [ ] duplicate commands are race-safe
-- [ ] order commands enforce actor/client authorization
-- [ ] engine outages are retryable infrastructure failures
-- [ ] `make test` passes
+- [x] duplicate commands are race-safe
+- [x] order commands enforce command actor authorization
+- [x] engine outages are retryable infrastructure failures
+- [x] `make test` passes
 
 ### Checkpoint 3: Replay And Audit Foundation
 
 After Tasks 4, 7, and 8:
-- [ ] scenario replay has deterministic clock behavior
-- [ ] HTTP/gRPC metadata parity is test-covered
-- [ ] event schema drift is blocked by tests
+- [x] scenario replay has deterministic clock behavior
+- [x] HTTP/gRPC metadata parity is test-covered
+- [x] event schema drift is blocked by tests
 - [ ] `make test` and relevant replay checks pass
 
 ## Risks And Mitigations

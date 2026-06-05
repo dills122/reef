@@ -116,6 +116,37 @@ class PlatformHttpServer(
             }
         }
 
+        server.createContext("/auth/roles") { exchange ->
+            when (exchange.requestMethod) {
+                "POST" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
+                    val body = readRequestBody(exchange) ?: return@createContext
+                    writeJson(exchange, 200, api.createRole(body))
+                }
+                "GET" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
+                    writeJson(exchange, 200, api.roles())
+                }
+                else -> methodNotAllowed(exchange)
+            }
+        }
+
+        server.createContext("/auth/actor-roles") { exchange ->
+            when (exchange.requestMethod) {
+                "POST" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
+                    val body = readRequestBody(exchange) ?: return@createContext
+                    writeJson(exchange, 200, api.assignRole(body))
+                }
+                "GET" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
+                    val actorId = queryValue(exchange, "actorId")
+                    writeJson(exchange, 200, api.actorRoles(actorId))
+                }
+                else -> methodNotAllowed(exchange)
+            }
+        }
+
         server.createContext("/orders/cancel") { exchange ->
             if (exchange.requestMethod != "POST") {
                 methodNotAllowed(exchange)
@@ -276,15 +307,19 @@ class PlatformHttpServer(
     }
 
     private fun queryLimit(exchange: HttpExchange, defaultValue: Int): Int {
-        val query = exchange.requestURI.query ?: return defaultValue
+        return queryValue(exchange, "limit").toIntOrNull() ?: defaultValue
+    }
+
+    private fun queryValue(exchange: HttpExchange, key: String): String {
+        val query = exchange.requestURI.query ?: return ""
         val values = query.split("&")
         for (value in values) {
             val parts = value.split("=", limit = 2)
-            if (parts.size == 2 && parts[0] == "limit") {
-                return parts[1].toIntOrNull() ?: defaultValue
+            if (parts.size == 2 && parts[0] == key) {
+                return parts[1]
             }
         }
-        return defaultValue
+        return ""
     }
 
     private fun correlationId(exchange: HttpExchange): String {

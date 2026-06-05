@@ -2,12 +2,15 @@ package com.reef.platform.application
 
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.Account
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.Permission
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
@@ -31,6 +34,20 @@ class OrderApplicationService(
             return existingResult
         }
         val traceId = traceId(command.traceId, command.orderId)
+
+        val authorizationError = rejectUnauthorizedActor(
+            commandId = command.commandId,
+            traceId = traceId,
+            correlationId = command.correlationId,
+            actorId = command.actorId,
+            orderId = command.orderId,
+            occurredAt = command.occurredAt,
+            permission = Permission.ORDER_SUBMIT,
+            rejectedEventType = "OrderRejected"
+        )
+        if (authorizationError != null) {
+            return authorizationError
+        }
 
         val validationError = validateReferenceData(command)
         if (validationError != null) {
@@ -164,6 +181,20 @@ class OrderApplicationService(
             return existingResult
         }
 
+        val authorizationError = rejectUnauthorizedActor(
+            commandId = command.commandId,
+            traceId = traceId(command.traceId, command.orderId),
+            correlationId = command.correlationId,
+            actorId = command.actorId,
+            orderId = command.orderId,
+            occurredAt = command.occurredAt,
+            permission = Permission.ORDER_CANCEL,
+            rejectedEventType = "OrderCancelRejected"
+        )
+        if (authorizationError != null) {
+            return authorizationError
+        }
+
         val result = engineGateway.cancelOrder(command)
         val traceId = traceId(command.traceId, command.orderId)
         runtimePersistence.saveSubmitResult(command.commandId, result)
@@ -185,6 +216,20 @@ class OrderApplicationService(
         val existingResult = runtimePersistence.submitResult(command.commandId)
         if (existingResult != null) {
             return existingResult
+        }
+
+        val authorizationError = rejectUnauthorizedActor(
+            commandId = command.commandId,
+            traceId = traceId(command.traceId, command.orderId),
+            correlationId = command.correlationId,
+            actorId = command.actorId,
+            orderId = command.orderId,
+            occurredAt = command.occurredAt,
+            permission = Permission.ORDER_MODIFY,
+            rejectedEventType = "OrderModifyRejected"
+        )
+        if (authorizationError != null) {
+            return authorizationError
         }
 
         val result = engineGateway.modifyOrder(command)
@@ -247,6 +292,72 @@ class OrderApplicationService(
                 )
             )
         }
+    }
+
+    private fun rejectUnauthorizedActor(
+        commandId: String,
+        traceId: String,
+        correlationId: String,
+        actorId: String,
+        orderId: String,
+        occurredAt: String,
+        permission: String,
+        rejectedEventType: String
+    ): SubmitOrderResult? {
+        if (hasPermission(actorId, permission)) {
+            return null
+        }
+
+        val rejected = EngineOrderRejected(
+            eventId = "evt-reject-unauthorized-$commandId",
+            orderId = orderId,
+            code = "AUTHORIZATION_ERROR",
+            reason = authorizationReason(actorId, permission),
+            occurredAt = occurredAt
+        )
+        val result = SubmitOrderResult(rejected = rejected)
+        runtimePersistence.persistSubmitOutcome(
+            commandId = commandId,
+            result = result,
+            acceptedOrder = null,
+            lifecycleEvents = listOf(
+                lifecycleEvent(
+                    eventId = rejected.eventId,
+                    eventType = rejectedEventType,
+                    orderId = orderId,
+                    traceId = traceId,
+                    causationId = commandId,
+                    correlationId = correlationId,
+                    occurredAt = occurredAt,
+                    actorId = actorId,
+                    payloadJson = commandPayload(commandId)
+                )
+            )
+        )
+        return result
+    }
+
+    private fun hasPermission(actorId: String, permission: String): Boolean {
+        if (actorId.isBlank()) {
+            return false
+        }
+        val boundRoleIds = runtimePersistence.actorRoleBindings(actorId).map { it.roleId }.toSet()
+        if (boundRoleIds.isEmpty()) {
+            return false
+        }
+        val allowed = runtimePersistence.roles()
+            .asSequence()
+            .filter { it.roleId in boundRoleIds }
+            .flatMap { it.permissions.asSequence() }
+            .toSet()
+        return permission in allowed || Permission.SUPERUSER in allowed
+    }
+
+    private fun authorizationReason(actorId: String, permission: String): String {
+        if (actorId.isBlank()) {
+            return "actorId is required"
+        }
+        return "actorId missing permission $permission"
     }
 
     private fun lifecycleEvent(
@@ -324,11 +435,19 @@ class OrderApplicationService(
 
     fun createAccount(account: Account) = runtimePersistence.saveAccount(account)
 
+    fun createRole(role: RoleDefinition) = runtimePersistence.saveRole(role)
+
+    fun assignRole(binding: ActorRoleBinding) = runtimePersistence.saveActorRoleBinding(binding)
+
     fun instruments() = runtimePersistence.instruments()
 
     fun participants() = runtimePersistence.participants()
 
     fun accounts() = runtimePersistence.accounts()
+
+    fun roles() = runtimePersistence.roles()
+
+    fun actorRoleBindings(actorId: String) = runtimePersistence.actorRoleBindings(actorId)
 
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt

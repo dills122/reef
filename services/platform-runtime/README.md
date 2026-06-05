@@ -111,3 +111,9 @@ Admin CLI:
   - calendar and override management (`calendar-upsert`, `calendar-list`, `override-upsert`, `override-list`)
   - simulation controls (`sim-start`, `sim-pause`, `sim-stop`, `sim-state`)
   - trace inspection (`events-recent`, `trace-events`)
+
+Order command authorization:
+
+- submit/cancel/modify require actor role permissions (`order.submit`, `order.cancel`, `order.modify`)
+- local seed scripts can upsert `order_trader` through internal `/auth/roles` and `/auth/actor-roles` endpoints
+- those HTTP seed endpoints are guarded by `X-Reef-Internal-Route: true` and the same legacy mutation route flag as reference-data seed endpoints

@@ -1,13 +1,17 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Permission
+import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineGateway
+import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import java.net.HttpURLConnection
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -199,11 +203,19 @@ class PlatformHttpServerBoundaryTest {
                 headers = mapOf("X-Reef-Internal-Route" to "true"),
                 body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
             )
+            val role = post(
+                port = server.address.port,
+                path = "/auth/roles",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
 
             assertEquals(403, submit.status)
             assertEquals(403, reference.status)
+            assertEquals(403, role.status)
             assertContains(submit.body, "\"error\":\"legacy mutation route disabled\"")
             assertContains(reference.body, "\"error\":\"legacy mutation route disabled\"")
+            assertContains(role.body, "\"error\":\"legacy mutation route disabled\"")
         } finally {
             server.stop(0)
         }
@@ -228,11 +240,47 @@ class PlatformHttpServerBoundaryTest {
                 headers = emptyMap(),
                 body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
             )
+            val role = post(
+                port = server.address.port,
+                path = "/auth/roles",
+                headers = emptyMap(),
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
 
             assertEquals(403, submit.status)
             assertEquals(403, reference.status)
+            assertEquals(403, role.status)
             assertContains(submit.body, "\"header\":\"X-Reef-Internal-Route\"")
             assertContains(reference.body, "\"header\":\"X-Reef-Internal-Route\"")
+            assertContains(role.body, "\"header\":\"X-Reef-Internal-Route\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAuthSeedRoutesAllowExplicitOrderActors() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            seedOrderAuthorization = false
+        )
+        try {
+            seedReferenceData(server.address.port)
+            seedOrderRoleBindings(server.address.port, "bot-capture-1")
+
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-auth-seeded"
+                ),
+                body = validSubmitBody("cmd-auth-seeded", "trace-auth-seeded", "ord-auth-seeded")
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"accepted\"")
+            assertContains(response.body, "\"orderId\":\"ord-auth-seeded\"")
         } finally {
             server.stop(0)
         }
@@ -372,6 +420,35 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(0, captureStore.receivedCalls)
             assertEquals(0, captureStore.completedCalls)
             assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1SubmitRejectsUnauthorizedActorBeforeEngineCall() {
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            seedOrderAuthorization = false
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-unauthorized"
+                ),
+                body = validSubmitBody("cmd-unauthorized", "trace-unauthorized", "ord-unauthorized")
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"rejected\"")
+            assertContains(response.body, "\"code\":\"AUTHORIZATION_ERROR\"")
+            assertContains(response.body, "\"reason\":\"actorId missing permission order.submit\"")
+            assertEquals(0, gateway.submitCalls)
         } finally {
             server.stop(0)
         }
@@ -914,11 +991,22 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
-        legacyMutationRoutesEnabled: Boolean = true
+        legacyMutationRoutesEnabled: Boolean = true,
+        seedOrderAuthorization: Boolean = true
     ): com.sun.net.httpserver.HttpServer {
+        val persistence = InMemoryRuntimePersistence()
+        if (seedOrderAuthorization) {
+            seedOrderAuthorization(
+                persistence,
+                "bot-capture-1",
+                "bot-1",
+                "bot-2"
+            )
+        }
         val api = PlatformApi(
             OrderApplicationService(
-                engineGateway = gateway
+                engineGateway = gateway,
+                runtimePersistence = persistence
             )
         )
         return PlatformHttpServer(
@@ -1037,6 +1125,35 @@ class PlatformHttpServerBoundaryTest {
             headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"accountId":"account-1","participantId":"participant-1"}"""
         )
+    }
+
+    private fun seedOrderRoleBindings(port: Int, vararg actorIds: String) {
+        post(
+            port = port,
+            path = "/auth/roles",
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
+            body = """{"roleId":"order_trader","permissions":"order.submit,order.cancel,order.modify"}"""
+        )
+        actorIds.forEach { actorId ->
+            post(
+                port = port,
+                path = "/auth/actor-roles",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"actorId":"$actorId","roleId":"order_trader"}"""
+            )
+        }
+    }
+
+    private fun seedOrderAuthorization(persistence: InMemoryRuntimePersistence, vararg actorIds: String) {
+        persistence.saveRole(
+            RoleDefinition(
+                "order_trader",
+                listOf(Permission.ORDER_SUBMIT, Permission.ORDER_CANCEL, Permission.ORDER_MODIFY)
+            )
+        )
+        actorIds.forEach { actorId ->
+            persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
+        }
     }
 }
 
