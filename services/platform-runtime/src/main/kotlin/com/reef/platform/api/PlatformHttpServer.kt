@@ -15,6 +15,7 @@ class PlatformHttpServer(
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
+    private val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 ) {
     private val maxRequestBodyBytes: Int =
@@ -32,6 +33,7 @@ class PlatformHttpServer(
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
+        commandStatusLookup = deps.commandStatusLookup,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -51,6 +53,10 @@ class PlatformHttpServer(
                 return@createContext
             }
             writeJson(exchange, 200, abuseStatsJson(abuseProtectionHook.stats()))
+        }
+
+        server.createContext("/api/v1/commands/") { exchange ->
+            handleCommandStatusLookup(exchange)
         }
 
         server.createContext("/orders/submit") { exchange ->
@@ -345,6 +351,29 @@ class PlatformHttpServer(
         }
     }
 
+    private fun handleCommandStatusLookup(exchange: HttpExchange) {
+        if (exchange.requestMethod != "GET") {
+            methodNotAllowed(exchange)
+            return
+        }
+        val lookup = commandStatusLookup
+        if (lookup == null) {
+            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
+            return
+        }
+        val commandId = exchange.requestURI.path.removePrefix("/api/v1/commands/").trim('/')
+        if (commandId.isBlank()) {
+            writeJson(exchange, 404, simpleErrorJson("command not found"))
+            return
+        }
+        val status = lookup.findCommandStatus(commandId)
+        if (status == null) {
+            writeJson(exchange, 404, simpleErrorJson("command not found"))
+            return
+        }
+        writeJson(exchange, 200, CommandStatusResponse.statusJson(status))
+    }
+
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
         val clientId = boundary.clientId(exchange.requestHeaders) ?: return
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders) ?: return
@@ -394,6 +423,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
+        commandStatusLookup = hooks.commandCaptureStore as? CommandStatusLookup,
         commandProcessingMode = hooks.commandProcessingMode
     )
 }
@@ -404,5 +434,6 @@ data class ServerBoundaryDeps(
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
+    val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

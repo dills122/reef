@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class CommandCaptureStoreTest {
     @Test
     fun defaultCaptureStoreLeavesCommandLogDisabledByDefault() {
-        val store = defaultCommandCaptureStore { key ->
+        val store = defaultCommandCaptureStore(CommandProcessingMode.SyncResult) { key ->
             when (key) {
                 "EXTERNAL_API_COMMAND_CAPTURE_MODE" -> "inmemory"
                 else -> null
@@ -26,7 +26,7 @@ class CommandCaptureStoreTest {
 
     @Test
     fun defaultCaptureStoreWrapsCaptureStoreWhenCommandLogModeIsInMemory() {
-        val store = defaultCommandCaptureStore { key ->
+        val store = defaultCommandCaptureStore(CommandProcessingMode.SyncResult) { key ->
             when (key) {
                 "EXTERNAL_API_COMMAND_CAPTURE_MODE" -> "inmemory"
                 "EXTERNAL_API_COMMAND_LOG_MODE" -> "inmemory"
@@ -44,6 +44,7 @@ class CommandCaptureStoreTest {
         val captureStore = CommandLogCommandCaptureStore(
             delegate = delegate,
             commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine,
             clock = { Instant.parse("2026-06-04T14:00:00Z") }
         )
 
@@ -71,6 +72,7 @@ class CommandCaptureStoreTest {
         assertEquals("SubmitOrder", record.commandType)
         assertEquals(Instant.parse("2026-06-04T14:00:00Z"), record.receivedAt)
         assertEquals(CommandLogStatus.RECEIVED, record.status)
+        assertEquals(CommandProcessingMode.CapturedSyncEngine, captureStore.findCommandStatus("cmd-1")?.processingMode)
         assertEquals(1, delegate.receivedCalls)
     }
 
@@ -104,11 +106,32 @@ class CommandCaptureStoreTest {
     @Test
     fun commandLogCaptureDelegatesCompletionAndFailureToExistingCaptureStore() {
         val delegate = RecordingCommandLogCaptureStore()
+        val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
             delegate = delegate,
-            commandLogStore = InMemoryCommandLogStore()
+            commandLogStore = commandLogStore
         )
 
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            correlationId = "corr-1",
+            requestPayload = """{"commandId":"cmd-1"}"""
+        )
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-2",
+            correlationId = "corr-2",
+            requestPayload = """{"commandId":"cmd-2"}"""
+        )
+
+        captureStore.markProcessing(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1"
+        )
         captureStore.markCompleted(
             clientId = "client-1",
             route = "/api/v1/orders/submit",
@@ -127,6 +150,10 @@ class CommandCaptureStoreTest {
 
         assertEquals(1, delegate.completedCalls)
         assertEquals(1, delegate.failedCalls)
+        assertEquals(CommandLogStatus.COMPLETED, commandLogStore.findByCommandId("cmd-1")?.status)
+        assertEquals(200, commandLogStore.findByCommandId("cmd-1")?.responseStatus)
+        assertEquals(CommandLogStatus.FAILED, commandLogStore.findByCommandId("cmd-2")?.status)
+        assertEquals("runtime unavailable", commandLogStore.findByCommandId("cmd-2")?.lastError)
     }
 }
 

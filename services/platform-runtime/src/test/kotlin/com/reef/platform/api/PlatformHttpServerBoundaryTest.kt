@@ -177,6 +177,62 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1CommandStatusEndpointReturnsCapturedCommandState() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-status-1"
+                ),
+                body = validSubmitBody("cmd-status-1", "trace-status-1", "ord-status-1")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-1")
+
+            assertEquals(200, response.status)
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-status-1\"")
+            assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"processingMode\":\"captured-sync-engine\"")
+            assertContains(status.body, "\"responseStatus\":200")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusEndpointReturnsNotFoundForUnknownCommand() {
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore()
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val response = get(server.address.port, "/api/v1/commands/missing-command")
+
+            assertEquals(404, response.status)
+            assertContains(response.body, "\"error\":\"command not found\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1SubmitRejectsOversizedBodyBeforeCapture() {
         val captureStore = RecordingCommandCaptureStore()
         val server = testServerWithGateway(
@@ -324,7 +380,8 @@ class PlatformHttpServerBoundaryTest {
         gateway: EngineGateway,
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
-        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook()
+        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
     ): com.sun.net.httpserver.HttpServer {
         val api = PlatformApi(
             OrderApplicationService(
@@ -338,7 +395,9 @@ class PlatformHttpServerBoundaryTest {
             abuseProtectionHook = abuseProtectionHook,
             idempotencyStore = InMemoryIdempotencyStore(),
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
-            commandCaptureStore = captureStore
+            commandCaptureStore = captureStore,
+            commandStatusLookup = captureStore as? CommandStatusLookup,
+            commandProcessingMode = commandProcessingMode
         ).start()
     }
 
@@ -421,6 +480,13 @@ private class RecordingCommandCaptureStore : CommandCaptureStore {
     ) {
         receivedCalls++
         lastReceivedPayload = requestPayload
+    }
+
+    override fun markProcessing(
+        clientId: String,
+        route: String,
+        idempotencyKey: String
+    ) {
     }
 
     override fun markCompleted(

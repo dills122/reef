@@ -538,6 +538,7 @@ data class BoundaryHooks(
 )
 
 fun defaultBoundaryHooks(): BoundaryHooks {
+    val commandProcessingMode = CommandProcessingMode.fromEnv()
     val authMode = (System.getenv("EXTERNAL_API_AUTH_MODE") ?: "allow-all").lowercase()
     val authHook = when (authMode) {
         "static-token" -> StaticTokenAuthHook(parseStaticTokens(System.getenv("EXTERNAL_API_TOKENS")))
@@ -600,8 +601,8 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         abuseProtectionHook = abuseProtectionHook,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
-        commandCaptureStore = defaultCommandCaptureStore(),
-        commandProcessingMode = CommandProcessingMode.fromEnv()
+        commandCaptureStore = defaultCommandCaptureStore(commandProcessingMode),
+        commandProcessingMode = commandProcessingMode
     )
 }
 
