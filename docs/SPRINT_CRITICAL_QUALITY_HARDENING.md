@@ -131,14 +131,14 @@ Introduce explicit clock policy for engine, runtime, and simulator replay so
 scenario runs can assert stable event timelines.
 
 Acceptance criteria:
-- [ ] Matching engine can use an injected clock or command timestamp policy.
-- [ ] Simulator uses scenario run metadata for session identity when supplied.
-- [ ] Replay mode can produce stable command timestamps.
+- [x] Matching engine can use an injected clock or command timestamp policy.
+- [x] Simulator uses scenario run metadata for session identity when supplied.
+- [x] Replay mode can produce stable command timestamps.
 - [ ] At least one golden scenario asserts ordered event timestamps.
 
 Verification:
-- [ ] `go test ./...` in `services/matching-engine`
-- [ ] `go test ./...` in `services/simulator`
+- [x] `go test ./...` in `services/matching-engine`
+- [x] `go test ./...` in `services/simulator`
 - [ ] Scenario replay test for `P1_GOLDEN_HIDDEN_CROSS_T1`
 
 Dependencies:

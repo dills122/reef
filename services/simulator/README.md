@@ -98,6 +98,10 @@ go run ./cmd/load-tester \
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
 
+Deterministic replay runs can set `--command-clock-start 2026-03-14T18:00:00Z`
+and `--command-clock-step 1s` (or `REEF_COMMAND_CLOCK_START` /
+`REEF_COMMAND_CLOCK_STEP`) so generated command `occurredAt` values are stable.
+
 ## Persona Session Support
 
 The load tester supports config-driven persona sessions (named actors, strategies, market universe, groups, deterministic seeds, and deterministic faults).

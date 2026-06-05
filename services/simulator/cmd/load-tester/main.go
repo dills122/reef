@@ -70,6 +70,8 @@ type Config struct {
 	HTTPIdleConnTimeout time.Duration
 	UseApiV1            bool
 	ClientIDPrefix      string
+	CommandClockStart   string
+	CommandClockStep    time.Duration
 }
 
 type Action string
@@ -315,6 +317,8 @@ func parseConfig() (Config, error) {
 	flag.DurationVar(&cfg.HTTPIdleConnTimeout, "http-idle-conn-timeout", cfg.HTTPIdleConnTimeout, "http client idle connection timeout")
 	flag.BoolVar(&cfg.UseApiV1, "use-api-v1", cfg.UseApiV1, "submit/modify/cancel via /api/v1 boundary routes")
 	flag.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix used for /api/v1 traffic")
+	flag.StringVar(&cfg.CommandClockStart, "command-clock-start", cfg.CommandClockStart, "optional RFC3339 start time for deterministic command occurredAt values")
+	flag.DurationVar(&cfg.CommandClockStep, "command-clock-step", cfg.CommandClockStep, "deterministic command clock step")
 	flag.Parse()
 	parsedConfig := cfg
 
@@ -383,6 +387,14 @@ func parseConfig() (Config, error) {
 	if cfg.UseApiV1 && strings.TrimSpace(cfg.ClientIDPrefix) == "" {
 		return cfg, errors.New("client-id-prefix must be non-empty when use-api-v1=true")
 	}
+	if cfg.CommandClockStart != "" {
+		if _, err := time.Parse(time.RFC3339, cfg.CommandClockStart); err != nil {
+			return cfg, errors.New("command-clock-start must be RFC3339 when provided")
+		}
+		if cfg.CommandClockStep <= 0 {
+			return cfg, errors.New("command-clock-step must be > 0 when command-clock-start is provided")
+		}
+	}
 	return cfg, nil
 }
 
@@ -424,6 +436,8 @@ func defaultConfigFromEnv() Config {
 		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
 		UseApiV1:            envBool("REEF_USE_API_V1", true),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
+		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
+		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
 	}
 }
 
@@ -566,6 +580,12 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	if explicit["client-id-prefix"] {
 		cfg.ClientIDPrefix = parsed.ClientIDPrefix
 	}
+	if explicit["command-clock-start"] {
+		cfg.CommandClockStart = parsed.CommandClockStart
+	}
+	if explicit["command-clock-step"] {
+		cfg.CommandClockStep = parsed.CommandClockStep
+	}
 }
 
 func buildHTTPClient(cfg Config) *http.Client {
@@ -674,7 +694,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = orderID
 			payload["instrumentId"] = instrumentID
 			payload["participantId"] = cfg.ParticipantID
@@ -714,7 +734,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = orderID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
@@ -748,7 +768,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID)
+			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = orderID
 			payload["reason"] = "load test"
 			status, body, err := doPOST(
@@ -1252,7 +1272,7 @@ func commandHeaders(cfg Config, workerID int, commandID, traceID string) map[str
 	}
 }
 
-func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, persona, strategyID string) map[string]string {
+func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, persona, strategyID string, reqID int64) map[string]string {
 	payload := map[string]string{
 		"commandId":     commandID,
 		"traceId":       traceID,
@@ -1261,7 +1281,7 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 		"actorId":       actorID,
 		"actorType":     actorType,
 		"strategyId":    strategyID,
-		"occurredAt":    time.Now().UTC().Format(time.RFC3339),
+		"occurredAt":    commandOccurredAt(cfg, reqID),
 	}
 	if persona != "" {
 		payload["persona"] = persona
@@ -1273,6 +1293,25 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 		payload["seed"] = strconv.FormatInt(cfg.Seed, 10)
 	}
 	return payload
+}
+
+func commandOccurredAt(cfg Config, reqID int64) string {
+	if cfg.CommandClockStart == "" {
+		return time.Now().UTC().Format(time.RFC3339)
+	}
+	start, err := time.Parse(time.RFC3339, cfg.CommandClockStart)
+	if err != nil {
+		return time.Now().UTC().Format(time.RFC3339)
+	}
+	step := cfg.CommandClockStep
+	if step <= 0 {
+		step = time.Second
+	}
+	offset := reqID - 1
+	if offset < 0 {
+		offset = 0
+	}
+	return start.Add(time.Duration(offset) * step).UTC().Format(time.RFC3339)
 }
 
 func computeLatency(values []float64) latencySummary {

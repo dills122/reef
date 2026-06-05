@@ -264,12 +264,29 @@ func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 
 func TestBuildCommandPayloadIncludesScenarioMetadata(t *testing.T) {
 	cfg := Config{ScenarioRunID: "sim-1", Seed: 4242}
-	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer")
+	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer", 1)
 	if payload["scenarioRunId"] != "sim-1" {
 		t.Fatalf("expected scenarioRunId, got: %+v", payload)
 	}
 	if payload["seed"] != "4242" {
 		t.Fatalf("expected seed metadata, got: %+v", payload)
+	}
+}
+
+func TestBuildCommandPayloadUsesDeterministicCommandClock(t *testing.T) {
+	cfg := Config{
+		CommandClockStart: "2026-03-14T18:00:00Z",
+		CommandClockStep:  2 * time.Second,
+	}
+
+	first := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "", "", 1)
+	third := buildCommandPayload(cfg, "cmd-3", "trace-3", "actor-1", "retail", "", "", 3)
+
+	if first["occurredAt"] != "2026-03-14T18:00:00Z" {
+		t.Fatalf("unexpected first command timestamp: %+v", first)
+	}
+	if third["occurredAt"] != "2026-03-14T18:00:04Z" {
+		t.Fatalf("unexpected third command timestamp: %+v", third)
 	}
 }
 

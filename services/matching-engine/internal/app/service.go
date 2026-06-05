@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 type Service struct {
 	books  sync.Map // map[string]*orderBook
 	orders sync.Map // map[string]*orderRecord
+	now    func() time.Time
 }
 
 type restingOrder struct {
@@ -38,12 +40,30 @@ type orderRecord struct {
 	LastUpdatedAt     string
 }
 
-func NewService() *Service {
-	return &Service{}
+type Option func(*Service)
+
+func WithClock(clock func() time.Time) Option {
+	return func(s *Service) {
+		if clock != nil {
+			s.now = clock
+		}
+	}
+}
+
+func NewService(options ...Option) *Service {
+	service := &Service{
+		now: func() time.Time {
+			return time.Now().UTC()
+		},
+	}
+	for _, option := range options {
+		option(service)
+	}
+	return service
 }
 
 func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := s.occurredAt(cmd.OccurredAt)
 
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
@@ -114,7 +134,7 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
@@ -150,7 +170,7 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
 	}
@@ -207,6 +227,16 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 			OccurredAt:    now,
 		},
 	}
+}
+
+func (s *Service) occurredAt(commandOccurredAt string) string {
+	if strings.TrimSpace(commandOccurredAt) != "" {
+		return commandOccurredAt
+	}
+	if s.now == nil {
+		return time.Now().UTC().Format(time.RFC3339)
+	}
+	return s.now().UTC().Format(time.RFC3339)
 }
 
 func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {

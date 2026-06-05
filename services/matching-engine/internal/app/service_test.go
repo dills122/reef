@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
@@ -41,6 +42,86 @@ func TestSubmitOrderAcceptsAndRestsFirstOrder(t *testing.T) {
 
 	if state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
 		t.Fatalf("unexpected accepted order state: %#v", state)
+	}
+}
+
+func TestServiceUsesCommandTimestampForGeneratedEvents(t *testing.T) {
+	service := NewService(WithClock(func() time.Time {
+		return time.Date(2026, 3, 14, 18, 30, 0, 0, time.UTC)
+	}))
+	buyTime := "2026-03-14T18:00:00Z"
+	sellTime := "2026-03-14T18:00:05Z"
+
+	buy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-clock-buy",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+		OccurredAt:    buyTime,
+	})
+	if buy.Accepted == nil || buy.Accepted.OccurredAt != buyTime {
+		t.Fatalf("expected buy accepted timestamp %s, got %#v", buyTime, buy.Accepted)
+	}
+
+	sell := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-clock-sell",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+		OccurredAt:    sellTime,
+	})
+	if sell.Accepted == nil || sell.Accepted.OccurredAt != sellTime {
+		t.Fatalf("expected sell accepted timestamp %s, got %#v", sellTime, sell.Accepted)
+	}
+	for _, execution := range sell.Executions {
+		if execution.OccurredAt != sellTime {
+			t.Fatalf("expected execution timestamp %s, got %#v", sellTime, execution)
+		}
+	}
+	for _, trade := range sell.Trades {
+		if trade.OccurredAt != sellTime {
+			t.Fatalf("expected trade timestamp %s, got %#v", sellTime, trade)
+		}
+	}
+	buyState, ok := service.OrderState("ord-clock-buy")
+	if !ok || buyState.LastUpdatedAt != sellTime {
+		t.Fatalf("expected matched buy state timestamp %s, got %#v", sellTime, buyState)
+	}
+
+	rejectTime := "2026-03-14T18:00:10Z"
+	rejected := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-clock-reject",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		OccurredAt:    rejectTime,
+	})
+	if rejected.Rejected == nil || rejected.Rejected.OccurredAt != rejectTime {
+		t.Fatalf("expected rejection timestamp %s, got %#v", rejectTime, rejected.Rejected)
+	}
+}
+
+func TestServiceFallsBackToInjectedClockWhenCommandTimestampMissing(t *testing.T) {
+	fixed := time.Date(2026, 3, 14, 18, 45, 0, 0, time.UTC)
+	service := NewService(WithClock(func() time.Time {
+		return fixed
+	}))
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-clock-fallback",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	if result.Accepted == nil || result.Accepted.OccurredAt != fixed.Format(time.RFC3339) {
+		t.Fatalf("expected injected clock timestamp, got %#v", result.Accepted)
 	}
 }
 
