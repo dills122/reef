@@ -65,7 +65,7 @@ This document defines constraints for the single-Postgres local model so future 
 - auth table ownership: migrations create schema-qualified `auth.*` role tables
 - boundary table ownership: migrations create schema-qualified `boundary.*` idempotency and command-capture tables
 - admin table bootstrap: admin-specific durable tables are still planned unless explicitly covered by runtime/auth storage
-- command log table ownership: migrations create schema-qualified `command_log.commands`; runtime wiring is not enabled yet
+- command log table ownership: migrations create schema-qualified `command_log.commands`; runtime wiring is available behind `EXTERNAL_API_COMMAND_LOG_MODE`
 - read-model bootstrap: planned under `read_model`
 
 Runtime, boundary, and auth persistence now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files represent the live table shapes, and local startup applies migrations before the full stack starts. Docker/local runtime uses `RUNTIME_DB_BOOTSTRAP_MODE=validate` by default so Postgres-backed stores fail fast if migrated objects are missing. `compat` remains available as a local repair fallback.
@@ -76,6 +76,7 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - `PostgresRuntimePersistence` uses explicit `auth.*` table names for roles and actor-role bindings.
 - `PostgresIdempotencyStore` uses explicit `boundary.api_idempotency_records`.
 - `PostgresCommandCaptureStore` uses explicit `boundary.api_command_captures`.
+- `CommandLogCommandCaptureStore` can append inbound API commands to `command_log.commands` behind `EXTERNAL_API_COMMAND_LOG_MODE`.
 - Schema-name overrides are limited to simple identifiers before SQL interpolation.
 - Domain migration files now represent the live runtime, auth, boundary, and command-log table shapes.
 - `make dev-db-migrate` applies migrations in deterministic domain order and records checksums in `public.reef_schema_migrations`.

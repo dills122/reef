@@ -4,7 +4,9 @@ import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.util.UUID
 import javax.sql.DataSource
 
 interface CommandCaptureStore {
@@ -160,6 +162,82 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
     }
 }
 
+class CommandLogCommandCaptureStore(
+    private val delegate: CommandCaptureStore,
+    private val commandLogStore: CommandLogStore,
+    private val clock: () -> Instant = { Instant.now() }
+) : CommandCaptureStore {
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+        commandLogStore.append(
+            CommandLogRecord(
+                commandId = commandId(clientId, route, idempotencyKey, requestPayload),
+                clientId = clientId,
+                route = route,
+                idempotencyKey = idempotencyKey,
+                traceId = JsonCodec.fieldAsString(requestPayload, "traceId").ifBlank { correlationId },
+                correlationId = JsonCodec.fieldAsString(requestPayload, "correlationId").ifBlank { correlationId },
+                actorId = JsonCodec.fieldAsString(requestPayload, "actorId").ifBlank { clientId },
+                commandType = commandType(route),
+                receivedAt = clock(),
+                payloadJson = payloadJson(requestPayload)
+            )
+        )
+        delegate.captureReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
+    }
+
+    override fun markCompleted(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        responsePayload: String
+    ) {
+        delegate.markCompleted(clientId, route, idempotencyKey, responseStatus, responsePayload)
+    }
+
+    override fun markFailed(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        responseStatus: Int,
+        errorClass: String,
+        errorMessage: String
+    ) {
+        delegate.markFailed(clientId, route, idempotencyKey, responseStatus, errorClass, errorMessage)
+    }
+
+    private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
+        val parsedCommandId = JsonCodec.fieldAsString(requestPayload, "commandId")
+        if (parsedCommandId.isNotBlank()) return parsedCommandId
+        val source = "$clientId|$route|$idempotencyKey"
+        return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+    }
+
+    private fun payloadJson(requestPayload: String): String {
+        return try {
+            JsonCodec.parseObject(requestPayload)
+            requestPayload
+        } catch (_: Exception) {
+            JsonCodec.writeObject("rawPayload" to requestPayload)
+        }
+    }
+
+    private fun commandType(route: String): String {
+        return when {
+            route.endsWith("/orders/submit") -> "SubmitOrder"
+            route.endsWith("/orders/cancel") -> "CancelOrder"
+            route.endsWith("/orders/modify") -> "ModifyOrder"
+            else -> "UnknownCommand"
+        }
+    }
+}
+
 class PostgresCommandCaptureStore(
     private val dataSource: DataSource,
     private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
@@ -307,15 +385,33 @@ class PostgresCommandCaptureStore(
 }
 
 fun defaultCommandCaptureStore(): CommandCaptureStore {
-    val mode = (System.getenv("EXTERNAL_API_COMMAND_CAPTURE_MODE") ?: "postgres").lowercase()
-    return when (mode) {
+    return defaultCommandCaptureStore { key -> System.getenv(key) }
+}
+
+internal fun defaultCommandCaptureStore(lookup: (String) -> String?): CommandCaptureStore {
+    val mode = (lookup("EXTERNAL_API_COMMAND_CAPTURE_MODE") ?: "postgres").trim().lowercase()
+    val captureStore = when (mode) {
         "disabled", "off", "none" -> NoopCommandCaptureStore()
         "inmemory" -> InMemoryCommandCaptureStore()
         else -> {
-            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword))
         }
+    }
+    return when (val commandLogMode = (lookup("EXTERNAL_API_COMMAND_LOG_MODE") ?: "disabled").trim().lowercase()) {
+        "disabled", "off", "none" -> captureStore
+        "inmemory" -> CommandLogCommandCaptureStore(captureStore, InMemoryCommandLogStore())
+        "postgres" -> {
+            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
+            CommandLogCommandCaptureStore(
+                captureStore,
+                PostgresCommandLogStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword))
+            )
+        }
+        else -> throw IllegalArgumentException("Unsupported EXTERNAL_API_COMMAND_LOG_MODE: $commandLogMode")
     }
 }

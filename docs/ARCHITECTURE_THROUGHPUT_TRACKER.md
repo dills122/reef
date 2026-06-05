@@ -63,7 +63,7 @@ Exit criteria:
 - [x] Add command log storage interface.
 - [x] Add Postgres implementation.
 - [x] Add in-memory implementation for unit tests.
-- [ ] Wire command capture to command log behind env flag.
+- [x] Wire command capture to command log behind env flag.
 - [x] Add duplicate idempotency tests.
 - [x] Add restart/replay test for durable captured command.
 
