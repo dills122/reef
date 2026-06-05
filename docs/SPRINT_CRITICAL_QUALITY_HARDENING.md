@@ -76,17 +76,18 @@ Add a command reservation step before engine side effects so duplicate
 command IDs or idempotency keys cannot race through the engine path.
 
 Acceptance criteria:
-- [ ] A command can be reserved as `RECEIVED` or `PROCESSING` before engine
+- [x] A command can be reserved as `RECEIVED` or `PROCESSING` before engine
       invocation.
-- [ ] First completed outcome is immutable for a command ID.
-- [ ] Duplicate in-flight command attempts return a deterministic in-progress
+- [x] First completed outcome is immutable for a command ID.
+- [x] Duplicate in-flight command attempts return a deterministic in-progress
       or conflict response.
-- [ ] Duplicate completed command attempts return the canonical first result.
+- [x] Duplicate completed command attempts return the canonical first result.
 
 Verification:
-- [ ] Runtime unit tests for duplicate submit/cancel/modify.
+- [x] Runtime unit tests for duplicate submit/cancel/modify.
 - [ ] Postgres integration test for concurrent duplicate idempotency key.
-- [ ] `make test`
+- [x] `./gradlew test`
+- [x] `make test`
 
 Dependencies:
 Task 1 recommended, but not strictly required.

@@ -9,6 +9,10 @@ import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineGateway
 import java.net.HttpURLConnection
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -354,6 +358,166 @@ class PlatformHttpServerBoundaryTest {
             assertTrue(record?.responsePayloadJson?.contains("ord-sync-engine-1") == true)
         } finally {
             server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedSyncEngineReplaysCompletedCommandForDuplicateCommandId() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-duplicate-command-first"
+                ),
+                body = validSubmitBody("cmd-duplicate-command", "trace-duplicate-command-first", "ord-duplicate-first")
+            )
+            val second = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-duplicate-command-second"
+                ),
+                body = validSubmitBody("cmd-duplicate-command", "trace-duplicate-command-second", "ord-duplicate-second")
+            )
+
+            assertEquals(200, first.status)
+            assertEquals(200, second.status)
+            assertContains(second.body, "\"orderId\":\"ord-duplicate-first\"")
+            assertEquals(1, gateway.submitCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedSyncEngineRejectsDuplicateInFlightCommandBeforeSecondEngineCall() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val gateway = BlockingFirstSubmitGateway()
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            seedReferenceData(server.address.port)
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-inflight-duplicate"
+            )
+            val first = executor.submit<HttpResponse> {
+                post(
+                    port = server.address.port,
+                    path = "/api/v1/orders/submit",
+                    headers = headers,
+                    body = validSubmitBody("cmd-inflight-duplicate", "trace-inflight-first", "ord-inflight-first")
+                )
+            }
+            assertTrue(gateway.awaitFirstSubmit())
+
+            val duplicate = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = validSubmitBody("cmd-inflight-duplicate", "trace-inflight-second", "ord-inflight-second")
+            )
+
+            assertEquals(409, duplicate.status)
+            assertContains(duplicate.body, "\"code\":\"COMMAND_ALREADY_IN_PROGRESS\"")
+            assertEquals(1, gateway.submitCalls)
+
+            gateway.release()
+            assertEquals(200, first.get(5, TimeUnit.SECONDS).status)
+        } finally {
+            gateway.release()
+            executor.shutdownNow()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun syncResultRejectsDuplicateInFlightMutationsBeforeSecondEngineCall() {
+        val cases = listOf(
+            Triple(
+                "/api/v1/orders/submit",
+                validSubmitBody("cmd-sync-inflight-submit-first", "trace-sync-inflight-submit-first", "ord-sync-inflight-submit-first"),
+                validSubmitBody("cmd-sync-inflight-submit-second", "trace-sync-inflight-submit-second", "ord-sync-inflight-submit-second")
+            ),
+            Triple(
+                "/api/v1/orders/cancel",
+                validCancelBody("cmd-sync-inflight-cancel-first", "trace-sync-inflight-cancel-first", "ord-sync-inflight-cancel-first"),
+                validCancelBody("cmd-sync-inflight-cancel-second", "trace-sync-inflight-cancel-second", "ord-sync-inflight-cancel-second")
+            ),
+            Triple(
+                "/api/v1/orders/modify",
+                validModifyBody("cmd-sync-inflight-modify-first", "trace-sync-inflight-modify-first", "ord-sync-inflight-modify-first"),
+                validModifyBody("cmd-sync-inflight-modify-second", "trace-sync-inflight-modify-second", "ord-sync-inflight-modify-second")
+            )
+        )
+        cases.forEachIndexed { index, (route, firstBody, secondBody) ->
+            val gateway = BlockingFirstSubmitGateway()
+            val server = testServerWithGateway(
+                gateway = gateway,
+                captureStore = InMemoryCommandCaptureStore()
+            )
+            val executor = Executors.newSingleThreadExecutor()
+            try {
+                if (route.endsWith("/submit")) {
+                    seedReferenceData(server.address.port)
+                }
+                val headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-sync-inflight-duplicate-$index"
+                )
+                val first = executor.submit<HttpResponse> {
+                    post(
+                        port = server.address.port,
+                        path = route,
+                        headers = headers,
+                        body = firstBody
+                    )
+                }
+                assertTrue(gateway.awaitFirstSubmit())
+
+                val duplicate = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = headers,
+                    body = secondBody
+                )
+
+                assertEquals(409, duplicate.status)
+                assertContains(duplicate.body, "\"code\":\"COMMAND_ALREADY_IN_PROGRESS\"")
+                assertEquals(1, gateway.submitCalls)
+
+                gateway.release()
+                assertEquals(200, first.get(5, TimeUnit.SECONDS).status)
+            } finally {
+                gateway.release()
+                executor.shutdownNow()
+                server.stop(0)
+            }
         }
     }
 
@@ -861,6 +1025,47 @@ private class CountingEngineGateway(
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
         return delegate.modifyOrder(command)
     }
+}
+
+private class BlockingFirstSubmitGateway : EngineGateway {
+    private val calls = AtomicInteger(0)
+    private val firstStarted = CountDownLatch(1)
+    private val releaseFirst = CountDownLatch(1)
+
+    val submitCalls: Int
+        get() = calls.get()
+
+    fun awaitFirstSubmit(): Boolean {
+        return firstStarted.await(5, TimeUnit.SECONDS)
+    }
+
+    fun release() {
+        releaseFirst.countDown()
+    }
+
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        val call = calls.incrementAndGet()
+        if (call == 1) {
+            firstStarted.countDown()
+            releaseFirst.await(5, TimeUnit.SECONDS)
+        }
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-05-22T00:00:00Z"
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
 }
 
 private class StaticRejectedEngineGateway(

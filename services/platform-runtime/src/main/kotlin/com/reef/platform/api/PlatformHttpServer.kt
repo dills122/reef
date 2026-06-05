@@ -309,8 +309,8 @@ class PlatformHttpServer(
             writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
             return
         }
-        try {
-            commandCaptureStore.captureReceived(clientId, route, idempotencyKey, correlationId, body)
+        val reservation = try {
+            commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
@@ -322,6 +322,10 @@ class PlatformHttpServer(
                 503,
                 simpleErrorJson("command capture unavailable", errorMessage)
             )
+            return
+        }
+        if (!reservation.accepted) {
+            writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, reservation.existingCommandStatus, correlationId)
             return
         }
 
@@ -391,6 +395,56 @@ class PlatformHttpServer(
             commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
             writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
         }
+    }
+
+    private fun writeDuplicateCommandReservation(
+        exchange: HttpExchange,
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        status: CommandStatusView?,
+        correlationId: String
+    ) {
+        if (status?.status == CommandLogStatus.COMPLETED && status.responseStatus > 0) {
+            idempotencyStore.save(
+                clientId,
+                route,
+                idempotencyKey,
+                IdempotencyResult(status.responseStatus, status.responsePayloadJson),
+                idempotencyRetentionPolicy.ttlFor(route)
+            )
+            writeJson(exchange, status.responseStatus, status.responsePayloadJson)
+            return
+        }
+        if (status != null && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val payload = CommandStatusResponse.acceptedJson(status)
+            idempotencyStore.save(
+                clientId,
+                route,
+                idempotencyKey,
+                IdempotencyResult(202, payload),
+                idempotencyRetentionPolicy.ttlFor(route)
+            )
+            writeJson(exchange, 202, payload)
+            return
+        }
+        val cached = idempotencyStore.find(clientId, route, idempotencyKey)
+        if (cached != null) {
+            writeJson(exchange, cached.status, cached.payload)
+            return
+        }
+        writeJson(
+            exchange,
+            409,
+            boundary.toErrorJson(
+                BoundaryError(
+                    409,
+                    "COMMAND_ALREADY_IN_PROGRESS",
+                    "command is already received or processing"
+                ),
+                correlationId
+            )
+        )
     }
 
     private fun handleCommandStatusLookup(exchange: HttpExchange) {
