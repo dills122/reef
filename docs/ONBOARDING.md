@@ -69,6 +69,8 @@ make dev-up
 make dev-smoke
 ```
 
+`make dev-up` starts Postgres first, applies DB migrations, then starts the full stack.
+
 If Bun is missing locally:
 
 ```bash
@@ -81,6 +83,7 @@ JS_RUNTIME=node make dev-smoke
 ```bash
 make dev-down
 make dev-reset
+make dev-db-migrate
 make test
 ```
 
@@ -92,7 +95,8 @@ make dev-smoke
 ```
 
 Note:
-- `dev-reset` now performs clean rebuild + compose health wait.
+- `dev-reset` now performs clean rebuild + migration apply + compose health wait.
+- `dev-db-migrate` remains available as an explicit repair/debug command.
 - inline smoke during reset is opt-in: `DEV_RESET_RUN_SMOKE=1 make dev-reset`.
 
 Load baseline:

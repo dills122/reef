@@ -31,7 +31,10 @@ Current state:
 
 Current persistence caveat:
 
-- durable mode still has transitional service-side table bootstrap in addition to migration files
+- durable mode uses explicit domain-schema table names instead of relying on JDBC `currentSchema`
+- migration-owned runtime/auth/boundary table definitions are applied automatically by local dev startup/reset
+- Docker/local runtime defaults to `RUNTIME_DB_BOOTSTRAP_MODE=validate`; `compat` remains available only as a local repair fallback
+- narrowing/removing service-side compatibility bootstrap code is still pending
 - the intended direction is split-ready domain schemas (`runtime`, `boundary`, `auth`, `admin`) with migration-owned tables and procedure-first critical write paths
 
 Run locally when Gradle is available:
@@ -67,6 +70,7 @@ External boundary config:
 - `EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES` optional comma list of `route:maxRejects/windowSeconds/blockSeconds` (example: `/api/v1/orders/modify:10/30/120`)
 - `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
+- `RUNTIME_DB_BOOTSTRAP_MODE=compat|validate` (Docker/local default `validate`; use `compat` only for local repair/debug)
 
 Operational stats endpoint:
 - `GET /internal/boundary/abuse/stats` (returns breaker mode/config and counters: `trips`, `blocks`, `releases`, `activeBlockedClients`)
@@ -76,6 +80,8 @@ When `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`, the runtime reuses:
 - `RUNTIME_DB_URL`
 - `RUNTIME_DB_USER`
 - `RUNTIME_DB_PASSWORD`
+
+The Postgres boundary stores create/read `boundary.api_idempotency_records` and `boundary.api_command_captures` by default.
 
 Current limitation:
 

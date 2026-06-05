@@ -52,6 +52,12 @@ Deterministic reset (down + volume wipe + rebuild + compose health wait):
 make dev-reset
 ```
 
+Forward-only DB migrations run automatically during `make dev-up` and `make dev-reset` after Postgres is healthy and before the full stack starts. Manual migration is still available for repair/debug:
+
+```bash
+make dev-db-migrate
+```
+
 Optional inline smoke during reset:
 
 ```bash
@@ -284,16 +290,25 @@ Additional stress artifacts:
 
 Compose sets:
 - runtime persistence: `RUNTIME_PERSISTENCE=postgres`
-- runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime`)
+- DB bootstrap mode: `RUNTIME_DB_BOOTSTRAP_MODE=validate` (`compat` remains a local repair fallback)
+- runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime` remains configured, but runtime storage uses explicit `runtime.*` and `auth.*` names)
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
-- boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary`)
+- boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 
 Postgres init creates domain schemas:
 - `runtime`
 - `auth`
 - `admin`
 - `boundary`
+
+Runtime, auth, and boundary persistence validates migrated schema objects by default in Docker/local startup. Set `RUNTIME_DB_BOOTSTRAP_MODE=compat` only for local repair/debug if a migration path needs to be bypassed temporarily.
+
+`make dev-up`, `make dev-reset`, and `make dev-db-migrate` apply SQL files under `scripts/dev/db/migrations/` in deterministic domain order and record checksums in `public.reef_schema_migrations`. Use `$(JS_RUNTIME) scripts/dev/db/migrate.mjs --dry-run` to validate order/checksums without touching Docker.
+
+Schema-placement verification:
+- `PostgresSchemaMigrationIntegrationTest` is opt-in.
+- run it with `RUNTIME_POSTGRES_JDBC_URL_TEST=jdbc:postgresql://localhost:5432/reef`, `RUNTIME_POSTGRES_USER_TEST=reef`, and `RUNTIME_POSTGRES_PASSWORD_TEST=reef` after `make dev-up` or `make dev-db-migrate`.
 
 `.env` support:
 - all `scripts/dev/*.mjs` load `.env` and `.env.local` automatically

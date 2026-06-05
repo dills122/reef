@@ -1,5 +1,8 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
+import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
+import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.time.Instant
 import javax.sql.DataSource
@@ -158,14 +161,28 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
 }
 
 class PostgresCommandCaptureStore(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
 ) : CommandCaptureStore {
     init {
         connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryCommandCapture(names.commandCaptures)
+                )
+                return@use
+            }
             conn.createStatement().use { stmt ->
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS api_command_captures (
+                    CREATE SCHEMA IF NOT EXISTS ${names.schemaName}
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandCaptures} (
                       client_id TEXT NOT NULL,
                       route TEXT NOT NULL,
                       idempotency_key TEXT NOT NULL,
@@ -184,8 +201,8 @@ class PostgresCommandCaptureStore(
                 )
                 stmt.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_api_command_captures_status_updated
-                    ON api_command_captures(status, last_updated_at DESC)
+                    CREATE INDEX IF NOT EXISTS ${names.commandCapturesStatusUpdatedIndex}
+                    ON ${names.commandCaptures}(status, last_updated_at DESC)
                     """.trimIndent()
                 )
             }
@@ -202,7 +219,7 @@ class PostgresCommandCaptureStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO api_command_captures(
+                INSERT INTO ${names.commandCaptures}(
                   client_id,
                   route,
                   idempotency_key,
@@ -235,7 +252,7 @@ class PostgresCommandCaptureStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                UPDATE api_command_captures
+                UPDATE ${names.commandCaptures}
                 SET status = 'COMPLETED',
                     response_status = ?,
                     response_payload = ?,
@@ -266,7 +283,7 @@ class PostgresCommandCaptureStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                UPDATE api_command_captures
+                UPDATE ${names.commandCaptures}
                 SET status = 'FAILED',
                     response_status = ?,
                     error_class = ?,
