@@ -181,6 +181,64 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun legacyMutationRoutesRejectWhenInternalGateDisabled() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            legacyMutationRoutesEnabled = false
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/orders/submit",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = validSubmitBody("cmd-legacy-disabled", "trace-legacy-disabled", "ord-legacy-disabled")
+            )
+            val reference = post(
+                port = server.address.port,
+                path = "/reference/instruments",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
+            )
+
+            assertEquals(403, submit.status)
+            assertEquals(403, reference.status)
+            assertContains(submit.body, "\"error\":\"legacy mutation route disabled\"")
+            assertContains(reference.body, "\"error\":\"legacy mutation route disabled\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun legacyMutationRoutesRequireInternalMarkerWhenGateEnabled() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            legacyMutationRoutesEnabled = true
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/orders/submit",
+                headers = emptyMap(),
+                body = validSubmitBody("cmd-legacy-marker", "trace-legacy-marker", "ord-legacy-marker")
+            )
+            val reference = post(
+                port = server.address.port,
+                path = "/reference/instruments",
+                headers = emptyMap(),
+                body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
+            )
+
+            assertEquals(403, submit.status)
+            assertEquals(403, reference.status)
+            assertContains(submit.body, "\"header\":\"X-Reef-Internal-Route\"")
+            assertContains(reference.body, "\"header\":\"X-Reef-Internal-Route\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1OrderMutationsRejectMalformedJsonBeforeCapture() {
         val captureStore = RecordingCommandCaptureStore()
         val server = testServerWithGateway(
@@ -795,7 +853,8 @@ class PlatformHttpServerBoundaryTest {
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
-        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
+        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+        legacyMutationRoutesEnabled: Boolean = true
     ): com.sun.net.httpserver.HttpServer {
         val api = PlatformApi(
             OrderApplicationService(
@@ -811,7 +870,8 @@ class PlatformHttpServerBoundaryTest {
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
-            commandProcessingMode = commandProcessingMode
+            commandProcessingMode = commandProcessingMode,
+            legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
         ).start()
     }
 
@@ -902,19 +962,19 @@ class PlatformHttpServerBoundaryTest {
         post(
             port = port,
             path = "/reference/instruments",
-            headers = emptyMap(),
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
         )
         post(
             port = port,
             path = "/reference/participants",
-            headers = emptyMap(),
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"participantId":"participant-1","name":"Participant 1"}"""
         )
         post(
             port = port,
             path = "/reference/accounts",
-            headers = emptyMap(),
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"accountId":"account-1","participantId":"participant-1"}"""
         )
     }

@@ -2,11 +2,12 @@ import { deriveDevUrls, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 const { runtimeUrl } = deriveDevUrls();
+const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
 
 async function post(path, payload) {
   const res = await fetch(`${runtimeUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...internalRouteHeaders },
     body: JSON.stringify(payload),
   });
   const text = await res.text();

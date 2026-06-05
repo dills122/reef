@@ -108,14 +108,14 @@ Prevent non-versioned mutation routes from bypassing `/api/v1` controls except
 when an explicit local/internal flag is enabled.
 
 Acceptance criteria:
-- [ ] `/orders/submit`, `/orders/cancel`, `/orders/modify`, and reference-data
+- [x] `/orders/submit`, `/orders/cancel`, `/orders/modify`, and reference-data
       POST routes are disabled by default or explicitly marked local/internal.
-- [ ] Smoke and simulator paths use `/api/v1` for command mutations.
-- [ ] Internal route behavior is covered by tests and documented.
+- [x] Smoke and simulator paths use `/api/v1` for command mutations.
+- [x] Internal route behavior is covered by tests and documented.
 
 Verification:
-- [ ] `make test-platform-runtime`
-- [ ] `go test ./...` in `services/simulator`
+- [x] `make test-platform-runtime`
+- [x] `go test ./...` in `services/simulator`
 - [ ] `make dev-smoke` when local stack is available
 
 Dependencies:

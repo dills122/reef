@@ -17,9 +17,9 @@ Current state:
 
 - Kotlin source and Gradle build scaffold
 - `GET /health`
-- `POST /orders/submit`
-- `POST /orders/cancel`
-- `POST /orders/modify`
+- `POST /orders/submit` (legacy/internal; requires `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` and `X-Reef-Internal-Route: true`)
+- `POST /orders/cancel` (legacy/internal; requires `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` and `X-Reef-Internal-Route: true`)
+- `POST /orders/modify` (legacy/internal; requires `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` and `X-Reef-Internal-Route: true`)
 - `POST /api/v1/orders/submit` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/cancel` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/modify` (requires `X-Client-Id` + `Idempotency-Key`)
@@ -73,6 +73,7 @@ External boundary config:
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
+- `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true|false` (code default `false`; local compose default `true`; legacy mutation and reference-data POST routes also require `X-Reef-Internal-Route: true`)
 - `RUNTIME_DB_BOOTSTRAP_MODE=compat|validate` (Docker/local default `validate`; use `compat` only for local repair/debug)
 
 Command status lookup:

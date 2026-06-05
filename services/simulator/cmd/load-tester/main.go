@@ -1165,12 +1165,13 @@ func checkTraceOnce(client *http.Client, baseURL, traceID string) bool {
 }
 
 func seedReferenceData(client *http.Client, cfg Config) error {
+	internalHeaders := map[string]string{"X-Reef-Internal-Route": "true"}
 	if cfg.HasSessionConfig && len(cfg.MarketEquities) > 0 {
 		for _, eq := range cfg.MarketEquities {
 			if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
 				"instrumentId": eq.InstrumentID,
 				"symbol":       eq.Symbol,
-			}, nil); err != nil {
+			}, internalHeaders); err != nil {
 				return err
 			}
 		}
@@ -1178,20 +1179,20 @@ func seedReferenceData(client *http.Client, cfg Config) error {
 		if _, _, err := doPOST(client, cfg.BaseURL+"/reference/instruments", map[string]string{
 			"instrumentId": cfg.InstrumentID,
 			"symbol":       cfg.InstrumentSymbol,
-		}, nil); err != nil {
+		}, internalHeaders); err != nil {
 			return err
 		}
 	}
 	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
 		"participantId": cfg.ParticipantID,
 		"name":          cfg.ParticipantName,
-	}, nil); err != nil {
+	}, internalHeaders); err != nil {
 		return err
 	}
 	if _, _, err := doPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
 		"accountId":     cfg.AccountID,
 		"participantId": cfg.ParticipantID,
-	}, nil); err != nil {
+	}, internalHeaders); err != nil {
 		return err
 	}
 	return nil

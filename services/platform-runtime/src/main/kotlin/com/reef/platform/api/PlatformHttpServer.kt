@@ -16,7 +16,8 @@ class PlatformHttpServer(
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
     private val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
-    private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
+    private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+    private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
 ) {
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
@@ -64,6 +65,7 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowLegacyMutationRoute(exchange)) return@createContext
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.submitOrder(body))
@@ -81,6 +83,7 @@ class PlatformHttpServer(
         server.createContext("/reference/instruments") { exchange ->
             when (exchange.requestMethod) {
                 "POST" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
                     writeJson(exchange, 200, api.createInstrument(body))
                 }
@@ -92,6 +95,7 @@ class PlatformHttpServer(
         server.createContext("/reference/participants") { exchange ->
             when (exchange.requestMethod) {
                 "POST" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
                     writeJson(exchange, 200, api.createParticipant(body))
                 }
@@ -103,6 +107,7 @@ class PlatformHttpServer(
         server.createContext("/reference/accounts") { exchange ->
             when (exchange.requestMethod) {
                 "POST" -> {
+                    if (!allowLegacyMutationRoute(exchange)) return@createContext
                     val body = readRequestBody(exchange) ?: return@createContext
                     writeJson(exchange, 200, api.createAccount(body))
                 }
@@ -116,6 +121,7 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowLegacyMutationRoute(exchange)) return@createContext
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.cancelOrder(body))
@@ -135,6 +141,7 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowLegacyMutationRoute(exchange)) return@createContext
             try {
                 val body = readRequestBody(exchange) ?: return@createContext
                 writeJson(exchange, 200, api.modifyOrder(body))
@@ -282,6 +289,26 @@ class PlatformHttpServer(
 
     private fun correlationId(exchange: HttpExchange): String {
         return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
+    }
+
+    private fun allowLegacyMutationRoute(exchange: HttpExchange): Boolean {
+        if (!legacyMutationRoutesEnabled) {
+            writeJson(exchange, 403, simpleErrorJson("legacy mutation route disabled"))
+            return false
+        }
+        val internalMarker = exchange.requestHeaders[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
+        if (internalMarker != "true") {
+            writeJson(
+                exchange,
+                403,
+                JsonCodec.writeObject(
+                    "error" to "legacy mutation route requires internal marker",
+                    "header" to LEGACY_INTERNAL_ROUTE_HEADER
+                )
+            )
+            return false
+        }
+        return true
     }
 
     private fun handleApiV1Mutation(
@@ -507,6 +534,7 @@ class PlatformHttpServer(
 }
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
+private const val LEGACY_INTERNAL_ROUTE_HEADER = "X-Reef-Internal-Route"
 
 private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
