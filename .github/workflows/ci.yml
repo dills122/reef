@@ -55,3 +55,35 @@ jobs:
       - name: Run platform-runtime performance guardrail
         working-directory: .
         run: ./scripts/ci/check-runtime-bench.sh
+
+  postgres-schema-placement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate dev migration scripts
+        run: node --test scripts/dev/lib/dev-stack.test.mjs scripts/dev/db/migrate.test.mjs
+      - name: Start Postgres
+        run: docker compose -f docker-compose.yml up -d postgres --wait --wait-timeout 120
+      - name: Apply migrations
+        run: JS_RUNTIME=node make dev-db-migrate
+      - name: Run schema placement integration test
+        working-directory: services/platform-runtime
+        env:
+          RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
+          RUNTIME_POSTGRES_USER_TEST: reef
+          RUNTIME_POSTGRES_PASSWORD_TEST: reef
+        run: ./gradlew --no-daemon test --tests com.reef.platform.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
+      - name: Dump Postgres logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs postgres
+      - name: Stop Postgres
+        if: always()
+        run: docker compose -f docker-compose.yml down --volumes --remove-orphans

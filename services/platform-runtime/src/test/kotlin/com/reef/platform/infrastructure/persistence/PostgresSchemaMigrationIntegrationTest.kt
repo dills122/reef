@@ -4,6 +4,7 @@ import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
 import com.reef.platform.api.PostgresCommandCaptureStore
 import com.reef.platform.api.PostgresIdempotencyStore
 import java.sql.DriverManager
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -185,5 +186,85 @@ class PostgresSchemaMigrationIntegrationTest {
             dataSource = boundaryDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )
+    }
+
+    @Test
+    fun validateModeCommandCaptureStorePersistsReceivedCompletedAndFailedStates() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val store = PostgresCommandCaptureStore(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val clientId = "client-$suffix"
+        val route = "/api/v1/orders/submit"
+        val completedKey = "completed-$suffix"
+        val failedKey = "failed-$suffix"
+
+        store.captureReceived(
+            clientId = clientId,
+            route = route,
+            idempotencyKey = completedKey,
+            correlationId = "corr-completed",
+            requestPayload = """{"commandId":"cmd-completed"}"""
+        )
+        store.markCompleted(
+            clientId = clientId,
+            route = route,
+            idempotencyKey = completedKey,
+            responseStatus = 200,
+            responsePayload = """{"accepted":true}"""
+        )
+        store.captureReceived(
+            clientId = clientId,
+            route = route,
+            idempotencyKey = failedKey,
+            correlationId = "corr-failed",
+            requestPayload = """{"commandId":"cmd-failed"}"""
+        )
+        store.markFailed(
+            clientId = clientId,
+            route = route,
+            idempotencyKey = failedKey,
+            responseStatus = 503,
+            errorClass = "BOUNDARY_UNAVAILABLE",
+            errorMessage = "capture failed"
+        )
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT idempotency_key, correlation_id, status, response_status, response_payload, error_class, error_message
+                FROM boundary.api_command_captures
+                WHERE client_id = ? AND route = ?
+                ORDER BY idempotency_key
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, clientId)
+                ps.setString(2, route)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals(completedKey, rs.getString("idempotency_key"))
+                    assertEquals("corr-completed", rs.getString("correlation_id"))
+                    assertEquals("COMPLETED", rs.getString("status"))
+                    assertEquals(200, rs.getInt("response_status"))
+                    assertEquals("""{"accepted":true}""", rs.getString("response_payload"))
+                    assertEquals("", rs.getString("error_class"))
+                    assertEquals("", rs.getString("error_message"))
+
+                    assertTrue(rs.next())
+                    assertEquals(failedKey, rs.getString("idempotency_key"))
+                    assertEquals("corr-failed", rs.getString("correlation_id"))
+                    assertEquals("FAILED", rs.getString("status"))
+                    assertEquals(503, rs.getInt("response_status"))
+                    assertEquals("", rs.getString("response_payload"))
+                    assertEquals("BOUNDARY_UNAVAILABLE", rs.getString("error_class"))
+                    assertEquals("capture failed", rs.getString("error_message"))
+                }
+            }
+        }
     }
 }

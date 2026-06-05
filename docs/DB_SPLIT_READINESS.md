@@ -80,7 +80,7 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - Domain migration files now represent the live runtime, auth, and boundary table shapes.
 - `make dev-db-migrate` applies migrations in deterministic domain order and records checksums in `public.reef_schema_migrations`.
 - Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
-- `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries and schema-owned table placement with a JDBC URL that does not set `currentSchema`.
+- `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries, schema-owned table placement, validation-mode store construction, and command-capture writes with a JDBC URL that does not set `currentSchema`.
 - Full local-stack smoke passed after applying migrations, including boundary command capture and `/api/v1` submit/cancel flow.
 - `make dev-up` and `make dev-reset` start Postgres, apply migrations, then start the full stack.
 - Docker/local runtime defaults to schema validation mode.
@@ -88,9 +88,8 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 
 ## Next persistence-alignment work
 
-1. Add the schema-placement integration test to a CI lane with an ephemeral Postgres service.
-2. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` compatibility code after CI proves migration execution order.
-3. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
+1. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` compatibility code after the CI migration lane soaks.
+2. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
 
 ## Split readiness checks to enforce in CI
 
