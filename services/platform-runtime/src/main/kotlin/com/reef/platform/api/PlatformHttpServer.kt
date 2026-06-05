@@ -320,6 +320,19 @@ class PlatformHttpServer(
             return
         }
 
+        if (commandProcessingMode != CommandProcessingMode.SyncResult && commandStatusLookup == null) {
+            commandCaptureStore.markFailed(
+                clientId,
+                route,
+                idempotencyKey,
+                503,
+                "COMMAND_STATUS_UNAVAILABLE",
+                "command status lookup is required for ${commandProcessingMode.configValue}"
+            )
+            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
+            return
+        }
+
         val abuseViolation = abuseProtectionHook.allow(clientId, route)
         if (abuseViolation != null) {
             commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
@@ -332,6 +345,30 @@ class PlatformHttpServer(
             commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
             writeJson(exchange, cached.status, cached.payload)
             return
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val status = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
+            if (status == null) {
+                commandCaptureStore.markFailed(
+                    clientId,
+                    route,
+                    idempotencyKey,
+                    503,
+                    "COMMAND_STATUS_UNAVAILABLE",
+                    "captured command status not found"
+                )
+                writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
+                return
+            }
+            val payload = CommandStatusResponse.acceptedJson(status)
+            rememberIdempotentResult(exchange, route, 202, payload)
+            writeJson(exchange, 202, payload)
+            return
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedSyncEngine) {
+            commandCaptureStore.markProcessing(clientId, route, idempotencyKey)
         }
 
         try {

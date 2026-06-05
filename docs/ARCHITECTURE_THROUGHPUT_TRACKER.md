@@ -25,7 +25,7 @@ Scaling intent:
 | A2 | DB pool/write-path diagnostics in stress telemetry | Not started | feature | Needed for bottleneck proof |
 | A3 | Command log schema and interface | Not started | feature | First DB slice to add |
 | A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
-| A5 | Command processing mode flags | Started | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
+| A5 | Command processing mode flags | Done | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
 | A6 | Async batched runtime persistence | Not started | architecture | Biggest likely throughput lever |
 | A7 | Runtime event/table partitioning | Not started | architecture | Long-soak stability |
 | A8 | Read-model schema/projection isolation | Not started | architecture | Remove projection writes from hot path |
@@ -74,13 +74,13 @@ Exit criteria:
 ### M3: Command Processing Modes
 
 - [x] Add `EXTERNAL_API_COMMAND_PROCESSING_MODE` config.
-- [ ] Define response contracts for each mode.
+- [x] Define response contracts for each mode.
 - [x] Implement `sync-result`.
-- [ ] Implement `captured-sync-engine`.
-- [ ] Prototype `captured-ack`.
-- [ ] Add status lookup API for captured commands.
-- [ ] Add idempotency replay behavior per mode.
-- [ ] Add simulator config toggle for mode.
+- [x] Implement `captured-sync-engine`.
+- [x] Prototype `captured-ack`.
+- [x] Add status lookup API for captured commands.
+- [x] Add idempotency replay behavior per mode.
+- [x] Add simulator config toggle for mode.
 
 Exit criteria:
 - Simulator can run both legacy synchronous and captured command modes without code changes.
@@ -160,9 +160,9 @@ Regression budget:
 
 ## Open Decisions
 
-1. What should `/api/v1` return in `captured-ack` mode?
-- candidate: `202 Accepted` with `commandId`, `traceId`, and status URL
-- risk: simulator and existing clients currently expect synchronous accepted/rejected result
+1. Should `captured-ack` grow a dedicated async processor in M4, or stay intake-only until the batch writer exists?
+- current prototype: `202 Accepted` with `commandId`, status, processing mode, and status URL
+- risk: simulator and existing clients currently expect synchronous accepted/rejected result unless explicitly run in captured mode
 
 2. Should command log live in Postgres only first, or add JetStream early?
 - recommendation: Postgres first

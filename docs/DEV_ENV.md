@@ -198,6 +198,7 @@ make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode strict-lifecycle
 Simulator mutating traffic uses `/api/v1` routes by default (idempotency + client headers enabled):
 - `--use-api-v1=true` (default)
 - `--client-id-prefix=sim-client` (default)
+- `DEV_SIM_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` recreates `platform-runtime` with that processing mode before running simulator traffic
 
 Optional abuse-breaker guardrail for `/api/v1` writes:
 - `EXTERNAL_API_ABUSE_BREAKER_MODE=off|reject-rate` (default `off`)
@@ -295,7 +296,7 @@ Compose sets:
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`)
-- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes are planned follow-up behavior)
+- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 
 Postgres init creates domain schemas:

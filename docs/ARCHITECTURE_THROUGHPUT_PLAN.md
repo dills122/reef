@@ -187,15 +187,18 @@ Create an append-only durable command intake slice that satisfies command captur
 - Current behavior shape.
 - Request waits for engine and persistence result.
 - Good for compatibility and deterministic tests.
+- Response contract: returns the current synchronous order result payload and replays the same payload by idempotency key.
 
 2. `captured-ack`
 - Request returns after durable command capture.
 - Processor completes command asynchronously.
 - Good for high-throughput intake.
+- Response contract: returns HTTP `202` with `commandId`, `status`, `processingMode`, and `statusUrl`; replays the same accepted response by idempotency key.
 
 3. `captured-sync-engine`
 - Request captures command durably, executes engine synchronously, defers non-critical projection/fanout.
 - Good transitional mode.
+- Response contract: returns the current synchronous order result payload while command status is queryable through `/api/v1/commands/{commandId}`.
 
 ### Acceptance Criteria
 
