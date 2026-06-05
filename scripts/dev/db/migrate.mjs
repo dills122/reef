@@ -8,7 +8,7 @@ import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 const defaultMigrationsRoot = path.join(repoRoot, "scripts/dev/db/migrations");
-const domainOrder = ["runtime", "auth", "admin", "boundary", "orchestration", "analytics"];
+const domainOrder = ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"];
 
 export async function discoverMigrations(migrationsRoot = defaultMigrationsRoot) {
   const migrations = [];

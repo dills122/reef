@@ -24,6 +24,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "boundary/0002_live_boundary_tables.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0003_command_capture_live_shape.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0004_command_capture_legacy_defaults.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0001_commands.sql"));
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

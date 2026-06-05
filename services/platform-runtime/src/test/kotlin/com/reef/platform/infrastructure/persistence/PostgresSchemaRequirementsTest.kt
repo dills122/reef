@@ -69,4 +69,30 @@ class PostgresSchemaRequirementsTest {
             requirements.columns.map { it.qualifiedName }.toSet()
         )
     }
+
+    @Test
+    fun commandLogRequirementsCoverAppendOnlyCommandTable() {
+        val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
+
+        assertEquals(setOf("command_log.commands"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "command_log.commands.command_id",
+                "command_log.commands.client_id",
+                "command_log.commands.route",
+                "command_log.commands.idempotency_key",
+                "command_log.commands.trace_id",
+                "command_log.commands.correlation_id",
+                "command_log.commands.actor_id",
+                "command_log.commands.command_type",
+                "command_log.commands.received_at",
+                "command_log.commands.payload_json",
+                "command_log.commands.status",
+                "command_log.commands.attempt_count",
+                "command_log.commands.last_error",
+                "command_log.commands.created_at"
+            ),
+            requirements.columns.map { it.qualifiedName }.toSet()
+        )
+    }
 }

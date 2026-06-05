@@ -5,7 +5,7 @@ This document defines constraints for the single-Postgres local model so future 
 ## Current domain schemas
 
 - `runtime`
-- `command_log` (planned; immutable inbound command capture)
+- `command_log` (immutable inbound command capture)
 - `read_model` (planned; query/UI projections)
 - `auth`
 - `admin`
@@ -65,7 +65,7 @@ This document defines constraints for the single-Postgres local model so future 
 - auth table ownership: migrations create schema-qualified `auth.*` role tables
 - boundary table ownership: migrations create schema-qualified `boundary.*` idempotency and command-capture tables
 - admin table bootstrap: admin-specific durable tables are still planned unless explicitly covered by runtime/auth storage
-- command log bootstrap: planned under `command_log`
+- command log table ownership: migrations create schema-qualified `command_log.commands`; runtime wiring is not enabled yet
 - read-model bootstrap: planned under `read_model`
 
 Runtime, boundary, and auth persistence now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files represent the live table shapes, and local startup applies migrations before the full stack starts. Docker/local runtime uses `RUNTIME_DB_BOOTSTRAP_MODE=validate` by default so Postgres-backed stores fail fast if migrated objects are missing. `compat` remains available as a local repair fallback.
@@ -77,7 +77,7 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - `PostgresIdempotencyStore` uses explicit `boundary.api_idempotency_records`.
 - `PostgresCommandCaptureStore` uses explicit `boundary.api_command_captures`.
 - Schema-name overrides are limited to simple identifiers before SQL interpolation.
-- Domain migration files now represent the live runtime, auth, and boundary table shapes.
+- Domain migration files now represent the live runtime, auth, boundary, and command-log table shapes.
 - `make dev-db-migrate` applies migrations in deterministic domain order and records checksums in `public.reef_schema_migrations`.
 - Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
 - `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries, schema-owned table placement, validation-mode store construction, and command-capture writes with a JDBC URL that does not set `currentSchema`.

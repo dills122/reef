@@ -54,18 +54,18 @@ Exit criteria:
 
 ### M2: Command Log Slice
 
-- [ ] Add `command_log` schema migration.
-- [ ] Add append-only `command_log.commands` table.
+- [x] Add `command_log` schema migration.
+- [x] Add append-only `command_log.commands` table.
 - [ ] Add minimal indexes:
-  - [ ] unique `(client_id, route, idempotency_key)`
-  - [ ] unique `command_id`
-  - [ ] processing index `(status, received_at)`
-- [ ] Add command log storage interface.
-- [ ] Add Postgres implementation.
-- [ ] Add in-memory implementation for unit tests.
+  - [x] unique `(client_id, route, idempotency_key)`
+  - [x] unique `command_id`
+  - [x] processing index `(status, received_at)`
+- [x] Add command log storage interface.
+- [x] Add Postgres implementation.
+- [x] Add in-memory implementation for unit tests.
 - [ ] Wire command capture to command log behind env flag.
-- [ ] Add duplicate idempotency tests.
-- [ ] Add restart/replay test for durable captured command.
+- [x] Add duplicate idempotency tests.
+- [x] Add restart/replay test for durable captured command.
 
 Exit criteria:
 - Captured command survives runtime restart after acknowledgment.
