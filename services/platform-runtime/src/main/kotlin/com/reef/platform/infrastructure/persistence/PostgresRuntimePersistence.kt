@@ -17,10 +17,15 @@ import javax.sql.DataSource
 
 class PostgresRuntimePersistence(
     private val dataSource: DataSource,
-    private val names: PostgresRuntimeSqlNames = PostgresRuntimeSqlNames()
+    private val names: PostgresRuntimeSqlNames = PostgresRuntimeSqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
 ) : RuntimePersistence {
     init {
         connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(conn, PostgresSchemaRequirements.runtime(names))
+                return@use
+            }
             conn.createStatement().use { stmt ->
                 stmt.execute(
                     """

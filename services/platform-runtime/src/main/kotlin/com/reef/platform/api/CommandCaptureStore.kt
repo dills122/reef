@@ -1,5 +1,8 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
+import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
+import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.time.Instant
 import javax.sql.DataSource
@@ -159,10 +162,18 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
 
 class PostgresCommandCaptureStore(
     private val dataSource: DataSource,
-    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames()
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
 ) : CommandCaptureStore {
     init {
         connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryCommandCapture(names.commandCaptures)
+                )
+                return@use
+            }
             conn.createStatement().use { stmt ->
                 stmt.execute(
                     """

@@ -1,5 +1,8 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
+import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
+import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
 import java.time.Instant
@@ -189,10 +192,18 @@ class InMemoryIdempotencyStore : IdempotencyStore {
 class PostgresIdempotencyStore(
     private val dataSource: DataSource,
     private val retentionPolicy: IdempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
-    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames()
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
 ) : IdempotencyStore {
     init {
         connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryIdempotency(names.idempotencyRecords)
+                )
+                return@use
+            }
             conn.createStatement().use { stmt ->
                 stmt.execute(
                     """

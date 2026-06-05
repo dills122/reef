@@ -37,7 +37,7 @@ Implemented or materially started:
 
 Material gaps:
 
-- Runtime, boundary, and auth durable bootstrap now targets explicit domain schemas such as `runtime.*`, `boundary.*`, and `auth.*`, but table ownership has not fully moved to forward-only migrations.
+- Runtime, boundary, and auth durable persistence now targets explicit domain schemas such as `runtime.*`, `boundary.*`, and `auth.*`; local startup applies migrations and Docker/local runtime validates migrated objects.
 - Event log persistence exists for queryability, but the outbox-backed event distribution path is only partially represented by migrations/specs and is not yet the runtime write path.
 - Cancel/modify operations emit lifecycle events but do not yet keep a complete persisted order-state projection equivalent to the engine state.
 - The platform UI is still a README-level placeholder; the currently planned UI is a simulator/control-room surface before full order/post-trade operator workflows.

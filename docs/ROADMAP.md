@@ -83,10 +83,10 @@ Current status:
 - API-first command and query paths are substantially implemented.
 - UI delivery is not complete.
 - persisted order lifecycle projection still needs to represent cancel/modify/current engine state consistently.
-- durable persistence now uses explicit runtime/boundary/auth schemas, migration files represent the live table shapes, and local startup applies migrations; service-bootstrap removal should happen before more lifecycle tables are added.
+- durable persistence now uses explicit runtime/boundary/auth schemas, migration files represent the live table shapes, local startup applies migrations, and Docker/local runtime validates migrated objects; compatibility-bootstrap code can be narrowed after CI covers migration execution order.
 
 Recommended remaining sequence:
-1. runtime service-bootstrap cleanup
+1. CI-backed schema-placement validation and runtime compatibility-bootstrap cleanup
 2. venue lifecycle projection completion
 3. simulator control room around existing scripts/artifacts
 4. first scenario-locked lifecycle tests

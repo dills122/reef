@@ -290,6 +290,7 @@ Additional stress artifacts:
 
 Compose sets:
 - runtime persistence: `RUNTIME_PERSISTENCE=postgres`
+- DB bootstrap mode: `RUNTIME_DB_BOOTSTRAP_MODE=validate` (`compat` remains a local repair fallback)
 - runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime` remains configured, but runtime storage uses explicit `runtime.*` and `auth.*` names)
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
@@ -301,7 +302,7 @@ Postgres init creates domain schemas:
 - `admin`
 - `boundary`
 
-Runtime, auth, and boundary service bootstrap creates schema-qualified compatibility tables today. Forward-only migration ownership is now part of local startup, and the remaining persistence cleanup is narrowing service-side bootstrap.
+Runtime, auth, and boundary persistence validates migrated schema objects by default in Docker/local startup. Set `RUNTIME_DB_BOOTSTRAP_MODE=compat` only for local repair/debug if a migration path needs to be bypassed temporarily.
 
 `make dev-up`, `make dev-reset`, and `make dev-db-migrate` apply SQL files under `scripts/dev/db/migrations/` in deterministic domain order and record checksums in `public.reef_schema_migrations`. Use `$(JS_RUNTIME) scripts/dev/db/migrate.mjs --dry-run` to validate order/checksums without touching Docker.
 

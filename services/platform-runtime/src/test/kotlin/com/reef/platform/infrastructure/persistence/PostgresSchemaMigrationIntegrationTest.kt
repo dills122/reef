@@ -1,5 +1,8 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
+import com.reef.platform.api.PostgresCommandCaptureStore
+import com.reef.platform.api.PostgresIdempotencyStore
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -158,5 +161,29 @@ class PostgresSchemaMigrationIntegrationTest {
 
             assertTrue(publicTables.isEmpty(), "unexpected public persistence tables: $publicTables")
         }
+    }
+
+    @Test
+    fun validateModeConstructorsAcceptMigratedSchemaWhenConfigured() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val runtimeDataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val boundaryDataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+
+        PostgresRuntimePersistence(
+            dataSource = runtimeDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresIdempotencyStore(
+            dataSource = boundaryDataSource,
+            retentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresCommandCaptureStore(
+            dataSource = boundaryDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
     }
 }
