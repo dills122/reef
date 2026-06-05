@@ -28,7 +28,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
                   'boundary/0004_command_capture_legacy_defaults.sql',
-                  'command_log/0001_commands.sql'
+                  'command_log/0001_commands.sql',
+                  'command_log/0002_command_results.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -47,6 +48,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0003_command_capture_live_shape.sql",
                     "boundary/0004_command_capture_legacy_defaults.sql",
                     "command_log/0001_commands.sql",
+                    "command_log/0002_command_results.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations

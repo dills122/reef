@@ -113,7 +113,9 @@ object PostgresSchemaRequirements {
                 "status",
                 "attempt_count",
                 "last_error",
-                "created_at"
+                "created_at",
+                "response_status",
+                "response_payload_json"
             ).map { column -> PostgresSchemaColumn(table, column) }
         )
     }

@@ -51,6 +51,33 @@ class CommandLogStoreTest {
         assertEquals(original, result.record)
         assertEquals(original, store.findByCommandId("cmd-1"))
     }
+
+    @Test
+    fun inMemoryStoreTracksProcessingCompletedAndFailedStatus() {
+        val store = InMemoryCommandLogStore()
+        val completed = commandLogRecord(commandId = "cmd-completed", idempotencyKey = "idem-completed")
+        val failed = commandLogRecord(commandId = "cmd-failed", idempotencyKey = "idem-failed")
+
+        store.append(completed)
+        store.append(failed)
+        store.markProcessing("cmd-completed")
+        store.markCompleted("cmd-completed", 200, """{"accepted":true}""")
+        store.markProcessing("cmd-failed")
+        store.markFailed("cmd-failed", 503, "runtime unavailable")
+
+        val completedRecord = store.findByCommandId("cmd-completed")
+        assertEquals(CommandLogStatus.COMPLETED, completedRecord?.status)
+        assertEquals(1, completedRecord?.attemptCount)
+        assertEquals(200, completedRecord?.responseStatus)
+        assertEquals("""{"accepted":true}""", completedRecord?.responsePayloadJson)
+        assertEquals("", completedRecord?.lastError)
+
+        val failedRecord = store.findByCommandId("cmd-failed")
+        assertEquals(CommandLogStatus.FAILED, failedRecord?.status)
+        assertEquals(1, failedRecord?.attemptCount)
+        assertEquals(503, failedRecord?.responseStatus)
+        assertEquals("runtime unavailable", failedRecord?.lastError)
+    }
 }
 
 private fun commandLogRecord(
@@ -121,6 +148,23 @@ class PostgresCommandLogStoreIntegrationTest {
         assertFalse(result.appended)
         assertEquals(original.idempotencyKey, result.record.idempotencyKey)
         assertEquals(original.idempotencyKey, store.findByCommandId(original.commandId)?.idempotencyKey)
+    }
+
+    @Test
+    fun postgresStorePersistsStatusTransitionsWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(commandId = "cmd-status-$suffix", idempotencyKey = "idem-status-$suffix")
+
+        assertTrue(store.append(record).appended)
+        store.markProcessing(record.commandId)
+        store.markCompleted(record.commandId, 200, """{"accepted":true}""")
+        val completed = postgresStoreOrNull()?.findByCommandId(record.commandId)
+
+        assertEquals(CommandLogStatus.COMPLETED, completed?.status)
+        assertEquals(1, completed?.attemptCount)
+        assertEquals(200, completed?.responseStatus)
+        assertTrue(completed?.responsePayloadJson?.contains("accepted") == true)
     }
 
     private fun postgresStoreOrNull(): PostgresCommandLogStore? {
