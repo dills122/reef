@@ -2,6 +2,7 @@ package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
 import com.reef.platform.api.PostgresCommandCaptureStore
+import com.reef.platform.api.PostgresCommandLogStore
 import com.reef.platform.api.PostgresIdempotencyStore
 import java.sql.DriverManager
 import java.util.UUID
@@ -26,7 +27,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
-                  'boundary/0004_command_capture_legacy_defaults.sql'
+                  'boundary/0004_command_capture_legacy_defaults.sql',
+                  'command_log/0001_commands.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -44,6 +46,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0002_live_boundary_tables.sql",
                     "boundary/0003_command_capture_live_shape.sql",
                     "boundary/0004_command_capture_legacy_defaults.sql",
+                    "command_log/0001_commands.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations
@@ -54,6 +57,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "auth.auth_roles",
                 "boundary.api_command_captures",
                 "boundary.api_idempotency_records",
+                "command_log.commands",
                 "runtime.executions",
                 "runtime.orders",
                 "runtime.reference_instruments",
@@ -66,7 +70,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 """
                 SELECT table_schema || '.' || table_name AS table_name
                 FROM information_schema.tables
-                WHERE table_schema IN ('runtime', 'auth', 'boundary')
+                WHERE table_schema IN ('runtime', 'auth', 'boundary', 'command_log')
                   AND table_name IN (
                     'orders',
                     'executions',
@@ -77,7 +81,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'auth_roles',
                     'auth_actor_roles',
                     'api_idempotency_records',
-                    'api_command_captures'
+                    'api_command_captures',
+                    'commands'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -149,7 +154,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'auth_roles',
                     'auth_actor_roles',
                     'api_idempotency_records',
-                    'api_command_captures'
+                    'api_command_captures',
+                    'commands'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -183,6 +189,10 @@ class PostgresSchemaMigrationIntegrationTest {
             bootstrapMode = PostgresBootstrapMode.Validate
         )
         PostgresCommandCaptureStore(
+            dataSource = boundaryDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresCommandLogStore(
             dataSource = boundaryDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )

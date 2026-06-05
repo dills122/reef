@@ -7,6 +7,7 @@ Domain folders:
 - `auth/`
 - `admin/`
 - `boundary/`
+- `command_log/`
 - `orchestration/`
 - `analytics/` (planned)
 

@@ -94,6 +94,29 @@ object PostgresSchemaRequirements {
             ).map { column -> PostgresSchemaColumn(table, column) }
         )
     }
+
+    fun commandLog(commands: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(commands)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                "command_id",
+                "client_id",
+                "route",
+                "idempotency_key",
+                "trace_id",
+                "correlation_id",
+                "actor_id",
+                "command_type",
+                "received_at",
+                "payload_json",
+                "status",
+                "attempt_count",
+                "last_error",
+                "created_at"
+            ).map { column -> PostgresSchemaColumn(table, column) }
+        )
+    }
 }
 
 object PostgresSchemaValidator {
