@@ -135,11 +135,25 @@ class PostgresRuntimePersistence(
                       trace_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
                       correlation_id TEXT NOT NULL,
+                      actor_id TEXT NOT NULL DEFAULT '',
                       producer TEXT NOT NULL,
                       schema_version TEXT NOT NULL,
                       sequence_number BIGINT NOT NULL,
+                      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
                       occurred_at TEXT NOT NULL
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.runtimeEvents}
+                    ADD COLUMN IF NOT EXISTS actor_id TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.runtimeEvents}
+                    ADD COLUMN IF NOT EXISTS payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -362,7 +376,7 @@ class PostgresRuntimePersistence(
                           ) - 1 AS trace_offset
                         FROM parsed_events parsed
                       )
-                      INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
+                      INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
                       SELECT
                         event->>'eventId',
                         event->>'eventType',
@@ -370,9 +384,11 @@ class PostgresRuntimePersistence(
                         event->>'traceId',
                         event->>'causationId',
                         event->>'correlationId',
+                        COALESCE(event->>'actorId', ''),
                         event->>'producer',
                         event->>'schemaVersion',
                         trace_starts.start_sequence + ordered_events.trace_offset,
+                        COALESCE(event->'payloadJson', '{}'::jsonb),
                         event->>'occurredAt'
                       FROM ordered_events
                       JOIN trace_starts ON trace_starts.trace_id = ordered_events.event->>'traceId'
@@ -740,8 +756,8 @@ class PostgresRuntimePersistence(
                 val nextByTrace = startByTrace.toMutableMap()
                 conn.prepareStatement(
                     """
-                    INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO ${names.runtimeEvents}(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
                     ON CONFLICT (event_id) DO NOTHING
                     """.trimIndent()
                 ).use { ps ->
@@ -754,10 +770,12 @@ class PostgresRuntimePersistence(
                         ps.setString(4, event.traceId)
                         ps.setString(5, event.causationId)
                         ps.setString(6, event.correlationId)
-                        ps.setString(7, event.producer)
-                        ps.setString(8, event.schemaVersion)
-                        ps.setLong(9, sequence)
-                        ps.setString(10, event.occurredAt)
+                        ps.setString(7, event.actorId)
+                        ps.setString(8, event.producer)
+                        ps.setString(9, event.schemaVersion)
+                        ps.setLong(10, sequence)
+                        ps.setString(11, event.payloadJson)
+                        ps.setString(12, event.occurredAt)
                         ps.addBatch()
                     }
                     ps.executeBatch()
@@ -927,7 +945,9 @@ class PostgresRuntimePersistence(
             producer = getString("producer"),
             schemaVersion = getString("schema_version"),
             sequenceNumber = getLong("sequence_number"),
-            occurredAt = getString("occurred_at")
+            occurredAt = getString("occurred_at"),
+            actorId = getString("actor_id"),
+            payloadJson = getString("payload_json")
         )
     }
 
@@ -1011,17 +1031,23 @@ class PostgresRuntimePersistence(
         "occurredAt" to occurredAt
     )
 
-    private fun RuntimeEvent.toJsonObject(): String = jsonObject(
-        "eventId" to eventId,
-        "eventType" to eventType,
-        "orderId" to orderId,
-        "traceId" to traceId,
-        "causationId" to causationId,
-        "correlationId" to correlationId,
-        "producer" to producer,
-        "schemaVersion" to schemaVersion,
-        "occurredAt" to occurredAt
-    )
+    private fun RuntimeEvent.toJsonObject(): String {
+        val stringFields = listOf(
+            "eventId" to eventId,
+            "eventType" to eventType,
+            "orderId" to orderId,
+            "traceId" to traceId,
+            "causationId" to causationId,
+            "correlationId" to correlationId,
+            "actorId" to actorId,
+            "producer" to producer,
+            "schemaVersion" to schemaVersion,
+            "occurredAt" to occurredAt
+        ).joinToString(",") { (key, value) ->
+            "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+        return "{$stringFields,\"payloadJson\":${payloadJson.ifBlank { "{}" }}}"
+    }
 
     private fun <T> List<T>.toJsonArray(toObject: (T) -> String): String {
         if (isEmpty()) return "[]"

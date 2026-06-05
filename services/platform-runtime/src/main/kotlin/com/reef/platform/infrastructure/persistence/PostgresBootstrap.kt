@@ -37,7 +37,11 @@ data class PostgresSchemaObject(val schema: String, val name: String) {
     }
 }
 
-data class PostgresSchemaColumn(val table: PostgresSchemaObject, val name: String) {
+data class PostgresSchemaColumn(
+    val table: PostgresSchemaObject,
+    val name: String,
+    val expectedDataType: String? = null
+) {
     val qualifiedName = "${table.qualifiedName}.$name"
 }
 
@@ -49,6 +53,7 @@ data class PostgresSchemaRequirement(
 
 object PostgresSchemaRequirements {
     fun runtime(names: PostgresRuntimeSqlNames): PostgresSchemaRequirement {
+        val runtimeEvents = PostgresSchemaObject.parse(names.runtimeEvents)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -66,7 +71,14 @@ object PostgresSchemaRequirements {
             functions = listOf(
                 names.validateReferenceDataFunction,
                 names.persistSubmitOutcomeFunction
-            ).map(PostgresSchemaObject::parse)
+            ).map(PostgresSchemaObject::parse),
+            columns = listOf(
+                PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
+                PostgresSchemaColumn(runtimeEvents, "occurred_at", "text"),
+                PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),
+                PostgresSchemaColumn(runtimeEvents, "payload_json", "jsonb"),
+                PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint")
+            )
         )
     }
 
@@ -132,7 +144,10 @@ object PostgresSchemaValidator {
             if (!functionExists(conn, function)) missing.add("function ${function.qualifiedName}")
         }
         requirement.columns.forEach { column ->
-            if (!columnExists(conn, column)) missing.add("column ${column.qualifiedName}")
+            if (!columnMatches(conn, column)) {
+                val expected = column.expectedDataType?.let { " type $it" }.orEmpty()
+                missing.add("column ${column.qualifiedName}$expected")
+            }
         }
 
         if (missing.isNotEmpty()) {
@@ -172,10 +187,10 @@ object PostgresSchemaValidator {
         }
     }
 
-    private fun columnExists(conn: Connection, column: PostgresSchemaColumn): Boolean {
+    private fun columnMatches(conn: Connection, column: PostgresSchemaColumn): Boolean {
         conn.prepareStatement(
             """
-            SELECT 1
+            SELECT data_type
             FROM information_schema.columns
             WHERE table_schema = ? AND table_name = ? AND column_name = ?
             """.trimIndent()
@@ -183,7 +198,11 @@ object PostgresSchemaValidator {
             ps.setString(1, column.table.schema)
             ps.setString(2, column.table.name)
             ps.setString(3, column.name)
-            ps.executeQuery().use { rs -> return rs.next() }
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) return false
+                val expected = column.expectedDataType ?: return true
+                return rs.getString("data_type") == expected
+            }
         }
     }
 }

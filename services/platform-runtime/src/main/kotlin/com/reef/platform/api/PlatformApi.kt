@@ -178,10 +178,12 @@ class PlatformApi(
         "traceId" to traceId,
         "causationId" to causationId,
         "correlationId" to correlationId,
+        "actorId" to actorId,
         "producer" to producer,
         "schemaVersion" to schemaVersion,
         "sequenceNumber" to sequenceNumber,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "payloadJson" to payloadJson
     )
 
     private fun toOrderMap(order: PersistedOrder): Map<String, Any> = mapOf(

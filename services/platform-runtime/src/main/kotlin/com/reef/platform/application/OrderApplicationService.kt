@@ -44,7 +44,9 @@ class OrderApplicationService(
                         traceId = traceId,
                         causationId = command.commandId,
                         correlationId = command.correlationId,
-                        occurredAt = rejected.occurredAt
+                        occurredAt = rejected.occurredAt,
+                        actorId = command.actorId,
+                        payloadJson = commandPayload(command.commandId)
                     )
                 )
             } else {
@@ -86,7 +88,9 @@ class OrderApplicationService(
                     traceId = traceId,
                     causationId = command.commandId,
                     correlationId = command.correlationId,
-                    occurredAt = accepted.occurredAt
+                    occurredAt = accepted.occurredAt,
+                    actorId = command.actorId,
+                    payloadJson = commandPayload(command.commandId)
                 )
             )
             val capacity = ArrayList<RuntimeEvent>(
@@ -102,7 +106,9 @@ class OrderApplicationService(
                         traceId = traceId,
                         causationId = accepted.eventId,
                         correlationId = command.correlationId,
-                        occurredAt = execution.occurredAt
+                        occurredAt = execution.occurredAt,
+                        actorId = command.actorId,
+                        payloadJson = commandPayload(command.commandId)
                     )
                 )
             }
@@ -115,7 +121,9 @@ class OrderApplicationService(
                         traceId = traceId,
                         causationId = accepted.eventId,
                         correlationId = command.correlationId,
-                        occurredAt = trade.occurredAt
+                        occurredAt = trade.occurredAt,
+                        actorId = command.actorId,
+                        payloadJson = commandPayload(command.commandId)
                     )
                 )
             }
@@ -132,7 +140,9 @@ class OrderApplicationService(
                         traceId = traceId,
                         causationId = command.commandId,
                         correlationId = command.correlationId,
-                        occurredAt = rejected.occurredAt
+                        occurredAt = rejected.occurredAt,
+                        actorId = command.actorId,
+                        payloadJson = commandPayload(command.commandId)
                     )
                 )
             }
@@ -161,6 +171,7 @@ class OrderApplicationService(
             command.orderId,
             command.commandId,
             command.correlationId,
+            command.actorId,
             traceId,
             result.accepted,
             result.rejected,
@@ -183,6 +194,7 @@ class OrderApplicationService(
             command.orderId,
             command.commandId,
             command.correlationId,
+            command.actorId,
             traceId,
             result.accepted,
             result.rejected,
@@ -196,6 +208,7 @@ class OrderApplicationService(
         defaultOrderId: String,
         commandId: String,
         correlationId: String,
+        actorId: String,
         traceId: String,
         accepted: EngineOrderAccepted?,
         rejected: EngineOrderRejected?,
@@ -211,7 +224,9 @@ class OrderApplicationService(
                     traceId = traceId,
                     causationId = commandId,
                     correlationId = correlationId,
-                    occurredAt = accepted.occurredAt
+                    occurredAt = accepted.occurredAt,
+                    actorId = actorId,
+                    payloadJson = commandPayload(commandId)
                 )
             )
             return
@@ -226,7 +241,9 @@ class OrderApplicationService(
                     traceId = traceId,
                     causationId = commandId,
                     correlationId = correlationId,
-                    occurredAt = rejected.occurredAt
+                    occurredAt = rejected.occurredAt,
+                    actorId = actorId,
+                    payloadJson = commandPayload(commandId)
                 )
             )
         }
@@ -239,7 +256,9 @@ class OrderApplicationService(
         traceId: String,
         causationId: String,
         correlationId: String,
-        occurredAt: String
+        occurredAt: String,
+        actorId: String = "",
+        payloadJson: String = "{}"
     ): RuntimeEvent {
         return RuntimeEvent(
             eventId = eventId,
@@ -250,8 +269,29 @@ class OrderApplicationService(
             correlationId = correlationId,
             producer = eventProducer,
             schemaVersion = eventSchemaVersion,
-            occurredAt = occurredAt
+            occurredAt = occurredAt,
+            actorId = actorId,
+            payloadJson = payloadJson
         )
+    }
+
+    private fun commandPayload(commandId: String): String {
+        return """{"commandId":"${escapeJson(commandId)}"}"""
+    }
+
+    private fun escapeJson(value: String): String {
+        return buildString(value.length + 8) {
+            value.forEach { ch ->
+                when (ch) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
+                }
+            }
+        }
     }
 
     private fun traceId(traceId: String, orderId: String): String {

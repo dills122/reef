@@ -224,15 +224,15 @@ Lock the canonical runtime event schema direction and add tests that prevent
 further drift between migrations, bootstrap validation, and write models.
 
 Acceptance criteria:
-- [ ] Decision recorded for typed event IDs/timestamps, actor ID, payload JSON,
+- [x] Decision recorded for typed event IDs/timestamps, actor ID, payload JSON,
       and outbox timing.
-- [ ] Schema validation checks column types for critical runtime event fields.
-- [ ] Runtime write model no longer silently loses actor/payload data.
-- [ ] Follow-up outbox implementation scope is explicit if not completed here.
+- [x] Schema validation checks column types for critical runtime event fields.
+- [x] Runtime write model no longer silently loses actor/payload data.
+- [x] Follow-up outbox implementation scope is explicit if not completed here.
 
 Verification:
-- [ ] Postgres schema integration test for column types.
-- [ ] Runtime event write/read test with actor and payload.
+- [x] Postgres schema integration test for column types.
+- [x] Runtime event write/read test with actor and payload.
 
 Dependencies:
 None, but should coordinate with Task 2 persistence work.

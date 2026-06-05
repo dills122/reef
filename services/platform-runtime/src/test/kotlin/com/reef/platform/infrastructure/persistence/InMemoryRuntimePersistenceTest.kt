@@ -78,8 +78,10 @@ class InMemoryRuntimePersistenceTest {
                 traceId = "trace-1",
                 causationId = "cmd-1",
                 correlationId = "corr-1",
+                actorId = "trader-1",
                 producer = "platform-runtime",
                 schemaVersion = "v1",
+                payloadJson = """{"source":"unit-test"}""",
                 occurredAt = "2026-03-14T18:00:00Z"
             )
         )
@@ -99,6 +101,9 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(1, persistence.eventsForOrder("ord-1").size)
         assertEquals(1, persistence.eventsForTrace("trace-1").size)
         assertEquals(1, persistence.events().size)
-        assertEquals(1L, persistence.eventsForTrace("trace-1").first().sequenceNumber)
+        val event = persistence.eventsForTrace("trace-1").first()
+        assertEquals(1L, event.sequenceNumber)
+        assertEquals("trader-1", event.actorId)
+        assertEquals("""{"source":"unit-test"}""", event.payloadJson)
     }
 }

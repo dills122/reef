@@ -175,9 +175,30 @@ class AdminApplicationService(
                 correlationId = actor.correlationId,
                 producer = eventProducer,
                 schemaVersion = eventSchemaVersion,
-                occurredAt = eventTime
+                occurredAt = eventTime,
+                actorId = actor.actorId,
+                payloadJson = detailPayload(detail)
             )
         )
+    }
+
+    private fun detailPayload(detail: String): String {
+        return """{"detail":"${escapeJson(detail)}"}"""
+    }
+
+    private fun escapeJson(value: String): String {
+        return buildString(value.length + 8) {
+            value.forEach { ch ->
+                when (ch) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
+                }
+            }
+        }
     }
 
     private fun requirePermission(actor: AdminActor, permission: String) {
