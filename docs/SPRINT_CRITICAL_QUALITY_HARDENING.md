@@ -50,7 +50,7 @@ Acceptance criteria:
       errors for malformed JSON.
 - [x] Required command fields are validated before application service calls.
 - [x] Unknown fields are rejected for versioned public command DTOs.
-- [ ] Legacy non-versioned mutation routes are documented as internal until they
+- [x] Legacy non-versioned mutation routes are documented as internal until they
       are gated in Task 3.
 
 Verification:
@@ -134,12 +134,12 @@ Acceptance criteria:
 - [x] Matching engine can use an injected clock or command timestamp policy.
 - [x] Simulator uses scenario run metadata for session identity when supplied.
 - [x] Replay mode can produce stable command timestamps.
-- [ ] At least one golden scenario asserts ordered event timestamps.
+- [x] At least one golden scenario asserts ordered event timestamps.
 
 Verification:
 - [x] `go test ./...` in `services/matching-engine`
 - [x] `go test ./...` in `services/simulator`
-- [ ] Scenario replay test for `P1_GOLDEN_HIDDEN_CROSS_T1`
+- [x] Fast replay-contract test for `P1_GOLDEN_HIDDEN_CROSS_T1`
 
 Dependencies:
 Task 1 recommended for strict scenario assertions.
@@ -291,7 +291,7 @@ After Tasks 4, 7, and 8:
 - [x] scenario replay has deterministic clock behavior
 - [x] HTTP/gRPC metadata parity is test-covered
 - [x] event schema drift is blocked by tests
-- [ ] `make test` and relevant replay checks pass
+- [x] `make test` and relevant replay checks pass
 
 ## Risks And Mitigations
 

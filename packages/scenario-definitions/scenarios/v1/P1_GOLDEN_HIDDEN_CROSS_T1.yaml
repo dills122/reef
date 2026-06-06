@@ -94,6 +94,36 @@ expectedEvents:
   - "SettlementCompleted"
   - "ScenarioRunCompleted"
 
+expectedEventTimeline:
+  anchor: "scenarioStart"
+  events:
+    - eventType: "ScenarioRunStarted"
+      occurredAtOffsetSeconds: 0
+    - eventType: "OrderSubmitted"
+      occurredAtOffsetSeconds: 1
+    - eventType: "OrderAccepted"
+      occurredAtOffsetSeconds: 1
+    - eventType: "OrderSubmitted"
+      occurredAtOffsetSeconds: 2
+    - eventType: "OrderAccepted"
+      occurredAtOffsetSeconds: 2
+    - eventType: "ExecutionCreated"
+      occurredAtOffsetSeconds: 3
+    - eventType: "TradeCreated"
+      occurredAtOffsetSeconds: 3
+    - eventType: "TradeAllocated"
+      occurredAtOffsetSeconds: 4
+    - eventType: "ConfirmationGenerated"
+      occurredAtOffsetSeconds: 5
+    - eventType: "TradeAffirmed"
+      occurredAtOffsetSeconds: 6
+    - eventType: "SettlementObligationCreated"
+      occurredAtOffsetSeconds: 7
+    - eventType: "SettlementCompleted"
+      occurredAtOffsetSeconds: 8
+    - eventType: "ScenarioRunCompleted"
+      occurredAtOffsetSeconds: 9
+
 expectedFinalStates:
   trade: "AFFIRMED"
   settlement: "SETTLED"
@@ -112,6 +142,7 @@ uiAssertions:
 
 replayAssertions:
   - "Given seed=424242 and same preconditions, expectedEvents sequence is identical."
+  - "Given seed=424242 and same preconditions, expectedEventTimeline occurredAt offsets are identical and monotonic."
   - "Event payload identity fields are stable across replay for business entities."
 
 idempotencyAssertions:
