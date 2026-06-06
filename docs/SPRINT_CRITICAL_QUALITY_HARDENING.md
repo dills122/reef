@@ -116,7 +116,7 @@ Acceptance criteria:
 Verification:
 - [x] `make test-platform-runtime`
 - [x] `go test ./...` in `services/simulator`
-- [ ] `make dev-smoke` when local stack is available
+- [x] `make dev-smoke` when local stack is available
 
 Dependencies:
 Task 1.
