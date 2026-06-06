@@ -64,9 +64,11 @@ CREATE TABLE IF NOT EXISTS runtime.runtime_events (
   trace_id TEXT NOT NULL,
   causation_id TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL DEFAULT '',
   producer TEXT NOT NULL,
   schema_version TEXT NOT NULL,
   sequence_number BIGINT NOT NULL,
+  payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   occurred_at TEXT NOT NULL
 );
 
@@ -78,6 +80,12 @@ ALTER TABLE runtime.runtime_events
 
 ALTER TABLE runtime.runtime_events
   ALTER COLUMN schema_version DROP DEFAULT;
+
+ALTER TABLE runtime.runtime_events
+  ADD COLUMN IF NOT EXISTS actor_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE runtime.runtime_events
+  ADD COLUMN IF NOT EXISTS payload_json JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS runtime.runtime_trace_sequences (
   trace_id TEXT PRIMARY KEY,
@@ -121,7 +129,8 @@ CREATE OR REPLACE FUNCTION runtime.runtime_validate_reference_data(
 RETURNS TABLE(
   instrument_exists BOOLEAN,
   participant_exists BOOLEAN,
-  account_exists BOOLEAN
+  account_exists BOOLEAN,
+  account_belongs_to_participant BOOLEAN
 )
 LANGUAGE SQL
 STABLE
@@ -129,7 +138,8 @@ AS $$
   SELECT
     EXISTS(SELECT 1 FROM runtime.reference_instruments WHERE instrument_id = p_instrument_id),
     EXISTS(SELECT 1 FROM runtime.reference_participants WHERE participant_id = p_participant_id),
-    EXISTS(SELECT 1 FROM runtime.reference_accounts WHERE account_id = p_account_id)
+    EXISTS(SELECT 1 FROM runtime.reference_accounts WHERE account_id = p_account_id),
+    EXISTS(SELECT 1 FROM runtime.reference_accounts WHERE account_id = p_account_id AND participant_id = p_participant_id)
 $$;
 
 CREATE OR REPLACE FUNCTION runtime.runtime_persist_submit_outcome(
@@ -268,7 +278,7 @@ BEGIN
       ) - 1 AS trace_offset
     FROM parsed_events parsed
   )
-  INSERT INTO runtime.runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, producer, schema_version, sequence_number, occurred_at)
+  INSERT INTO runtime.runtime_events(event_id, event_type, order_id, trace_id, causation_id, correlation_id, actor_id, producer, schema_version, sequence_number, payload_json, occurred_at)
   SELECT
     event->>'eventId',
     event->>'eventType',
@@ -276,9 +286,11 @@ BEGIN
     event->>'traceId',
     event->>'causationId',
     event->>'correlationId',
+    COALESCE(event->>'actorId', ''),
     event->>'producer',
     event->>'schemaVersion',
     trace_starts.start_sequence + ordered_events.trace_offset,
+    COALESCE(event->'payloadJson', '{}'::jsonb),
     event->>'occurredAt'
   FROM ordered_events
   JOIN trace_starts ON trace_starts.trace_id = ordered_events.event->>'traceId'

@@ -1,14 +1,22 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Permission
+import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineGateway
+import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import java.net.HttpURLConnection
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -177,6 +185,306 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun legacyMutationRoutesRejectWhenInternalGateDisabled() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            legacyMutationRoutesEnabled = false
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/orders/submit",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = validSubmitBody("cmd-legacy-disabled", "trace-legacy-disabled", "ord-legacy-disabled")
+            )
+            val reference = post(
+                port = server.address.port,
+                path = "/reference/instruments",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
+            )
+            val role = post(
+                port = server.address.port,
+                path = "/auth/roles",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+
+            assertEquals(403, submit.status)
+            assertEquals(403, reference.status)
+            assertEquals(403, role.status)
+            assertContains(submit.body, "\"error\":\"legacy mutation route disabled\"")
+            assertContains(reference.body, "\"error\":\"legacy mutation route disabled\"")
+            assertContains(role.body, "\"error\":\"legacy mutation route disabled\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun legacyMutationRoutesRequireInternalMarkerWhenGateEnabled() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            legacyMutationRoutesEnabled = true
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/orders/submit",
+                headers = emptyMap(),
+                body = validSubmitBody("cmd-legacy-marker", "trace-legacy-marker", "ord-legacy-marker")
+            )
+            val reference = post(
+                port = server.address.port,
+                path = "/reference/instruments",
+                headers = emptyMap(),
+                body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
+            )
+            val role = post(
+                port = server.address.port,
+                path = "/auth/roles",
+                headers = emptyMap(),
+                body = """{"roleId":"order_trader","permissions":"order.submit"}"""
+            )
+
+            assertEquals(403, submit.status)
+            assertEquals(403, reference.status)
+            assertEquals(403, role.status)
+            assertContains(submit.body, "\"header\":\"X-Reef-Internal-Route\"")
+            assertContains(reference.body, "\"header\":\"X-Reef-Internal-Route\"")
+            assertContains(role.body, "\"header\":\"X-Reef-Internal-Route\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAuthSeedRoutesAllowExplicitOrderActors() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            seedOrderAuthorization = false
+        )
+        try {
+            seedReferenceData(server.address.port)
+            seedOrderRoleBindings(server.address.port, "bot-capture-1")
+
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-auth-seeded"
+                ),
+                body = validSubmitBody("cmd-auth-seeded", "trace-auth-seeded", "ord-auth-seeded")
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"accepted\"")
+            assertContains(response.body, "\"orderId\":\"ord-auth-seeded\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectMalformedJsonBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            listOf(
+                "/api/v1/orders/submit",
+                "/api/v1/orders/cancel",
+                "/api/v1/orders/modify"
+            ).forEachIndexed { index, route ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-malformed-$index",
+                        "X-Correlation-Id" to "corr-malformed-$index"
+                    ),
+                    body = """{"commandId":"""
+                )
+
+                assertEquals(400, response.status)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "\"message\":\"invalid json payload\"")
+                assertContains(response.body, "\"correlationId\":\"corr-malformed-$index\"")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectUnknownFieldsBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val cases = listOf(
+                "/api/v1/orders/submit" to validSubmitBody("cmd-unknown-submit", "trace-unknown-submit", "ord-unknown-submit", extra = ""","unexpected":"value""""),
+                "/api/v1/orders/cancel" to validCancelBody("cmd-unknown-cancel", "trace-unknown-cancel", "ord-unknown-cancel", extra = ""","unexpected":"value""""),
+                "/api/v1/orders/modify" to validModifyBody("cmd-unknown-modify", "trace-unknown-modify", "ord-unknown-modify", extra = ""","unexpected":"value"""")
+            )
+            cases.forEachIndexed { index, (route, body) ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-unknown-$index"
+                    ),
+                    body = body
+                )
+
+                assertEquals(400, response.status)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "\"message\":\"unknown field: unexpected\"")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1OrderMutationsRejectMissingRequiredFieldsBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val cases = listOf(
+                "/api/v1/orders/submit" to bodyWithoutField(validSubmitBody("cmd-missing-submit", "trace-missing-submit", "ord-missing-submit"), "orderId"),
+                "/api/v1/orders/cancel" to bodyWithoutField(validCancelBody("cmd-missing-cancel", "trace-missing-cancel", "ord-missing-cancel"), "reason"),
+                "/api/v1/orders/modify" to bodyWithoutField(validModifyBody("cmd-missing-modify", "trace-missing-modify", "ord-missing-modify"), "limitPrice")
+            )
+            cases.forEachIndexed { index, (route, body) ->
+                val response = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = mapOf(
+                        "X-Client-Id" to "client-1",
+                        "Idempotency-Key" to "idem-missing-$index"
+                    ),
+                    body = body
+                )
+
+                assertEquals(400, response.status, route)
+                assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+                assertContains(response.body, "\"message\":\"missing required field:")
+            }
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1SubmitRejectsInvalidEnumValuesBeforeCapture() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-invalid-enum"
+                ),
+                body = validSubmitBody("cmd-invalid-enum", "trace-invalid-enum", "ord-invalid-enum")
+                    .replace("\"side\":\"BUY\"", "\"side\":\"BID\"")
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "\"message\":\"invalid side: BID\"")
+            assertEquals(0, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(0, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1SubmitRejectsUnauthorizedActorBeforeEngineCall() {
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            seedOrderAuthorization = false
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-unauthorized"
+                ),
+                body = validSubmitBody("cmd-unauthorized", "trace-unauthorized", "ord-unauthorized")
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"rejected\"")
+            assertContains(response.body, "\"code\":\"AUTHORIZATION_ERROR\"")
+            assertContains(response.body, "\"reason\":\"actorId missing permission order.submit\"")
+            assertEquals(0, gateway.submitCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1SubmitReturnsRetryableErrorWhenEngineTransportFails() {
+        val captureStore = RecordingCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = ThrowingEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-engine-down"
+                ),
+                body = validSubmitBody("cmd-engine-down", "trace-engine-down", "ord-engine-down")
+            )
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"error\":\"runtime unavailable\"")
+            assertFalse(response.body.contains("\"rejected\""))
+            assertEquals(1, captureStore.receivedCalls)
+            assertEquals(0, captureStore.completedCalls)
+            assertEquals(1, captureStore.failedCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1CommandStatusEndpointReturnsCapturedCommandState() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -245,6 +553,166 @@ class PlatformHttpServerBoundaryTest {
             assertTrue(record?.responsePayloadJson?.contains("ord-sync-engine-1") == true)
         } finally {
             server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedSyncEngineReplaysCompletedCommandForDuplicateCommandId() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            seedReferenceData(server.address.port)
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-duplicate-command-first"
+                ),
+                body = validSubmitBody("cmd-duplicate-command", "trace-duplicate-command-first", "ord-duplicate-first")
+            )
+            val second = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-duplicate-command-second"
+                ),
+                body = validSubmitBody("cmd-duplicate-command", "trace-duplicate-command-second", "ord-duplicate-second")
+            )
+
+            assertEquals(200, first.status)
+            assertEquals(200, second.status)
+            assertContains(second.body, "\"orderId\":\"ord-duplicate-first\"")
+            assertEquals(1, gateway.submitCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedSyncEngineRejectsDuplicateInFlightCommandBeforeSecondEngineCall() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val gateway = BlockingFirstSubmitGateway()
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            seedReferenceData(server.address.port)
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-inflight-duplicate"
+            )
+            val first = executor.submit<HttpResponse> {
+                post(
+                    port = server.address.port,
+                    path = "/api/v1/orders/submit",
+                    headers = headers,
+                    body = validSubmitBody("cmd-inflight-duplicate", "trace-inflight-first", "ord-inflight-first")
+                )
+            }
+            assertTrue(gateway.awaitFirstSubmit())
+
+            val duplicate = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = headers,
+                body = validSubmitBody("cmd-inflight-duplicate", "trace-inflight-second", "ord-inflight-second")
+            )
+
+            assertEquals(409, duplicate.status)
+            assertContains(duplicate.body, "\"code\":\"COMMAND_ALREADY_IN_PROGRESS\"")
+            assertEquals(1, gateway.submitCalls)
+
+            gateway.release()
+            assertEquals(200, first.get(5, TimeUnit.SECONDS).status)
+        } finally {
+            gateway.release()
+            executor.shutdownNow()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun syncResultRejectsDuplicateInFlightMutationsBeforeSecondEngineCall() {
+        val cases = listOf(
+            Triple(
+                "/api/v1/orders/submit",
+                validSubmitBody("cmd-sync-inflight-submit-first", "trace-sync-inflight-submit-first", "ord-sync-inflight-submit-first"),
+                validSubmitBody("cmd-sync-inflight-submit-second", "trace-sync-inflight-submit-second", "ord-sync-inflight-submit-second")
+            ),
+            Triple(
+                "/api/v1/orders/cancel",
+                validCancelBody("cmd-sync-inflight-cancel-first", "trace-sync-inflight-cancel-first", "ord-sync-inflight-cancel-first"),
+                validCancelBody("cmd-sync-inflight-cancel-second", "trace-sync-inflight-cancel-second", "ord-sync-inflight-cancel-second")
+            ),
+            Triple(
+                "/api/v1/orders/modify",
+                validModifyBody("cmd-sync-inflight-modify-first", "trace-sync-inflight-modify-first", "ord-sync-inflight-modify-first"),
+                validModifyBody("cmd-sync-inflight-modify-second", "trace-sync-inflight-modify-second", "ord-sync-inflight-modify-second")
+            )
+        )
+        cases.forEachIndexed { index, (route, firstBody, secondBody) ->
+            val gateway = BlockingFirstSubmitGateway()
+            val server = testServerWithGateway(
+                gateway = gateway,
+                captureStore = InMemoryCommandCaptureStore()
+            )
+            val executor = Executors.newSingleThreadExecutor()
+            try {
+                if (route.endsWith("/submit")) {
+                    seedReferenceData(server.address.port)
+                }
+                val headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-sync-inflight-duplicate-$index"
+                )
+                val first = executor.submit<HttpResponse> {
+                    post(
+                        port = server.address.port,
+                        path = route,
+                        headers = headers,
+                        body = firstBody
+                    )
+                }
+                assertTrue(gateway.awaitFirstSubmit())
+
+                val duplicate = post(
+                    port = server.address.port,
+                    path = route,
+                    headers = headers,
+                    body = secondBody
+                )
+
+                assertEquals(409, duplicate.status)
+                assertContains(duplicate.body, "\"code\":\"COMMAND_ALREADY_IN_PROGRESS\"")
+                assertEquals(1, gateway.submitCalls)
+
+                gateway.release()
+                assertEquals(200, first.get(5, TimeUnit.SECONDS).status)
+            } finally {
+                gateway.release()
+                executor.shutdownNow()
+                server.stop(0)
+            }
         }
     }
 
@@ -522,11 +990,23 @@ class PlatformHttpServerBoundaryTest {
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
-        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
+        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+        legacyMutationRoutesEnabled: Boolean = true,
+        seedOrderAuthorization: Boolean = true
     ): com.sun.net.httpserver.HttpServer {
+        val persistence = InMemoryRuntimePersistence()
+        if (seedOrderAuthorization) {
+            seedOrderAuthorization(
+                persistence,
+                "bot-capture-1",
+                "bot-1",
+                "bot-2"
+            )
+        }
         val api = PlatformApi(
             OrderApplicationService(
-                engineGateway = gateway
+                engineGateway = gateway,
+                runtimePersistence = persistence
             )
         )
         return PlatformHttpServer(
@@ -538,7 +1018,8 @@ class PlatformHttpServerBoundaryTest {
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
-            commandProcessingMode = commandProcessingMode
+            commandProcessingMode = commandProcessingMode,
+            legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
         ).start()
     }
 
@@ -561,7 +1042,7 @@ class PlatformHttpServerBoundaryTest {
         return HttpResponse(connection.responseCode, text)
     }
 
-    private fun validSubmitBody(commandId: String, traceId: String, orderId: String): String {
+    private fun validSubmitBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
         return """
             {
               "commandId":"$commandId",
@@ -579,30 +1060,100 @@ class PlatformHttpServerBoundaryTest {
               "quantityUnits":"100",
               "limitPrice":"150250000000",
               "currency":"USD",
-              "timeInForce":"DAY"
+              "timeInForce":"DAY"$extra
             }
         """.trimIndent()
+    }
+
+    private fun validCancelBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"$traceId",
+              "causationId":"",
+              "correlationId":"$traceId",
+              "actorId":"bot-capture-1",
+              "occurredAt":"2026-05-22T00:00:00Z",
+              "orderId":"$orderId",
+              "reason":"test"$extra
+            }
+        """.trimIndent()
+    }
+
+    private fun validModifyBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"$traceId",
+              "causationId":"",
+              "correlationId":"$traceId",
+              "actorId":"bot-capture-1",
+              "occurredAt":"2026-05-22T00:00:00Z",
+              "orderId":"$orderId",
+              "quantityUnits":"100",
+              "limitPrice":"150250000001"$extra
+            }
+        """.trimIndent()
+    }
+
+    private fun bodyWithoutField(body: String, field: String): String {
+        val withoutField = body
+            .lines()
+            .filterNot { it.trimStart().startsWith("\"$field\":") }
+            .joinToString("\n")
+        return Regex(""",(\s*})""").replace(withoutField) { match ->
+            match.groupValues[1]
+        }
     }
 
     private fun seedReferenceData(port: Int) {
         post(
             port = port,
             path = "/reference/instruments",
-            headers = emptyMap(),
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"instrumentId":"AAPL","symbol":"AAPL"}"""
         )
         post(
             port = port,
             path = "/reference/participants",
-            headers = emptyMap(),
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"participantId":"participant-1","name":"Participant 1"}"""
         )
         post(
             port = port,
             path = "/reference/accounts",
-            headers = emptyMap(),
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
             body = """{"accountId":"account-1","participantId":"participant-1"}"""
         )
+    }
+
+    private fun seedOrderRoleBindings(port: Int, vararg actorIds: String) {
+        post(
+            port = port,
+            path = "/auth/roles",
+            headers = mapOf("X-Reef-Internal-Route" to "true"),
+            body = """{"roleId":"order_trader","permissions":"order.submit,order.cancel,order.modify"}"""
+        )
+        actorIds.forEach { actorId ->
+            post(
+                port = port,
+                path = "/auth/actor-roles",
+                headers = mapOf("X-Reef-Internal-Route" to "true"),
+                body = """{"actorId":"$actorId","roleId":"order_trader"}"""
+            )
+        }
+    }
+
+    private fun seedOrderAuthorization(persistence: InMemoryRuntimePersistence, vararg actorIds: String) {
+        persistence.saveRole(
+            RoleDefinition(
+                "order_trader",
+                listOf(Permission.ORDER_SUBMIT, Permission.ORDER_CANCEL, Permission.ORDER_MODIFY)
+            )
+        )
+        actorIds.forEach { actorId ->
+            persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
+        }
     }
 }
 
@@ -713,6 +1264,47 @@ private class CountingEngineGateway(
     }
 }
 
+private class BlockingFirstSubmitGateway : EngineGateway {
+    private val calls = AtomicInteger(0)
+    private val firstStarted = CountDownLatch(1)
+    private val releaseFirst = CountDownLatch(1)
+
+    val submitCalls: Int
+        get() = calls.get()
+
+    fun awaitFirstSubmit(): Boolean {
+        return firstStarted.await(5, TimeUnit.SECONDS)
+    }
+
+    fun release() {
+        releaseFirst.countDown()
+    }
+
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        val call = calls.incrementAndGet()
+        if (call == 1) {
+            firstStarted.countDown()
+            releaseFirst.await(5, TimeUnit.SECONDS)
+        }
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-05-22T00:00:00Z"
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
+        SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
+    )
+}
+
 private class StaticRejectedEngineGateway(
     private val code: String,
     private val reason: String
@@ -736,4 +1328,18 @@ private class StaticRejectedEngineGateway(
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class ThrowingEngineGateway : EngineGateway {
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        error("engine transport unavailable")
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        error("engine transport unavailable")
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        error("engine transport unavailable")
+    }
 }

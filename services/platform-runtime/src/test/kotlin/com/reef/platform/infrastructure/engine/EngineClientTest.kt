@@ -4,7 +4,7 @@ import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.SubmitOrderCommand
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -16,10 +16,10 @@ class EngineClientTest {
         val json = JsonCodec.parseObject(payload)
 
         assertEquals("cmd-1", json.string("commandId"))
+        assertEquals("trace-1", json.string("traceId"))
+        assertEquals("cause-1", json.string("causationId"))
         assertEquals("corr-1", json.string("correlationId"))
         assertEquals("ord-1", json.string("orderId"))
-        assertFalse(json.has("traceId"))
-        assertFalse(json.has("causationId"))
     }
 
     @Test
@@ -96,11 +96,20 @@ class EngineClientTest {
         assertTrue(result.trades.isEmpty())
     }
 
+    @Test
+    fun submitOrderThrowsTransportExceptionWhenEngineIsUnavailable() {
+        val client = EngineClient("http://127.0.0.1:1")
+
+        assertFailsWith<EngineTransportException> {
+            client.submitOrder(submitCommand())
+        }
+    }
+
     private fun submitCommand(): SubmitOrderCommand {
         return SubmitOrderCommand(
             commandId = "cmd-1",
             traceId = "trace-1",
-            causationId = "",
+            causationId = "cause-1",
             correlationId = "corr-1",
             actorId = "trader-1",
             occurredAt = "2026-03-14T18:00:00Z",

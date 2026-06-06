@@ -17,9 +17,9 @@ Current state:
 
 - Kotlin source and Gradle build scaffold
 - `GET /health`
-- `POST /orders/submit`
-- `POST /orders/cancel`
-- `POST /orders/modify`
+- `POST /orders/submit` (legacy/internal; requires `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` and `X-Reef-Internal-Route: true`)
+- `POST /orders/cancel` (legacy/internal; requires `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` and `X-Reef-Internal-Route: true`)
+- `POST /orders/modify` (legacy/internal; requires `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` and `X-Reef-Internal-Route: true`)
 - `POST /api/v1/orders/submit` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/cancel` (requires `X-Client-Id` + `Idempotency-Key`)
 - `POST /api/v1/orders/modify` (requires `X-Client-Id` + `Idempotency-Key`)
@@ -51,6 +51,7 @@ Transport config:
 - `ENGINE_TRANSPORT=http` (legacy HTTP client path, useful for A/B comparisons)
 - `MATCHING_ENGINE_BASE_URL` for HTTP transport (default `http://localhost:8081`)
 - `MATCHING_ENGINE_GRPC_TARGET` for gRPC transport target (default `localhost:9081`)
+- `ENGINE_GRPC_DEADLINE_MS` for runtime-to-engine gRPC command deadlines (default `2000`)
 
 External boundary config:
 
@@ -73,6 +74,7 @@ External boundary config:
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
+- `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true|false` (code default `false`; local compose default `true`; legacy mutation and reference-data POST routes also require `X-Reef-Internal-Route: true`)
 - `RUNTIME_DB_BOOTSTRAP_MODE=compat|validate` (Docker/local default `validate`; use `compat` only for local repair/debug)
 
 Command status lookup:
@@ -109,3 +111,9 @@ Admin CLI:
   - calendar and override management (`calendar-upsert`, `calendar-list`, `override-upsert`, `override-list`)
   - simulation controls (`sim-start`, `sim-pause`, `sim-stop`, `sim-state`)
   - trace inspection (`events-recent`, `trace-events`)
+
+Order command authorization:
+
+- submit/cancel/modify require actor role permissions (`order.submit`, `order.cancel`, `order.modify`)
+- local seed scripts can upsert `order_trader` through internal `/auth/roles` and `/auth/actor-roles` endpoints
+- those HTTP seed endpoints are guarded by `X-Reef-Internal-Route: true` and the same legacy mutation route flag as reference-data seed endpoints

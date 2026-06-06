@@ -33,6 +33,8 @@ private static final long serialVersionUID = 0L;
     actorId_ = "";
     actorType_ = "";
     occurredAt_ = "";
+    traceId_ = "";
+    causationId_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -61,7 +63,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       commandId_ = s;
@@ -77,7 +79,7 @@ private static final long serialVersionUID = 0L;
       getCommandIdBytes() {
     java.lang.Object ref = commandId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       commandId_ = b;
@@ -100,7 +102,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       correlationId_ = s;
@@ -116,7 +118,7 @@ private static final long serialVersionUID = 0L;
       getCorrelationIdBytes() {
     java.lang.Object ref = correlationId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       correlationId_ = b;
@@ -139,7 +141,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       actorId_ = s;
@@ -155,7 +157,7 @@ private static final long serialVersionUID = 0L;
       getActorIdBytes() {
     java.lang.Object ref = actorId_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       actorId_ = b;
@@ -178,7 +180,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       actorType_ = s;
@@ -194,7 +196,7 @@ private static final long serialVersionUID = 0L;
       getActorTypeBytes() {
     java.lang.Object ref = actorType_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       actorType_ = b;
@@ -217,7 +219,7 @@ private static final long serialVersionUID = 0L;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
-      com.google.protobuf.ByteString bs = 
+      com.google.protobuf.ByteString bs =
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
       occurredAt_ = s;
@@ -233,10 +235,88 @@ private static final long serialVersionUID = 0L;
       getOccurredAtBytes() {
     java.lang.Object ref = occurredAt_;
     if (ref instanceof java.lang.String) {
-      com.google.protobuf.ByteString b = 
+      com.google.protobuf.ByteString b =
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
       occurredAt_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int TRACE_ID_FIELD_NUMBER = 6;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object traceId_ = "";
+  /**
+   * <code>string trace_id = 6;</code>
+   * @return The traceId.
+   */
+  @java.lang.Override
+  public java.lang.String getTraceId() {
+    java.lang.Object ref = traceId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      traceId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string trace_id = 6;</code>
+   * @return The bytes for traceId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getTraceIdBytes() {
+    java.lang.Object ref = traceId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      traceId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int CAUSATION_ID_FIELD_NUMBER = 7;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object causationId_ = "";
+  /**
+   * <code>string causation_id = 7;</code>
+   * @return The causationId.
+   */
+  @java.lang.Override
+  public java.lang.String getCausationId() {
+    java.lang.Object ref = causationId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      causationId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string causation_id = 7;</code>
+   * @return The bytes for causationId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getCausationIdBytes() {
+    java.lang.Object ref = causationId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      causationId_ = b;
       return b;
     } else {
       return (com.google.protobuf.ByteString) ref;
@@ -272,6 +352,12 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(occurredAt_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 5, occurredAt_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(traceId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 6, traceId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(causationId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 7, causationId_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -295,6 +381,12 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(occurredAt_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(5, occurredAt_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(traceId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(6, traceId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(causationId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(7, causationId_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -321,6 +413,10 @@ private static final long serialVersionUID = 0L;
         .equals(other.getActorType())) return false;
     if (!getOccurredAt()
         .equals(other.getOccurredAt())) return false;
+    if (!getTraceId()
+        .equals(other.getTraceId())) return false;
+    if (!getCausationId()
+        .equals(other.getCausationId())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -342,6 +438,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getActorType().hashCode();
     hash = (37 * hash) + OCCURRED_AT_FIELD_NUMBER;
     hash = (53 * hash) + getOccurredAt().hashCode();
+    hash = (37 * hash) + TRACE_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getTraceId().hashCode();
+    hash = (37 * hash) + CAUSATION_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getCausationId().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -478,6 +578,8 @@ private static final long serialVersionUID = 0L;
       actorId_ = "";
       actorType_ = "";
       occurredAt_ = "";
+      traceId_ = "";
+      causationId_ = "";
       return this;
     }
 
@@ -526,6 +628,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000010) != 0)) {
         result.occurredAt_ = occurredAt_;
       }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.traceId_ = traceId_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.causationId_ = causationId_;
+      }
     }
 
     @java.lang.Override
@@ -563,6 +671,16 @@ private static final long serialVersionUID = 0L;
       if (!other.getOccurredAt().isEmpty()) {
         occurredAt_ = other.occurredAt_;
         bitField0_ |= 0x00000010;
+        onChanged();
+      }
+      if (!other.getTraceId().isEmpty()) {
+        traceId_ = other.traceId_;
+        bitField0_ |= 0x00000020;
+        onChanged();
+      }
+      if (!other.getCausationId().isEmpty()) {
+        causationId_ = other.causationId_;
+        bitField0_ |= 0x00000040;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -616,6 +734,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000010;
               break;
             } // case 42
+            case 50: {
+              traceId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 50
+            case 58: {
+              causationId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 58
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -658,7 +786,7 @@ private static final long serialVersionUID = 0L;
         getCommandIdBytes() {
       java.lang.Object ref = commandId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         commandId_ = b;
@@ -730,7 +858,7 @@ private static final long serialVersionUID = 0L;
         getCorrelationIdBytes() {
       java.lang.Object ref = correlationId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         correlationId_ = b;
@@ -802,7 +930,7 @@ private static final long serialVersionUID = 0L;
         getActorIdBytes() {
       java.lang.Object ref = actorId_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         actorId_ = b;
@@ -874,7 +1002,7 @@ private static final long serialVersionUID = 0L;
         getActorTypeBytes() {
       java.lang.Object ref = actorType_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         actorType_ = b;
@@ -946,7 +1074,7 @@ private static final long serialVersionUID = 0L;
         getOccurredAtBytes() {
       java.lang.Object ref = occurredAt_;
       if (ref instanceof String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         occurredAt_ = b;
@@ -989,6 +1117,150 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       occurredAt_ = value;
       bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object traceId_ = "";
+    /**
+     * <code>string trace_id = 6;</code>
+     * @return The traceId.
+     */
+    public java.lang.String getTraceId() {
+      java.lang.Object ref = traceId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        traceId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string trace_id = 6;</code>
+     * @return The bytes for traceId.
+     */
+    public com.google.protobuf.ByteString
+        getTraceIdBytes() {
+      java.lang.Object ref = traceId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        traceId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string trace_id = 6;</code>
+     * @param value The traceId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTraceId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      traceId_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string trace_id = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTraceId() {
+      traceId_ = getDefaultInstance().getTraceId();
+      bitField0_ = (bitField0_ & ~0x00000020);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string trace_id = 6;</code>
+     * @param value The bytes for traceId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTraceIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      traceId_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object causationId_ = "";
+    /**
+     * <code>string causation_id = 7;</code>
+     * @return The causationId.
+     */
+    public java.lang.String getCausationId() {
+      java.lang.Object ref = causationId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        causationId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string causation_id = 7;</code>
+     * @return The bytes for causationId.
+     */
+    public com.google.protobuf.ByteString
+        getCausationIdBytes() {
+      java.lang.Object ref = causationId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        causationId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string causation_id = 7;</code>
+     * @param value The causationId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCausationId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      causationId_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string causation_id = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCausationId() {
+      causationId_ = getDefaultInstance().getCausationId();
+      bitField0_ = (bitField0_ & ~0x00000040);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string causation_id = 7;</code>
+     * @param value The bytes for causationId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCausationIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      causationId_ = value;
+      bitField0_ |= 0x00000040;
       onChanged();
       return this;
     }

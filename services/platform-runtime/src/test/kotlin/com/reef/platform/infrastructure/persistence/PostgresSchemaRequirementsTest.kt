@@ -33,6 +33,19 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.functions.map { it.qualifiedName }.toSet()
         )
+        assertEquals(
+            setOf(
+                "runtime.runtime_events.event_id:text",
+                "runtime.runtime_events.occurred_at:text",
+                "runtime.runtime_events.actor_id:text",
+                "runtime.runtime_events.payload_json:jsonb",
+                "runtime.runtime_events.sequence_number:bigint"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.runtime_events" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
     }
 
     @Test

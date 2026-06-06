@@ -44,6 +44,18 @@ class PlatformApi(
         return JsonCodec.writeObject("accountId" to account.accountId)
     }
 
+    fun createRole(body: String): String {
+        val role = PlatformCommandParsers.roleDefinition(body)
+        orderService.createRole(role)
+        return JsonCodec.writeObject("roleId" to role.roleId)
+    }
+
+    fun assignRole(body: String): String {
+        val binding = PlatformCommandParsers.actorRoleBinding(body)
+        orderService.assignRole(binding)
+        return JsonCodec.writeObject("actorId" to binding.actorId, "roleId" to binding.roleId)
+    }
+
     fun instruments(): String {
         return JsonCodec.writeObject("instruments" to orderService.instruments().map { instrument ->
             mapOf(
@@ -67,6 +79,24 @@ class PlatformApi(
             mapOf(
                 "accountId" to account.accountId,
                 "participantId" to account.participantId
+            )
+        })
+    }
+
+    fun roles(): String {
+        return JsonCodec.writeObject("roles" to orderService.roles().map { role ->
+            mapOf(
+                "roleId" to role.roleId,
+                "permissions" to role.permissions
+            )
+        })
+    }
+
+    fun actorRoles(actorId: String): String {
+        return JsonCodec.writeObject("actorRoles" to orderService.actorRoleBindings(actorId).map { binding ->
+            mapOf(
+                "actorId" to binding.actorId,
+                "roleId" to binding.roleId
             )
         })
     }
@@ -178,10 +208,12 @@ class PlatformApi(
         "traceId" to traceId,
         "causationId" to causationId,
         "correlationId" to correlationId,
+        "actorId" to actorId,
         "producer" to producer,
         "schemaVersion" to schemaVersion,
         "sequenceNumber" to sequenceNumber,
-        "occurredAt" to occurredAt
+        "occurredAt" to occurredAt,
+        "payloadJson" to payloadJson
     )
 
     private fun toOrderMap(order: PersistedOrder): Map<String, Any> = mapOf(

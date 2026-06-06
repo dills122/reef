@@ -2,6 +2,20 @@
 
 This directory contains CLI simulation and load-testing tools for Reef.
 
+## Fast Tests And Long Runs
+
+Fast simulator tests are part of the normal repository gate:
+
+```bash
+make test-simulator
+make test
+```
+
+Long-running load, stress, throughput-campaign, and soak runs remain explicit
+developer/operations commands (`make dev-stress`, `make dev-throughput-campaign`,
+and related scripts). Do not move those into the fast test target without a
+separate CI/runtime-budget decision.
+
 ## Load Tester CLI
 
 `cmd/load-tester` drives mixed submit/modify/cancel traffic against the platform runtime API and prints a rich JSON session report.
@@ -9,7 +23,7 @@ This directory contains CLI simulation and load-testing tools for Reef.
 What it includes:
 - configurable concurrency, rate, duration, timeout
 - configurable action mix percentages
-- automatic reference-data seeding
+- automatic reference-data and order-actor role seeding
 - latency percentiles (global + per-action)
 - status-code and error breakdown
 - trace integrity checks (`/traces/{traceId}/events`) for sequence continuity
@@ -65,6 +79,11 @@ The tester now assigns workers to four behavior profiles:
 - `retail`: smaller sizes and submit-heavy behavior
 - `noise`: random background flow
 
+Before traffic starts, the load tester seeds an `order_trader` role with
+`order.submit`, `order.cancel`, and `order.modify`, then binds every emitted
+actor ID to that role. Persona sessions seed their named actors; default runs
+seed `bot-{worker}` actors.
+
 ### Report Additions
 
 - `acceptedBusinessOpsRps`: successful business operations per second
@@ -97,6 +116,10 @@ go run ./cmd/load-tester \
 ```
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
+
+Deterministic replay runs can set `--command-clock-start 2026-03-14T18:00:00Z`
+and `--command-clock-step 1s` (or `REEF_COMMAND_CLOCK_START` /
+`REEF_COMMAND_CLOCK_STEP`) so generated command `occurredAt` values are stable.
 
 ## Persona Session Support
 

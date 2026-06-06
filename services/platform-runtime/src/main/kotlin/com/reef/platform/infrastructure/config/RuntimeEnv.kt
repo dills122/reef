@@ -15,5 +15,14 @@ object RuntimeEnv {
         return if (min == null) value else value.coerceAtLeast(min)
     }
 
+    fun bool(key: String, fallback: Boolean, lookup: (String) -> String? = systemLookup): Boolean {
+        return when (lookup(key)?.trim()?.lowercase()) {
+            null, "" -> fallback
+            "1", "true", "yes", "on" -> true
+            "0", "false", "no", "off" -> false
+            else -> fallback
+        }
+    }
+
     private val systemLookup: (String) -> String? = { key -> System.getenv(key) }
 }

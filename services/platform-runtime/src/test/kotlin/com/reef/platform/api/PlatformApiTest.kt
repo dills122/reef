@@ -65,6 +65,7 @@ class PlatformApiTest {
             )
         )
         seedReferenceData(api)
+        seedOrderAuthorization(api, "trader-1")
 
         val response = api.submitOrder(validRequestBody())
 
@@ -93,6 +94,7 @@ class PlatformApiTest {
             )
         )
         seedReferenceData(api)
+        seedOrderAuthorization(api, "trader-1")
 
         val response = api.submitOrder(validRequestBody())
 
@@ -143,6 +145,7 @@ class PlatformApiTest {
             )
         )
         seedReferenceData(api)
+        seedOrderAuthorization(api, "trader-1")
 
         api.submitOrder(validRequestBody())
 
@@ -190,6 +193,7 @@ class PlatformApiTest {
                 )
             )
         )
+        seedOrderAuthorization(api, "trader-1")
 
         val cancelResponse = api.cancelOrder(
             """
@@ -223,6 +227,25 @@ class PlatformApiTest {
             """.trimIndent()
         )
         assertContains(modifyResponse, "\"accepted\"")
+    }
+
+    @Test
+    fun roleEndpointsExposeSavedDefinitionsAndActorBindings() {
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult()
+                )
+            )
+        )
+
+        api.createRole("""{"roleId":"order_trader","permissions":"order.submit,order.cancel,order.modify"}""")
+        api.assignRole("""{"actorId":"trader-9","roleId":"order_trader"}""")
+
+        assertContains(api.roles(), "\"roleId\":\"order_trader\"")
+        assertContains(api.roles(), "\"order.submit\"")
+        assertContains(api.actorRoles("trader-9"), "\"actorId\":\"trader-9\"")
+        assertContains(api.actorRoles("trader-9"), "\"roleId\":\"order_trader\"")
     }
 
     @Test
@@ -271,6 +294,11 @@ class PlatformApiTest {
         api.createInstrument("""{"instrumentId":"AAPL","symbol":"AAPL"}""")
         api.createParticipant("""{"participantId":"participant-1","name":"Participant 1"}""")
         api.createAccount("""{"accountId":"account-1","participantId":"participant-1"}""")
+    }
+
+    private fun seedOrderAuthorization(api: PlatformApi, actorId: String) {
+        api.createRole("""{"roleId":"order_trader","permissions":"order.submit,order.cancel,order.modify"}""")
+        api.assignRole("""{"actorId":"$actorId","roleId":"order_trader"}""")
     }
 }
 

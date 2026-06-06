@@ -10,7 +10,6 @@ import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
-import java.time.Instant
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -71,6 +70,8 @@ class EngineClient : EngineGateway {
     internal fun submitPayload(command: SubmitOrderCommand): String {
         return JsonCodec.writeObject(
             "commandId" to command.commandId,
+            "traceId" to command.traceId,
+            "causationId" to command.causationId,
             "correlationId" to command.correlationId,
             "actorId" to command.actorId,
             "occurredAt" to command.occurredAt,
@@ -88,28 +89,30 @@ class EngineClient : EngineGateway {
     }
 
     private fun postAndParse(path: String, payload: String): SubmitOrderResult {
-        return try {
-            val request = HttpRequest.newBuilder(URI.create("$engineBaseUrl$path"))
-                .timeout(Duration.ofSeconds(5))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(payload))
-                .build()
+        val request = HttpRequest.newBuilder(URI.create("$engineBaseUrl$path"))
+            .timeout(Duration.ofSeconds(5))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build()
 
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = try {
+            httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        } catch (ex: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw EngineTransportException("engine HTTP $path interrupted", ex)
+        } catch (ex: Exception) {
+            throw EngineTransportException("engine HTTP $path unavailable: ${ex.message ?: "unknown"}", ex)
+        }
+
+        if (response.statusCode() !in 200..299) {
+            throw EngineTransportException("engine HTTP $path returned status ${response.statusCode()}")
+        }
+
+        return try {
             val responseBody = response.body()
             parseSubmitOrderResult(responseBody)
         } catch (ex: Exception) {
-            SubmitOrderResult(
-                rejected = EngineOrderRejected(
-                    eventId = "evt-engine-transport-error",
-                    orderId = JsonCodec.parseObjectOrEmpty(payload).string("orderId"),
-                    code = "ENGINE_UNAVAILABLE",
-                    reason = ex.message ?: "engine transport error",
-                    occurredAt = Instant.now().toString()
-                ),
-                executions = emptyList(),
-                trades = emptyList()
-            )
+            throw EngineTransportException("engine HTTP $path returned invalid response", ex)
         }
     }
 

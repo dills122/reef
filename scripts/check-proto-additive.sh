@@ -2,16 +2,27 @@
 set -euo pipefail
 
 # Additive-first guard: fail when a numbered protobuf field is removed.
-# This compares current branch against origin/main for contracts/proto/*.proto.
+# This compares current branch against PROTO_BASE_REF, defaulting to origin/HEAD.
 
-if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
-  echo "origin/main not available; skipping proto additive check"
+base_ref="${PROTO_BASE_REF:-origin/HEAD}"
+
+if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+  for candidate in origin/main origin/master; do
+    if git rev-parse --verify "$candidate" >/dev/null 2>&1; then
+      base_ref="$candidate"
+      break
+    fi
+  done
+fi
+
+if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+  echo "no proto base ref available; skipping proto additive check"
   exit 0
 fi
 
 status=0
-for file in $(git diff --name-only origin/main...HEAD -- contracts/proto/*.proto); do
-  removed=$(git diff --unified=0 origin/main...HEAD -- "$file" | grep -E '^-.*= [0-9]+;' || true)
+for file in $(git diff --name-only "$base_ref"...HEAD -- contracts/proto/*.proto); do
+  removed=$(git diff --unified=0 "$base_ref"...HEAD -- "$file" | grep -E '^-.*= [0-9]+;' || true)
   if [[ -n "$removed" ]]; then
     echo "Proto compatibility violation in $file:"
     echo "$removed"

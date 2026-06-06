@@ -32,6 +32,7 @@ Each scenario file should include:
 - `faultInjection`
 - `steps`
 - `expectedEvents`
+- `expectedEventTimeline` for golden paths that assert replay timestamp order
 - `expectedFinalStates`
 - `invariants`
 - `uiAssertions`
@@ -42,4 +43,6 @@ Each scenario file should include:
 
 - `steps` are logical command-stage definitions, not direct database actions.
 - `expectedEvents` order is authoritative for replay validation.
+- `expectedEventTimeline` uses scenario-start-relative `occurredAtOffsetSeconds`
+  values and must match `expectedEvents` order when present.
 - `scenarioRunId`, `correlationId`, and `causationId` are required metadata in scenario-driven events.

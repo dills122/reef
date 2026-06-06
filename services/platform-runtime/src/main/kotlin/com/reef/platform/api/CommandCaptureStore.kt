@@ -10,6 +10,17 @@ import java.util.UUID
 import javax.sql.DataSource
 
 interface CommandCaptureStore {
+    fun reserveReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ): CommandCaptureReceipt {
+        captureReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
+        return CommandCaptureReceipt.Accepted
+    }
+
     fun captureReceived(
         clientId: String,
         route: String,
@@ -41,6 +52,15 @@ interface CommandCaptureStore {
         errorClass: String,
         errorMessage: String
     )
+}
+
+data class CommandCaptureReceipt(
+    val accepted: Boolean,
+    val existingCommandStatus: CommandStatusView? = null
+) {
+    companion object {
+        val Accepted = CommandCaptureReceipt(accepted = true)
+    }
 }
 
 class NoopCommandCaptureStore : CommandCaptureStore {
@@ -91,17 +111,19 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
 
     private val records = java.util.concurrent.ConcurrentHashMap<String, CapturedCommand>()
 
-    override fun captureReceived(
+    override fun reserveReceived(
         clientId: String,
         route: String,
         idempotencyKey: String,
         correlationId: String,
         requestPayload: String
-    ) {
+    ): CommandCaptureReceipt {
         val now = Instant.now().epochSecond
         val key = key(clientId, route, idempotencyKey)
+        var accepted = false
         records.compute(key) { _, existing ->
             if (existing == null) {
+                accepted = true
                 CapturedCommand(
                     clientId = clientId,
                     route = route,
@@ -120,6 +142,17 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
                 existing.copy(updatedAtEpochSeconds = now)
             }
         }
+        return if (accepted) CommandCaptureReceipt.Accepted else CommandCaptureReceipt(accepted = false)
+    }
+
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+        reserveReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
     }
 
     override fun markCompleted(
@@ -175,6 +208,24 @@ class CommandLogCommandCaptureStore(
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val clock: () -> Instant = { Instant.now() }
 ) : CommandCaptureStore, CommandStatusLookup {
+    override fun reserveReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ): CommandCaptureReceipt {
+        val appendResult = commandLogStore.append(newCommandLogRecord(clientId, route, idempotencyKey, correlationId, requestPayload))
+        if (!appendResult.appended) {
+            return CommandCaptureReceipt(
+                accepted = false,
+                existingCommandStatus = appendResult.record.toStatusView(commandProcessingMode)
+            )
+        }
+        delegate.captureReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
+        return CommandCaptureReceipt.Accepted
+    }
+
     override fun captureReceived(
         clientId: String,
         route: String,
@@ -182,21 +233,7 @@ class CommandLogCommandCaptureStore(
         correlationId: String,
         requestPayload: String
     ) {
-        commandLogStore.append(
-            CommandLogRecord(
-                commandId = commandId(clientId, route, idempotencyKey, requestPayload),
-                clientId = clientId,
-                route = route,
-                idempotencyKey = idempotencyKey,
-                traceId = JsonCodec.fieldAsString(requestPayload, "traceId").ifBlank { correlationId },
-                correlationId = JsonCodec.fieldAsString(requestPayload, "correlationId").ifBlank { correlationId },
-                actorId = JsonCodec.fieldAsString(requestPayload, "actorId").ifBlank { clientId },
-                commandType = commandType(route),
-                receivedAt = clock(),
-                payloadJson = payloadJson(requestPayload)
-            )
-        )
-        delegate.captureReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
+        reserveReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
     }
 
     override fun markProcessing(clientId: String, route: String, idempotencyKey: String) {
@@ -246,6 +283,27 @@ class CommandLogCommandCaptureStore(
         if (parsedCommandId.isNotBlank()) return parsedCommandId
         val source = "$clientId|$route|$idempotencyKey"
         return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+    }
+
+    private fun newCommandLogRecord(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ): CommandLogRecord {
+        return CommandLogRecord(
+            commandId = commandId(clientId, route, idempotencyKey, requestPayload),
+            clientId = clientId,
+            route = route,
+            idempotencyKey = idempotencyKey,
+            traceId = JsonCodec.fieldAsString(requestPayload, "traceId").ifBlank { correlationId },
+            correlationId = JsonCodec.fieldAsString(requestPayload, "correlationId").ifBlank { correlationId },
+            actorId = JsonCodec.fieldAsString(requestPayload, "actorId").ifBlank { clientId },
+            commandType = commandType(route),
+            receivedAt = clock(),
+            payloadJson = payloadJson(requestPayload)
+        )
     }
 
     private fun payloadJson(requestPayload: String): String {
@@ -316,13 +374,13 @@ class PostgresCommandCaptureStore(
         }
     }
 
-    override fun captureReceived(
+    override fun reserveReceived(
         clientId: String,
         route: String,
         idempotencyKey: String,
         correlationId: String,
         requestPayload: String
-    ) {
+    ): CommandCaptureReceipt {
         connection().use { conn ->
             conn.prepareStatement(
                 """
@@ -335,8 +393,7 @@ class PostgresCommandCaptureStore(
                   status
                 )
                 VALUES (?, ?, ?, ?, ?, 'RECEIVED')
-                ON CONFLICT (client_id, route, idempotency_key) DO UPDATE SET
-                  last_updated_at = NOW()
+                ON CONFLICT (client_id, route, idempotency_key) DO NOTHING
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, clientId)
@@ -344,9 +401,34 @@ class PostgresCommandCaptureStore(
                 ps.setString(3, idempotencyKey)
                 ps.setString(4, correlationId)
                 ps.setString(5, requestPayload)
+                if (ps.executeUpdate() == 1) {
+                    return CommandCaptureReceipt.Accepted
+                }
+            }
+            conn.prepareStatement(
+                """
+                UPDATE ${names.commandCaptures}
+                SET last_updated_at = NOW()
+                WHERE client_id = ? AND route = ? AND idempotency_key = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, clientId)
+                ps.setString(2, route)
+                ps.setString(3, idempotencyKey)
                 ps.executeUpdate()
             }
         }
+        return CommandCaptureReceipt(accepted = false)
+    }
+
+    override fun captureReceived(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        requestPayload: String
+    ) {
+        reserveReceived(clientId, route, idempotencyKey, correlationId, requestPayload)
     }
 
     override fun markCompleted(

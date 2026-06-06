@@ -128,7 +128,9 @@ data class RuntimeEvent(
     val producer: String,
     val schemaVersion: String,
     val sequenceNumber: Long = 0,
-    val occurredAt: String
+    val occurredAt: String,
+    val actorId: String = "",
+    val payloadJson: String = "{}"
 )
 
 data class RoleDefinition(

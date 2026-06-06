@@ -4,6 +4,7 @@ import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
 import com.reef.platform.api.PostgresCommandCaptureStore
 import com.reef.platform.api.PostgresCommandLogStore
 import com.reef.platform.api.PostgresIdempotencyStore
+import com.reef.platform.domain.RuntimeEvent
 import java.sql.DriverManager
 import java.util.UUID
 import kotlin.test.Test
@@ -141,6 +142,40 @@ class PostgresSchemaMigrationIntegrationTest {
                 commandCaptureColumns
             )
 
+            val runtimeEventColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'runtime_events'
+                  AND column_name IN (
+                    'event_id',
+                    'occurred_at',
+                    'actor_id',
+                    'payload_json',
+                    'sequence_number'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "actor_id:text",
+                    "event_id:text",
+                    "occurred_at:text",
+                    "payload_json:jsonb",
+                    "sequence_number:bigint"
+                ),
+                runtimeEventColumns
+            )
+
             val publicTables = conn.prepareStatement(
                 """
                 SELECT table_name
@@ -184,7 +219,27 @@ class PostgresSchemaMigrationIntegrationTest {
         PostgresRuntimePersistence(
             dataSource = runtimeDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
-        )
+        ).let { runtimePersistence ->
+            val traceId = "trace-schema-${UUID.randomUUID()}"
+            runtimePersistence.saveEvent(
+                RuntimeEvent(
+                    eventId = "evt-schema-${UUID.randomUUID()}",
+                    eventType = "SchemaRoundTrip",
+                    orderId = "ord-schema",
+                    traceId = traceId,
+                    causationId = "cmd-schema",
+                    correlationId = "corr-schema",
+                    actorId = "actor-schema",
+                    producer = "platform-runtime-test",
+                    schemaVersion = "v1",
+                    payloadJson = """{"source":"postgres-integration"}""",
+                    occurredAt = "2026-03-14T18:00:00Z"
+                )
+            )
+            val event = runtimePersistence.eventsForTrace(traceId).single()
+            assertEquals("actor-schema", event.actorId)
+            assertTrue(event.payloadJson.contains("postgres-integration"), event.payloadJson)
+        }
         PostgresIdempotencyStore(
             dataSource = boundaryDataSource,
             retentionPolicy = DefaultIdempotencyRetentionPolicy(),

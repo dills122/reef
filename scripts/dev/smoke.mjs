@@ -5,6 +5,7 @@ import https from "node:https";
 loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
+const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
 
 async function postJson(url, payload, headers = {}) {
   const response = await requestJson("POST", url, payload, headers, 5000);
@@ -66,16 +67,24 @@ await postJson(`${runtimeUrl}/reference/instruments`, {
   symbol: "AAPL",
   assetClass: "US_EQ",
   currency: "USD",
-});
+}, internalRouteHeaders);
 await postJson(`${runtimeUrl}/reference/participants`, {
   participantId: "participant-1",
   name: "Participant 1",
-});
+}, internalRouteHeaders);
 await postJson(`${runtimeUrl}/reference/accounts`, {
   accountId: "account-1",
   participantId: "participant-1",
   accountType: "HOUSE",
-});
+}, internalRouteHeaders);
+await postJson(`${runtimeUrl}/auth/roles`, {
+  roleId: "order_trader",
+  permissions: "order.submit,order.cancel,order.modify",
+}, internalRouteHeaders);
+await postJson(`${runtimeUrl}/auth/actor-roles`, {
+  actorId: "smoke-user",
+  roleId: "order_trader",
+}, internalRouteHeaders);
 
 console.log("submitting via /api/v1 boundary...");
 const submitResponse = await postJson(
@@ -115,6 +124,7 @@ const cancelResponse = await postJson(
     actorId: "smoke-user",
     occurredAt: "2026-05-01T13:00:10Z",
     orderId: "smoke-ord-1",
+    reason: "smoke cancel",
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-cancel-1" },
 );

@@ -2,11 +2,12 @@ import { deriveDevUrls, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 const { runtimeUrl } = deriveDevUrls();
+const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
 
 async function post(path, payload) {
   const res = await fetch(`${runtimeUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...internalRouteHeaders },
     body: JSON.stringify(payload),
   });
   const text = await res.text();
@@ -30,6 +31,8 @@ function usage() {
   instrument-upsert <instrumentId> <symbol>
   participant-upsert <participantId> <name>
   account-upsert <accountId> <participantId>
+  role-upsert <roleId> <permissionCsv>
+  role-assign <actorId> <roleId>
   events [limit]
   traces <traceId>`);
 }
@@ -70,6 +73,20 @@ switch (command) {
       participantId: args[1],
       accountType: "HOUSE",
     });
+    break;
+  case "role-upsert":
+    if (args.length < 2) {
+      usage();
+      process.exit(1);
+    }
+    await post("/auth/roles", { roleId: args[0], permissions: args[1] });
+    break;
+  case "role-assign":
+    if (args.length < 2) {
+      usage();
+      process.exit(1);
+    }
+    await post("/auth/actor-roles", { actorId: args[0], roleId: args[1] });
     break;
   case "events": {
     const limit = args[0] ?? "20";

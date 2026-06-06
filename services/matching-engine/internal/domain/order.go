@@ -19,6 +19,8 @@ const (
 
 type SubmitOrder struct {
 	CommandID     string `json:"commandId"`
+	TraceID       string `json:"traceId"`
+	CausationID   string `json:"causationId"`
 	CorrelationID string `json:"correlationId"`
 	ActorID       string `json:"actorId"`
 	OccurredAt    string `json:"occurredAt"`

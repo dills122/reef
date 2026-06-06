@@ -50,51 +50,17 @@ func (s *Server) Addr() string {
 }
 
 func (s *orderExecutionRPCServer) SubmitOrder(_ context.Context, req *orderv1.SubmitOrder) (*orderv1.SubmitOrderResult, error) {
-	result := s.service.SubmitOrder(domain.SubmitOrder{
-		CommandID:     req.GetMetadata().GetCommandId(),
-		CorrelationID: req.GetMetadata().GetCorrelationId(),
-		ActorID:       req.GetMetadata().GetActorId(),
-		OccurredAt:    req.GetMetadata().GetOccurredAt(),
-		OrderID:       req.GetOrderId(),
-		InstrumentID:  req.GetInstrumentId(),
-		ParticipantID: req.GetParticipantId(),
-		AccountID:     req.GetAccountId(),
-		Side:          toDomainSide(req.GetSide()),
-		OrderType:     req.GetOrderType().String(),
-		QuantityUnits: req.GetQuantity().GetUnits(),
-		LimitPrice:    req.GetLimitPrice().GetNanos(),
-		Currency:      req.GetLimitPrice().GetCurrency(),
-		TimeInForce:   req.GetTimeInForce().String(),
-	})
+	result := s.service.SubmitOrder(submitOrderFromProto(req))
 	return toProtoResult(result), nil
 }
 
 func (s *orderExecutionRPCServer) CancelOrder(_ context.Context, req *orderv1.CancelOrder) (*orderv1.SubmitOrderResult, error) {
-	result := s.service.CancelOrder(domain.CancelOrder{
-		CommandID:     req.GetMetadata().GetCommandId(),
-		TraceID:       req.GetMetadata().GetCorrelationId(),
-		CausationID:   "",
-		CorrelationID: req.GetMetadata().GetCorrelationId(),
-		ActorID:       req.GetMetadata().GetActorId(),
-		OccurredAt:    req.GetMetadata().GetOccurredAt(),
-		OrderID:       req.GetOrderId(),
-		Reason:        req.GetReason(),
-	})
+	result := s.service.CancelOrder(cancelOrderFromProto(req))
 	return toProtoResult(result), nil
 }
 
 func (s *orderExecutionRPCServer) ModifyOrder(_ context.Context, req *orderv1.ModifyOrder) (*orderv1.SubmitOrderResult, error) {
-	result := s.service.ModifyOrder(domain.ModifyOrder{
-		CommandID:     req.GetMetadata().GetCommandId(),
-		TraceID:       req.GetMetadata().GetCorrelationId(),
-		CausationID:   "",
-		CorrelationID: req.GetMetadata().GetCorrelationId(),
-		ActorID:       req.GetMetadata().GetActorId(),
-		OccurredAt:    req.GetMetadata().GetOccurredAt(),
-		OrderID:       req.GetOrderId(),
-		QuantityUnits: req.GetQuantity().GetUnits(),
-		LimitPrice:    req.GetLimitPrice().GetNanos(),
-	})
+	result := s.service.ModifyOrder(modifyOrderFromProto(req))
 	return toProtoResult(result), nil
 }
 
@@ -110,6 +76,57 @@ func toDomainSide(side orderv1.OrderSide) domain.Side {
 		return domain.SideSell
 	}
 	return domain.SideBuy
+}
+
+func submitOrderFromProto(req *orderv1.SubmitOrder) domain.SubmitOrder {
+	metadata := req.GetMetadata()
+	return domain.SubmitOrder{
+		CommandID:     metadata.GetCommandId(),
+		TraceID:       metadata.GetTraceId(),
+		CausationID:   metadata.GetCausationId(),
+		CorrelationID: metadata.GetCorrelationId(),
+		ActorID:       metadata.GetActorId(),
+		OccurredAt:    metadata.GetOccurredAt(),
+		OrderID:       req.GetOrderId(),
+		InstrumentID:  req.GetInstrumentId(),
+		ParticipantID: req.GetParticipantId(),
+		AccountID:     req.GetAccountId(),
+		Side:          toDomainSide(req.GetSide()),
+		OrderType:     req.GetOrderType().String(),
+		QuantityUnits: req.GetQuantity().GetUnits(),
+		LimitPrice:    req.GetLimitPrice().GetNanos(),
+		Currency:      req.GetLimitPrice().GetCurrency(),
+		TimeInForce:   req.GetTimeInForce().String(),
+	}
+}
+
+func cancelOrderFromProto(req *orderv1.CancelOrder) domain.CancelOrder {
+	metadata := req.GetMetadata()
+	return domain.CancelOrder{
+		CommandID:     metadata.GetCommandId(),
+		TraceID:       metadata.GetTraceId(),
+		CausationID:   metadata.GetCausationId(),
+		CorrelationID: metadata.GetCorrelationId(),
+		ActorID:       metadata.GetActorId(),
+		OccurredAt:    metadata.GetOccurredAt(),
+		OrderID:       req.GetOrderId(),
+		Reason:        req.GetReason(),
+	}
+}
+
+func modifyOrderFromProto(req *orderv1.ModifyOrder) domain.ModifyOrder {
+	metadata := req.GetMetadata()
+	return domain.ModifyOrder{
+		CommandID:     metadata.GetCommandId(),
+		TraceID:       metadata.GetTraceId(),
+		CausationID:   metadata.GetCausationId(),
+		CorrelationID: metadata.GetCorrelationId(),
+		ActorID:       metadata.GetActorId(),
+		OccurredAt:    metadata.GetOccurredAt(),
+		OrderID:       req.GetOrderId(),
+		QuantityUnits: req.GetQuantity().GetUnits(),
+		LimitPrice:    req.GetLimitPrice().GetNanos(),
+	}
 }
 
 func toProtoResult(result domain.SubmitOrderResult) *orderv1.SubmitOrderResult {

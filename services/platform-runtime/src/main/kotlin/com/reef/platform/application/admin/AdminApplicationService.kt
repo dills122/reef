@@ -3,6 +3,7 @@ package com.reef.platform.application.admin
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.Permission
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
@@ -175,9 +176,30 @@ class AdminApplicationService(
                 correlationId = actor.correlationId,
                 producer = eventProducer,
                 schemaVersion = eventSchemaVersion,
-                occurredAt = eventTime
+                occurredAt = eventTime,
+                actorId = actor.actorId,
+                payloadJson = detailPayload(detail)
             )
         )
+    }
+
+    private fun detailPayload(detail: String): String {
+        return """{"detail":"${escapeJson(detail)}"}"""
+    }
+
+    private fun escapeJson(value: String): String {
+        return buildString(value.length + 8) {
+            value.forEach { ch ->
+                when (ch) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
+                }
+            }
+        }
     }
 
     private fun requirePermission(actor: AdminActor, permission: String) {
@@ -190,15 +212,6 @@ class AdminApplicationService(
             throw AuthorizationException("actor ${actor.actorId} missing permission $permission")
         }
     }
-}
-
-object Permission {
-    const val SUPERUSER = "admin.superuser"
-    const val REFERENCE_WRITE = "reference.write"
-    const val AUTH_ADMIN = "auth.admin"
-    const val CALENDAR_ADMIN = "calendar.admin"
-    const val OVERRIDE_ADMIN = "override.admin"
-    const val SIMULATION_CONTROL = "simulation.control"
 }
 
 private fun defaultRuntimePersistence(): RuntimePersistence {

@@ -430,3 +430,17 @@ Primary references:
 - [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 - [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
 - [`apps/platform-ui/README.md`](../apps/platform-ui/README.md)
+
+### D-030: Runtime Event Schema Baseline And Outbox Timing
+
+Status: accepted
+
+Summary:
+- Current live `runtime.runtime_events` keeps `event_id` and `occurred_at` as `TEXT` because engine event IDs are semantic strings and simulation command timestamps are command-sourced strings.
+- `actor_id TEXT NOT NULL DEFAULT ''` and `payload_json JSONB NOT NULL DEFAULT '{}'::jsonb` are required on runtime events so write models do not drop attribution or event context.
+- Schema validation must guard critical runtime event column types until a deliberate typed-ID/timestamp migration is planned.
+- `runtime.event_outbox` remains a follow-up migration/workflow. It should be introduced with explicit transaction timing and publisher semantics rather than being mixed into this drift-fix slice.
+
+Primary references:
+- [`docs/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./SPRINT_CRITICAL_QUALITY_HARDENING.md)
+- [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)

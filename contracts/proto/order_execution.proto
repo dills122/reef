@@ -12,6 +12,8 @@ message CommandMetadata {
   string actor_id = 3;
   string actor_type = 4;
   string occurred_at = 5;
+  string trace_id = 6;
+  string causation_id = 7;
 }
 
 message OrderQuantity {

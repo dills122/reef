@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -264,12 +267,29 @@ func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 
 func TestBuildCommandPayloadIncludesScenarioMetadata(t *testing.T) {
 	cfg := Config{ScenarioRunID: "sim-1", Seed: 4242}
-	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer")
+	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer", 1)
 	if payload["scenarioRunId"] != "sim-1" {
 		t.Fatalf("expected scenarioRunId, got: %+v", payload)
 	}
 	if payload["seed"] != "4242" {
 		t.Fatalf("expected seed metadata, got: %+v", payload)
+	}
+}
+
+func TestBuildCommandPayloadUsesDeterministicCommandClock(t *testing.T) {
+	cfg := Config{
+		CommandClockStart: "2026-03-14T18:00:00Z",
+		CommandClockStep:  2 * time.Second,
+	}
+
+	first := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "", "", 1)
+	third := buildCommandPayload(cfg, "cmd-3", "trace-3", "actor-1", "retail", "", "", 3)
+
+	if first["occurredAt"] != "2026-03-14T18:00:00Z" {
+		t.Fatalf("unexpected first command timestamp: %+v", first)
+	}
+	if third["occurredAt"] != "2026-03-14T18:00:04Z" {
+		t.Fatalf("unexpected third command timestamp: %+v", third)
 	}
 }
 
@@ -454,6 +474,84 @@ func TestBuildHTTPClientUsesConfiguredTransport(t *testing.T) {
 	if transport.IdleConnTimeout != 22*time.Second {
 		t.Fatalf("unexpected IdleConnTimeout: %s", transport.IdleConnTimeout)
 	}
+}
+
+func TestOrderActorIDsUsesSessionActorsWhenPresent(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: true,
+		Workers:          4,
+		SessionActors: []sessionconfig.Actor{
+			{ActorID: "mm-1"},
+			{ActorID: "retail-1"},
+			{ActorID: "mm-1"},
+			{ActorID: ""},
+		},
+	}
+
+	got := orderActorIDs(cfg)
+	want := []string{"mm-1", "retail-1"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected actor ids length: got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected actor ids: got=%v want=%v", got, want)
+		}
+	}
+}
+
+func TestSeedReferenceDataSeedsOrderRolesForDefaultActors(t *testing.T) {
+	roleSeeded := false
+	bindings := map[string]bool{}
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Header.Get("X-Reef-Internal-Route") != "true" {
+			t.Fatalf("missing internal seed header for %s", r.URL.Path)
+		}
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("invalid seed payload for %s: %v", r.URL.Path, err)
+		}
+		switch r.URL.Path {
+		case "/auth/roles":
+			roleSeeded = payload["roleId"] == "order_trader" &&
+				payload["permissions"] == "order.submit,order.cancel,order.modify"
+		case "/auth/actor-roles":
+			if payload["roleId"] == "order_trader" {
+				bindings[payload["actorId"]] = true
+			}
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"status":"ok"}`)),
+		}, nil
+	})}
+
+	cfg := Config{
+		BaseURL:          "http://platform-runtime.test",
+		Workers:          2,
+		InstrumentID:     "AAPL",
+		InstrumentSymbol: "AAPL",
+		ParticipantID:    "participant-1",
+		ParticipantName:  "Participant 1",
+		AccountID:        "account-1",
+	}
+
+	if err := seedReferenceData(client, cfg); err != nil {
+		t.Fatalf("seedReferenceData error: %v", err)
+	}
+	if !roleSeeded {
+		t.Fatal("expected order_trader role to be seeded")
+	}
+	if !bindings["bot-0"] || !bindings["bot-1"] {
+		t.Fatalf("expected default worker actors to be bound, got %+v", bindings)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func TestDeterministicSequenceFromExampleSession(t *testing.T) {

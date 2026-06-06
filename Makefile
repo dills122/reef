@@ -1,20 +1,24 @@
 GO_MATCHING_ENGINE_DIR := services/matching-engine
 PLATFORM_RUNTIME_DIR := services/platform-runtime
+SIMULATOR_DIR := services/simulator
 
 DEV_COMPOSE_PROFILES ?=
 JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-db-migrate dev-smoke dev-stress dev-stress-diagnostics dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
+.PHONY: test test-go test-platform-runtime test-simulator fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-db-migrate dev-smoke dev-stress dev-stress-diagnostics dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
 
-test: test-go test-platform-runtime
+test: test-go test-simulator test-platform-runtime
 
 check-proto-additive:
 	./scripts/check-proto-additive.sh
 
 test-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && GOCACHE=/tmp/reef-go-build-cache go test ./...
+
+test-simulator:
+	cd $(SIMULATOR_DIR) && GOCACHE=/tmp/reef-go-build-cache go test ./...
 
 bench-matching-engine:
 	cd $(GO_MATCHING_ENGINE_DIR) && go test -run '^$$' -bench 'BenchmarkSubmitOrderResting|BenchmarkSubmitOrderMatchAgainstResting|BenchmarkModifyOrder' -benchmem ./internal/app

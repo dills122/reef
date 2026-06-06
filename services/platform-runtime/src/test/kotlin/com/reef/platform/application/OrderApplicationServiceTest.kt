@@ -4,10 +4,13 @@ import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Account
+import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.Permission
+import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -26,6 +29,7 @@ class OrderApplicationServiceTest {
         val persistence = InMemoryRuntimePersistence()
         val service = OrderApplicationService(gateway, persistence)
         seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-1")
 
         val result = service.submitOrder(
             SubmitOrderCommand(
@@ -63,6 +67,7 @@ class OrderApplicationServiceTest {
     fun submitOrderDoesNotPersistRejectedArtifacts() {
         val service = OrderApplicationService(RejectingEngineGateway(), InMemoryRuntimePersistence())
         seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-2")
 
         val result = service.submitOrder(
             SubmitOrderCommand(
@@ -99,6 +104,7 @@ class OrderApplicationServiceTest {
         val persistence = InMemoryRuntimePersistence()
         val service = OrderApplicationService(gateway, persistence)
         seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-1")
 
         val command = SubmitOrderCommand(
             commandId = "cmd-idempotent-1",
@@ -130,8 +136,81 @@ class OrderApplicationServiceTest {
     }
 
     @Test
+    fun submitOrderRejectsUnauthorizedActorBeforeEngineCall() {
+        val gateway = RecordingEngineGateway()
+        val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
+        seedReferenceData(service)
+
+        val result = service.submitOrder(
+            SubmitOrderCommand(
+                commandId = "cmd-unauthorized-submit-1",
+                traceId = "trace-unauthorized-submit-1",
+                causationId = "",
+                correlationId = "corr-unauthorized-submit-1",
+                actorId = "trader-unauthorized",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-unauthorized-submit-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY"
+            )
+        )
+
+        assertNotNull(result.rejected)
+        assertEquals("AUTHORIZATION_ERROR", result.rejected?.code)
+        assertEquals("actorId missing permission order.submit", result.rejected?.reason)
+        assertEquals(0, gateway.submitCalls)
+        assertEquals(listOf("OrderRejected"), service.persistedTraceEvents("trace-unauthorized-submit-1").map { it.eventType })
+    }
+
+    @Test
+    fun cancelAndModifyRejectUnauthorizedActorsBeforeEngineCall() {
+        val gateway = RecordingEngineGateway()
+        val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
+
+        val cancel = service.cancelOrder(
+            CancelOrderCommand(
+                commandId = "cmd-unauthorized-cancel-1",
+                traceId = "trace-unauthorized-cancel-1",
+                causationId = "",
+                correlationId = "corr-unauthorized-cancel-1",
+                actorId = "trader-unauthorized",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-unauthorized-cancel-1",
+                reason = "user requested"
+            )
+        )
+        val modify = service.modifyOrder(
+            ModifyOrderCommand(
+                commandId = "cmd-unauthorized-modify-1",
+                traceId = "trace-unauthorized-modify-1",
+                causationId = "",
+                correlationId = "corr-unauthorized-modify-1",
+                actorId = "trader-unauthorized",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-unauthorized-modify-1",
+                quantityUnits = "120",
+                limitPrice = "150250000001"
+            )
+        )
+
+        assertEquals("AUTHORIZATION_ERROR", cancel.rejected?.code)
+        assertEquals("actorId missing permission order.cancel", cancel.rejected?.reason)
+        assertEquals("AUTHORIZATION_ERROR", modify.rejected?.code)
+        assertEquals("actorId missing permission order.modify", modify.rejected?.reason)
+        assertEquals(0, gateway.submitCalls)
+    }
+
+    @Test
     fun cancelOrderPersistsLifecycleEvent() {
         val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
+        seedOrderAuthorization(service, "trader-1")
 
         val result = service.cancelOrder(
             CancelOrderCommand(
@@ -154,6 +233,7 @@ class OrderApplicationServiceTest {
     fun submitOrderTraceEventsFollowExpectedSequence() {
         val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
         seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-1")
         service.submitOrder(
             SubmitOrderCommand(
                 commandId = "cmd-seq-1",
@@ -186,6 +266,7 @@ class OrderApplicationServiceTest {
     @Test
     fun submitOrderRejectsWhenReferenceDataMissing() {
         val service = OrderApplicationService(RecordingEngineGateway(), InMemoryRuntimePersistence())
+        seedOrderAuthorization(service, "trader-1")
         val result = service.submitOrder(
             SubmitOrderCommand(
                 commandId = "cmd-missing-ref-1",
@@ -210,12 +291,58 @@ class OrderApplicationServiceTest {
         assertNotNull(result.rejected)
         assertEquals("REFERENCE_DATA_ERROR", result.rejected?.code)
     }
+
+    @Test
+    fun submitOrderRejectsWhenAccountDoesNotBelongToParticipantBeforeEngineCall() {
+        val gateway = RecordingEngineGateway()
+        val service = OrderApplicationService(gateway, InMemoryRuntimePersistence())
+        service.createInstrument(Instrument("AAPL", "AAPL"))
+        service.createParticipant(Participant("participant-1", "Participant 1"))
+        service.createParticipant(Participant("participant-2", "Participant 2"))
+        service.createAccount(Account("account-2", "participant-2"))
+        seedOrderAuthorization(service, "trader-1")
+
+        val result = service.submitOrder(
+            SubmitOrderCommand(
+                commandId = "cmd-account-mismatch-1",
+                traceId = "trace-account-mismatch-1",
+                causationId = "",
+                correlationId = "corr-account-mismatch-1",
+                actorId = "trader-1",
+                occurredAt = "2026-03-14T18:00:00Z",
+                orderId = "ord-account-mismatch-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-2",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY"
+            )
+        )
+
+        assertNotNull(result.rejected)
+        assertEquals("REFERENCE_DATA_ERROR", result.rejected?.code)
+        assertEquals("accountId does not belong to participantId", result.rejected?.reason)
+        assertEquals(0, gateway.submitCalls)
+    }
 }
 
 private fun seedReferenceData(service: OrderApplicationService) {
     service.createInstrument(Instrument("AAPL", "AAPL"))
     service.createParticipant(Participant("participant-1", "Participant 1"))
     service.createAccount(Account("account-1", "participant-1"))
+}
+
+private fun seedOrderAuthorization(
+    service: OrderApplicationService,
+    actorId: String,
+    permissions: List<String> = listOf(Permission.ORDER_SUBMIT, Permission.ORDER_CANCEL, Permission.ORDER_MODIFY)
+) {
+    service.createRole(RoleDefinition("order_trader", permissions))
+    service.assignRole(ActorRoleBinding(actorId, "order_trader"))
 }
 
 private class RecordingEngineGateway : EngineGateway {
