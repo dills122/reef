@@ -4,6 +4,9 @@ import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -133,6 +136,45 @@ class PostgresCommandLogStoreIntegrationTest {
         assertFalse(result.appended)
         assertEquals(original.commandId, result.record.commandId)
         assertEquals(original.commandId, store.findByIdempotency(original.clientId, original.route, original.idempotencyKey)?.commandId)
+    }
+
+    @Test
+    fun postgresStoreReturnsSingleWinnerForConcurrentDuplicateIdempotencyWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val idempotencyKey = "idem-concurrent-$suffix"
+        val workers = 8
+        val ready = CountDownLatch(workers)
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(workers)
+
+        try {
+            val futures = (0 until workers).map { index ->
+                executor.submit<CommandLogAppendResult> {
+                    val record = commandLogRecord(
+                        commandId = "cmd-concurrent-$suffix-$index",
+                        idempotencyKey = idempotencyKey
+                    )
+                    ready.countDown()
+                    start.await(5, TimeUnit.SECONDS)
+                    postgresStoreOrNull()?.append(record) ?: error("Postgres store unavailable during concurrent append")
+                }
+            }
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "workers did not reach the start gate")
+            start.countDown()
+
+            val results = futures.map { future -> future.get(10, TimeUnit.SECONDS) }
+            val winnerIds = results.map { it.record.commandId }.toSet()
+            val stored = store.findByIdempotency("client-1", "/api/v1/orders/submit", idempotencyKey)
+
+            assertEquals(1, results.count { it.appended }, "exactly one append should win")
+            assertEquals(1, winnerIds.size, "all duplicate attempts should replay the same command")
+            assertNotNull(stored)
+            assertEquals(winnerIds.single(), stored.commandId)
+        } finally {
+            start.countDown()
+            executor.shutdownNow()
+        }
     }
 
     @Test

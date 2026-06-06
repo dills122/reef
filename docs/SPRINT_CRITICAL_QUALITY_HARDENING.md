@@ -85,7 +85,7 @@ Acceptance criteria:
 
 Verification:
 - [x] Runtime unit tests for duplicate submit/cancel/modify.
-- [ ] Postgres integration test for concurrent duplicate idempotency key.
+- [x] Postgres integration test for concurrent duplicate idempotency key.
 - [x] `./gradlew test`
 - [x] `make test`
 
