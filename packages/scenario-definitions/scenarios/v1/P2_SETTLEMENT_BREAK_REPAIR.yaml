@@ -117,6 +117,44 @@ expectedEvents:
   - "SettlementCompleted"
   - "ScenarioRunCompleted"
 
+expectedEventTimeline:
+  anchor: "scenarioStart"
+  events:
+    - eventType: "ScenarioRunStarted"
+      occurredAtOffsetSeconds: 0
+    - eventType: "OrderSubmitted"
+      occurredAtOffsetSeconds: 1
+    - eventType: "OrderAccepted"
+      occurredAtOffsetSeconds: 1
+    - eventType: "OrderSubmitted"
+      occurredAtOffsetSeconds: 2
+    - eventType: "OrderAccepted"
+      occurredAtOffsetSeconds: 2
+    - eventType: "ExecutionCreated"
+      occurredAtOffsetSeconds: 3
+    - eventType: "TradeCreated"
+      occurredAtOffsetSeconds: 3
+    - eventType: "TradeAllocated"
+      occurredAtOffsetSeconds: 4
+    - eventType: "ConfirmationGenerated"
+      occurredAtOffsetSeconds: 5
+    - eventType: "TradeAffirmed"
+      occurredAtOffsetSeconds: 6
+    - eventType: "SettlementObligationCreated"
+      occurredAtOffsetSeconds: 7
+    - eventType: "SettlementFailed"
+      occurredAtOffsetSeconds: 8
+    - eventType: "ExceptionOpened"
+      occurredAtOffsetSeconds: 8
+    - eventType: "ExceptionRepairApplied"
+      occurredAtOffsetSeconds: 9
+    - eventType: "SettlementRetried"
+      occurredAtOffsetSeconds: 10
+    - eventType: "SettlementCompleted"
+      occurredAtOffsetSeconds: 11
+    - eventType: "ScenarioRunCompleted"
+      occurredAtOffsetSeconds: 12
+
 expectedFinalStates:
   trade: "AFFIRMED"
   settlement: "SETTLED"
@@ -137,6 +175,7 @@ uiAssertions:
 replayAssertions:
   - "Given seed=424243 and same preconditions, failure occurs at the same lifecycle step."
   - "Expected event order remains stable across replay."
+  - "Given seed=424243 and same preconditions, expectedEventTimeline occurredAt offsets are identical and monotonic."
 
 idempotencyAssertions:
   - command: "OpenException"
