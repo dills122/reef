@@ -17,7 +17,11 @@ class PlatformHttpServer(
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
     private val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
+    private val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+    private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
+    private val asyncCommandWorkerBatchSize: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", 100, min = 1),
+    private val asyncCommandWorkerPollMs: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS", 25L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
 ) {
     private val maxRequestBodyBytes: Int =
@@ -36,6 +40,7 @@ class PlatformHttpServer(
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
         commandStatusLookup = deps.commandStatusLookup,
+        capturedCommandQueue = deps.capturedCommandQueue,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -270,6 +275,19 @@ class PlatformHttpServer(
         }
 
         server.start()
+        if (asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val queue = capturedCommandQueue
+            if (queue == null) {
+                System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
+            } else {
+                AsyncCommandProcessor(
+                    queue = queue,
+                    api = api,
+                    batchSize = asyncCommandWorkerBatchSize,
+                    pollIntervalMs = asyncCommandWorkerPollMs
+                ).start()
+            }
+        }
         println("platform-runtime listening on :$port")
         return server
     }
@@ -617,6 +635,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
         commandStatusLookup = hooks.commandCaptureStore as? CommandStatusLookup,
+        capturedCommandQueue = hooks.commandCaptureStore as? CapturedCommandQueue,
         commandProcessingMode = hooks.commandProcessingMode
     )
 }
@@ -628,5 +647,6 @@ data class ServerBoundaryDeps(
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
     val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
+    val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

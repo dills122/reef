@@ -57,7 +57,7 @@ Scaling intent:
 | A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
 | A12 | Boundary capture hot-path reduction | Not started | architecture | Command capture currently writes and updates Postgres on every API v1 command |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
-| A14 | Accepted-command write-ahead path | Not started | architecture | Needed to separate accepted command latency from full audit/event projection |
+| A14 | Accepted-command write-ahead path | In progress | architecture | `captured-ack` can now run an optional async command worker from command-log records |
 
 ## Milestone Checklist
 
@@ -106,6 +106,7 @@ Exit criteria:
 - [x] Implement `sync-result`.
 - [x] Implement `captured-sync-engine`.
 - [x] Prototype `captured-ack`.
+- [x] Add optional async worker for `captured-ack` command-log records.
 - [x] Add status lookup API for captured commands.
 - [x] Add idempotency replay behavior per mode.
 - [x] Add simulator config toggle for mode.

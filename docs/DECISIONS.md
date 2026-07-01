@@ -444,3 +444,18 @@ Summary:
 Primary references:
 - [`docs/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./SPRINT_CRITICAL_QUALITY_HARDENING.md)
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
+
+### D-031: Captured-Ack Async Command Worker
+
+Status: accepted
+
+Summary:
+- `captured-ack` remains opt-in and is not the default external API behavior.
+- When `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`, the runtime starts a background worker that reads `RECEIVED` command-log records, marks them `PROCESSING`, executes the existing platform API operation, and marks the command `COMPLETED` or `FAILED`.
+- The command log is the write-ahead intake record and idempotency anchor for this mode.
+- This is the first accepted-command write-ahead slice. It decouples request acknowledgment from full runtime persistence, but it does not yet implement batched persistence, projection isolation, partitioned event storage, or worker scale-out.
+- Synchronous `sync-result` remains available for compatibility and deterministic tests.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)

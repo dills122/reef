@@ -63,6 +63,13 @@ data class CommandCaptureReceipt(
     }
 }
 
+interface CapturedCommandQueue {
+    fun pendingCommands(limit: Int): List<CommandLogRecord>
+    fun markCommandProcessing(commandId: String)
+    fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
+    fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String)
+}
+
 class NoopCommandCaptureStore : CommandCaptureStore {
     override fun captureReceived(
         clientId: String,
@@ -207,7 +214,7 @@ class CommandLogCommandCaptureStore(
     private val commandLogStore: CommandLogStore,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val clock: () -> Instant = { Instant.now() }
-) : CommandCaptureStore, CommandStatusLookup {
+) : CommandCaptureStore, CommandStatusLookup, CapturedCommandQueue {
     override fun reserveReceived(
         clientId: String,
         route: String,
@@ -276,6 +283,22 @@ class CommandLogCommandCaptureStore(
 
     override fun findCommandStatus(clientId: String, route: String, idempotencyKey: String): CommandStatusView? {
         return commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.toStatusView(commandProcessingMode)
+    }
+
+    override fun pendingCommands(limit: Int): List<CommandLogRecord> {
+        return commandLogStore.findByStatus(CommandLogStatus.RECEIVED, limit)
+    }
+
+    override fun markCommandProcessing(commandId: String) {
+        commandLogStore.markProcessing(commandId)
+    }
+
+    override fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String) {
+        commandLogStore.markCompleted(commandId, responseStatus, responsePayloadJson)
+    }
+
+    override fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String) {
+        commandLogStore.markFailed(commandId, responseStatus, errorMessage)
     }
 
     private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {

@@ -42,6 +42,7 @@ interface CommandLogStore {
     fun append(record: CommandLogRecord): CommandLogAppendResult
     fun findByCommandId(commandId: String): CommandLogRecord?
     fun findByIdempotency(clientId: String, route: String, idempotencyKey: String): CommandLogRecord?
+    fun findByStatus(status: CommandLogStatus, limit: Int): List<CommandLogRecord>
     fun markProcessing(commandId: String)
     fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markFailed(commandId: String, responseStatus: Int, errorMessage: String)
@@ -76,6 +77,16 @@ class InMemoryCommandLogStore : CommandLogStore {
 
     override fun findByIdempotency(clientId: String, route: String, idempotencyKey: String): CommandLogRecord? {
         return idempotencyToCommandId[idempotencyKey(clientId, route, idempotencyKey)]?.let { byCommandId[it] }
+    }
+
+    override fun findByStatus(status: CommandLogStatus, limit: Int): List<CommandLogRecord> {
+        if (limit <= 0) return emptyList()
+        return byCommandId.values
+            .asSequence()
+            .filter { it.status == status }
+            .sortedBy { it.receivedAt }
+            .take(limit)
+            .toList()
     }
 
     override fun markProcessing(commandId: String) {
@@ -246,6 +257,31 @@ class PostgresCommandLogStore(
                 ps.setString(3, idempotencyKey)
                 ps.executeQuery().use { rs ->
                     return if (rs.next()) rs.toCommandLogRecord() else null
+                }
+            }
+        }
+    }
+
+    override fun findByStatus(status: CommandLogStatus, limit: Int): List<CommandLogRecord> {
+        if (limit <= 0) return emptyList()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT *
+                FROM ${names.commands}
+                WHERE status = ?
+                ORDER BY received_at, command_id
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, status.name)
+                ps.setInt(2, limit)
+                ps.executeQuery().use { rs ->
+                    val records = mutableListOf<CommandLogRecord>()
+                    while (rs.next()) {
+                        records.add(rs.toCommandLogRecord())
+                    }
+                    return records
                 }
             }
         }
