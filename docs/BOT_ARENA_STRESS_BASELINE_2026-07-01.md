@@ -592,3 +592,76 @@ Diagnosis:
 - Removing durable command-log append entirely only improved the best diagnostic result to `2538.07` accepted rps.
 - The remaining gap to `5k+` is therefore not primarily the command-log table; the local ceiling is likely HTTP server/runtime concurrency, load-generator/client limits, container CPU scheduling, or shared runtime synchronization.
 - The next useful test is a concurrency/thread sweep plus a low-level accepted-ack microbenchmark that bypasses simulator command generation and runtime async processing.
+
+## Worker And Server Thread Sweep
+
+The earlier `128`-worker results under-drove captured-ack. A follow-up sweep used:
+
+- durable Postgres command log
+- legacy boundary capture disabled
+- in-memory idempotency lookup
+- async worker enabled
+- `REEF_RATE_SCHEDULE=precise`
+- `DEV_STRESS_RATES=10000`
+- `DEV_STRESS_SWEEP_WORKERS=128,256,512,1024`
+- default `PLATFORM_HTTP_THREADS=32`
+
+Results:
+
+| Workers | Requested RPS | Accepted RPS | Success | p50 | p95 | p99 | Trace Pass |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `128` | `10000` | `2001.99` | `100.00%` | `44.72ms` | `51.67ms` | `64.83ms` | `52.00%` |
+| `256` | `10000` | `3853.76` | `100.00%` | `48.41ms` | `63.07ms` | `79.86ms` | `8.00%` |
+| `512` | `10000` | `3090.26` | `100.00%` | `75.68ms` | `97.12ms` | `105.04ms` | `0.00%` |
+| `1024` | `10000` | `1816.19` | `100.00%` | `142.70ms` | `173.38ms` | `477.81ms` | `0.00%` |
+
+Artifacts:
+
+- `/tmp/reef-worker-sweep-rate-10000-workers-128.json`
+- `/tmp/reef-worker-sweep-rate-10000-workers-256.json`
+- `/tmp/reef-worker-sweep-rate-10000-workers-512.json`
+- `/tmp/reef-worker-sweep-rate-10000-workers-1024.json`
+- `/tmp/reef-worker-sweep-20260701/reef-worker-sweep-telemetry.ndjson`
+
+Diagnosis:
+
+- The current best durable captured-ack intake result is `3853.76` accepted rps at `256` load workers.
+- Over-concurrency hurts: `512` and `1024` workers reduce throughput and increase latency.
+- During the sweep, `api.commandCapture.reserve` averaged `6.08ms`, so command-log append latency still rises under high concurrency.
+- The async worker drains correctly but can lag badly during overload; after the sweep it had `138027` `RECEIVED` and `483` `PROCESSING` before draining.
+
+### Intake-Only Diagnostic
+
+The same durable command-log path was tested with `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false` to isolate accepted-command append throughput from async processing competition.
+
+| Workers | Requested RPS | Accepted RPS | Success | p50 | p95 | p99 |
+|---:|---:|---:|---:|---:|---:|---:|
+| `256` | `10000` | `3991.44` | `100.00%` | `47.20ms` | `62.22ms` | `72.56ms` |
+| `512` | `10000` | `3005.64` | `100.00%` | `60.81ms` | `96.36ms` | `117.04ms` |
+
+Artifacts:
+
+- `/tmp/reef-intake-only-rate-10000-workers-256.json`
+- `/tmp/reef-intake-only-rate-10000-workers-512.json`
+- `/tmp/reef-intake-only-20260701/reef-intake-only-telemetry.ndjson`
+
+Diagnosis:
+
+- Disabling async processing improved the best `256`-worker point only from `3853.76` to `3991.44` accepted rps.
+- Async processing competes with intake, but it is not the dominant limiter for `5k+`.
+- `api.commandCapture.reserve` still averaged `5.67ms` with async disabled, so the durable command-log append path itself remains a major hot path under concurrency.
+
+### HTTP Thread Count Diagnostic
+
+The best `256`-worker point was retested with `PLATFORM_HTTP_THREADS=128`.
+
+| HTTP Threads | Workers | Requested RPS | Accepted RPS | Success | p50 | p95 | p99 |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `32` | `256` | `10000` | `3853.76` | `100.00%` | `48.41ms` | `63.07ms` | `79.86ms` |
+| `128` | `256` | `10000` | `3537.29` | `100.00%` | `49.00ms` | `67.19ms` | `86.61ms` |
+
+Diagnosis:
+
+- Raising the Java HTTP executor from `32` to `128` threads made throughput and latency worse.
+- Keep the default local `PLATFORM_HTTP_THREADS=32` for now.
+- The next implementation target is not more HTTP threads; it is either reducing per-command command-log append cost, partitioning command intake from async runtime writes, or replacing `HttpServer` with a server stack designed for higher connection concurrency.

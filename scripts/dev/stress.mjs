@@ -17,6 +17,7 @@ const traceLimit = env("DEV_STRESS_TRACE_CHECK_LIMIT", "100");
 const out = env("DEV_STRESS_REPORT_OUT", "/tmp/reef-load-report-dev-stress.json");
 const mode = env("DEV_STRESS_MODE", "strict-lifecycle");
 const profile = env("DEV_STRESS_PROFILE", "default");
+const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
 const sweepWorkers = parseCsvInts(env("DEV_STRESS_SWEEP_WORKERS", ""));
@@ -74,6 +75,7 @@ try {
           duration,
           workers: String(workerCount),
           rate,
+          rateSchedule,
           mode,
           traceLimit,
           actionMix,
@@ -86,6 +88,7 @@ try {
         duration,
         workers,
         rate,
+        rateSchedule,
         mode,
         traceLimit,
         actionMix,
@@ -301,7 +304,7 @@ function resolveActionMix(profileName) {
   return { submit: "70", modify: "20", cancel: "10" };
 }
 
-async function runStressStep({ runtimeUrl, duration, workers, rate, mode, traceLimit, actionMix, reportOut }) {
+async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, traceLimit, actionMix, reportOut }) {
   console.log(`step rate=${rate} rps workers=${workers}`);
   await run(
     "go",
@@ -316,6 +319,8 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, mode, traceL
       workers,
       "--rate",
       String(rate),
+      "--rate-schedule",
+      rateSchedule,
       "--mode",
       mode,
       "--submit-pct",

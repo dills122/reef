@@ -136,6 +136,7 @@ Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_DB_NAME=reef`
 - `DEV_STRESS_DB_SCHEMA=runtime`
 - `DEV_STRESS_DB_LOG_SINCE=30m`
+- `DEV_STRESS_RATE_SCHEDULE=drop|precise` controls load-tester rate scheduling (`drop` is the default; `precise` is useful for capacity sweeps with larger worker counts)
 
 Run replay-pack drift validation against baseline scenario:
 
