@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
@@ -54,6 +55,17 @@ class PlatformHttpServer(
                 return@createContext
             }
             writeJson(exchange, 200, abuseStatsJson(abuseProtectionHook.stats()))
+        }
+
+        server.createContext("/internal/perf/hot-path") { exchange ->
+            when (exchange.requestMethod) {
+                "GET" -> writeJson(exchange, 200, JsonCodec.writeObject("metrics" to HotPathMetrics.snapshot()))
+                "POST" -> {
+                    HotPathMetrics.reset()
+                    writeJson(exchange, 200, JsonCodec.writeObject("status" to "reset"))
+                }
+                else -> methodNotAllowed(exchange)
+            }
         }
 
         server.createContext("/api/v1/commands/") { exchange ->
@@ -372,7 +384,9 @@ class PlatformHttpServer(
             return
         }
         val reservation = try {
-            commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
+            HotPathMetrics.time("api.commandCapture.reserve") {
+                commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
+            }
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
@@ -392,28 +406,36 @@ class PlatformHttpServer(
         }
 
         if (commandProcessingMode != CommandProcessingMode.SyncResult && commandStatusLookup == null) {
-            commandCaptureStore.markFailed(
-                clientId,
-                route,
-                idempotencyKey,
-                503,
-                "COMMAND_STATUS_UNAVAILABLE",
-                "command status lookup is required for ${commandProcessingMode.configValue}"
-            )
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(
+                    clientId,
+                    route,
+                    idempotencyKey,
+                    503,
+                    "COMMAND_STATUS_UNAVAILABLE",
+                    "command status lookup is required for ${commandProcessingMode.configValue}"
+                )
+            }
             writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
             return
         }
 
         val abuseViolation = abuseProtectionHook.allow(clientId, route)
         if (abuseViolation != null) {
-            commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
+            }
             writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
             return
         }
 
-        val cached = idempotencyStore.find(clientId, route, idempotencyKey)
+        val cached = HotPathMetrics.time("api.idempotency.find") {
+            idempotencyStore.find(clientId, route, idempotencyKey)
+        }
         if (cached != null) {
-            commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
+            }
             writeJson(exchange, cached.status, cached.payload)
             return
         }
@@ -421,14 +443,16 @@ class PlatformHttpServer(
         if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val status = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
             if (status == null) {
-                commandCaptureStore.markFailed(
-                    clientId,
-                    route,
-                    idempotencyKey,
-                    503,
-                    "COMMAND_STATUS_UNAVAILABLE",
-                    "captured command status not found"
-                )
+                HotPathMetrics.time("api.commandCapture.markFailed") {
+                    commandCaptureStore.markFailed(
+                        clientId,
+                        route,
+                        idempotencyKey,
+                        503,
+                        "COMMAND_STATUS_UNAVAILABLE",
+                        "captured command status not found"
+                    )
+                }
                 writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
                 return
             }
@@ -439,14 +463,22 @@ class PlatformHttpServer(
         }
 
         if (commandProcessingMode == CommandProcessingMode.CapturedSyncEngine) {
-            commandCaptureStore.markProcessing(clientId, route, idempotencyKey)
+            HotPathMetrics.time("api.commandCapture.markProcessing") {
+                commandCaptureStore.markProcessing(clientId, route, idempotencyKey)
+            }
         }
 
         try {
-            val payload = operation(body)
+            val payload = HotPathMetrics.time("api.operation") {
+                operation(body)
+            }
             abuseProtectionHook.observe(clientId, route, 200, rejectCode(payload))
-            rememberIdempotentResult(exchange, route, 200, payload)
-            commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
+            HotPathMetrics.time("api.idempotency.save") {
+                rememberIdempotentResult(exchange, route, 200, payload)
+            }
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
+            }
             writeJson(exchange, 200, payload)
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
@@ -454,7 +486,9 @@ class PlatformHttpServer(
             System.err.println(
                 "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
             )
-            commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
+            }
             writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
         }
     }

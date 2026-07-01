@@ -26,6 +26,15 @@ Clean-DB retest reference from the Bot Arena planning branch:
 - the clean sweep did not recover the older `~3k accepted rps` ceiling; after four runs the database had grown to about `6049MB`
 - current planning cap remains `~2k accepted rps` per runtime + engine instance until phase timing identifies the synchronous hot-path bottleneck
 
+Hot-path timing reference from the Bot Arena planning branch:
+- matching-engine microbenchmarks are not the first-order limiter for submit-heavy traffic (`~1.2us` resting submit, `~2.8us` crossing submit)
+- API v1 default `3000/384/30s` sample: `1386.53` accepted wall rps, p50 `162ms`
+- default hot-path average costs: command capture reserve `5.29ms`, command capture completion `5.25ms`, idempotency save `5.15ms`, runtime operation `11.92ms`
+- command capture disabled sample: `1657.40` accepted wall rps, p50 `73.87ms`; still limited by idempotency save and runtime persistence
+- command capture disabled + in-memory idempotency sample: `1747.17` accepted wall rps, p50 `45.60ms`; runtime persistence remained `6.35ms avg`
+- reduced boundary path at `5000/512/30s` regressed to `1476.60` accepted wall rps; runtime persistence rose to `14.58ms avg`
+- diagnosis: the first-order blocker is synchronous runtime persistence/write amplification under concurrency, not accumulated DB bloat alone and not matching-engine compute
+
 Scaling intent:
 - reach stable `5k` accepted rps per instance before relying on horizontal scale-out.
 - use per-instance throughput as the unit that cluster capacity multiplies.
@@ -35,7 +44,7 @@ Scaling intent:
 
 | ID | Workstream | Status | Target Branch Type | Notes |
 |---|---|---|---|---|
-| A1 | Runtime phase timing diagnostics | Not started | feature | Must land before major rewrites |
+| A1 | Runtime phase timing diagnostics | In progress | feature | Internal hot-path endpoint added for boundary/engine/persistence timing |
 | A2 | DB pool/write-path diagnostics in stress telemetry | Not started | feature | Needed for bottleneck proof |
 | A3 | Command log schema and interface | Not started | feature | First DB slice to add |
 | A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
@@ -48,16 +57,17 @@ Scaling intent:
 | A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
 | A12 | Boundary capture hot-path reduction | Not started | architecture | Command capture currently writes and updates Postgres on every API v1 command |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
+| A14 | Accepted-command write-ahead path | Not started | architecture | Needed to separate accepted command latency from full audit/event projection |
 
 ## Milestone Checklist
 
 ### M1: Observability Before Rewrite
 
 - [ ] Add phase timing around boundary validation.
-- [ ] Add phase timing around idempotency lookup/save.
-- [ ] Add phase timing around command capture.
-- [ ] Add phase timing around engine round-trip.
-- [ ] Add phase timing around runtime persistence.
+- [x] Add phase timing around idempotency lookup/save.
+- [x] Add phase timing around command capture.
+- [x] Add phase timing around engine round-trip.
+- [x] Add phase timing around runtime persistence.
 - [ ] Add phase timing around response serialization.
 - [ ] Surface phase timing in stress report summary.
 - [ ] Add Hikari pool active/idle/wait metrics or debug endpoint.

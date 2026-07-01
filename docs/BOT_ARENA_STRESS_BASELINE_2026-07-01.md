@@ -298,3 +298,138 @@ Clean-vs-loaded result:
 - The clean run confirms the current bottleneck is not only accumulated historical table size.
 - The current practical single-instance ceiling should stay around `~2k accepted rps` until phase timing proves where the synchronous path is spending time.
 - Table growth is still a serious arena concern: one short clean sweep generated about `6GB` of database state.
+
+## Hot-Path Timing Diagnosis
+
+Lightweight internal timing was added around the runtime API v1 path and order application service. The endpoint is:
+
+```text
+GET /internal/perf/hot-path
+POST /internal/perf/hot-path
+```
+
+`POST` resets the in-memory counters. `GET` returns aggregate count, total, average, and max milliseconds per phase.
+
+Matching-engine in-process microbenchmarks on the same machine do not explain the `~2k` ceiling:
+
+| Benchmark | Result |
+|---|---:|
+| `BenchmarkSubmitOrderResting` | `1187 ns/op` |
+| `BenchmarkSubmitOrderMatchAgainstResting` | `2751 ns/op` |
+| `BenchmarkModifyOrder` | `116022 ns/op` |
+
+The runtime phase timing points instead to synchronous DB-backed command durability and runtime persistence.
+
+### API v1 Default Path
+
+Command:
+
+```bash
+node scripts/dev/sim-run.mjs --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-api-v1-3k-384w-30s-20260701.json
+```
+
+Result:
+
+- wall throughput: `1403.32 rps`
+- accepted wall throughput: `1386.53 rps`
+- p50/p95/p99: `162.00ms` / `271.18ms` / `394.38ms`
+
+Average hot-path phase timings:
+
+| Phase | Avg ms |
+|---|---:|
+| `api.commandCapture.reserve` | `5.29` |
+| `api.commandCapture.markCompleted` | `5.25` |
+| `api.idempotency.save` | `5.15` |
+| `api.operation` | `11.92` |
+| `runtime.persistence.persistSubmitOutcome` | `7.75` |
+| `runtime.engine.submit` | `2.20` |
+
+### Command Capture Disabled
+
+Runtime override:
+
+```bash
+EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled docker compose -f docker-compose.yml up -d --build platform-runtime
+```
+
+Command:
+
+```bash
+node scripts/dev/sim-run.mjs --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-capture-disabled-3k-384w-30s-20260701.json
+```
+
+Result:
+
+- wall throughput: `1677.43 rps`
+- accepted wall throughput: `1657.40 rps`
+- p50/p95/p99: `73.87ms` / `200.80ms` / `331.11ms`
+
+Average hot-path phase timings:
+
+| Phase | Avg ms |
+|---|---:|
+| `api.idempotency.save` | `5.79` |
+| `api.operation` | `14.32` |
+| `runtime.persistence.persistSubmitOutcome` | `9.07` |
+| `runtime.engine.submit` | `2.98` |
+
+### Boundary Persistence Removed
+
+Runtime override:
+
+```bash
+EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled EXTERNAL_API_IDEMPOTENCY_STORE=inmemory docker compose -f docker-compose.yml up -d --build platform-runtime
+```
+
+Command:
+
+```bash
+node scripts/dev/sim-run.mjs --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-boundary-memory-3k-384w-30s-20260701.json
+```
+
+Result:
+
+- wall throughput: `1768.81 rps`
+- accepted wall throughput: `1747.17 rps`
+- p50/p95/p99: `45.60ms` / `175.16ms` / `268.44ms`
+
+Average hot-path phase timings:
+
+| Phase | Avg ms |
+|---|---:|
+| `api.operation` | `11.47` |
+| `runtime.persistence.persistSubmitOutcome` | `6.35` |
+| `runtime.engine.submit` | `2.67` |
+
+Pushing the same reduced path to `5000/512` did not approach `5k`:
+
+- command: `/tmp/reef-hotpath-boundary-memory-5k-512w-30s-20260701.json`
+- wall throughput: `1494.60 rps`
+- accepted wall throughput: `1476.60 rps`
+- p50/p95/p99: `187.14ms` / `248.69ms` / `405.12ms`
+- `runtime.persistence.persistSubmitOutcome` increased to `14.58ms avg`
+- `api.operation` increased to `23.48ms avg`
+
+Post-diagnostic table state:
+
+- database size: `9157MB`
+- `runtime.runtime_events`: `3.79M` rows, `4809MB`
+- `runtime.executions`: `1.79M` rows, `1053MB`
+- `boundary.api_command_captures`: `722k` rows, `1069MB`
+- `boundary.api_idempotency_records`: `803k` rows, `724MB`
+
+Diagnosis:
+
+- The matching engine is not the first-order limiter for submit-heavy capacity traffic.
+- API v1 boundary persistence is expensive, but removing it does not get close to `5k`.
+- The dominant blocker is synchronous runtime persistence and write amplification under concurrency.
+- The current path writes command result, order state, executions, trades, trace sequences, and runtime events before returning.
+- Higher offered load increases persistence latency rather than increasing throughput.
+
+Implication for `5k` to `10k+`:
+
+- `5k` accepted rps per instance is unlikely through thread/pool tuning alone.
+- The next architecture slice should separate accepted command latency from full audit/event persistence latency.
+- The arena path needs either async/batched persistence, a write-ahead command log plus background projection, partitioned event storage, or a combination of those.
+- Public/auditable command capture can remain strict, but it cannot stay as multiple synchronous per-command Postgres writes if `10k+` is the target.

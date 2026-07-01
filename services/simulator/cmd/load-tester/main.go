@@ -69,6 +69,7 @@ type Config struct {
 	HTTPMaxConnsHost    int
 	HTTPIdleConnTimeout time.Duration
 	UseApiV1            bool
+	LegacyInternalRoute bool
 	ClientIDPrefix      string
 	CommandClockStart   string
 	CommandClockStep    time.Duration
@@ -320,6 +321,7 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.HTTPMaxConnsHost, "http-max-conns-per-host", cfg.HTTPMaxConnsHost, "http client transport max total connections per host (0 = no transport-side limit)")
 	flag.DurationVar(&cfg.HTTPIdleConnTimeout, "http-idle-conn-timeout", cfg.HTTPIdleConnTimeout, "http client idle connection timeout")
 	flag.BoolVar(&cfg.UseApiV1, "use-api-v1", cfg.UseApiV1, "submit/modify/cancel via /api/v1 boundary routes")
+	flag.BoolVar(&cfg.LegacyInternalRoute, "legacy-internal-route", cfg.LegacyInternalRoute, "send internal marker header when use-api-v1=false")
 	flag.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix used for /api/v1 traffic")
 	flag.StringVar(&cfg.CommandClockStart, "command-clock-start", cfg.CommandClockStart, "optional RFC3339 start time for deterministic command occurredAt values")
 	flag.DurationVar(&cfg.CommandClockStep, "command-clock-step", cfg.CommandClockStep, "deterministic command clock step")
@@ -439,6 +441,7 @@ func defaultConfigFromEnv() Config {
 		HTTPMaxConnsHost:    envInt("REEF_HTTP_MAX_CONNS_PER_HOST", 0),
 		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
 		UseApiV1:            envBool("REEF_USE_API_V1", true),
+		LegacyInternalRoute: envBool("REEF_LEGACY_INTERNAL_ROUTE", false),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
 		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
 		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
@@ -580,6 +583,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["use-api-v1"] {
 		cfg.UseApiV1 = parsed.UseApiV1
+	}
+	if explicit["legacy-internal-route"] {
+		cfg.LegacyInternalRoute = parsed.LegacyInternalRoute
 	}
 	if explicit["client-id-prefix"] {
 		cfg.ClientIDPrefix = parsed.ClientIDPrefix
@@ -1331,6 +1337,11 @@ func commandRoute(cfg Config, action Action) string {
 
 func commandHeaders(cfg Config, workerID int, commandID, traceID string) map[string]string {
 	if !cfg.UseApiV1 {
+		if cfg.LegacyInternalRoute {
+			return map[string]string{
+				"X-Reef-Internal-Route": "true",
+			}
+		}
 		return nil
 	}
 	return map[string]string{
