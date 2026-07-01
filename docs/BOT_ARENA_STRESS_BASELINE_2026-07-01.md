@@ -250,3 +250,51 @@ Likely speed-up order:
 5. Batch or async runtime persistence for arena simulations while preserving deterministic replay/audit records.
 6. Partition or lifecycle-manage large append tables (`runtime_events`, command captures, idempotency records, executions, trades).
 7. Re-test clean-stack, loaded-stack, and long-soak envelopes separately.
+
+## Clean-DB Ceiling Retest
+
+The loaded database was dumped before reset:
+
+- compressed dump: `/tmp/reef-loaded-before-clean-reset-20260701.dump`
+- compressed size: `345MB`
+- pre-reset live database size: `8431MB`
+
+The local stack was then reset with:
+
+```bash
+JS_RUNTIME=node make dev-reset
+```
+
+Immediately after reset, the `reef` database was `8359kB` and the hot runtime/boundary tables had zero live rows.
+
+Clean-stack commands:
+
+```bash
+node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-3k-384w-20260701.json
+node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 4000 --workers 448 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-4k-448w-20260701.json
+node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 5000 --workers 512 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-5k-512w-20260701.json
+node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 6500 --workers 768 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-6500-768w-20260701.json
+```
+
+| Target RPS | Workers | Wall Window | Observed RPS | Accepted RPS | Success % | Invalid-Intent % | System-Failure % | p50 ms | p95 ms | p99 ms | Trace Pass |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3000 | 384 | 78.5s | 2067.95 | 2042.40 | 98.76 | 1.24 | 0.00 | 139.13 | 179.12 | 253.68 | 100/100 |
+| 4000 | 448 | 80.9s | 1994.84 | 1970.13 | 98.76 | 1.24 | 0.00 | 164.20 | 218.42 | 342.35 | 100/100 |
+| 5000 | 512 | 83.9s | 2036.82 | 2011.51 | 98.76 | 1.24 | 0.00 | 177.74 | 239.75 | 329.69 | 100/100 |
+| 6500 | 768 | 95.2s | 1677.62 | 1657.24 | 98.78 | 1.22 | 0.00 | 280.53 | 393.65 | 545.50 | 100/100 |
+
+After the four clean runs, the database had already grown to `6049MB`:
+
+- `runtime.runtime_events`: `2.21M` rows, `3.0GB`
+- `boundary.api_command_captures`: `654k` rows, `1.1GB`
+- `runtime.executions`: `1.07M` rows, `666MB`
+- `boundary.api_idempotency_records`: `649k` rows, `617MB`
+- `runtime.trades`: `534k` rows, `417MB`
+
+Clean-vs-loaded result:
+
+- Resetting the database did not recover the old `~3k accepted rps` ceiling.
+- The clean best point was `~2042 accepted rps` at `3000/384`, which is slightly below the loaded `~2070 accepted rps` point from the earlier sweep.
+- The clean run confirms the current bottleneck is not only accumulated historical table size.
+- The current practical single-instance ceiling should stay around `~2k accepted rps` until phase timing proves where the synchronous path is spending time.
+- Table growth is still a serious arena concern: one short clean sweep generated about `6GB` of database state.

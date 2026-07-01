@@ -18,6 +18,14 @@ Current loaded-stack reference from the Bot Arena planning branch:
 - larger target probes (`4000/448`, `5000/512`, `6500/768`) reduced accepted throughput and increased tail latency
 - use this as a conservative loaded-instance planning cap until clean-stack and diagnostic runs are repeated
 
+Clean-DB retest reference from the Bot Arena planning branch:
+- pre-reset database dump: `/tmp/reef-loaded-before-clean-reset-20260701.dump` (`345MB` compressed, source DB `8431MB`)
+- clean database before sweep: `8359kB`, zero live rows in hot runtime/boundary tables
+- best clean ceiling probe on 2026-07-01: `2067.95 rps` total, `2042.40 rps` accepted, `98.76%` success
+- profile: `capacity-baseline`, target `3000`, workers `384`, API v1 command path
+- the clean sweep did not recover the older `~3k accepted rps` ceiling; after four runs the database had grown to about `6049MB`
+- current planning cap remains `~2k accepted rps` per runtime + engine instance until phase timing identifies the synchronous hot-path bottleneck
+
 Scaling intent:
 - reach stable `5k` accepted rps per instance before relying on horizontal scale-out.
 - use per-instance throughput as the unit that cluster capacity multiplies.
