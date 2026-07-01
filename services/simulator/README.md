@@ -118,6 +118,41 @@ go run ./cmd/load-tester \
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
 
+## Intake Bench CLI
+
+`cmd/intake-bench` is a narrower accepted-command ingress benchmark. It sends minimal valid `/api/v1/orders/submit` payloads and reports raw accepted RPS, latency percentiles, status-code counts, and errors. It intentionally skips strategy selection, lifecycle state, seeding, trace checks, and tailing so it can separate platform-runtime intake capacity from simulator behavior.
+
+Example:
+
+```bash
+cd services/simulator
+go run ./cmd/intake-bench \
+  --base-url http://localhost:8080 \
+  --duration 30s \
+  --workers 256 \
+  --rate 10000 \
+  --rate-schedule precise \
+  --actor-id-prefix bot \
+  --pretty-summary \
+  --report-out /tmp/reef-intake-bench.json
+```
+
+From the repo root, use:
+
+```bash
+make dev-intake-bench
+```
+
+Useful env overrides:
+
+- `DEV_INTAKE_DURATION`
+- `DEV_INTAKE_WORKERS`
+- `DEV_INTAKE_RATE`
+- `DEV_INTAKE_RATE_SCHEDULE=drop|precise`
+- `DEV_INTAKE_ACTOR_ID_PREFIX` (`bot` by default, matching seeded load-test actors)
+- `DEV_INTAKE_ARTIFACT_DIR`
+- `DEV_INTAKE_REPORT_OUT`
+
 Deterministic replay runs can set `--command-clock-start 2026-03-14T18:00:00Z`
 and `--command-clock-step 1s` (or `REEF_COMMAND_CLOCK_START` /
 `REEF_COMMAND_CLOCK_STEP`) so generated command `occurredAt` values are stable.

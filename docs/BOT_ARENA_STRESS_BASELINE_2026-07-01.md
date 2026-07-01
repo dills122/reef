@@ -665,3 +665,70 @@ Diagnosis:
 - Raising the Java HTTP executor from `32` to `128` threads made throughput and latency worse.
 - Keep the default local `PLATFORM_HTTP_THREADS=32` for now.
 - The next implementation target is not more HTTP threads; it is either reducing per-command command-log append cost, partitioning command intake from async runtime writes, or replacing `HttpServer` with a server stack designed for higher connection concurrency.
+
+## Raw Intake Microbenchmark
+
+A narrow `cmd/intake-bench` tool was added to measure `/api/v1/orders/submit` accepted-command ingress without strategy selection, lifecycle state, trace checks, tailing, or rich simulator reporting.
+
+Command:
+
+```bash
+DEV_INTAKE_DURATION=15s \
+DEV_INTAKE_WORKERS=256 \
+DEV_INTAKE_RATE=10000 \
+DEV_INTAKE_RATE_SCHEDULE=precise \
+DEV_INTAKE_ACTOR_ID_PREFIX=bot \
+DEV_INTAKE_ARTIFACT_DIR=/tmp/reef-raw-intake-valid-20260701 \
+DEV_INTAKE_REPORT_OUT=/tmp/reef-raw-intake-valid.json \
+JS_RUNTIME=node \
+make dev-intake-bench
+```
+
+Result:
+
+| Workers | Requested RPS | Accepted RPS | Success | p50 | p95 | p99 |
+|---:|---:|---:|---:|---:|---:|---:|
+| `256` | `10000` | `6937.74` | `100.00%` | `48.84ms` | `61.01ms` | `67.41ms` |
+
+Higher offered-rate check:
+
+```bash
+DEV_INTAKE_DURATION=15s \
+DEV_INTAKE_WORKERS=384 \
+DEV_INTAKE_RATE=15000 \
+DEV_INTAKE_RATE_SCHEDULE=precise \
+DEV_INTAKE_ACTOR_ID_PREFIX=bot \
+DEV_INTAKE_ARTIFACT_DIR=/tmp/reef-raw-intake-valid-384-20260701 \
+DEV_INTAKE_REPORT_OUT=/tmp/reef-raw-intake-valid-384.json \
+JS_RUNTIME=node \
+make dev-intake-bench
+```
+
+| Workers | Requested RPS | Accepted RPS | Success | p50 | p95 | p99 |
+|---:|---:|---:|---:|---:|---:|---:|
+| `384` | `15000` | `7784.04` | `100.00%` | `59.10ms` | `76.30ms` | `84.48ms` |
+
+Artifacts:
+
+- `/tmp/reef-raw-intake-valid-20260701/reef-raw-intake-valid-workers-256-rate-10000.json`
+- `/tmp/reef-raw-intake-valid-384-20260701/reef-raw-intake-valid-384-workers-384-rate-15000.json`
+
+Hot-path averages:
+
+| Run | `api.commandCapture.reserve` | `api.idempotency.find` |
+|---|---:|---:|
+| `256w/10000rps` | `5.27ms` | `0.001ms` |
+| `384w/15000rps` | `6.63ms` | `0.001ms` |
+
+Async queue state immediately after `384w/15000rps`:
+
+```json
+{"RECEIVED":87803,"PROCESSING":429,"COMPLETED":1407719,"FAILED":0}
+```
+
+Diagnosis:
+
+- Raw accepted-command ingress is above the `5k` target on one local instance.
+- The richer simulator/load-tester path was measuring strategy/lifecycle/reporting overhead as well as platform-runtime intake.
+- The next scaling problem is sustained end-to-end processing: async workers and runtime persistence fall behind when intake runs at `6.9k-7.8k` accepted rps.
+- Architecture work should now focus less on "can the API accept 5k?" and more on "can the system durably process/drain 5k+ without unbounded backlog?"

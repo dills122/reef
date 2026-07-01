@@ -236,6 +236,21 @@ Disable boundary route usage only for legacy comparison/debug:
 make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode capacity-baseline --use-api-v1=false --pretty-summary"
 ```
 
+Raw accepted-command intake benchmark:
+
+```bash
+DEV_INTAKE_DURATION=30s \
+DEV_INTAKE_WORKERS=256 \
+DEV_INTAKE_RATE=10000 \
+DEV_INTAKE_RATE_SCHEDULE=precise \
+DEV_INTAKE_ACTOR_ID_PREFIX=bot \
+DEV_INTAKE_ARTIFACT_DIR=/tmp/reef-intake-$(date +%Y%m%d-%H%M%S) \
+DEV_INTAKE_REPORT_OUT=/tmp/reef-intake-bench.json \
+make dev-intake-bench JS_RUNTIME=node
+```
+
+Use this before architecture changes when the goal is to separate platform-runtime `/api/v1/orders/submit` intake capacity from simulator strategy/lifecycle overhead.
+
 30-minute fixed-load soak (clean reset recommended first):
 
 ```bash
