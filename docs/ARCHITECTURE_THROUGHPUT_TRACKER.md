@@ -55,9 +55,9 @@ Scaling intent:
 | A9 | Postgres outbox publisher | Not started | architecture | Precondition for NATS |
 | A10 | NATS JetStream integration | Deferred | architecture | Wait until outbox is real |
 | A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
-| A12 | Boundary capture hot-path reduction | Not started | architecture | Command capture currently writes and updates Postgres on every API v1 command |
+| A12 | Boundary capture hot-path reduction | In progress | architecture | `captured-ack` now avoids the separate idempotency write for accepted responses |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
-| A14 | Accepted-command write-ahead path | In progress | architecture | `captured-ack` can now run an optional async command worker from command-log records |
+| A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
 
 ## Milestone Checklist
 
@@ -107,6 +107,9 @@ Exit criteria:
 - [x] Implement `captured-sync-engine`.
 - [x] Prototype `captured-ack`.
 - [x] Add optional async worker for `captured-ack` command-log records.
+- [x] Add atomic command-log claiming for async workers.
+- [x] Add async command worker thread tuning.
+- [x] Add async command queue/drain stats endpoint.
 - [x] Add status lookup API for captured commands.
 - [x] Add idempotency replay behavior per mode.
 - [x] Add simulator config toggle for mode.

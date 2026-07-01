@@ -756,6 +756,44 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun asyncCommandStatsEndpointReturnsQueueDepths() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-async-stats"
+                ),
+                body = validSubmitBody("cmd-async-stats", "trace-async-stats", "ord-async-stats")
+            )
+            val stats = get(server.address.port, "/internal/commands/async/stats")
+
+            assertEquals(202, submit.status)
+            assertEquals(200, stats.status)
+            assertContains(stats.body, "\"processingMode\":\"captured-ack\"")
+            assertContains(stats.body, "\"workerThreads\":1")
+            assertContains(stats.body, "\"RECEIVED\":1")
+            assertContains(stats.body, "\"PROCESSING\":0")
+            assertContains(stats.body, "\"COMPLETED\":0")
+            assertContains(stats.body, "\"FAILED\":0")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedAckReplaysFirstAcceptedResponseForSameIdempotencyKey() {
         val captureStore = CommandLogCommandCaptureStore(
             delegate = NoopCommandCaptureStore(),

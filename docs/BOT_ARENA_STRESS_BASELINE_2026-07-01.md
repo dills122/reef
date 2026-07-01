@@ -433,3 +433,79 @@ Implication for `5k` to `10k+`:
 - The next architecture slice should separate accepted command latency from full audit/event persistence latency.
 - The arena path needs either async/batched persistence, a write-ahead command log plus background projection, partitioned event storage, or a combination of those.
 - Public/auditable command capture can remain strict, but it cannot stay as multiple synchronous per-command Postgres writes if `10k+` is the target.
+
+## Captured-Ack Async Worker Bundle
+
+Configuration:
+
+- `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=4`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=250`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
+
+Command:
+
+```bash
+DEV_STRESS_DURATION=30s \
+DEV_STRESS_MODE=capacity-baseline \
+DEV_STRESS_PROFILE=capacity-heavy \
+DEV_STRESS_RATES=2500,5000,7500,10000 \
+DEV_STRESS_SWEEP_WORKERS=128 \
+DEV_STRESS_TRACE_CHECK_LIMIT=100 \
+DEV_STRESS_MIN_SUCCESS_RATE_PCT=0 \
+DEV_STRESS_ARTIFACT_DIR=/tmp/reef-async-bundle-20260701 \
+DEV_STRESS_REPORT_OUT=/tmp/reef-async-bundle.json \
+JS_RUNTIME=node \
+make dev-stress
+```
+
+Results:
+
+| Requested RPS | Workers | Accepted RPS | Success | p50 | p95 | p99 | Trace Pass |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `2500` | `128` | `2056.26` | `100.00%` | `44.50ms` | `50.00ms` | `60.08ms` | `48.00%` |
+| `5000` | `128` | `2284.65` | `100.00%` | `45.23ms` | `51.46ms` | `70.82ms` | `17.00%` |
+| `7500` | `128` | `2273.70` | `100.00%` | `45.55ms` | `51.19ms` | `69.38ms` | `4.00%` |
+| `10000` | `128` | `2210.72` | `100.00%` | `46.01ms` | `53.13ms` | `90.10ms` | `0.00%` |
+
+Artifacts:
+
+- `/tmp/reef-async-bundle-rate-2500-workers-128.json`
+- `/tmp/reef-async-bundle-rate-5000-workers-128.json`
+- `/tmp/reef-async-bundle-rate-7500-workers-128.json`
+- `/tmp/reef-async-bundle-rate-10000-workers-128.json`
+- `/tmp/reef-async-bundle-20260701/reef-async-bundle-telemetry.ndjson`
+- `/tmp/reef-async-bundle-20260701/reef-async-bundle-kpi.md`
+
+Post-run async worker stats immediately after the sweep:
+
+```json
+{"RECEIVED":43408,"PROCESSING":705,"COMPLETED":271645,"FAILED":0}
+```
+
+Post-drain async worker stats after roughly 30 seconds:
+
+```json
+{"RECEIVED":0,"PROCESSING":0,"COMPLETED":315758,"FAILED":0}
+```
+
+Hot-path averages after the sweep:
+
+| Phase | Avg ms |
+|---|---:|
+| `api.commandCapture.reserve` | `3.80` |
+| `api.idempotency.find` | `0.25` |
+| `async.claim` | `1.46` |
+| `async.operation` | `2.31` |
+| `async.complete` | `0.78` |
+| `runtime.persistence.persistSubmitOutcome` | `1.29` |
+| `runtime.engine.submit` | `0.44` |
+
+Diagnosis:
+
+- The captured-ack path removes the synchronous runtime persistence wait from API response latency and holds `202` p99 below `100ms` through the tested range.
+- Intake still plateaus around `2.2k` accepted rps on this single local instance, so the current HTTP/Kotlin/Postgres command-log append path is now the first accepted-response limiter.
+- Durable processing did complete all commands after the sweep, but high requested rates created a temporary backlog and low immediate trace pass rates.
+- The next slice should focus on command-log append throughput, HTTP/runtime concurrency, and batch/partition strategy before chasing bot-game rules.

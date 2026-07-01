@@ -451,9 +451,11 @@ Status: accepted
 
 Summary:
 - `captured-ack` remains opt-in and is not the default external API behavior.
-- When `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`, the runtime starts a background worker that reads `RECEIVED` command-log records, marks them `PROCESSING`, executes the existing platform API operation, and marks the command `COMPLETED` or `FAILED`.
+- When `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`, the runtime starts one or more background workers that atomically claim `RECEIVED` command-log records, execute the existing platform API operation, and mark each command `COMPLETED` or `FAILED`.
 - The command log is the write-ahead intake record and idempotency anchor for this mode.
-- This is the first accepted-command write-ahead slice. It decouples request acknowledgment from full runtime persistence, but it does not yet implement batched persistence, projection isolation, partitioned event storage, or worker scale-out.
+- Captured-ack `202` responses replay from the command log instead of writing a second boundary idempotency row on the intake path.
+- `/internal/commands/async/stats` reports worker settings, command-log status counts, and async claim/complete/fail counters for drain testing.
+- This is the accepted-command write-ahead slice. It decouples request acknowledgment from full runtime persistence, but it does not yet implement batched persistence, projection isolation, partitioned event storage, or multi-instance worker coordination.
 - Synchronous `sync-result` remains available for compatibility and deterministic tests.
 
 Primary references:

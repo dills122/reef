@@ -64,7 +64,8 @@ data class CommandCaptureReceipt(
 }
 
 interface CapturedCommandQueue {
-    fun pendingCommands(limit: Int): List<CommandLogRecord>
+    fun claimReceivedCommands(limit: Int): List<CommandLogRecord>
+    fun statusCounts(): Map<CommandLogStatus, Long>
     fun markCommandProcessing(commandId: String)
     fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String)
@@ -285,8 +286,12 @@ class CommandLogCommandCaptureStore(
         return commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.toStatusView(commandProcessingMode)
     }
 
-    override fun pendingCommands(limit: Int): List<CommandLogRecord> {
-        return commandLogStore.findByStatus(CommandLogStatus.RECEIVED, limit)
+    override fun claimReceivedCommands(limit: Int): List<CommandLogRecord> {
+        return commandLogStore.claimReceived(limit)
+    }
+
+    override fun statusCounts(): Map<CommandLogStatus, Long> {
+        return commandLogStore.statusCounts()
     }
 
     override fun markCommandProcessing(commandId: String) {

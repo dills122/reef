@@ -20,6 +20,7 @@ class PlatformHttpServer(
     private val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
+    private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
     private val asyncCommandWorkerBatchSize: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", 100, min = 1),
     private val asyncCommandWorkerPollMs: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS", 25L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
@@ -71,6 +72,14 @@ class PlatformHttpServer(
                 }
                 else -> methodNotAllowed(exchange)
             }
+        }
+
+        server.createContext("/internal/commands/async/stats") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, asyncCommandStatsJson())
         }
 
         server.createContext("/api/v1/commands/") { exchange ->
@@ -280,12 +289,15 @@ class PlatformHttpServer(
             if (queue == null) {
                 System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
             } else {
-                AsyncCommandProcessor(
-                    queue = queue,
-                    api = api,
-                    batchSize = asyncCommandWorkerBatchSize,
-                    pollIntervalMs = asyncCommandWorkerPollMs
-                ).start()
+                (1..asyncCommandWorkerThreads).forEach { index ->
+                    AsyncCommandProcessor(
+                        queue = queue,
+                        api = api,
+                        batchSize = asyncCommandWorkerBatchSize,
+                        pollIntervalMs = asyncCommandWorkerPollMs,
+                        workerName = "reef-async-command-processor-$index"
+                    ).start()
+                }
             }
         }
         println("platform-runtime listening on :$port")
@@ -475,7 +487,6 @@ class PlatformHttpServer(
                 return
             }
             val payload = CommandStatusResponse.acceptedJson(status)
-            rememberIdempotentResult(exchange, route, 202, payload)
             writeJson(exchange, 202, payload)
             return
         }
@@ -532,13 +543,6 @@ class PlatformHttpServer(
         }
         if (status != null && commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val payload = CommandStatusResponse.acceptedJson(status)
-            idempotencyStore.save(
-                clientId,
-                route,
-                idempotencyKey,
-                IdempotencyResult(202, payload),
-                idempotencyRetentionPolicy.ttlFor(route)
-            )
             writeJson(exchange, 202, payload)
             return
         }
@@ -616,6 +620,34 @@ class PlatformHttpServer(
             "blocks" to stats.blocks,
             "releases" to stats.releases,
             "activeBlockedClients" to stats.activeBlockedClients
+        )
+    }
+
+    private fun asyncCommandStatsJson(): String {
+        val queueCounts = capturedCommandQueue
+            ?.statusCounts()
+            ?.mapKeys { (status, _) -> status.name }
+            ?: emptyMap()
+        val counts = CommandLogStatus.values().associate { status ->
+            status.name to (queueCounts[status.name] ?: 0L)
+        }
+        val metrics = AsyncCommandProcessorMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to asyncCommandWorkerEnabled,
+            "processingMode" to commandProcessingMode.configValue,
+            "workerThreads" to asyncCommandWorkerThreads,
+            "batchSize" to asyncCommandWorkerBatchSize,
+            "pollIntervalMs" to asyncCommandWorkerPollMs,
+            "queue" to counts,
+            "metrics" to mapOf(
+                "claimed" to metrics.claimed,
+                "completed" to metrics.completed,
+                "failed" to metrics.failed,
+                "emptyPolls" to metrics.emptyPolls,
+                "lastClaimedAt" to metrics.lastClaimedAt,
+                "lastCompletedAt" to metrics.lastCompletedAt,
+                "lastFailedAt" to metrics.lastFailedAt
+            )
         )
     }
 }

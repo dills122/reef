@@ -81,6 +81,30 @@ class CommandLogStoreTest {
         assertEquals(503, failedRecord?.responseStatus)
         assertEquals("runtime unavailable", failedRecord?.lastError)
     }
+
+    @Test
+    fun inMemoryStoreClaimsReceivedCommandsAndCountsStatuses() {
+        val store = InMemoryCommandLogStore()
+        val first = commandLogRecord(commandId = "cmd-claim-1", idempotencyKey = "idem-claim-1")
+        val second = commandLogRecord(commandId = "cmd-claim-2", idempotencyKey = "idem-claim-2")
+            .copy(receivedAt = Instant.parse("2026-06-04T13:00:01Z"))
+
+        store.append(second)
+        store.append(first)
+
+        val claimed = store.claimReceived(1)
+        val counts = store.statusCounts()
+
+        assertEquals(listOf("cmd-claim-1"), claimed.map { it.commandId })
+        assertEquals(CommandLogStatus.PROCESSING, claimed.single().status)
+        assertEquals(1, claimed.single().attemptCount)
+        assertEquals(CommandLogStatus.PROCESSING, store.findByCommandId("cmd-claim-1")?.status)
+        assertEquals(listOf("cmd-claim-2"), store.findByStatus(CommandLogStatus.RECEIVED, 10).map { it.commandId })
+        assertEquals(1L, counts[CommandLogStatus.RECEIVED])
+        assertEquals(1L, counts[CommandLogStatus.PROCESSING])
+        assertEquals(0L, counts[CommandLogStatus.COMPLETED])
+        assertEquals(0L, counts[CommandLogStatus.FAILED])
+    }
 }
 
 private fun commandLogRecord(
@@ -207,6 +231,28 @@ class PostgresCommandLogStoreIntegrationTest {
         assertEquals(1, completed?.attemptCount)
         assertEquals(200, completed?.responseStatus)
         assertTrue(completed?.responsePayloadJson?.contains("accepted") == true)
+    }
+
+    @Test
+    fun postgresStoreClaimsReceivedCommandsWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val first = commandLogRecord(commandId = "cmd-claim-first-$suffix", idempotencyKey = "idem-claim-first-$suffix")
+        val second = commandLogRecord(commandId = "cmd-claim-second-$suffix", idempotencyKey = "idem-claim-second-$suffix")
+            .copy(receivedAt = Instant.parse("2026-06-04T13:00:01Z"))
+
+        assertTrue(store.append(second).appended)
+        assertTrue(store.append(first).appended)
+
+        val claimed = store.claimReceived(1)
+        val stored = store.findByCommandId(first.commandId)
+        val counts = store.statusCounts()
+
+        assertEquals(listOf(first.commandId), claimed.map { it.commandId })
+        assertEquals(CommandLogStatus.PROCESSING, claimed.single().status)
+        assertEquals(1, claimed.single().attemptCount)
+        assertEquals(CommandLogStatus.PROCESSING, stored?.status)
+        assertTrue((counts[CommandLogStatus.PROCESSING] ?: 0L) >= 1L)
     }
 
     private fun postgresStoreOrNull(): PostgresCommandLogStore? {

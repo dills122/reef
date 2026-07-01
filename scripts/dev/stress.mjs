@@ -1,4 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
@@ -366,30 +368,62 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
   const probes = [
     { name: "runtime.health", url: `${runtimeUrl}/health` },
     { name: "runtime.metrics", url: `${runtimeUrl}/actuator/prometheus` },
+    { name: "runtime.hotPath", url: `${runtimeUrl}/internal/perf/hot-path`, captureJson: true },
+    { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];
   const results = [];
   for (const probe of probes) {
-    const started = Date.now();
-    try {
-      const response = await fetch(probe.url, { method: "GET" });
-      results.push({
-        name: probe.name,
-        status: response.status,
-        ok: response.ok,
-        latencyMs: Date.now() - started,
+    results.push(await requestAppProbe(probe));
+  }
+  return { sampledAt, probes: results };
+}
+
+async function requestAppProbe(probe) {
+  const started = Date.now();
+  return new Promise((resolve) => {
+    const url = new URL(probe.url);
+    const client = url.protocol === "https:" ? https : http;
+    const req = client.request(url, { method: "GET", timeout: 2000 }, (response) => {
+      const chunks = [];
+      let bytes = 0;
+      response.on("data", (chunk) => {
+        bytes += chunk.length;
+        if (bytes <= 1024 * 1024) {
+          chunks.push(chunk);
+        }
       });
-    } catch (error) {
-      results.push({
+      response.on("end", () => {
+        const result = {
+          name: probe.name,
+          status: response.statusCode,
+          ok: response.statusCode >= 200 && response.statusCode < 300,
+          latencyMs: Date.now() - started,
+        };
+        if (probe.captureJson) {
+          try {
+            result.json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          } catch (error) {
+            result.bodyError = String(error.message || error);
+          }
+        }
+        resolve(result);
+      });
+    });
+    req.on("timeout", () => {
+      req.destroy(new Error("timeout"));
+    });
+    req.on("error", (error) => {
+      resolve({
         name: probe.name,
         ok: false,
         latencyMs: Date.now() - started,
         error: String(error.message || error),
       });
-    }
-  }
-  return { sampledAt, probes: results };
+    });
+    req.end();
+  });
 }
 
 async function sampleDockerStats(sampledAt) {

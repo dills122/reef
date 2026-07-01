@@ -127,6 +127,8 @@ Diagnostic artifacts are written under the stress artifact root with suffix `-di
 - `pre-table-count-estimates.csv`, `post-table-count-estimates.csv`
 - `postgres-logs.txt`
 
+Stress telemetry also samples runtime health, hot-path timings, async command queue stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
+
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
 - `DEV_STRESS_DB_SERVICE=postgres`
@@ -299,7 +301,8 @@ Compose sets:
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`)
 - command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
-- async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE` and `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`
+- async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`
+- async command worker stats: `GET /internal/commands/async/stats` returns worker settings, command-log status counts, and async claim/complete/fail counters
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 

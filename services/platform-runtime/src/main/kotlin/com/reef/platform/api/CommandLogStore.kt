@@ -43,6 +43,8 @@ interface CommandLogStore {
     fun findByCommandId(commandId: String): CommandLogRecord?
     fun findByIdempotency(clientId: String, route: String, idempotencyKey: String): CommandLogRecord?
     fun findByStatus(status: CommandLogStatus, limit: Int): List<CommandLogRecord>
+    fun claimReceived(limit: Int): List<CommandLogRecord>
+    fun statusCounts(): Map<CommandLogStatus, Long>
     fun markProcessing(commandId: String)
     fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markFailed(commandId: String, responseStatus: Int, errorMessage: String)
@@ -87,6 +89,35 @@ class InMemoryCommandLogStore : CommandLogStore {
             .sortedBy { it.receivedAt }
             .take(limit)
             .toList()
+    }
+
+    override fun claimReceived(limit: Int): List<CommandLogRecord> {
+        if (limit <= 0) return emptyList()
+        return synchronized(this) {
+            byCommandId.values
+                .asSequence()
+                .filter { it.status == CommandLogStatus.RECEIVED }
+                .sortedBy { it.receivedAt }
+                .take(limit)
+                .map { existing ->
+                    val claimed = existing.copy(
+                        status = CommandLogStatus.PROCESSING,
+                        attemptCount = existing.attemptCount + 1,
+                        lastError = ""
+                    )
+                    byCommandId[existing.commandId] = claimed
+                    claimed
+                }
+                .toList()
+        }
+    }
+
+    override fun statusCounts(): Map<CommandLogStatus, Long> {
+        val counts = CommandLogStatus.values().associateWith { 0L }.toMutableMap()
+        byCommandId.values.forEach { record ->
+            counts[record.status] = counts.getValue(record.status) + 1L
+        }
+        return counts
     }
 
     override fun markProcessing(commandId: String) {
@@ -285,6 +316,60 @@ class PostgresCommandLogStore(
                 }
             }
         }
+    }
+
+    override fun claimReceived(limit: Int): List<CommandLogRecord> {
+        if (limit <= 0) return emptyList()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                WITH claimed AS (
+                  SELECT command_id
+                  FROM ${names.commands}
+                  WHERE status = 'RECEIVED'
+                  ORDER BY received_at, command_id
+                  LIMIT ?
+                  FOR UPDATE SKIP LOCKED
+                )
+                UPDATE ${names.commands} commands
+                SET status = 'PROCESSING',
+                    attempt_count = commands.attempt_count + 1,
+                    last_error = ''
+                FROM claimed
+                WHERE commands.command_id = claimed.command_id
+                RETURNING commands.*
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, limit)
+                ps.executeQuery().use { rs ->
+                    val records = mutableListOf<CommandLogRecord>()
+                    while (rs.next()) {
+                        records.add(rs.toCommandLogRecord())
+                    }
+                    return records
+                }
+            }
+        }
+    }
+
+    override fun statusCounts(): Map<CommandLogStatus, Long> {
+        val counts = CommandLogStatus.values().associateWith { 0L }.toMutableMap()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM ${names.commands}
+                GROUP BY status
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        counts[CommandLogStatus.valueOf(rs.getString("status"))] = rs.getLong("count")
+                    }
+                }
+            }
+        }
+        return counts
     }
 
     override fun markProcessing(commandId: String) {
