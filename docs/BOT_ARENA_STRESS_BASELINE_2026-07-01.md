@@ -509,3 +509,86 @@ Diagnosis:
 - Intake still plateaus around `2.2k` accepted rps on this single local instance, so the current HTTP/Kotlin/Postgres command-log append path is now the first accepted-response limiter.
 - Durable processing did complete all commands after the sweep, but high requested rates created a temporary backlog and low immediate trace pass rates.
 - The next slice should focus on command-log append throughput, HTTP/runtime concurrency, and batch/partition strategy before chasing bot-game rules.
+
+## Command-Log-Only Intake Comparison
+
+The captured-ack bundle above still used the legacy boundary command-capture table in addition to the command log. To isolate that cost, two follow-up runs disabled legacy command capture and switched idempotency lookup to in-memory while keeping `captured-ack`.
+
+### Durable Command Log Only
+
+Configuration:
+
+- `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
+- `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory`
+- `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=4`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=250`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
+
+Results:
+
+| Requested RPS | Workers | Accepted RPS | Success | p50 | p95 | p99 | Trace Pass |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `5000` | `128` | `2377.37` | `100.00%` | `43.56ms` | `48.10ms` | `54.18ms` | `40.00%` |
+| `10000` | `128` | `2375.63` | `100.00%` | `43.78ms` | `47.64ms` | `55.66ms` | `17.00%` |
+
+Hot-path averages:
+
+| Phase | Avg ms |
+|---|---:|
+| `api.commandCapture.reserve` | `1.88` |
+| `api.idempotency.find` | `0.001` |
+| `async.operation` | `2.24` |
+| `runtime.persistence.persistSubmitOutcome` | `1.22` |
+
+Post-drain stats:
+
+```json
+{"RECEIVED":0,"PROCESSING":0,"COMPLETED":486151,"FAILED":0}
+```
+
+Artifacts:
+
+- `/tmp/reef-commandlog-only-rate-5000-workers-128.json`
+- `/tmp/reef-commandlog-only-rate-10000-workers-128.json`
+- `/tmp/reef-commandlog-only-20260701/reef-commandlog-only-telemetry.ndjson`
+
+### In-Memory Command Log Diagnostic
+
+Configuration changed `EXTERNAL_API_COMMAND_LOG_MODE=inmemory` while keeping legacy capture disabled and idempotency in-memory. This is not durable; it is only a ceiling diagnostic.
+
+Results:
+
+| Requested RPS | Workers | Accepted RPS | Success | p50 | p95 | p99 | Trace Pass |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `5000` | `128` | `2471.87` | `100.00%` | `41.84ms` | `44.02ms` | `46.84ms` | `57.00%` |
+| `10000` | `128` | `2538.07` | `100.00%` | `41.97ms` | `44.18ms` | `47.83ms` | `49.00%` |
+
+Hot-path averages:
+
+| Phase | Avg ms |
+|---|---:|
+| `api.commandCapture.reserve` | `0.019` |
+| `api.idempotency.find` | `0.001` |
+| `async.operation` | `2.10` |
+| `runtime.persistence.persistSubmitOutcome` | `1.14` |
+
+Post-drain stats:
+
+```json
+{"RECEIVED":0,"PROCESSING":0,"COMPLETED":180109,"FAILED":0}
+```
+
+Artifacts:
+
+- `/tmp/reef-inmemory-commandlog-rate-5000-workers-128.json`
+- `/tmp/reef-inmemory-commandlog-rate-10000-workers-128.json`
+- `/tmp/reef-inmemory-commandlog-20260701/reef-inmemory-commandlog-telemetry.ndjson`
+
+Diagnosis:
+
+- Disabling legacy boundary command capture helps: best durable captured-ack throughput improved from `2284.65` to `2377.37` accepted rps and p99 improved from `70.82ms` to `54.18ms`.
+- Removing durable command-log append entirely only improved the best diagnostic result to `2538.07` accepted rps.
+- The remaining gap to `5k+` is therefore not primarily the command-log table; the local ceiling is likely HTTP server/runtime concurrency, load-generator/client limits, container CPU scheduling, or shared runtime synchronization.
+- The next useful test is a concurrency/thread sweep plus a low-level accepted-ack microbenchmark that bypasses simulator command generation and runtime async processing.
