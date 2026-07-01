@@ -212,3 +212,41 @@ Design implication:
 - Compare HTTP boundary versus gRPC/in-process command gateway before changing the arena write path.
 - Add simulator metrics that separate client backlog, runtime queueing, engine round-trip, persistence, and serialization.
 - Add arena-like profile variants with stricter own-order state handling to estimate avoidable invalid lifecycle noise.
+
+## Slowdown Investigation
+
+Follow-up inspection on the same local stack found that the current `~2k accepted rps` ceiling is mostly a loaded synchronous write-path limit, not an engine correctness issue.
+
+Important observations:
+
+- The load tester's default `drop` scheduler keeps only one pending rate token. When workers are saturated, offered tokens are dropped instead of queued. The reported throughput is therefore a practical completed-request capacity signal, not proof that every configured target RPS reached the runtime.
+- The local database is no longer clean. At inspection time it contained roughly:
+  - `runtime.runtime_events`: `3.16M` rows, `4.2GB`
+  - `boundary.api_command_captures`: `917k` rows, `1.5GB`
+  - `boundary.api_idempotency_records`: `920k` rows, `861MB`
+  - `runtime.executions`: `1.5M` rows, `927MB`
+  - `runtime.trades`: `751k` rows, `583MB`
+  - `runtime.submit_results`: `917k` rows, `308MB`
+- Postgres logged a checkpoint during the stress window with about `3.3GB` of WAL distance and a `742s` checkpoint duration. That points to write volume and storage/checkpoint behavior as first-class bottlenecks for long-running simulator use.
+- API v1 successful commands currently perform boundary command capture, idempotency lookup, engine execution, runtime persistence, idempotency save, and command capture completion synchronously before returning.
+- `EXTERNAL_API_COMMAND_LOG_MODE=disabled` does not disable command capture. `EXTERNAL_API_COMMAND_CAPTURE_MODE` defaults to `postgres`, so the boundary capture table is still on the hot path.
+- Runtime submits use a consolidated Postgres function for result, order, executions, trades, and lifecycle events. Modify/cancel paths still save result and lifecycle event separately.
+- The runtime uses a blocking `HttpServer` fixed thread pool (`PLATFORM_HTTP_THREADS=64`) and shared Hikari pools (`RUNTIME_DB_POOL_MAX=48`). With synchronous DB work in the request path, thread and pool waits will directly show up as request latency.
+- A quick legacy-route A/B probe was attempted with `--use-api-v1=false`, but the route returned `403` for order mutations because legacy mutation routes require the internal route guard. That result is a guardrail check, not a boundary-overhead measurement.
+
+Current interpretation:
+
+- Use `~2k accepted rps` as the conservative current loaded-stack planning cap for one runtime + engine instance.
+- Keep `~3k accepted rps` as the clean/tuned synchronous-path target already seen in earlier throughput work.
+- Treat `5k accepted rps` per instance as an architecture target that likely requires async or batched persistence, table lifecycle work, and better hot-path diagnostics.
+- Do not plan the arena around one giant instance. Plan capacity by run, instrument shard, matching partition, sandbox worker pool, and leaderboard/read-model partition.
+
+Likely speed-up order:
+
+1. Add phase timing and Hikari/pool diagnostics before rewriting the hot path.
+2. Add table-growth and checkpoint diagnostics to stress reports.
+3. Disable or move unnecessary boundary writes for internal simulator-only profiles only if command-path parity remains explicit and audited.
+4. Convert command capture from update-heavy mutable rows to append-oriented status events or a lighter hot-path receipt model.
+5. Batch or async runtime persistence for arena simulations while preserving deterministic replay/audit records.
+6. Partition or lifecycle-manage large append tables (`runtime_events`, command captures, idempotency records, executions, trades).
+7. Re-test clean-stack, loaded-stack, and long-soak envelopes separately.

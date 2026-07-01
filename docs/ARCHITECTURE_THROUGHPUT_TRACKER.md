@@ -12,6 +12,12 @@ Current measured reference:
 - profile: `capacity-baseline`, target `6500`, workers `768`, gRPC runtime-engine, runtime threads `64`, DB pool max `48`
 - capacity model: all targets in this tracker are per runtime + engine instance unless explicitly labeled cluster-wide
 
+Current loaded-stack reference from the Bot Arena planning branch:
+- best current-stack ceiling probe on 2026-07-01: `2096.39 rps` total, `2070.02 rps` accepted, `98.74%` success
+- profile: `capacity-baseline`, target `3000`, workers `384`, API v1 command path, non-clean local Postgres data volume
+- larger target probes (`4000/448`, `5000/512`, `6500/768`) reduced accepted throughput and increased tail latency
+- use this as a conservative loaded-instance planning cap until clean-stack and diagnostic runs are repeated
+
 Scaling intent:
 - reach stable `5k` accepted rps per instance before relying on horizontal scale-out.
 - use per-instance throughput as the unit that cluster capacity multiplies.
@@ -32,6 +38,8 @@ Scaling intent:
 | A9 | Postgres outbox publisher | Not started | architecture | Precondition for NATS |
 | A10 | NATS JetStream integration | Deferred | architecture | Wait until outbox is real |
 | A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
+| A12 | Boundary capture hot-path reduction | Not started | architecture | Command capture currently writes and updates Postgres on every API v1 command |
+| A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 
 ## Milestone Checklist
 
@@ -46,6 +54,8 @@ Scaling intent:
 - [ ] Surface phase timing in stress report summary.
 - [ ] Add Hikari pool active/idle/wait metrics or debug endpoint.
 - [ ] Add DB diagnostics snapshot to `dev-stress-diagnostics` for pool and table growth.
+- [ ] Add checkpoint/WAL-growth evidence to stress diagnostics.
+- [ ] Record whether each benchmark is clean-stack, warm-stack, or loaded-stack.
 - [ ] Run baseline at `5000/512/60s`.
 - [ ] Run ceiling point at `6500/768/60s`.
 
