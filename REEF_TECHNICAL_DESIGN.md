@@ -94,6 +94,9 @@ Responsibilities:
 Design rule:
 - simulator implementation language is less important than command-path parity, deterministic seeds, traceable run artifacts, and replay assertions.
 
+Exploratory extension:
+- [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) proposes a future tournament-style bot arena on top of the simulation control plane. The arena would use sandboxed bot execution, tested operator-controlled liquidity and background-flow bots, modular game modes, replayable runs, separate arena storage for competition metadata, and leaderboard analytics while preserving venue command-path parity.
+
 ### 3.5 Admin operations surface (CLI first)
 
 Admin controls should be implemented as application-layer use cases first and exposed via a CLI adapter in early phases.

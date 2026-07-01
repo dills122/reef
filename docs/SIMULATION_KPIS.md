@@ -17,15 +17,18 @@ This defines the canonical metrics for simulator-driven performance runs so we c
 - Meaning: overall outcome quality across all generated traffic.
 
 4. `valid_intent_success_rate_pct` (proxy)
+- Source: `quality.validIntentSuccessRatePct`
 - Formula: `totalSuccess / (totalRequests - invalidIntentRejectCount) * 100`
 - Invalid intent reject codes (default): `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`
 - Meaning: approximates system reliability after removing clearly invalid lifecycle attempts.
 
 5. `invalid_intent_rate_pct`
+- Source: `quality.invalidIntentRatePct`
 - Formula: `invalidIntentRejectCount / totalRequests * 100`
 - Meaning: signal of simulator/data quality and lifecycle realism.
 
 6. `system_failure_rate_pct` (proxy)
+- Source: `quality.systemFailureRatePct`
 - Formula: `(totalFailures - invalidIntentRejectCount) / totalRequests * 100`
 - Meaning: approximates non-simulator failure contribution.
 
@@ -56,6 +59,8 @@ This defines the canonical metrics for simulator-driven performance runs so we c
 5. KPI summary Markdown: `/tmp/reef-load-report-dev-stress-kpi.md`
 6. Optional DB diagnostics directory (when `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`):
    - `/tmp/<report-base>-diagnostics/`
+
+Raw load-tester JSON reports also include a `quality` object with the KPI proxy fields above. Wrapper summaries should read from that object where possible instead of recomputing incompatible definitions.
 
 ## Comparator Usage
 

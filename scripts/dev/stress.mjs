@@ -509,17 +509,7 @@ function buildKpiSummary(reportFiles, invalidCodes) {
       const filename = basename(path);
       const workerMatch = filename.match(/workers-(\d+)\.json$/);
       const rateMatch = filename.match(/rate-(\d+)/);
-      const totalRequests = Number(report.totalRequests ?? 0);
-      const totalSuccess = Number(report.totalSuccess ?? 0);
-      const totalFailures = Number(report.totalFailures ?? 0);
-      const invalidIntentRejectCount = invalidCodes.reduce(
-        (acc, code) => acc + rejectCount(report, code),
-        0,
-      );
-      const validIntentRequestCount = Math.max(totalRequests - invalidIntentRejectCount, 0);
-      const validIntentSuccessRatePct =
-        validIntentRequestCount > 0 ? (totalSuccess / validIntentRequestCount) * 100 : 0;
-      const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0);
+      const quality = qualityFromReport(report, invalidCodes);
       const traceChecked = Number(report.traceChecks?.checked ?? 0);
       const tracePass = Number(report.traceChecks?.pass ?? 0);
       samples.push({
@@ -528,10 +518,10 @@ function buildKpiSummary(reportFiles, invalidCodes) {
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
         throughputRps: Number(report.throughputRps ?? 0),
         acceptedBusinessOpsRps: Number(report.acceptedBusinessOpsRps ?? 0),
-        endToEndSuccessRatePct: totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0,
-        validIntentSuccessRatePct,
-        invalidIntentRatePct: totalRequests > 0 ? (invalidIntentRejectCount / totalRequests) * 100 : 0,
-        systemFailureRateProxyPct: totalRequests > 0 ? (systemFailureProxyCount / totalRequests) * 100 : 0,
+        endToEndSuccessRatePct: quality.endToEndSuccessRatePct,
+        validIntentSuccessRatePct: quality.validIntentSuccessRatePct,
+        invalidIntentRatePct: quality.invalidIntentRatePct,
+        systemFailureRateProxyPct: quality.systemFailureRatePct,
         tracePassRatePct: traceChecked > 0 ? (tracePass / traceChecked) * 100 : 100,
         p95LatencyMs: Number(report.latencyMs?.p95 ?? 0),
         p99LatencyMs: Number(report.latencyMs?.p99 ?? 0),
@@ -574,6 +564,33 @@ function buildKpiSummary(reportFiles, invalidCodes) {
     qualityCap90: quality90,
     qualityCap95: quality95,
     samples,
+  };
+}
+
+function qualityFromReport(report, invalidCodes) {
+  if (report.quality && typeof report.quality === "object") {
+    return {
+      endToEndSuccessRatePct: Number(report.quality.endToEndSuccessRatePct ?? 0),
+      validIntentSuccessRatePct: Number(report.quality.validIntentSuccessRatePct ?? 0),
+      invalidIntentRatePct: Number(report.quality.invalidIntentRatePct ?? 0),
+      systemFailureRatePct: Number(report.quality.systemFailureRatePct ?? 0),
+    };
+  }
+  const totalRequests = Number(report.totalRequests ?? 0);
+  const totalSuccess = Number(report.totalSuccess ?? 0);
+  const totalFailures = Number(report.totalFailures ?? 0);
+  const invalidIntentRejectCount = invalidCodes.reduce(
+    (acc, code) => acc + rejectCount(report, code),
+    0,
+  );
+  const validIntentRequestCount = Math.max(totalRequests - invalidIntentRejectCount, 0);
+  const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0);
+  return {
+    endToEndSuccessRatePct: totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0,
+    validIntentSuccessRatePct:
+      validIntentRequestCount > 0 ? (totalSuccess / validIntentRequestCount) * 100 : 0,
+    invalidIntentRatePct: totalRequests > 0 ? (invalidIntentRejectCount / totalRequests) * 100 : 0,
+    systemFailureRatePct: totalRequests > 0 ? (systemFailureProxyCount / totalRequests) * 100 : 0,
   };
 }
 

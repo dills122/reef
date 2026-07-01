@@ -68,7 +68,7 @@ go run ./cmd/load-tester \
 ### Mode Guidance
 
 - `chaos`: randomized actions regardless of order lifecycle state; useful for resilience and rejection-path testing.
-- `strict-lifecycle`: forces submit when no local live orders exist and prunes clearly terminal rejected orders from worker state; useful for cleaner business-throughput measurements.
+- `strict-lifecycle`: forces submit when no local live orders exist, prunes clearly terminal rejected orders from worker state, and briefly backs off to submit-only recovery after stale lifecycle rejects; useful for cleaner business-throughput measurements.
 - `capacity-baseline`: throughput-focused profile with submit-heavy behavior and reduced invalid modify/cancel noise; useful for capacity benchmarking.
 
 ### Profile Model
@@ -87,6 +87,7 @@ seed `bot-{worker}` actors.
 ### Report Additions
 
 - `acceptedBusinessOpsRps`: successful business operations per second
+- `quality`: end-to-end success, valid-intent success, invalid-intent rate, and system-failure proxy metrics
 - `rejectReasons`: grouped rejection code/reason breakdown
 - `rejectTaxonomy`: reject-code counts with percentage-of-failures/rejects (includes boundary error envelopes such as `ABUSE_BLOCKED` on non-2xx responses when present)
 

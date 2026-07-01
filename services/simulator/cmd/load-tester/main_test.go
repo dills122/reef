@@ -120,6 +120,15 @@ func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
 	if !approxEqual(second.PercentOfFailures, 25) || !approxEqual(second.PercentOfRejects, 33.33333333333333) {
 		t.Fatalf("unexpected second row percentages: %+v", second)
 	}
+	if report.Quality.InvalidIntentRejectCount != 3 {
+		t.Fatalf("expected invalid intent rejects to be counted, got %+v", report.Quality)
+	}
+	if report.Quality.SystemFailureCount != 1 {
+		t.Fatalf("expected system failure proxy count to be counted, got %+v", report.Quality)
+	}
+	if !approxEqual(report.Quality.ValidIntentSuccessRatePct, 0) {
+		t.Fatalf("expected no valid-intent successes in fixture, got %+v", report.Quality)
+	}
 }
 
 func TestFillResultParsesBoundaryErrorEnvelope(t *testing.T) {
@@ -334,7 +343,18 @@ func TestHasActionableOrders(t *testing.T) {
 }
 
 func TestUpdateRecoveryState(t *testing.T) {
-	state := workerState{rejectStreak: 2}
+	state := workerState{}
+	updateRecoveryState(&state, Config{Mode: "strict-lifecycle"})
+	if state.submitOnlyTicks != 8 || state.rejectStreak != 1 {
+		t.Fatalf("expected immediate strict-lifecycle recovery window, got %+v", state)
+	}
+	state = workerState{}
+	updateRecoveryState(&state, Config{Mode: "capacity-baseline"})
+	if state.submitOnlyTicks != 12 || state.rejectStreak != 1 {
+		t.Fatalf("expected immediate capacity-baseline recovery window, got %+v", state)
+	}
+
+	state = workerState{rejectStreak: 2}
 	updateRecoveryState(&state, Config{Mode: "strict-lifecycle"})
 	if state.submitOnlyTicks != 20 || state.rejectStreak != 0 {
 		t.Fatalf("expected recovery submit-only window, got %+v", state)
@@ -348,6 +368,15 @@ func TestUpdateRecoveryState(t *testing.T) {
 	updateRecoveryState(&state, Config{Mode: "chaos"})
 	if state.submitOnlyTicks != 0 || state.rejectStreak != 2 {
 		t.Fatalf("expected no recovery mutation outside lifecycle-managed modes, got %+v", state)
+	}
+}
+
+func TestLifecycleRecoveryTicks(t *testing.T) {
+	if got := lifecycleRecoveryTicks("strict-lifecycle"); got != 8 {
+		t.Fatalf("expected strict-lifecycle recovery ticks=8, got %d", got)
+	}
+	if got := lifecycleRecoveryTicks("capacity-baseline"); got != 12 {
+		t.Fatalf("expected capacity-baseline recovery ticks=12, got %d", got)
 	}
 }
 

@@ -120,6 +120,7 @@ type summary struct {
 	TopErrors              []errorSummary            `json:"topErrors"`
 	RejectReasons          []errorSummary            `json:"rejectReasons"`
 	RejectTaxonomy         []rejectTaxonomySummary   `json:"rejectTaxonomy"`
+	Quality                qualitySummary            `json:"quality"`
 	LatencyMs              latencySummary            `json:"latencyMs"`
 	TraceChecks            traceChecks               `json:"traceChecks"`
 }
@@ -142,6 +143,7 @@ type actionSummary struct {
 type latencySummary = reporting.LatencySummary
 type errorSummary = reporting.ErrorSummary
 type rejectTaxonomySummary = reporting.RejectTaxonomySummary
+type qualitySummary = reporting.QualitySummary
 
 type traceChecks struct {
 	Checked       int      `json:"checked"`
@@ -171,6 +173,8 @@ const (
 	profileRetail        = "retail"
 	profileNoise         = "noise"
 )
+
+var defaultInvalidIntentRejectCodes = []string{"INVALID_STATE", "NOT_FOUND", "VALIDATION_ERROR"}
 
 type trade struct {
 	EventID       string `json:"eventId"`
@@ -973,11 +977,16 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	report.TopErrors = topErrors(errorCounts, 8)
 	report.RejectReasons = topErrors(rejectReasons, 12)
 	report.RejectTaxonomy = summarizeRejectTaxonomy(rejectCodes, report.TotalFailures, totalRejects, 12)
+	report.Quality = computeQuality(report.TotalRequests, report.TotalSuccess, report.TotalFailures, rejectCodes, defaultInvalidIntentRejectCodes)
 	return report
 }
 
 func summarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []rejectTaxonomySummary {
 	return reporting.SummarizeRejectTaxonomy(rejectCodes, totalFailures, totalRejects, limit)
+}
+
+func computeQuality(totalRequests, totalSuccess, totalFailures int64, rejectCodes map[string]int64, invalidIntentCodes []string) qualitySummary {
+	return reporting.ComputeQuality(totalRequests, totalSuccess, totalFailures, rejectCodes, invalidIntentCodes)
 }
 
 func updateDimensionSummary(target map[string]profileSummary, key string, action Action, success bool) {
@@ -1410,6 +1419,8 @@ func printPrettySummary(report summary) {
 	fmt.Printf("  requests=%d success=%d failures=%d throughput=%.2f rps accepted=%.2f rps\n",
 		report.TotalRequests, report.TotalSuccess, report.TotalFailures, report.ThroughputRPS, report.AcceptedBusinessOpsRPS)
 	fmt.Printf("  success-rate=%.2f%%\n", successRate)
+	fmt.Printf("  valid-intent-success=%.2f%% invalid-intent=%.2f%% system-failure=%.2f%%\n",
+		report.Quality.ValidIntentSuccessRatePct, report.Quality.InvalidIntentRatePct, report.Quality.SystemFailureRatePct)
 	fmt.Printf("  latency(ms): min=%.2f p50=%.2f p95=%.2f p99=%.2f max=%.2f\n\n",
 		report.LatencyMs.Min, report.LatencyMs.P50, report.LatencyMs.P95, report.LatencyMs.P99, report.LatencyMs.Max)
 

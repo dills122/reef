@@ -48,6 +48,9 @@ Immediate implication:
 Current planning review:
 - [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./PROJECT_GOAL_PLAN_REVIEW.md)
 
+Exploratory planning:
+- [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md) proposes a tournament-style trading bot arena as a future simulation-control layer with sandboxed bot execution, modular game modes, replay, scoring, and leaderboards.
+
 ## Delivery Strategy
 
 The most effective sequence is:
@@ -94,6 +97,29 @@ Current execution checkpoint before that block:
 ## Major Workstreams
 
 Additional active workstream:
+
+### Workstream L: Bot Arena Exploration
+
+Goal:
+evaluate a tournament-style bot arena without weakening Reef's core venue, simulator, and API boundary discipline.
+
+Scope:
+- TypeScript-first bot SDK backed by language-neutral protobuf contracts
+- gRPC/protobuf arena runtime protocol between sandbox workers and the arena orchestrator
+- operator-controlled market maker and background-flow bots as tested liquidity/traffic providers
+- modular game modes with strict visible-data, action, risk, and scoring policies
+- replay and audit data model that scales without storing every full snapshot forever
+- separate arena storage boundary for competition metadata, replay indexes, leaderboards, and bot registry data
+- low-cost infrastructure path that starts local/scheduled and scales worker pools only when tournaments run
+- scale-out design by tournament run, shard, instrument group, sandbox worker, and matching-engine partition
+
+Exit criteria:
+- arena architecture decision is accepted or explicitly rejected
+- built-in bot liquidity model is proven with deterministic tests
+- sandbox threat model and public-submission quarantine path are documented
+- first game mode contract is stable enough for implementation planning
+- arena storage split and retention policy are implementation-ready
+- cost and capacity envelope is measured before public submissions are enabled
 
 ### Workstream K: Runtime Performance Library Investigation
 

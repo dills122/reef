@@ -22,6 +22,19 @@ type RejectTaxonomySummary struct {
 	PercentOfRejects  float64 `json:"percentOfRejects"`
 }
 
+type QualitySummary struct {
+	TotalRequests             int64    `json:"totalRequests"`
+	TotalSuccess              int64    `json:"totalSuccess"`
+	TotalFailures             int64    `json:"totalFailures"`
+	InvalidIntentRejectCodes  []string `json:"invalidIntentRejectCodes"`
+	InvalidIntentRejectCount  int64    `json:"invalidIntentRejectCount"`
+	SystemFailureCount        int64    `json:"systemFailureCount"`
+	EndToEndSuccessRatePct    float64  `json:"endToEndSuccessRatePct"`
+	ValidIntentSuccessRatePct float64  `json:"validIntentSuccessRatePct"`
+	InvalidIntentRatePct      float64  `json:"invalidIntentRatePct"`
+	SystemFailureRatePct      float64  `json:"systemFailureRatePct"`
+}
+
 func ComputeLatency(values []float64) LatencySummary {
 	if len(values) == 0 {
 		return LatencySummary{}
@@ -88,6 +101,44 @@ func SummarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, 
 	return out
 }
 
+func ComputeQuality(totalRequests, totalSuccess, totalFailures int64, rejectCodes map[string]int64, invalidIntentCodes []string) QualitySummary {
+	normalizedInvalidCodes := normalizeCodes(invalidIntentCodes)
+	invalidCodeSet := make(map[string]struct{}, len(normalizedInvalidCodes))
+	for _, code := range normalizedInvalidCodes {
+		invalidCodeSet[code] = struct{}{}
+	}
+
+	invalidIntentRejects := int64(0)
+	for code, count := range rejectCodes {
+		if _, ok := invalidCodeSet[code]; ok {
+			invalidIntentRejects += count
+		}
+	}
+	systemFailures := totalFailures - invalidIntentRejects
+	if systemFailures < 0 {
+		systemFailures = 0
+	}
+	validIntentRequests := totalRequests - invalidIntentRejects
+
+	row := QualitySummary{
+		TotalRequests:            totalRequests,
+		TotalSuccess:             totalSuccess,
+		TotalFailures:            totalFailures,
+		InvalidIntentRejectCodes: normalizedInvalidCodes,
+		InvalidIntentRejectCount: invalidIntentRejects,
+		SystemFailureCount:       systemFailures,
+	}
+	if totalRequests > 0 {
+		row.EndToEndSuccessRatePct = (float64(totalSuccess) / float64(totalRequests)) * 100
+		row.InvalidIntentRatePct = (float64(invalidIntentRejects) / float64(totalRequests)) * 100
+		row.SystemFailureRatePct = (float64(systemFailures) / float64(totalRequests)) * 100
+	}
+	if validIntentRequests > 0 {
+		row.ValidIntentSuccessRatePct = (float64(totalSuccess) / float64(validIntentRequests)) * 100
+	}
+	return row
+}
+
 func percentile(sorted []float64, p float64) float64 {
 	if len(sorted) == 0 {
 		return 0
@@ -100,4 +151,24 @@ func percentile(sorted []float64, p float64) float64 {
 	}
 	idx := int(float64(len(sorted)-1) * p)
 	return sorted[idx]
+}
+
+func normalizeCodes(codes []string) []string {
+	if len(codes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(codes))
+	out := make([]string, 0, len(codes))
+	for _, code := range codes {
+		if code == "" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		out = append(out, code)
+	}
+	sort.Strings(out)
+	return out
 }
