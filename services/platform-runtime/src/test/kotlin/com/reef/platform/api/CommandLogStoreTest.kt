@@ -135,6 +135,42 @@ class CommandLogStoreTest {
         assertEquals(3L, allRuns.accepted)
         assertEquals(1L, allRuns.processing)
     }
+
+    @Test
+    fun inMemoryStoreMarksTerminalBatch() {
+        val store = InMemoryCommandLogStore()
+        val completed = commandLogRecord(commandId = "cmd-batch-completed", idempotencyKey = "idem-batch-completed")
+        val failed = commandLogRecord(commandId = "cmd-batch-failed", idempotencyKey = "idem-batch-failed")
+
+        store.append(completed)
+        store.append(failed)
+        store.markProcessing(completed.commandId)
+        store.markProcessing(failed.commandId)
+        store.markTerminal(
+            listOf(
+                CommandTerminalUpdate(
+                    commandId = completed.commandId,
+                    status = CommandLogStatus.COMPLETED,
+                    responseStatus = 200,
+                    responsePayloadJson = """{"accepted":true}"""
+                ),
+                CommandTerminalUpdate(
+                    commandId = failed.commandId,
+                    status = CommandLogStatus.FAILED,
+                    responseStatus = 503,
+                    responsePayloadJson = "{}",
+                    errorMessage = "runtime unavailable"
+                )
+            )
+        )
+
+        val accounting = store.accountingSnapshot()
+        assertEquals(CommandLogStatus.COMPLETED, store.findByCommandId(completed.commandId)?.status)
+        assertEquals(CommandLogStatus.FAILED, store.findByCommandId(failed.commandId)?.status)
+        assertEquals(2L, accounting.terminal)
+        assertEquals(0L, accounting.active)
+        assertEquals(0L, accounting.accountingGap)
+    }
 }
 
 private fun commandLogRecord(

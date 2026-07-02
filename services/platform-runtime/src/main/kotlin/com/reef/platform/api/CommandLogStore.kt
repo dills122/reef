@@ -55,6 +55,14 @@ data class CommandLogAccountingSnapshot(
     val staleProcessing: Long
 )
 
+data class CommandTerminalUpdate(
+    val commandId: String,
+    val status: CommandLogStatus,
+    val responseStatus: Int,
+    val responsePayloadJson: String,
+    val errorMessage: String = ""
+)
+
 interface CommandLogStore {
     fun append(record: CommandLogRecord): CommandLogAppendResult
     fun findByCommandId(commandId: String): CommandLogRecord?
@@ -66,6 +74,7 @@ interface CommandLogStore {
     fun markProcessing(commandId: String)
     fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markFailed(commandId: String, responseStatus: Int, errorMessage: String)
+    fun markTerminal(updates: List<CommandTerminalUpdate>)
 }
 
 class InMemoryCommandLogStore : CommandLogStore {
@@ -193,6 +202,17 @@ class InMemoryCommandLogStore : CommandLogStore {
                 responseStatus = responseStatus,
                 lastError = errorMessage
             )
+        }
+    }
+
+    override fun markTerminal(updates: List<CommandTerminalUpdate>) {
+        updates.forEach { update ->
+            when (update.status) {
+                CommandLogStatus.COMPLETED -> markCompleted(update.commandId, update.responseStatus, update.responsePayloadJson)
+                CommandLogStatus.FAILED -> markFailed(update.commandId, update.responseStatus, update.errorMessage)
+                CommandLogStatus.RECEIVED,
+                CommandLogStatus.PROCESSING -> error("terminal update status must be COMPLETED or FAILED")
+            }
         }
     }
 
@@ -867,6 +887,65 @@ class PostgresCommandLogStore(
                     while (rs.next()) {
                     }
                 }
+            }
+        }
+    }
+
+    override fun markTerminal(updates: List<CommandTerminalUpdate>) {
+        if (updates.isEmpty()) return
+        dataSource.connection.use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement(
+                    """
+                    WITH deleted_queue AS (
+                      DELETE FROM ${names.commandWorkQueue}
+                      WHERE command_id = ?
+                      RETURNING command_id, attempt_count
+                    )
+                    INSERT INTO ${names.commandResults}(
+                      command_id,
+                      status,
+                      attempt_count,
+                      last_error,
+                      response_status,
+                      response_payload_json,
+                      completed_at
+                    )
+                    SELECT command_id, ?, attempt_count, ?, ?, ?::jsonb, NOW()
+                    FROM deleted_queue
+                    ON CONFLICT (command_id) DO UPDATE SET
+                      status = EXCLUDED.status,
+                      attempt_count = EXCLUDED.attempt_count,
+                      last_error = EXCLUDED.last_error,
+                      response_status = EXCLUDED.response_status,
+                      response_payload_json = EXCLUDED.response_payload_json,
+                      completed_at = EXCLUDED.completed_at
+                    """.trimIndent()
+                ).use { ps ->
+                    updates.forEach { update ->
+                        require(update.status == CommandLogStatus.COMPLETED || update.status == CommandLogStatus.FAILED) {
+                            "terminal update status must be COMPLETED or FAILED"
+                        }
+                        ps.setString(1, update.commandId)
+                        ps.setString(2, update.status.name)
+                        ps.setString(3, if (update.status == CommandLogStatus.FAILED) update.errorMessage else "")
+                        ps.setInt(4, update.responseStatus)
+                        ps.setString(
+                            5,
+                            if (update.status == CommandLogStatus.FAILED) "{}" else update.responsePayloadJson
+                        )
+                        ps.addBatch()
+                    }
+                    ps.executeBatch()
+                }
+                conn.commit()
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
             }
         }
     }

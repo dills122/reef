@@ -70,6 +70,7 @@ interface CapturedCommandQueue {
     fun markCommandProcessing(commandId: String)
     fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String)
+    fun markCommandTerminal(updates: List<CommandTerminalUpdate>)
 }
 
 class NoopCommandCaptureStore : CommandCaptureStore {
@@ -309,6 +310,10 @@ class CommandLogCommandCaptureStore(
 
     override fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String) {
         commandLogStore.markFailed(commandId, responseStatus, errorMessage)
+    }
+
+    override fun markCommandTerminal(updates: List<CommandTerminalUpdate>) {
+        commandLogStore.markTerminal(updates)
     }
 
     private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {

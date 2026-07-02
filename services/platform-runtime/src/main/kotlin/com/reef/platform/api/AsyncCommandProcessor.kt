@@ -37,27 +37,66 @@ class AsyncCommandProcessor(
             queue.claimReceivedCommands(batchSize)
         }
         AsyncCommandProcessorMetrics.recordClaimed(commands.size)
-        commands.forEach { command ->
+        val terminalUpdates = commands.map { command ->
             process(command)
+        }
+        if (terminalUpdates.isNotEmpty()) {
+            HotPathMetrics.time("async.completeBatch") {
+                try {
+                    queue.markCommandTerminal(terminalUpdates)
+                } catch (_: Exception) {
+                    terminalUpdates.forEach { update -> markTerminalIndividually(update) }
+                }
+            }
+            terminalUpdates.forEach { update ->
+                when (update.status) {
+                    CommandLogStatus.COMPLETED -> AsyncCommandProcessorMetrics.recordCompleted()
+                    CommandLogStatus.FAILED -> AsyncCommandProcessorMetrics.recordFailed()
+                    CommandLogStatus.RECEIVED,
+                    CommandLogStatus.PROCESSING -> Unit
+                }
+            }
         }
         return commands.size
     }
 
-    private fun process(command: CommandLogRecord) {
-        try {
+    private fun process(command: CommandLogRecord): CommandTerminalUpdate {
+        return try {
             val payload = HotPathMetrics.time("async.operation") {
                 execute(command)
             }
-            HotPathMetrics.time("async.complete") {
-                queue.markCommandCompleted(command.commandId, 200, payload)
-            }
-            AsyncCommandProcessorMetrics.recordCompleted()
+            CommandTerminalUpdate(
+                commandId = command.commandId,
+                status = CommandLogStatus.COMPLETED,
+                responseStatus = 200,
+                responsePayloadJson = payload
+            )
         } catch (ex: Exception) {
             val message = ex.message ?: ex::class.simpleName ?: "unknown"
-            HotPathMetrics.time("async.fail") {
-                queue.markCommandFailed(command.commandId, 503, message)
-            }
-            AsyncCommandProcessorMetrics.recordFailed()
+            CommandTerminalUpdate(
+                commandId = command.commandId,
+                status = CommandLogStatus.FAILED,
+                responseStatus = 503,
+                responsePayloadJson = "{}",
+                errorMessage = message
+            )
+        }
+    }
+
+    private fun markTerminalIndividually(update: CommandTerminalUpdate) {
+        when (update.status) {
+            CommandLogStatus.COMPLETED -> queue.markCommandCompleted(
+                update.commandId,
+                update.responseStatus,
+                update.responsePayloadJson
+            )
+            CommandLogStatus.FAILED -> queue.markCommandFailed(
+                update.commandId,
+                update.responseStatus,
+                update.errorMessage
+            )
+            CommandLogStatus.RECEIVED,
+            CommandLogStatus.PROCESSING -> Unit
         }
     }
 
