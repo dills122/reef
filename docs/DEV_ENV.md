@@ -178,6 +178,10 @@ Raw intake benchmarks accept matching run metadata:
 - `DEV_INTAKE_RUN_ID=<stable-run-id>`
 - `DEV_INTAKE_RUN_KIND=intake-bench`
 - `DEV_INTAKE_SCENARIO_ID=raw-intake`
+- `DEV_INTAKE_CAPTURE_COMMAND_ACCOUNTING=1` attaches command accounting and drain-rate data to the JSON report.
+- `DEV_INTAKE_COMMAND_DRAIN_WAIT_MS=30000` controls how long the runner waits for active commands to drain after load stops.
+- `DEV_INTAKE_COMMAND_DRAIN_POLL_MS=1000` controls drain polling frequency.
+- `DEV_INTAKE_FAIL_ON_ACCOUNTING_GAP=1` fails the run if the final accounting snapshot reports a gap.
 
 Run replay-pack drift validation against baseline scenario:
 
@@ -293,6 +297,8 @@ make dev-intake-bench JS_RUNTIME=node
 Use this before architecture changes when the goal is to separate platform-runtime `/api/v1/orders/submit` intake capacity from simulator strategy/lifecycle overhead.
 
 `dev-intake-bench` captures pre/post DB diagnostics by default and embeds a `dbDiagnostics` object into the JSON report. It also writes raw snapshots under `*-db-diagnostics-workers-<workers>-rate-<rate>/`. Disable this with `DEV_INTAKE_CAPTURE_DB_DIAGNOSTICS=0`, or adjust schemas with `DEV_INTAKE_DB_SCHEMAS=runtime,boundary,command_log`.
+
+When command accounting is enabled, the report also includes `commandAccounting` with before/after/drained snapshots, accepted rps, completed-during-load rps, active backlog after load, final active depth, final accounting gap, drain seconds, post-load drained count, and post-load drain rps. This is the preferred local gate for captured-ack throughput work because accepted rps alone does not prove the worker queue can drain.
 
 ## Command-log lifecycle
 

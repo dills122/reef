@@ -128,7 +128,7 @@ Captured-ack idempotency lookup reduction:
 | A20 | Async queue lease reclaim | Done | reliability | Stale `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`, preventing restart-stranded commands |
 | A21 | Completed-throughput target and no-loss plan | Done | planning | Active target is now `7500` completed/sec minimum, `10000` preferred, with no accepted-command accounting gaps |
 | A22 | Run/session attribution for throughput runs | Done | feature | `run_id`, `run_kind`, and `scenario_id` are captured on command-log rows from stress/intake payload metadata |
-| A23 | Backlog-adjusted stress accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress reports attach accepted, terminal, active, stale, completed-rps, and accounting-gap deltas using actual report wall duration when present. Drain-time measurement remains next |
+| A23 | Backlog-adjusted stress/intake accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress and intake reports attach accepted, terminal, active, stale, completed-rps, accounting-gap, and drain-time/rate data |
 | A24 | Durable-intake backpressure thresholds | In progress | reliability | Opt-in active-depth and stale-processing rejection added; queue-age and drain-rate thresholds remain next |
 | A25 | Batched command completion | Done | performance | Async processor flushes terminal command updates in one transaction per claimed batch; A/B showed no target recovery, so command-log reserve and runtime persistence are the next bottlenecks |
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
@@ -212,6 +212,7 @@ Drain follow-up:
 - [x] Run wider `4/8/16/24` worker sweep.
 - [ ] Reduce remaining split-schema write amplification.
 - [x] Add completed-throughput and accounting-gap fields to stress reports.
+- [x] Add command drain-rate and time-to-zero-active fields to raw intake reports.
 - [x] Add durable-intake overload thresholds that reject before acceptance.
 - [x] Add batched terminal result and queue-completion writes.
 - [x] A/B batched terminal writes against captured-ack worker and raw-intake profiles.
