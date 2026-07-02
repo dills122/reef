@@ -4,10 +4,11 @@ import https from "node:https";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import {
+  captureDbDiagnosticsLogs,
+  captureDbDiagnosticsSnapshot,
+  defaultDiagnosticSchemas,
+} from "./lib/db-diagnostics.mjs";
 
 loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
@@ -27,7 +28,9 @@ const captureDbDiagnostics = env("DEV_STRESS_CAPTURE_DB_DIAGNOSTICS", "0") === "
 const dbDiagnosticsService = env("DEV_STRESS_DB_SERVICE", "postgres");
 const dbDiagnosticsUser = env("DEV_STRESS_DB_USER", "reef");
 const dbDiagnosticsName = env("DEV_STRESS_DB_NAME", "reef");
-const dbDiagnosticsSchema = env("DEV_STRESS_DB_SCHEMA", "runtime");
+const dbDiagnosticsSchemas = parseCsvStrings(
+  env("DEV_STRESS_DB_SCHEMAS", env("DEV_STRESS_DB_SCHEMA", defaultDiagnosticSchemas.join(","))),
+);
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 
 const baseOut = out.replace(/\.json$/, "");
@@ -63,7 +66,7 @@ if (captureDbDiagnostics) {
     service: dbDiagnosticsService,
     dbUser: dbDiagnosticsUser,
     dbName: dbDiagnosticsName,
-    schema: dbDiagnosticsSchema,
+    schemas: dbDiagnosticsSchemas,
   });
 }
 try {
@@ -105,7 +108,7 @@ try {
       service: dbDiagnosticsService,
       dbUser: dbDiagnosticsUser,
       dbName: dbDiagnosticsName,
-      schema: dbDiagnosticsSchema,
+      schemas: dbDiagnosticsSchemas,
     });
     await captureDbDiagnosticsLogs({
       diagnosticsDir,
@@ -175,120 +178,16 @@ function parseCsvInts(raw) {
     .filter((value) => Number.isFinite(value) && value > 0);
 }
 
+function parseCsvStrings(raw) {
+  return String(raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function resetDir(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
-}
-
-async function captureDbDiagnosticsSnapshot({ diagnosticsDir, stage, service, dbUser, dbName, schema }) {
-  mkdirSync(diagnosticsDir, { recursive: true });
-  const info = { capturedAt: new Date().toISOString(), stage, service, dbUser, dbName, schema };
-  try {
-    const safeSchema = normalizeSchemaName(schema);
-    const serverVersion = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: "show server_version_num;",
-    });
-    const bgwriterRows = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: "select * from pg_stat_bgwriter;",
-    });
-    const checkpointerRows = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql:
-        "select coalesce((select count(1) from pg_catalog.pg_views where schemaname='pg_catalog' and viewname='pg_stat_checkpointer'),0);",
-    });
-    const hasCheckpointer = Number(checkpointerRows[0] ?? 0) > 0;
-    const checkpointerData = hasCheckpointer
-      ? await queryDbCsv({
-          service,
-          dbUser,
-          dbName,
-          sql: "select * from pg_stat_checkpointer;",
-        })
-      : [];
-    const tableSizes = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: `
-select c.relname, pg_total_relation_size(c.oid) as bytes
-from pg_class c
-join pg_namespace n on n.oid = c.relnamespace
-where n.nspname='${safeSchema}' and c.relkind='r'
-order by pg_total_relation_size(c.oid) desc
-limit 20;`,
-    });
-    const tableCounts = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: `
-select relname, n_live_tup
-from pg_stat_user_tables
-where schemaname='${safeSchema}'
-order by n_live_tup desc
-limit 20;`,
-    });
-
-    writeFileSync(join(diagnosticsDir, `${stage}-meta.json`), JSON.stringify({ ...info, serverVersion }, null, 2));
-    writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_bgwriter.csv`), bgwriterRows.join("\n") + "\n");
-    if (hasCheckpointer) {
-      writeFileSync(
-        join(diagnosticsDir, `${stage}-pg_stat_checkpointer.csv`),
-        checkpointerData.join("\n") + "\n",
-      );
-    }
-    writeFileSync(join(diagnosticsDir, `${stage}-table-sizes.csv`), tableSizes.join("\n") + "\n");
-    writeFileSync(join(diagnosticsDir, `${stage}-table-count-estimates.csv`), tableCounts.join("\n") + "\n");
-  } catch (error) {
-    writeFileSync(
-      join(diagnosticsDir, `${stage}-capture-error.txt`),
-      `${new Date().toISOString()} ${String(error?.message || error)}\n`,
-    );
-  }
-}
-
-function normalizeSchemaName(raw) {
-  const value = String(raw ?? "").trim();
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-    throw new Error(`invalid schema identifier: ${value}`);
-  }
-  return value;
-}
-
-async function captureDbDiagnosticsLogs({ diagnosticsDir, service, since }) {
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      "docker",
-      ["compose", "-f", "docker-compose.yml", "logs", "--since", since, service],
-      { cwd: process.cwd() },
-    );
-    writeFileSync(join(diagnosticsDir, "postgres-logs.txt"), `${stdout}${stderr}`);
-  } catch (error) {
-    writeFileSync(
-      join(diagnosticsDir, "postgres-logs-error.txt"),
-      `${new Date().toISOString()} ${String(error?.message || error)}\n`,
-    );
-  }
-}
-
-async function queryDbCsv({ service, dbUser, dbName, sql }) {
-  const { stdout } = await execFileAsync(
-    "docker",
-    ["compose", "-f", "docker-compose.yml", "exec", "-T", service, "psql", "-U", dbUser, "-d", dbName, "-At", "-F", ",", "-c", sql],
-    { cwd: process.cwd() },
-  );
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 function resolveActionMix(profileName) {

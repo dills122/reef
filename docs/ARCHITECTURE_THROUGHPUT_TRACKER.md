@@ -45,7 +45,7 @@ Scaling intent:
 | ID | Workstream | Status | Target Branch Type | Notes |
 |---|---|---|---|---|
 | A1 | Runtime phase timing diagnostics | In progress | feature | Internal hot-path endpoint added for boundary/engine/persistence timing |
-| A2 | DB pool/write-path diagnostics in stress telemetry | In progress | feature | Hikari pool endpoint and telemetry probe added; write-path table/index diagnostics still manual |
+| A2 | DB pool/write-path diagnostics in stress telemetry | Done | feature | Hikari endpoint, telemetry probe, and reusable pre/post table/checkpoint diagnostics are available |
 | A3 | Command log schema and interface | Not started | feature | First DB slice to add |
 | A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
 | A5 | Command processing mode flags | Done | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
@@ -73,8 +73,8 @@ Scaling intent:
 - [ ] Add phase timing around response serialization.
 - [ ] Surface phase timing in stress report summary.
 - [x] Add Hikari pool active/idle/wait metrics or debug endpoint.
-- [ ] Add DB diagnostics snapshot to `dev-stress-diagnostics` for pool and table growth.
-- [ ] Add checkpoint/WAL-growth evidence to stress diagnostics.
+- [x] Add DB diagnostics snapshot to `dev-stress-diagnostics` for pool and table growth.
+- [x] Add checkpoint/WAL-growth evidence to stress diagnostics.
 - [ ] Record whether each benchmark is clean-stack, warm-stack, or loaded-stack.
 - [ ] Run baseline at `5000/512/60s`.
 - [ ] Run ceiling point at `6500/768/60s`.

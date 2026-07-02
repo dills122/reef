@@ -120,11 +120,10 @@ make dev-stress-diagnostics
 ```
 
 Diagnostic artifacts are written under the stress artifact root with suffix `-diagnostics`:
-- `pre-meta.json`, `post-meta.json`
+- `pre-db-diagnostics.json`, `post-db-diagnostics.json`
 - `pre-pg_stat_bgwriter.csv`, `post-pg_stat_bgwriter.csv`
 - `pre-pg_stat_checkpointer.csv`, `post-pg_stat_checkpointer.csv` (Postgres 17+ when available)
-- `pre-table-sizes.csv`, `post-table-sizes.csv`
-- `pre-table-count-estimates.csv`, `post-table-count-estimates.csv`
+- `pre-table-stats.csv`, `post-table-stats.csv`
 - `postgres-logs.txt`
 
 Stress telemetry also samples runtime health, hot-path timings, async command queue stats, runtime DB pool stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
@@ -134,7 +133,7 @@ Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_DB_SERVICE=postgres`
 - `DEV_STRESS_DB_USER=reef`
 - `DEV_STRESS_DB_NAME=reef`
-- `DEV_STRESS_DB_SCHEMA=runtime`
+- `DEV_STRESS_DB_SCHEMAS=runtime,boundary,command_log`
 - `DEV_STRESS_DB_LOG_SINCE=30m`
 - `DEV_STRESS_RATE_SCHEDULE=drop|precise` controls load-tester rate scheduling (`drop` is the default; `precise` is useful for capacity sweeps with larger worker counts)
 
@@ -250,6 +249,8 @@ make dev-intake-bench JS_RUNTIME=node
 ```
 
 Use this before architecture changes when the goal is to separate platform-runtime `/api/v1/orders/submit` intake capacity from simulator strategy/lifecycle overhead.
+
+`dev-intake-bench` captures pre/post DB diagnostics by default and embeds a `dbDiagnostics` object into the JSON report. It also writes raw snapshots under `*-db-diagnostics-workers-<workers>-rate-<rate>/`. Disable this with `DEV_INTAKE_CAPTURE_DB_DIAGNOSTICS=0`, or adjust schemas with `DEV_INTAKE_DB_SCHEMAS=runtime,boundary,command_log`.
 
 30-minute fixed-load soak (clean reset recommended first):
 
