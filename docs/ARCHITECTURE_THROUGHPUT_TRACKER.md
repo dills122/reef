@@ -64,6 +64,7 @@ Scaling intent:
 | A17 | Command-log lifecycle controls | In progress | architecture | Dry-run-first terminal pruning and retention pins added; partitioning remains next |
 | A18 | Command-log partitioning plan | Done | architecture | Plan chooses live lookup + partitioned archive path instead of in-place range partitioning of `commands` |
 | A19 | Async queue indexed claim | Done | performance | Loaded claim query moved from command-table sort/join to `command_work_queue(status, updated_at, command_id)` index; `LIMIT 250` probe dropped from ~1416ms to ~17ms |
+| A20 | Async queue lease reclaim | Done | reliability | Stale `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`, preventing restart-stranded commands |
 
 ## Milestone Checklist
 
@@ -136,8 +137,18 @@ Drain follow-up:
 - [x] Add pinned run/session retention before pruning named replay/audit runs.
 - [x] Add partitioning plan for command-log commands/results.
 - [x] Make async queue claim use the active-queue index instead of sorting joined command history.
+- [x] Add async worker lease timeout so stale `PROCESSING` rows can be reclaimed after runtime restart.
+- [x] Add captured-ack dev/stress entrypoints using the tested queue settings.
 - [ ] Add run/session attribution to command-log intake.
-- [ ] Reduce remaining split-schema write amplification before wider `4/8/16` worker sweep.
+- [x] Run wider `4/8/16/24` worker sweep.
+- [ ] Reduce remaining split-schema write amplification.
+
+Latest async drain notes:
+- `4` workers drained about `~2k commands/sec`.
+- `8` workers drained about `~3k commands/sec`.
+- `16` workers drained about `~4k-4.3k commands/sec`.
+- `24` workers drained about `~4.9k commands/sec`, but per-command persistence and complete latency worsened.
+- DB pools showed no waiter pressure during the sweep, so the next likely bottleneck is per-command runtime persistence and result completion writes.
 
 ### M4: Async Batched Runtime Persistence
 

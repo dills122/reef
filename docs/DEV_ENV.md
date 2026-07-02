@@ -119,6 +119,28 @@ Run stress with automatic pre/post DB diagnostics capture:
 make dev-stress-diagnostics
 ```
 
+Run the durable captured-ack queue profile used for async drain and bot-arena capacity work:
+
+```bash
+make dev-up-captured-ack
+make dev-stress-captured-ack
+```
+
+`dev-up-captured-ack` starts `platform-runtime` with:
+- `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=4`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=250`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS=60000`
+
+Override the worker count for drain sweeps, for example:
+
+```bash
+EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=16 make dev-up-captured-ack
+```
+
 Diagnostic artifacts are written under the stress artifact root with suffix `-diagnostics`:
 - `pre-db-diagnostics.json`, `post-db-diagnostics.json`
 - `pre-pg_stat_bgwriter.csv`, `post-pg_stat_bgwriter.csv`
@@ -372,7 +394,8 @@ Compose sets:
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
 - command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
-- async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`
+- async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`
+- async command worker lease: claimed `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`; this prevents runtime restarts from permanently stranding in-flight commands.
 - async command worker stats: `GET /internal/commands/async/stats` returns worker settings, active queue status counts from `command_log.command_work_queue`, and async claim/complete/fail counters. Postgres mode does not count historical terminal results on this hot probe.
 - DB pool stats: `GET /internal/perf/db-pools` returns Hikari active/idle/total/waiter counts for runtime-managed pools.
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`

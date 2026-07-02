@@ -180,7 +180,12 @@ class PostgresCommandLogStore(
     private val dataSource: DataSource,
     private val names: PostgresCommandLogSqlNames = PostgresCommandLogSqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
-    private val appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.fromEnv()
+    private val appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.fromEnv(),
+    private val processingLeaseMs: Long = RuntimeEnv.long(
+        "EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS",
+        60_000L,
+        min = 1_000L
+    )
 ) : CommandLogStore {
     init {
         dataSource.connection.use { conn ->
@@ -547,6 +552,16 @@ class PostgresCommandLogStore(
                   SELECT queue.command_id
                   FROM ${names.commandWorkQueue} queue
                   WHERE queue.status = 'RECEIVED'
+                     OR (
+                       queue.status = 'PROCESSING'
+                       AND (
+                         queue.leased_until < NOW()
+                         OR (
+                           queue.leased_until IS NULL
+                           AND queue.updated_at < NOW() - (?::double precision * INTERVAL '1 millisecond')
+                         )
+                       )
+                     )
                   ORDER BY queue.updated_at, queue.command_id
                   LIMIT ?
                   FOR UPDATE SKIP LOCKED
@@ -556,8 +571,8 @@ class PostgresCommandLogStore(
                   SET status = 'PROCESSING',
                       attempt_count = queue.attempt_count + 1,
                       last_error = '',
-                      leased_by = '',
-                      leased_until = NULL,
+                      leased_by = 'async-command-worker',
+                      leased_until = NOW() + (?::double precision * INTERVAL '1 millisecond'),
                       updated_at = NOW()
                   FROM claimed
                   WHERE queue.command_id = claimed.command_id
@@ -566,7 +581,9 @@ class PostgresCommandLogStore(
                 ${selectComposedCommandLogRecord(queueTable = "updated queue", queueJoin = "JOIN")}
                 """.trimIndent()
             ).use { ps ->
-                ps.setInt(1, limit)
+                ps.setLong(1, processingLeaseMs)
+                ps.setInt(2, limit)
+                ps.setLong(3, processingLeaseMs)
                 ps.executeQuery().use { rs ->
                     val records = mutableListOf<CommandLogRecord>()
                     while (rs.next()) {

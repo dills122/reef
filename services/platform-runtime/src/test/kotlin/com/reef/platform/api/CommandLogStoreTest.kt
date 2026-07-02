@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import java.sql.DriverManager
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -254,9 +255,9 @@ class PostgresCommandLogStoreIntegrationTest {
         val store = postgresStoreOrNull() ?: return
         val suffix = UUID.randomUUID().toString()
         val first = commandLogRecord(commandId = "cmd-claim-first-$suffix", idempotencyKey = "idem-claim-first-$suffix")
-            .copy(receivedAt = Instant.parse("1970-01-01T00:00:00Z"))
+            .copy(receivedAt = Instant.parse("1800-01-01T00:00:00Z"))
         val second = commandLogRecord(commandId = "cmd-claim-second-$suffix", idempotencyKey = "idem-claim-second-$suffix")
-            .copy(receivedAt = Instant.parse("1970-01-01T00:00:01Z"))
+            .copy(receivedAt = Instant.parse("1800-01-01T00:00:01Z"))
 
         assertTrue(store.append(second).appended)
         assertTrue(store.append(first).appended)
@@ -270,10 +271,39 @@ class PostgresCommandLogStoreIntegrationTest {
         assertEquals(1, claimed.single().attemptCount)
         assertEquals(CommandLogStatus.PROCESSING, stored?.status)
         assertTrue((counts[CommandLogStatus.PROCESSING] ?: 0L) >= 1L)
+
+        store.markCompleted(first.commandId, 200, """{"accepted":true}""")
+        store.markFailed(second.commandId, 503, "test cleanup")
+    }
+
+    @Test
+    fun postgresStoreReclaimsStaleProcessingCommandsWhenConfigured() {
+        val store = postgresStoreOrNull(processingLeaseMs = 60_000L) ?: return
+        val suffix = UUID.randomUUID().toString()
+        val stale = commandLogRecord(
+            commandId = "cmd-stale-processing-$suffix",
+            idempotencyKey = "idem-stale-processing-$suffix"
+        ).copy(receivedAt = Instant.parse("1900-01-01T00:00:00Z"))
+
+        assertTrue(store.append(stale).appended)
+        store.markProcessing(stale.commandId)
+        forceStaleProcessing(stale.commandId) ?: return
+
+        val claimed = store.claimReceived(1)
+        val stored = store.findByCommandId(stale.commandId)
+
+        assertEquals(listOf(stale.commandId), claimed.map { it.commandId })
+        assertEquals(CommandLogStatus.PROCESSING, claimed.single().status)
+        assertEquals(2, claimed.single().attemptCount)
+        assertEquals(CommandLogStatus.PROCESSING, stored?.status)
+        assertEquals(2, stored?.attemptCount)
+
+        store.markCompleted(stale.commandId, 200, """{"accepted":true}""")
     }
 
     private fun postgresStoreOrNull(
-        appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.Inline
+        appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.Inline,
+        processingLeaseMs: Long = 60_000L
     ): PostgresCommandLogStore? {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
@@ -281,7 +311,30 @@ class PostgresCommandLogStoreIntegrationTest {
         return PostgresCommandLogStore(
             dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword),
             bootstrapMode = PostgresBootstrapMode.Validate,
-            appendMode = appendMode
+            appendMode = appendMode,
+            processingLeaseMs = processingLeaseMs
         )
+    }
+
+    private fun forceStaleProcessing(commandId: String): Boolean? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE command_log.command_work_queue
+                SET status = 'PROCESSING',
+                    updated_at = '1900-01-01T00:00:00Z'::timestamptz,
+                    leased_by = '',
+                    leased_until = NULL
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeUpdate()
+            }
+        }
+        return true
     }
 }
