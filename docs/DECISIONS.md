@@ -535,6 +535,8 @@ Summary:
 - `command_log.command_work_queue` is recoverable active scheduling state and can be unlogged to reduce WAL churn; no-loss accounting still depends on logged `command_log.commands` for accepted commands and logged `command_log.command_results` for terminal outcomes.
 - bootstrap must continue reconstructing active queue rows from durable commands without terminal results after restart.
 - first quick loaded-stack evidence for the unlogged active queue recovered a `3945.78 accepted rps` point with eventual `59395/59395` terminal commands and `0` accounting gap, but it is still below the `7500` completed/sec target.
+- captured-ack dev/stress profiles should disable legacy boundary command capture by default because durable command capture is already provided by `command_log.commands`; keeping both writes on the hot path reduced the quick loaded-stack point to about `1646 accepted rps`.
+- first quick loaded-stack evidence after disabling duplicate legacy capture reached `4757.19 accepted rps` with eventual `71559/71559` terminal commands and `0` accounting gap.
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)

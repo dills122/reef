@@ -127,6 +127,7 @@ make dev-stress-captured-ack
 ```
 
 `dev-up-captured-ack` starts `platform-runtime` with:
+- `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
 - `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`
@@ -134,6 +135,8 @@ make dev-stress-captured-ack
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=250`
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS=60000`
+
+In this profile, `command_log.commands` is the canonical durable command capture path. The legacy boundary command-capture table is disabled by default to avoid duplicate hot-path writes; set `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres` explicitly when testing legacy capture behavior.
 
 Durable captured-ack intake backpressure is opt-in:
 - `EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS=0` disables active queue-depth rejection.

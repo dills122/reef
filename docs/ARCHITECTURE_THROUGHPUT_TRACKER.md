@@ -89,6 +89,13 @@ Active-queue WAL tuning follow-up:
 - unlogged active queue run, `8` async workers, run id `unlogged-active-queue-8w-15000-384`: `47433` accepted, `3151.87 accepted rps`, p95 `180.13ms`, p99 `238.16ms`; immediate terminal `47433/47433`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `13.41ms`.
 - conclusion: removing the retired status index alone did not move the ceiling on this loaded stack. Making the active queue recoverable/unlogged materially reduced append pressure and recovered a `~3.9k accepted rps` loaded-stack point, but still falls short of the `7500` completed/sec target.
 
+Captured-ack profile correction:
+- `make dev-up-captured-ack` now defaults `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled` because `command_log.commands` is the canonical durable capture path for captured-ack.
+- with legacy boundary capture still enabled, run id `reserve-buildrecord-executeupdate-4w-15000-384` accepted only `25103` commands, `1646.06 accepted rps`, p95 `332.93ms`, p99 `383.14ms`; `api.commandCapture.reserve` averaged `17.41ms`, while the new inner `api.commandLog.append` span averaged `9.76ms`.
+- with legacy boundary capture disabled, `4` async workers, run id `captured-ack-no-legacy-capture-4w-15000-384`: `71559` accepted, `4757.19 accepted rps`, p95 `120.98ms`, p99 `171.11ms`; immediate active backlog `21461`, eventual terminal `71559/71559`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `7.03ms`, `api.commandLog.append` averaged `7.01ms`, and `api.commandCapture.buildRecord` averaged `0.013ms`.
+- with legacy boundary capture disabled, `8` async workers, run id `captured-ack-no-legacy-capture-8w-15000-384`: `64958` accepted, `4317.92 accepted rps`, p95 `127.51ms`, p99 `171.43ms`; eventual terminal `64958/64958`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `7.84ms`.
+- conclusion: duplicate legacy boundary capture was still present in the captured-ack dev profile and was a material loaded-stack bottleneck. Removing it improves the quick loaded-stack point to `~4.8k accepted rps`, but completed-throughput drain is still below the `7500` target.
+
 ## Workstream Status
 
 | ID | Workstream | Status | Target Branch Type | Notes |
@@ -104,7 +111,7 @@ Active-queue WAL tuning follow-up:
 | A9 | Postgres outbox publisher | Not started | architecture | Precondition for NATS |
 | A10 | NATS JetStream integration | Deferred | architecture | Wait until outbox is real |
 | A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
-| A12 | Boundary capture hot-path reduction | In progress | architecture | `captured-ack` now avoids the separate idempotency write for accepted responses |
+| A12 | Boundary capture hot-path reduction | In progress | architecture | Captured-ack dev profile now disables duplicate legacy boundary command capture; command-log append remains the canonical durable capture path |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
 | A15 | Command queue/result split | Done | architecture | Functional split complete; first benchmark regressed ingress, so next work must reduce write amplification |
@@ -204,6 +211,8 @@ Drain follow-up:
 - [x] A/B batched terminal writes against captured-ack worker and raw-intake profiles.
 - [x] Remove retired command-table status index from the hot append path.
 - [x] Move active command queue to recoverable unlogged storage.
+- [x] Disable duplicate legacy boundary command capture in captured-ack dev/stress profile.
+- [x] Add inner reserve timing for command-record build vs command-log append.
 - [ ] Split or slim hot command payload writes on command-log reserve.
 - [ ] Batch or defer per-command runtime persistence writes.
 
@@ -219,6 +228,7 @@ Latest batched-completion notes:
 - raw-intake runs on the same loaded stack accepted only `~2.3k-2.8k rps`, far below the earlier narrow `7k+` intake reference.
 - `api.commandCapture.reserve` reached `16.84ms avg` in the `16` worker raw-intake sample, so the next high-value slice is command-log write amplification before another worker-count sweep.
 - after making the active queue unlogged, the best quick loaded-stack raw-intake point improved to `3945.78 accepted rps` with eventual drain and `0` gap. The next measured blocker remains command-log reserve plus runtime persistence under higher worker counts.
+- after disabling duplicate legacy boundary capture in the captured-ack profile, the best quick loaded-stack point improved again to `4757.19 accepted rps`, p99 `171.11ms`, eventual drain, and `0` gap. `api.commandLog.append` now accounts for almost all reserve latency.
 
 ### M4: Async Batched Runtime Persistence
 

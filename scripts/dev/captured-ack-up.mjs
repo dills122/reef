@@ -5,6 +5,7 @@ loadDotEnv();
 
 setValue("EXTERNAL_API_COMMAND_LOG_MODE", "postgres");
 setValue("EXTERNAL_API_COMMAND_PROCESSING_MODE", "captured-ack");
+setDefault("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setValue("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", "true");
 setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", "4");
 setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", "250");
@@ -13,6 +14,7 @@ setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS", "60000");
 
 console.log("captured-ack runtime settings:");
 console.log(`  commandLog=${env("EXTERNAL_API_COMMAND_LOG_MODE")}`);
+console.log(`  legacyCommandCapture=${env("EXTERNAL_API_COMMAND_CAPTURE_MODE")}`);
 console.log(`  processingMode=${env("EXTERNAL_API_COMMAND_PROCESSING_MODE")}`);
 console.log(`  asyncWorker=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED")}`);
 console.log(`  asyncThreads=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS")}`);

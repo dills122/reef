@@ -452,7 +452,6 @@ class PostgresCommandLogStore(
                 SELECT command_id, 'RECEIVED', 0, '', ?::timestamptz
                 FROM inserted_command
                 ON CONFLICT (command_id) DO NOTHING
-                RETURNING command_id
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, record.commandId)
@@ -469,19 +468,17 @@ class PostgresCommandLogStore(
                 ps.setString(12, record.receivedAt.toString())
                 ps.setString(13, record.payloadJson)
                 ps.setString(14, record.receivedAt.toString())
-                ps.executeQuery().use { rs ->
-                    if (rs.next()) {
-                        return CommandLogAppendResult(
-                            appended = true,
-                            record = record.copy(
-                                status = CommandLogStatus.RECEIVED,
-                                attemptCount = 0,
-                                lastError = "",
-                                responseStatus = 0,
-                                responsePayloadJson = "{}"
-                            )
+                if (ps.executeUpdate() > 0) {
+                    return CommandLogAppendResult(
+                        appended = true,
+                        record = record.copy(
+                            status = CommandLogStatus.RECEIVED,
+                            attemptCount = 0,
+                            lastError = "",
+                            responseStatus = 0,
+                            responsePayloadJson = "{}"
                         )
-                    }
+                    )
                 }
             }
         }
