@@ -2,6 +2,7 @@ import { basename, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 import {
@@ -174,16 +175,27 @@ async function sampleCommandAccounting(runtimeUrl, runId) {
 
 async function waitForCommandDrain({ runtimeUrl, runId, initialProbe, timeoutMs, pollMs }) {
   const startedAtMs = Date.now();
+  const startedAtMonotonicMs = performance.now();
+  const maxPolls = Math.max(1, Math.ceil(timeoutMs / Math.max(1, pollMs)) + 1);
   let latest = initialProbe;
-  while (latest?.json?.available && Number(latest.json.active ?? 0) > 0 && Date.now() - startedAtMs < timeoutMs) {
+  let polls = 0;
+  while (
+    latest?.json?.available &&
+    Number(latest.json.active ?? 0) > 0 &&
+    performance.now() - startedAtMonotonicMs < timeoutMs &&
+    polls < maxPolls
+  ) {
     await sleep(pollMs);
     latest = await sampleCommandAccounting(runtimeUrl, runId);
+    polls++;
   }
+  const elapsedMs = Math.round(performance.now() - startedAtMonotonicMs);
   return {
     ...(latest ?? {}),
     drainStartedAt: new Date(startedAtMs).toISOString(),
     drainFinishedAt: new Date().toISOString(),
-    drainElapsedMs: Date.now() - startedAtMs,
+    drainElapsedMs: elapsedMs,
+    drainPolls: polls,
     timedOut: Boolean(latest?.json?.available && Number(latest.json.active ?? 0) > 0),
   };
 }
@@ -214,6 +226,7 @@ function buildCommandAccounting({ runId, durationSeconds, beforeProbe, afterProb
         drainStartedAt: drainedProbe?.drainStartedAt ?? "",
         drainFinishedAt: drainedProbe?.drainFinishedAt ?? "",
         drainElapsedMs: Number(drainedProbe?.drainElapsedMs ?? 0),
+        drainPolls: Number(drainedProbe?.drainPolls ?? 0),
         timedOut: Boolean(drainedProbe?.timedOut),
       },
     },
@@ -290,7 +303,7 @@ async function requestJson(rawUrl) {
   return new Promise((resolve) => {
     const url = new URL(rawUrl);
     const client = url.protocol === "https:" ? https : http;
-    const req = client.request(url, { method: "GET", timeout: 2000 }, (response) => {
+    const req = client.request(url, { method: "GET", timeout: 2000, agent: false }, (response) => {
       const chunks = [];
       response.on("data", (chunk) => chunks.push(chunk));
       response.on("end", () => {

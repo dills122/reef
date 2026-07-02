@@ -102,6 +102,20 @@ Captured-ack idempotency lookup reduction:
 - `8` async workers, run id `captured-ack-skip-idempotency-8w-15000-384`: `25820` accepted, `1688.07 accepted rps`, p95 `330.82ms`, p99 `373.13ms`; immediate terminal `25820/25820`, `0` active, `0` gap; `api.commandLog.append` averaged `12.76ms`.
 - conclusion: skipping the redundant idempotency lookup improves the best 4-worker intake point and p95/p99 latency, but higher async worker counts still compete with intake on the loaded local database. Current best quick loaded-stack point is `4851.68 accepted rps` with eventual drain and `0` gap.
 
+Drain-accounted worker sweep:
+- 2026-07-02 corrected captured-ack profile used `DEV_INTAKE_DURATION=15s`, `DEV_INTAKE_RATE=15000`, `DEV_INTAKE_WORKERS=384`, precise scheduling, command accounting enabled, and `DEV_INTAKE_COMMAND_DRAIN_WAIT_MS=60000`.
+- artifacts:
+  - `/tmp/reef-drain-sweep-4w/intake-workers-384-rate-15000.json`
+  - `/tmp/reef-drain-sweep-6w/intake-workers-384-rate-15000.json`
+  - `/tmp/reef-drain-sweep-8w-rerun/intake-workers-384-rate-15000.json`
+  - `/tmp/reef-drain-sweep-12w/intake-workers-384-rate-15000.json`
+- `4` workers: `63503` accepted, `4215.75 accepted rps`, p95 `120.05ms`, p99 `162.31ms`; terminal during load `3047`, `202.28 completed/sec`; active after load `60456`; post-load drain `60456` in `26.88s`, `2249.11/sec`; final active `0`, gap `0`.
+- `6` workers: `26952` accepted, `1761.90 accepted rps`, p95 `319.87ms`, p99 `358.26ms`; terminal during load `4549`, `297.38 completed/sec`; active after load `22403`; post-load drain `22403` in `13.04s`, `1718.55/sec`; final active `0`, gap `0`.
+- `8` workers rerun: `72249` accepted, `4801.95 accepted rps`, p95 `108.24ms`, p99 `152.07ms`; terminal during load `8010`, `532.38 completed/sec`; active after load `64239`; post-load drain `64239` in `17.16s`, `3743.31/sec`; final active `0`, gap `0`.
+- `12` workers: `25025` accepted, `1638.22 accepted rps`, p95 `347.30ms`, p99 `400.99ms`; terminal during load `7272`, `476.05 completed/sec`; active after load `17753`; post-load drain `17753` in `6.28s`, `2825.56/sec`; final active `0`, gap `0`.
+- hot-path sample from the best `8` worker rerun: `api.commandLog.append` averaged `7.57ms`, `runtime.persistence.persistSubmitOutcome` averaged `1.71ms`, `async.claim` averaged `2.04ms`, and `async.completeBatch` averaged `27.10ms` per batch.
+- conclusion: the worker pool cannot be fixed by simply raising thread count. The current corrected profile can accept about `4.8k/sec` on this loaded stack, but completed-during-load throughput is only `~0.5k/sec`; the backlog drains afterward at up to `~3.7k/sec`. The next implementation target should reduce worker-side database work and/or isolate worker persistence from intake contention.
+
 ## Workstream Status
 
 | ID | Workstream | Status | Target Branch Type | Notes |
@@ -238,6 +252,7 @@ Latest batched-completion notes:
 - after making the active queue unlogged, the best quick loaded-stack raw-intake point improved to `3945.78 accepted rps` with eventual drain and `0` gap. The next measured blocker remains command-log reserve plus runtime persistence under higher worker counts.
 - after disabling duplicate legacy boundary capture in the captured-ack profile, the best quick loaded-stack point improved again to `4757.19 accepted rps`, p99 `171.11ms`, eventual drain, and `0` gap. `api.commandLog.append` now accounts for almost all reserve latency.
 - after skipping captured-ack's redundant idempotency lookup, the best quick loaded-stack point improved to `4851.68 accepted rps`, p99 `161.63ms`, eventual drain, and `0` gap. Worker-side persistence/claim pressure is now the reason higher worker counts reduce intake.
+- drain-accounted sweeps show best corrected loaded-stack intake at `4801.95 accepted rps` with `8` async workers, but only `532.38 completed/sec` during load and a `64239` command post-load backlog. Final accounting still reached active `0` and gap `0`.
 
 ### M4: Async Batched Runtime Persistence
 

@@ -539,6 +539,8 @@ Summary:
 - first quick loaded-stack evidence after disabling duplicate legacy capture reached `4757.19 accepted rps` with eventual `71559/71559` terminal commands and `0` accounting gap.
 - new captured-ack commands should not perform the synchronous idempotency-store lookup after command-log reservation; command-log idempotency already guards duplicate replay in this mode.
 - first quick loaded-stack evidence after skipping that redundant lookup reached `4851.68 accepted rps` with eventual `73005/73005` terminal commands and `0` accounting gap.
+- drain-accounted worker sweeps show that raising async worker count alone does not reach the completed-throughput target. The best corrected loaded-stack point accepted `4801.95 rps`, but completed only `532.38/sec` during load and drained the remaining backlog afterward at `3743.31/sec`.
+- the next throughput slice should reduce worker-side database work or isolate worker persistence from intake contention before further worker-count tuning.
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
