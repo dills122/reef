@@ -374,6 +374,7 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.health", url: `${runtimeUrl}/health` },
     { name: "runtime.metrics", url: `${runtimeUrl}/actuator/prometheus` },
     { name: "runtime.hotPath", url: `${runtimeUrl}/internal/perf/hot-path`, captureJson: true },
+    { name: "runtime.dbPools", url: `${runtimeUrl}/internal/perf/db-pools`, captureJson: true },
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },

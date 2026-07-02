@@ -45,7 +45,7 @@ Scaling intent:
 | ID | Workstream | Status | Target Branch Type | Notes |
 |---|---|---|---|---|
 | A1 | Runtime phase timing diagnostics | In progress | feature | Internal hot-path endpoint added for boundary/engine/persistence timing |
-| A2 | DB pool/write-path diagnostics in stress telemetry | Not started | feature | Needed for bottleneck proof |
+| A2 | DB pool/write-path diagnostics in stress telemetry | In progress | feature | Hikari pool endpoint and telemetry probe added; write-path table/index diagnostics still manual |
 | A3 | Command log schema and interface | Not started | feature | First DB slice to add |
 | A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
 | A5 | Command processing mode flags | Done | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
@@ -58,6 +58,7 @@ Scaling intent:
 | A12 | Boundary capture hot-path reduction | In progress | architecture | `captured-ack` now avoids the separate idempotency write for accepted responses |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
+| A15 | Command queue/result split | Not started | architecture | Needed to keep command intake immutable and move mutable worker state/result payloads out of `command_log.commands` |
 
 ## Milestone Checklist
 
@@ -70,7 +71,7 @@ Scaling intent:
 - [x] Add phase timing around runtime persistence.
 - [ ] Add phase timing around response serialization.
 - [ ] Surface phase timing in stress report summary.
-- [ ] Add Hikari pool active/idle/wait metrics or debug endpoint.
+- [x] Add Hikari pool active/idle/wait metrics or debug endpoint.
 - [ ] Add DB diagnostics snapshot to `dev-stress-diagnostics` for pool and table growth.
 - [ ] Add checkpoint/WAL-growth evidence to stress diagnostics.
 - [ ] Record whether each benchmark is clean-stack, warm-stack, or loaded-stack.
@@ -110,12 +111,20 @@ Exit criteria:
 - [x] Add atomic command-log claiming for async workers.
 - [x] Add async command worker thread tuning.
 - [x] Add async command queue/drain stats endpoint.
+- [x] Run async worker drain sweep.
 - [x] Add status lookup API for captured commands.
 - [x] Add idempotency replay behavior per mode.
 - [x] Add simulator config toggle for mode.
 
 Exit criteria:
 - Simulator can run both legacy synchronous and captured command modes without code changes.
+
+Drain follow-up:
+
+- [ ] Split immutable command capture from mutable queue lease/status state.
+- [ ] Move terminal response payloads into a separate command result table.
+- [ ] Make async queue counts cheap enough for frequent telemetry.
+- [ ] Re-run raw intake plus drain sweep after the command queue/result split.
 
 ### M4: Async Batched Runtime Persistence
 

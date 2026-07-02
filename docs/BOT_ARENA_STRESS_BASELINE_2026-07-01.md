@@ -732,3 +732,70 @@ Diagnosis:
 - The richer simulator/load-tester path was measuring strategy/lifecycle/reporting overhead as well as platform-runtime intake.
 - The next scaling problem is sustained end-to-end processing: async workers and runtime persistence fall behind when intake runs at `6.9k-7.8k` accepted rps.
 - Architecture work should now focus less on "can the API accept 5k?" and more on "can the system durably process/drain 5k+ without unbounded backlog?"
+
+## Async Drain Worker Sweep
+
+The raw intake benchmark showed the API can accept above `5k` on one instance, but the async command worker cannot drain at the same rate. A follow-up sweep kept the same durable captured-ack profile and changed only async worker count.
+
+Profile:
+
+- `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
+- `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory`
+- `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=250`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
+- raw intake command: `DEV_INTAKE_DURATION=15s DEV_INTAKE_WORKERS=384 DEV_INTAKE_RATE=15000 DEV_INTAKE_RATE_SCHEDULE=precise`
+
+| Async Workers | Accepted Commands | Accepted RPS | p50 | p95 | p99 | Completed During Burst | Immediate Backlog |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| `4` | `~116760` | `7784.04` | `59.10ms` | `76.30ms` | `84.48ms` | `~28957` | `88232` |
+| `8` | `95081` | `6321.46` | `67.52ms` | `92.73ms` | `119.76ms` | `43298` | `53130` |
+| `16` | `86809` | `5771.31` | `72.11ms` | `95.14ms` | `121.44ms` | `54938` | `34307` |
+
+Artifacts:
+
+- `/tmp/reef-raw-intake-valid-384-20260701/reef-raw-intake-valid-384-workers-384-rate-15000.json`
+- `/tmp/reef-drain-8w-20260701/reef-drain-8w-workers-384-rate-15000.json`
+- `/tmp/reef-drain-16w-20260701/reef-drain-16w-workers-384-rate-15000.json`
+
+Immediate hot-path averages from the `16`-worker run:
+
+| Phase | Avg |
+|---|---:|
+| `api.commandCapture.reserve` | `8.43ms` |
+| `async.claim` | `1.05ms` |
+| `async.operation` | `4.85ms` |
+| `async.complete` | `2.37ms` |
+| `runtime.engine.submit` | `1.46ms` |
+| `runtime.persistence.persistSubmitOutcome` | `2.36ms` |
+
+Postgres table/index observations on the loaded local database:
+
+- `command_log.commands` had `1677841` inserted rows, `3355682` updates, `173507` dead tuples, and `0` HOT updates.
+- `command_log.commands` was `2779 MB` total with `584 MB` of indexes.
+- Exact async status counts currently run `SELECT status, COUNT(*) ... GROUP BY status` over the command log; at this database size, `EXPLAIN ANALYZE` took about `415ms`.
+- Hikari diagnostics showed no connection starvation during the runs:
+  - `8` workers: boundary pool `0` waiters, runtime pool `0` waiters.
+  - `16` workers: boundary pool `0` waiters, runtime pool `0` waiters.
+
+Diagnosis:
+
+- More async workers increase drain during the ingest burst, but they materially reduce accepted-command ingress and still do not sustain the offered `15k` rate.
+- The current command-log row is not append-only in practice. Each accepted command is inserted, updated to `PROCESSING`, then updated to `COMPLETED` with response JSON.
+- The indexed `status` mutation prevents HOT updates and creates dead tuples, so worker scaling increases Postgres write churn instead of cleanly increasing drain.
+- Runtime persistence remains a real drain cost. Each accepted submit may write `submit_results`, `orders`, `runtime_events`, `runtime_trace_sequences`, `executions`, and `trades`.
+- The next useful implementation slice is not simply raising worker count, HTTP threads, or pool size. It should reduce mutable write amplification.
+
+Recommended next moves:
+
+1. Split command intake from mutable work state:
+   - keep `command_log.commands` immutable or nearly immutable
+   - move worker lease/status into a narrow `command_log.command_work_queue`
+   - move terminal response payloads into `command_log.command_results`
+   - have status lookup compose immutable command, queue state, and result row
+2. Replace exact queue counts in the hot telemetry path with lightweight counters or a cheaper queue-table query.
+3. Add batch-oriented runtime persistence for arena workloads once command queue churn is isolated.
+4. Revisit runtime event/execution/trade partitioning before long so table and index growth do not dominate soak tests.
+5. Keep `4` async workers as the current local default for intake ceiling tests; use `8` or `16` only when deliberately measuring catch-up drain tradeoffs.

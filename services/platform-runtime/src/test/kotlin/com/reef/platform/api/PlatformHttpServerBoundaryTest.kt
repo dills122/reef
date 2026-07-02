@@ -794,6 +794,19 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun dbPoolStatsEndpointReturnsPoolList() {
+        val server = testServer()
+        try {
+            val response = get(server.address.port, "/internal/perf/db-pools")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"pools\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedAckReplaysFirstAcceptedResponseForSameIdempotencyKey() {
         val captureStore = CommandLogCommandCaptureStore(
             delegate = NoopCommandCaptureStore(),

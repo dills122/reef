@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
@@ -72,6 +73,14 @@ class PlatformHttpServer(
                 }
                 else -> methodNotAllowed(exchange)
             }
+        }
+
+        server.createContext("/internal/perf/db-pools") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, dbPoolStatsJson())
         }
 
         server.createContext("/internal/commands/async/stats") { exchange ->
@@ -648,6 +657,24 @@ class PlatformHttpServer(
                 "lastCompletedAt" to metrics.lastCompletedAt,
                 "lastFailedAt" to metrics.lastFailedAt
             )
+        )
+    }
+
+    private fun dbPoolStatsJson(): String {
+        return JsonCodec.writeObject(
+            "pools" to RuntimeDataSources.snapshots().map { snapshot ->
+                mapOf(
+                    "key" to snapshot.key,
+                    "jdbcUrl" to snapshot.jdbcUrl,
+                    "username" to snapshot.username,
+                    "maximumPoolSize" to snapshot.maximumPoolSize,
+                    "minimumIdle" to snapshot.minimumIdle,
+                    "activeConnections" to snapshot.activeConnections,
+                    "idleConnections" to snapshot.idleConnections,
+                    "totalConnections" to snapshot.totalConnections,
+                    "threadsAwaitingConnection" to snapshot.threadsAwaitingConnection
+                )
+            }
         )
     }
 }
