@@ -254,8 +254,9 @@ class PostgresCommandLogStoreIntegrationTest {
         val store = postgresStoreOrNull() ?: return
         val suffix = UUID.randomUUID().toString()
         val first = commandLogRecord(commandId = "cmd-claim-first-$suffix", idempotencyKey = "idem-claim-first-$suffix")
+            .copy(receivedAt = Instant.parse("1970-01-01T00:00:00Z"))
         val second = commandLogRecord(commandId = "cmd-claim-second-$suffix", idempotencyKey = "idem-claim-second-$suffix")
-            .copy(receivedAt = Instant.parse("2026-06-04T13:00:01Z"))
+            .copy(receivedAt = Instant.parse("1970-01-01T00:00:01Z"))
 
         assertTrue(store.append(second).appended)
         assertTrue(store.append(first).appended)

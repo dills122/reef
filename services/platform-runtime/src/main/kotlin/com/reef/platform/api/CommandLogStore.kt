@@ -372,8 +372,8 @@ class PostgresCommandLogStore(
                   ON CONFLICT DO NOTHING
                   RETURNING command_id
                 )
-                INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error)
-                SELECT command_id, ?, 0, ''
+                INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error, updated_at)
+                SELECT command_id, ?, 0, '', ?::timestamptz
                 FROM inserted_command
                 ON CONFLICT (command_id) DO NOTHING
                 RETURNING command_id
@@ -393,6 +393,7 @@ class PostgresCommandLogStore(
                 ps.setInt(12, 0)
                 ps.setString(13, "")
                 ps.setString(14, CommandLogStatus.RECEIVED.name)
+                ps.setString(15, record.receivedAt.toString())
                 ps.executeQuery().use { rs ->
                     if (rs.next()) {
                         return CommandLogAppendResult(
@@ -545,9 +546,8 @@ class PostgresCommandLogStore(
                 WITH claimed AS (
                   SELECT queue.command_id
                   FROM ${names.commandWorkQueue} queue
-                  JOIN ${names.commands} commands ON commands.command_id = queue.command_id
                   WHERE queue.status = 'RECEIVED'
-                  ORDER BY commands.received_at, commands.command_id
+                  ORDER BY queue.updated_at, queue.command_id
                   LIMIT ?
                   FOR UPDATE SKIP LOCKED
                 ),
@@ -820,8 +820,8 @@ class PostgresCommandLogStore(
               GET DIAGNOSTICS v_inserted = ROW_COUNT;
 
               IF v_inserted = 1 THEN
-                INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error)
-                VALUES (p_command_id, 'RECEIVED', 0, '')
+                INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error, updated_at)
+                VALUES (p_command_id, 'RECEIVED', 0, '', p_received_at)
                 ON CONFLICT (command_id) DO NOTHING;
 
                 v_command_id := p_command_id;
