@@ -61,14 +61,32 @@ WITH eligible AS (
   ORDER BY results.completed_at, results.command_id
   LIMIT ${batchSize}
 ),
-deleted AS (
+deleted_payloads AS (
+  DELETE FROM command_log.command_payloads payloads
+  USING eligible
+  WHERE payloads.command_id = eligible.command_id
+  RETURNING payloads.command_id
+),
+deleted_queue AS (
+  DELETE FROM command_log.command_work_queue queue
+  USING eligible
+  WHERE queue.command_id = eligible.command_id
+  RETURNING queue.command_id
+),
+deleted_results AS (
+  DELETE FROM command_log.command_results results
+  USING eligible
+  WHERE results.command_id = eligible.command_id
+  RETURNING results.command_id
+),
+deleted_commands AS (
   DELETE FROM command_log.commands commands
   USING eligible
   WHERE commands.command_id = eligible.command_id
   RETURNING commands.command_id
 )
 SELECT COUNT(*) AS deleted_count
-FROM deleted;
+FROM deleted_commands;
 `.trim();
 }
 
@@ -97,6 +115,7 @@ ORDER BY status;
 export function buildVacuumSql() {
   return [
     { table: "command_log.commands", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.commands;" },
+    { table: "command_log.command_payloads", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.command_payloads;" },
     { table: "command_log.command_results", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.command_results;" },
     { table: "command_log.command_work_queue", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.command_work_queue;" },
   ];

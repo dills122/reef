@@ -335,7 +335,7 @@ class PostgresCommandLogStore(
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.commandPayloads} (
-                      command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
+                      command_id TEXT PRIMARY KEY,
                       payload_json JSONB NOT NULL,
                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )
@@ -353,7 +353,7 @@ class PostgresCommandLogStore(
                 stmt.execute(
                     """
                     CREATE UNLOGGED TABLE IF NOT EXISTS ${names.commandWorkQueue} (
-                      command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
+                      command_id TEXT PRIMARY KEY,
                       status TEXT NOT NULL,
                       attempt_count INTEGER NOT NULL DEFAULT 0,
                       last_error TEXT NOT NULL DEFAULT '',
@@ -373,7 +373,7 @@ class PostgresCommandLogStore(
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.commandResults} (
-                      command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
+                      command_id TEXT PRIMARY KEY,
                       status TEXT NOT NULL DEFAULT 'COMPLETED',
                       attempt_count INTEGER NOT NULL DEFAULT 0,
                       last_error TEXT NOT NULL DEFAULT '',
@@ -390,6 +390,24 @@ class PostgresCommandLogStore(
                       ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'COMPLETED',
                       ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
                       ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.commandPayloads}
+                      DROP CONSTRAINT IF EXISTS command_payloads_command_id_fkey
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.commandWorkQueue}
+                      DROP CONSTRAINT IF EXISTS command_work_queue_command_id_fkey
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.commandResults}
+                      DROP CONSTRAINT IF EXISTS command_results_command_id_fkey
                     """.trimIndent()
                 )
                 stmt.execute(

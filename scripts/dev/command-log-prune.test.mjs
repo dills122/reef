@@ -28,11 +28,13 @@ test("builds terminal-only eligible count SQL", () => {
   assert.match(sql, /86400::double precision/);
 });
 
-test("builds batched delete through commands for cascading terminal history", () => {
+test("builds batched delete for terminal command history", () => {
   const sql = buildDeleteBatchSql({ olderThanSeconds: 0, batchSize: 50000 });
 
   assert.match(sql, /WITH eligible AS/);
   assert.match(sql, /LIMIT 50000/);
+  assert.match(sql, /DELETE FROM command_log\.command_payloads payloads/);
+  assert.match(sql, /DELETE FROM command_log\.command_results results/);
   assert.match(sql, /DELETE FROM command_log\.commands commands/);
   assert.match(sql, /RETURNING commands\.command_id/);
   assert.match(sql, /idempotency_prefix/);
@@ -48,9 +50,10 @@ test("builds active queue count SQL", () => {
 test("builds low-shared-memory vacuum commands", () => {
   const commands = buildVacuumSql();
 
-  assert.equal(commands.length, 3);
+  assert.equal(commands.length, 4);
   assert.match(commands[0].sql, /PARALLEL 0/);
   assert.equal(commands[0].table, "command_log.commands");
+  assert.equal(commands[1].table, "command_log.command_payloads");
 });
 
 test("builds retention pin exclusion predicate", () => {

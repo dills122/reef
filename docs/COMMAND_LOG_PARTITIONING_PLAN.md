@@ -17,10 +17,10 @@ Current live tables:
   - contains request payload and command metadata
 - `command_log.command_work_queue`
   - active worker state only
-  - references `commands(command_id)` with `ON DELETE CASCADE`
+  - derived/reconstructable from durable commands without terminal results
 - `command_log.command_results`
   - terminal status/response payload
-  - references `commands(command_id)` with `ON DELETE CASCADE`
+  - durable terminal command outcome, pruned explicitly with parent commands
 - `command_log.retention_pins`
   - protects named command history from pruning
 
@@ -47,7 +47,7 @@ Measured pressure:
 
 5. Avoid risky in-place native partitioning of `commands`.
 - PostgreSQL unique constraints on partitioned tables must include the partition key.
-- range partitioning `commands` by `received_at` would force primary/unique keys to include `received_at`, which complicates `command_id` foreign keys and current lookup semantics.
+- range partitioning `commands` by `received_at` would force primary/unique keys to include `received_at`, which complicates current `command_id` lookup and pruning semantics.
 
 ## Decision
 

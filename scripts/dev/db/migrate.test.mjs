@@ -19,6 +19,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0002_event_backbone.sql",
       "runtime/0003_live_runtime_persistence.sql",
       "runtime/0004_bulk_submit_outcomes.sql",
+      "runtime/0005_set_based_submit_outcomes.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -37,6 +38,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0010_drop_legacy_status_index.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0011_unlogged_active_queue.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0012_command_payloads.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0013_drop_hot_path_foreign_keys.sql"));
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

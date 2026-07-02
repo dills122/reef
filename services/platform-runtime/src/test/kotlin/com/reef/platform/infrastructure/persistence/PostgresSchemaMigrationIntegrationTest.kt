@@ -26,6 +26,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 WHERE migration_id IN (
                   'runtime/0003_live_runtime_persistence.sql',
                   'runtime/0004_bulk_submit_outcomes.sql',
+                  'runtime/0005_set_based_submit_outcomes.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -41,7 +42,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0009_run_metadata.sql',
                   'command_log/0010_drop_legacy_status_index.sql',
                   'command_log/0011_unlogged_active_queue.sql',
-                  'command_log/0012_command_payloads.sql'
+                  'command_log/0012_command_payloads.sql',
+                  'command_log/0013_drop_hot_path_foreign_keys.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -71,8 +73,10 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0010_drop_legacy_status_index.sql",
                     "command_log/0011_unlogged_active_queue.sql",
                     "command_log/0012_command_payloads.sql",
+                    "command_log/0013_drop_hot_path_foreign_keys.sql",
                     "runtime/0003_live_runtime_persistence.sql",
-                    "runtime/0004_bulk_submit_outcomes.sql"
+                    "runtime/0004_bulk_submit_outcomes.sql",
+                    "runtime/0005_set_based_submit_outcomes.sql"
                 ),
                 appliedMigrations
             )
@@ -179,6 +183,27 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertEquals(setOf("command_log.command_append"), commandLogFunctions)
+
+            val commandLogForeignKeys = conn.prepareStatement(
+                """
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid IN (
+                  'command_log.command_payloads'::regclass,
+                  'command_log.command_work_queue'::regclass,
+                  'command_log.command_results'::regclass
+                )
+                  AND contype = 'f'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("conname"))
+                    rows
+                }
+            }
+
+            assertTrue(commandLogForeignKeys.isEmpty(), "unexpected command-log hot-path foreign keys: $commandLogForeignKeys")
 
             val commandCaptureColumns = conn.prepareStatement(
                 """
