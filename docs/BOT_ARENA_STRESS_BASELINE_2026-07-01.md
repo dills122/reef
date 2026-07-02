@@ -843,3 +843,11 @@ Stored-procedure intake follow-up:
 - Benchmarking the PL/pgSQL function path with the same `4` async-worker, `384` intake-worker, `15k` offered-rate shape produced `3865.82` accepted rps, p50 `91.95ms`, p95 `155.66ms`, p99 `303.26ms`, and `api.commandCapture.reserve` `13.20ms avg`.
 - This did not beat the post-split inline baseline of `4020.17` accepted rps and `11.33ms` reserve average, so the stored function should remain an opt-in experiment rather than the default throughput path.
 - A later default-inline rerun on the same now-loaded local database produced only `1815.38` accepted rps with `api.commandCapture.reserve` `20.29ms avg`; treat that as loaded-stack degradation evidence, not a clean A/B result. At that point `command_log.commands` had grown past `2.0M` live rows.
+
+Command-log lifecycle follow-up:
+
+- `make dev-command-log-prune` adds a dry-run-first terminal history prune path. It deletes only commands that have terminal `command_results` and no active `command_work_queue` row.
+- A dry run against the loaded local database found `2062824` eligible terminal command rows.
+- Applying the prune with `DEV_COMMAND_LOG_PRUNE_APPLY=1 DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` removed the eligible terminal history. The first post-delete vacuum attempt failed on Docker shared-memory pressure, so the tool was hardened to use `VACUUM (ANALYZE, PARALLEL 0)` and to record vacuum errors instead of losing the prune report. Manual lower-memory vacuum then succeeded on `command_log.commands`, `command_log.command_results`, and `command_log.command_work_queue`.
+- Post-prune benchmark with the same `4` async-worker, `384` intake-worker, `15k` offered-rate shape produced `3477.43` accepted rps, p50 `107.54ms`, p95 `185.49ms`, p99 `222.64ms`, and `api.commandCapture.reserve` `13.40ms avg`.
+- Cleanup recovered a large part of the later loaded-stack drop (`1815.38` -> `3477.43` accepted rps), but it did not recover the earlier post-split best (`4020.17` accepted rps). Next lifecycle work should add pinned run/session retention and then evaluate partitioning or active-queue churn reduction.

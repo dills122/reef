@@ -275,6 +275,8 @@ Useful knobs:
 - `DEV_COMMAND_LOG_PRUNE_VACUUM=1`
 - `DEV_COMMAND_LOG_PRUNE_CAPTURE_DB_DIAGNOSTICS=1`
 
+Vacuum runs after applied pruning using `PARALLEL 0` to reduce Docker shared-memory pressure. If vacuum still fails locally, pruning remains applied and the report records the vacuum error; rerun later with more Docker shared memory or `DEV_COMMAND_LOG_PRUNE_VACUUM=0`.
+
 For loaded local benchmark databases, use `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` only when all terminal command history can be discarded. Keep named replay/audit runs by exporting them before pruning or by using a future pinned-run retention path.
 
 30-minute fixed-load soak (clean reset recommended first):

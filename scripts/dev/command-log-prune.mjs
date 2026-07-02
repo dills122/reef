@@ -79,9 +79,9 @@ ORDER BY status;
 
 export function buildVacuumSql() {
   return [
-    "VACUUM (ANALYZE) command_log.commands;",
-    "VACUUM (ANALYZE) command_log.command_results;",
-    "VACUUM (ANALYZE) command_log.command_work_queue;",
+    { table: "command_log.commands", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.commands;" },
+    { table: "command_log.command_results", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.command_results;" },
+    { table: "command_log.command_work_queue", sql: "VACUUM (ANALYZE, PARALLEL 0) command_log.command_work_queue;" },
   ];
 }
 
@@ -137,6 +137,7 @@ async function main() {
 
   let deleted = 0;
   let batches = 0;
+  const vacuum = [];
   if (apply) {
     while (batches < maxBatches) {
       const deletedThisBatch = await querySingleNumber({
@@ -152,8 +153,17 @@ async function main() {
     }
 
     if (runVacuum && deleted > 0) {
-      for (const sql of buildVacuumSql()) {
-        await execPsql({ service, dbUser, dbName, sql, capture: false });
+      for (const vacuumCommand of buildVacuumSql()) {
+        try {
+          await execPsql({ service, dbUser, dbName, sql: vacuumCommand.sql, capture: false });
+          vacuum.push({ table: vacuumCommand.table, ok: true });
+        } catch (error) {
+          vacuum.push({
+            table: vacuumCommand.table,
+            ok: false,
+            error: String(error?.message || error),
+          });
+        }
       }
     }
   }
@@ -190,6 +200,7 @@ async function main() {
     eligibleAfter,
     deleted,
     batches,
+    vacuum,
     queueCountsBefore,
     queueCountsAfter,
     dbDiagnostics: captureDiagnostics

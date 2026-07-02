@@ -4,6 +4,7 @@ import {
   buildDeleteBatchSql,
   buildEligibleCountSql,
   buildQueueCountsSql,
+  buildVacuumSql,
   parseDurationSeconds,
 } from "./command-log-prune.mjs";
 
@@ -39,4 +40,12 @@ test("builds active queue count SQL", () => {
 
   assert.match(sql, /FROM command_log\.command_work_queue/);
   assert.match(sql, /GROUP BY status/);
+});
+
+test("builds low-shared-memory vacuum commands", () => {
+  const commands = buildVacuumSql();
+
+  assert.equal(commands.length, 3);
+  assert.match(commands[0].sql, /PARALLEL 0/);
+  assert.equal(commands[0].table, "command_log.commands");
 });
