@@ -473,6 +473,8 @@ Summary:
 - command status APIs compose command metadata, queue state, and result rows so public status behavior remains stable.
 - this split is intended to reduce indexed status updates and dead tuples on the command intake table before deeper async/batched runtime persistence work.
 - first benchmark evidence showed this split alone regresses accepted ingress because it adds active-queue/result writes; follow-up work must reduce write amplification before treating the split as a throughput win.
+- command intake can use the opt-in `command_log.command_append(...)` database routine so command insert, active-queue enqueue, and duplicate replay stay in one database call.
+- benchmark evidence did not justify making that routine the default: `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=inline` remains the default until a function or batched intake path beats it.
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)

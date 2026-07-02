@@ -1,5 +1,6 @@
 package com.reef.platform.api
 
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
@@ -156,10 +157,30 @@ class InMemoryCommandLogStore : CommandLogStore {
     }
 }
 
+enum class PostgresCommandLogAppendMode {
+    Inline,
+    Function;
+
+    companion object {
+        fun from(value: String?): PostgresCommandLogAppendMode {
+            return when (val normalized = value?.trim()?.lowercase()) {
+                null, "", "inline" -> Inline
+                "function", "stored-function", "stored-procedure" -> Function
+                else -> throw IllegalArgumentException("Unsupported EXTERNAL_API_COMMAND_LOG_APPEND_MODE: $normalized")
+            }
+        }
+
+        fun fromEnv(): PostgresCommandLogAppendMode {
+            return from(RuntimeEnv.string("EXTERNAL_API_COMMAND_LOG_APPEND_MODE", "inline"))
+        }
+    }
+}
+
 class PostgresCommandLogStore(
     private val dataSource: DataSource,
     private val names: PostgresCommandLogSqlNames = PostgresCommandLogSqlNames(),
-    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
+    private val appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.fromEnv()
 ) : CommandLogStore {
     init {
         dataSource.connection.use { conn ->
@@ -169,7 +190,8 @@ class PostgresCommandLogStore(
                     PostgresSchemaRequirements.commandLog(
                         commands = names.commands,
                         workQueue = names.commandWorkQueue,
-                        results = names.commandResults
+                        results = names.commandResults,
+                        appendFunction = names.commandAppendFunction
                     )
                 )
                 return@use
@@ -292,11 +314,20 @@ class PostgresCommandLogStore(
                     WHERE status IN ('COMPLETED', 'FAILED')
                     """.trimIndent()
                 )
+                stmt.execute("DROP FUNCTION IF EXISTS ${names.commandAppendFunction}(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, JSONB)")
+                stmt.execute(commandAppendFunctionSql())
             }
         }
     }
 
     override fun append(record: CommandLogRecord): CommandLogAppendResult {
+        return when (appendMode) {
+            PostgresCommandLogAppendMode.Inline -> appendInline(record)
+            PostgresCommandLogAppendMode.Function -> appendWithFunction(record)
+        }
+    }
+
+    private fun appendInline(record: CommandLogRecord): CommandLogAppendResult {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
@@ -352,6 +383,59 @@ class PostgresCommandLogStore(
                                 responseStatus = 0,
                                 responsePayloadJson = "{}"
                             )
+                        )
+                    }
+                }
+            }
+        }
+
+        val existing = findByIdempotency(record.clientId, record.route, record.idempotencyKey)
+            ?: findByCommandId(record.commandId)
+            ?: error("command log append conflicted but existing command could not be found")
+        return CommandLogAppendResult(appended = false, record = existing)
+    }
+
+    private fun appendWithFunction(record: CommandLogRecord): CommandLogAppendResult {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  out_appended AS appended,
+                  out_command_id AS command_id,
+                  out_client_id AS client_id,
+                  out_route AS route,
+                  out_idempotency_key AS idempotency_key,
+                  out_trace_id AS trace_id,
+                  out_correlation_id AS correlation_id,
+                  out_actor_id AS actor_id,
+                  out_command_type AS command_type,
+                  out_received_at AS received_at,
+                  out_payload_json AS payload_json,
+                  out_status AS status,
+                  out_attempt_count AS attempt_count,
+                  out_last_error AS last_error,
+                  out_response_status AS response_status,
+                  out_response_payload_json AS response_payload_json
+                FROM ${names.commandAppendFunction}(
+                  ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb
+                )
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, record.commandId)
+                ps.setString(2, record.clientId)
+                ps.setString(3, record.route)
+                ps.setString(4, record.idempotencyKey)
+                ps.setString(5, record.traceId)
+                ps.setString(6, record.correlationId)
+                ps.setString(7, record.actorId)
+                ps.setString(8, record.commandType)
+                ps.setString(9, record.receivedAt.toString())
+                ps.setString(10, record.payloadJson)
+                ps.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        return CommandLogAppendResult(
+                            appended = rs.getBoolean("appended"),
+                            record = rs.toCommandLogRecord()
                         )
                     }
                 }
@@ -641,6 +725,127 @@ class PostgresCommandLogStore(
             LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
         """.trimIndent()
     }
+
+    private fun commandAppendFunctionSql(): String {
+        return """
+            CREATE OR REPLACE FUNCTION ${names.commandAppendFunction}(
+              p_command_id TEXT,
+              p_client_id TEXT,
+              p_route TEXT,
+              p_idempotency_key TEXT,
+              p_trace_id TEXT,
+              p_correlation_id TEXT,
+              p_actor_id TEXT,
+              p_command_type TEXT,
+              p_received_at TIMESTAMPTZ,
+              p_payload_json JSONB
+            )
+            RETURNS TABLE (
+              out_appended BOOLEAN,
+              out_command_id TEXT,
+              out_client_id TEXT,
+              out_route TEXT,
+              out_idempotency_key TEXT,
+              out_trace_id TEXT,
+              out_correlation_id TEXT,
+              out_actor_id TEXT,
+              out_command_type TEXT,
+              out_received_at TIMESTAMPTZ,
+              out_payload_json JSONB,
+              out_status TEXT,
+              out_attempt_count INTEGER,
+              out_last_error TEXT,
+              out_response_status INTEGER,
+              out_response_payload_json JSONB
+            )
+            LANGUAGE plpgsql
+            AS $$
+            DECLARE
+              v_inserted INTEGER := 0;
+              v_command_id TEXT;
+            BEGIN
+              INSERT INTO ${names.commands} AS command_row(
+                command_id,
+                client_id,
+                route,
+                idempotency_key,
+                trace_id,
+                correlation_id,
+                actor_id,
+                command_type,
+                received_at,
+                payload_json,
+                status,
+                attempt_count,
+                last_error
+              )
+              VALUES (
+                p_command_id,
+                p_client_id,
+                p_route,
+                p_idempotency_key,
+                p_trace_id,
+                p_correlation_id,
+                p_actor_id,
+                p_command_type,
+                p_received_at,
+                p_payload_json,
+                'RECEIVED',
+                0,
+                ''
+              )
+              ON CONFLICT DO NOTHING;
+
+              GET DIAGNOSTICS v_inserted = ROW_COUNT;
+
+              IF v_inserted = 1 THEN
+                INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error)
+                VALUES (p_command_id, 'RECEIVED', 0, '')
+                ON CONFLICT (command_id) DO NOTHING;
+
+                v_command_id := p_command_id;
+              ELSE
+                SELECT c.command_id
+                INTO v_command_id
+                FROM ${names.commands} c
+                WHERE c.client_id = p_client_id
+                  AND c.route = p_route
+                  AND c.idempotency_key = p_idempotency_key;
+
+                IF v_command_id IS NULL THEN
+                  SELECT c.command_id
+                  INTO v_command_id
+                  FROM ${names.commands} c
+                  WHERE c.command_id = p_command_id;
+                END IF;
+              END IF;
+
+              RETURN QUERY
+              SELECT
+                v_inserted = 1 AS out_appended,
+                c.command_id AS out_command_id,
+                c.client_id AS out_client_id,
+                c.route AS out_route,
+                c.idempotency_key AS out_idempotency_key,
+                c.trace_id AS out_trace_id,
+                c.correlation_id AS out_correlation_id,
+                c.actor_id AS out_actor_id,
+                c.command_type AS out_command_type,
+                c.received_at AS out_received_at,
+                c.payload_json AS out_payload_json,
+                COALESCE(q.status, r.status, c.status) AS out_status,
+                COALESCE(q.attempt_count, r.attempt_count, c.attempt_count) AS out_attempt_count,
+                COALESCE(q.last_error, r.last_error, c.last_error) AS out_last_error,
+                COALESCE(r.response_status, c.response_status, 0) AS out_response_status,
+                COALESCE(r.response_payload_json, c.response_payload_json, '{}'::jsonb) AS out_response_payload_json
+              FROM ${names.commands} c
+              LEFT JOIN ${names.commandWorkQueue} q ON q.command_id = c.command_id
+              LEFT JOIN ${names.commandResults} r ON r.command_id = c.command_id
+              WHERE c.command_id = v_command_id;
+            END;
+            $$;
+        """.trimIndent()
+    }
 }
 
 data class PostgresCommandLogSqlNames(
@@ -650,6 +855,7 @@ data class PostgresCommandLogSqlNames(
     val commands = "$schemaName.commands"
     val commandWorkQueue = "$schemaName.command_work_queue"
     val commandResults = "$schemaName.command_results"
+    val commandAppendFunction = "$schemaName.command_append"
 
     private fun schemaNameOrDefault(schema: String): String {
         val candidate = schema.trim().ifBlank { "command_log" }

@@ -110,13 +110,15 @@ object PostgresSchemaRequirements {
     fun commandLog(
         commands: String,
         workQueue: String = "command_log.command_work_queue",
-        results: String = "command_log.command_results"
+        results: String = "command_log.command_results",
+        appendFunction: String = "command_log.command_append"
     ): PostgresSchemaRequirement {
         val commandTable = PostgresSchemaObject.parse(commands)
         val queueTable = PostgresSchemaObject.parse(workQueue)
         val resultTable = PostgresSchemaObject.parse(results)
         return PostgresSchemaRequirement(
             tables = listOf(commandTable, queueTable, resultTable),
+            functions = listOf(PostgresSchemaObject.parse(appendFunction)),
             columns = listOf(
                 listOf(
                     "command_id",

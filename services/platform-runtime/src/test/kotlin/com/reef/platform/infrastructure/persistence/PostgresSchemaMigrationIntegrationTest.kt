@@ -33,7 +33,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0002_command_results.sql',
                   'command_log/0003_queue_result_split.sql',
                   'command_log/0004_terminal_results_active_queue.sql',
-                  'command_log/0005_result_terminal_metadata.sql'
+                  'command_log/0005_result_terminal_metadata.sql',
+                  'command_log/0006_command_append_function.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -56,6 +57,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0003_queue_result_split.sql",
                     "command_log/0004_terminal_results_active_queue.sql",
                     "command_log/0005_result_terminal_metadata.sql",
+                    "command_log/0006_command_append_function.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations
@@ -107,6 +109,23 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertEquals(expectedTables, actualTables)
+
+            val commandLogFunctions = conn.prepareStatement(
+                """
+                SELECT routine_schema || '.' || routine_name AS routine_name
+                FROM information_schema.routines
+                WHERE routine_schema = 'command_log'
+                  AND routine_name = 'command_append'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("routine_name"))
+                    rows
+                }
+            }
+
+            assertEquals(setOf("command_log.command_append"), commandLogFunctions)
 
             val commandCaptureColumns = conn.prepareStatement(
                 """

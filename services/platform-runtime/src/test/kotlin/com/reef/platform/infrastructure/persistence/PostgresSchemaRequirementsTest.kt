@@ -95,6 +95,7 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
+        assertEquals(setOf("command_log.command_append"), requirements.functions.map { it.qualifiedName }.toSet())
         assertEquals(
             setOf(
                 "command_log.commands.command_id",

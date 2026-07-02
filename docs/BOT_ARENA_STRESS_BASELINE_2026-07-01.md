@@ -834,3 +834,12 @@ Post-split diagnosis:
 - Completion now deletes active queue rows and upserts terminal result rows, raising `async.complete` to `3.00ms avg`.
 - The queue split should be kept only if the next slice reduces write amplification with a stored procedure, lighter active queue, or async/batched persistence path.
 - The next benchmark should compare a stored-procedure command intake path or an intake-only command log against this split schema before sweeping worker counts again.
+
+Stored-procedure intake follow-up:
+
+- `command_log/0006_command_append_function.sql` adds `command_log.command_append(...)`.
+- The function inserts the durable command row, enqueues active work, and returns either the newly appended command or the existing duplicate command in one database call.
+- `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=function` enables the function path; the default remains `inline`.
+- Benchmarking the PL/pgSQL function path with the same `4` async-worker, `384` intake-worker, `15k` offered-rate shape produced `3865.82` accepted rps, p50 `91.95ms`, p95 `155.66ms`, p99 `303.26ms`, and `api.commandCapture.reserve` `13.20ms avg`.
+- This did not beat the post-split inline baseline of `4020.17` accepted rps and `11.33ms` reserve average, so the stored function should remain an opt-in experiment rather than the default throughput path.
+- A later default-inline rerun on the same now-loaded local database produced only `1815.38` accepted rps with `api.commandCapture.reserve` `20.29ms avg`; treat that as loaded-stack degradation evidence, not a clean A/B result. At that point `command_log.commands` had grown past `2.0M` live rows.

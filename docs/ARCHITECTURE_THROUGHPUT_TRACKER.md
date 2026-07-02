@@ -59,6 +59,7 @@ Scaling intent:
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
 | A15 | Command queue/result split | Done | architecture | Functional split complete; first benchmark regressed ingress, so next work must reduce write amplification |
+| A16 | Stored-procedure command intake | Done | architecture | Added as opt-in `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=function`; benchmark regressed reserve latency, so default remains `inline` |
 
 ## Milestone Checklist
 
@@ -125,7 +126,9 @@ Drain follow-up:
 - [x] Move terminal response payloads into a separate command result table.
 - [x] Make async queue counts cheap enough for frequent telemetry.
 - [x] Re-run raw intake plus drain check after the command queue/result split.
-- [ ] Reduce split-schema write amplification before wider `4/8/16` worker sweep.
+- [x] Add opt-in stored-procedure command intake for append + queue enqueue + duplicate replay.
+- [x] Re-run split-schema benchmark after stored-procedure intake.
+- [ ] Reduce remaining split-schema write amplification before wider `4/8/16` worker sweep.
 
 ### M4: Async Batched Runtime Persistence
 

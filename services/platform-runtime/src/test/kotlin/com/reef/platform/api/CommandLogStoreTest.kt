@@ -163,6 +163,22 @@ class PostgresCommandLogStoreIntegrationTest {
     }
 
     @Test
+    fun postgresStoreFunctionAppendModeReturnsExistingCommandForDuplicateIdempotencyWhenConfigured() {
+        val store = postgresStoreOrNull(appendMode = PostgresCommandLogAppendMode.Function) ?: return
+        val suffix = UUID.randomUUID().toString()
+        val original = commandLogRecord(commandId = "cmd-function-original-$suffix", idempotencyKey = "idem-function-$suffix")
+        val duplicate = commandLogRecord(commandId = "cmd-function-duplicate-$suffix", idempotencyKey = "idem-function-$suffix")
+
+        assertTrue(store.append(original).appended)
+        val result = store.append(duplicate)
+
+        assertFalse(result.appended)
+        assertEquals(original.commandId, result.record.commandId)
+        assertEquals(CommandLogStatus.RECEIVED, result.record.status)
+        assertEquals(original.commandId, store.findByIdempotency(original.clientId, original.route, original.idempotencyKey)?.commandId)
+    }
+
+    @Test
     fun postgresStoreReturnsSingleWinnerForConcurrentDuplicateIdempotencyWhenConfigured() {
         val store = postgresStoreOrNull() ?: return
         val suffix = UUID.randomUUID().toString()
@@ -255,13 +271,16 @@ class PostgresCommandLogStoreIntegrationTest {
         assertTrue((counts[CommandLogStatus.PROCESSING] ?: 0L) >= 1L)
     }
 
-    private fun postgresStoreOrNull(): PostgresCommandLogStore? {
+    private fun postgresStoreOrNull(
+        appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.Inline
+    ): PostgresCommandLogStore? {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
         val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
         return PostgresCommandLogStore(
             dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword),
-            bootstrapMode = PostgresBootstrapMode.Validate
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            appendMode = appendMode
         )
     }
 }
