@@ -248,6 +248,58 @@ class CommandCaptureStoreTest {
         assertTrue(status.responsePayloadJson.contains("\"accepted\""))
         assertNotNull(persistence.acceptedOrder("ord-async-1"))
     }
+
+    @Test
+    fun asyncCommandProcessorPersistsSubmitBatchBeforeCompletingCommands() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
+        persistence.saveRole(RoleDefinition("order_trader", listOf(Permission.ORDER_SUBMIT)))
+        persistence.saveActorRoleBinding(ActorRoleBinding("actor-1", "order_trader"))
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            clock = { Instant.parse("2026-06-04T14:00:00Z") }
+        )
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-async-batch-1",
+            correlationId = "trace-async-batch-1",
+            requestPayload = validAsyncSubmitPayload("cmd-async-batch-1", "trace-async-batch-1", "ord-async-batch-1")
+        )
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-async-batch-2",
+            correlationId = "trace-async-batch-2",
+            requestPayload = validAsyncSubmitPayload("cmd-async-batch-2", "trace-async-batch-2", "ord-async-batch-2")
+        )
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = AsyncAcceptedEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val processor = AsyncCommandProcessor(
+            queue = captureStore,
+            api = api,
+            batchSize = 10,
+            pollIntervalMs = 1L
+        )
+
+        assertEquals(2, processor.processOnce())
+
+        val first = captureStore.findCommandStatus("cmd-async-batch-1")
+        val second = captureStore.findCommandStatus("cmd-async-batch-2")
+        assertEquals(CommandLogStatus.COMPLETED, first?.status)
+        assertEquals(CommandLogStatus.COMPLETED, second?.status)
+        assertNotNull(persistence.acceptedOrder("ord-async-batch-1"))
+        assertNotNull(persistence.acceptedOrder("ord-async-batch-2"))
+        assertEquals(2, persistence.acceptedOrders().size)
+    }
 }
 
 private class RecordingCommandLogCaptureStore : CommandCaptureStore {

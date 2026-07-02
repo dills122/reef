@@ -13,6 +13,7 @@ import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import java.sql.Connection
+import java.sql.PreparedStatement
 import javax.sql.DataSource
 
 class PostgresRuntimePersistence(
@@ -616,21 +617,72 @@ class PostgresRuntimePersistence(
                 )
                 """.trimIndent()
             ).use { ps ->
-                ps.setString(1, commandId)
-                ps.setString(2, resultType)
-                ps.setString(3, accepted?.eventId ?: rejected?.eventId.orEmpty())
-                ps.setString(4, accepted?.orderId ?: rejected?.orderId.orEmpty())
-                ps.setString(5, accepted?.engineOrderId.orEmpty())
-                ps.setString(6, rejected?.code.orEmpty())
-                ps.setString(7, rejected?.reason.orEmpty())
-                ps.setString(8, accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
-                ps.setString(9, acceptedOrder?.toJsonObject())
-                ps.setString(10, result.executions.toJsonArray { it.toJsonObject() })
-                ps.setString(11, result.trades.toJsonArray { it.toJsonObject() })
-                ps.setString(12, lifecycleEvents.toJsonArray { it.toJsonObject() })
+                ps.bindSubmitOutcome(commandId, resultType, accepted, rejected, acceptedOrder, result, lifecycleEvents)
                 ps.execute()
             }
         }
+    }
+
+    override fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
+        if (outcomes.isEmpty()) return
+        connection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement(
+                    """
+                    SELECT ${names.persistSubmitOutcomeFunction}(
+                      ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb
+                    )
+                    """.trimIndent()
+                ).use { ps ->
+                    outcomes.forEach { outcome ->
+                        val accepted = outcome.result.accepted
+                        val rejected = outcome.result.rejected
+                        val resultType = if (accepted != null) "accepted" else "rejected"
+                        ps.bindSubmitOutcome(
+                            commandId = outcome.commandId,
+                            resultType = resultType,
+                            accepted = accepted,
+                            rejected = rejected,
+                            acceptedOrder = outcome.acceptedOrder,
+                            result = outcome.result,
+                            lifecycleEvents = outcome.lifecycleEvents
+                        )
+                        ps.execute()
+                    }
+                }
+                conn.commit()
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    private fun PreparedStatement.bindSubmitOutcome(
+        commandId: String,
+        resultType: String,
+        accepted: EngineOrderAccepted?,
+        rejected: EngineOrderRejected?,
+        acceptedOrder: PersistedOrder?,
+        result: SubmitOrderResult,
+        lifecycleEvents: List<RuntimeEvent>
+    ) {
+        setString(1, commandId)
+        setString(2, resultType)
+        setString(3, accepted?.eventId ?: rejected?.eventId.orEmpty())
+        setString(4, accepted?.orderId ?: rejected?.orderId.orEmpty())
+        setString(5, accepted?.engineOrderId.orEmpty())
+        setString(6, rejected?.code.orEmpty())
+        setString(7, rejected?.reason.orEmpty())
+        setString(8, accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
+        setString(9, acceptedOrder?.toJsonObject())
+        setString(10, result.executions.toJsonArray { it.toJsonObject() })
+        setString(11, result.trades.toJsonArray { it.toJsonObject() })
+        setString(12, lifecycleEvents.toJsonArray { it.toJsonObject() })
     }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {

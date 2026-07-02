@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -37,9 +38,7 @@ class AsyncCommandProcessor(
             queue.claimReceivedCommands(batchSize)
         }
         AsyncCommandProcessorMetrics.recordClaimed(commands.size)
-        val terminalUpdates = commands.map { command ->
-            process(command)
-        }
+        val terminalUpdates = processBatch(commands)
         if (terminalUpdates.isNotEmpty()) {
             HotPathMetrics.time("async.completeBatch") {
                 try {
@@ -58,6 +57,49 @@ class AsyncCommandProcessor(
             }
         }
         return commands.size
+    }
+
+    private fun processBatch(commands: List<CommandLogRecord>): List<CommandTerminalUpdate> {
+        val terminalUpdates = mutableListOf<CommandTerminalUpdate>()
+        val preparedSubmits = mutableListOf<PreparedSubmitCommand>()
+        commands.forEach { command ->
+            if (command.route == "/api/v1/orders/submit") {
+                try {
+                    val outcome = HotPathMetrics.time("async.prepareSubmitOrder") {
+                        api.prepareSubmitOrder(command.payloadJson)
+                    }
+                    preparedSubmits.add(PreparedSubmitCommand(command, outcome))
+                } catch (ex: Exception) {
+                    terminalUpdates.add(failedUpdate(command.commandId, ex))
+                }
+            } else {
+                terminalUpdates.add(process(command))
+            }
+        }
+
+        if (preparedSubmits.isNotEmpty()) {
+            try {
+                HotPathMetrics.time("async.persistSubmitOutcomes") {
+                    api.persistSubmitOutcomes(preparedSubmits.map { it.outcome })
+                }
+                preparedSubmits.forEach { prepared ->
+                    terminalUpdates.add(
+                        CommandTerminalUpdate(
+                            commandId = prepared.command.commandId,
+                            status = CommandLogStatus.COMPLETED,
+                            responseStatus = 200,
+                            responsePayloadJson = api.submitOrderResponse(prepared.outcome)
+                        )
+                    )
+                }
+            } catch (ex: Exception) {
+                preparedSubmits.forEach { prepared ->
+                    terminalUpdates.add(failedUpdate(prepared.command.commandId, ex))
+                }
+            }
+        }
+
+        return terminalUpdates
     }
 
     private fun process(command: CommandLogRecord): CommandTerminalUpdate {
@@ -81,6 +123,17 @@ class AsyncCommandProcessor(
                 errorMessage = message
             )
         }
+    }
+
+    private fun failedUpdate(commandId: String, ex: Exception): CommandTerminalUpdate {
+        val message = ex.message ?: ex::class.simpleName ?: "unknown"
+        return CommandTerminalUpdate(
+            commandId = commandId,
+            status = CommandLogStatus.FAILED,
+            responseStatus = 503,
+            responsePayloadJson = "{}",
+            errorMessage = message
+        )
     }
 
     private fun markTerminalIndividually(update: CommandTerminalUpdate) {
@@ -114,6 +167,11 @@ class AsyncCommandProcessor(
         }
     }
 }
+
+private data class PreparedSubmitCommand(
+    val command: CommandLogRecord,
+    val outcome: PersistableSubmitOutcome
+)
 
 data class AsyncCommandProcessorStats(
     val claimed: Long,

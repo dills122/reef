@@ -6,6 +6,7 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 
 class PlatformApi(
     private val orderService: OrderApplicationService = OrderApplicationService()
@@ -16,6 +17,18 @@ class PlatformApi(
 
     fun submitOrder(body: String): String {
         return toJson(orderService.submitOrder(PlatformCommandParsers.submitOrder(body)))
+    }
+
+    fun prepareSubmitOrder(body: String): PersistableSubmitOutcome {
+        return orderService.prepareSubmitOrder(PlatformCommandParsers.submitOrder(body))
+    }
+
+    fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
+        orderService.persistSubmitOutcomes(outcomes)
+    }
+
+    fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {
+        return toJson(outcome.result)
     }
 
     fun cancelOrder(body: String): String {

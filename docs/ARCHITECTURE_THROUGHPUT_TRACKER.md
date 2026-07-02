@@ -239,7 +239,7 @@ Drain follow-up:
 - [x] Skip redundant idempotency lookup for new captured-ack accepted commands.
 - [x] Split runtime-managed DB pools by hot-path role and add opt-in dedicated runtime persistence for captured-ack workers.
 - [x] Split or slim hot command payload writes on command-log reserve.
-- [ ] Batch or defer per-command runtime persistence writes.
+- [x] Batch per-command runtime persistence writes for captured-ack submit workers.
 
 Latest async drain notes:
 - `4` workers drained about `~2k commands/sec`.
@@ -259,6 +259,7 @@ Latest batched-completion notes:
 - named pools initially inherited the old global `RUNTIME_DB_POOL_MIN_IDLE=16` for every role and could exhaust local Postgres clients during restarts. Role-specific defaults now cap `runtime`/`async-runtime` lower and keep `command-log` as the only high-capacity pool by default.
 - the valid dedicated-vs-shared worker runtime pool A/B was effectively neutral in local captured-ack mode, so the dedicated `async-runtime` pool is opt-in rather than the dev default. Remaining backlog still points at command-log append and per-command async operation/persistence cost rather than Hikari waiters.
 - command payload storage now defaults to `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table`: `command_log.commands` keeps a slim `{}` compatibility payload for new commands while the full durable request payload is written to `command_log.command_payloads` and joined for replay/claim/status reads. A quick 8-worker `8k/8s` local A/B reached `3389.44 accepted rps`, p99 `148.11ms`, `1981.06/sec` post-load drain in side-table mode versus `1964.94 accepted rps`, p99 `210.73ms`, `2302.11/sec` post-load drain in inline mode; both reached final active `0` and gap `0`. The physical storage check showed `27313/27313` slim command rows plus payload rows for the side-table run and `0` side-table payload rows for the inline run.
+- captured-ack submit workers now prepare a claimed batch, persist submit outcomes in one transaction, and only then mark command-log terminal rows. The first 8-worker `8k/8s` smoke reached `3067.47 accepted rps`, p99 `162.35ms`, `951.49 completed/sec` during load, and `2750.24/sec` post-load drain with final active `0` and gap `0`. A JDBC `executeBatch` variant was tested and rejected for this local profile (`1775.38 accepted rps`, `880.56 completed/sec` during load), so the committed path uses repeated function execution inside one transaction.
 
 ### M4: Async Batched Runtime Persistence
 
