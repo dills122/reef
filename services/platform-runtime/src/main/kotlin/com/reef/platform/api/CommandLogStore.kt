@@ -284,7 +284,7 @@ class PostgresCommandLogStore(
                       scenario_id TEXT NOT NULL DEFAULT '',
                       received_at TIMESTAMPTZ NOT NULL,
                       payload_json JSONB NOT NULL,
-                      status TEXT NOT NULL,
+                      status TEXT NOT NULL DEFAULT 'RECEIVED',
                       attempt_count INTEGER NOT NULL DEFAULT 0,
                       last_error TEXT NOT NULL DEFAULT '',
                       response_status INTEGER NOT NULL DEFAULT 0,
@@ -293,12 +293,6 @@ class PostgresCommandLogStore(
                       UNIQUE (client_id, route, idempotency_key),
                       CHECK (status IN ('RECEIVED', 'PROCESSING', 'COMPLETED', 'FAILED'))
                     )
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_command_log_commands_status_received
-                    ON ${names.commands}(status, received_at)
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -313,7 +307,13 @@ class PostgresCommandLogStore(
                 )
                 stmt.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS ${names.commandWorkQueue} (
+                    ALTER TABLE ${names.commands}
+                      ALTER COLUMN status SET DEFAULT 'RECEIVED'
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE UNLOGGED TABLE IF NOT EXISTS ${names.commandWorkQueue} (
                       command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
                       status TEXT NOT NULL,
                       attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -442,17 +442,14 @@ class PostgresCommandLogStore(
                       run_kind,
                       scenario_id,
                       received_at,
-                      payload_json,
-                      status,
-                      attempt_count,
-                      last_error
+                      payload_json
                     )
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb, ?, ?, ?)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb)
                   ON CONFLICT DO NOTHING
                   RETURNING command_id
                 )
                 INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error, updated_at)
-                SELECT command_id, ?, 0, '', ?::timestamptz
+                SELECT command_id, 'RECEIVED', 0, '', ?::timestamptz
                 FROM inserted_command
                 ON CONFLICT (command_id) DO NOTHING
                 RETURNING command_id
@@ -471,11 +468,7 @@ class PostgresCommandLogStore(
                 ps.setString(11, record.scenarioId)
                 ps.setString(12, record.receivedAt.toString())
                 ps.setString(13, record.payloadJson)
-                ps.setString(14, CommandLogStatus.RECEIVED.name)
-                ps.setInt(15, 0)
-                ps.setString(16, "")
-                ps.setString(17, CommandLogStatus.RECEIVED.name)
-                ps.setString(18, record.receivedAt.toString())
+                ps.setString(14, record.receivedAt.toString())
                 ps.executeQuery().use { rs ->
                     if (rs.next()) {
                         return CommandLogAppendResult(
@@ -1060,10 +1053,7 @@ class PostgresCommandLogStore(
                 run_kind,
                 scenario_id,
                 received_at,
-                payload_json,
-                status,
-                attempt_count,
-                last_error
+                payload_json
               )
               VALUES (
                 p_command_id,
@@ -1078,10 +1068,7 @@ class PostgresCommandLogStore(
                 p_run_kind,
                 p_scenario_id,
                 p_received_at,
-                p_payload_json,
-                'RECEIVED',
-                0,
-                ''
+                p_payload_json
               )
               ON CONFLICT DO NOTHING;
 

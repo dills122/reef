@@ -80,6 +80,14 @@ Latest raw-intake sweep after batched completion:
 - `24` workers: `41291` accepted, `2736.52 accepted rps`, p95 `172.52ms`, p99 `224.26ms`; immediate accounting showed all commands terminal with `0` gap.
 - hot-path sample from the `16` worker run: `api.commandCapture.reserve` averaged `16.84ms`, `runtime.persistence.persistSubmitOutcome` averaged `5.01ms`, `async.completeBatch` averaged `52.94ms` per batch, and `async.claim` averaged `1.36ms`.
 - conclusion: batched terminal writes reduced one completion mutation surface but did not recover the `7500` completed/sec target. The current loaded-stack bottleneck is back at command-log reserve/write amplification and per-command runtime persistence.
+- follow-up tuning removes the retired `commands(status, received_at)` index and makes `command_work_queue` an unlogged derived active-state table. Durable accepted commands remain in logged `command_log.commands`; durable terminal outcomes remain in logged `command_log.command_results`; bootstrap reconstructs active queue rows from non-terminal commands.
+
+Active-queue WAL tuning follow-up:
+- 2026-07-02 quick comparisons used the same loaded local stack and `DEV_INTAKE_DURATION=15s`, `DEV_INTAKE_RATE=15000`, `DEV_INTAKE_WORKERS=384`, precise scheduling.
+- retired status-index/default-status-only run, `4` async workers, run id `drop-legacy-status-index-4w-15000-384`: `25083` accepted, `1644.24 accepted rps`, p95 `332.98ms`, p99 `372.51ms`; `api.commandCapture.reserve` averaged `18.16ms`; eventual terminal `25083/25083`, `0` active, `0` gap.
+- unlogged active queue run, `4` async workers, run id `unlogged-active-queue-4w-15000-384`: `59395` accepted, `3945.78 accepted rps`, p95 `131.15ms`, p99 `209.56ms`; immediate active backlog `11340`, eventual terminal `59395/59395`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `10.62ms`.
+- unlogged active queue run, `8` async workers, run id `unlogged-active-queue-8w-15000-384`: `47433` accepted, `3151.87 accepted rps`, p95 `180.13ms`, p99 `238.16ms`; immediate terminal `47433/47433`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `13.41ms`.
+- conclusion: removing the retired status index alone did not move the ceiling on this loaded stack. Making the active queue recoverable/unlogged materially reduced append pressure and recovered a `~3.9k accepted rps` loaded-stack point, but still falls short of the `7500` completed/sec target.
 
 ## Workstream Status
 
@@ -112,6 +120,7 @@ Latest raw-intake sweep after batched completion:
 | A25 | Batched command completion | Done | performance | Async processor flushes terminal command updates in one transaction per claimed batch; A/B showed no target recovery, so command-log reserve and runtime persistence are the next bottlenecks |
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
 | A27 | Bot-arena venue-path readiness | Not started | architecture | Built-in and user bots must use the same command/API path with run/bot attribution and guardrails |
+| A28 | Recoverable active command queue | In progress | performance | `command_work_queue` is derived active state and can be unlogged/reconstructed while accepted commands and terminal outcomes stay durable; quick loaded-stack run recovered `3945.78 accepted rps` with eventual `0` gap |
 
 ## Milestone Checklist
 
@@ -193,7 +202,9 @@ Drain follow-up:
 - [x] Add durable-intake overload thresholds that reject before acceptance.
 - [x] Add batched terminal result and queue-completion writes.
 - [x] A/B batched terminal writes against captured-ack worker and raw-intake profiles.
-- [ ] Split or slim hot command payload/index writes on command-log reserve.
+- [x] Remove retired command-table status index from the hot append path.
+- [x] Move active command queue to recoverable unlogged storage.
+- [ ] Split or slim hot command payload writes on command-log reserve.
 - [ ] Batch or defer per-command runtime persistence writes.
 
 Latest async drain notes:
@@ -207,6 +218,7 @@ Latest batched-completion notes:
 - end-to-end captured-ack load-tester runs validated eventual drain and `0` accepted-command accounting gap, but did not produce a clean ceiling because the load generator stretched under saturation.
 - raw-intake runs on the same loaded stack accepted only `~2.3k-2.8k rps`, far below the earlier narrow `7k+` intake reference.
 - `api.commandCapture.reserve` reached `16.84ms avg` in the `16` worker raw-intake sample, so the next high-value slice is command-log write amplification before another worker-count sweep.
+- after making the active queue unlogged, the best quick loaded-stack raw-intake point improved to `3945.78 accepted rps` with eventual drain and `0` gap. The next measured blocker remains command-log reserve plus runtime persistence under higher worker counts.
 
 ### M4: Async Batched Runtime Persistence
 

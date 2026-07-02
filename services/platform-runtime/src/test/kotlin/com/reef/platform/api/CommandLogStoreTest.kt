@@ -366,16 +366,41 @@ class PostgresCommandLogStoreIntegrationTest {
         store.markCompleted(stale.commandId, 200, """{"accepted":true}""")
     }
 
+    @Test
+    fun postgresCompatBootstrapReconstructsMissingActiveQueueRowsWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(
+            commandId = "cmd-rebuild-queue-$suffix",
+            idempotencyKey = "idem-rebuild-queue-$suffix"
+        ).copy(runId = "run-rebuild-queue-$suffix")
+
+        assertTrue(store.append(record).appended)
+        deleteQueueRow(record.commandId) ?: return
+
+        val recoveredStore = postgresStoreOrNull(bootstrapMode = PostgresBootstrapMode.Compat) ?: return
+        val recovered = recoveredStore.findByCommandId(record.commandId)
+        val accounting = recoveredStore.accountingSnapshot(record.runId)
+
+        assertEquals(CommandLogStatus.RECEIVED, recovered?.status)
+        assertEquals(1L, accounting.accepted)
+        assertEquals(1L, accounting.active)
+        assertEquals(0L, accounting.accountingGap)
+
+        recoveredStore.markCompleted(record.commandId, 200, """{"accepted":true}""")
+    }
+
     private fun postgresStoreOrNull(
         appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.Inline,
-        processingLeaseMs: Long = 60_000L
+        processingLeaseMs: Long = 60_000L,
+        bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.Validate
     ): PostgresCommandLogStore? {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
         val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
         return PostgresCommandLogStore(
             dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword),
-            bootstrapMode = PostgresBootstrapMode.Validate,
+            bootstrapMode = bootstrapMode,
             appendMode = appendMode,
             processingLeaseMs = processingLeaseMs
         )
@@ -393,6 +418,24 @@ class PostgresCommandLogStoreIntegrationTest {
                     updated_at = '1900-01-01T00:00:00Z'::timestamptz,
                     leased_by = '',
                     leased_until = NULL
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeUpdate()
+            }
+        }
+        return true
+    }
+
+    private fun deleteQueueRow(commandId: String): Boolean? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                DELETE FROM command_log.command_work_queue
                 WHERE command_id = ?
                 """.trimIndent()
             ).use { ps ->

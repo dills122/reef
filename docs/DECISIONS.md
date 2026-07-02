@@ -532,6 +532,9 @@ Summary:
 - benchmark evidence did not justify making that routine the default: `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=inline` remains the default until a function or batched intake path beats it.
 - batched terminal result and queue-completion writes are now the default async completion path, but 2026-07-02 stress evidence did not recover the `7500` completed/sec target.
 - the next measured bottlenecks are command-log reserve/write amplification and per-command runtime persistence, not async queue claim mechanics.
+- `command_log.command_work_queue` is recoverable active scheduling state and can be unlogged to reduce WAL churn; no-loss accounting still depends on logged `command_log.commands` for accepted commands and logged `command_log.command_results` for terminal outcomes.
+- bootstrap must continue reconstructing active queue rows from durable commands without terminal results after restart.
+- first quick loaded-stack evidence for the unlogged active queue recovered a `3945.78 accepted rps` point with eventual `59395/59395` terminal commands and `0` accounting gap, but it is still below the `7500` completed/sec target.
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)

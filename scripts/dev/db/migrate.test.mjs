@@ -33,6 +33,8 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0007_retention_pins.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0008_command_append_queue_timestamp.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0009_run_metadata.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0010_drop_legacy_status_index.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0011_unlogged_active_queue.sql"));
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {
