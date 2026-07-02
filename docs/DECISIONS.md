@@ -462,6 +462,21 @@ Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
+### D-033: Command Log Lifecycle Controls
+
+Status: accepted
+
+Summary:
+- `command_log.commands` and `command_log.command_results` are canonical command intake/audit history, but unbounded local stress history is not a useful default for iterative throughput work.
+- command-log pruning must be explicit and dry-run-first in local tooling.
+- pruning may delete terminal command history only when no active `command_work_queue` row exists for the command.
+- named replay/audit runs need a pinned retention path before broad arena-run pruning becomes a normal workflow.
+- physical partitioning remains a follow-up after prune/retest evidence shows how much table lifecycle alone recovers.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted

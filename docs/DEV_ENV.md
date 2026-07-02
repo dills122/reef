@@ -252,6 +252,31 @@ Use this before architecture changes when the goal is to separate platform-runti
 
 `dev-intake-bench` captures pre/post DB diagnostics by default and embeds a `dbDiagnostics` object into the JSON report. It also writes raw snapshots under `*-db-diagnostics-workers-<workers>-rate-<rate>/`. Disable this with `DEV_INTAKE_CAPTURE_DB_DIAGNOSTICS=0`, or adjust schemas with `DEV_INTAKE_DB_SCHEMAS=runtime,boundary,command_log`.
 
+## Command-log lifecycle
+
+Prune terminal command-log history with a dry-run-first dev tool:
+
+```bash
+make dev-command-log-prune
+```
+
+The default mode reports how many completed/failed command records are eligible for pruning but does not delete rows. It never selects active `command_work_queue` rows. Apply pruning explicitly:
+
+```bash
+DEV_COMMAND_LOG_PRUNE_APPLY=1 \
+DEV_COMMAND_LOG_PRUNE_OLDER_THAN=24h \
+make dev-command-log-prune
+```
+
+Useful knobs:
+- `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=24h` accepts `ms`, `s`, `m`, `h`, or `d`
+- `DEV_COMMAND_LOG_PRUNE_BATCH_SIZE=50000`
+- `DEV_COMMAND_LOG_PRUNE_MAX_BATCHES=100`
+- `DEV_COMMAND_LOG_PRUNE_VACUUM=1`
+- `DEV_COMMAND_LOG_PRUNE_CAPTURE_DB_DIAGNOSTICS=1`
+
+For loaded local benchmark databases, use `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` only when all terminal command history can be discarded. Keep named replay/audit runs by exporting them before pruning or by using a future pinned-run retention path.
+
 30-minute fixed-load soak (clean reset recommended first):
 
 ```bash
