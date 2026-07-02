@@ -55,6 +55,32 @@ Latest accounting smoke:
 - result: `1999` accepted, `1999` terminal, `0` active, `0` accounting gap, `20/20` trace checks, `199.90 completed/sec`.
 - artifact: `/tmp/reef-accounting-smoke/captured-ack-smoke-rate-200-workers-16.json`.
 
+Latest batched-completion sweep:
+- 2026-07-02 captured-ack load-tester sweep used `DEV_STRESS_DURATION=15s`, `DEV_STRESS_RATES=15000`, `DEV_STRESS_SWEEP_WORKERS=384`, precise scheduling, and async worker counts `4/8/16/24`.
+- artifacts:
+  - `/tmp/reef-batch-drain-sweep-4w/captured-ack-4w-rate-15000-workers-384.json`
+  - `/tmp/reef-batch-drain-sweep-8w/captured-ack-8w-rate-15000-workers-384.json`
+  - `/tmp/reef-batch-drain-sweep-16w/captured-ack-16w-rate-15000-workers-384.json`
+  - `/tmp/reef-batch-drain-sweep-24w/captured-ack-24w-rate-15000-workers-384.json`
+- the stress runner stretched to about `32s` wall time under saturation; completed-rps accounting now uses the report's actual `durationSeconds` when present instead of only the configured duration.
+- accepted wall throughput ranged from about `622` to `1343 rps`; terminal wall throughput ranged from about `418` to `619 rps` during immediate accounting.
+- all accepted commands eventually drained with `0` accounting gap.
+- this sweep is useful for end-to-end pressure and accounting validation, but the current load tester under-drives the runtime when saturated, so it is not a clean single-instance ceiling signal.
+
+Latest raw-intake sweep after batched completion:
+- 2026-07-02 raw-intake sweep used `DEV_INTAKE_DURATION=15s`, `DEV_INTAKE_RATE=15000`, `DEV_INTAKE_WORKERS=384`, precise scheduling, and async worker counts `4/8/16/24`.
+- artifacts:
+  - `/tmp/reef-batch-raw-4w/intake-workers-384-rate-15000.json`
+  - `/tmp/reef-batch-raw-8w/intake-workers-384-rate-15000.json`
+  - `/tmp/reef-batch-raw-16w/intake-workers-384-rate-15000.json`
+  - `/tmp/reef-batch-raw-24w/intake-workers-384-rate-15000.json`
+- `4` workers: `42391` accepted, `2807.70 accepted rps`, p95 `167.12ms`, p99 `212.22ms`; immediate active backlog `30346`, later drained to zero with `0` gap.
+- `8` workers: `39516` accepted, `2616.11 accepted rps`, p95 `180.42ms`, p99 `217.26ms`; immediate accounting showed all commands terminal with `0` gap.
+- `16` workers: `34115` accepted, `2256.55 accepted rps`, p95 `207.90ms`, p99 `277.64ms`; immediate accounting showed all commands terminal with `0` gap.
+- `24` workers: `41291` accepted, `2736.52 accepted rps`, p95 `172.52ms`, p99 `224.26ms`; immediate accounting showed all commands terminal with `0` gap.
+- hot-path sample from the `16` worker run: `api.commandCapture.reserve` averaged `16.84ms`, `runtime.persistence.persistSubmitOutcome` averaged `5.01ms`, `async.completeBatch` averaged `52.94ms` per batch, and `async.claim` averaged `1.36ms`.
+- conclusion: batched terminal writes reduced one completion mutation surface but did not recover the `7500` completed/sec target. The current loaded-stack bottleneck is back at command-log reserve/write amplification and per-command runtime persistence.
+
 ## Workstream Status
 
 | ID | Workstream | Status | Target Branch Type | Notes |
@@ -81,9 +107,9 @@ Latest accounting smoke:
 | A20 | Async queue lease reclaim | Done | reliability | Stale `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`, preventing restart-stranded commands |
 | A21 | Completed-throughput target and no-loss plan | Done | planning | Active target is now `7500` completed/sec minimum, `10000` preferred, with no accepted-command accounting gaps |
 | A22 | Run/session attribution for throughput runs | Done | feature | `run_id`, `run_kind`, and `scenario_id` are captured on command-log rows from stress/intake payload metadata |
-| A23 | Backlog-adjusted stress accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress reports attach accepted, terminal, active, stale, completed-rps, and accounting-gap deltas. Drain-time measurement remains next |
+| A23 | Backlog-adjusted stress accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress reports attach accepted, terminal, active, stale, completed-rps, and accounting-gap deltas using actual report wall duration when present. Drain-time measurement remains next |
 | A24 | Durable-intake backpressure thresholds | In progress | reliability | Opt-in active-depth and stale-processing rejection added; queue-age and drain-rate thresholds remain next |
-| A25 | Batched command completion | In progress | performance | Async processor now flushes terminal command updates in one transaction per claimed batch; stress A/B remains next |
+| A25 | Batched command completion | Done | performance | Async processor flushes terminal command updates in one transaction per claimed batch; A/B showed no target recovery, so command-log reserve and runtime persistence are the next bottlenecks |
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
 | A27 | Bot-arena venue-path readiness | Not started | architecture | Built-in and user bots must use the same command/API path with run/bot attribution and guardrails |
 
@@ -166,6 +192,9 @@ Drain follow-up:
 - [x] Add completed-throughput and accounting-gap fields to stress reports.
 - [x] Add durable-intake overload thresholds that reject before acceptance.
 - [x] Add batched terminal result and queue-completion writes.
+- [x] A/B batched terminal writes against captured-ack worker and raw-intake profiles.
+- [ ] Split or slim hot command payload/index writes on command-log reserve.
+- [ ] Batch or defer per-command runtime persistence writes.
 
 Latest async drain notes:
 - `4` workers drained about `~2k commands/sec`.
@@ -173,6 +202,11 @@ Latest async drain notes:
 - `16` workers drained about `~4k-4.3k commands/sec`.
 - `24` workers drained about `~4.9k commands/sec`, but per-command persistence and complete latency worsened.
 - DB pools showed no waiter pressure during the sweep, so the next likely bottleneck is per-command runtime persistence and result completion writes.
+
+Latest batched-completion notes:
+- end-to-end captured-ack load-tester runs validated eventual drain and `0` accepted-command accounting gap, but did not produce a clean ceiling because the load generator stretched under saturation.
+- raw-intake runs on the same loaded stack accepted only `~2.3k-2.8k rps`, far below the earlier narrow `7k+` intake reference.
+- `api.commandCapture.reserve` reached `16.84ms avg` in the `16` worker raw-intake sample, so the next high-value slice is command-log write amplification before another worker-count sweep.
 
 ### M4: Async Batched Runtime Persistence
 

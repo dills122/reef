@@ -293,7 +293,7 @@ function attachCommandAccounting({ reportOut, duration, runId, beforeAccounting,
     const report = JSON.parse(readFileSync(reportOut, "utf8"));
     const before = beforeAccounting?.json ?? null;
     const after = afterAccounting?.json ?? null;
-    const durationSeconds = parseDurationSeconds(duration);
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
     const delta = commandAccountingDelta(before, after, durationSeconds);
     report.commandAccounting = {
       runId,
