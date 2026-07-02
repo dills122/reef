@@ -91,7 +91,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "command_log.commands",
                 "command_log.command_work_queue",
-                "command_log.command_results"
+                "command_log.command_results",
+                "command_log.retention_pins"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
@@ -127,7 +128,13 @@ class PostgresSchemaRequirementsTest {
                 "command_log.command_results.last_error",
                 "command_log.command_results.response_status",
                 "command_log.command_results.response_payload_json",
-                "command_log.command_results.completed_at"
+                "command_log.command_results.completed_at",
+                "command_log.retention_pins.pin_id",
+                "command_log.retention_pins.selector_type",
+                "command_log.retention_pins.selector_value",
+                "command_log.retention_pins.reason",
+                "command_log.retention_pins.created_at",
+                "command_log.retention_pins.updated_at"
             ),
             requirements.columns.map { it.qualifiedName }.toSet()
         )

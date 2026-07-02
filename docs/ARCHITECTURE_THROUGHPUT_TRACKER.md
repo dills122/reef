@@ -60,7 +60,7 @@ Scaling intent:
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
 | A15 | Command queue/result split | Done | architecture | Functional split complete; first benchmark regressed ingress, so next work must reduce write amplification |
 | A16 | Stored-procedure command intake | Done | architecture | Added as opt-in `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=function`; benchmark regressed reserve latency, so default remains `inline` |
-| A17 | Command-log lifecycle controls | In progress | architecture | Dry-run-first terminal history pruning added; partitioning and pinned run retention remain next |
+| A17 | Command-log lifecycle controls | In progress | architecture | Dry-run-first terminal pruning and retention pins added; partitioning remains next |
 
 ## Milestone Checklist
 
@@ -130,7 +130,8 @@ Drain follow-up:
 - [x] Add opt-in stored-procedure command intake for append + queue enqueue + duplicate replay.
 - [x] Re-run split-schema benchmark after stored-procedure intake.
 - [x] Add dry-run-first command-log terminal history prune tooling.
-- [ ] Add pinned run/session retention before pruning named replay/audit runs.
+- [x] Add pinned run/session retention before pruning named replay/audit runs.
+- [ ] Add partitioning plan for command-log commands/results.
 - [ ] Reduce remaining split-schema write amplification before wider `4/8/16` worker sweep.
 
 ### M4: Async Batched Runtime Persistence

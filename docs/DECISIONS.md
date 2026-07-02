@@ -470,7 +470,8 @@ Summary:
 - `command_log.commands` and `command_log.command_results` are canonical command intake/audit history, but unbounded local stress history is not a useful default for iterative throughput work.
 - command-log pruning must be explicit and dry-run-first in local tooling.
 - pruning may delete terminal command history only when no active `command_work_queue` row exists for the command.
-- named replay/audit runs need a pinned retention path before broad arena-run pruning becomes a normal workflow.
+- named replay/audit runs can be protected with `command_log.retention_pins` before broad arena-run pruning.
+- retention pins support exact command IDs and session-friendly selectors such as idempotency-key prefixes.
 - physical partitioning remains a follow-up after prune/retest evidence shows how much table lifecycle alone recovers.
 
 Primary references:

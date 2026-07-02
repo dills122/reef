@@ -277,7 +277,34 @@ Useful knobs:
 
 Vacuum runs after applied pruning using `PARALLEL 0` to reduce Docker shared-memory pressure. If vacuum still fails locally, pruning remains applied and the report records the vacuum error; rerun later with more Docker shared memory or `DEV_COMMAND_LOG_PRUNE_VACUUM=0`.
 
-For loaded local benchmark databases, use `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` only when all terminal command history can be discarded. Keep named replay/audit runs by exporting them before pruning or by using a future pinned-run retention path.
+Protect a named run/session before pruning by adding a retention pin. Intake and load-test idempotency keys start with a session prefix, so `idempotency_prefix` is the usual selector:
+
+```bash
+DEV_COMMAND_LOG_PIN_ACTION=upsert \
+DEV_COMMAND_LOG_PIN_SELECTOR_TYPE=idempotency_prefix \
+DEV_COMMAND_LOG_PIN_SELECTOR_VALUE=intake-1782954356175044000 \
+DEV_COMMAND_LOG_PIN_REASON="keep post-prune benchmark run" \
+make dev-command-log-pin
+```
+
+List pins:
+
+```bash
+make dev-command-log-pin
+```
+
+Delete a pin:
+
+```bash
+DEV_COMMAND_LOG_PIN_ACTION=delete \
+DEV_COMMAND_LOG_PIN_SELECTOR_TYPE=idempotency_prefix \
+DEV_COMMAND_LOG_PIN_SELECTOR_VALUE=intake-1782954356175044000 \
+make dev-command-log-pin
+```
+
+Supported selectors are `command_id`, `idempotency_prefix`, `trace_id`, `correlation_id`, and `client_id`. Prune excludes pinned commands in addition to active queue rows.
+
+For loaded local benchmark databases, use `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` only when all unpinned terminal command history can be discarded. Export important audit history or add retention pins before pruning.
 
 30-minute fixed-load soak (clean reset recommended first):
 

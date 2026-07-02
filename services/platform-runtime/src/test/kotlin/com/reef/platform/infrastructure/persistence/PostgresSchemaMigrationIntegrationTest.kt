@@ -34,7 +34,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0003_queue_result_split.sql',
                   'command_log/0004_terminal_results_active_queue.sql',
                   'command_log/0005_result_terminal_metadata.sql',
-                  'command_log/0006_command_append_function.sql'
+                  'command_log/0006_command_append_function.sql',
+                  'command_log/0007_retention_pins.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -58,6 +59,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0004_terminal_results_active_queue.sql",
                     "command_log/0005_result_terminal_metadata.sql",
                     "command_log/0006_command_append_function.sql",
+                    "command_log/0007_retention_pins.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations
@@ -71,6 +73,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "command_log.command_results",
                 "command_log.command_work_queue",
                 "command_log.commands",
+                "command_log.retention_pins",
                 "runtime.executions",
                 "runtime.orders",
                 "runtime.reference_instruments",
@@ -97,7 +100,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'api_command_captures',
                     'commands',
                     'command_work_queue',
-                    'command_results'
+                    'command_results',
+                    'retention_pins'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -109,6 +113,41 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertEquals(expectedTables, actualTables)
+
+            val retentionPinColumns = conn.prepareStatement(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'command_log'
+                  AND table_name = 'retention_pins'
+                  AND column_name IN (
+                    'pin_id',
+                    'selector_type',
+                    'selector_value',
+                    'reason',
+                    'created_at',
+                    'updated_at'
+                  )
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                setOf(
+                    "pin_id",
+                    "selector_type",
+                    "selector_value",
+                    "reason",
+                    "created_at",
+                    "updated_at"
+                ),
+                retentionPinColumns
+            )
 
             val commandLogFunctions = conn.prepareStatement(
                 """

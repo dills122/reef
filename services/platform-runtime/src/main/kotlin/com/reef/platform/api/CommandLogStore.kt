@@ -191,6 +191,7 @@ class PostgresCommandLogStore(
                         commands = names.commands,
                         workQueue = names.commandWorkQueue,
                         results = names.commandResults,
+                        retentionPins = names.retentionPins,
                         appendFunction = names.commandAppendFunction
                     )
                 )
@@ -281,6 +282,26 @@ class PostgresCommandLogStore(
                     """
                     CREATE INDEX IF NOT EXISTS idx_command_log_results_status_completed
                     ON ${names.commandResults}(status, completed_at, command_id)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.retentionPins} (
+                      pin_id TEXT PRIMARY KEY,
+                      selector_type TEXT NOT NULL,
+                      selector_value TEXT NOT NULL,
+                      reason TEXT NOT NULL DEFAULT '',
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      UNIQUE (selector_type, selector_value),
+                      CHECK (selector_type IN ('command_id', 'idempotency_prefix', 'trace_id', 'correlation_id', 'client_id'))
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_command_log_retention_pins_selector
+                    ON ${names.retentionPins}(selector_type, selector_value)
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -855,6 +876,7 @@ data class PostgresCommandLogSqlNames(
     val commands = "$schemaName.commands"
     val commandWorkQueue = "$schemaName.command_work_queue"
     val commandResults = "$schemaName.command_results"
+    val retentionPins = "$schemaName.retention_pins"
     val commandAppendFunction = "$schemaName.command_append"
 
     private fun schemaNameOrDefault(schema: String): String {

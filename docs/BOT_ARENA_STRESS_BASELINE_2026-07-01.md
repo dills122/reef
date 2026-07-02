@@ -851,3 +851,9 @@ Command-log lifecycle follow-up:
 - Applying the prune with `DEV_COMMAND_LOG_PRUNE_APPLY=1 DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` removed the eligible terminal history. The first post-delete vacuum attempt failed on Docker shared-memory pressure, so the tool was hardened to use `VACUUM (ANALYZE, PARALLEL 0)` and to record vacuum errors instead of losing the prune report. Manual lower-memory vacuum then succeeded on `command_log.commands`, `command_log.command_results`, and `command_log.command_work_queue`.
 - Post-prune benchmark with the same `4` async-worker, `384` intake-worker, `15k` offered-rate shape produced `3477.43` accepted rps, p50 `107.54ms`, p95 `185.49ms`, p99 `222.64ms`, and `api.commandCapture.reserve` `13.40ms avg`.
 - Cleanup recovered a large part of the later loaded-stack drop (`1815.38` -> `3477.43` accepted rps), but it did not recover the earlier post-split best (`4020.17` accepted rps). Next lifecycle work should add pinned run/session retention and then evaluate partitioning or active-queue churn reduction.
+
+Retention pin follow-up:
+
+- `command_log/0007_retention_pins.sql` adds explicit retention pins for selectors such as `command_id`, `idempotency_prefix`, `trace_id`, `correlation_id`, and `client_id`.
+- `make dev-command-log-pin` can list, upsert, or delete pins. `make dev-command-log-prune` excludes pinned commands.
+- Smoke verification pinned the post-prune benchmark session by idempotency prefix. With the pin present, `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` dry-run reported `0` eligible rows; after deleting the temporary pin, the same dry-run reported `52315` eligible rows.

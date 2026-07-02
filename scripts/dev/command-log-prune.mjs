@@ -34,12 +34,14 @@ export function buildEligibleCountSql({ olderThanSeconds }) {
   return `
 SELECT COUNT(*) AS eligible_count
 FROM command_log.command_results results
+JOIN command_log.commands commands ON commands.command_id = results.command_id
 WHERE results.completed_at < NOW() - (${olderThanSeconds}::double precision * INTERVAL '1 second')
   AND NOT EXISTS (
     SELECT 1
     FROM command_log.command_work_queue queue
     WHERE queue.command_id = results.command_id
-  );
+  )
+  AND ${buildRetentionPinExclusionPredicate("commands")};
 `.trim();
 }
 
@@ -48,12 +50,14 @@ export function buildDeleteBatchSql({ olderThanSeconds, batchSize }) {
 WITH eligible AS (
   SELECT results.command_id
   FROM command_log.command_results results
+  JOIN command_log.commands commands ON commands.command_id = results.command_id
   WHERE results.completed_at < NOW() - (${olderThanSeconds}::double precision * INTERVAL '1 second')
     AND NOT EXISTS (
       SELECT 1
       FROM command_log.command_work_queue queue
       WHERE queue.command_id = results.command_id
     )
+    AND ${buildRetentionPinExclusionPredicate("commands")}
   ORDER BY results.completed_at, results.command_id
   LIMIT ${batchSize}
 ),
@@ -66,6 +70,18 @@ deleted AS (
 SELECT COUNT(*) AS deleted_count
 FROM deleted;
 `.trim();
+}
+
+export function buildRetentionPinExclusionPredicate(commandAlias) {
+  return `NOT EXISTS (
+    SELECT 1
+    FROM command_log.retention_pins pins
+    WHERE (pins.selector_type = 'command_id' AND pins.selector_value = ${commandAlias}.command_id)
+       OR (pins.selector_type = 'idempotency_prefix' AND ${commandAlias}.idempotency_key LIKE pins.selector_value || '%')
+       OR (pins.selector_type = 'trace_id' AND pins.selector_value = ${commandAlias}.trace_id)
+       OR (pins.selector_type = 'correlation_id' AND pins.selector_value = ${commandAlias}.correlation_id)
+       OR (pins.selector_type = 'client_id' AND pins.selector_value = ${commandAlias}.client_id)
+  )`;
 }
 
 export function buildQueueCountsSql() {

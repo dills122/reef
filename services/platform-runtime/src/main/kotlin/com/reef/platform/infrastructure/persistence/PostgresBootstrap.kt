@@ -111,13 +111,15 @@ object PostgresSchemaRequirements {
         commands: String,
         workQueue: String = "command_log.command_work_queue",
         results: String = "command_log.command_results",
+        retentionPins: String = "command_log.retention_pins",
         appendFunction: String = "command_log.command_append"
     ): PostgresSchemaRequirement {
         val commandTable = PostgresSchemaObject.parse(commands)
         val queueTable = PostgresSchemaObject.parse(workQueue)
         val resultTable = PostgresSchemaObject.parse(results)
+        val retentionPinTable = PostgresSchemaObject.parse(retentionPins)
         return PostgresSchemaRequirement(
-            tables = listOf(commandTable, queueTable, resultTable),
+            tables = listOf(commandTable, queueTable, resultTable, retentionPinTable),
             functions = listOf(PostgresSchemaObject.parse(appendFunction)),
             columns = listOf(
                 listOf(
@@ -155,7 +157,15 @@ object PostgresSchemaRequirements {
                     "response_status",
                     "response_payload_json",
                     "completed_at"
-                ).map { column -> PostgresSchemaColumn(resultTable, column) }
+                ).map { column -> PostgresSchemaColumn(resultTable, column) },
+                listOf(
+                    "pin_id",
+                    "selector_type",
+                    "selector_value",
+                    "reason",
+                    "created_at",
+                    "updated_at"
+                ).map { column -> PostgresSchemaColumn(retentionPinTable, column) }
             ).flatten()
         )
     }

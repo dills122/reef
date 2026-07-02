@@ -4,6 +4,7 @@ import {
   buildDeleteBatchSql,
   buildEligibleCountSql,
   buildQueueCountsSql,
+  buildRetentionPinExclusionPredicate,
   buildVacuumSql,
   parseDurationSeconds,
 } from "./command-log-prune.mjs";
@@ -23,6 +24,7 @@ test("builds terminal-only eligible count SQL", () => {
   assert.match(sql, /FROM command_log\.command_results results/);
   assert.match(sql, /NOT EXISTS/);
   assert.match(sql, /command_log\.command_work_queue queue/);
+  assert.match(sql, /command_log\.retention_pins pins/);
   assert.match(sql, /86400::double precision/);
 });
 
@@ -33,6 +35,7 @@ test("builds batched delete through commands for cascading terminal history", ()
   assert.match(sql, /LIMIT 50000/);
   assert.match(sql, /DELETE FROM command_log\.commands commands/);
   assert.match(sql, /RETURNING commands\.command_id/);
+  assert.match(sql, /idempotency_prefix/);
 });
 
 test("builds active queue count SQL", () => {
@@ -48,4 +51,12 @@ test("builds low-shared-memory vacuum commands", () => {
   assert.equal(commands.length, 3);
   assert.match(commands[0].sql, /PARALLEL 0/);
   assert.equal(commands[0].table, "command_log.commands");
+});
+
+test("builds retention pin exclusion predicate", () => {
+  const sql = buildRetentionPinExclusionPredicate("commands");
+
+  assert.match(sql, /selector_type = 'command_id'/);
+  assert.match(sql, /commands\.idempotency_key LIKE pins\.selector_value/);
+  assert.match(sql, /selector_type = 'client_id'/);
 });
