@@ -135,6 +135,11 @@ make dev-stress-captured-ack
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS=60000`
 
+Durable captured-ack intake backpressure is opt-in:
+- `EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS=0` disables active queue-depth rejection.
+- `EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING=0` disables stale-processing rejection.
+- When enabled, new commands receive `429 COMMAND_INTAKE_BACKPRESSURE` before durable acceptance; duplicate idempotency replays still return their existing command status.
+
 Override the worker count for drain sweeps, for example:
 
 ```bash

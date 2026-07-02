@@ -24,6 +24,8 @@ class PlatformHttpServer(
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
     private val asyncCommandWorkerBatchSize: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", 100, min = 1),
     private val asyncCommandWorkerPollMs: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS", 25L),
+    private val commandIntakeMaxActive: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS", 0L, min = 0L),
+    private val commandIntakeMaxStaleProcessing: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING", 0L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
 ) {
     private val maxRequestBodyBytes: Int =
@@ -430,6 +432,20 @@ class PlatformHttpServer(
             writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
             return
         }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val existingStatus = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
+            if (existingStatus != null) {
+                writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existingStatus, correlationId)
+                return
+            }
+            val backpressure = commandIntakeBackpressure()
+            if (backpressure != null) {
+                writeJson(exchange, backpressure.status, boundary.toErrorJson(backpressure, correlationId))
+                return
+            }
+        }
+
         val reservation = try {
             HotPathMetrics.time("api.commandCapture.reserve") {
                 commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
@@ -655,6 +671,10 @@ class PlatformHttpServer(
             "workerThreads" to asyncCommandWorkerThreads,
             "batchSize" to asyncCommandWorkerBatchSize,
             "pollIntervalMs" to asyncCommandWorkerPollMs,
+            "intakeBackpressure" to mapOf(
+                "maxActiveCommands" to commandIntakeMaxActive,
+                "maxStaleProcessing" to commandIntakeMaxStaleProcessing
+            ),
             "queue" to counts,
             "metrics" to mapOf(
                 "claimed" to metrics.claimed,
@@ -666,6 +686,29 @@ class PlatformHttpServer(
                 "lastFailedAt" to metrics.lastFailedAt
             )
         )
+    }
+
+    private fun commandIntakeBackpressure(): BoundaryError? {
+        if (commandIntakeMaxActive <= 0L && commandIntakeMaxStaleProcessing <= 0L) {
+            return null
+        }
+        val queue = capturedCommandQueue ?: return null
+        val snapshot = queue.accountingSnapshot()
+        if (commandIntakeMaxStaleProcessing > 0L && snapshot.staleProcessing >= commandIntakeMaxStaleProcessing) {
+            return BoundaryError(
+                429,
+                "COMMAND_INTAKE_BACKPRESSURE",
+                "command intake rejected because stale processing count is ${snapshot.staleProcessing}"
+            )
+        }
+        if (commandIntakeMaxActive > 0L && snapshot.active >= commandIntakeMaxActive) {
+            return BoundaryError(
+                429,
+                "COMMAND_INTAKE_BACKPRESSURE",
+                "command intake rejected because active command queue depth is ${snapshot.active}"
+            )
+        }
+        return null
     }
 
     private fun commandAccountingJson(runId: String): String {

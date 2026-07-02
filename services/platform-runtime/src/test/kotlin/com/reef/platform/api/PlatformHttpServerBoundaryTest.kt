@@ -834,6 +834,59 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun capturedAckBackpressureRejectsNewCommandsButAllowsDuplicateReplay() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandIntakeMaxActive = 1
+        )
+        try {
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-backpressure-1"
+                ),
+                body = validSubmitBody("cmd-backpressure-1", "trace-backpressure-1", "ord-backpressure-1")
+            )
+            val duplicate = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-backpressure-1"
+                ),
+                body = validSubmitBody("cmd-backpressure-1", "trace-backpressure-1", "ord-backpressure-1")
+            )
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-backpressure-2"
+                ),
+                body = validSubmitBody("cmd-backpressure-2", "trace-backpressure-2", "ord-backpressure-2")
+            )
+
+            assertEquals(202, first.status)
+            assertEquals(202, duplicate.status)
+            assertEquals(429, rejected.status)
+            assertContains(rejected.body, "\"code\":\"COMMAND_INTAKE_BACKPRESSURE\"")
+            assertEquals(1L, commandLogStore.accountingSnapshot().accepted)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun dbPoolStatsEndpointReturnsPoolList() {
         val server = testServer()
         try {
@@ -1083,7 +1136,9 @@ class PlatformHttpServerBoundaryTest {
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
-        seedOrderAuthorization: Boolean = true
+        seedOrderAuthorization: Boolean = true,
+        commandIntakeMaxActive: Long = 0L,
+        commandIntakeMaxStaleProcessing: Long = 0L
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
         if (seedOrderAuthorization) {
@@ -1110,6 +1165,8 @@ class PlatformHttpServerBoundaryTest {
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
             commandProcessingMode = commandProcessingMode,
+            commandIntakeMaxActive = commandIntakeMaxActive,
+            commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
         ).start()
     }

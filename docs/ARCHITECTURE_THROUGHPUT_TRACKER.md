@@ -77,7 +77,7 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 | A21 | Completed-throughput target and no-loss plan | Done | planning | Active target is now `7500` completed/sec minimum, `10000` preferred, with no accepted-command accounting gaps |
 | A22 | Run/session attribution for throughput runs | Done | feature | `run_id`, `run_kind`, and `scenario_id` are captured on command-log rows from stress/intake payload metadata |
 | A23 | Backlog-adjusted stress accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress reports attach accepted, terminal, active, stale, completed-rps, and accounting-gap deltas. Drain-time measurement remains next |
-| A24 | Durable-intake backpressure thresholds | Not started | reliability | Reject/throttle before acceptance when queue depth, lag, or lease health says the system cannot safely drain |
+| A24 | Durable-intake backpressure thresholds | In progress | reliability | Opt-in active-depth and stale-processing rejection added; queue-age and drain-rate thresholds remain next |
 | A25 | Batched command completion | Not started | performance | Reduce per-command result upsert and active-queue delete/update overhead |
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
 | A27 | Bot-arena venue-path readiness | Not started | architecture | Built-in and user bots must use the same command/API path with run/bot attribution and guardrails |
@@ -159,7 +159,7 @@ Drain follow-up:
 - [x] Run wider `4/8/16/24` worker sweep.
 - [ ] Reduce remaining split-schema write amplification.
 - [x] Add completed-throughput and accounting-gap fields to stress reports.
-- [ ] Add durable-intake overload thresholds that reject before acceptance.
+- [x] Add durable-intake overload thresholds that reject before acceptance.
 - [ ] Add batched terminal result and queue-completion writes.
 
 Latest async drain notes:
