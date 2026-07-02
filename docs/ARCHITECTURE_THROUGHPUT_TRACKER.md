@@ -115,6 +115,8 @@ Drain-accounted worker sweep:
 - `12` workers: `25025` accepted, `1638.22 accepted rps`, p95 `347.30ms`, p99 `400.99ms`; terminal during load `7272`, `476.05 completed/sec`; active after load `17753`; post-load drain `17753` in `6.28s`, `2825.56/sec`; final active `0`, gap `0`.
 - hot-path sample from the best `8` worker rerun: `api.commandLog.append` averaged `7.57ms`, `runtime.persistence.persistSubmitOutcome` averaged `1.71ms`, `async.claim` averaged `2.04ms`, and `async.completeBatch` averaged `27.10ms` per batch.
 - conclusion: the worker pool cannot be fixed by simply raising thread count. The current corrected profile can accept about `4.8k/sec` on this loaded stack, but completed-during-load throughput is only `~0.5k/sec`; the backlog drains afterward at up to `~3.7k/sec`. The next implementation target should reduce worker-side database work and/or isolate worker persistence from intake contention.
+- implementation follow-up: runtime-managed Postgres access now uses named Hikari pools (`runtime`, `async-runtime`, `command-log`, `command-capture`, `idempotency`, `admin-runtime`). Captured-ack workers can execute through a separate `async-runtime` pool with `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true`, but the dev default is currently `false` because captured-ack intake no longer uses runtime persistence on the hot accept path. Named pools use conservative role defaults to avoid multiplying the old single-pool `RUNTIME_DB_POOL_MAX`/`MIN_IDLE` settings into too many Postgres clients.
+- local A/B after compose flag propagation was fixed, both `8` workers, `DEV_INTAKE_DURATION=8s`, `DEV_INTAKE_RATE=8000`, `DEV_INTAKE_WORKERS=256`: default shared worker runtime pool accepted `31811`, `3952.42 accepted rps`, p99 `130.43ms`, post-load drain `1865.19/sec`; dedicated worker runtime pool accepted `32329`, `4017.18 accepted rps`, p99 `127.63ms`, post-load drain `1879.67/sec`; both reached final active `0` and accounting gap `0`.
 
 ## Workstream Status
 
@@ -235,6 +237,7 @@ Drain follow-up:
 - [x] Disable duplicate legacy boundary command capture in captured-ack dev/stress profile.
 - [x] Add inner reserve timing for command-record build vs command-log append.
 - [x] Skip redundant idempotency lookup for new captured-ack accepted commands.
+- [x] Split runtime-managed DB pools by hot-path role and add opt-in dedicated runtime persistence for captured-ack workers.
 - [ ] Split or slim hot command payload writes on command-log reserve.
 - [ ] Batch or defer per-command runtime persistence writes.
 
@@ -253,6 +256,8 @@ Latest batched-completion notes:
 - after disabling duplicate legacy boundary capture in the captured-ack profile, the best quick loaded-stack point improved again to `4757.19 accepted rps`, p99 `171.11ms`, eventual drain, and `0` gap. `api.commandLog.append` now accounts for almost all reserve latency.
 - after skipping captured-ack's redundant idempotency lookup, the best quick loaded-stack point improved to `4851.68 accepted rps`, p99 `161.63ms`, eventual drain, and `0` gap. Worker-side persistence/claim pressure is now the reason higher worker counts reduce intake.
 - drain-accounted sweeps show best corrected loaded-stack intake at `4801.95 accepted rps` with `8` async workers, but only `532.38 completed/sec` during load and a `64239` command post-load backlog. Final accounting still reached active `0` and gap `0`.
+- named pools initially inherited the old global `RUNTIME_DB_POOL_MIN_IDLE=16` for every role and could exhaust local Postgres clients during restarts. Role-specific defaults now cap `runtime`/`async-runtime` lower and keep `command-log` as the only high-capacity pool by default.
+- the valid dedicated-vs-shared worker runtime pool A/B was effectively neutral in local captured-ack mode, so the dedicated `async-runtime` pool is opt-in rather than the dev default. Remaining backlog still points at command-log append and per-command async operation/persistence cost rather than Hikari waiters.
 
 ### M4: Async Batched Runtime Persistence
 

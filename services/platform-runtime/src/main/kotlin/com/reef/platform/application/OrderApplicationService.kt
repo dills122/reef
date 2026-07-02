@@ -541,7 +541,7 @@ class OrderApplicationService(
     }
 }
 
-private fun defaultRuntimePersistence(): RuntimePersistence {
+internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePersistence {
     val persistence = System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory"
     if (persistence != "postgres") {
         return InMemoryRuntimePersistence()
@@ -550,5 +550,5 @@ private fun defaultRuntimePersistence(): RuntimePersistence {
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
     val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
     val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
-    return PostgresRuntimePersistence(RuntimeDataSources.dataSource(jdbcUrl, user, password))
+    return PostgresRuntimePersistence(RuntimeDataSources.dataSource(jdbcUrl, user, password, poolName))
 }

@@ -1,5 +1,7 @@
 package com.reef.platform.api
 
+import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
@@ -24,6 +26,8 @@ class PlatformHttpServer(
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
     private val asyncCommandWorkerBatchSize: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", 100, min = 1),
     private val asyncCommandWorkerPollMs: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS", 25L),
+    private val asyncCommandWorkerDedicatedRuntimePoolEnabled: Boolean =
+        RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
     private val commandIntakeMaxActive: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS", 0L, min = 0L),
     private val commandIntakeMaxStaleProcessing: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING", 0L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
@@ -308,10 +312,11 @@ class PlatformHttpServer(
             if (queue == null) {
                 System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
             } else {
+                val workerApi = asyncCommandWorkerApi()
                 (1..asyncCommandWorkerThreads).forEach { index ->
                     AsyncCommandProcessor(
                         queue = queue,
-                        api = api,
+                        api = workerApi,
                         batchSize = asyncCommandWorkerBatchSize,
                         pollIntervalMs = asyncCommandWorkerPollMs,
                         workerName = "reef-async-command-processor-$index"
@@ -321,6 +326,15 @@ class PlatformHttpServer(
         }
         println("platform-runtime listening on :$port")
         return server
+    }
+
+    private fun asyncCommandWorkerApi(): PlatformApi {
+        if (!asyncCommandWorkerDedicatedRuntimePoolEnabled) return api
+        return PlatformApi(
+            OrderApplicationService(
+                runtimePersistence = defaultRuntimePersistence("async-runtime")
+            )
+        )
     }
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
@@ -740,6 +754,7 @@ class PlatformHttpServer(
             "pools" to RuntimeDataSources.snapshots().map { snapshot ->
                 mapOf(
                     "key" to snapshot.key,
+                    "poolName" to snapshot.poolName,
                     "jdbcUrl" to snapshot.jdbcUrl,
                     "username" to snapshot.username,
                     "maximumPoolSize" to snapshot.maximumPoolSize,

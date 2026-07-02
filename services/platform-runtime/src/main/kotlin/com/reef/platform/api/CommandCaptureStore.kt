@@ -570,7 +570,7 @@ internal fun defaultCommandCaptureStore(
             val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
             val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
             val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
-            PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword))
+            PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-capture"))
         }
     }
     return when (val commandLogMode = (lookup("EXTERNAL_API_COMMAND_LOG_MODE") ?: "disabled").trim().lowercase()) {
@@ -586,7 +586,9 @@ internal fun defaultCommandCaptureStore(
             val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             CommandLogCommandCaptureStore(
                 delegate = captureStore,
-                commandLogStore = PostgresCommandLogStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)),
+                commandLogStore = PostgresCommandLogStore(
+                    RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-log")
+                ),
                 commandProcessingMode = commandProcessingMode
             )
         }

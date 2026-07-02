@@ -11,6 +11,7 @@ setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", "4");
 setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", "250");
 setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS", "5");
 setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS", "60000");
+setDefault("EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", "false");
 
 console.log("captured-ack runtime settings:");
 console.log(`  commandLog=${env("EXTERNAL_API_COMMAND_LOG_MODE")}`);
@@ -21,6 +22,7 @@ console.log(`  asyncThreads=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS")}`
 console.log(`  asyncBatchSize=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE")}`);
 console.log(`  asyncPollMs=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS")}`);
 console.log(`  asyncLeaseMs=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS")}`);
+console.log(`  asyncDedicatedRuntimePool=${env("EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED")}`);
 
 await devUp();
 
