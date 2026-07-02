@@ -50,6 +50,11 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 - drain sweep evidence: `4` workers about `2k completed/sec`, `8` workers about `3k completed/sec`, `16` workers about `4k-4.3k completed/sec`, and `24` workers about `4.9k completed/sec` with worse persistence/complete latency.
 - DB pools showed no waiter pressure, so the next likely bottleneck is write amplification across command completion and runtime persistence.
 
+Latest accounting smoke:
+- 2026-07-02 captured-ack smoke after run attribution, accounting telemetry, backpressure, and terminal-write batching: `DEV_STRESS_DURATION=10s`, `DEV_STRESS_RATES=200`, `DEV_STRESS_SWEEP_WORKERS=16`.
+- result: `1999` accepted, `1999` terminal, `0` active, `0` accounting gap, `20/20` trace checks, `199.90 completed/sec`.
+- artifact: `/tmp/reef-accounting-smoke/captured-ack-smoke-rate-200-workers-16.json`.
+
 ## Workstream Status
 
 | ID | Workstream | Status | Target Branch Type | Notes |
