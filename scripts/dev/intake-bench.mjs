@@ -17,6 +17,8 @@ const rateSchedule = env("DEV_INTAKE_RATE_SCHEDULE", "precise");
 const actorIdPrefix = env("DEV_INTAKE_ACTOR_ID_PREFIX", "bot");
 const artifactDir = env("DEV_INTAKE_ARTIFACT_DIR", "/tmp");
 const out = env("DEV_INTAKE_REPORT_OUT", "/tmp/reef-intake-bench.json");
+const runKind = env("DEV_INTAKE_RUN_KIND", "intake-bench");
+const scenarioId = env("DEV_INTAKE_SCENARIO_ID", "raw-intake");
 const captureDbDiagnostics = env("DEV_INTAKE_CAPTURE_DB_DIAGNOSTICS", "1") !== "0";
 const dbDiagnosticsService = env("DEV_INTAKE_DB_SERVICE", "postgres");
 const dbDiagnosticsUser = env("DEV_INTAKE_DB_USER", "reef");
@@ -26,11 +28,12 @@ const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
 const reportOut = join(artifactDir, `${reportBaseName}-workers-${workers}-rate-${rate}.json`);
 const diagnosticsDir = join(artifactDir, `${reportBaseName}-db-diagnostics-workers-${workers}-rate-${rate}`);
+const runId = env("DEV_INTAKE_RUN_ID", `${reportBaseName}-workers-${workers}-rate-${rate}-${Date.now()}`);
 
 mkdirSync(artifactDir, { recursive: true });
 
 console.log(`running intake bench against ${runtimeUrl}`);
-console.log(`  duration=${duration} workers=${workers} rate=${rate} schedule=${rateSchedule} actorPrefix=${actorIdPrefix}`);
+console.log(`  duration=${duration} workers=${workers} rate=${rate} schedule=${rateSchedule} actorPrefix=${actorIdPrefix} runId=${runId}`);
 
 let preDbDiagnostics = null;
 let postDbDiagnostics = null;
@@ -63,6 +66,12 @@ try {
       rateSchedule,
       "--actor-id-prefix",
       actorIdPrefix,
+      "--run-id",
+      runId,
+      "--run-kind",
+      runKind,
+      "--scenario-id",
+      scenarioId,
       "--pretty-summary",
       "--report-out",
       reportOut,

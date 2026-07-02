@@ -72,7 +72,10 @@ class CommandCaptureStoreTest {
                   "commandId":"cmd-1",
                   "traceId":"trace-1",
                   "correlationId":"corr-payload",
-                  "actorId":"actor-1"
+                  "actorId":"actor-1",
+                  "runId":"run-1",
+                  "runKind":"stress",
+                  "scenarioId":"scenario-1"
                 }
             """.trimIndent()
         )
@@ -84,6 +87,9 @@ class CommandCaptureStoreTest {
         assertEquals("corr-payload", record.correlationId)
         assertEquals("actor-1", record.actorId)
         assertEquals("SubmitOrder", record.commandType)
+        assertEquals("run-1", record.runId)
+        assertEquals("stress", record.runKind)
+        assertEquals("scenario-1", record.scenarioId)
         assertEquals(Instant.parse("2026-06-04T14:00:00Z"), record.receivedAt)
         assertEquals(CommandLogStatus.RECEIVED, record.status)
         assertEquals(CommandProcessingMode.CapturedSyncEngine, captureStore.findCommandStatus("cmd-1")?.processingMode)

@@ -25,6 +25,9 @@ data class CommandLogRecord(
     val correlationId: String,
     val actorId: String,
     val commandType: String,
+    val runId: String = "",
+    val runKind: String = "",
+    val scenarioId: String = "",
     val receivedAt: Instant,
     val payloadJson: String,
     val status: CommandLogStatus = CommandLogStatus.RECEIVED,
@@ -39,6 +42,19 @@ data class CommandLogAppendResult(
     val record: CommandLogRecord
 )
 
+data class CommandLogAccountingSnapshot(
+    val runId: String,
+    val accepted: Long,
+    val received: Long,
+    val processing: Long,
+    val completed: Long,
+    val failed: Long,
+    val active: Long,
+    val terminal: Long,
+    val accountingGap: Long,
+    val staleProcessing: Long
+)
+
 interface CommandLogStore {
     fun append(record: CommandLogRecord): CommandLogAppendResult
     fun findByCommandId(commandId: String): CommandLogRecord?
@@ -46,6 +62,7 @@ interface CommandLogStore {
     fun findByStatus(status: CommandLogStatus, limit: Int): List<CommandLogRecord>
     fun claimReceived(limit: Int): List<CommandLogRecord>
     fun statusCounts(): Map<CommandLogStatus, Long>
+    fun accountingSnapshot(runId: String = ""): CommandLogAccountingSnapshot
     fun markProcessing(commandId: String)
     fun markCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markFailed(commandId: String, responseStatus: Int, errorMessage: String)
@@ -119,6 +136,33 @@ class InMemoryCommandLogStore : CommandLogStore {
             counts[record.status] = counts.getValue(record.status) + 1L
         }
         return counts
+    }
+
+    override fun accountingSnapshot(runId: String): CommandLogAccountingSnapshot {
+        val records = byCommandId.values.filter { runId.isBlank() || it.runId == runId }
+        val counts = CommandLogStatus.values().associateWith { 0L }.toMutableMap()
+        records.forEach { record ->
+            counts[record.status] = counts.getValue(record.status) + 1L
+        }
+        val received = counts.getValue(CommandLogStatus.RECEIVED)
+        val processing = counts.getValue(CommandLogStatus.PROCESSING)
+        val completed = counts.getValue(CommandLogStatus.COMPLETED)
+        val failed = counts.getValue(CommandLogStatus.FAILED)
+        val active = received + processing
+        val terminal = completed + failed
+        val accepted = records.size.toLong()
+        return CommandLogAccountingSnapshot(
+            runId = runId,
+            accepted = accepted,
+            received = received,
+            processing = processing,
+            completed = completed,
+            failed = failed,
+            active = active,
+            terminal = terminal,
+            accountingGap = accepted - active - terminal,
+            staleProcessing = 0L
+        )
     }
 
     override fun markProcessing(commandId: String) {
@@ -215,6 +259,9 @@ class PostgresCommandLogStore(
                       correlation_id TEXT NOT NULL,
                       actor_id TEXT NOT NULL,
                       command_type TEXT NOT NULL,
+                      run_id TEXT NOT NULL DEFAULT '',
+                      run_kind TEXT NOT NULL DEFAULT '',
+                      scenario_id TEXT NOT NULL DEFAULT '',
                       received_at TIMESTAMPTZ NOT NULL,
                       payload_json JSONB NOT NULL,
                       status TEXT NOT NULL,
@@ -238,7 +285,10 @@ class PostgresCommandLogStore(
                     """
                     ALTER TABLE ${names.commands}
                       ADD COLUMN IF NOT EXISTS response_status INTEGER NOT NULL DEFAULT 0,
-                      ADD COLUMN IF NOT EXISTS response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
+                      ADD COLUMN IF NOT EXISTS response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      ADD COLUMN IF NOT EXISTS run_id TEXT NOT NULL DEFAULT '',
+                      ADD COLUMN IF NOT EXISTS run_kind TEXT NOT NULL DEFAULT '',
+                      ADD COLUMN IF NOT EXISTS scenario_id TEXT NOT NULL DEFAULT ''
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -299,7 +349,7 @@ class PostgresCommandLogStore(
                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                       UNIQUE (selector_type, selector_value),
-                      CHECK (selector_type IN ('command_id', 'idempotency_prefix', 'trace_id', 'correlation_id', 'client_id'))
+                      CHECK (selector_type IN ('command_id', 'idempotency_prefix', 'trace_id', 'correlation_id', 'client_id', 'run_id'))
                     )
                     """.trimIndent()
                 )
@@ -341,6 +391,7 @@ class PostgresCommandLogStore(
                     """.trimIndent()
                 )
                 stmt.execute("DROP FUNCTION IF EXISTS ${names.commandAppendFunction}(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, JSONB)")
+                stmt.execute("DROP FUNCTION IF EXISTS ${names.commandAppendFunction}(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, JSONB)")
                 stmt.execute(commandAppendFunctionSql())
             }
         }
@@ -367,13 +418,16 @@ class PostgresCommandLogStore(
                       correlation_id,
                       actor_id,
                       command_type,
+                      run_id,
+                      run_kind,
+                      scenario_id,
                       received_at,
                       payload_json,
                       status,
                       attempt_count,
                       last_error
                     )
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb, ?, ?, ?)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb, ?, ?, ?)
                   ON CONFLICT DO NOTHING
                   RETURNING command_id
                 )
@@ -392,13 +446,16 @@ class PostgresCommandLogStore(
                 ps.setString(6, record.correlationId)
                 ps.setString(7, record.actorId)
                 ps.setString(8, record.commandType)
-                ps.setString(9, record.receivedAt.toString())
-                ps.setString(10, record.payloadJson)
-                ps.setString(11, CommandLogStatus.RECEIVED.name)
-                ps.setInt(12, 0)
-                ps.setString(13, "")
+                ps.setString(9, record.runId)
+                ps.setString(10, record.runKind)
+                ps.setString(11, record.scenarioId)
+                ps.setString(12, record.receivedAt.toString())
+                ps.setString(13, record.payloadJson)
                 ps.setString(14, CommandLogStatus.RECEIVED.name)
-                ps.setString(15, record.receivedAt.toString())
+                ps.setInt(15, 0)
+                ps.setString(16, "")
+                ps.setString(17, CommandLogStatus.RECEIVED.name)
+                ps.setString(18, record.receivedAt.toString())
                 ps.executeQuery().use { rs ->
                     if (rs.next()) {
                         return CommandLogAppendResult(
@@ -436,6 +493,9 @@ class PostgresCommandLogStore(
                   out_correlation_id AS correlation_id,
                   out_actor_id AS actor_id,
                   out_command_type AS command_type,
+                  out_run_id AS run_id,
+                  out_run_kind AS run_kind,
+                  out_scenario_id AS scenario_id,
                   out_received_at AS received_at,
                   out_payload_json AS payload_json,
                   out_status AS status,
@@ -444,7 +504,7 @@ class PostgresCommandLogStore(
                   out_response_status AS response_status,
                   out_response_payload_json AS response_payload_json
                 FROM ${names.commandAppendFunction}(
-                  ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb
+                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb
                 )
                 """.trimIndent()
             ).use { ps ->
@@ -456,8 +516,11 @@ class PostgresCommandLogStore(
                 ps.setString(6, record.correlationId)
                 ps.setString(7, record.actorId)
                 ps.setString(8, record.commandType)
-                ps.setString(9, record.receivedAt.toString())
-                ps.setString(10, record.payloadJson)
+                ps.setString(9, record.runId)
+                ps.setString(10, record.runKind)
+                ps.setString(11, record.scenarioId)
+                ps.setString(12, record.receivedAt.toString())
+                ps.setString(13, record.payloadJson)
                 ps.executeQuery().use { rs ->
                     if (rs.next()) {
                         return CommandLogAppendResult(
@@ -615,6 +678,97 @@ class PostgresCommandLogStore(
         return counts
     }
 
+    override fun accountingSnapshot(runId: String): CommandLogAccountingSnapshot {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                WITH command_count AS (
+                  SELECT COUNT(*) AS accepted
+                  FROM ${names.commands} commands
+                  WHERE (? = '' OR commands.run_id = ?)
+                ),
+                queue_counts AS (
+                  SELECT
+                    COUNT(*) FILTER (WHERE queue.status = 'RECEIVED') AS received,
+                    COUNT(*) FILTER (WHERE queue.status = 'PROCESSING') AS processing,
+                    COUNT(*) FILTER (
+                      WHERE queue.status = 'PROCESSING'
+                        AND (
+                          queue.leased_until < NOW()
+                          OR (
+                            queue.leased_until IS NULL
+                            AND queue.updated_at < NOW() - (?::double precision * INTERVAL '1 millisecond')
+                          )
+                        )
+                    ) AS stale_processing
+                  FROM ${names.commandWorkQueue} queue
+                  JOIN ${names.commands} commands ON commands.command_id = queue.command_id
+                  WHERE (? = '' OR commands.run_id = ?)
+                ),
+                result_counts AS (
+                  SELECT
+                    COUNT(*) FILTER (WHERE results.status = 'COMPLETED') AS completed,
+                    COUNT(*) FILTER (WHERE results.status = 'FAILED') AS failed
+                  FROM ${names.commandResults} results
+                  JOIN ${names.commands} commands ON commands.command_id = results.command_id
+                  WHERE (? = '' OR commands.run_id = ?)
+                )
+                SELECT
+                  command_count.accepted,
+                  COALESCE(queue_counts.received, 0) AS received,
+                  COALESCE(queue_counts.processing, 0) AS processing,
+                  COALESCE(queue_counts.stale_processing, 0) AS stale_processing,
+                  COALESCE(result_counts.completed, 0) AS completed,
+                  COALESCE(result_counts.failed, 0) AS failed
+                FROM command_count, queue_counts, result_counts
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, runId)
+                ps.setString(2, runId)
+                ps.setLong(3, processingLeaseMs)
+                ps.setString(4, runId)
+                ps.setString(5, runId)
+                ps.setString(6, runId)
+                ps.setString(7, runId)
+                ps.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        val accepted = rs.getLong("accepted")
+                        val received = rs.getLong("received")
+                        val processing = rs.getLong("processing")
+                        val completed = rs.getLong("completed")
+                        val failed = rs.getLong("failed")
+                        val active = received + processing
+                        val terminal = completed + failed
+                        return CommandLogAccountingSnapshot(
+                            runId = runId,
+                            accepted = accepted,
+                            received = received,
+                            processing = processing,
+                            completed = completed,
+                            failed = failed,
+                            active = active,
+                            terminal = terminal,
+                            accountingGap = accepted - active - terminal,
+                            staleProcessing = rs.getLong("stale_processing")
+                        )
+                    }
+                }
+            }
+        }
+        return CommandLogAccountingSnapshot(
+            runId = runId,
+            accepted = 0L,
+            received = 0L,
+            processing = 0L,
+            completed = 0L,
+            failed = 0L,
+            active = 0L,
+            terminal = 0L,
+            accountingGap = 0L,
+            staleProcessing = 0L
+        )
+    }
+
     override fun markProcessing(commandId: String) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
@@ -727,6 +881,9 @@ class PostgresCommandLogStore(
             correlationId = getString("correlation_id"),
             actorId = getString("actor_id"),
             commandType = getString("command_type"),
+            runId = getString("run_id"),
+            runKind = getString("run_kind"),
+            scenarioId = getString("scenario_id"),
             receivedAt = getTimestamp("received_at").toInstant(),
             payloadJson = getString("payload_json"),
             status = CommandLogStatus.valueOf(getString("status")),
@@ -751,6 +908,9 @@ class PostgresCommandLogStore(
               commands.correlation_id,
               commands.actor_id,
               commands.command_type,
+              commands.run_id,
+              commands.run_kind,
+              commands.scenario_id,
               commands.received_at,
               commands.payload_json,
               COALESCE(queue.status, results.status, commands.status) AS status,
@@ -775,6 +935,9 @@ class PostgresCommandLogStore(
               p_correlation_id TEXT,
               p_actor_id TEXT,
               p_command_type TEXT,
+              p_run_id TEXT,
+              p_run_kind TEXT,
+              p_scenario_id TEXT,
               p_received_at TIMESTAMPTZ,
               p_payload_json JSONB
             )
@@ -788,6 +951,9 @@ class PostgresCommandLogStore(
               out_correlation_id TEXT,
               out_actor_id TEXT,
               out_command_type TEXT,
+              out_run_id TEXT,
+              out_run_kind TEXT,
+              out_scenario_id TEXT,
               out_received_at TIMESTAMPTZ,
               out_payload_json JSONB,
               out_status TEXT,
@@ -811,6 +977,9 @@ class PostgresCommandLogStore(
                 correlation_id,
                 actor_id,
                 command_type,
+                run_id,
+                run_kind,
+                scenario_id,
                 received_at,
                 payload_json,
                 status,
@@ -826,6 +995,9 @@ class PostgresCommandLogStore(
                 p_correlation_id,
                 p_actor_id,
                 p_command_type,
+                p_run_id,
+                p_run_kind,
+                p_scenario_id,
                 p_received_at,
                 p_payload_json,
                 'RECEIVED',
@@ -869,6 +1041,9 @@ class PostgresCommandLogStore(
                 c.correlation_id AS out_correlation_id,
                 c.actor_id AS out_actor_id,
                 c.command_type AS out_command_type,
+                c.run_id AS out_run_id,
+                c.run_kind AS out_run_kind,
+                c.scenario_id AS out_scenario_id,
                 c.received_at AS out_received_at,
                 c.payload_json AS out_payload_json,
                 COALESCE(q.status, r.status, c.status) AS out_status,

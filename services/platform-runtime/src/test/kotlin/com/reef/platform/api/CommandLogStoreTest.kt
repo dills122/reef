@@ -106,6 +106,35 @@ class CommandLogStoreTest {
         assertEquals(0L, counts[CommandLogStatus.COMPLETED])
         assertEquals(0L, counts[CommandLogStatus.FAILED])
     }
+
+    @Test
+    fun inMemoryStoreBuildsAccountingSnapshotByRun() {
+        val store = InMemoryCommandLogStore()
+        val first = commandLogRecord(commandId = "cmd-accounting-1", idempotencyKey = "idem-accounting-1")
+            .copy(runId = "run-1")
+        val second = commandLogRecord(commandId = "cmd-accounting-2", idempotencyKey = "idem-accounting-2")
+            .copy(runId = "run-1")
+        val otherRun = commandLogRecord(commandId = "cmd-accounting-3", idempotencyKey = "idem-accounting-3")
+            .copy(runId = "run-2")
+
+        store.append(first)
+        store.append(second)
+        store.append(otherRun)
+        store.markProcessing(first.commandId)
+        store.markCompleted(first.commandId, 200, """{"accepted":true}""")
+        store.markProcessing(otherRun.commandId)
+
+        val runOne = store.accountingSnapshot("run-1")
+        val allRuns = store.accountingSnapshot()
+
+        assertEquals(2L, runOne.accepted)
+        assertEquals(1L, runOne.received)
+        assertEquals(0L, runOne.processing)
+        assertEquals(1L, runOne.completed)
+        assertEquals(0L, runOne.accountingGap)
+        assertEquals(3L, allRuns.accepted)
+        assertEquals(1L, allRuns.processing)
+    }
 }
 
 private fun commandLogRecord(

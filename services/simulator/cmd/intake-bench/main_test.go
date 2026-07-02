@@ -8,6 +8,9 @@ import (
 
 func TestBuildSubmitPayloadIncludesApiV1RequiredFields(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.RunID = "run-1"
+	cfg.RunKind = "intake-bench"
+	cfg.ScenarioID = "raw-intake"
 	body := buildSubmitPayload(cfg, "cmd-1", "trace-1", "order-1", 7)
 
 	var payload map[string]string
@@ -42,6 +45,9 @@ func TestBuildSubmitPayloadIncludesApiV1RequiredFields(t *testing.T) {
 	}
 	if payload["actorId"] != "bot-7" {
 		t.Fatalf("unexpected actorId: %s", payload["actorId"])
+	}
+	if payload["runId"] != "run-1" || payload["runKind"] != "intake-bench" || payload["scenarioId"] != "raw-intake" {
+		t.Fatalf("unexpected run metadata: %#v", payload)
 	}
 }
 

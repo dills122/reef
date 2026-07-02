@@ -10,6 +10,7 @@ import {
 test("normalizes supported retention pin selector types", () => {
   assert.equal(normalizeSelectorType("idempotency_prefix"), "idempotency_prefix");
   assert.equal(normalizeSelectorType("command_id"), "command_id");
+  assert.equal(normalizeSelectorType("run_id"), "run_id");
   assert.throws(() => normalizeSelectorType("payload"), /invalid retention pin selector type/);
 });
 

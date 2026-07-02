@@ -81,6 +81,7 @@ export function buildRetentionPinExclusionPredicate(commandAlias) {
        OR (pins.selector_type = 'trace_id' AND pins.selector_value = ${commandAlias}.trace_id)
        OR (pins.selector_type = 'correlation_id' AND pins.selector_value = ${commandAlias}.correlation_id)
        OR (pins.selector_type = 'client_id' AND pins.selector_value = ${commandAlias}.client_id)
+       OR (pins.selector_type = 'run_id' AND pins.selector_value = ${commandAlias}.run_id)
   )`;
 }
 

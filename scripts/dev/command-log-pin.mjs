@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
 
 const execFileAsync = promisify(execFile);
-const selectorTypes = new Set(["command_id", "idempotency_prefix", "trace_id", "correlation_id", "client_id"]);
+const selectorTypes = new Set(["command_id", "idempotency_prefix", "trace_id", "correlation_id", "client_id", "run_id"]);
 
 export function normalizeSelectorType(raw) {
   const value = String(raw ?? "").trim();

@@ -794,6 +794,46 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun commandAccountingEndpointReturnsRunScopedCounts() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-accounting"
+                ),
+                body = validSubmitBody("cmd-accounting", "trace-accounting", "ord-accounting")
+                    .replace("\"timeInForce\":\"DAY\"", "\"timeInForce\":\"DAY\",\"runId\":\"run-1\",\"runKind\":\"stress\",\"scenarioId\":\"scenario-1\"")
+            )
+            val accounting = get(server.address.port, "/internal/commands/accounting?runId=run-1")
+
+            assertEquals(202, submit.status)
+            assertEquals(200, accounting.status)
+            assertContains(accounting.body, "\"available\":true")
+            assertContains(accounting.body, "\"runId\":\"run-1\"")
+            assertContains(accounting.body, "\"accepted\":1")
+            assertContains(accounting.body, "\"received\":1")
+            assertContains(accounting.body, "\"active\":1")
+            assertContains(accounting.body, "\"terminal\":0")
+            assertContains(accounting.body, "\"accountingGap\":0")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun dbPoolStatsEndpointReturnsPoolList() {
         val server = testServer()
         try {

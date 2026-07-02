@@ -59,4 +59,6 @@ test("builds retention pin exclusion predicate", () => {
   assert.match(sql, /selector_type = 'command_id'/);
   assert.match(sql, /commands\.idempotency_key LIKE pins\.selector_value/);
   assert.match(sql, /selector_type = 'client_id'/);
+  assert.match(sql, /selector_type = 'run_id'/);
+  assert.match(sql, /commands\.run_id/);
 });

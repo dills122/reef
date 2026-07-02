@@ -275,10 +275,19 @@ func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 }
 
 func TestBuildCommandPayloadIncludesScenarioMetadata(t *testing.T) {
-	cfg := Config{ScenarioRunID: "sim-1", Seed: 4242}
+	cfg := Config{
+		ScenarioRunID: "sim-1",
+		RunID:         "run-1",
+		RunKind:       "stress",
+		ScenarioID:    "scenario-1",
+		Seed:          4242,
+	}
 	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer", 1)
 	if payload["scenarioRunId"] != "sim-1" {
 		t.Fatalf("expected scenarioRunId, got: %+v", payload)
+	}
+	if payload["runId"] != "run-1" || payload["runKind"] != "stress" || payload["scenarioId"] != "scenario-1" {
+		t.Fatalf("expected run metadata, got: %+v", payload)
 	}
 	if payload["seed"] != "4242" {
 		t.Fatalf("expected seed metadata, got: %+v", payload)

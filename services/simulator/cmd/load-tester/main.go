@@ -27,6 +27,9 @@ type Config struct {
 	SessionConfigPath   string
 	SessionName         string
 	ScenarioRunID       string
+	RunID               string
+	RunKind             string
+	ScenarioID          string
 	Seed                int64
 	HasSessionConfig    bool
 	SideBiasBuyPct      int
@@ -227,6 +230,9 @@ func main() {
 
 	started := time.Now().UTC()
 	sessionID := fmt.Sprintf("load-%d", started.UnixNano())
+	if cfg.RunID == "" {
+		cfg.RunID = sessionID
+	}
 	client := buildHTTPClient(cfg)
 	defer client.CloseIdleConnections()
 
@@ -308,6 +314,9 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.StrictMinLiveOrders, "strict-min-live-orders", cfg.StrictMinLiveOrders, "minimum local live-order depth before modify/cancel in strict modes")
 	flag.StringVar(&cfg.ReportOut, "report-out", cfg.ReportOut, "optional json report output path")
 	flag.StringVar(&cfg.Mode, "mode", cfg.Mode, "traffic mode: chaos, strict-lifecycle, or capacity-baseline")
+	flag.StringVar(&cfg.RunID, "run-id", cfg.RunID, "run/session id stamped into command payloads")
+	flag.StringVar(&cfg.RunKind, "run-kind", cfg.RunKind, "run kind stamped into command payloads")
+	flag.StringVar(&cfg.ScenarioID, "scenario-id", cfg.ScenarioID, "scenario id stamped into command payloads")
 	flag.BoolVar(&cfg.Tail, "tail", cfg.Tail, "stream new trades/events during the run")
 	flag.DurationVar(&cfg.TailInterval, "tail-interval", cfg.TailInterval, "tail poll interval")
 	flag.IntVar(&cfg.TailLines, "tail-lines", cfg.TailLines, "max trade/event rows per tail poll")
@@ -428,6 +437,9 @@ func defaultConfigFromEnv() Config {
 		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 4),
 		ReportOut:           envOr("REEF_REPORT_OUT", ""),
 		Mode:                envOr("REEF_MODE", "chaos"),
+		RunID:               envOr("REEF_RUN_ID", ""),
+		RunKind:             envOr("REEF_RUN_KIND", "stress"),
+		ScenarioID:          envOr("REEF_SCENARIO_ID", ""),
 		Tail:                envBool("REEF_TAIL", false),
 		TailInterval:        envDuration("REEF_TAIL_INTERVAL", 2*time.Second),
 		TailLines:           envInt("REEF_TAIL_LINES", 5),
@@ -452,6 +464,12 @@ func mergeSessionConfig(defaults Config, session sessionconfig.RuntimeConfig) Co
 	cfg := defaults
 	cfg.SessionName = session.SessionName
 	cfg.ScenarioRunID = session.ScenarioRunID
+	if cfg.RunID == "" {
+		cfg.RunID = session.ScenarioRunID
+	}
+	if cfg.ScenarioID == "" {
+		cfg.ScenarioID = session.SessionName
+	}
 	cfg.Seed = session.Seed
 	cfg.BaseURL = session.BaseURL
 	cfg.Duration = session.Duration
@@ -1360,6 +1378,9 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 		"actorId":       actorID,
 		"actorType":     actorType,
 		"strategyId":    strategyID,
+		"runId":         cfg.RunID,
+		"runKind":       cfg.RunKind,
+		"scenarioId":    cfg.ScenarioID,
 		"occurredAt":    commandOccurredAt(cfg, reqID),
 	}
 	if persona != "" {

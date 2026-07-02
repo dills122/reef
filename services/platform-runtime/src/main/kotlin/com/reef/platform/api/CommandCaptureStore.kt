@@ -66,6 +66,7 @@ data class CommandCaptureReceipt(
 interface CapturedCommandQueue {
     fun claimReceivedCommands(limit: Int): List<CommandLogRecord>
     fun statusCounts(): Map<CommandLogStatus, Long>
+    fun accountingSnapshot(runId: String = ""): CommandLogAccountingSnapshot
     fun markCommandProcessing(commandId: String)
     fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
     fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String)
@@ -294,6 +295,10 @@ class CommandLogCommandCaptureStore(
         return commandLogStore.statusCounts()
     }
 
+    override fun accountingSnapshot(runId: String): CommandLogAccountingSnapshot {
+        return commandLogStore.accountingSnapshot(runId)
+    }
+
     override fun markCommandProcessing(commandId: String) {
         commandLogStore.markProcessing(commandId)
     }
@@ -329,6 +334,10 @@ class CommandLogCommandCaptureStore(
             correlationId = JsonCodec.fieldAsString(requestPayload, "correlationId").ifBlank { correlationId },
             actorId = JsonCodec.fieldAsString(requestPayload, "actorId").ifBlank { clientId },
             commandType = commandType(route),
+            runId = JsonCodec.fieldAsString(requestPayload, "runId")
+                .ifBlank { JsonCodec.fieldAsString(requestPayload, "scenarioRunId") },
+            runKind = JsonCodec.fieldAsString(requestPayload, "runKind"),
+            scenarioId = JsonCodec.fieldAsString(requestPayload, "scenarioId"),
             receivedAt = clock(),
             payloadJson = payloadJson(requestPayload)
         )

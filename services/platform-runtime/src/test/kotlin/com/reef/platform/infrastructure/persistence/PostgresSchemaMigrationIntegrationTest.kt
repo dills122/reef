@@ -36,7 +36,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0005_result_terminal_metadata.sql',
                   'command_log/0006_command_append_function.sql',
                   'command_log/0007_retention_pins.sql',
-                  'command_log/0008_command_append_queue_timestamp.sql'
+                  'command_log/0008_command_append_queue_timestamp.sql',
+                  'command_log/0009_run_metadata.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -62,6 +63,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0006_command_append_function.sql",
                     "command_log/0007_retention_pins.sql",
                     "command_log/0008_command_append_queue_timestamp.sql",
+                    "command_log/0009_run_metadata.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations

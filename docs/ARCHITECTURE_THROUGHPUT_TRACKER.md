@@ -75,8 +75,8 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 | A19 | Async queue indexed claim | Done | performance | Loaded claim query moved from command-table sort/join to `command_work_queue(status, updated_at, command_id)` index; `LIMIT 250` probe dropped from ~1416ms to ~17ms |
 | A20 | Async queue lease reclaim | Done | reliability | Stale `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`, preventing restart-stranded commands |
 | A21 | Completed-throughput target and no-loss plan | Done | planning | Active target is now `7500` completed/sec minimum, `10000` preferred, with no accepted-command accounting gaps |
-| A22 | Run/session attribution for throughput runs | Not started | feature | Required for arena retention, replay, diagnostics, and partition/archive selection |
-| A23 | Backlog-adjusted stress accounting | Not started | feature | Reports should show accepted, terminal, active, stale, drain time, and accounting gap |
+| A22 | Run/session attribution for throughput runs | Done | feature | `run_id`, `run_kind`, and `scenario_id` are captured on command-log rows from stress/intake payload metadata |
+| A23 | Backlog-adjusted stress accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress reports attach accepted, terminal, active, stale, completed-rps, and accounting-gap deltas. Drain-time measurement remains next |
 | A24 | Durable-intake backpressure thresholds | Not started | reliability | Reject/throttle before acceptance when queue depth, lag, or lease health says the system cannot safely drain |
 | A25 | Batched command completion | Not started | performance | Reduce per-command result upsert and active-queue delete/update overhead |
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
@@ -155,10 +155,10 @@ Drain follow-up:
 - [x] Make async queue claim use the active-queue index instead of sorting joined command history.
 - [x] Add async worker lease timeout so stale `PROCESSING` rows can be reclaimed after runtime restart.
 - [x] Add captured-ack dev/stress entrypoints using the tested queue settings.
-- [ ] Add run/session attribution to command-log intake.
+- [x] Add run/session attribution to command-log intake.
 - [x] Run wider `4/8/16/24` worker sweep.
 - [ ] Reduce remaining split-schema write amplification.
-- [ ] Add completed-throughput and accounting-gap fields to stress reports.
+- [x] Add completed-throughput and accounting-gap fields to stress reports.
 - [ ] Add durable-intake overload thresholds that reject before acceptance.
 - [ ] Add batched terminal result and queue-completion writes.
 

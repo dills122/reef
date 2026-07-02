@@ -150,14 +150,26 @@ Diagnostic artifacts are written under the stress artifact root with suffix `-di
 
 Stress telemetry also samples runtime health, hot-path timings, async command queue stats, runtime DB pool stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
+Captured-ack stress reports also attach `commandAccounting` when the runtime exposes `/internal/commands/accounting`. The accounting block records the run-scoped pre/post snapshots, accepted delta, completed/failed terminal delta, active queue depth after the step, stale processing count, completed rps, and accepted-command accounting gap. `make dev-stress-captured-ack` sets `DEV_STRESS_FAIL_ON_ACCOUNTING_GAP=1` by default.
+
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
+- `DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING=1`
+- `DEV_STRESS_FAIL_ON_ACCOUNTING_GAP=0|1`
+- `DEV_STRESS_RUN_ID=<stable-run-id>`
+- `DEV_STRESS_RUN_KIND=stress`
+- `DEV_STRESS_SCENARIO_ID=<mode-or-scenario>`
 - `DEV_STRESS_DB_SERVICE=postgres`
 - `DEV_STRESS_DB_USER=reef`
 - `DEV_STRESS_DB_NAME=reef`
 - `DEV_STRESS_DB_SCHEMAS=runtime,boundary,command_log`
 - `DEV_STRESS_DB_LOG_SINCE=30m`
 - `DEV_STRESS_RATE_SCHEDULE=drop|precise` controls load-tester rate scheduling (`drop` is the default; `precise` is useful for capacity sweeps with larger worker counts)
+
+Raw intake benchmarks accept matching run metadata:
+- `DEV_INTAKE_RUN_ID=<stable-run-id>`
+- `DEV_INTAKE_RUN_KIND=intake-bench`
+- `DEV_INTAKE_SCENARIO_ID=raw-intake`
 
 Run replay-pack drift validation against baseline scenario:
 

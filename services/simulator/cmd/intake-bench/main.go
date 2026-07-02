@@ -36,6 +36,9 @@ type config struct {
 	HTTPIdleConnTimeout time.Duration `json:"httpIdleConnTimeout"`
 	ClientIDPrefix      string        `json:"clientIdPrefix"`
 	ActorIDPrefix       string        `json:"actorIdPrefix"`
+	RunID               string        `json:"runId"`
+	RunKind             string        `json:"runKind"`
+	ScenarioID          string        `json:"scenarioId"`
 	InstrumentID        string        `json:"instrumentId"`
 	ParticipantID       string        `json:"participantId"`
 	AccountID           string        `json:"accountId"`
@@ -112,6 +115,9 @@ func parseConfig(args []string) (config, error) {
 	fs.DurationVar(&cfg.HTTPIdleConnTimeout, "http-idle-conn-timeout", cfg.HTTPIdleConnTimeout, "http client idle connection timeout")
 	fs.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix")
 	fs.StringVar(&cfg.ActorIDPrefix, "actor-id-prefix", cfg.ActorIDPrefix, "actorId prefix used in submit payloads")
+	fs.StringVar(&cfg.RunID, "run-id", cfg.RunID, "run/session id stamped into command payloads")
+	fs.StringVar(&cfg.RunKind, "run-kind", cfg.RunKind, "run kind stamped into command payloads")
+	fs.StringVar(&cfg.ScenarioID, "scenario-id", cfg.ScenarioID, "scenario id stamped into command payloads")
 	fs.StringVar(&cfg.InstrumentID, "instrument-id", cfg.InstrumentID, "submit payload instrumentId")
 	fs.StringVar(&cfg.ParticipantID, "participant-id", cfg.ParticipantID, "submit payload participantId")
 	fs.StringVar(&cfg.AccountID, "account-id", cfg.AccountID, "submit payload accountId")
@@ -149,6 +155,9 @@ func defaultConfig() config {
 		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "intake-bench"),
 		ActorIDPrefix:       envOr("REEF_ACTOR_ID_PREFIX", "bot"),
+		RunID:               envOr("REEF_RUN_ID", ""),
+		RunKind:             envOr("REEF_RUN_KIND", "intake-bench"),
+		ScenarioID:          envOr("REEF_SCENARIO_ID", "raw-intake"),
 		InstrumentID:        envOr("REEF_INSTRUMENT_ID", "AAPL"),
 		ParticipantID:       envOr("REEF_PARTICIPANT_ID", "participant-1"),
 		AccountID:           envOr("REEF_ACCOUNT_ID", "account-1"),
@@ -164,6 +173,9 @@ func run(cfg config) report {
 	defer cancel()
 
 	sessionID := fmt.Sprintf("intake-%d", time.Now().UnixNano())
+	if cfg.RunID == "" {
+		cfg.RunID = sessionID
+	}
 	started := time.Now()
 	results := make(chan requestResult, maxInt(cfg.Workers*8, 1024))
 	rateCh := make(chan struct{}, rateChannelDepth(cfg))
@@ -250,6 +262,9 @@ func buildSubmitPayload(cfg config, commandID, traceID, orderID string, workerID
 		"actorId":       fmt.Sprintf("%s-%d", cfg.ActorIDPrefix, workerID),
 		"actorType":     "benchmark",
 		"strategyId":    "raw-intake",
+		"runId":         cfg.RunID,
+		"runKind":       cfg.RunKind,
+		"scenarioId":    cfg.ScenarioID,
 		"occurredAt":    cfg.OccurredAt,
 		"orderId":       orderID,
 		"instrumentId":  cfg.InstrumentID,

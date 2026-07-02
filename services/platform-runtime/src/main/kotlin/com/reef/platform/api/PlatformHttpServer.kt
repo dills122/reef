@@ -91,6 +91,14 @@ class PlatformHttpServer(
             writeJson(exchange, 200, asyncCommandStatsJson())
         }
 
+        server.createContext("/internal/commands/accounting") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, commandAccountingJson(queryValue(exchange, "runId")))
+        }
+
         server.createContext("/api/v1/commands/") { exchange ->
             handleCommandStatusLookup(exchange)
         }
@@ -657,6 +665,30 @@ class PlatformHttpServer(
                 "lastCompletedAt" to metrics.lastCompletedAt,
                 "lastFailedAt" to metrics.lastFailedAt
             )
+        )
+    }
+
+    private fun commandAccountingJson(runId: String): String {
+        val snapshot = capturedCommandQueue?.accountingSnapshot(runId)
+        if (snapshot == null) {
+            return JsonCodec.writeObject(
+                "available" to false,
+                "runId" to runId,
+                "error" to "captured command queue unavailable"
+            )
+        }
+        return JsonCodec.writeObject(
+            "available" to true,
+            "runId" to snapshot.runId,
+            "accepted" to snapshot.accepted,
+            "received" to snapshot.received,
+            "processing" to snapshot.processing,
+            "completed" to snapshot.completed,
+            "failed" to snapshot.failed,
+            "active" to snapshot.active,
+            "terminal" to snapshot.terminal,
+            "accountingGap" to snapshot.accountingGap,
+            "staleProcessing" to snapshot.staleProcessing
         )
     }
 

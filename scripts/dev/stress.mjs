@@ -18,6 +18,8 @@ const traceLimit = env("DEV_STRESS_TRACE_CHECK_LIMIT", "100");
 const out = env("DEV_STRESS_REPORT_OUT", "/tmp/reef-load-report-dev-stress.json");
 const mode = env("DEV_STRESS_MODE", "strict-lifecycle");
 const profile = env("DEV_STRESS_PROFILE", "default");
+const runKind = env("DEV_STRESS_RUN_KIND", "stress");
+const scenarioId = env("DEV_STRESS_SCENARIO_ID", `${mode}:${profile}`);
 const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
@@ -32,6 +34,8 @@ const dbDiagnosticsSchemas = parseCsvStrings(
   env("DEV_STRESS_DB_SCHEMAS", env("DEV_STRESS_DB_SCHEMA", defaultDiagnosticSchemas.join(","))),
 );
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
+const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
+const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -73,6 +77,7 @@ try {
   for (const rate of rates) {
     if (sweepWorkers.length > 0) {
       for (const workerCount of sweepWorkers) {
+        const runId = runIdForStep({ rate, workerCount });
         await runStressStep({
           runtimeUrl,
           duration,
@@ -80,12 +85,16 @@ try {
           rate,
           rateSchedule,
           mode,
+          runId,
+          runKind,
+          scenarioId,
           traceLimit,
           actionMix,
           reportOut: `${baseOut}-rate-${rate}-workers-${workerCount}.json`,
         });
       }
     } else {
+      const runId = runIdForStep({ rate, workerCount: workers });
       await runStressStep({
         runtimeUrl,
         duration,
@@ -93,6 +102,9 @@ try {
         rate,
         rateSchedule,
         mode,
+        runId,
+        runKind,
+        scenarioId,
         traceLimit,
         actionMix,
         reportOut: `${baseOut}-rate-${rate}.json`,
@@ -185,6 +197,13 @@ function parseCsvStrings(raw) {
     .filter(Boolean);
 }
 
+function runIdForStep({ rate, workerCount }) {
+  return env(
+    "DEV_STRESS_RUN_ID",
+    `${reportBaseName}-rate-${rate}-workers-${workerCount}-${Date.now()}`,
+  );
+}
+
 function resetDir(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
@@ -203,47 +222,146 @@ function resolveActionMix(profileName) {
   return { submit: "70", modify: "20", cancel: "10" };
 }
 
-async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, traceLimit, actionMix, reportOut }) {
-  console.log(`step rate=${rate} rps workers=${workers}`);
-  await run(
-    "go",
-    [
-      "run",
-      "./cmd/load-tester",
-      "--base-url",
-      runtimeUrl,
-      "--duration",
-      duration,
-      "--workers",
-      workers,
-      "--rate",
-      String(rate),
-      "--rate-schedule",
-      rateSchedule,
-      "--mode",
-      mode,
-      "--submit-pct",
-      actionMix.submit,
-      "--modify-pct",
-      actionMix.modify,
-      "--cancel-pct",
-      actionMix.cancel,
-      "--profile-mm-pct",
-      "35",
-      "--profile-inst-pct",
-      "30",
-      "--profile-retail-pct",
-      "25",
-      "--profile-noise-pct",
-      "10",
-      "--trace-check-limit",
-      traceLimit,
-      "--pretty-summary",
-      "--report-out",
-      reportOut,
-    ],
-    { cwd: "services/simulator" },
-  );
+async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
+  console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
+  const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
+  try {
+    await run(
+      "go",
+      [
+        "run",
+        "./cmd/load-tester",
+        "--base-url",
+        runtimeUrl,
+        "--duration",
+        duration,
+        "--workers",
+        workers,
+        "--rate",
+        String(rate),
+        "--rate-schedule",
+        rateSchedule,
+        "--mode",
+        mode,
+        "--run-id",
+        runId,
+        "--run-kind",
+        runKind,
+        "--scenario-id",
+        scenarioId,
+        "--submit-pct",
+        actionMix.submit,
+        "--modify-pct",
+        actionMix.modify,
+        "--cancel-pct",
+        actionMix.cancel,
+        "--profile-mm-pct",
+        "35",
+        "--profile-inst-pct",
+        "30",
+        "--profile-retail-pct",
+        "25",
+        "--profile-noise-pct",
+        "10",
+        "--trace-check-limit",
+        traceLimit,
+        "--pretty-summary",
+        "--report-out",
+        reportOut,
+      ],
+      { cwd: "services/simulator" },
+    );
+  } finally {
+    if (captureCommandAccounting) {
+      const afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
+      attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });
+    }
+  }
+}
+
+async function sampleCommandAccounting(runtimeUrl, runId) {
+  const encodedRunId = encodeURIComponent(runId);
+  return requestAppProbe({
+    name: "runtime.commandAccounting",
+    url: `${runtimeUrl}/internal/commands/accounting?runId=${encodedRunId}`,
+    captureJson: true,
+  });
+}
+
+function attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeAccounting?.json ?? null;
+    const after = afterAccounting?.json ?? null;
+    const durationSeconds = parseDurationSeconds(duration);
+    const delta = commandAccountingDelta(before, after, durationSeconds);
+    report.commandAccounting = {
+      runId,
+      before,
+      after,
+      delta,
+      probes: {
+        before: accountingProbeSummary(beforeAccounting),
+        after: accountingProbeSummary(afterAccounting),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    if (delta) {
+      console.log(
+        `  command-accounting acceptedDelta=${delta.acceptedDelta} terminalDelta=${delta.terminalDelta} active=${delta.activeAfter} gap=${delta.accountingGapAfter} completedRps=${delta.completedRps.toFixed(2)}`,
+      );
+      if (failOnAccountingGap && delta.accountingGapAfter !== 0) {
+        throw new Error(`command accounting gap for run ${runId}: ${delta.accountingGapAfter}`);
+      }
+    }
+  } catch (error) {
+    if (failOnAccountingGap) {
+      throw error;
+    }
+    console.warn(`  command-accounting unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function commandAccountingDelta(before, after, durationSeconds) {
+  if (!before?.available || !after?.available) return null;
+  const acceptedDelta = Number(after.accepted ?? 0) - Number(before.accepted ?? 0);
+  const completedDelta = Number(after.completed ?? 0) - Number(before.completed ?? 0);
+  const failedDelta = Number(after.failed ?? 0) - Number(before.failed ?? 0);
+  const terminalDelta = completedDelta + failedDelta;
+  return {
+    acceptedDelta,
+    completedDelta,
+    failedDelta,
+    terminalDelta,
+    activeAfter: Number(after.active ?? 0),
+    receivedAfter: Number(after.received ?? 0),
+    processingAfter: Number(after.processing ?? 0),
+    staleProcessingAfter: Number(after.staleProcessing ?? 0),
+    accountingGapAfter: Number(after.accountingGap ?? 0),
+    acceptedRps: durationSeconds > 0 ? acceptedDelta / durationSeconds : 0,
+    completedRps: durationSeconds > 0 ? terminalDelta / durationSeconds : 0,
+  };
+}
+
+function accountingProbeSummary(probe) {
+  if (!probe) return null;
+  return {
+    ok: probe.ok,
+    status: probe.status,
+    latencyMs: probe.latencyMs,
+    error: probe.error,
+    bodyError: probe.bodyError,
+  };
+}
+
+function parseDurationSeconds(raw) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  const match = value.match(/^(\d+(?:\.\d+)?)(ms|s|m|h)$/);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const multiplier = { ms: 0.001, s: 1, m: 60, h: 3600 }[unit] ?? 0;
+  return amount * multiplier;
 }
 
 function startTelemetryCapture({ outPath, intervalMs, runtimeUrl, engineUrl }) {
