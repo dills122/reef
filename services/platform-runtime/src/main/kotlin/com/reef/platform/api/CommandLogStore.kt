@@ -240,11 +240,31 @@ enum class PostgresCommandLogAppendMode {
     }
 }
 
+enum class PostgresCommandLogPayloadMode {
+    Inline,
+    SideTable;
+
+    companion object {
+        fun from(value: String?): PostgresCommandLogPayloadMode {
+            return when (val normalized = value?.trim()?.lowercase()) {
+                null, "", "side-table", "sidetable", "split" -> SideTable
+                "inline", "commands" -> Inline
+                else -> throw IllegalArgumentException("Unsupported EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE: $normalized")
+            }
+        }
+
+        fun fromEnv(): PostgresCommandLogPayloadMode {
+            return from(RuntimeEnv.string("EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE", "side-table"))
+        }
+    }
+}
+
 class PostgresCommandLogStore(
     private val dataSource: DataSource,
     private val names: PostgresCommandLogSqlNames = PostgresCommandLogSqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
     private val appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.fromEnv(),
+    private val payloadMode: PostgresCommandLogPayloadMode = PostgresCommandLogPayloadMode.fromEnv(),
     private val processingLeaseMs: Long = RuntimeEnv.long(
         "EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS",
         60_000L,
@@ -258,6 +278,7 @@ class PostgresCommandLogStore(
                     conn,
                     PostgresSchemaRequirements.commandLog(
                         commands = names.commands,
+                        payloads = names.commandPayloads,
                         workQueue = names.commandWorkQueue,
                         results = names.commandResults,
                         retentionPins = names.retentionPins,
@@ -309,6 +330,24 @@ class PostgresCommandLogStore(
                     """
                     ALTER TABLE ${names.commands}
                       ALTER COLUMN status SET DEFAULT 'RECEIVED'
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandPayloads} (
+                      command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
+                      payload_json JSONB NOT NULL,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    INSERT INTO ${names.commandPayloads}(command_id, payload_json, created_at)
+                    SELECT command_id, payload_json, created_at
+                    FROM ${names.commands}
+                    WHERE payload_json <> '{}'::jsonb
+                    ON CONFLICT (command_id) DO NOTHING
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -425,6 +464,7 @@ class PostgresCommandLogStore(
     }
 
     private fun appendInline(record: CommandLogRecord): CommandLogAppendResult {
+        val commandPayloadJson = if (payloadMode == PostgresCommandLogPayloadMode.SideTable) "{}" else record.payloadJson
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
@@ -447,6 +487,14 @@ class PostgresCommandLogStore(
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb)
                   ON CONFLICT DO NOTHING
                   RETURNING command_id
+                ),
+                inserted_payload AS (
+                  INSERT INTO ${names.commandPayloads}(command_id, payload_json, created_at)
+                  SELECT command_id, ?::jsonb, ?::timestamptz
+                  FROM inserted_command
+                  WHERE ?::boolean
+                  ON CONFLICT (command_id) DO NOTHING
+                  RETURNING command_id
                 )
                 INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error, updated_at)
                 SELECT command_id, 'RECEIVED', 0, '', ?::timestamptz
@@ -466,8 +514,11 @@ class PostgresCommandLogStore(
                 ps.setString(10, record.runKind)
                 ps.setString(11, record.scenarioId)
                 ps.setString(12, record.receivedAt.toString())
-                ps.setString(13, record.payloadJson)
-                ps.setString(14, record.receivedAt.toString())
+                ps.setString(13, commandPayloadJson)
+                ps.setString(14, record.payloadJson)
+                ps.setString(15, record.receivedAt.toString())
+                ps.setBoolean(16, payloadMode == PostgresCommandLogPayloadMode.SideTable)
+                ps.setString(17, record.receivedAt.toString())
                 if (ps.executeUpdate() > 0) {
                     return CommandLogAppendResult(
                         appended = true,
@@ -981,7 +1032,7 @@ class PostgresCommandLogStore(
               commands.run_kind,
               commands.scenario_id,
               commands.received_at,
-              commands.payload_json,
+              COALESCE(payloads.payload_json, commands.payload_json) AS payload_json,
               COALESCE(queue.status, results.status, commands.status) AS status,
               COALESCE(queue.attempt_count, results.attempt_count, commands.attempt_count) AS attempt_count,
               COALESCE(queue.last_error, results.last_error, commands.last_error) AS last_error,
@@ -989,6 +1040,7 @@ class PostgresCommandLogStore(
               COALESCE(results.response_payload_json, commands.response_payload_json, '{}'::jsonb) AS response_payload_json
             FROM ${names.commands} commands
             $queueJoin $queueTable ON queue.command_id = commands.command_id
+            LEFT JOIN ${names.commandPayloads} payloads ON payloads.command_id = commands.command_id
             LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
         """.trimIndent()
     }
@@ -1065,13 +1117,17 @@ class PostgresCommandLogStore(
                 p_run_kind,
                 p_scenario_id,
                 p_received_at,
-                p_payload_json
+                '{}'::jsonb
               )
               ON CONFLICT DO NOTHING;
 
               GET DIAGNOSTICS v_inserted = ROW_COUNT;
 
               IF v_inserted = 1 THEN
+                INSERT INTO ${names.commandPayloads}(command_id, payload_json, created_at)
+                VALUES (p_command_id, p_payload_json, p_received_at)
+                ON CONFLICT (command_id) DO NOTHING;
+
                 INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error, updated_at)
                 VALUES (p_command_id, 'RECEIVED', 0, '', p_received_at)
                 ON CONFLICT (command_id) DO NOTHING;
@@ -1108,13 +1164,14 @@ class PostgresCommandLogStore(
                 c.run_kind AS out_run_kind,
                 c.scenario_id AS out_scenario_id,
                 c.received_at AS out_received_at,
-                c.payload_json AS out_payload_json,
+                COALESCE(p.payload_json, c.payload_json) AS out_payload_json,
                 COALESCE(q.status, r.status, c.status) AS out_status,
                 COALESCE(q.attempt_count, r.attempt_count, c.attempt_count) AS out_attempt_count,
                 COALESCE(q.last_error, r.last_error, c.last_error) AS out_last_error,
                 COALESCE(r.response_status, c.response_status, 0) AS out_response_status,
                 COALESCE(r.response_payload_json, c.response_payload_json, '{}'::jsonb) AS out_response_payload_json
               FROM ${names.commands} c
+              LEFT JOIN ${names.commandPayloads} p ON p.command_id = c.command_id
               LEFT JOIN ${names.commandWorkQueue} q ON q.command_id = c.command_id
               LEFT JOIN ${names.commandResults} r ON r.command_id = c.command_id
               WHERE c.command_id = v_command_id;
@@ -1129,6 +1186,7 @@ data class PostgresCommandLogSqlNames(
 ) {
     val schemaName = schemaNameOrDefault(schema)
     val commands = "$schemaName.commands"
+    val commandPayloads = "$schemaName.command_payloads"
     val commandWorkQueue = "$schemaName.command_work_queue"
     val commandResults = "$schemaName.command_results"
     val retentionPins = "$schemaName.retention_pins"

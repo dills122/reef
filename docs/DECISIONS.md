@@ -530,6 +530,7 @@ Summary:
 - first benchmark evidence showed this split alone regresses accepted ingress because it adds active-queue/result writes; follow-up work must reduce write amplification before treating the split as a throughput win.
 - command intake can use the opt-in `command_log.command_append(...)` database routine so command insert, active-queue enqueue, and duplicate replay stay in one database call.
 - benchmark evidence did not justify making that routine the default: `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=inline` remains the default until a function or batched intake path beats it.
+- durable request payloads can live in `command_log.command_payloads` while new `command_log.commands` rows keep a slim compatibility payload. `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table` is the default because it narrows the hot command metadata row without losing worker replay data; `inline` remains available for A/B testing.
 - batched terminal result and queue-completion writes are now the default async completion path, but 2026-07-02 stress evidence did not recover the `7500` completed/sec target.
 - the next measured bottlenecks are command-log reserve/write amplification and per-command runtime persistence, not async queue claim mechanics.
 - `command_log.command_work_queue` is recoverable active scheduling state and can be unlogged to reduce WAL churn; no-loss accounting still depends on logged `command_log.commands` for accepted commands and logged `command_log.command_results` for terminal outcomes.

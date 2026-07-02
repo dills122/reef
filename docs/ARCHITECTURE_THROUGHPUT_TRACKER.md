@@ -238,7 +238,7 @@ Drain follow-up:
 - [x] Add inner reserve timing for command-record build vs command-log append.
 - [x] Skip redundant idempotency lookup for new captured-ack accepted commands.
 - [x] Split runtime-managed DB pools by hot-path role and add opt-in dedicated runtime persistence for captured-ack workers.
-- [ ] Split or slim hot command payload writes on command-log reserve.
+- [x] Split or slim hot command payload writes on command-log reserve.
 - [ ] Batch or defer per-command runtime persistence writes.
 
 Latest async drain notes:
@@ -258,6 +258,7 @@ Latest batched-completion notes:
 - drain-accounted sweeps show best corrected loaded-stack intake at `4801.95 accepted rps` with `8` async workers, but only `532.38 completed/sec` during load and a `64239` command post-load backlog. Final accounting still reached active `0` and gap `0`.
 - named pools initially inherited the old global `RUNTIME_DB_POOL_MIN_IDLE=16` for every role and could exhaust local Postgres clients during restarts. Role-specific defaults now cap `runtime`/`async-runtime` lower and keep `command-log` as the only high-capacity pool by default.
 - the valid dedicated-vs-shared worker runtime pool A/B was effectively neutral in local captured-ack mode, so the dedicated `async-runtime` pool is opt-in rather than the dev default. Remaining backlog still points at command-log append and per-command async operation/persistence cost rather than Hikari waiters.
+- command payload storage now defaults to `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table`: `command_log.commands` keeps a slim `{}` compatibility payload for new commands while the full durable request payload is written to `command_log.command_payloads` and joined for replay/claim/status reads. A quick 8-worker `8k/8s` local A/B reached `3389.44 accepted rps`, p99 `148.11ms`, `1981.06/sec` post-load drain in side-table mode versus `1964.94 accepted rps`, p99 `210.73ms`, `2302.11/sec` post-load drain in inline mode; both reached final active `0` and gap `0`. The physical storage check showed `27313/27313` slim command rows plus payload rows for the side-table run and `0` side-table payload rows for the inline run.
 
 ### M4: Async Batched Runtime Persistence
 

@@ -109,17 +109,19 @@ object PostgresSchemaRequirements {
 
     fun commandLog(
         commands: String,
+        payloads: String = "command_log.command_payloads",
         workQueue: String = "command_log.command_work_queue",
         results: String = "command_log.command_results",
         retentionPins: String = "command_log.retention_pins",
         appendFunction: String = "command_log.command_append"
     ): PostgresSchemaRequirement {
         val commandTable = PostgresSchemaObject.parse(commands)
+        val payloadTable = PostgresSchemaObject.parse(payloads)
         val queueTable = PostgresSchemaObject.parse(workQueue)
         val resultTable = PostgresSchemaObject.parse(results)
         val retentionPinTable = PostgresSchemaObject.parse(retentionPins)
         return PostgresSchemaRequirement(
-            tables = listOf(commandTable, queueTable, resultTable, retentionPinTable),
+            tables = listOf(commandTable, payloadTable, queueTable, resultTable, retentionPinTable),
             functions = listOf(PostgresSchemaObject.parse(appendFunction)),
             columns = listOf(
                 listOf(
@@ -143,6 +145,11 @@ object PostgresSchemaRequirements {
                     "response_status",
                     "response_payload_json"
                 ).map { column -> PostgresSchemaColumn(commandTable, column) },
+                listOf(
+                    "command_id",
+                    "payload_json",
+                    "created_at"
+                ).map { column -> PostgresSchemaColumn(payloadTable, column) },
                 listOf(
                     "command_id",
                     "status",

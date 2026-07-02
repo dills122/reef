@@ -129,6 +129,7 @@ make dev-stress-captured-ack
 `dev-up-captured-ack` starts `platform-runtime` with:
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
 - `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
+- `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table`
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`
 - `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=4`
@@ -418,7 +419,8 @@ Compose sets:
 - runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime` remains configured, but runtime storage uses explicit `runtime.*` and `auth.*` names)
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
-- optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
+- optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, durable request payloads in `command_log.command_payloads`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
+- command-log payload mode: `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table|inline` (default `side-table`). `side-table` keeps hot command metadata rows narrow while retaining the full durable request payload for worker replay.
 - command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
 - async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`

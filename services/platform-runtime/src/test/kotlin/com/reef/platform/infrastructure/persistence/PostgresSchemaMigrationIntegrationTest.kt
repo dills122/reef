@@ -37,7 +37,10 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0006_command_append_function.sql',
                   'command_log/0007_retention_pins.sql',
                   'command_log/0008_command_append_queue_timestamp.sql',
-                  'command_log/0009_run_metadata.sql'
+                  'command_log/0009_run_metadata.sql',
+                  'command_log/0010_drop_legacy_status_index.sql',
+                  'command_log/0011_unlogged_active_queue.sql',
+                  'command_log/0012_command_payloads.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -64,6 +67,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0007_retention_pins.sql",
                     "command_log/0008_command_append_queue_timestamp.sql",
                     "command_log/0009_run_metadata.sql",
+                    "command_log/0010_drop_legacy_status_index.sql",
+                    "command_log/0011_unlogged_active_queue.sql",
+                    "command_log/0012_command_payloads.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations
@@ -74,6 +80,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "auth.auth_roles",
                 "boundary.api_command_captures",
                 "boundary.api_idempotency_records",
+                "command_log.command_payloads",
                 "command_log.command_results",
                 "command_log.command_work_queue",
                 "command_log.commands",
@@ -103,6 +110,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     'api_idempotency_records',
                     'api_command_captures',
                     'commands',
+                    'command_payloads',
                     'command_work_queue',
                     'command_results',
                     'retention_pins'

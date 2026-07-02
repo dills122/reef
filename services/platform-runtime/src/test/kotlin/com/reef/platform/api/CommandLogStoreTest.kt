@@ -214,6 +214,21 @@ class PostgresCommandLogStoreIntegrationTest {
     }
 
     @Test
+    fun postgresStoreWritesPayloadToSideTableByDefaultWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(commandId = "cmd-side-payload-$suffix", idempotencyKey = "idem-side-payload-$suffix")
+
+        assertTrue(store.append(record).appended)
+        val stored = store.findByCommandId(record.commandId)
+        val physicalPayloads = physicalCommandPayloads(record.commandId) ?: return
+
+        assertEquals(record.payloadJson, stored?.payloadJson)
+        assertEquals("""{}""", physicalPayloads.commandRowPayloadJson)
+        assertEquals(record.payloadJson, physicalPayloads.payloadRowPayloadJson)
+    }
+
+    @Test
     fun postgresStoreReturnsExistingCommandForDuplicateIdempotencyWhenConfigured() {
         val store = postgresStoreOrNull() ?: return
         val suffix = UUID.randomUUID().toString()
@@ -392,6 +407,7 @@ class PostgresCommandLogStoreIntegrationTest {
 
     private fun postgresStoreOrNull(
         appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.Inline,
+        payloadMode: PostgresCommandLogPayloadMode = PostgresCommandLogPayloadMode.SideTable,
         processingLeaseMs: Long = 60_000L,
         bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.Validate
     ): PostgresCommandLogStore? {
@@ -402,8 +418,40 @@ class PostgresCommandLogStoreIntegrationTest {
             dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword),
             bootstrapMode = bootstrapMode,
             appendMode = appendMode,
+            payloadMode = payloadMode,
             processingLeaseMs = processingLeaseMs
         )
+    }
+
+    private data class PhysicalCommandPayloads(
+        val commandRowPayloadJson: String,
+        val payloadRowPayloadJson: String
+    )
+
+    private fun physicalCommandPayloads(commandId: String): PhysicalCommandPayloads? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT commands.payload_json::text AS command_payload_json,
+                       payloads.payload_json::text AS payload_row_payload_json
+                FROM command_log.commands commands
+                JOIN command_log.command_payloads payloads ON payloads.command_id = commands.command_id
+                WHERE commands.command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return PhysicalCommandPayloads(
+                        commandRowPayloadJson = rs.getString("command_payload_json"),
+                        payloadRowPayloadJson = rs.getString("payload_row_payload_json")
+                    )
+                }
+            }
+        }
     }
 
     private fun forceStaleProcessing(commandId: String): Boolean? {

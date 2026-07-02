@@ -90,6 +90,7 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "command_log.commands",
+                "command_log.command_payloads",
                 "command_log.command_work_queue",
                 "command_log.command_results",
                 "command_log.retention_pins"
@@ -118,6 +119,9 @@ class PostgresSchemaRequirementsTest {
                 "command_log.commands.created_at",
                 "command_log.commands.response_status",
                 "command_log.commands.response_payload_json",
+                "command_log.command_payloads.command_id",
+                "command_log.command_payloads.payload_json",
+                "command_log.command_payloads.created_at",
                 "command_log.command_work_queue.command_id",
                 "command_log.command_work_queue.status",
                 "command_log.command_work_queue.attempt_count",
