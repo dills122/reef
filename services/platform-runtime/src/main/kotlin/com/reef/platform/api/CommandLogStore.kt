@@ -164,7 +164,14 @@ class PostgresCommandLogStore(
     init {
         dataSource.connection.use { conn ->
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
-                PostgresSchemaValidator.validate(conn, PostgresSchemaRequirements.commandLog(names.commands))
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.commandLog(
+                        commands = names.commands,
+                        workQueue = names.commandWorkQueue,
+                        results = names.commandResults
+                    )
+                )
                 return@use
             }
             conn.createStatement().use { stmt ->
@@ -206,6 +213,85 @@ class PostgresCommandLogStore(
                       ADD COLUMN IF NOT EXISTS response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandWorkQueue} (
+                      command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
+                      status TEXT NOT NULL,
+                      attempt_count INTEGER NOT NULL DEFAULT 0,
+                      last_error TEXT NOT NULL DEFAULT '',
+                      leased_by TEXT NOT NULL DEFAULT '',
+                      leased_until TIMESTAMPTZ,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      CHECK (status IN ('RECEIVED', 'PROCESSING', 'COMPLETED', 'FAILED'))
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_command_log_work_queue_status_updated
+                    ON ${names.commandWorkQueue}(status, updated_at, command_id)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandResults} (
+                      command_id TEXT PRIMARY KEY REFERENCES ${names.commands}(command_id) ON DELETE CASCADE,
+                      status TEXT NOT NULL DEFAULT 'COMPLETED',
+                      attempt_count INTEGER NOT NULL DEFAULT 0,
+                      last_error TEXT NOT NULL DEFAULT '',
+                      response_status INTEGER NOT NULL,
+                      response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      CHECK (status IN ('COMPLETED', 'FAILED'))
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.commandResults}
+                      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'COMPLETED',
+                      ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
+                      ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_command_log_results_status_completed
+                    ON ${names.commandResults}(status, completed_at, command_id)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error, updated_at)
+                    SELECT command_id, status, attempt_count, last_error, created_at
+                    FROM ${names.commands}
+                    ON CONFLICT (command_id) DO NOTHING
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    INSERT INTO ${names.commandResults}(
+                      command_id,
+                      status,
+                      attempt_count,
+                      last_error,
+                      response_status,
+                      response_payload_json,
+                      completed_at
+                    )
+                    SELECT command_id, status, attempt_count, last_error, response_status, response_payload_json, created_at
+                    FROM ${names.commands}
+                    WHERE status IN ('COMPLETED', 'FAILED') OR response_status > 0
+                    ON CONFLICT (command_id) DO NOTHING
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    DELETE FROM ${names.commandWorkQueue}
+                    WHERE status IN ('COMPLETED', 'FAILED')
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -214,23 +300,31 @@ class PostgresCommandLogStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.commands}(
-                  command_id,
-                  client_id,
-                  route,
-                  idempotency_key,
-                  trace_id,
-                  correlation_id,
-                  actor_id,
-                  command_type,
-                  received_at,
-                  payload_json,
-                  status,
-                  attempt_count,
-                  last_error
+                WITH inserted_command AS (
+                  INSERT INTO ${names.commands}(
+                      command_id,
+                      client_id,
+                      route,
+                      idempotency_key,
+                      trace_id,
+                      correlation_id,
+                      actor_id,
+                      command_type,
+                      received_at,
+                      payload_json,
+                      status,
+                      attempt_count,
+                      last_error
+                    )
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb, ?, ?, ?)
+                  ON CONFLICT DO NOTHING
+                  RETURNING command_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::jsonb, ?, ?, ?)
-                ON CONFLICT DO NOTHING
+                INSERT INTO ${names.commandWorkQueue}(command_id, status, attempt_count, last_error)
+                SELECT command_id, ?, 0, ''
+                FROM inserted_command
+                ON CONFLICT (command_id) DO NOTHING
+                RETURNING command_id
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, record.commandId)
@@ -243,11 +337,24 @@ class PostgresCommandLogStore(
                 ps.setString(8, record.commandType)
                 ps.setString(9, record.receivedAt.toString())
                 ps.setString(10, record.payloadJson)
-                ps.setString(11, record.status.name)
-                ps.setInt(12, record.attemptCount)
-                ps.setString(13, record.lastError)
-                val inserted = ps.executeUpdate() == 1
-                if (inserted) return CommandLogAppendResult(appended = true, record = record)
+                ps.setString(11, CommandLogStatus.RECEIVED.name)
+                ps.setInt(12, 0)
+                ps.setString(13, "")
+                ps.setString(14, CommandLogStatus.RECEIVED.name)
+                ps.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        return CommandLogAppendResult(
+                            appended = true,
+                            record = record.copy(
+                                status = CommandLogStatus.RECEIVED,
+                                attemptCount = 0,
+                                lastError = "",
+                                responseStatus = 0,
+                                responsePayloadJson = "{}"
+                            )
+                        )
+                    }
+                }
             }
         }
 
@@ -261,9 +368,8 @@ class PostgresCommandLogStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                SELECT *
-                FROM ${names.commands}
-                WHERE command_id = ?
+                ${selectComposedCommandLogRecord()}
+                WHERE commands.command_id = ?
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, commandId)
@@ -278,9 +384,8 @@ class PostgresCommandLogStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                SELECT *
-                FROM ${names.commands}
-                WHERE client_id = ? AND route = ? AND idempotency_key = ?
+                ${selectComposedCommandLogRecord()}
+                WHERE commands.client_id = ? AND commands.route = ? AND commands.idempotency_key = ?
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, clientId)
@@ -295,15 +400,24 @@ class PostgresCommandLogStore(
 
     override fun findByStatus(status: CommandLogStatus, limit: Int): List<CommandLogRecord> {
         if (limit <= 0) return emptyList()
+        val terminalStatus = status == CommandLogStatus.COMPLETED || status == CommandLogStatus.FAILED
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                """
-                SELECT *
-                FROM ${names.commands}
-                WHERE status = ?
-                ORDER BY received_at, command_id
-                LIMIT ?
-                """.trimIndent()
+                if (terminalStatus) {
+                    """
+                    ${selectComposedCommandLogRecord()}
+                    WHERE results.status = ?
+                    ORDER BY results.completed_at, commands.command_id
+                    LIMIT ?
+                    """.trimIndent()
+                } else {
+                    """
+                    ${selectComposedCommandLogRecord()}
+                    WHERE queue.status = ?
+                    ORDER BY commands.received_at, commands.command_id
+                    LIMIT ?
+                    """.trimIndent()
+                }
             ).use { ps ->
                 ps.setString(1, status.name)
                 ps.setInt(2, limit)
@@ -324,20 +438,27 @@ class PostgresCommandLogStore(
             conn.prepareStatement(
                 """
                 WITH claimed AS (
-                  SELECT command_id
-                  FROM ${names.commands}
-                  WHERE status = 'RECEIVED'
-                  ORDER BY received_at, command_id
+                  SELECT queue.command_id
+                  FROM ${names.commandWorkQueue} queue
+                  JOIN ${names.commands} commands ON commands.command_id = queue.command_id
+                  WHERE queue.status = 'RECEIVED'
+                  ORDER BY commands.received_at, commands.command_id
                   LIMIT ?
                   FOR UPDATE SKIP LOCKED
+                ),
+                updated AS (
+                  UPDATE ${names.commandWorkQueue} queue
+                  SET status = 'PROCESSING',
+                      attempt_count = queue.attempt_count + 1,
+                      last_error = '',
+                      leased_by = '',
+                      leased_until = NULL,
+                      updated_at = NOW()
+                  FROM claimed
+                  WHERE queue.command_id = claimed.command_id
+                  RETURNING queue.*
                 )
-                UPDATE ${names.commands} commands
-                SET status = 'PROCESSING',
-                    attempt_count = commands.attempt_count + 1,
-                    last_error = ''
-                FROM claimed
-                WHERE commands.command_id = claimed.command_id
-                RETURNING commands.*
+                ${selectComposedCommandLogRecord(queueTable = "updated queue", queueJoin = "JOIN")}
                 """.trimIndent()
             ).use { ps ->
                 ps.setInt(1, limit)
@@ -358,7 +479,7 @@ class PostgresCommandLogStore(
             conn.prepareStatement(
                 """
                 SELECT status, COUNT(*) AS count
-                FROM ${names.commands}
+                FROM ${names.commandWorkQueue}
                 GROUP BY status
                 """.trimIndent()
             ).use { ps ->
@@ -376,10 +497,13 @@ class PostgresCommandLogStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                UPDATE ${names.commands}
+                UPDATE ${names.commandWorkQueue}
                 SET status = 'PROCESSING',
                     attempt_count = attempt_count + 1,
-                    last_error = ''
+                    last_error = '',
+                    leased_by = '',
+                    leased_until = NULL,
+                    updated_at = NOW()
                 WHERE command_id = ?
                 """.trimIndent()
             ).use { ps ->
@@ -393,18 +517,39 @@ class PostgresCommandLogStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                UPDATE ${names.commands}
-                SET status = 'COMPLETED',
-                    response_status = ?,
-                    response_payload_json = ?::jsonb,
-                    last_error = ''
-                WHERE command_id = ?
+                WITH deleted_queue AS (
+                  DELETE FROM ${names.commandWorkQueue}
+                  WHERE command_id = ?
+                  RETURNING command_id, attempt_count
+                )
+                INSERT INTO ${names.commandResults}(
+                  command_id,
+                  status,
+                  attempt_count,
+                  last_error,
+                  response_status,
+                  response_payload_json,
+                  completed_at
+                )
+                SELECT command_id, 'COMPLETED', attempt_count, '', ?, ?::jsonb, NOW()
+                FROM deleted_queue
+                ON CONFLICT (command_id) DO UPDATE SET
+                  status = EXCLUDED.status,
+                  attempt_count = EXCLUDED.attempt_count,
+                  last_error = EXCLUDED.last_error,
+                  response_status = EXCLUDED.response_status,
+                  response_payload_json = EXCLUDED.response_payload_json,
+                  completed_at = EXCLUDED.completed_at
+                RETURNING command_id
                 """.trimIndent()
             ).use { ps ->
-                ps.setInt(1, responseStatus)
-                ps.setString(2, responsePayloadJson)
-                ps.setString(3, commandId)
-                ps.executeUpdate()
+                ps.setString(1, commandId)
+                ps.setInt(2, responseStatus)
+                ps.setString(3, responsePayloadJson)
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                    }
+                }
             }
         }
     }
@@ -413,17 +558,39 @@ class PostgresCommandLogStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                UPDATE ${names.commands}
-                SET status = 'FAILED',
-                    response_status = ?,
-                    last_error = ?
-                WHERE command_id = ?
+                WITH deleted_queue AS (
+                  DELETE FROM ${names.commandWorkQueue}
+                  WHERE command_id = ?
+                  RETURNING command_id, attempt_count
+                )
+                INSERT INTO ${names.commandResults}(
+                  command_id,
+                  status,
+                  attempt_count,
+                  last_error,
+                  response_status,
+                  response_payload_json,
+                  completed_at
+                )
+                SELECT command_id, 'FAILED', attempt_count, ?, ?, '{}'::jsonb, NOW()
+                FROM deleted_queue
+                ON CONFLICT (command_id) DO UPDATE SET
+                  status = EXCLUDED.status,
+                  attempt_count = EXCLUDED.attempt_count,
+                  last_error = EXCLUDED.last_error,
+                  response_status = EXCLUDED.response_status,
+                  response_payload_json = EXCLUDED.response_payload_json,
+                  completed_at = EXCLUDED.completed_at
+                RETURNING command_id
                 """.trimIndent()
             ).use { ps ->
-                ps.setInt(1, responseStatus)
+                ps.setString(1, commandId)
                 ps.setString(2, errorMessage)
-                ps.setString(3, commandId)
-                ps.executeUpdate()
+                ps.setInt(3, responseStatus)
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                    }
+                }
             }
         }
     }
@@ -447,6 +614,33 @@ class PostgresCommandLogStore(
             responsePayloadJson = getString("response_payload_json")
         )
     }
+
+    private fun selectComposedCommandLogRecord(
+        queueTable: String = "${names.commandWorkQueue} queue",
+        queueJoin: String = "LEFT JOIN"
+    ): String {
+        return """
+            SELECT
+              commands.command_id,
+              commands.client_id,
+              commands.route,
+              commands.idempotency_key,
+              commands.trace_id,
+              commands.correlation_id,
+              commands.actor_id,
+              commands.command_type,
+              commands.received_at,
+              commands.payload_json,
+              COALESCE(queue.status, results.status, commands.status) AS status,
+              COALESCE(queue.attempt_count, results.attempt_count, commands.attempt_count) AS attempt_count,
+              COALESCE(queue.last_error, results.last_error, commands.last_error) AS last_error,
+              COALESCE(results.response_status, commands.response_status, 0) AS response_status,
+              COALESCE(results.response_payload_json, commands.response_payload_json, '{}'::jsonb) AS response_payload_json
+            FROM ${names.commands} commands
+            $queueJoin $queueTable ON queue.command_id = commands.command_id
+            LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
+        """.trimIndent()
+    }
 }
 
 data class PostgresCommandLogSqlNames(
@@ -454,6 +648,8 @@ data class PostgresCommandLogSqlNames(
 ) {
     val schemaName = schemaNameOrDefault(schema)
     val commands = "$schemaName.commands"
+    val commandWorkQueue = "$schemaName.command_work_queue"
+    val commandResults = "$schemaName.command_results"
 
     private fun schemaNameOrDefault(schema: String): String {
         val candidate = schema.trim().ifBlank { "command_log" }

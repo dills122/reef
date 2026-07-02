@@ -461,3 +461,19 @@ Summary:
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+
+### D-032: Command Log Queue And Result Split
+
+Status: accepted
+
+Summary:
+- `command_log.commands` remains the durable inbound command intake record and idempotency anchor.
+- mutable worker state belongs in `command_log.command_work_queue`, not on the command intake row.
+- terminal response payloads belong in `command_log.command_results`, not on the command intake row.
+- command status APIs compose command metadata, queue state, and result rows so public status behavior remains stable.
+- this split is intended to reduce indexed status updates and dead tuples on the command intake table before deeper async/batched runtime persistence work.
+- first benchmark evidence showed this split alone regresses accepted ingress because it adds active-queue/result writes; follow-up work must reduce write amplification before treating the split as a throughput win.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)

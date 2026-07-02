@@ -799,3 +799,38 @@ Recommended next moves:
 3. Add batch-oriented runtime persistence for arena workloads once command queue churn is isolated.
 4. Revisit runtime event/execution/trade partitioning before long so table and index growth do not dominate soak tests.
 5. Keep `4` async workers as the current local default for intake ceiling tests; use `8` or `16` only when deliberately measuring catch-up drain tradeoffs.
+
+Implementation follow-up:
+
+- `command_log/0003_queue_result_split.sql` adds `command_log.command_work_queue` and `command_log.command_results`.
+- `command_log/0004_terminal_results_active_queue.sql` makes `command_work_queue` active-work-only and moves terminal status to `command_results`.
+- `command_log/0005_result_terminal_metadata.sql` preserves terminal attempt/error metadata after queue deletion.
+- New Postgres command-log writes leave `command_log.commands` as the durable intake/idempotency row and compose status from command, active queue, and result rows.
+- Post-split verification confirmed new `command_log.commands` rows remain `RECEIVED`, active queue rows are deleted after completion, and `command_results` stores terminal status/response.
+
+Post-split benchmark:
+
+```bash
+DEV_INTAKE_DURATION=15s \
+DEV_INTAKE_WORKERS=384 \
+DEV_INTAKE_RATE=15000 \
+DEV_INTAKE_RATE_SCHEDULE=precise \
+DEV_INTAKE_ACTOR_ID_PREFIX=bot \
+DEV_INTAKE_ARTIFACT_DIR=/tmp/reef-active-queue-fixed-4w-20260701 \
+DEV_INTAKE_REPORT_OUT=/tmp/reef-active-queue-fixed-4w.json \
+JS_RUNTIME=node \
+make dev-intake-bench
+```
+
+| Shape | Async Workers | Accepted RPS | p50 | p95 | p99 | Completed During Burst | Immediate Backlog |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| pre-split command row mutation | `4` | `7784.04` | `59.10ms` | `76.30ms` | `84.48ms` | `~28957` | `88232` |
+| split active queue/result | `4` | `4020.17` | `93.62ms` | `126.35ms` | `163.85ms` | `13380` | `47274` |
+
+Post-split diagnosis:
+
+- The split fixed command-row mutation semantics but did not improve throughput.
+- Intake now pays an additional active-queue write, raising `api.commandCapture.reserve` to `11.33ms avg`.
+- Completion now deletes active queue rows and upserts terminal result rows, raising `async.complete` to `3.00ms avg`.
+- The queue split should be kept only if the next slice reduces write amplification with a stored procedure, lighter active queue, or async/batched persistence path.
+- The next benchmark should compare a stored-procedure command intake path or an intake-only command log against this split schema before sweeping worker counts again.

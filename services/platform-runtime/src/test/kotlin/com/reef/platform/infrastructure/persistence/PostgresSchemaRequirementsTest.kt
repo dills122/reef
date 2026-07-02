@@ -87,7 +87,14 @@ class PostgresSchemaRequirementsTest {
     fun commandLogRequirementsCoverAppendOnlyCommandTable() {
         val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
 
-        assertEquals(setOf("command_log.commands"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "command_log.commands",
+                "command_log.command_work_queue",
+                "command_log.command_results"
+            ),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
         assertEquals(
             setOf(
                 "command_log.commands.command_id",
@@ -105,7 +112,21 @@ class PostgresSchemaRequirementsTest {
                 "command_log.commands.last_error",
                 "command_log.commands.created_at",
                 "command_log.commands.response_status",
-                "command_log.commands.response_payload_json"
+                "command_log.commands.response_payload_json",
+                "command_log.command_work_queue.command_id",
+                "command_log.command_work_queue.status",
+                "command_log.command_work_queue.attempt_count",
+                "command_log.command_work_queue.last_error",
+                "command_log.command_work_queue.leased_by",
+                "command_log.command_work_queue.leased_until",
+                "command_log.command_work_queue.updated_at",
+                "command_log.command_results.command_id",
+                "command_log.command_results.status",
+                "command_log.command_results.attempt_count",
+                "command_log.command_results.last_error",
+                "command_log.command_results.response_status",
+                "command_log.command_results.response_payload_json",
+                "command_log.command_results.completed_at"
             ),
             requirements.columns.map { it.qualifiedName }.toSet()
         )

@@ -58,7 +58,7 @@ Scaling intent:
 | A12 | Boundary capture hot-path reduction | In progress | architecture | `captured-ack` now avoids the separate idempotency write for accepted responses |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
-| A15 | Command queue/result split | Not started | architecture | Needed to keep command intake immutable and move mutable worker state/result payloads out of `command_log.commands` |
+| A15 | Command queue/result split | Done | architecture | Functional split complete; first benchmark regressed ingress, so next work must reduce write amplification |
 
 ## Milestone Checklist
 
@@ -121,10 +121,11 @@ Exit criteria:
 
 Drain follow-up:
 
-- [ ] Split immutable command capture from mutable queue lease/status state.
-- [ ] Move terminal response payloads into a separate command result table.
-- [ ] Make async queue counts cheap enough for frequent telemetry.
-- [ ] Re-run raw intake plus drain sweep after the command queue/result split.
+- [x] Split immutable command capture from mutable queue lease/status state.
+- [x] Move terminal response payloads into a separate command result table.
+- [x] Make async queue counts cheap enough for frequent telemetry.
+- [x] Re-run raw intake plus drain check after the command queue/result split.
+- [ ] Reduce split-schema write amplification before wider `4/8/16` worker sweep.
 
 ### M4: Async Batched Runtime Persistence
 

@@ -107,28 +107,54 @@ object PostgresSchemaRequirements {
         )
     }
 
-    fun commandLog(commands: String): PostgresSchemaRequirement {
-        val table = PostgresSchemaObject.parse(commands)
+    fun commandLog(
+        commands: String,
+        workQueue: String = "command_log.command_work_queue",
+        results: String = "command_log.command_results"
+    ): PostgresSchemaRequirement {
+        val commandTable = PostgresSchemaObject.parse(commands)
+        val queueTable = PostgresSchemaObject.parse(workQueue)
+        val resultTable = PostgresSchemaObject.parse(results)
         return PostgresSchemaRequirement(
-            tables = listOf(table),
+            tables = listOf(commandTable, queueTable, resultTable),
             columns = listOf(
-                "command_id",
-                "client_id",
-                "route",
-                "idempotency_key",
-                "trace_id",
-                "correlation_id",
-                "actor_id",
-                "command_type",
-                "received_at",
-                "payload_json",
-                "status",
-                "attempt_count",
-                "last_error",
-                "created_at",
-                "response_status",
-                "response_payload_json"
-            ).map { column -> PostgresSchemaColumn(table, column) }
+                listOf(
+                    "command_id",
+                    "client_id",
+                    "route",
+                    "idempotency_key",
+                    "trace_id",
+                    "correlation_id",
+                    "actor_id",
+                    "command_type",
+                    "received_at",
+                    "payload_json",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "created_at",
+                    "response_status",
+                    "response_payload_json"
+                ).map { column -> PostgresSchemaColumn(commandTable, column) },
+                listOf(
+                    "command_id",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "leased_by",
+                    "leased_until",
+                    "updated_at"
+                ).map { column -> PostgresSchemaColumn(queueTable, column) },
+                listOf(
+                    "command_id",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "response_status",
+                    "response_payload_json",
+                    "completed_at"
+                ).map { column -> PostgresSchemaColumn(resultTable, column) }
+            ).flatten()
         )
     }
 }

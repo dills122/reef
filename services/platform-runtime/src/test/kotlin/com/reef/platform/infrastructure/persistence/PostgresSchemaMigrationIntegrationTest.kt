@@ -30,7 +30,10 @@ class PostgresSchemaMigrationIntegrationTest {
                   'boundary/0003_command_capture_live_shape.sql',
                   'boundary/0004_command_capture_legacy_defaults.sql',
                   'command_log/0001_commands.sql',
-                  'command_log/0002_command_results.sql'
+                  'command_log/0002_command_results.sql',
+                  'command_log/0003_queue_result_split.sql',
+                  'command_log/0004_terminal_results_active_queue.sql',
+                  'command_log/0005_result_terminal_metadata.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -50,6 +53,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0004_command_capture_legacy_defaults.sql",
                     "command_log/0001_commands.sql",
                     "command_log/0002_command_results.sql",
+                    "command_log/0003_queue_result_split.sql",
+                    "command_log/0004_terminal_results_active_queue.sql",
+                    "command_log/0005_result_terminal_metadata.sql",
                     "runtime/0003_live_runtime_persistence.sql"
                 ),
                 appliedMigrations
@@ -60,6 +66,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "auth.auth_roles",
                 "boundary.api_command_captures",
                 "boundary.api_idempotency_records",
+                "command_log.command_results",
+                "command_log.command_work_queue",
                 "command_log.commands",
                 "runtime.executions",
                 "runtime.orders",
@@ -85,7 +93,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     'auth_actor_roles',
                     'api_idempotency_records',
                     'api_command_captures',
-                    'commands'
+                    'commands',
+                    'command_work_queue',
+                    'command_results'
                   )
                 """.trimIndent()
             ).use { ps ->
