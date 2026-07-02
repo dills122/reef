@@ -29,7 +29,8 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "runtime.runtime_validate_reference_data",
-                "runtime.runtime_persist_submit_outcome"
+                "runtime.runtime_persist_submit_outcome",
+                "runtime.runtime_persist_submit_outcomes"
             ),
             requirements.functions.map { it.qualifiedName }.toSet()
         )

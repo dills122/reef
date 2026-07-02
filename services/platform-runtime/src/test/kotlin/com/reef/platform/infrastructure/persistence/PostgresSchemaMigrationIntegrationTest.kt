@@ -25,6 +25,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 FROM public.reef_schema_migrations
                 WHERE migration_id IN (
                   'runtime/0003_live_runtime_persistence.sql',
+                  'runtime/0004_bulk_submit_outcomes.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -70,7 +71,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0010_drop_legacy_status_index.sql",
                     "command_log/0011_unlogged_active_queue.sql",
                     "command_log/0012_command_payloads.sql",
-                    "runtime/0003_live_runtime_persistence.sql"
+                    "runtime/0003_live_runtime_persistence.sql",
+                    "runtime/0004_bulk_submit_outcomes.sql"
                 ),
                 appliedMigrations
             )
@@ -254,6 +256,34 @@ class PostgresSchemaMigrationIntegrationTest {
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val runtimeFunctions = conn.prepareStatement(
+                """
+                SELECT routine_schema || '.' || routine_name AS routine_name
+                FROM information_schema.routines
+                WHERE routine_schema = 'runtime'
+                  AND routine_name IN (
+                    'runtime_validate_reference_data',
+                    'runtime_persist_submit_outcome',
+                    'runtime_persist_submit_outcomes'
+                  )
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("routine_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                setOf(
+                    "runtime.runtime_validate_reference_data",
+                    "runtime.runtime_persist_submit_outcome",
+                    "runtime.runtime_persist_submit_outcomes"
+                ),
+                runtimeFunctions
             )
 
             val publicTables = conn.prepareStatement(

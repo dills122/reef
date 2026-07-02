@@ -399,6 +399,50 @@ class PostgresRuntimePersistence(
                     $$;
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION ${names.persistSubmitOutcomesFunction}(
+                      p_outcomes JSONB
+                    )
+                    RETURNS BIGINT
+                    LANGUAGE plpgsql
+                    AS $$
+                    DECLARE
+                      outcome JSONB;
+                      persisted_count BIGINT := 0;
+                    BEGIN
+                      IF p_outcomes IS NULL THEN
+                        RETURN 0;
+                      END IF;
+
+                      IF jsonb_typeof(p_outcomes) <> 'array' THEN
+                        RAISE EXCEPTION 'runtime submit outcomes payload must be a JSON array';
+                      END IF;
+
+                      FOR outcome IN SELECT value FROM jsonb_array_elements(p_outcomes)
+                      LOOP
+                        PERFORM ${names.persistSubmitOutcomeFunction}(
+                          outcome->>'commandId',
+                          outcome->>'resultType',
+                          outcome->>'eventId',
+                          outcome->>'orderId',
+                          outcome->>'engineOrderId',
+                          outcome->>'code',
+                          outcome->>'reason',
+                          outcome->>'occurredAt',
+                          NULLIF(outcome->'acceptedOrder', 'null'::jsonb),
+                          COALESCE(outcome->'executions', '[]'::jsonb),
+                          COALESCE(outcome->'trades', '[]'::jsonb),
+                          COALESCE(outcome->'events', '[]'::jsonb)
+                        );
+                        persisted_count := persisted_count + 1;
+                      END LOOP;
+
+                      RETURN persisted_count;
+                    END;
+                    $$;
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -626,38 +670,18 @@ class PostgresRuntimePersistence(
     override fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
         if (outcomes.isEmpty()) return
         connection().use { conn ->
-            val previousAutoCommit = conn.autoCommit
-            conn.autoCommit = false
-            try {
-                conn.prepareStatement(
-                    """
-                    SELECT ${names.persistSubmitOutcomeFunction}(
-                      ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?::jsonb
-                    )
-                    """.trimIndent()
-                ).use { ps ->
-                    outcomes.forEach { outcome ->
-                        val accepted = outcome.result.accepted
-                        val rejected = outcome.result.rejected
-                        val resultType = if (accepted != null) "accepted" else "rejected"
-                        ps.bindSubmitOutcome(
-                            commandId = outcome.commandId,
-                            resultType = resultType,
-                            accepted = accepted,
-                            rejected = rejected,
-                            acceptedOrder = outcome.acceptedOrder,
-                            result = outcome.result,
-                            lifecycleEvents = outcome.lifecycleEvents
-                        )
-                        ps.execute()
+            conn.prepareStatement(
+                """
+                SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, outcomes.toJsonArray { it.toJsonObject() })
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    check(rs.getLong(1) == outcomes.size.toLong()) {
+                        "Persisted submit outcome count did not match requested batch size"
                     }
                 }
-                conn.commit()
-            } catch (ex: Exception) {
-                conn.rollback()
-                throw ex
-            } finally {
-                conn.autoCommit = previousAutoCommit
             }
         }
     }
@@ -1099,6 +1123,29 @@ class PostgresRuntimePersistence(
             "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
         }
         return "{$stringFields,\"payloadJson\":${payloadJson.ifBlank { "{}" }}}"
+    }
+
+    private fun PersistableSubmitOutcome.toJsonObject(): String {
+        val accepted = result.accepted
+        val rejected = result.rejected
+        val resultType = if (accepted != null) "accepted" else "rejected"
+        val fields = listOf(
+            "commandId" to commandId,
+            "resultType" to resultType,
+            "eventId" to (accepted?.eventId ?: rejected?.eventId.orEmpty()),
+            "orderId" to (accepted?.orderId ?: rejected?.orderId.orEmpty()),
+            "engineOrderId" to accepted?.engineOrderId.orEmpty(),
+            "code" to rejected?.code.orEmpty(),
+            "reason" to rejected?.reason.orEmpty(),
+            "occurredAt" to (accepted?.occurredAt ?: rejected?.occurredAt.orEmpty())
+        ).joinToString(",") { (key, value) ->
+            "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+        return "{$fields," +
+            "\"acceptedOrder\":${acceptedOrder?.toJsonObject() ?: "null"}," +
+            "\"executions\":${result.executions.toJsonArray { it.toJsonObject() }}," +
+            "\"trades\":${result.trades.toJsonArray { it.toJsonObject() }}," +
+            "\"events\":${lifecycleEvents.toJsonArray { it.toJsonObject() }}}"
     }
 
     private fun <T> List<T>.toJsonArray(toObject: (T) -> String): String {

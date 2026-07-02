@@ -18,6 +18,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0001_runtime_init.sql",
       "runtime/0002_event_backbone.sql",
       "runtime/0003_live_runtime_persistence.sql",
+      "runtime/0004_bulk_submit_outcomes.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));

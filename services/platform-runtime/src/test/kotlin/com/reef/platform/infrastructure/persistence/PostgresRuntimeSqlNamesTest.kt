@@ -16,6 +16,8 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.runtime_events", names.runtimeEvents)
         assertEquals("runtime.submit_results", names.submitResults)
         assertEquals("runtime.reference_instruments", names.referenceInstruments)
+        assertEquals("runtime.runtime_persist_submit_outcome", names.persistSubmitOutcomeFunction)
+        assertEquals("runtime.runtime_persist_submit_outcomes", names.persistSubmitOutcomesFunction)
         assertEquals("auth.auth_roles", names.authRoles)
         assertEquals("auth.auth_actor_roles", names.authActorRoles)
     }

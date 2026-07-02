@@ -70,7 +70,8 @@ object PostgresSchemaRequirements {
             ).map(PostgresSchemaObject::parse),
             functions = listOf(
                 names.validateReferenceDataFunction,
-                names.persistSubmitOutcomeFunction
+                names.persistSubmitOutcomeFunction,
+                names.persistSubmitOutcomesFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
