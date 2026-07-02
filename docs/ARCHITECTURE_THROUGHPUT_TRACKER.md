@@ -6,6 +6,7 @@ Track architecture work needed to move beyond the current tuned `~3k rps` single
 
 Primary plan:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
 
 Current measured reference:
 - best local ceiling probe: `2961.43 rps` total, `2919.27 rps` accepted, `98.58%` success
@@ -61,6 +62,7 @@ Scaling intent:
 | A15 | Command queue/result split | Done | architecture | Functional split complete; first benchmark regressed ingress, so next work must reduce write amplification |
 | A16 | Stored-procedure command intake | Done | architecture | Added as opt-in `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=function`; benchmark regressed reserve latency, so default remains `inline` |
 | A17 | Command-log lifecycle controls | In progress | architecture | Dry-run-first terminal pruning and retention pins added; partitioning remains next |
+| A18 | Command-log partitioning plan | Done | architecture | Plan chooses live lookup + partitioned archive path instead of in-place range partitioning of `commands` |
 
 ## Milestone Checklist
 
@@ -131,7 +133,8 @@ Drain follow-up:
 - [x] Re-run split-schema benchmark after stored-procedure intake.
 - [x] Add dry-run-first command-log terminal history prune tooling.
 - [x] Add pinned run/session retention before pruning named replay/audit runs.
-- [ ] Add partitioning plan for command-log commands/results.
+- [x] Add partitioning plan for command-log commands/results.
+- [ ] Add run/session attribution to command-log intake.
 - [ ] Reduce remaining split-schema write amplification before wider `4/8/16` worker sweep.
 
 ### M4: Async Batched Runtime Persistence

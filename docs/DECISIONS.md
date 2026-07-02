@@ -478,6 +478,22 @@ Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
+### D-034: Command Log Partitioning Direction
+
+Status: accepted
+
+Summary:
+- Do not range-partition the current `command_log.commands` table in place.
+- `commands` remains the hot command-ID/idempotency lookup table until a v2 schema deliberately changes the key shape.
+- partitioning should first target terminal history/archive tables where `completed_at`, `received_at`, or run/session metadata are natural lifecycle keys.
+- command payloads should be split from the hot command index before partitioning bulky command history.
+- active queue rows should stay small through active-only semantics, pruning, and worker drain improvements rather than time partitioning.
+- the next implementation slice is run/session attribution so arena and simulator workloads can be retained, pruned, and diagnosed by run.
+
+Primary references:
+- [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted
