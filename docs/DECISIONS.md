@@ -329,8 +329,9 @@ Status: accepted
 
 Summary:
 - Reef should track a concrete single-instance throughput objective before horizontal scale-out.
-- planning anchor target is 5,000 accepted req/s per runtime + engine instance, with staged near-term and stretch targets documented in SLO baselines.
+- original planning anchor target was 5,000 accepted req/s per runtime + engine instance, with staged near-term and stretch targets documented in SLO baselines.
 - horizontal scaling should multiply this strong per-instance unit rather than compensate for unresolved single-node bottlenecks.
+- superseded for the bot-arena scaling track by D-035, which raises the active target to `7500-10000` completed commands/sec with no accepted-command accounting gaps.
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
@@ -400,7 +401,8 @@ Status: accepted
 
 Summary:
 - after reaching the tuned local `~3k rps` single-instance capacity profile, further throughput work should prioritize architecture changes over more thread/pool tuning.
-- the active target is `5k` accepted requests per second per runtime + engine instance before relying on horizontal scale-out.
+- the then-active target was `5k` accepted requests per second per runtime + engine instance before relying on horizontal scale-out.
+- superseded for the bot-arena scaling track by D-035, which uses completed command lifecycle throughput rather than accepted-request intake.
 - Reef should separate durable command intake from downstream runtime persistence through an append-only `command_log` slice.
 - synchronous command-result behavior remains available for compatibility and deterministic tests.
 - async/batched runtime persistence and read-model projection isolation are the next major scaling levers.
@@ -416,7 +418,7 @@ Primary references:
 Status: accepted
 
 Summary:
-- the next high-value sprint should build a local simulator testing/admin UI before deeper `5k` architecture changes.
+- the next high-value sprint should build a local simulator testing/admin UI before deeper throughput architecture changes.
 - the UI should orchestrate existing simulator/dev scripts through a local-only control API rather than replacing the CLI.
 - UI-launched runs must produce the same report artifacts and reproduction commands as CLI-launched runs.
 - the control API must use allowlisted commands and artifact path guardrails; no arbitrary shell execution from the browser.
@@ -492,6 +494,27 @@ Summary:
 
 Primary references:
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
+### D-035: Completed Throughput And No-Loss Scaling Target
+
+Status: accepted
+
+Summary:
+- the active bot-arena scaling target is completed command lifecycle throughput, not raw accepted-request intake.
+- the minimum target is `7500` completed commands per second per runtime + engine instance.
+- the preferred target is `10000` completed commands per second per runtime + engine instance.
+- if the runtime returns an accepted response, the command must be durably captured and must either reach terminal `COMPLETED`/`FAILED` state or remain visible as active leased/retryable work.
+- overload must reject or throttle before durable acceptance when the system cannot safely drain more work.
+- `captured-ack` is the primary high-throughput benchmark mode for this track.
+- `sync-result` remains the deterministic correctness and compatibility mode.
+- raw intake and capacity-baseline profiles remain diagnostics only; they do not prove release readiness without completed-throughput accounting and queue drain.
+- Kubernetes scale-out must not be used to hide per-instance write amplification, queue backlog, or accepted-command accounting gaps.
+- bot traffic must use the same public command/API path as other simulator traffic, with run/session/bot attribution and no direct state mutation.
+
+Primary references:
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### D-032: Command Log Queue And Result Split

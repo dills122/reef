@@ -2,13 +2,16 @@
 
 ## Purpose
 
-Define the next architecture improvements after one local runtime + engine instance reached roughly `3k rps` with `98%+` success in capacity-baseline simulation.
+Define the next architecture improvements after Reef proved that a single local runtime + engine instance can accept several thousand requests per second, but still cannot complete the durable captured-command lifecycle fast enough for bot-arena scale.
 
-The goal is to move from tuned synchronous throughput to a production-shaped write architecture that can sustain `5k` accepted requests per second per runtime instance, preserve command capture guarantees, and keep DB growth from degrading the environment over time.
+The active goal is to move from tuned synchronous throughput to a production-shaped write architecture that can sustain at least `7500` completed commands per second per runtime instance, preferably `10000`, while preserving command capture, auditability, deterministic replay, and zero silent loss of accepted commands.
+
+Detailed execution plan:
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 
 ## Current Baseline
 
-Latest high-throughput local profile:
+Historical high-throughput synchronous/capacity profile:
 
 - runtime -> engine transport: gRPC
 - runtime HTTP threads: `64`
@@ -26,17 +29,27 @@ Interpretation:
 - The write path is likely dominated by synchronous boundary capture, idempotency, runtime persistence, and event/table growth.
 - Further worker/rate increases already show diminishing returns and worse p99.
 
+Current captured-ack evidence from the bot-arena scaling branch:
+- raw durable intake can exceed `7k accepted rps` in narrow local benchmarks.
+- async worker drain is currently below target: about `4k-4.3k completed/sec` at `16` workers and about `4.9k completed/sec` at `24` workers, with worsening persistence and completion latency.
+- indexed queue claims and lease reclaim fixed correctness/drain blockers, but they did not remove the remaining write-amplification ceiling.
+
+Interpretation:
+- the next capacity gate is not whether the API can accept commands.
+- the next capacity gate is whether accepted commands reach terminal state at `7500-10000 completed/sec` without unbounded backlog, unexplained gaps, or lossy overload behavior.
+
 ## Per-Instance Scaling Model
 
-The planning target is `5k` accepted requests per second for each runtime + engine instance.
+The planning target is at least `7500` completed commands per second for each runtime + engine instance, with `10000` completed commands per second as the preferred stable target.
 
 This matters because horizontal scaling should multiply a strong node, not compensate for a weak one. A scaled cluster with `N` runtime instances should be planned as roughly `N * per-instance-capacity`, with overhead reserved for routing, partition ownership, database contention, and failover.
 
 Implications:
 - performance reports must state whether throughput is per instance or cluster-wide.
-- single-instance tuning remains the primary benchmark until the `5k` target is stable.
+- single-instance tuning remains the primary benchmark until the `7500` completed/sec minimum target is stable.
 - horizontal scaling work should not hide hot-path bottlenecks in command capture, idempotency, engine calls, or runtime persistence.
 - DB slice decisions should be evaluated against per-instance pressure first, then aggregate cluster pressure.
+- accepted-command intake is a diagnostic metric; completed throughput, terminal accounting, and queue drain are the release gates.
 
 ## Guiding Constraints
 
@@ -46,6 +59,8 @@ Implications:
 2. Preserve command capture.
 - No client command should disappear after the runtime acknowledges it.
 - Any async design must define exactly where durable capture happens.
+- Any accepted command must either reach terminal `COMPLETED`/`FAILED` state or remain visible as active leased/retryable work.
+- Overload must reject or throttle before durable acceptance when the system cannot safely drain more work.
 
 3. Preserve deterministic testability.
 - Every new async/batched path needs a sync/test mode or explicit drain controls for deterministic integration tests.
@@ -56,6 +71,11 @@ Implications:
 
 5. Make every performance change measurable.
 - Each architecture slice needs before/after accepted throughput, p95/p99, top errors, and DB diagnostics.
+- High-throughput slices also need completed throughput, queue depth, drain time, stale lease count, and accepted-command accounting gap.
+
+6. Keep bot traffic on the venue path.
+- Built-in bots, market-maker bots, simulator traffic, and future user bots must use the same command/API path.
+- Bot-arena metadata, leaderboards, and replay artifacts should be isolated from the trading hot path.
 
 ## Target Architecture
 
@@ -313,21 +333,24 @@ Introduce NATS JetStream when internal queues and DB-backed processing need dist
 
 ## Target Metrics
 
-Near target:
-- `4k rps` accepted throughput per runtime instance
-- success rate `>= 95%`
+Minimum stable target:
+- `7500` completed commands/sec per runtime + engine instance in durable `captured-ack` mode
+- `0` silent drops or unexplained accepted-command gaps
+- bounded queue backlog during load
+- queue drains to zero after load stops
 - trace pass `>= 99%`
-- p99 under `750ms` in local high-load profile
+- overload is explicit rejection/throttle, not hidden loss
 
 Preferred target:
-- `5k rps` accepted throughput per runtime instance
-- success rate `>= 98%`
+- `10000` completed commands/sec per runtime + engine instance in durable `captured-ack` mode
+- `0` silent drops or unexplained accepted-command gaps
+- sustained `10-15m` run plus clean post-run drain
 - trace pass `>= 99%`
-- p99 under `500ms` in local high-load profile
+- p99 target documented per benchmark mode and not allowed to hide backlog growth
 
-Longer-term stretch:
-- `8k-10k rps` accepted throughput per runtime instance after async command pipeline and partitioned persistence
-- requires deeper command processing and write-model redesign
+Diagnostic targets:
+- raw durable intake can exceed the completed-throughput target, but it is not sufficient by itself.
+- capacity-baseline mode remains useful for isolating simulator/client/runtime overhead, not for release gating.
 
 ## Decision Gates
 
@@ -336,18 +359,16 @@ Longer-term stretch:
 3. Do not introduce NATS before Postgres outbox and idempotent consumers are designed.
 4. Do not remove synchronous mode; it remains required for deterministic tests and compatibility.
 5. Do not add indexes to hot write tables without benchmark evidence.
+6. Do not use Kubernetes scale-out to mask per-instance write amplification or accepted-command accounting gaps.
 
 ## First Sprint Recommendation
 
-Build M1 and prepare M2:
+Build the first slice from the throughput scaling work plan:
 
-1. Add runtime phase timing instrumentation.
-2. Add DB pool diagnostics to stress telemetry.
-3. Add `command_log` schema migration and storage interface.
-4. Implement command capture append path behind a mode flag.
-5. Run A/B:
-   - current tuned sync
-   - command-log append + sync result
-   - command-log append + captured ack prototype if API contract is acceptable
+1. Add run/session attribution to command-log intake.
+2. Add backlog-adjusted accounting metrics to captured-ack stress reports.
+3. Fail stress validation on accepted-command accounting gaps.
+4. Add explicit durable-intake backpressure thresholds.
+5. Implement and benchmark batched command completion.
 
-This gives evidence before committing to the larger async persistence rewrite.
+This turns the current queue/drain findings into a measurable path toward `7500-10000` completed commands/sec without weakening no-loss guarantees.

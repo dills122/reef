@@ -91,12 +91,38 @@ Current execution checkpoint before that block:
 - make command idempotency atomic, replay clocks deterministic, and `/api/v1` validation strict enough to support scenario assertions
 - add CI-backed schema-placement validation, then narrow compatibility bootstrap now that local startup runs migrations and validates migrated objects
 - run the runtime DB/JSON/HTTP library benchmark gate before committing to hot-path library swaps
+- complete the throughput scaling foundation for durable captured-ack traffic before enabling bot-arena load
 - deliver the simulator control-room MVP over existing CLI/report artifacts
 - complete venue order-state projections for submit/cancel/modify
 
 ## Major Workstreams
 
 Additional active workstream:
+
+### Workstream M: Throughput Scaling Foundation
+
+Goal:
+prepare Reef for bot-arena traffic and a basic Kubernetes deployment by reaching stable completed-throughput capacity without silent accepted-command loss.
+
+Scope:
+- durable `captured-ack` as the primary high-throughput benchmark mode
+- minimum `7500` completed commands/sec per runtime + engine instance, with `10000` preferred
+- accepted-command accounting across terminal results, active queue work, stale leases, and drain time
+- run/session attribution for stress tests, simulator runs, and future arena runs
+- durable-intake backpressure that rejects before acceptance when the system cannot safely drain
+- batched command completion and async runtime persistence to reduce write amplification
+- Kubernetes readiness, liveness, graceful shutdown, lease reclaim, and per-pod metric labeling
+
+Exit criteria:
+- no accepted-command accounting gaps in captured-ack stress reports
+- queue backlog remains bounded and drains to zero after load stops
+- per-instance throughput reaches the minimum completed-throughput target or the next bottleneck is measured
+- bot-originated traffic can use the same command/API path with run/bot attribution
+
+Primary references:
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
 ### Workstream L: Bot Arena Exploration
 

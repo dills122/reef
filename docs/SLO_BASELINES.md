@@ -55,6 +55,6 @@ Targets:
 - maintain stable error rates and acceptable latency envelopes
 
 Planning anchor:
-- product planning objective is 5,000 accepted req/s per runtime + engine instance.
-- horizontal scale-out should multiply this per-instance unit after durability, p99 latency, and success rate are stable.
-- higher single-instance throughput remains optimization upside, but 5,000 accepted req/s is the architecture target for this phase.
+- active bot-arena scaling objective is 7,500 completed commands/sec per runtime + engine instance, with 10,000 preferred.
+- accepted req/s remains a diagnostic number; release gates use completed throughput, terminal accounting, bounded backlog, and clean drain.
+- horizontal scale-out should multiply this per-instance unit after durability, p99 latency, success rate, and no-loss accounting are stable.

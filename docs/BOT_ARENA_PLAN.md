@@ -30,6 +30,7 @@ The current working direction is:
 - keep arena metadata, leaderboards, bot registry, run history, and replay indexes outside the trading hot-path database
 - use Redis only for ephemeral coordination, rate limits, leases, and live caches, not as the sole durable store for competition records
 - design the run plane for early horizontal scale by tournament run, shard, instrument group, sandbox worker, and matching-engine partition
+- inherit the throughput scaling target from [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md): at least `7500` completed commands/sec per runtime + engine instance, preferably `10000`, with zero silent accepted-command loss
 
 This direction can change, but changing it should update this document and any accepted decision records that later depend on it.
 
@@ -60,6 +61,8 @@ The arena should support specialized competitions and aggregate seasons:
 - overall ranking across multiple game modes and seed sets
 
 The game layer must not redefine Reef as a retail trading application. It should remain a controlled simulation and benchmarking surface for strategy behavior, market microstructure, and platform throughput.
+
+Arena readiness depends on completed-throughput capacity, not only request intake. Before attaching public bot traffic, Reef should prove that accepted bot-originated commands are durably captured, terminally accounted, and drained without unexplained gaps under the captured-ack stress profile.
 
 ## Architecture Fit
 

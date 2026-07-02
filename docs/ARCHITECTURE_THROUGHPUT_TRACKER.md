@@ -2,10 +2,11 @@
 
 ## Purpose
 
-Track architecture work needed to move beyond the current tuned `~3k rps` single-instance local throughput profile toward sustained `5k` accepted requests per second per runtime instance while preserving command capture, auditability, and deterministic simulation.
+Track architecture work needed to move beyond accepted-request intake toward sustained `7500` completed commands per second per runtime + engine instance, with `10000` completed commands per second as the preferred target, while preserving command capture, auditability, deterministic simulation, and zero silent loss.
 
 Primary plan:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
 
 Current measured reference:
@@ -37,9 +38,17 @@ Hot-path timing reference from the Bot Arena planning branch:
 - diagnosis: the first-order blocker is synchronous runtime persistence/write amplification under concurrency, not accumulated DB bloat alone and not matching-engine compute
 
 Scaling intent:
-- reach stable `5k` accepted rps per instance before relying on horizontal scale-out.
+- reach stable `7500` completed commands/sec per instance before relying on horizontal scale-out.
+- prefer `10000` completed commands/sec per instance if write-amplification work gets there without weakening accounting or replay.
 - use per-instance throughput as the unit that cluster capacity multiplies.
 - keep cluster-wide tests separate from single-instance ceiling and quality gates.
+- treat accepted rps as diagnostic; completed rps, queue drain, and accepted-command accounting are the release gates.
+
+Current captured-ack scaling reference from the Bot Arena planning branch:
+- raw durable intake can exceed `7k accepted rps` locally in narrow intake benchmarks.
+- async drain now avoids the earlier indexed-claim and stale-lease blockers.
+- drain sweep evidence: `4` workers about `2k completed/sec`, `8` workers about `3k completed/sec`, `16` workers about `4k-4.3k completed/sec`, and `24` workers about `4.9k completed/sec` with worse persistence/complete latency.
+- DB pools showed no waiter pressure, so the next likely bottleneck is write amplification across command completion and runtime persistence.
 
 ## Workstream Status
 
@@ -65,6 +74,13 @@ Scaling intent:
 | A18 | Command-log partitioning plan | Done | architecture | Plan chooses live lookup + partitioned archive path instead of in-place range partitioning of `commands` |
 | A19 | Async queue indexed claim | Done | performance | Loaded claim query moved from command-table sort/join to `command_work_queue(status, updated_at, command_id)` index; `LIMIT 250` probe dropped from ~1416ms to ~17ms |
 | A20 | Async queue lease reclaim | Done | reliability | Stale `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`, preventing restart-stranded commands |
+| A21 | Completed-throughput target and no-loss plan | Done | planning | Active target is now `7500` completed/sec minimum, `10000` preferred, with no accepted-command accounting gaps |
+| A22 | Run/session attribution for throughput runs | Not started | feature | Required for arena retention, replay, diagnostics, and partition/archive selection |
+| A23 | Backlog-adjusted stress accounting | Not started | feature | Reports should show accepted, terminal, active, stale, drain time, and accounting gap |
+| A24 | Durable-intake backpressure thresholds | Not started | reliability | Reject/throttle before acceptance when queue depth, lag, or lease health says the system cannot safely drain |
+| A25 | Batched command completion | Not started | performance | Reduce per-command result upsert and active-queue delete/update overhead |
+| A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
+| A27 | Bot-arena venue-path readiness | Not started | architecture | Built-in and user bots must use the same command/API path with run/bot attribution and guardrails |
 
 ## Milestone Checklist
 
@@ -142,6 +158,9 @@ Drain follow-up:
 - [ ] Add run/session attribution to command-log intake.
 - [x] Run wider `4/8/16/24` worker sweep.
 - [ ] Reduce remaining split-schema write amplification.
+- [ ] Add completed-throughput and accounting-gap fields to stress reports.
+- [ ] Add durable-intake overload thresholds that reject before acceptance.
+- [ ] Add batched terminal result and queue-completion writes.
 
 Latest async drain notes:
 - `4` workers drained about `~2k commands/sec`.
@@ -166,6 +185,8 @@ Latest async drain notes:
 
 Exit criteria:
 - `async-batched` either improves accepted throughput by `>=25%` or materially reduces p99 at equivalent throughput.
+- durable captured-ack mode reaches at least `7500` completed commands/sec or identifies the next measured bottleneck.
+- no graceful-shutdown test loses accepted commands.
 
 ### M5: Partitioning And Retention
 
@@ -211,17 +232,23 @@ Every throughput architecture PR should include:
 - [ ] Baseline command and candidate command.
 - [ ] Runtime instance count and whether the metric is per-instance or cluster-wide.
 - [ ] Accepted throughput delta.
+- [ ] Completed throughput delta.
+- [ ] Accepted-command accounting check: accepted equals terminal plus active work, with no unexplained gap.
+- [ ] Queue backlog, oldest queued age, stale lease count, and drain time after load stops.
 - [ ] p95/p99 delta.
 - [ ] Success-rate delta.
 - [ ] Trace pass rate.
 - [ ] Top reject taxonomy.
 - [ ] DB diagnostics or explanation why not applicable.
+- [ ] WAL/checkpoint and hot-table row-growth diagnostics for durable throughput runs.
 - [ ] Rollback/toggle path.
 
 Regression budget:
 - accepted throughput drop must be `<10%` unless explicitly justified.
+- completed throughput must not regress unless the PR intentionally adds correctness/backpressure and documents the tradeoff.
 - p95 increase must be `<20%` unless accepted for a higher-throughput operating point.
 - unexpected `5xx` or transport errors should remain near zero.
+- accepted-command accounting gaps must remain `0`.
 
 ## Open Decisions
 
@@ -244,19 +271,22 @@ Regression budget:
 ## Next Sprint Proposal
 
 Target:
-- M1 complete
-- M2 schema/interface complete
-- no default behavior change yet
+- completed-throughput accounting visible in captured-ack stress reports.
+- durable intake rejects before acceptance when queue health says the system cannot drain safely.
+- batched command completion ready for A/B testing against the current worker-drain ceiling.
 
 Deliverables:
-- runtime phase timing diagnostics
-- DB pool telemetry in stress reports
-- `command_log` schema/table migration
-- command log interface with tests
-- A/B baseline report using current tuned profile
+- run/session attribution in command-log intake and stress tooling
+- accepted/completed/failed/active/stale/accounting-gap metrics in stress reports
+- post-load drain measurement
+- overload threshold configuration for durable intake
+- batched terminal-result and queue-completion write path behind a flag
+- A/B report against the current captured-ack queue profile
 
 Definition of done:
 - docs updated with metrics
 - sync path remains default behavior
+- no accepted-command accounting gaps in the stress report
+- queue drains to zero after load stops or reports an explicit active/stale reason
 - all tests pass
-- stress report identifies top hot-path phase
+- stress report identifies top hot-path phase and completed-throughput bottleneck
