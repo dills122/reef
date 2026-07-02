@@ -96,6 +96,12 @@ Captured-ack profile correction:
 - with legacy boundary capture disabled, `8` async workers, run id `captured-ack-no-legacy-capture-8w-15000-384`: `64958` accepted, `4317.92 accepted rps`, p95 `127.51ms`, p99 `171.43ms`; eventual terminal `64958/64958`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `7.84ms`.
 - conclusion: duplicate legacy boundary capture was still present in the captured-ack dev profile and was a material loaded-stack bottleneck. Removing it improves the quick loaded-stack point to `~4.8k accepted rps`, but completed-throughput drain is still below the `7500` target.
 
+Captured-ack idempotency lookup reduction:
+- captured-ack now returns the accepted command status from `command_log` immediately after reservation and skips the synchronous `api.idempotency.find` path for new accepted commands. Duplicate replay remains command-log based before reservation.
+- `4` async workers, run id `captured-ack-skip-idempotency-4w-15000-384`: `73005` accepted, `4851.68 accepted rps`, p95 `106.80ms`, p99 `161.63ms`; immediate active backlog `61702`, eventual terminal `73005/73005`, `0` active, `0` gap; `api.commandCapture.reserve` averaged `7.38ms`, `api.commandLog.append` averaged `7.36ms`, and `api.idempotency.find` no longer appeared in the hot-path report.
+- `8` async workers, run id `captured-ack-skip-idempotency-8w-15000-384`: `25820` accepted, `1688.07 accepted rps`, p95 `330.82ms`, p99 `373.13ms`; immediate terminal `25820/25820`, `0` active, `0` gap; `api.commandLog.append` averaged `12.76ms`.
+- conclusion: skipping the redundant idempotency lookup improves the best 4-worker intake point and p95/p99 latency, but higher async worker counts still compete with intake on the loaded local database. Current best quick loaded-stack point is `4851.68 accepted rps` with eventual drain and `0` gap.
+
 ## Workstream Status
 
 | ID | Workstream | Status | Target Branch Type | Notes |
@@ -213,6 +219,7 @@ Drain follow-up:
 - [x] Move active command queue to recoverable unlogged storage.
 - [x] Disable duplicate legacy boundary command capture in captured-ack dev/stress profile.
 - [x] Add inner reserve timing for command-record build vs command-log append.
+- [x] Skip redundant idempotency lookup for new captured-ack accepted commands.
 - [ ] Split or slim hot command payload writes on command-log reserve.
 - [ ] Batch or defer per-command runtime persistence writes.
 
@@ -229,6 +236,7 @@ Latest batched-completion notes:
 - `api.commandCapture.reserve` reached `16.84ms avg` in the `16` worker raw-intake sample, so the next high-value slice is command-log write amplification before another worker-count sweep.
 - after making the active queue unlogged, the best quick loaded-stack raw-intake point improved to `3945.78 accepted rps` with eventual drain and `0` gap. The next measured blocker remains command-log reserve plus runtime persistence under higher worker counts.
 - after disabling duplicate legacy boundary capture in the captured-ack profile, the best quick loaded-stack point improved again to `4757.19 accepted rps`, p99 `171.11ms`, eventual drain, and `0` gap. `api.commandLog.append` now accounts for almost all reserve latency.
+- after skipping captured-ack's redundant idempotency lookup, the best quick loaded-stack point improved to `4851.68 accepted rps`, p99 `161.63ms`, eventual drain, and `0` gap. Worker-side persistence/claim pressure is now the reason higher worker counts reduce intake.
 
 ### M4: Async Batched Runtime Persistence
 

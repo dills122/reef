@@ -537,6 +537,8 @@ Summary:
 - first quick loaded-stack evidence for the unlogged active queue recovered a `3945.78 accepted rps` point with eventual `59395/59395` terminal commands and `0` accounting gap, but it is still below the `7500` completed/sec target.
 - captured-ack dev/stress profiles should disable legacy boundary command capture by default because durable command capture is already provided by `command_log.commands`; keeping both writes on the hot path reduced the quick loaded-stack point to about `1646 accepted rps`.
 - first quick loaded-stack evidence after disabling duplicate legacy capture reached `4757.19 accepted rps` with eventual `71559/71559` terminal commands and `0` accounting gap.
+- new captured-ack commands should not perform the synchronous idempotency-store lookup after command-log reservation; command-log idempotency already guards duplicate replay in this mode.
+- first quick loaded-stack evidence after skipping that redundant lookup reached `4851.68 accepted rps` with eventual `73005/73005` terminal commands and `0` accounting gap.
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)

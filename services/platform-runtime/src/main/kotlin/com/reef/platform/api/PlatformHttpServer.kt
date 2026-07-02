@@ -492,17 +492,6 @@ class PlatformHttpServer(
             return
         }
 
-        val cached = HotPathMetrics.time("api.idempotency.find") {
-            idempotencyStore.find(clientId, route, idempotencyKey)
-        }
-        if (cached != null) {
-            HotPathMetrics.time("api.commandCapture.markCompleted") {
-                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
-            }
-            writeJson(exchange, cached.status, cached.payload)
-            return
-        }
-
         if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val status = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
             if (status == null) {
@@ -521,6 +510,17 @@ class PlatformHttpServer(
             }
             val payload = CommandStatusResponse.acceptedJson(status)
             writeJson(exchange, 202, payload)
+            return
+        }
+
+        val cached = HotPathMetrics.time("api.idempotency.find") {
+            idempotencyStore.find(clientId, route, idempotencyKey)
+        }
+        if (cached != null) {
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
+            }
+            writeJson(exchange, cached.status, cached.payload)
             return
         }
 

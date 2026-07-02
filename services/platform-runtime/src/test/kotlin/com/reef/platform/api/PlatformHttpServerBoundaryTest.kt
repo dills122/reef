@@ -941,6 +941,40 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun capturedAckSkipsIdempotencyStoreForNewAcceptedCommand() {
+        val idempotencyStore = CountingIdempotencyStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            idempotencyStore = idempotencyStore
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-ack-no-idempotency"
+                ),
+                body = validSubmitBody("cmd-ack-no-idempotency", "trace-ack-no-idempotency", "ord-ack-no-idempotency")
+            )
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-ack-no-idempotency\"")
+            assertEquals(0, idempotencyStore.findCalls)
+            assertEquals(0, idempotencyStore.saveCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedModesRequireCommandStatusLookup() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
@@ -1138,7 +1172,8 @@ class PlatformHttpServerBoundaryTest {
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
         commandIntakeMaxActive: Long = 0L,
-        commandIntakeMaxStaleProcessing: Long = 0L
+        commandIntakeMaxStaleProcessing: Long = 0L,
+        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
         if (seedOrderAuthorization) {
@@ -1160,7 +1195,7 @@ class PlatformHttpServerBoundaryTest {
             api = api,
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
-            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
@@ -1348,6 +1383,26 @@ private class RecordingCommandCaptureStore : CommandCaptureStore {
         errorMessage: String
     ) {
         failedCalls++
+    }
+}
+
+private class CountingIdempotencyStore : IdempotencyStore {
+    var findCalls: Int = 0
+    var saveCalls: Int = 0
+
+    override fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult? {
+        findCalls++
+        return null
+    }
+
+    override fun save(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        result: IdempotencyResult,
+        ttlClass: IdempotencyTtlClass
+    ) {
+        saveCalls++
     }
 }
 
