@@ -116,15 +116,18 @@ class StreamCommandWorker(
             return
         }
 
-        preparedSubmits.forEach { prepared ->
-            try {
-                markPublished(prepared)
-            } catch (ex: Exception) {
+        try {
+            markPublished(preparedSubmits)
+        } catch (ex: Exception) {
+            val error = ex.message ?: ex::class.simpleName ?: "unknown"
+            preparedSubmits.forEach { prepared ->
                 safeNak(prepared.delivery)
-                StreamCommandWorkerMetrics.recordFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
-                return@forEach
+                StreamCommandWorkerMetrics.recordFailed(partition, error)
             }
+            return
+        }
 
+        preparedSubmits.forEach { prepared ->
             try {
                 prepared.delivery.ack()
                 StreamCommandWorkerMetrics.recordCompleted(partition, prepared.delivery.streamSequence)
@@ -134,14 +137,18 @@ class StreamCommandWorker(
         }
     }
 
-    private fun markPublished(prepared: PreparedStreamSubmit) {
+    private fun markPublished(preparedSubmits: List<PreparedStreamSubmit>) {
         val marker = publicationMarker ?: return
-        val marked = HotPathMetrics.time("streamWorker.markPublished") {
-            marker.markPublishedByCommandId(prepared.outcome.commandId, prepared.delivery.streamSequence)
+        val marked = HotPathMetrics.time("streamWorker.markPublishedBatch") {
+            marker.markPublishedByCommandIds(
+                preparedSubmits.map { prepared ->
+                    prepared.outcome.commandId to prepared.delivery.streamSequence
+                }
+            )
         }
-        if (!marked) {
+        if (marked != preparedSubmits.size) {
             throw IllegalStateException(
-                "stream_worker_mark_published_missing commandId=${prepared.outcome.commandId} streamSequence=${prepared.delivery.streamSequence}"
+                "stream_worker_mark_published_missing marked=$marked expected=${preparedSubmits.size}"
             )
         }
     }
@@ -204,7 +211,8 @@ class NatsStreamCommandSource(
     private val partition: Int,
     private val filterSubject: String,
     private val durableName: String,
-    private val ackWait: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_WORKER_ACK_WAIT_MS", 30_000L, min = 1_000L))
+    private val ackWait: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_WORKER_ACK_WAIT_MS", 30_000L, min = 1_000L)),
+    private val maxAckPending: Long = RuntimeEnv.long("STREAM_ACK_WORKER_MAX_ACK_PENDING", 1_000L, min = 1L)
 ) : StreamCommandSource, StreamCommandTelemetrySource {
     private val connection by lazy {
         val options = Options.Builder()
@@ -236,6 +244,7 @@ class NatsStreamCommandSource(
                 .filterSubject(filterSubject)
                 .ackPolicy(AckPolicy.Explicit)
                 .ackWait(ackWait)
+                .maxAckPending(maxAckPending)
                 .build()
             val options = PullSubscribeOptions.builder()
                 .stream(config.streamName)

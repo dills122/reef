@@ -397,7 +397,7 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     const phases = afterHotPath?.json?.metrics?.phases ?? {};
     const streamAckPhases = Object.fromEntries(
       Object.entries(phases)
-        .filter(([name]) => name.startsWith("api.streamAck."))
+        .filter(([name]) => name.startsWith("api.streamAck.") || name.startsWith("streamWorker."))
         .sort(([left], [right]) => left.localeCompare(right)),
     );
     report.streamAckApiPhases = {
@@ -410,11 +410,12 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     const reserve = streamAckPhases["api.streamAck.reserve"];
     const publishAck = streamAckPhases["api.streamAck.publishAck"];
     const markPublished = streamAckPhases["api.streamAck.markPublished"];
+    const markPublishedBatch = streamAckPhases["streamWorker.markPublishedBatch"];
     const enqueuePublished = streamAckPhases["api.streamAck.enqueuePublished"];
     const asyncFlush = streamAckPhases["api.streamAck.markPublished.asyncFlush"];
-    if (total || reserve || publishAck || markPublished || enqueuePublished) {
+    if (total || reserve || publishAck || markPublished || markPublishedBatch || enqueuePublished) {
       console.log(
-        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
+        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} workerMarkPublishedBatchAvg=${formatPhaseAvg(markPublishedBatch)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
       );
     }
   } catch (error) {

@@ -38,6 +38,8 @@ private fun streamCommandPublicationMarker(
     val marker = store ?: return null
     return when (mode.trim().lowercase()) {
         "async" -> if (runtimeRole == PlatformRuntimeRole.Api) AsyncStreamCommandPublicationMarker(marker) else marker
+        "worker", "defer-to-worker", "worker-only" -> if (runtimeRole == PlatformRuntimeRole.Api) null else marker
+        "none", "disabled" -> null
         else -> marker
     }
 }

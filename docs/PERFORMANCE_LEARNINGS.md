@@ -90,6 +90,14 @@ Highest-value fixes after the next ablations:
    - JetStream as the canonical event log and Postgres as projection/query storage is a reserve option only if compact canonical Postgres append remains the ceiling
    - adopting that option would require a new architecture decision, retention/replay/checksum requirements, and an updated audit/query story
 
+First batch fix applied before the next DO soak:
+
+1. Remove duplicate API-side publish-marker DB pressure from the stream-ack throughput profile.
+2. Batch worker publish-marker repair before JetStream ack.
+3. Stop duplicating submit lifecycle events into per-event canonical rows in throughput mode; keep the full outcome payload in canonical command results.
+4. Avoid nonessential canonical query indexes in throughput mode.
+5. Raise worker/projector batch and ack-pending headroom together so the next run tests a meaningfully different drain shape.
+
 ## Runtime Library Investigation Priorities
 
 Before swapping libraries, benchmark candidates against Reef's actual command, persistence, and simulator workloads.

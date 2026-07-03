@@ -81,6 +81,11 @@ sealed class StreamCommandReservation {
 
 interface StreamCommandPublicationMarker {
     fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean
+    fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
+        return commands.count { (commandId, streamSequence) ->
+            markPublishedByCommandId(commandId, streamSequence)
+        }
+    }
 }
 
 interface StreamCommandIntakeStore : StreamCommandPublicationMarker {
@@ -142,6 +147,21 @@ class InMemoryStreamCommandIntakeStore : StreamCommandIntakeStore {
             val published = existing.reference.copy(streamSequence = streamSequence)
             byIdempotency[key] = existing.copy(reference = published)
             return true
+        }
+    }
+
+    override fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
+        if (commands.isEmpty()) return 0
+        synchronized(this) {
+            var marked = 0
+            commands.forEach { (commandId, streamSequence) ->
+                val key = byCommandId[commandId] ?: return@forEach
+                val existing = byIdempotency[key] ?: return@forEach
+                val published = existing.reference.copy(streamSequence = streamSequence)
+                byIdempotency[key] = existing.copy(reference = published)
+                marked += 1
+            }
+            return marked
         }
     }
 
@@ -254,11 +274,64 @@ class PostgresStreamCommandIntakeStore(
                     published = TRUE,
                     published_at = COALESCE(published_at, NOW())
                 WHERE command_id = ?
+                  AND (stream_sequence = 0 OR published = FALSE)
                 """.trimIndent()
             ).use { ps ->
                 ps.setLong(1, streamSequence)
                 ps.setString(2, commandId)
-                return ps.executeUpdate() > 0
+                if (ps.executeUpdate() > 0) return true
+            }
+            conn.prepareStatement(
+                """
+                SELECT 1
+                FROM ${names.streamCommandIntake}
+                WHERE command_id = ?
+                  AND stream_sequence > 0
+                  AND published = TRUE
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs -> return rs.next() }
+            }
+        }
+    }
+
+    override fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
+        if (commands.isEmpty()) return 0
+        val payload = commands.joinToString(prefix = "[", postfix = "]") { (commandId, streamSequence) ->
+            """{"commandId":"${escapeJson(commandId)}","streamSequence":$streamSequence}"""
+        }
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                WITH updates AS (
+                  SELECT
+                    item->>'commandId' AS command_id,
+                    COALESCE((item->>'streamSequence')::BIGINT, 0) AS stream_sequence
+                  FROM jsonb_array_elements(?::jsonb) AS item
+                ),
+                updated AS (
+                  UPDATE ${names.streamCommandIntake} intake
+                  SET stream_sequence = CASE WHEN intake.stream_sequence = 0 THEN updates.stream_sequence ELSE intake.stream_sequence END,
+                      published = TRUE,
+                      published_at = COALESCE(intake.published_at, NOW())
+                  FROM updates
+                  WHERE intake.command_id = updates.command_id
+                    AND (intake.stream_sequence = 0 OR intake.published = FALSE)
+                  RETURNING intake.command_id
+                )
+                SELECT COUNT(*)::BIGINT AS marked
+                FROM ${names.streamCommandIntake} intake
+                JOIN updates ON updates.command_id = intake.command_id
+                WHERE intake.stream_sequence > 0
+                  AND intake.published = TRUE
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, payload)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getLong("marked").toInt()
+                }
             }
         }
     }
@@ -363,6 +436,21 @@ class AsyncStreamCommandPublicationMarker(
         if (queued) return true
         return HotPathMetrics.time("api.streamAck.markPublished.queueFullSync") {
             delegate.markPublishedByCommandId(commandId, streamSequence)
+        }
+    }
+}
+
+private fun escapeJson(value: String): String {
+    return buildString(value.length + 8) {
+        value.forEach { ch ->
+            when (ch) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(ch)
+            }
         }
     }
 }

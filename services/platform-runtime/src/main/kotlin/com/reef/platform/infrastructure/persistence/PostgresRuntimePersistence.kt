@@ -12,6 +12,7 @@ import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import java.sql.Connection
 import java.sql.PreparedStatement
 import javax.sql.DataSource
@@ -22,6 +23,11 @@ class PostgresRuntimePersistence(
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
     private val projectionDataSource: DataSource = dataSource
 ) : RuntimePersistence {
+    private val streamAckCanonicalEventRowsEnabled: Boolean =
+        RuntimeEnv.bool("STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED", true)
+    private val streamAckCanonicalQueryIndexesEnabled: Boolean =
+        RuntimeEnv.bool("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED", true)
+
     private data class ProjectionCandidate(
         val partitionId: Int,
         val partitionSequence: Long,
@@ -254,12 +260,14 @@ class PostgresRuntimePersistence(
                     ON ${names.canonicalCommandResults}(partition_id, partition_seq)
                     """.trimIndent()
                 )
-                stmt.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_canonical_command_results_run_session
-                    ON ${names.canonicalCommandResults}(run_id, venue_session_id, partition_id, partition_seq)
-                    """.trimIndent()
-                )
+                if (streamAckCanonicalQueryIndexesEnabled) {
+                    stmt.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_canonical_command_results_run_session
+                        ON ${names.canonicalCommandResults}(run_id, venue_session_id, partition_id, partition_seq)
+                        """.trimIndent()
+                    )
+                }
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEvents} (
@@ -281,18 +289,20 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
-                stmt.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_partition_seq
-                    ON ${names.canonicalVenueEvents}(partition_id, event_seq)
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_run_session
-                    ON ${names.canonicalVenueEvents}(run_id, venue_session_id, partition_id, event_seq)
-                    """.trimIndent()
-                )
+                if (streamAckCanonicalEventRowsEnabled && streamAckCanonicalQueryIndexesEnabled) {
+                    stmt.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_partition_seq
+                        ON ${names.canonicalVenueEvents}(partition_id, event_seq)
+                        """.trimIndent()
+                    )
+                    stmt.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_run_session
+                        ON ${names.canonicalVenueEvents}(run_id, venue_session_id, partition_id, event_seq)
+                        """.trimIndent()
+                    )
+                }
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.projectionWatermarks} (
@@ -403,7 +413,7 @@ class PostgresRuntimePersistence(
                         FROM outcomes
                         CROSS JOIN LATERAL jsonb_array_elements(
                           CASE
-                            WHEN jsonb_typeof(outcome->'events') = 'array' THEN outcome->'events'
+                            WHEN $streamAckCanonicalEventRowsEnabled AND jsonb_typeof(outcome->'events') = 'array' THEN outcome->'events'
                             ELSE '[]'::jsonb
                           END
                         ) WITH ORDINALITY AS event_rows(event, event_ordinality)

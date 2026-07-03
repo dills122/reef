@@ -250,6 +250,17 @@ Use the ablation results to choose implementation work in this order:
 
 If compact canonical Postgres append still caps completed throughput around `1k-2k/sec`, evaluate a separate architecture decision for a retained JetStream canonical event stream with Postgres as async projection/query storage. Do not make that pivot implicitly during benchmark tuning.
 
+## Current Fix Batch Before Next Soak
+
+The next DO soak should not rerun the failed shape. This branch applies a batch fix across the substantiated failure spots from the `7500/384/5m` run:
+
+- API publish-marker pressure: `STREAM_ACK_MARK_PUBLISHED_MODE=worker` removes the duplicate API-side post-publish DB update from the throughput profile while preserving `202` after JetStream publish ack.
+- Worker publish repair: workers mark intake rows published in one batch before acking deliveries instead of one DB update per command.
+- Canonical write amplification: stream-ack throughput defaults keep full submit outcomes in `canonical_command_results.result_payload` but stop duplicating every lifecycle event into `canonical_venue_events` rows.
+- Hot canonical indexes: stream-ack throughput defaults avoid broader query indexes on canonical append tables; projection still keeps the partition/sequence index it needs.
+- Drain headroom: worker batch, ack wait, max ack-pending, projector batch, and projector poll defaults are raised together to reduce commits and avoid tiny in-flight ceilings.
+- Evidence: stress reports include worker batch publish-repair timing so the next run shows whether this path remains hot.
+
 ## OpenTofu Harness Plan
 
 Add an intentionally small stack under something like:
