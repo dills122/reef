@@ -1132,6 +1132,114 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun streamAckHealthEndpointReturnsStreamSnapshot() {
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = RecordingStreamCommandPublisher(),
+            streamCommandHealthCheck = FixedStreamCommandHealthCheck(
+                StreamCommandHealthSnapshot(
+                    available = true,
+                    streamName = "REEF_COMMANDS",
+                    messageCount = 3,
+                    byteCount = 512,
+                    maxBytes = 1024,
+                    storageUtilization = 0.5,
+                    publishAckLastMs = 7,
+                    publishAckMaxMs = 11
+                )
+            )
+        )
+        try {
+            val response = get(server.address.port, "/internal/stream-ack/health")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"available\":true")
+            assertContains(response.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(response.body, "\"stream\":\"REEF_COMMANDS\"")
+            assertContains(response.body, "\"messages\":3")
+            assertContains(response.body, "\"storageUtilization\":0.5")
+            assertContains(response.body, "\"publishAckLastMs\":7")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckRejectsBeforePublishWhenStreamHealthUnavailable() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher,
+            streamCommandHealthCheck = FixedStreamCommandHealthCheck(
+                StreamCommandHealthSnapshot(
+                    available = false,
+                    streamName = "REEF_COMMANDS",
+                    error = "stream not found"
+                )
+            )
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-health-down"
+                ),
+                body = validSubmitBody("cmd-stream-health-down", "trace-stream-health-down", "ord-stream-health-down", extra = streamRoutingExtra())
+            )
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"code\":\"STREAM_COMMAND_STREAM_UNAVAILABLE\"")
+            assertEquals(0, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckRejectsBeforePublishWhenStreamStorageIsOverThreshold() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher,
+            streamCommandHealthCheck = FixedStreamCommandHealthCheck(
+                StreamCommandHealthSnapshot(
+                    available = true,
+                    streamName = "REEF_COMMANDS",
+                    byteCount = 950,
+                    maxBytes = 1000,
+                    storageUtilization = 0.95
+                )
+            ),
+            streamCommandMaxStorageUtilization = 0.90
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-storage-full"
+                ),
+                body = validSubmitBody("cmd-stream-storage-full", "trace-stream-storage-full", "ord-stream-storage-full", extra = streamRoutingExtra())
+            )
+
+            assertEquals(429, response.status)
+            assertContains(response.body, "\"code\":\"STREAM_COMMAND_BACKPRESSURE\"")
+            assertEquals(0, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedModesRequireCommandStatusLookup() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
@@ -1334,7 +1442,9 @@ class PlatformHttpServerBoundaryTest {
         idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore(),
         streamCommandIntakeStore: StreamCommandIntakeStore? = null,
         streamCommandPublisher: StreamCommandPublisher? = null,
-        streamCommandConfig: StreamCommandConfig = StreamCommandConfig()
+        streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
+        streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
+        streamCommandMaxStorageUtilization: Double = 0.95
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
         if (seedOrderAuthorization) {
@@ -1362,7 +1472,9 @@ class PlatformHttpServerBoundaryTest {
             commandStatusLookup = captureStore as? CommandStatusLookup,
             streamCommandIntakeStore = streamCommandIntakeStore,
             streamCommandPublisher = streamCommandPublisher,
+            streamCommandHealthCheck = streamCommandHealthCheck,
             streamCommandConfig = streamCommandConfig,
+            streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
@@ -1587,6 +1699,12 @@ private class RecordingStreamCommandPublisher(
         }
         return StreamPublishAck("REEF_COMMANDS", published.size.toLong())
     }
+}
+
+private class FixedStreamCommandHealthCheck(
+    private val snapshot: StreamCommandHealthSnapshot
+) : StreamCommandHealthCheck {
+    override fun snapshot(): StreamCommandHealthSnapshot = snapshot
 }
 
 private class StaticAcceptedEngineGateway : EngineGateway {

@@ -29,7 +29,10 @@ class PlatformHttpServer(
     private val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     private val streamCommandIntakeStore: StreamCommandIntakeStore? = null,
     private val streamCommandPublisher: StreamCommandPublisher? = null,
+    private val streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
     private val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
+    private val streamCommandMaxStorageUtilization: Double =
+        RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -65,7 +68,9 @@ class PlatformHttpServer(
         capturedCommandQueue = deps.capturedCommandQueue,
         streamCommandIntakeStore = deps.streamCommandIntakeStore,
         streamCommandPublisher = deps.streamCommandPublisher,
+        streamCommandHealthCheck = deps.streamCommandHealthCheck,
         streamCommandConfig = deps.streamCommandConfig,
+        streamCommandMaxStorageUtilization = deps.streamCommandMaxStorageUtilization,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -120,6 +125,14 @@ class PlatformHttpServer(
                 return@createContext
             }
             writeJson(exchange, 200, commandAccountingJson(queryValue(exchange, "runId")))
+        }
+
+        server.createContext("/internal/stream-ack/health") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, streamCommandHealthJson())
         }
 
         server.createContext("/api/v1/commands/") { exchange ->
@@ -630,6 +643,12 @@ class PlatformHttpServer(
             return
         }
 
+        val streamBackpressure = streamCommandBackpressure()
+        if (streamBackpressure != null) {
+            writeJson(exchange, streamBackpressure.status, boundary.toErrorJson(streamBackpressure, correlationId))
+            return
+        }
+
         val initialReference = envelope.reference(streamCommandConfig.streamName)
         val reservation = try {
             intakeStore.reserve(envelope, initialReference)
@@ -840,6 +859,29 @@ class PlatformHttpServer(
         return null
     }
 
+    private fun streamCommandBackpressure(): BoundaryError? {
+        val health = streamCommandHealthCheck?.snapshot() ?: return null
+        if (!health.available) {
+            return BoundaryError(
+                503,
+                "STREAM_COMMAND_STREAM_UNAVAILABLE",
+                "stream command intake rejected because ${health.streamName} is unavailable"
+            )
+        }
+        if (
+            streamCommandMaxStorageUtilization > 0.0 &&
+            health.maxBytes > 0L &&
+            health.storageUtilization >= streamCommandMaxStorageUtilization
+        ) {
+            return BoundaryError(
+                429,
+                "STREAM_COMMAND_BACKPRESSURE",
+                "stream command intake rejected because storage utilization is ${health.storageUtilization}"
+            )
+        }
+        return null
+    }
+
     private fun commandIntakeBackpressureSnapshot(queue: CapturedCommandQueue): CommandIntakeBackpressureSnapshot {
         val now = System.currentTimeMillis()
         backpressureSnapshot?.let { cached ->
@@ -919,6 +961,32 @@ class PlatformHttpServer(
             }
         )
     }
+
+    private fun streamCommandHealthJson(): String {
+        val snapshot = streamCommandHealthCheck?.snapshot()
+        if (snapshot == null) {
+            return JsonCodec.writeObject(
+                "available" to false,
+                "processingMode" to commandProcessingMode.configValue,
+                "stream" to streamCommandConfig.streamName,
+                "error" to "stream command health unavailable"
+            )
+        }
+        return JsonCodec.writeObject(
+            "available" to snapshot.available,
+            "processingMode" to commandProcessingMode.configValue,
+            "stream" to snapshot.streamName,
+            "messages" to snapshot.messageCount,
+            "bytes" to snapshot.byteCount,
+            "maxBytes" to snapshot.maxBytes,
+            "storageUtilization" to snapshot.storageUtilization,
+            "maxStorageUtilization" to streamCommandMaxStorageUtilization,
+            "publishAckLastMs" to snapshot.publishAckLastMs,
+            "publishAckMaxMs" to snapshot.publishAckMaxMs,
+            "checkedAt" to snapshot.checkedAt.toString(),
+            "error" to snapshot.error
+        )
+    }
 }
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
@@ -926,6 +994,11 @@ private const val LEGACY_INTERNAL_ROUTE_HEADER = "X-Reef-Internal-Route"
 
 private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
+    val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
+        StreamCommandIntakeFactory.defaultPublisher()
+    } else {
+        null
+    }
     return ServerBoundaryDeps(
         boundary = ExternalApiBoundary(
             authHook = hooks.authHook,
@@ -942,11 +1015,8 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         } else {
             null
         },
-        streamCommandPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
-            StreamCommandIntakeFactory.defaultPublisher()
-        } else {
-            null
-        },
+        streamCommandPublisher = streamPublisher,
+        streamCommandHealthCheck = streamPublisher as? StreamCommandHealthCheck,
         streamCommandConfig = StreamCommandConfig(),
         commandProcessingMode = hooks.commandProcessingMode
     )
@@ -962,6 +1032,9 @@ data class ServerBoundaryDeps(
     val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     val streamCommandIntakeStore: StreamCommandIntakeStore? = null,
     val streamCommandPublisher: StreamCommandPublisher? = null,
+    val streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
     val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
+    val streamCommandMaxStorageUtilization: Double =
+        RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

@@ -330,7 +330,7 @@ Exit criteria:
 - [x] Define stream-ack command envelope and protobuf/contract updates.
 - [x] Define deterministic partition key and subject builder.
 - [x] Add local NATS/JetStream dev profile and stream bootstrap.
-- [ ] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry.
+- [ ] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry. Stream health and publish-ack latency are present; partition lag and oldest age need the worker consumer.
 - [x] Implement `stream-ack` API mode behind a flag.
 - [x] Add scoped idempotency guard with payload-hash conflict behavior.
 - [ ] Add partition worker that preserves per-partition ordering.

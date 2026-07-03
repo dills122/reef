@@ -14,6 +14,7 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.sql.DataSource
 import kotlin.math.max
 
@@ -311,11 +312,30 @@ interface StreamCommandPublisher {
     fun publish(envelope: StreamCommandEnvelope): StreamPublishAck
 }
 
+data class StreamCommandHealthSnapshot(
+    val available: Boolean,
+    val streamName: String,
+    val messageCount: Long = 0L,
+    val byteCount: Long = 0L,
+    val maxBytes: Long = 0L,
+    val storageUtilization: Double = 0.0,
+    val publishAckLastMs: Long = 0L,
+    val publishAckMaxMs: Long = 0L,
+    val checkedAt: Instant = Instant.now(),
+    val error: String = ""
+)
+
+interface StreamCommandHealthCheck {
+    fun snapshot(): StreamCommandHealthSnapshot
+}
+
 class NatsJetStreamCommandPublisher(
     private val natsUrl: String = RuntimeEnv.string("STREAM_ACK_NATS_URL", "nats://localhost:4222"),
     private val ackTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", 2_000L, min = 1L)),
     private val config: StreamCommandConfig = StreamCommandConfig()
-) : StreamCommandPublisher {
+) : StreamCommandPublisher, StreamCommandHealthCheck {
+    private val lastPublishAckMs = AtomicLong(0L)
+    private val maxPublishAckMs = AtomicLong(0L)
     private val connection by lazy {
         val options = Options.Builder()
             .server(natsUrl)
@@ -332,11 +352,47 @@ class NatsJetStreamCommandPublisher(
             .headers(headers)
             .data(envelope.payloadJson.toByteArray(Charsets.UTF_8))
             .build()
+        val started = System.nanoTime()
         val ack = jetStream.publish(message)
+        val elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
+        lastPublishAckMs.set(elapsedMs)
+        maxPublishAckMs.accumulateAndGet(elapsedMs, ::maxOf)
         return StreamPublishAck(
             streamName = ack.stream ?: config.streamName,
             streamSequence = ack.seqno
         )
+    }
+
+    override fun snapshot(): StreamCommandHealthSnapshot {
+        return try {
+            val info = connection.jetStreamManagement().getStreamInfo(config.streamName)
+            val state = info.streamState
+            val maxBytes = info.configuration.maxBytes
+            val byteCount = state.byteCount
+            StreamCommandHealthSnapshot(
+                available = true,
+                streamName = config.streamName,
+                messageCount = state.msgCount,
+                byteCount = byteCount,
+                maxBytes = maxBytes,
+                storageUtilization = storageUtilization(byteCount, maxBytes),
+                publishAckLastMs = lastPublishAckMs.get(),
+                publishAckMaxMs = maxPublishAckMs.get()
+            )
+        } catch (ex: Exception) {
+            StreamCommandHealthSnapshot(
+                available = false,
+                streamName = config.streamName,
+                publishAckLastMs = lastPublishAckMs.get(),
+                publishAckMaxMs = maxPublishAckMs.get(),
+                error = ex.message ?: "unknown"
+            )
+        }
+    }
+
+    private fun storageUtilization(byteCount: Long, maxBytes: Long): Double {
+        if (maxBytes <= 0L) return 0.0
+        return byteCount.toDouble() / maxBytes.toDouble()
     }
 }
 

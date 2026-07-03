@@ -177,10 +177,13 @@ make dev-up-stream-ack
 - `STREAM_ACK_SUBJECT_PREFIX=reef.cmd.v1`
 - `STREAM_ACK_PARTITION_COUNT=16`
 - `STREAM_ACK_INTAKE_STORE=postgres`
+- `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
 
 In this mode the API returns `202` only after JetStream publish acknowledgment. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
+
+Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. Partition lag and oldest-unprocessed age are added with the partition worker/consumer slice.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`

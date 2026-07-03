@@ -267,5 +267,7 @@ The first stream-ack slice is implemented behind `EXTERNAL_API_COMMAND_PROCESSIN
 - same key and same payload replays the accepted stream reference
 - same key and different payload returns `409`
 - `make dev-up-stream-ack` starts the local JetStream profile and bootstraps the retained command stream
+- `/internal/stream-ack/health` reports command stream availability, stream bytes/messages, storage utilization, and publish-ack latency watermarks
+- the API rejects before publish when the command stream is unavailable or stream storage utilization exceeds the configured threshold
 
 The partition worker, stream lag telemetry, redelivery-safe canonical DB commit path, and replay checksum tests remain follow-up work.
