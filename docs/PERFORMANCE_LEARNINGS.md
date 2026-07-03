@@ -113,13 +113,22 @@ Accepted-async no-DB evidence:
 - raising load workers from `512` to `1024` at the selected `64` window reduced throughput to `8320.41/sec` and raised `p95` to `236.84ms`, so the remaining accepted-async ceiling is not simply too few load-generator workers
 - default accepted-async in-flight is therefore `64` per lane for the current no-DB isolation path; `128` did not improve accept throughput and materially worsened engine wait
 
+Netty hot-path no-DB evidence:
+
+- `/tmp/reef-runtime-nodb-netty-accepted-async-w64-15k-30s/runtime-nodb-netty-accepted-async-w64-15k-30s-rate-15000-workers-512.json`
+- config: `PLATFORM_HTTP_SERVER=netty`, `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64`, `ENGINE_TRANSPORT=grpc-stream`, `16` stream lanes, `512` load workers, `30s`
+- result: `449926` successful `202` responses, `14996.88/sec`, `100%` success, `p50=3.02ms`, `p95=20.55ms`, `p99=46.57ms`
+- schedule target was `450000`; the run missed only `74` completions with no failures or generated-load drops
+- hot-path telemetry: `api.mutation.total avg=0.04ms`, `runtime.engine.submit avg=7.20ms`
+- a shorter 15s confirmation also hit the target: `14987.25/sec`, `100%` success, `p95=61.79ms`, `p99=113.62ms`
+
 Immediate implications:
 
 1. Keep the heap-backed price-time book structure; sorted-slice resting-order insertion is not a safe base for growing-book stress.
-2. Do not keep tuning HTTP thread count as the main path to `15k/sec`; the synchronous request/response runtime-to-engine path is the remaining no-DB ceiling.
-3. Accepted-async proves the API hot path can stop waiting on engine completion, but the local JDK `HttpServer`/load-generator boundary still tops out around `10k-12k/sec` on this workstation before the background engine workers become the only limiter.
+2. Do not keep tuning JDK `HttpServer` thread count as the main path to `15k/sec`; the Netty hot-path adapter removed the previous local front-door ceiling for accepted-async no-DB runs.
+3. Accepted-async plus Netty proves the API hot path can accept submit commands at the `15k/sec` target on this workstation when DB writes are excluded. This is still not durable acceptance and must not be confused with the production ingress target.
 4. Keep accepted-async worker in-flight bounded. The Compose/runtime defaults now expose `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64`; tune from there with telemetry instead of using unbounded or very large stream windows.
-5. The next non-DB architecture move should either replace the JDK `HttpServer`/sync handler shape with a measured async runtime boundary, or move the no-DB stress harness closer to the runtime process to separate HTTP front-door capacity from command lifecycle capacity.
+5. A flagged Netty hot-path adapter now exists behind `PLATFORM_HTTP_SERVER=netty` to isolate the JDK `HttpServer` boundary. Treat it as a benchmark adapter until the measured no-DB evidence justifies expanding its route surface.
 
 ## Stream-Ack Post-Soak Optimization Priorities
 

@@ -327,6 +327,12 @@ Transport comparison knobs:
 - `ENGINE_GRPC_STREAM_LANES=16` sets the number of runtime submit lanes. Commands currently route by `instrumentId`; this should evolve to `venueSessionId + instrumentId` when the runtime command model carries venue session directly.
 - `ENGINE_GRPC_STREAM_QUEUE_CAPACITY=100000` sets each lane in-flight capacity.
 
+HTTP boundary comparison knobs:
+
+- `PLATFORM_HTTP_SERVER=jdk` keeps the default JDK `HttpServer` adapter and full local route surface.
+- `PLATFORM_HTTP_SERVER=netty` enables the measured Netty hot-path adapter. This adapter intentionally covers the no-DB ceiling-test surface first: setup POSTs for reference/auth seeding, `/health`, `/api/v1/orders/submit`, `/api/v1/commands/{commandId}`, `/internal/perf/hot-path`, `/internal/perf/db-pools`, `/internal/commands/async/stats`, stream-ack/projector status probes, and abuse stats.
+- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, and `PLATFORM_NETTY_APPLICATION_THREADS=64` tune the Netty adapter. A worker count of `0` uses Netty's default event-loop sizing, while application threads run the hot-path command handler off the IO event loop.
+
 Accepted-async no-DB isolation knobs:
 
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async` makes submit-order intake return a `202` command receipt after validation, idempotency reservation, and in-memory lane enqueue. It does not provide durable acceptance and is benchmark-only unless paired with a durable ingress design.
@@ -573,6 +579,7 @@ Compose sets:
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, durable request payloads in `command_log.command_payloads`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
 - command-log payload mode: `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table|inline` (default `side-table`). `side-table` keeps hot command metadata rows narrow while retaining the full durable request payload for worker replay.
 - runtime role: `PLATFORM_RUNTIME_ROLE=api|worker|projector`. Compose sets this per service; there is no all-in-one runtime role.
+- HTTP server adapter: `PLATFORM_HTTP_SERVER=jdk|netty` (default `jdk`). `netty` is currently a hot-path benchmark adapter for submit/status/internal stats, not a full replacement for every local route.
 - command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
 - async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`

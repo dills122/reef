@@ -20,6 +20,7 @@ console.log(`  idempotencyStore=${env("EXTERNAL_API_IDEMPOTENCY_STORE")}`);
 console.log(`  commandCapture=${env("EXTERNAL_API_COMMAND_CAPTURE_MODE")}`);
 console.log(`  commandLog=${env("EXTERNAL_API_COMMAND_LOG_MODE")}`);
 console.log(`  processingMode=${env("EXTERNAL_API_COMMAND_PROCESSING_MODE")}`);
+console.log(`  httpServer=${env("PLATFORM_HTTP_SERVER", "jdk")}`);
 console.log(`  streamIntakeStore=${env("STREAM_ACK_INTAKE_STORE")}`);
 console.log(`  streamWorker=${env("STREAM_ACK_WORKER_ENABLED")}`);
 console.log(`  streamProjector=${env("STREAM_ACK_PROJECTOR_ENABLED")}`);

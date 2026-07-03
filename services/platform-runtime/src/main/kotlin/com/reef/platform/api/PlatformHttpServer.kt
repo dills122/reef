@@ -6,6 +6,7 @@ import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import com.sun.net.httpserver.Headers
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
@@ -28,6 +29,20 @@ private data class CachedStreamCommandHealthSnapshot(
 private data class CachedStreamCommandDrainBackpressureSnapshot(
     val sampledAtMs: Long,
     val snapshot: StreamCommandDrainBackpressureSnapshot
+)
+
+internal data class PlatformHotPathRequest(
+    val method: String,
+    val path: String,
+    val query: String?,
+    val headers: Headers,
+    val body: String = ""
+)
+
+internal data class PlatformHotPathResponse(
+    val status: Int,
+    val body: String = "",
+    val contentType: String? = "application/json"
 )
 
 private fun streamCommandPublicationMarker(
@@ -459,6 +474,12 @@ class PlatformHttpServer(
         }
 
         server.start()
+        startRuntimeLoops()
+        println("platform-runtime role=${runtimeRole.configValue} listening on :$port")
+        return server
+    }
+
+    internal fun startRuntimeLoops() {
         if (runtimeRole.backgroundWorkersEnabled && asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val queue = capturedCommandQueue
             if (queue == null) {
@@ -488,8 +509,6 @@ class PlatformHttpServer(
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.AcceptedAsync) {
             acceptedAsyncCommandIntake?.start()
         }
-        println("platform-runtime role=${runtimeRole.configValue} listening on :$port")
-        return server
     }
 
     private fun asyncCommandWorkerApi(): PlatformApi {
@@ -522,6 +541,79 @@ class PlatformHttpServer(
     private fun methodNotAllowed(exchange: HttpExchange) {
         exchange.sendResponseHeaders(405, -1)
         exchange.close()
+    }
+
+    internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
+        return when {
+            request.path == "/health" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, api.health())
+            }
+            request.path == "/internal/boundary/abuse/stats" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, abuseStatsJson(abuseProtectionHook.stats()))
+            }
+            request.path == "/internal/perf/hot-path" -> {
+                when (request.method) {
+                    "GET" -> PlatformHotPathResponse(200, JsonCodec.writeObject("metrics" to HotPathMetrics.snapshot()))
+                    "POST" -> {
+                        HotPathMetrics.reset()
+                        PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "reset"))
+                    }
+                    else -> methodNotAllowedResponse()
+                }
+            }
+            request.path == "/internal/perf/db-pools" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, dbPoolStatsJson())
+            }
+            request.path == "/internal/commands/async/stats" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, asyncCommandStatsJson())
+            }
+            request.path == "/internal/commands/accounting" -> {
+                if (request.method != "GET") {
+                    methodNotAllowedResponse()
+                } else {
+                    PlatformHotPathResponse(200, commandAccountingJson(queryValue(request.query, "runId")))
+                }
+            }
+            request.path == "/internal/stream-ack/health" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, streamCommandHealthJson())
+            }
+            request.path == "/internal/stream-ack/worker/stats" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, streamCommandWorkerStatsJson())
+            }
+            request.path == "/internal/projector/status" -> {
+                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, projectorStatusJson())
+            }
+            request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
+            request.path == "/api/v1/orders/submit" -> {
+                handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body ->
+                    api.submitOrder(body)
+                }
+            }
+            request.path == "/reference/instruments" -> {
+                handleLegacySetupRequest(request, postOperation = { body -> api.createInstrument(body) }, getOperation = { api.instruments() })
+            }
+            request.path == "/reference/participants" -> {
+                handleLegacySetupRequest(request, postOperation = { body -> api.createParticipant(body) }, getOperation = { api.participants() })
+            }
+            request.path == "/reference/accounts" -> {
+                handleLegacySetupRequest(request, postOperation = { body -> api.createAccount(body) }, getOperation = { api.accounts() })
+            }
+            request.path == "/auth/roles" -> {
+                handleLegacySetupRequest(request, postOperation = { body -> api.createRole(body) }, getOperation = { api.roles() })
+            }
+            request.path == "/auth/actor-roles" -> {
+                handleLegacySetupRequest(
+                    request,
+                    postOperation = { body -> api.assignRole(body) },
+                    getOperation = { api.actorRoles(queryValue(request.query, "actorId")) }
+                )
+            }
+            else -> null
+        }
+    }
+
+    private fun methodNotAllowedResponse(): PlatformHotPathResponse {
+        return PlatformHotPathResponse(status = 405, body = "", contentType = null)
     }
 
     private fun simpleErrorJson(error: String, message: String? = null): String {
@@ -594,6 +686,11 @@ class PlatformHttpServer(
 
     private fun queryValue(exchange: HttpExchange, key: String): String {
         val query = exchange.requestURI.query ?: return ""
+        return queryValue(query, key)
+    }
+
+    private fun queryValue(query: String?, key: String): String {
+        if (query.isNullOrBlank()) return ""
         val values = query.split("&")
         for (value in values) {
             val parts = value.split("=", limit = 2)
@@ -606,6 +703,10 @@ class PlatformHttpServer(
 
     private fun correlationId(exchange: HttpExchange): String {
         return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
+    }
+
+    private fun correlationId(headers: Headers): String {
+        return headers["X-Correlation-Id"]?.firstOrNull() ?: ""
     }
 
     private fun allowLegacyMutationRoute(exchange: HttpExchange): Boolean {
@@ -626,6 +727,56 @@ class PlatformHttpServer(
             return false
         }
         return true
+    }
+
+    private fun allowLegacyMutationRouteResponse(headers: Headers): PlatformHotPathResponse? {
+        if (!legacyMutationRoutesEnabled) {
+            return PlatformHotPathResponse(403, simpleErrorJson("legacy mutation route disabled"))
+        }
+        val internalMarker = headers[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
+        if (internalMarker != "true") {
+            return PlatformHotPathResponse(
+                403,
+                JsonCodec.writeObject(
+                    "error" to "legacy mutation route requires internal marker",
+                    "header" to LEGACY_INTERNAL_ROUTE_HEADER
+                )
+            )
+        }
+        return null
+    }
+
+    private fun handleLegacySetupRequest(
+        request: PlatformHotPathRequest,
+        postOperation: (String) -> String,
+        getOperation: (() -> String)? = null
+    ): PlatformHotPathResponse {
+        return when (request.method) {
+            "POST" -> {
+                allowLegacyMutationRouteResponse(request.headers)?.let { return it }
+                if (request.body.toByteArray().size > maxRequestBodyBytes) {
+                    return PlatformHotPathResponse(
+                        413,
+                        JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
+                    )
+                }
+                try {
+                    PlatformHotPathResponse(200, postOperation(request.body))
+                } catch (ex: Exception) {
+                    PlatformHotPathResponse(503, runtimeUnavailableJson(ex))
+                }
+            }
+            "GET" -> {
+                val operation = getOperation ?: return methodNotAllowedResponse()
+                allowLegacyMutationRouteResponse(request.headers)?.let { return it }
+                try {
+                    PlatformHotPathResponse(200, operation())
+                } catch (ex: Exception) {
+                    PlatformHotPathResponse(503, runtimeUnavailableJson(ex))
+                }
+            }
+            else -> methodNotAllowedResponse()
+        }
     }
 
     private fun handleApiV1Mutation(
@@ -814,6 +965,182 @@ class PlatformHttpServer(
         }
     }
 
+    private fun handleApiV1MutationResponse(
+        request: PlatformHotPathRequest,
+        route: String,
+        operation: (String) -> String
+    ): PlatformHotPathResponse {
+        val started = System.nanoTime()
+        try {
+            return handleApiV1MutationMeasuredResponse(request, route, operation)
+        } finally {
+            HotPathMetrics.record("api.mutation.total", System.nanoTime() - started)
+        }
+    }
+
+    private fun handleApiV1MutationMeasuredResponse(
+        request: PlatformHotPathRequest,
+        route: String,
+        operation: (String) -> String
+    ): PlatformHotPathResponse {
+        if (request.method != "POST") {
+            return methodNotAllowedResponse()
+        }
+        if (request.body.toByteArray().size > maxRequestBodyBytes) {
+            return PlatformHotPathResponse(
+                413,
+                JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
+            )
+        }
+
+        val violation = HotPathMetrics.time("api.boundary.checkWrite") {
+            boundary.checkWrite(request.headers, route)
+        }
+        val correlationId = correlationId(request.headers)
+        if (violation != null) {
+            return PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId))
+        }
+
+        val clientId = boundary.clientId(request.headers).orEmpty()
+        val idempotencyKey = boundary.idempotencyKey(request.headers).orEmpty()
+        val body = request.body
+        val validationError = HotPathMetrics.time("api.command.validate") {
+            PlatformCommandParsers.validateApiV1Command(route, body)
+        }
+        if (validationError != null) {
+            return PlatformHotPathResponse(
+                400,
+                boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
+            )
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
+            return handleAcceptedAsyncMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.StreamAck) {
+            return PlatformHotPathResponse(503, simpleErrorJson("netty hot path does not support stream-ack intake"))
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val existingStatus = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
+            if (existingStatus != null) {
+                return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existingStatus, correlationId)
+            }
+            val backpressure = commandIntakeBackpressure()
+            if (backpressure != null) {
+                return PlatformHotPathResponse(backpressure.status, boundary.toErrorJson(backpressure, correlationId))
+            }
+        }
+
+        val reservation = try {
+            HotPathMetrics.time("api.commandCapture.reserve") {
+                commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
+            }
+        } catch (ex: Exception) {
+            val errorClass = ex::class.simpleName ?: "Exception"
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "command_capture_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+            )
+            return PlatformHotPathResponse(503, simpleErrorJson("command capture unavailable", errorMessage))
+        }
+        if (!reservation.accepted) {
+            return duplicateCommandReservationResponse(clientId, route, idempotencyKey, reservation.existingCommandStatus, correlationId)
+        }
+
+        if (
+            commandProcessingMode in setOf(CommandProcessingMode.CapturedAck, CommandProcessingMode.CapturedSyncEngine) &&
+            commandStatusLookup == null
+        ) {
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(
+                    clientId,
+                    route,
+                    idempotencyKey,
+                    503,
+                    "COMMAND_STATUS_UNAVAILABLE",
+                    "command status lookup is required for ${commandProcessingMode.configValue}"
+                )
+            }
+            return PlatformHotPathResponse(503, simpleErrorJson("command status unavailable"))
+        }
+
+        val abuseViolation = HotPathMetrics.time("api.abuse.allow") {
+            abuseProtectionHook.allow(clientId, route)
+        }
+        if (abuseViolation != null) {
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
+            }
+            return PlatformHotPathResponse(abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val status = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
+            if (status == null) {
+                HotPathMetrics.time("api.commandCapture.markFailed") {
+                    commandCaptureStore.markFailed(
+                        clientId,
+                        route,
+                        idempotencyKey,
+                        503,
+                        "COMMAND_STATUS_UNAVAILABLE",
+                        "captured command status not found"
+                    )
+                }
+                return PlatformHotPathResponse(503, simpleErrorJson("command status unavailable"))
+            }
+            return PlatformHotPathResponse(202, CommandStatusResponse.acceptedJson(status))
+        }
+
+        val cached = HotPathMetrics.time("api.idempotency.find") {
+            idempotencyStore.find(clientId, route, idempotencyKey)
+        }
+        if (cached != null) {
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
+            }
+            return PlatformHotPathResponse(cached.status, cached.payload)
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedSyncEngine) {
+            HotPathMetrics.time("api.commandCapture.markProcessing") {
+                commandCaptureStore.markProcessing(clientId, route, idempotencyKey)
+            }
+        }
+
+        return try {
+            val payload = HotPathMetrics.time("api.operation") {
+                operation(body)
+            }
+            abuseProtectionHook.observe(clientId, route, 200, rejectCode(payload))
+            HotPathMetrics.time("api.idempotency.save") {
+                idempotencyStore.save(
+                    clientId,
+                    route,
+                    idempotencyKey,
+                    IdempotencyResult(200, payload),
+                    idempotencyRetentionPolicy.ttlFor(route)
+                )
+            }
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
+            }
+            PlatformHotPathResponse(200, payload)
+        } catch (ex: Exception) {
+            val errorClass = ex::class.simpleName ?: "Exception"
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+            )
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
+            }
+            PlatformHotPathResponse(503, simpleErrorJson("runtime unavailable", errorMessage))
+        }
+    }
+
     private fun handleStreamAckMutation(
         exchange: HttpExchange,
         route: String,
@@ -995,6 +1322,62 @@ class PlatformHttpServer(
         writeJson(exchange, 202, CommandStatusResponse.acceptedJson(status))
     }
 
+    private fun handleAcceptedAsyncMutationResponse(
+        route: String,
+        clientId: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String
+    ): PlatformHotPathResponse {
+        val intake = acceptedAsyncCommandIntake
+            ?: return PlatformHotPathResponse(503, simpleErrorJson("accepted async intake unavailable"))
+
+        val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
+        if (existing != null) {
+            return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existing, correlationId)
+        }
+
+        val abuseViolation = HotPathMetrics.time("api.abuse.allow") {
+            abuseProtectionHook.allow(clientId, route)
+        }
+        if (abuseViolation != null) {
+            return PlatformHotPathResponse(abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+        }
+
+        val receipt = try {
+            HotPathMetrics.time("api.acceptedAsync.reserve") {
+                intake.enqueueSubmit(clientId, route, idempotencyKey, correlationId, body)
+            }
+        } catch (ex: Exception) {
+            val errorClass = ex::class.simpleName ?: "Exception"
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+            )
+            return PlatformHotPathResponse(503, simpleErrorJson("accepted async unavailable", errorMessage))
+        }
+
+        if (receipt.duplicate) {
+            return duplicateCommandReservationResponse(clientId, route, idempotencyKey, receipt.status, correlationId)
+        }
+        if (receipt.backpressure) {
+            return PlatformHotPathResponse(
+                429,
+                boundary.toErrorJson(
+                    BoundaryError(429, "COMMAND_INTAKE_BACKPRESSURE", "accepted async lane queue is full"),
+                    correlationId
+                )
+            )
+        }
+
+        val status = receipt.status
+        if (!receipt.accepted || status == null) {
+            return PlatformHotPathResponse(503, simpleErrorJson("accepted async command not accepted"))
+        }
+
+        return PlatformHotPathResponse(202, CommandStatusResponse.acceptedJson(status))
+    }
+
     private fun markStreamCommandPublished(commandId: String, streamSequence: Long) {
         val marker = streamCommandPublicationMarker ?: return
         if (streamCommandMarkPublishedMode.trim().lowercase() == "async") {
@@ -1051,6 +1434,43 @@ class PlatformHttpServer(
         )
     }
 
+    private fun duplicateCommandReservationResponse(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        status: CommandStatusView?,
+        correlationId: String
+    ): PlatformHotPathResponse {
+        if (status?.status == CommandLogStatus.COMPLETED && status.responseStatus > 0) {
+            idempotencyStore.save(
+                clientId,
+                route,
+                idempotencyKey,
+                IdempotencyResult(status.responseStatus, status.responsePayloadJson),
+                idempotencyRetentionPolicy.ttlFor(route)
+            )
+            return PlatformHotPathResponse(status.responseStatus, status.responsePayloadJson)
+        }
+        if (status != null && commandProcessingMode in setOf(CommandProcessingMode.CapturedAck, CommandProcessingMode.AcceptedAsync)) {
+            return PlatformHotPathResponse(202, CommandStatusResponse.acceptedJson(status))
+        }
+        val cached = idempotencyStore.find(clientId, route, idempotencyKey)
+        if (cached != null) {
+            return PlatformHotPathResponse(cached.status, cached.payload)
+        }
+        return PlatformHotPathResponse(
+            409,
+            boundary.toErrorJson(
+                BoundaryError(
+                    409,
+                    "COMMAND_ALREADY_IN_PROGRESS",
+                    "command is already received or processing"
+                ),
+                correlationId
+            )
+        )
+    }
+
     private fun handleCommandStatusLookup(exchange: HttpExchange) {
         if (exchange.requestMethod != "GET") {
             methodNotAllowed(exchange)
@@ -1072,6 +1492,21 @@ class PlatformHttpServer(
             return
         }
         writeJson(exchange, 200, CommandStatusResponse.statusJson(status))
+    }
+
+    private fun commandStatusLookupResponse(request: PlatformHotPathRequest): PlatformHotPathResponse {
+        if (request.method != "GET") {
+            return methodNotAllowedResponse()
+        }
+        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
+            ?: return PlatformHotPathResponse(503, simpleErrorJson("command status unavailable"))
+        val commandId = request.path.removePrefix("/api/v1/commands/").trim('/')
+        if (commandId.isBlank()) {
+            return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
+        }
+        val status = lookup.findCommandStatus(commandId)
+            ?: return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
+        return PlatformHotPathResponse(200, CommandStatusResponse.statusJson(status))
     }
 
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {

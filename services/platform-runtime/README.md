@@ -47,6 +47,8 @@ GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
 
 Transport config:
 
+- `PLATFORM_HTTP_SERVER=jdk|netty` selects the runtime HTTP adapter (default `jdk`). The `netty` adapter is currently a measured hot-path adapter for submit/status/internal stats during no-DB ceiling tests.
+- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, and `PLATFORM_NETTY_APPLICATION_THREADS=64` tune the Netty adapter. `0` worker threads uses Netty's default event-loop sizing.
 - `ENGINE_TRANSPORT=grpc` (Docker dev default; real gRPC client path to matching-engine)
 - `ENGINE_TRANSPORT=grpc-stream` (experimental submit-order lane transport using persistent bidirectional gRPC streams; cancel/modify fall back to unary gRPC)
 - `ENGINE_TRANSPORT=http` (legacy HTTP client path, useful for A/B comparisons)

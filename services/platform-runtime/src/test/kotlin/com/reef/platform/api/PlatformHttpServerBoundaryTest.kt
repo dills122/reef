@@ -904,6 +904,40 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun nettyHotPathAcceptedAsyncSubmitStatusAndStats() {
+        val server = testNettyHotPathServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.AcceptedAsync
+        )
+        try {
+            val health = get(server.port, "/health")
+            val response = post(
+                port = server.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-accepted-async",
+                    "Idempotency-Key" to "idem-netty-accepted-async"
+                ),
+                body = validSubmitBody("cmd-netty-accepted-async", "trace-netty-accepted-async", "ord-netty-accepted-async")
+            )
+            val completed = waitForCommandStatus(server.port, "cmd-netty-accepted-async", "COMPLETED")
+            val stats = get(server.port, "/internal/commands/async/stats")
+
+            assertEquals(200, health.status)
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-netty-accepted-async\"")
+            assertEquals(200, completed.status)
+            assertContains(completed.body, "\"status\":\"COMPLETED\"")
+            assertEquals(200, stats.status)
+            assertContains(stats.body, "\"processingMode\":\"accepted-async\"")
+            assertContains(stats.body, "\"inFlightPerLane\"")
+            assertContains(stats.body, "\"completed\":1")
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun commandAccountingEndpointReturnsRunScopedCounts() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1650,6 +1684,55 @@ class PlatformHttpServerBoundaryTest {
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
             commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
+        ).start()
+    }
+
+    private fun testNettyHotPathServerWithGateway(
+        gateway: EngineGateway,
+        runtimeRole: PlatformRuntimeRole = PlatformRuntimeRole.Api,
+        boundary: ExternalApiBoundary = ExternalApiBoundary(),
+        captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
+        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+        commandIntakeMaxActive: Long = 0L,
+        commandIntakeMaxStaleProcessing: Long = 0L,
+        commandIntakeBackpressureSampleMs: Long = 100L,
+        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
+    ): RunningPlatformNettyServer {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        seedOrderAuthorization(
+            persistence,
+            "bot-capture-1",
+            "bot-1",
+            "bot-2"
+        )
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val delegate = PlatformHttpServer(
+            port = 0,
+            runtimeRole = runtimeRole,
+            api = api,
+            boundary = boundary,
+            abuseProtectionHook = abuseProtectionHook,
+            idempotencyStore = idempotencyStore,
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            commandCaptureStore = captureStore,
+            commandStatusLookup = captureStore as? CommandStatusLookup,
+            commandProcessingMode = commandProcessingMode,
+            commandIntakeMaxActive = commandIntakeMaxActive,
+            commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
+            commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
+            legacyMutationRoutesEnabled = true
+        )
+        return PlatformNettyHotPathServer(
+            delegate = delegate,
+            port = 0,
+            applicationThreads = 4
         ).start()
     }
 
