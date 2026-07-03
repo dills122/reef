@@ -26,6 +26,8 @@ setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_MAX", "32");
 setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE", "8");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MAX", "24");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE", "8");
+setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX", "24");
+setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE", "8");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["stream-ack"]));
 
 console.log("stream-ack runtime settings:");
@@ -42,6 +44,7 @@ console.log(`  workerBatchSize=${env("STREAM_ACK_WORKER_BATCH_SIZE")}`);
 console.log(`  projectorEnabled=${env("STREAM_ACK_PROJECTOR_ENABLED")}`);
 console.log(`  projector0Partitions=${env("STREAM_ACK_PROJECTOR_0_PARTITIONS")}`);
 console.log(`  projector1Partitions=${env("STREAM_ACK_PROJECTOR_1_PARTITIONS")}`);
+console.log(`  projectionJdbcUrl=${env("RUNTIME_PROJECTION_POSTGRES_JDBC_URL", "jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime")}`);
 
 await devUp();
 await bootstrapCommandStream();

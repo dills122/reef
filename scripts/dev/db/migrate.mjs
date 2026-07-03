@@ -86,7 +86,17 @@ async function main() {
     return;
   }
 
-  await runPsql(`
+  for (const target of migrationTargets()) {
+    await applyMigrationsToTarget(target, migrations);
+  }
+}
+
+async function applyMigrationsToTarget(target, migrations) {
+  if (target.label !== "primary") {
+    console.log(`migrating ${target.label} database (${target.service})`);
+  }
+  await runPsql(
+    `
 CREATE TABLE IF NOT EXISTS public.reef_schema_migrations (
   migration_id TEXT PRIMARY KEY,
   domain_name TEXT NOT NULL,
@@ -94,27 +104,52 @@ CREATE TABLE IF NOT EXISTS public.reef_schema_migrations (
   checksum_sha256 TEXT NOT NULL,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-`);
+`,
+    { target },
+  );
 
   for (const migration of migrations) {
+    const displayId = target.label === "primary" ? migration.id : `${target.label}:${migration.id}`;
     const existingChecksum = (
       await runPsql(
         `SELECT COALESCE((SELECT checksum_sha256 FROM public.reef_schema_migrations WHERE migration_id = ${sqlString(migration.id)}), '');`,
-        { capture: true },
+        { capture: true, target },
       )
     ).trim();
 
     if (existingChecksum) {
       if (existingChecksum !== migration.checksum) {
-        throw new Error(`checksum mismatch for ${migration.id}: applied=${existingChecksum} current=${migration.checksum}`);
+        throw new Error(
+          `checksum mismatch for ${displayId}: applied=${existingChecksum} current=${migration.checksum}`,
+        );
       }
-      console.log(`skip ${migration.id}`);
+      console.log(`skip ${displayId}`);
       continue;
     }
 
-    console.log(`apply ${migration.id}`);
-    await runPsql(buildApplySql(migration));
+    console.log(`apply ${displayId}`);
+    await runPsql(buildApplySql(migration), { target });
   }
+}
+
+function migrationTargets() {
+  const targets = [
+    {
+      label: "primary",
+      service: env("REEF_POSTGRES_SERVICE", "postgres"),
+      user: env("REEF_POSTGRES_USER", "reef"),
+      dbName: env("REEF_POSTGRES_DB", "reef"),
+    },
+  ];
+  if (env("REEF_PROJECTION_POSTGRES_MIGRATIONS", "1") !== "0") {
+    targets.push({
+      label: "projection",
+      service: env("REEF_PROJECTION_POSTGRES_SERVICE", "projection-postgres"),
+      user: env("REEF_PROJECTION_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
+      dbName: env("REEF_PROJECTION_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+    });
+  }
+  return targets;
 }
 
 function sha256(value) {
@@ -126,21 +161,19 @@ function sqlString(value) {
 }
 
 function runPsql(sql, options = {}) {
-  const { capture = false } = options;
-  const dbUser = env("REEF_POSTGRES_USER", "reef");
-  const dbName = env("REEF_POSTGRES_DB", "reef");
+  const { capture = false, target = migrationTargets()[0] } = options;
   const args = [
     "compose",
     "-f",
     "docker-compose.yml",
     "exec",
     "-T",
-    "postgres",
+    target.service,
     "psql",
     "-U",
-    dbUser,
+    target.user,
     "-d",
-    dbName,
+    target.dbName,
     "-v",
     "ON_ERROR_STOP=1",
     "-X",

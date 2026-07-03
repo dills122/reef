@@ -1,6 +1,6 @@
 # DB Split-Readiness Guardrails
 
-This document defines constraints for the single-Postgres local model so future scoped DB extraction remains low-friction.
+This document defines constraints for the local Postgres model so scoped DB extraction remains low-friction.
 
 ## Current domain schemas
 
@@ -58,6 +58,11 @@ This document defines constraints for the single-Postgres local model so future 
 - read-model writes must not be required for the order-command hot path to acknowledge or complete
 - projections should be rebuildable from runtime state/events
 
+11. Pre-settlement and hot-cache policy
+- canonical matched execution/trade facts must be durably recorded before downstream settlement or user-visible lifecycle claims depend on them
+- Redis may hold transient reservations, hot counters, rate/backpressure state, cached read models, or leaderboard-style derived state
+- Redis must not be the authoritative pre-settlement ledger for executions, trades, settlement obligations, or replay/audit facts
+
 ## Current local bootstrap model
 
 - schema creation: `scripts/dev/db/init/001_create_domain_schemas.sql`
@@ -67,12 +72,16 @@ This document defines constraints for the single-Postgres local model so future 
 - admin table bootstrap: admin-specific durable tables are still planned unless explicitly covered by runtime/auth storage
 - command log table ownership: migrations create schema-qualified `command_log.commands`; runtime wiring is available behind `EXTERNAL_API_COMMAND_LOG_MODE`
 - read-model bootstrap: planned under `read_model`
+- projection DB bootstrap: Docker starts `projection-postgres` and the dev migration runner applies the same forward migrations to it for the current submit-projection proof slice
 
 Runtime, boundary, and auth persistence now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files represent the live table shapes, and local startup applies migrations before the full stack starts. Docker/local runtime uses `RUNTIME_DB_BOOTSTRAP_MODE=validate` by default so Postgres-backed stores fail fast if migrated objects are missing. `compat` remains available as a local repair fallback.
+
+`RUNTIME_PROJECTION_POSTGRES_JDBC_URL` enables a physical projection store. When set, `PostgresRuntimePersistence` keeps canonical append/reference/auth access on `RUNTIME_POSTGRES_JDBC_URL` and routes submit-result/order/execution/trade/runtime-event projection reads and writes through the projection JDBC pool. The stream-ack projector reads canonical payloads from the runtime DB, writes normalized projection rows to the projection DB, and advances projection-local watermarks. When unset, both paths share the runtime data source for backward compatibility.
 
 ## Current implementation checkpoint
 
 - `PostgresRuntimePersistence` uses explicit `runtime.*` table/routine names for orders, executions, trades, runtime events, trace sequences, submit results, and reference data.
+- `PostgresRuntimePersistence` can route normalized projection tables and watermarks to `RUNTIME_PROJECTION_POSTGRES_JDBC_URL` while keeping canonical command results and venue events on `RUNTIME_POSTGRES_JDBC_URL`.
 - `PostgresRuntimePersistence` uses explicit `auth.*` table names for roles and actor-role bindings.
 - `PostgresIdempotencyStore` uses explicit `boundary.api_idempotency_records`.
 - `PostgresCommandCaptureStore` uses explicit `boundary.api_command_captures`.
@@ -83,14 +92,15 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
 - `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries, schema-owned table placement, validation-mode store construction, and command-capture writes with a JDBC URL that does not set `currentSchema`.
 - Full local-stack smoke passed after applying migrations, including boundary command capture and `/api/v1` submit/cancel flow.
-- `make dev-up` and `make dev-reset` start Postgres, apply migrations, then start the full stack.
+- `make dev-up` and `make dev-reset` start canonical and projection Postgres services, apply migrations, then start the full stack.
 - Docker/local runtime defaults to schema validation mode.
 - Service-side compatibility bootstrap remains available through `RUNTIME_DB_BOOTSTRAP_MODE=compat`, not as the local default.
 
 ## Next persistence-alignment work
 
 1. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` compatibility code after the CI migration lane soaks.
-2. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
+2. Move long-term UI/query projections from overloaded `runtime.*` tables into a dedicated `read_model` schema contract.
+3. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
 
 ## Split readiness checks to enforce in CI
 

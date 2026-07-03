@@ -19,10 +19,18 @@ import javax.sql.DataSource
 class PostgresRuntimePersistence(
     private val dataSource: DataSource,
     private val names: PostgresRuntimeSqlNames = PostgresRuntimeSqlNames(),
-    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
+    private val projectionDataSource: DataSource = dataSource
 ) : RuntimePersistence {
+    private data class ProjectionCandidate(
+        val partitionId: Int,
+        val partitionSequence: Long,
+        val resultPayload: String,
+        val partitionRow: Int = 0
+    )
+
     init {
-        connection().use { conn ->
+        canonicalConnection().use { conn ->
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
                 PostgresSchemaValidator.validate(conn, PostgresSchemaRequirements.runtime(names))
                 return@use
@@ -1021,13 +1029,18 @@ class PostgresRuntimePersistence(
                 )
             }
         }
+        if (bootstrapMode == PostgresBootstrapMode.Validate && projectionStoreSeparated()) {
+            projectionConnection().use { conn ->
+                PostgresSchemaValidator.validate(conn, PostgresSchemaRequirements.runtime(names))
+            }
+        }
     }
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         val accepted = result.accepted
         val rejected = result.rejected
         val resultType = if (accepted != null) "accepted" else "rejected"
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.submitResults}(command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at)
@@ -1056,13 +1069,13 @@ class PostgresRuntimePersistence(
     }
 
     override fun submitResult(commandId: String): SubmitOrderResult? {
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 "SELECT result_type, event_id, order_id, engine_order_id, code, reason, occurred_at FROM ${names.submitResults} WHERE command_id = ?"
             ).use { ps ->
                 ps.setString(1, commandId)
                 ps.executeQuery().use { rs ->
-                    if (!rs.next()) return canonicalSubmitResult(conn, commandId)
+                    if (!rs.next()) return canonicalSubmitResult(commandId)
                     val resultType = rs.getString("result_type")
                     val orderId = rs.getString("order_id")
                     return if (resultType == "accepted") {
@@ -1092,45 +1105,47 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun canonicalSubmitResult(conn: Connection, commandId: String): SubmitOrderResult? {
-        conn.prepareStatement(
-            """
-            SELECT
-              result_payload->>'resultType' AS result_type,
-              result_payload->>'eventId' AS event_id,
-              result_payload->>'orderId' AS order_id,
-              result_payload->>'engineOrderId' AS engine_order_id,
-              result_payload->>'code' AS code,
-              result_payload->>'reason' AS reason,
-              result_payload->>'occurredAt' AS occurred_at
-            FROM ${names.canonicalCommandResults}
-            WHERE command_id = ?
-            """.trimIndent()
-        ).use { ps ->
-            ps.setString(1, commandId)
-            ps.executeQuery().use { rs ->
-                if (!rs.next()) return null
-                val resultType = rs.getString("result_type")
-                val orderId = rs.getString("order_id")
-                return if (resultType == "accepted") {
-                    SubmitOrderResult(
-                        accepted = EngineOrderAccepted(
-                            eventId = rs.getString("event_id"),
-                            orderId = orderId,
-                            engineOrderId = rs.getString("engine_order_id"),
-                            occurredAt = rs.getString("occurred_at")
+    private fun canonicalSubmitResult(commandId: String): SubmitOrderResult? {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  result_payload->>'resultType' AS result_type,
+                  result_payload->>'eventId' AS event_id,
+                  result_payload->>'orderId' AS order_id,
+                  result_payload->>'engineOrderId' AS engine_order_id,
+                  result_payload->>'code' AS code,
+                  result_payload->>'reason' AS reason,
+                  result_payload->>'occurredAt' AS occurred_at
+                FROM ${names.canonicalCommandResults}
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    val resultType = rs.getString("result_type")
+                    val orderId = rs.getString("order_id")
+                    return if (resultType == "accepted") {
+                        SubmitOrderResult(
+                            accepted = EngineOrderAccepted(
+                                eventId = rs.getString("event_id"),
+                                orderId = orderId,
+                                engineOrderId = rs.getString("engine_order_id"),
+                                occurredAt = rs.getString("occurred_at")
+                            )
                         )
-                    )
-                } else {
-                    SubmitOrderResult(
-                        rejected = EngineOrderRejected(
-                            eventId = rs.getString("event_id"),
-                            orderId = orderId,
-                            code = rs.getString("code"),
-                            reason = rs.getString("reason"),
-                            occurredAt = rs.getString("occurred_at")
+                    } else {
+                        SubmitOrderResult(
+                            rejected = EngineOrderRejected(
+                                eventId = rs.getString("event_id"),
+                                orderId = orderId,
+                                code = rs.getString("code"),
+                                reason = rs.getString("reason"),
+                                occurredAt = rs.getString("occurred_at")
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -1273,7 +1288,7 @@ class PostgresRuntimePersistence(
         val rejected = result.rejected
         val resultType = if (accepted != null) "accepted" else "rejected"
 
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
                 SELECT ${names.persistSubmitOutcomeFunction}(
@@ -1289,26 +1304,14 @@ class PostgresRuntimePersistence(
 
     override fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
         if (outcomes.isEmpty()) return
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)
-                """.trimIndent()
-            ).use { ps ->
-                ps.setString(1, outcomes.toJsonArray { it.toJsonObject() })
-                ps.executeQuery().use { rs ->
-                    rs.next()
-                    check(rs.getLong(1) == outcomes.size.toLong()) {
-                        "Persisted submit outcome count did not match requested batch size"
-                    }
-                }
-            }
+        projectionConnection().use { conn ->
+            persistSubmitOutcomePayloads(conn, outcomes.toJsonArray { it.toJsonObject() }, outcomes.size)
         }
     }
 
     override fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
         if (outcomes.isEmpty()) return
-        connection().use { conn ->
+        canonicalConnection().use { conn ->
             conn.prepareStatement(
                 """
                 SELECT ${names.appendCanonicalSubmitOutcomesFunction}(?::jsonb)
@@ -1327,7 +1330,10 @@ class PostgresRuntimePersistence(
 
     override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
         if (batchSize <= 0) return 0
-        connection().use { conn ->
+        if (projectionStoreSeparated()) {
+            return projectCanonicalSubmitOutcomesAcrossStores(projectionName, batchSize, partitions)
+        }
+        canonicalConnection().use { conn ->
             conn.prepareStatement(
                 """
                 SELECT ${names.projectCanonicalSubmitOutcomesFunction}(?, ?, ?)
@@ -1344,8 +1350,209 @@ class PostgresRuntimePersistence(
         }
     }
 
+    private fun projectCanonicalSubmitOutcomesAcrossStores(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>
+    ): Long {
+        val ownedPartitions = ownedProjectionPartitions(partitions)
+        if (ownedPartitions.isEmpty()) return 0
+        val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
+        val perPartitionLimit = ((batchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
+        val candidates = ownedPartitions
+            .flatMap { partitionId ->
+                canonicalProjectionCandidates(
+                    partitionId = partitionId,
+                    afterPartitionSequence = watermarks[partitionId] ?: 0L,
+                    limit = perPartitionLimit
+                ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
+            }
+            .sortedWith(
+                compareBy<ProjectionCandidate> { it.partitionRow }
+                    .thenBy { it.partitionId }
+                    .thenBy { it.partitionSequence }
+            )
+            .take(batchSize)
+        if (candidates.isEmpty()) return 0
+
+        projectionConnection().use { conn ->
+            conn.autoCommit = false
+            try {
+                val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
+                persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+                updateProjectionWatermarks(conn, projectionName, candidates)
+                conn.commit()
+                return candidates.size.toLong()
+            } catch (ex: Exception) {
+                conn.rollback()
+                recordProjectionFailure(conn, projectionName, ex.message ?: ex::class.simpleName ?: "unknown")
+                conn.commit()
+                throw ex
+            } finally {
+                conn.autoCommit = true
+            }
+        }
+    }
+
+    private fun ownedProjectionPartitions(partitions: List<Int>): List<Int> {
+        if (partitions.isNotEmpty()) return partitions.distinct().sorted()
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT DISTINCT partition_id
+                FROM ${names.canonicalCommandResults}
+                ORDER BY partition_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val out = mutableListOf<Int>()
+                    while (rs.next()) out.add(rs.getInt("partition_id"))
+                    return out
+                }
+            }
+        }
+    }
+
+    private fun projectionWatermarkMap(projectionName: String, partitions: List<Int>): Map<Int, Long> {
+        if (partitions.isEmpty()) return emptyMap()
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT partition_id, last_partition_seq
+                FROM ${names.projectionWatermarks}
+                WHERE projection_name = ?
+                  AND partition_id = ANY(?::INTEGER[])
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.setArray(2, conn.createArrayOf("integer", partitions.toTypedArray()))
+                ps.executeQuery().use { rs ->
+                    val out = mutableMapOf<Int, Long>()
+                    while (rs.next()) out[rs.getInt("partition_id")] = rs.getLong("last_partition_seq")
+                    return out
+                }
+            }
+        }
+    }
+
+    private fun canonicalProjectionCandidates(
+        partitionId: Int,
+        afterPartitionSequence: Long,
+        limit: Int
+    ): List<ProjectionCandidate> {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT partition_id, partition_seq, result_payload::TEXT AS result_payload
+                FROM ${names.canonicalCommandResults}
+                WHERE partition_id = ?
+                  AND partition_seq > ?
+                ORDER BY partition_seq
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, partitionId)
+                ps.setLong(2, afterPartitionSequence)
+                ps.setInt(3, limit)
+                ps.executeQuery().use { rs ->
+                    val out = mutableListOf<ProjectionCandidate>()
+                    while (rs.next()) {
+                        out.add(
+                            ProjectionCandidate(
+                                partitionId = rs.getInt("partition_id"),
+                                partitionSequence = rs.getLong("partition_seq"),
+                                resultPayload = rs.getString("result_payload")
+                            )
+                        )
+                    }
+                    return out
+                }
+            }
+        }
+    }
+
+    private fun persistSubmitOutcomePayloads(conn: Connection, payloadJson: String, expectedCount: Int) {
+        conn.prepareStatement(
+            """
+            SELECT ${names.persistSubmitOutcomesFunction}(?::jsonb)
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, payloadJson)
+            ps.executeQuery().use { rs ->
+                rs.next()
+                check(rs.getLong(1) == expectedCount.toLong()) {
+                    "Persisted submit outcome count did not match requested batch size"
+                }
+            }
+        }
+    }
+
+    private fun updateProjectionWatermarks(
+        conn: Connection,
+        projectionName: String,
+        candidates: List<ProjectionCandidate>
+    ) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.projectionWatermarks}(
+              projection_name,
+              partition_id,
+              last_partition_seq,
+              last_projected_at,
+              updated_at,
+              last_error
+            )
+            VALUES (?, ?, ?, now(), now(), '')
+            ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+              last_partition_seq = GREATEST(
+                ${names.projectionWatermarks}.last_partition_seq,
+                EXCLUDED.last_partition_seq
+              ),
+              last_projected_at = EXCLUDED.last_projected_at,
+              updated_at = EXCLUDED.updated_at,
+              last_error = ''
+            """.trimIndent()
+        ).use { ps ->
+            candidates
+                .groupBy { it.partitionId }
+                .forEach { (partitionId, partitionCandidates) ->
+                    ps.setString(1, projectionName)
+                    ps.setInt(2, partitionId)
+                    ps.setLong(3, partitionCandidates.maxOf { it.partitionSequence })
+                    ps.addBatch()
+                }
+            ps.executeBatch()
+        }
+    }
+
+    private fun recordProjectionFailure(conn: Connection, projectionName: String, error: String) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.projectionWatermarks}(
+              projection_name,
+              partition_id,
+              last_partition_seq,
+              last_projected_at,
+              updated_at,
+              last_error
+            )
+            VALUES (?, -1, 0, NULL, now(), ?)
+            ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+              updated_at = EXCLUDED.updated_at,
+              last_error = EXCLUDED.last_error
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, projectionName)
+            ps.setString(2, error)
+            ps.executeUpdate()
+        }
+    }
+
     override fun projectionStatus(projectionName: String, partitions: List<Int>): ProjectionStatus {
-        connection().use { conn ->
+        if (projectionStoreSeparated()) {
+            return projectionStatusAcrossStores(projectionName, partitions)
+        }
+        canonicalConnection().use { conn ->
             val watermarks = conn.prepareStatement(
                 """
                 WITH requested_partitions AS (
@@ -1451,6 +1658,116 @@ class PostgresRuntimePersistence(
         }
     }
 
+    private fun projectionStatusAcrossStores(projectionName: String, partitions: List<Int>): ProjectionStatus {
+        val canonicalMaxByPartition = canonicalMaxPartitionSequences(partitions)
+        val watermarkRows = projectionWatermarkRows(projectionName, partitions)
+        val partitionIds = (partitions + canonicalMaxByPartition.keys + watermarkRows.keys)
+            .filter { it >= 0 }
+            .distinct()
+            .sorted()
+        val watermarks = partitionIds.map { partitionId ->
+            val watermark = watermarkRows[partitionId]
+            val canonicalMax = canonicalMaxByPartition[partitionId] ?: 0L
+            val projected = watermark?.lastPartitionSequence ?: 0L
+            ProjectionWatermark(
+                projectionName = watermark?.projectionName ?: projectionName,
+                partitionId = partitionId,
+                lastPartitionSequence = projected,
+                canonicalMaxPartitionSequence = canonicalMax,
+                lag = (canonicalMax - projected).coerceAtLeast(0L),
+                updatedAt = watermark?.updatedAt.orEmpty(),
+                lastError = watermark?.lastError.orEmpty()
+            )
+        } + watermarkRows.values.filter { it.partitionId == -1 }
+        val projectedCount = projectionConnection().use { conn ->
+            conn.prepareStatement("SELECT COUNT(*) FROM ${names.submitResults}").use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getLong(1)
+                }
+            }
+        }
+        return ProjectionStatus(
+            projectionName = projectionName,
+            projectedCount = projectedCount,
+            lag = watermarks.sumOf { it.lag },
+            watermarks = watermarks.sortedBy { it.partitionId }
+        )
+    }
+
+    private fun canonicalMaxPartitionSequences(partitions: List<Int>): Map<Int, Long> {
+        canonicalConnection().use { conn ->
+            val sql = if (partitions.isEmpty()) {
+                """
+                SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
+                FROM ${names.canonicalCommandResults}
+                GROUP BY partition_id
+                """.trimIndent()
+            } else {
+                """
+                SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
+                FROM ${names.canonicalCommandResults}
+                WHERE partition_id = ANY(?::INTEGER[])
+                GROUP BY partition_id
+                """.trimIndent()
+            }
+            conn.prepareStatement(sql).use { ps ->
+                if (partitions.isNotEmpty()) {
+                    ps.setArray(1, conn.createArrayOf("integer", partitions.toTypedArray()))
+                }
+                ps.executeQuery().use { rs ->
+                    val out = mutableMapOf<Int, Long>()
+                    while (rs.next()) out[rs.getInt("partition_id")] = rs.getLong("canonical_max_partition_seq")
+                    return out
+                }
+            }
+        }
+    }
+
+    private fun projectionWatermarkRows(
+        projectionName: String,
+        partitions: List<Int>
+    ): Map<Int, ProjectionWatermark> {
+        projectionConnection().use { conn ->
+            val sql = if (partitions.isEmpty()) {
+                """
+                SELECT projection_name, partition_id, last_partition_seq, updated_at::TEXT AS updated_at, last_error
+                FROM ${names.projectionWatermarks}
+                WHERE projection_name = ?
+                """.trimIndent()
+            } else {
+                """
+                SELECT projection_name, partition_id, last_partition_seq, updated_at::TEXT AS updated_at, last_error
+                FROM ${names.projectionWatermarks}
+                WHERE projection_name = ?
+                  AND (partition_id = ANY(?::INTEGER[]) OR partition_id = -1)
+                """.trimIndent()
+            }
+            conn.prepareStatement(sql).use { ps ->
+                ps.setString(1, projectionName)
+                if (partitions.isNotEmpty()) {
+                    ps.setArray(2, conn.createArrayOf("integer", partitions.toTypedArray()))
+                }
+                ps.executeQuery().use { rs ->
+                    val out = mutableMapOf<Int, ProjectionWatermark>()
+                    while (rs.next()) {
+                        val partitionId = rs.getInt("partition_id")
+                        out[partitionId] = ProjectionWatermark(
+                            projectionName = rs.getString("projection_name"),
+                            partitionId = partitionId,
+                            lastPartitionSequence = rs.getLong("last_partition_seq"),
+                            canonicalMaxPartitionSequence = 0,
+                            lag = 0,
+                            updatedAt = rs.getString("updated_at"),
+                            lastError = rs.getString("last_error")
+                        )
+                    }
+                    return out
+                }
+            }
+        }
+    }
+
     private fun PreparedStatement.bindSubmitOutcome(
         commandId: String,
         resultType: String,
@@ -1475,7 +1792,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
@@ -1513,7 +1830,7 @@ class PostgresRuntimePersistence(
 
     override fun saveExecutions(executions: List<ExecutionCreated>) {
         if (executions.isEmpty()) return
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.executions}(event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at)
@@ -1539,7 +1856,7 @@ class PostgresRuntimePersistence(
 
     override fun saveTrades(trades: List<TradeCreated>) {
         if (trades.isEmpty()) return
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
                 INSERT INTO ${names.trades}(event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at)
@@ -1571,7 +1888,7 @@ class PostgresRuntimePersistence(
 
     override fun saveEvents(events: List<RuntimeEvent>) {
         if (events.isEmpty()) return
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.autoCommit = false
             try {
                 val startByTrace = mutableMapOf<String, Long>()
@@ -1632,7 +1949,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun acceptedOrder(orderId: String): PersistedOrder? {
-        connection().use { conn ->
+        projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
                 SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at
@@ -1661,7 +1978,7 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun acceptedOrders(): List<PersistedOrder> = queryList(
+    override fun acceptedOrders(): List<PersistedOrder> = projectionQueryList(
         """
         SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at
         FROM ${names.orders} ORDER BY accepted_at
@@ -1683,7 +2000,7 @@ class PostgresRuntimePersistence(
         )
     }
 
-    override fun executionsForOrder(orderId: String): List<ExecutionCreated> = queryList(
+    override fun executionsForOrder(orderId: String): List<ExecutionCreated> = projectionQueryList(
         "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at",
         orderId
     ) {
@@ -1699,7 +2016,7 @@ class PostgresRuntimePersistence(
         )
     }
 
-    override fun trades(): List<TradeCreated> = queryList(
+    override fun trades(): List<TradeCreated> = projectionQueryList(
         "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at"
     ) {
         TradeCreated(
@@ -1716,7 +2033,7 @@ class PostgresRuntimePersistence(
         )
     }
 
-    override fun recentTrades(limit: Int): List<TradeCreated> = queryList(
+    override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
         "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?",
         limit.coerceAtLeast(0).toString()
     ) {
@@ -1734,7 +2051,7 @@ class PostgresRuntimePersistence(
         )
     }.asReversed()
 
-    override fun tradesForOrder(orderId: String): List<TradeCreated> = queryList(
+    override fun tradesForOrder(orderId: String): List<TradeCreated> = projectionQueryList(
         """
         SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at
         FROM ${names.trades} WHERE buy_order_id = ? OR sell_order_id = ? ORDER BY occurred_at
@@ -1775,7 +2092,7 @@ class PostgresRuntimePersistence(
         limit.coerceAtLeast(0).toString()
     ).asReversed()
 
-    private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = queryList(sql, *params) {
+    private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = projectionQueryList(sql, *params) {
         RuntimeEvent(
             eventId = getString("event_id"),
             eventType = getString("event_type"),
@@ -1821,7 +2138,20 @@ class PostgresRuntimePersistence(
     }
 
     private fun <T> queryList(sql: String, vararg params: String, map: java.sql.ResultSet.() -> T): List<T> {
-        connection().use { conn ->
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(sql).use { ps ->
+                params.forEachIndexed { idx, value -> ps.setString(idx + 1, value) }
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<T>()
+                    while (rs.next()) rows.add(rs.map())
+                    return rows
+                }
+            }
+        }
+    }
+
+    private fun <T> projectionQueryList(sql: String, vararg params: String, map: java.sql.ResultSet.() -> T): List<T> {
+        projectionConnection().use { conn ->
             conn.prepareStatement(sql).use { ps ->
                 params.forEachIndexed { idx, value -> ps.setString(idx + 1, value) }
                 ps.executeQuery().use { rs ->
@@ -1967,5 +2297,11 @@ class PostgresRuntimePersistence(
         }
     }
 
-    private fun connection(): Connection = dataSource.connection
+    private fun projectionStoreSeparated(): Boolean = projectionDataSource !== dataSource
+
+    private fun connection(): Connection = canonicalConnection()
+
+    private fun canonicalConnection(): Connection = dataSource.connection
+
+    private fun projectionConnection(): Connection = projectionDataSource.connection
 }

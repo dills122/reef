@@ -632,5 +632,22 @@ internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePer
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"
     val user = System.getenv("RUNTIME_POSTGRES_USER") ?: "reef"
     val password = System.getenv("RUNTIME_POSTGRES_PASSWORD") ?: "reef"
-    return PostgresRuntimePersistence(RuntimeDataSources.dataSource(jdbcUrl, user, password, poolName))
+    val projectionJdbcUrl = System.getenv("RUNTIME_PROJECTION_POSTGRES_JDBC_URL")?.trim().orEmpty()
+    val projectionUser = System.getenv("RUNTIME_PROJECTION_POSTGRES_USER") ?: user
+    val projectionPassword = System.getenv("RUNTIME_PROJECTION_POSTGRES_PASSWORD") ?: password
+    val runtimeDataSource = RuntimeDataSources.dataSource(jdbcUrl, user, password, poolName)
+    val projectionDataSource = if (projectionJdbcUrl.isBlank()) {
+        runtimeDataSource
+    } else {
+        RuntimeDataSources.dataSource(
+            projectionJdbcUrl,
+            projectionUser,
+            projectionPassword,
+            "$poolName-projection"
+        )
+    }
+    return PostgresRuntimePersistence(
+        dataSource = runtimeDataSource,
+        projectionDataSource = projectionDataSource
+    )
 }
