@@ -6,6 +6,8 @@ loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
 const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
+const smokeRunId = env("DEV_SMOKE_RUN_ID", "smoke-run-1");
+const smokeVenueSessionId = env("DEV_SMOKE_VENUE_SESSION_ID", "smoke-session-1");
 
 async function postJson(url, payload, headers = {}) {
   const response = await requestJson("POST", url, payload, headers, 5000);
@@ -95,6 +97,8 @@ const submitResponse = await postJson(
     causationId: "smoke-causation-1",
     correlationId: "smoke-correlation-1",
     actorId: "smoke-user",
+    runId: smokeRunId,
+    venueSessionId: smokeVenueSessionId,
     occurredAt: "2026-05-01T13:00:00Z",
     orderId: "smoke-ord-1",
     instrumentId: "AAPL",
@@ -122,8 +126,11 @@ const cancelResponse = await postJson(
     causationId: "smoke-causation-2",
     correlationId: "smoke-correlation-2",
     actorId: "smoke-user",
+    runId: smokeRunId,
+    venueSessionId: smokeVenueSessionId,
     occurredAt: "2026-05-01T13:00:10Z",
     orderId: "smoke-ord-1",
+    instrumentId: "AAPL",
     reason: "smoke cancel",
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-cancel-1" },
