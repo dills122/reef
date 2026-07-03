@@ -36,6 +36,9 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 	if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 		return ActionSubmit
 	}
+	if cfg.ActionMixOverride {
+		return chooseAction(rng, cfg, hasOrders)
+	}
 	if !cfg.HasSessionConfig {
 		return chooseAction(rng, cfg, hasOrders)
 	}
@@ -57,6 +60,9 @@ func chooseActionForProfile(rng *rand.Rand, cfg Config, hasOrders bool, profile 
 }
 
 func chooseActionForActor(rng *rand.Rand, cfg Config, hasOrders bool, profile string, actor *sessionconfig.Actor) Action {
+	if cfg.ActionMixOverride {
+		return chooseActionForProfile(rng, cfg, hasOrders, profile)
+	}
 	if mix, ok := strategy.ResolveActionMix(actor, cfg.StrategyProfiles); ok {
 		if isLifecycleManagedMode(cfg.Mode) && !hasOrders {
 			return ActionSubmit

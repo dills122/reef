@@ -10,6 +10,13 @@ Primary plan:
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
 
+Architecture checkpoint:
+- D-037 reframes stream-ack as the high-throughput path for a deterministic simulated market venue.
+- the main success metric is `completed/sec`: worker processed the command, canonical command result and venue events committed, and JetStream message acked.
+- `accepted/sec` is durable ingress capacity, `projected/sec` is read-model catch-up, and `visible/sec` is UI/control-room freshness.
+- the next large architectural work is role split, canonical append store, async projections, engine shards, then DigitalOcean benchmark harness.
+- engine sharding should not precede canonical append/projection separation unless evidence shows the engine is the current bottleneck.
+
 Current measured reference:
 - best local ceiling probe: `2961.43 rps` total, `2919.27 rps` accepted, `98.58%` success
 - profile: `capacity-baseline`, target `6500`, workers `768`, gRPC runtime-engine, runtime threads `64`, DB pool max `48`
@@ -54,7 +61,8 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 Current architecture direction:
 - Postgres `captured-ack` remains a correctness baseline and local fallback, but it is not the final high-throughput design for the bot-arena target.
 - The next major throughput track is `stream-ack`: durable JetStream publish ack before `202`, deterministic partition routing by run/session/instrument, partition workers that commit canonical Postgres results/events before JetStream ack, and downstream projection workers with watermarks.
-- The first stream-ack target is `5000` durable publish-ack accepted rps with visible lag and no accepted-command gaps, followed by `5000` processed rps, then `10000` accepted/processed rps.
+- The next stream-ack target is not more command-log tuning. The phase order is role split and explicit partition ownership, canonical append store, async projections, engine shards, then a DigitalOcean benchmark harness.
+- Near-term benchmarks must report attempted/sec, accepted/sec, completed/sec, projected/sec where applicable, backlog/lag, DB flush p95/p99, and replay/checksum evidence before claiming progress toward `7500-10000` completed/sec.
 
 Latest accounting smoke:
 - 2026-07-02 captured-ack smoke after run attribution, accounting telemetry, backpressure, and terminal-write batching: `DEV_STRESS_DURATION=10s`, `DEV_STRESS_RATES=200`, `DEV_STRESS_SWEEP_WORKERS=16`.
@@ -161,6 +169,11 @@ Drain-accounted worker sweep:
 | A31 | Stream partition worker and ack rule | Planned | architecture | Ack JetStream only after canonical command result and event log commit |
 | A32 | Canonical event log and projection watermarks | Planned | architecture | Separate venue outcomes from leaderboard/UI projections and expose lag |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
+| A34 | Stream-ack role split and partition ownership | Planned | architecture | Split runtime modes into API, worker, projector, and all-in-one; workers own explicit non-overlapping partition ranges |
+| A35 | Canonical append store | Planned | architecture | Make canonical command results and venue events the stream-ack completion boundary before normalized projections |
+| A36 | Async market-simulation projections | Planned | architecture | Move order/trade/status/timeline/leaderboard/run read models behind projector watermarks and rebuilds |
+| A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
+| A38 | DigitalOcean benchmark harness | Deferred | validation | Deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
 
 ## Milestone Checklist
 
@@ -327,16 +340,43 @@ Exit criteria:
 
 ### M7: Stream-Ack Ingress And Partitioned Processing
 
-- [ ] Define stream-ack command envelope and protobuf/contract updates.
-- [ ] Define deterministic partition key and subject builder.
-- [ ] Add local NATS/JetStream dev profile and stream bootstrap.
-- [ ] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry.
-- [ ] Implement `stream-ack` API mode behind a flag.
-- [ ] Add scoped idempotency guard with payload-hash conflict behavior.
-- [ ] Add partition worker that preserves per-partition ordering.
-- [ ] Persist canonical command result and event log before JetStream ack.
+- [x] Define stream-ack command envelope and protobuf/contract updates.
+- [x] Define deterministic partition key and subject builder.
+- [x] Add local NATS/JetStream dev profile and stream bootstrap.
+- [x] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry.
+- [x] Implement `stream-ack` API mode behind a flag.
+- [x] Add scoped idempotency guard with payload-hash conflict behavior.
+- [x] Add SubmitOrder partition worker that preserves per-partition ordering.
+- [x] Persist SubmitOrder canonical command result and event log before JetStream ack.
+- [ ] Extend partition worker processing to cancel/modify commands.
 - [ ] Add projection watermarks and lag snapshots.
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
+
+Latest stream-ack notes:
+- The first single-instrument stream-ack run accepted all commands but routed through too few partitions: `5000` nominal rps accepted `100186` commands at `2441.99 accepted/sec`, while the worker completed `40056` during the step at `976.35/sec`; trace checks were `0%` because processing lagged behind accepted ingress.
+- The stream-ack stress profile now uses `packages/scenario-definitions/stream-ack-submit-stress.yaml`, a submit-only 16-instrument scenario, and telemetry now captures Docker stats again.
+- Isolated 16-instrument run on `REEF_COMMANDS_MULTI_16_FULL`:
+  - `1000` nominal rps: `28956` accepted, `928.80 accepted/sec`, `928.80 completed/sec`, p95 `47.77ms`, p99 `62.50ms`, trace pass `100%`, worker failures `0`.
+  - `2500` nominal rps: `69479` accepted, `2230.22 accepted/sec`, `1946.27 completed/sec`, p95 `136.18ms`, p99 `170.69ms`, trace pass `84%`, worker failures `0`.
+  - `5000` nominal rps: `66993` accepted, `2157.24 accepted/sec`, `2003.09 completed/sec`, p95 `147.35ms`, p99 `180.99ms`, trace pass `75%`, worker failures `0`.
+- The 16-instrument run used `8` active stream partitions; partition `6` was hottest at `51830` commands. Runtime peaked near `354%` CPU, Postgres near `303%` CPU, and DB pool waiters peaked at `51`, so the next bottleneck is runtime/Postgres contention plus partition skew under worker load, not JetStream publish acknowledgement.
+- Stream workers now prepare fetched submit batches, persist the batch with one runtime persistence call, then ack each JetStream delivery after the batch commit path returns. The stream-ack dev profile also enables a dedicated `stream-runtime` DB pool (`max=24`, `minIdle=8`) and raises the worker batch size to `250`.
+- Batch persistence validation on `REEF_COMMANDS_BATCH_FULL`:
+  - `1000` nominal rps: `28464` accepted/completed, `916.12/sec`, p95 `80.53ms`, p99 `156.81ms`, trace pass `100%`, worker failures `0`.
+  - `2500` nominal rps: `72598` accepted/completed, `2333.84/sec`, p95 `112.51ms`, p99 `153.21ms`, trace pass `97%`, worker failures `0`.
+  - `5000` nominal rps: `77861` accepted, `77776` worker completed, `2500.20 completed/sec`, p95 `128.06ms`, p99 `182.96ms`, trace pass `95%`, worker failures `0`.
+- The batch run moved the processed ceiling from roughly `2000/sec` to `2500/sec` and improved trace completion at high load, but it still exposed `stream-intake` pool waiters and partition skew. The dev profile now gives `stream-intake` its own pool (`max=32`, `minIdle=8`) and the stream-ack stress target generates a 64-instrument session config so deterministic routing has enough independent instrument keys to exercise all partitions.
+- Spread-profile validation on `REEF_COMMANDS_SPREAD_FULL`:
+  - `1000` nominal rps: `28887` accepted/completed, `870.39/sec`, p95 `49.66ms`, p99 `61.55ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
+  - `2500` nominal rps: `74187` accepted/completed, `2222.68/sec`, p95 `61.97ms`, p99 `115.59ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
+  - `5000` nominal rps: `104431` accepted/completed, `3106.74/sec`, p95 `101.58ms`, p99 `136.16ms`, trace pass `96%`, active partitions `16`, worker failures `0`.
+- Net result: the durable stream-ack processed ceiling moved from about `2000/sec` to about `3100/sec` on the local stack while preserving `202`-after-publish and DB-before-stream-ack semantics. Remaining bottlenecks are runtime/Postgres CPU and batched persistence cost (`~28ms` average per `persistSubmitOutcomes` batch in the spread run), not JetStream publish durability. Intake-pool pressure improved materially (`maxDbPoolWaiters` dropped from `56` to `14`).
+- Follow-up probes that did not beat the spread-profile baseline:
+  - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
+  - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`
+  - `32` stream partitions regressed to `2586.44/sec`, so extra worker lanes added contention rather than throughput on the local stack
+  - hot-path auth/reference lookup caching reduced those lookup timings but shifted pressure into larger/slower persistence batches; cache plus batch `250` reached `2915.98/sec`, and cache plus batch `100` reached `2876.79/sec`
+  - a `256`-instrument stress shape reduced hot-partition skew but regressed to `2128.20/sec`; keep the default generated stream-ack stress shape at `64` instruments for ceiling comparisons, and use `DEV_STRESS_STREAM_ACK_INSTRUMENTS` for broader realism probes
 
 Exit criteria:
 - `202` is returned only after JetStream durable publish ack.

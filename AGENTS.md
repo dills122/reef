@@ -10,9 +10,13 @@ Optimize for:
 
 - realistic market-infrastructure domain boundaries
 - deterministic scenario execution, replay, and auditability
+- high-throughput command intake and lifecycle processing with measured evidence
+- low write amplification, partitionable processing, and async projections on hot paths
 - local-first development with inspectable workflows
 - small, explicit changes over broad refactors
 - tests and documentation when behavior, contracts, setup, or commands change
+
+Performance work must never weaken correctness, determinism, auditability, idempotency, or replay semantics.
 
 ## Canonical Docs
 
@@ -21,8 +25,10 @@ Read these before changing architecture or behavior:
 - `REEF_PROJECT_OVERVIEW.md`
 - `REEF_TECHNICAL_DESIGN.md`
 - `docs/steering/README.md`
+- `docs/steering/repository-scope-and-priorities.md`
 - `docs/steering/architecture.md`
 - `docs/steering/repository.md`
+- `docs/PERFORMANCE_LEARNINGS.md`
 - `docs/ENGINEERING_DELIVERY_POLICY.md`
 - `docs/DECISIONS.md`
 
@@ -72,9 +78,13 @@ If behavior changes, update the relevant contract and docs in the same change.
 - Keep domain logic framework-light and outside adapters.
 - Keep Go matching-engine behavior isolated from Kotlin runtime orchestration.
 - Keep UI projections from leaking into core write-model logic.
+- Keep canonical command/event facts separate from rebuildable projections.
+- Keep matching-sensitive submit/cancel/modify commands for the same venue session and instrument on the same deterministic processing lane.
+- Do not return `202 Accepted` until the configured durable ingress mechanism has acknowledged acceptance.
 - Avoid premature service extraction; bounded contexts can begin as modules.
 - Avoid unrelated refactors and generated artifact churn.
 - Do not change public API routes, event semantics, storage formats, or scenario determinism without explicit intent.
+- Do not add synchronous hot-path writes, table scans, or read-model updates without a clear reason and, where relevant, benchmark evidence.
 
 ## Repository Conventions
 

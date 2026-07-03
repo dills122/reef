@@ -2,7 +2,9 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "
 import http from "node:http";
 import https from "node:https";
 import { basename, join } from "node:path";
+import { execFile } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
+import { promisify } from "node:util";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 import {
   captureDbDiagnosticsLogs,
@@ -11,6 +13,7 @@ import {
 } from "./lib/db-diagnostics.mjs";
 
 loadDotEnv();
+const execFileAsync = promisify(execFile);
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const duration = env("DEV_STRESS_DURATION", "30s");
 const workers = env("DEV_STRESS_WORKERS", "12");
@@ -20,6 +23,7 @@ const mode = env("DEV_STRESS_MODE", "strict-lifecycle");
 const profile = env("DEV_STRESS_PROFILE", "default");
 const runKind = env("DEV_STRESS_RUN_KIND", "stress");
 const scenarioId = env("DEV_STRESS_SCENARIO_ID", `${mode}:${profile}`);
+const sessionConfig = env("DEV_STRESS_SESSION_CONFIG", "");
 const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
@@ -36,6 +40,7 @@ const dbDiagnosticsSchemas = parseCsvStrings(
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
+const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -219,18 +224,23 @@ function resolveActionMix(profileName) {
   if (profileName === "abuse-trip") {
     return { submit: "35", modify: "45", cancel: "20" };
   }
+  if (profileName === "stream-submit") {
+    return { submit: "100", modify: "0", cancel: "0" };
+  }
   return { submit: "70", modify: "20", cancel: "10" };
 }
 
 async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
+  const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
   try {
     await run(
       "go",
       [
         "run",
         "./cmd/load-tester",
+        ...(sessionConfig ? ["--session-config", sessionConfig] : []),
         "--base-url",
         runtimeUrl,
         "--duration",
@@ -276,6 +286,10 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
       attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });
     }
+    if (captureStreamAckWorkerStats) {
+      const afterStreamWorkers = await sampleStreamAckWorkers(runtimeUrl);
+      attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
+    }
   }
 }
 
@@ -286,6 +300,101 @@ async function sampleCommandAccounting(runtimeUrl, runId) {
     url: `${runtimeUrl}/internal/commands/accounting?runId=${encodedRunId}`,
     captureJson: true,
   });
+}
+
+async function sampleStreamAckWorkers(runtimeUrl) {
+  return requestAppProbe({
+    name: "runtime.streamAckWorkers",
+    url: `${runtimeUrl}/internal/stream-ack/worker/stats`,
+    captureJson: true,
+  });
+}
+
+function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeStreamWorkers?.json ?? null;
+    const after = afterStreamWorkers?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const delta = streamWorkerDelta(before, after, durationSeconds);
+    report.streamAckWorkers = {
+      before,
+      after,
+      delta,
+      probes: {
+        before: accountingProbeSummary(beforeStreamWorkers),
+        after: accountingProbeSummary(afterStreamWorkers),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    if (delta) {
+      const hotPartitions = delta.partitionDeltas
+        .slice()
+        .sort((a, b) => b.completedDelta - a.completedDelta)
+        .slice(0, 4)
+        .map((partition) => `p${partition.partition}:${partition.completedDelta}`)
+        .join(" ");
+      console.log(
+        `  stream-workers fetchedDelta=${delta.fetchedDelta} completedDelta=${delta.completedDelta} failedDelta=${delta.failedDelta} ackFailedDelta=${delta.ackFailedDelta} completedRps=${delta.completedRps.toFixed(2)} hotPartitions=${hotPartitions}`,
+      );
+    }
+  } catch (error) {
+    console.warn(`  stream-worker stats unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function streamWorkerDelta(before, after, durationSeconds) {
+  const beforeMetrics = before?.metrics;
+  const afterMetrics = after?.metrics;
+  if (!beforeMetrics || !afterMetrics) return null;
+  const fetchedDelta = Number(afterMetrics.fetched ?? 0) - Number(beforeMetrics.fetched ?? 0);
+  const completedDelta = Number(afterMetrics.completed ?? 0) - Number(beforeMetrics.completed ?? 0);
+  const failedDelta = Number(afterMetrics.failed ?? 0) - Number(beforeMetrics.failed ?? 0);
+  const ackFailedDelta = Number(afterMetrics.ackFailed ?? 0) - Number(beforeMetrics.ackFailed ?? 0);
+  const unsupportedDelta = Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0);
+  const partitionDeltas = streamWorkerPartitionDeltas(before, after, durationSeconds);
+  return {
+    fetchedDelta,
+    completedDelta,
+    failedDelta,
+    ackFailedDelta,
+    unsupportedDelta,
+    fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
+    completedRps: durationSeconds > 0 ? completedDelta / durationSeconds : 0,
+    partitionDeltas,
+    consumerMetrics: after?.consumerMetrics ?? [],
+  };
+}
+
+function streamWorkerPartitionDeltas(before, after, durationSeconds) {
+  const beforeByPartition = new Map(
+    (before?.partitionMetrics ?? []).map((partition) => [Number(partition.partition), partition]),
+  );
+  return (after?.partitionMetrics ?? [])
+    .map((afterPartition) => {
+      const partition = Number(afterPartition.partition);
+      const beforePartition = beforeByPartition.get(partition) ?? {};
+      const fetchedDelta = Number(afterPartition.fetched ?? 0) - Number(beforePartition.fetched ?? 0);
+      const completedDelta = Number(afterPartition.completed ?? 0) - Number(beforePartition.completed ?? 0);
+      const failedDelta = Number(afterPartition.failed ?? 0) - Number(beforePartition.failed ?? 0);
+      const ackFailedDelta = Number(afterPartition.ackFailed ?? 0) - Number(beforePartition.ackFailed ?? 0);
+      const unsupportedDelta = Number(afterPartition.unsupported ?? 0) - Number(beforePartition.unsupported ?? 0);
+      return {
+        partition,
+        fetchedDelta,
+        completedDelta,
+        failedDelta,
+        ackFailedDelta,
+        unsupportedDelta,
+        fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
+        completedRps: durationSeconds > 0 ? completedDelta / durationSeconds : 0,
+        localInFlightAfter: Number(afterPartition.localInFlight ?? 0),
+        lastFetchedStreamSequence: Number(afterPartition.lastFetchedStreamSequence ?? 0),
+        lastCompletedStreamSequence: Number(afterPartition.lastCompletedStreamSequence ?? 0),
+        maxDeliveredCount: Number(afterPartition.maxDeliveredCount ?? 0),
+      };
+    })
+    .sort((a, b) => a.partition - b.partition);
 }
 
 function attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting }) {
@@ -393,6 +502,8 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.hotPath", url: `${runtimeUrl}/internal/perf/hot-path`, captureJson: true },
     { name: "runtime.dbPools", url: `${runtimeUrl}/internal/perf/db-pools`, captureJson: true },
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
+    { name: "runtime.streamAckHealth", url: `${runtimeUrl}/internal/stream-ack/health`, captureJson: true },
+    { name: "runtime.streamAckWorkers", url: `${runtimeUrl}/internal/stream-ack/worker/stats`, captureJson: true },
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];

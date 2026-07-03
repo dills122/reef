@@ -11,8 +11,10 @@ The architecture must support:
 - deterministic simulation
 - inspectable workflows
 - replayable event history
+- high-throughput command intake and lifecycle processing under realistic simulator load
+- auditability and replay evidence that remain intact when performance is optimized
 
-The platform should be production-shaped, but not prematurely production-optimized.
+The platform should be production-shaped and throughput-aware, but not an HFT benchmark harness. Correctness, determinism, and auditability stay ahead of raw speed claims.
 
 ## System Shape
 
@@ -23,7 +25,7 @@ Reef is expected to grow into these primary surfaces:
 - Kotlin platform runtime for APIs, workflow orchestration, persistence, and read models
 - Go matching engine for order book and matching behavior
 - Postgres as canonical state storage
-- NATS as the preferred async backbone once service boundaries justify it
+- NATS JetStream as the preferred async backbone and durable accepted-command ingress path for stream-backed high-throughput modes
 - Protobuf as the preferred inter-service contract format once contracts stabilize
 
 ## Architectural Rules
@@ -55,6 +57,18 @@ Do not adopt full event sourcing unless the project proves it is necessary.
 Simulation paths should be seedable, replayable, and explainable.
 Avoid hidden time dependencies or untracked randomness in scenario execution.
 
+### 7. Throughput is a first-class constraint
+
+Command intake, matching, persistence, projection, and simulator load changes must account for sustained throughput, backlog, and write amplification. Performance work is invalid if it weakens lifecycle correctness, command idempotency, deterministic replay, traceability, or audit evidence.
+
+### 8. Canonical facts stay separate from projections
+
+Persist canonical command results and lifecycle events before acknowledging consumed work. Keep read models, dashboards, control-room counters, timelines, and search views rebuildable and preferably asynchronous, with explicit lag and watermark data where freshness matters.
+
+### 9. Ordered partitions protect matching correctness
+
+Submit, cancel, and modify commands that affect the same venue session and instrument must enter the same deterministic processing lane unless the lifecycle model proves a different concurrency design is correct.
+
 ## Bounded Contexts
 
 The initial domain breakdown should follow these contexts:
@@ -82,6 +96,36 @@ Phase 1 should bias toward a modular monolith plus separate engine:
 - optional in-process event dispatcher inside the Kotlin runtime
 
 This is the default unless there is a strong reason to distribute more aggressively.
+
+The synchronous runtime-to-engine and Postgres-heavy path is a correctness baseline and local fallback. It should not be treated as the primary path to high sustained TPS unless comparable benchmark evidence proves that posture.
+
+## Target High-Throughput Shape
+
+For venue ingress and matching-heavy paths, the preferred direction is:
+
+```text
+Boundary/API
+  -> durable command ingress
+  -> partitioned command workers
+  -> matching engine
+  -> canonical lifecycle/event persistence
+  -> async projections/read models/control-room views
+```
+
+Avoid expanding this synchronous shape for high-throughput paths:
+
+```text
+Boundary/API
+  -> synchronous matching
+  -> synchronous order writes
+  -> synchronous event writes
+  -> synchronous trade writes
+  -> synchronous trace writes
+  -> synchronous read-model writes
+  -> response
+```
+
+That synchronous path can remain useful for strict lifecycle tests, debugging, parity comparisons, and local fallback modes.
 
 ## Repository Shape
 
@@ -113,6 +157,8 @@ Additional folders are acceptable when justified, but avoid mixing runtime, UI, 
 - prefer protobuf for Kotlin-Go contracts once shapes settle
 - prefer stable identifiers over positional coupling
 - treat timestamps, seeds, correlation IDs, and actor identity as first-class metadata
+- include routing metadata required to preserve deterministic partitioning, especially `venueSessionId`, `instrumentId`, and where applicable `scenarioRunId`
+- distinguish attempted, durably accepted, processed, persisted, and projected command outcomes
 
 Examples of early commands:
 
@@ -144,6 +190,9 @@ Examples of early events:
 - maintain append-only event storage alongside current-state tables
 - read models may be rebuilt from persisted events and state transitions where useful
 - do not let UI-specific projections leak back into core write-model logic
+- keep hot-path database writes minimal, explicit, and measured
+- prefer batched canonical persistence over per-command persistence on throughput-sensitive paths
+- prefer async projections for query-heavy UI/control-room state
 
 At minimum, plan for:
 
@@ -160,6 +209,9 @@ At minimum, plan for:
 - start with the simplest interface that preserves service boundaries
 - synchronous HTTP or gRPC between runtime and engine is acceptable early on
 - introduce NATS when async workflows materially improve the design
+- use JetStream stream-backed command intake when the goal is durable accepted-command throughput under bot/simulator load
+- return `202 Accepted` only after the configured durable ingress mechanism has acknowledged acceptance
+- reject before durable acceptance when backpressure, stream health, partition lag, worker health, or DB flush lag indicates the platform cannot safely drain
 - never let transport concerns define the domain model
 
 For communication and API specifics, treat these as normative companions:
@@ -190,6 +242,17 @@ Use:
 - durable event records
 - traceable workflow identifiers
 
+Throughput and stress evidence should distinguish:
+
+- attempted command rate
+- durably accepted command rate
+- processed command rate
+- canonical event persistence rate
+- projected/read-model catch-up rate
+- business reject rate versus system failure rate
+- queue or stream backlog, worker lag, and oldest unprocessed command age
+- replay and trace validation result
+
 ## Testing Strategy
 
 Favor a layered approach:
@@ -213,6 +276,8 @@ Use [`docs/PERFORMANCE_LEARNINGS.md`](../PERFORMANCE_LEARNINGS.md) as normative 
 - write-path optimization defaults (pooling, batching, counter-based sequencing)
 - PR-level performance evidence requirements
 
+Also treat [`repository-scope-and-priorities.md`](./repository-scope-and-priorities.md) as normative for hot-path rules, command acceptance semantics, partitioning, canonical facts versus projections, and safe refactor boundaries.
+
 ## Non-Goals For Early Phases
 
 Avoid early investment in:
@@ -222,3 +287,5 @@ Avoid early investment in:
 - production-scale infrastructure
 - excessive service fragmentation
 - event-sourcing purity
+
+Do not confuse these non-goals with permission to ignore sustained throughput. Reef should be high-throughput enough to run realistic simulator and bot workloads with bounded backlog and validated replay.

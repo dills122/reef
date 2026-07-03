@@ -19,7 +19,11 @@ object PlatformCommandParsers {
         "runKind",
         "scenarioId",
         "scenarioRunId",
-        "seed"
+        "seed",
+        "venueSessionId",
+        "clientOrderId",
+        "botId",
+        "botVersion"
     )
     private val apiV1Contracts = mapOf(
         "/api/v1/orders/submit" to apiV1Contract(

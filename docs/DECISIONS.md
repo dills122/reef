@@ -540,6 +540,36 @@ Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
+### D-037: Stream-Ack Canonical Append And Projection Split
+
+Status: accepted
+
+Summary:
+- Reef's high-throughput path is a deterministic simulated market venue architecture, not a generic request/response CRUD path and not a real-money production exchange.
+- the market-simulation hot path is accepted command -> ordered partition lane -> matching/lifecycle decision -> canonical append-only facts -> stream ack.
+- D-037 refines D-036 for phase order, metric definitions, canonical persistence, and projection ownership.
+- the implementation order is role split and explicit partition ownership first, canonical append store second, async projection system third, engine shards fourth, and DigitalOcean benchmark harness fifth.
+- `accepted/sec` means the API returned `202` only after durable JetStream publish acknowledgement.
+- `completed/sec` means a worker consumed the command, made the matching/lifecycle decision, committed canonical command result and venue events, and acknowledged the JetStream message.
+- `projected/sec` means downstream read models, timelines, counters, leaderboards, reports, or UI state caught up from canonical facts.
+- `visible/sec` means projected state is available to UI/control-room users; it is not part of the command completion definition.
+- normalized orders, executions, trades, status rows, trace timelines, leaderboard state, and run summaries are not stream-ack completion requirements; they are async projections with watermarks and lag metrics.
+- canonical append tables must be sufficient to prove and replay what happened to every accepted command.
+- redelivery after worker crash is a normal design case; deterministic IDs and uniqueness constraints must prevent duplicate trades, executions, lifecycle events, and terminal command results.
+- submit, cancel, and modify commands affecting the same run/session/instrument must use the same deterministic partition lane; cancel/modify must carry routing metadata rather than requiring hot-path lookup.
+- backpressure must be based on drain health and completed throughput, not durable acceptance rate alone.
+- no `7500-10000` completed/sec claim is valid without accepted/completed/projected accounting, bounded lag, p95/p99 evidence, zero accepted-command gaps, and replay or checksum evidence.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/steering/architecture.md`](./steering/architecture.md)
+- [NATS JetStream Streams](https://docs.nats.io/nats-concepts/jetstream/streams)
+- [NATS JetStream Consumers](https://docs.nats.io/nats-concepts/jetstream/consumers)
+- [NATS Subject Mapping and Partitioning](https://docs.nats.io/nats-concepts/subject_mapping)
+- [PostgreSQL Populating a Database](https://www.postgresql.org/docs/current/populate.html)
+- [PostgreSQL Table Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted

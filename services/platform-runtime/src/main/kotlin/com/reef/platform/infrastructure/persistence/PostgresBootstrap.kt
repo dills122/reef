@@ -108,6 +108,27 @@ object PostgresSchemaRequirements {
         )
     }
 
+    fun boundaryStreamCommandIntake(streamCommandIntake: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(streamCommandIntake)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                "scope",
+                "idempotency_key",
+                "payload_hash",
+                "command_id",
+                "route",
+                "subject",
+                "stream_name",
+                "partition",
+                "stream_sequence",
+                "published",
+                "first_seen_at",
+                "published_at"
+            ).map { column -> PostgresSchemaColumn(table, column) }
+        )
+    }
+
     fun commandLog(
         commands: String,
         payloads: String = "command_log.command_payloads",
