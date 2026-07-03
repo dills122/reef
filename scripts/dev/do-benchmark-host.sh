@@ -67,6 +67,7 @@ USAGE
 
 main() {
   cd "$ROOT_DIR"
+  log "loading local environment"
   load_env_file "$ROOT_DIR/.env"
   load_env_file "$ROOT_DIR/.env.local"
   refresh_runtime_config
@@ -178,9 +179,13 @@ cmd_destroy() {
 
 provision_stack() {
   require_destroyable_confirmation
+  log "configuring OpenTofu variables"
   configure_tf_vars
+  log "initializing OpenTofu in $INFRA_DIR"
   tofu init
+  log "applying OpenTofu stack"
   tofu apply -auto-approve
+  log "waiting for benchmark host readiness"
   wait_for_ssh
 }
 
@@ -360,6 +365,7 @@ ssh_base() {
 
 configure_tf_vars() {
   local mode="${1:-required}"
+  log "resolving DigitalOcean token"
   export TF_VAR_do_token="${DIGITALOCEAN_TOKEN:-${DO_TOKEN:-}}"
   if [ -z "$TF_VAR_do_token" ] && [ "$mode" != "optional" ]; then
     echo "DIGITALOCEAN_TOKEN or DO_TOKEN is required" >&2
@@ -368,6 +374,7 @@ configure_tf_vars() {
 
   local public_key
   public_key="$(public_key_path)"
+  log "using SSH public key path: $public_key"
   if [ ! -f "$public_key" ] && [ "$mode" != "optional" ]; then
     echo "SSH public key not found: $public_key" >&2
     exit 1
@@ -385,7 +392,9 @@ configure_tf_vars() {
   export TF_VAR_ssh_user="${REEF_DO_SSH_USER:-reefbench}"
   export TF_VAR_droplet_name="${REEF_DO_DROPLET_NAME:-reef-stream-ack-benchmark}"
   export TF_VAR_allowed_ssh_cidrs
+  log "resolving allowed SSH CIDRs"
   TF_VAR_allowed_ssh_cidrs="$(allowed_ssh_cidrs_json "$mode")"
+  log "allowed SSH CIDRs: $TF_VAR_allowed_ssh_cidrs"
 }
 
 allowed_ssh_cidrs_json() {
@@ -434,6 +443,10 @@ require_destroyable_confirmation() {
     echo "Set REEF_DO_CONFIRM_DESTROYABLE=1 to acknowledge this creates billable DigitalOcean resources." >&2
     exit 1
   fi
+}
+
+log() {
+  printf '[do-benchmark] %s\n' "$*"
 }
 
 tofu() {
