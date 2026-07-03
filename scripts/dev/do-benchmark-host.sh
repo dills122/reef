@@ -472,7 +472,7 @@ ssh_user() {
 }
 
 public_key_path() {
-  expand_path "${REEF_DO_SSH_PUBLIC_KEY:-~/.ssh/id_ed25519.pub}"
+  expand_path "${REEF_DO_SSH_PUBLIC_KEY:-$HOME/.ssh/id_ed25519.pub}"
 }
 
 private_key_path() {
