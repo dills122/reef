@@ -169,6 +169,7 @@ Minimum for each promotion tier:
 - `2000 completed/sec` is the first required stable target; after that, promote to `5000/sec`, then `7500/sec`.
 - Accepted throughput is within `5-10%` of worker completed throughput unless the difference is explained by intentional pre-acceptance backpressure.
 - The tier has `100%` success or only intentional pre-acceptance `429` backpressure.
+- A run that barely holds `2000/sec` with saturated CPU/IO, rapidly growing lag, poor post-run drain, or no credible path to `5000/sec` is a failed capacity result even if the process stays alive for `5m`.
 - No unexpected `5xx`.
 - Worker `failed=0` and `ackFailed=0`.
 - Accepted commands are either completed/projected during the window or have visible lag that drains afterward.
@@ -180,6 +181,7 @@ Minimum for each promotion tier:
 Healthy promotion target:
 
 - the current tier sustains the target completed/sec rate for `5m`
+- the observed bottleneck has enough headroom that the next tier looks like tuning/provisioning, not another architecture phase
 - p95 roughly under `150ms`
 - worker completed throughput materially close to accepted throughput, or clear evidence of the next limiting subsystem
 - projection lag visible and bounded, not silent
@@ -206,7 +208,7 @@ Scale worker and projector process counts only after these measurements show the
 
 ## Capacity Headroom Rule
 
-Do not optimize for just-barely-enough capacity. If the active target is `2000 completed/sec`, it is acceptable for a subsystem to handle `5000-6000/sec` when the extra cost and complexity are reasonable. The goal is to make each promotion tier boring, not fragile.
+Do not optimize for just-barely-enough capacity. If the active target is `2000 completed/sec`, it is acceptable for a subsystem to handle `5000-6000/sec` when the extra cost and complexity are reasonable. The goal is to make each promotion tier boring, not fragile. Barely stable at `2000/sec` is not a success state for this track.
 
 Headroom is healthy when:
 
@@ -216,6 +218,8 @@ Headroom is healthy when:
 - it does not create a major cost jump just to hide avoidable write amplification
 
 Avoid brute-force scaling when it is close to `10x` cost/complexity for a small gain, or when it hides rows/command, WAL bytes/command, commits/command, projection write amplification, or hot-partition behavior that should be fixed.
+
+Avoid a micro-tuning mindset for this phase. Prefer changes that remove a real bottleneck class or add practical headroom across the promotion ladder over small parameter nudges that only make the current `2000/sec` run pass by a narrow margin.
 
 ## Post-Ablation Fix Order
 

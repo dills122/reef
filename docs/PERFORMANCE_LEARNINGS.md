@@ -83,7 +83,10 @@ Highest-value fixes after the next ablations:
 5. Provision for practical headroom:
    - `2-3x` subsystem headroom over the current target is acceptable when cost and complexity are reasonable
    - avoid `10x` cost/complexity jumps or broad brute-force scaling that hides avoidable write amplification
-6. Keep the hard pivot explicit:
+6. Avoid barely-stable milestones:
+   - a `2000 completed/sec` run with saturated CPU/IO, growing lag, slow drain, or no credible path to `5000/sec` is not a capacity win
+   - prefer bottleneck-removing changes and practical overcapacity over small parameter nudges that only make one run pass
+7. Keep the hard pivot explicit:
    - JetStream as the canonical event log and Postgres as projection/query storage is a reserve option only if compact canonical Postgres append remains the ceiling
    - adopting that option would require a new architecture decision, retention/replay/checksum requirements, and an updated audit/query story
 
