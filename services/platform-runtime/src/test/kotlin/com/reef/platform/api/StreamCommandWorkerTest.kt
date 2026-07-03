@@ -15,6 +15,7 @@ import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class StreamCommandWorkerTest {
     @Test
@@ -28,18 +29,37 @@ class StreamCommandWorkerTest {
                 runtimePersistence = persistence
             )
         )
-        val delivery = RecordingDelivery(payloadJson = validSubmitBody("cmd-worker-1", "ord-worker-1"))
+        var ackObservedCanonical = false
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-1", "ord-worker-1"),
+            onAck = {
+                ackObservedCanonical = persistence.canonicalSubmitOutcomes()
+                    .any { it.commandId == "cmd-worker-1" }
+            }
+        )
         val source = FixedStreamCommandSource(delivery)
-        val worker = StreamCommandWorker(source = source, api = api)
+        val worker = StreamCommandWorker(source = source, api = api, partition = 0)
 
         val processed = worker.processOnce()
 
         assertEquals(1, processed)
         assertEquals(1, gateway.submitCalls)
         assertEquals(1, delivery.ackCalls)
+        assertTrue(ackObservedCanonical)
         assertEquals(0, delivery.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-1"))
         assertNotNull(persistence.acceptedOrder("ord-worker-1"))
+        val canonical = persistence.canonicalSubmitOutcomes().single()
+        assertEquals("run-worker-1", canonical.runId)
+        assertEquals("session-worker-1", canonical.venueSessionId)
+        assertEquals(0, canonical.partitionId)
+        assertEquals(1, canonical.partitionSequence)
+        assertEquals("REEF_COMMANDS", canonical.streamName)
+        assertEquals(1, canonical.streamSequence)
+        assertEquals("AAPL", canonical.instrumentId)
+        assertEquals("SubmitOrder", canonical.commandType)
+        assertEquals("accepted", canonical.resultStatus)
+        assertTrue(canonical.payloadHash.isNotBlank())
     }
 
     @Test
@@ -68,6 +88,7 @@ class StreamCommandWorkerTest {
         assertEquals(0, first.nakCalls + second.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-redeliver"))
         assertNotNull(persistence.acceptedOrder("ord-worker-redeliver"))
+        assertEquals(1, persistence.canonicalSubmitOutcomes().size)
     }
 
     @Test
@@ -104,6 +125,10 @@ class StreamCommandWorkerTest {
         assertEquals(0, first.nakCalls + second.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-batch-1"))
         assertNotNull(persistence.submitResult("cmd-worker-batch-2"))
+        assertEquals(
+            listOf(10L, 11L),
+            persistence.canonicalSubmitOutcomes().map { it.streamSequence }
+        )
         val partition = StreamCommandWorkerMetrics.snapshot().partitions.single()
         assertEquals(3, partition.partition)
         assertEquals(2, partition.fetched)
@@ -278,13 +303,15 @@ private class RecordingDelivery(
     override val payloadJson: String,
     override val streamSequence: Long = 1,
     override val deliveredCount: Long = 1,
-    private val failAck: Boolean = false
+    private val failAck: Boolean = false,
+    private val onAck: () -> Unit = {}
 ) : StreamCommandDelivery {
     var ackCalls = 0
     var nakCalls = 0
     var termCalls = 0
 
     override fun ack() {
+        onAck()
         ackCalls++
         if (failAck) error("ack failed")
     }

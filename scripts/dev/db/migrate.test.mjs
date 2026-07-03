@@ -20,6 +20,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0003_live_runtime_persistence.sql",
       "runtime/0004_bulk_submit_outcomes.sql",
       "runtime/0005_set_based_submit_outcomes.sql",
+      "runtime/0006_canonical_append_store.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));

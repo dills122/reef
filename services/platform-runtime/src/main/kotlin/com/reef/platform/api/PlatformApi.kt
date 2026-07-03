@@ -6,6 +6,7 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 
 class PlatformApi(
@@ -25,6 +26,10 @@ class PlatformApi(
 
     fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
         orderService.persistSubmitOutcomes(outcomes)
+    }
+
+    fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
+        orderService.appendCanonicalSubmitOutcomes(outcomes)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {

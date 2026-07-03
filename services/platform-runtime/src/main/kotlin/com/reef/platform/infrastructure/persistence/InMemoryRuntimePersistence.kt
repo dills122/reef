@@ -12,6 +12,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 
 class InMemoryRuntimePersistence : RuntimePersistence {
+    private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
     private val submitResults = linkedMapOf<String, SubmitOrderResult>()
     private val instruments = linkedMapOf<String, Instrument>()
     private val participants = linkedMapOf<String, Participant>()
@@ -145,5 +146,15 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         if (limit <= 0) return emptyList()
         val from = (events.size - limit).coerceAtLeast(0)
         return events.subList(from, events.size).toList()
+    }
+
+    override fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
+        outcomes.forEach { outcome ->
+            canonicalSubmitOutcomes.putIfAbsent(outcome.commandId, outcome)
+        }
+    }
+
+    fun canonicalSubmitOutcomes(): List<CanonicalSubmitOutcome> {
+        return canonicalSubmitOutcomes.values.toList()
     }
 }

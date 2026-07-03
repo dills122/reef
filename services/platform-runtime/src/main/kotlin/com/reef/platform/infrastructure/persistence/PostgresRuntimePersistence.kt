@@ -217,6 +217,76 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalCommandResults} (
+                      command_id TEXT PRIMARY KEY,
+                      run_id TEXT NOT NULL,
+                      venue_session_id TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      partition_seq BIGINT NOT NULL,
+                      stream_name TEXT NOT NULL,
+                      stream_seq BIGINT NOT NULL,
+                      idempotency_key TEXT NOT NULL,
+                      payload_hash TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      command_type TEXT NOT NULL,
+                      result_status TEXT NOT NULL,
+                      reject_code TEXT NOT NULL,
+                      accepted_at TEXT NOT NULL,
+                      completed_at TEXT NOT NULL,
+                      engine_shard_id TEXT NOT NULL,
+                      result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE (stream_name, stream_seq)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_results_partition_seq
+                    ON ${names.canonicalCommandResults}(partition_id, partition_seq)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_results_run_session
+                    ON ${names.canonicalCommandResults}(run_id, venue_session_id, partition_id, partition_seq)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEvents} (
+                      event_id TEXT PRIMARY KEY,
+                      run_id TEXT NOT NULL,
+                      venue_session_id TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      partition_seq BIGINT NOT NULL,
+                      event_seq BIGINT NOT NULL,
+                      command_id TEXT NOT NULL,
+                      event_type TEXT NOT NULL,
+                      aggregate_type TEXT NOT NULL,
+                      aggregate_id TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      deterministic_event_index INTEGER NOT NULL,
+                      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      emitted_at TEXT NOT NULL,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_partition_seq
+                    ON ${names.canonicalVenueEvents}(partition_id, event_seq)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_run_session
+                    ON ${names.canonicalVenueEvents}(run_id, venue_session_id, partition_id, event_seq)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE OR REPLACE FUNCTION ${names.validateReferenceDataFunction}(
                       p_instrument_id TEXT,
                       p_participant_id TEXT,
@@ -236,6 +306,131 @@ class PostgresRuntimePersistence(
                         EXISTS(SELECT 1 FROM ${names.referenceParticipants} WHERE participant_id = p_participant_id),
                         EXISTS(SELECT 1 FROM ${names.referenceAccounts} WHERE account_id = p_account_id),
                         EXISTS(SELECT 1 FROM ${names.referenceAccounts} WHERE account_id = p_account_id AND participant_id = p_participant_id)
+                    $$;
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION ${names.appendCanonicalSubmitOutcomesFunction}(
+                      p_outcomes JSONB
+                    )
+                    RETURNS BIGINT
+                    LANGUAGE plpgsql
+                    AS $$
+                    DECLARE
+                      appended_count BIGINT := 0;
+                    BEGIN
+                      IF p_outcomes IS NULL THEN
+                        RETURN 0;
+                      END IF;
+
+                      IF jsonb_typeof(p_outcomes) <> 'array' THEN
+                        RAISE EXCEPTION 'canonical submit outcomes payload must be a JSON array';
+                      END IF;
+
+                      WITH outcomes AS (
+                        SELECT outcome, ordinality::BIGINT AS outcome_ordinality
+                        FROM jsonb_array_elements(p_outcomes) WITH ORDINALITY AS outcome_rows(outcome, ordinality)
+                      ),
+                      insert_results AS (
+                        INSERT INTO ${names.canonicalCommandResults}(
+                          command_id,
+                          run_id,
+                          venue_session_id,
+                          partition_id,
+                          partition_seq,
+                          stream_name,
+                          stream_seq,
+                          idempotency_key,
+                          payload_hash,
+                          instrument_id,
+                          command_type,
+                          result_status,
+                          reject_code,
+                          accepted_at,
+                          completed_at,
+                          engine_shard_id,
+                          result_payload
+                        )
+                        SELECT
+                          outcome->>'commandId',
+                          COALESCE(outcome->>'runId', ''),
+                          COALESCE(outcome->>'venueSessionId', ''),
+                          COALESCE((outcome->>'partitionId')::INTEGER, -1),
+                          COALESCE((outcome->>'partitionSequence')::BIGINT, 0),
+                          COALESCE(outcome->>'streamName', ''),
+                          COALESCE((outcome->>'streamSequence')::BIGINT, 0),
+                          COALESCE(outcome->>'idempotencyKey', ''),
+                          COALESCE(outcome->>'payloadHash', ''),
+                          COALESCE(outcome->>'instrumentId', ''),
+                          COALESCE(outcome->>'commandType', ''),
+                          COALESCE(outcome->>'resultStatus', ''),
+                          COALESCE(outcome->>'rejectCode', ''),
+                          COALESCE(outcome->>'acceptedAt', ''),
+                          COALESCE(outcome->>'completedAt', ''),
+                          COALESCE(outcome->>'engineShardId', ''),
+                          COALESCE(outcome->'resultPayload', '{}'::jsonb)
+                        FROM outcomes
+                        ON CONFLICT (command_id) DO NOTHING
+                        RETURNING 1
+                      ),
+                      parsed_events AS (
+                        SELECT
+                          outcome,
+                          event,
+                          event_ordinality::INTEGER AS deterministic_event_index
+                        FROM outcomes
+                        CROSS JOIN LATERAL jsonb_array_elements(
+                          CASE
+                            WHEN jsonb_typeof(outcome->'events') = 'array' THEN outcome->'events'
+                            ELSE '[]'::jsonb
+                          END
+                        ) WITH ORDINALITY AS event_rows(event, event_ordinality)
+                      ),
+                      insert_events AS (
+                        INSERT INTO ${names.canonicalVenueEvents}(
+                          event_id,
+                          run_id,
+                          venue_session_id,
+                          partition_id,
+                          partition_seq,
+                          event_seq,
+                          command_id,
+                          event_type,
+                          aggregate_type,
+                          aggregate_id,
+                          instrument_id,
+                          deterministic_event_index,
+                          payload,
+                          emitted_at
+                        )
+                        SELECT
+                          event->>'eventId',
+                          COALESCE(outcome->>'runId', ''),
+                          COALESCE(outcome->>'venueSessionId', ''),
+                          COALESCE((outcome->>'partitionId')::INTEGER, -1),
+                          COALESCE((outcome->>'partitionSequence')::BIGINT, 0),
+                          COALESCE((outcome->>'partitionSequence')::BIGINT, 0) * 1000 + deterministic_event_index,
+                          outcome->>'commandId',
+                          COALESCE(event->>'eventType', ''),
+                          CASE
+                            WHEN event->>'eventType' = 'ExecutionCreated' THEN 'execution'
+                            WHEN event->>'eventType' = 'TradeCreated' THEN 'trade'
+                            ELSE 'order'
+                          END,
+                          COALESCE(event->>'orderId', event->>'eventId', ''),
+                          COALESCE(outcome->>'instrumentId', ''),
+                          deterministic_event_index,
+                          event,
+                          COALESCE(event->>'occurredAt', outcome->>'completedAt', '')
+                        FROM parsed_events
+                        ON CONFLICT (event_id) DO NOTHING
+                        RETURNING 1
+                      )
+                      SELECT COUNT(*) INTO appended_count FROM outcomes;
+
+                      RETURN appended_count;
+                    END;
                     $$;
                     """.trimIndent()
                 )
@@ -837,6 +1032,25 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
+        if (outcomes.isEmpty()) return
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT ${names.appendCanonicalSubmitOutcomesFunction}(?::jsonb)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, outcomes.toJsonArray { it.toJsonObject() })
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    check(rs.getLong(1) == outcomes.size.toLong()) {
+                        "Appended canonical submit outcome count did not match requested batch size"
+                    }
+                }
+            }
+        }
+    }
+
     private fun PreparedStatement.bindSubmitOutcome(
         commandId: String,
         resultType: String,
@@ -1297,6 +1511,32 @@ class PostgresRuntimePersistence(
             "\"executions\":${result.executions.toJsonArray { it.toJsonObject() }}," +
             "\"trades\":${result.trades.toJsonArray { it.toJsonObject() }}," +
             "\"events\":${lifecycleEvents.toJsonArray { it.toJsonObject() }}}"
+    }
+
+    private fun CanonicalSubmitOutcome.toJsonObject(): String {
+        val fields = listOf(
+            "runId" to runId,
+            "venueSessionId" to venueSessionId,
+            "partitionId" to partitionId.toString(),
+            "partitionSequence" to partitionSequence.toString(),
+            "streamName" to streamName,
+            "streamSequence" to streamSequence.toString(),
+            "commandId" to commandId,
+            "idempotencyKey" to idempotencyKey,
+            "payloadHash" to payloadHash,
+            "instrumentId" to instrumentId,
+            "commandType" to commandType,
+            "resultStatus" to resultStatus,
+            "rejectCode" to rejectCode,
+            "acceptedAt" to acceptedAt,
+            "completedAt" to completedAt,
+            "engineShardId" to engineShardId
+        ).joinToString(",") { (key, value) ->
+            "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+        return "{$fields," +
+            "\"resultPayload\":${outcome.toJsonObject()}," +
+            "\"events\":${outcome.lifecycleEvents.toJsonArray { it.toJsonObject() }}}"
     }
 
     private fun <T> List<T>.toJsonArray(toObject: (T) -> String): String {

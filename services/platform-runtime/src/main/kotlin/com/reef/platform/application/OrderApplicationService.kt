@@ -17,6 +17,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
@@ -199,6 +200,13 @@ class OrderApplicationService(
         if (outcomes.isEmpty()) return
         HotPathMetrics.time("runtime.persistence.persistSubmitOutcomes") {
             runtimePersistence.persistSubmitOutcomes(outcomes)
+        }
+    }
+
+    fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
+        if (outcomes.isEmpty()) return
+        HotPathMetrics.time("runtime.persistence.appendCanonicalSubmitOutcomes") {
+            runtimePersistence.appendCanonicalSubmitOutcomes(outcomes)
         }
     }
 

@@ -200,6 +200,8 @@ Do not put leaderboard, UI read-model, or analytics writes on the command comple
 
 In stream-ack mode, canonical append-only facts become the completion boundary. Normalized order, execution, trade, status, trace, leaderboard, report, and UI tables are projections unless a future decision explicitly promotes a field back into the canonical completion transaction.
 
+Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack; until the projector slice is complete, workers still also update the existing normalized order/execution/trade/runtime-event tables to preserve current read paths and stress checks.
+
 Minimum canonical result direction:
 
 ```text
@@ -357,6 +359,7 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - write canonical command result and event log in one DB transaction
 - ack JetStream after commit only
 - add redelivery idempotency tests
+- initial submit slice exists: workers batch append canonical submit outcomes before ack and retain normalized writes until projector ownership is separated
 
 7. Canonical replay support
 - formalize event IDs and command-result linkage

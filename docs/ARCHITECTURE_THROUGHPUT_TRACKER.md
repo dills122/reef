@@ -166,11 +166,11 @@ Drain-accounted worker sweep:
 | A28 | Recoverable active command queue | In progress | performance | `command_work_queue` is derived active state and can be unlogged/reconstructed while accepted commands and terminal outcomes stay durable; quick loaded-stack run recovered `3945.78 accepted rps` with eventual `0` gap |
 | A29 | Stream-ack command contract and partitioning | Planned | contract | Command envelope must include run/session/instrument routing metadata and deterministic subject partitioning |
 | A30 | Stream-ack idempotency guard | Planned | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
-| A31 | Stream partition worker and ack rule | Planned | architecture | Ack JetStream only after canonical command result and event log commit |
+| A31 | Stream partition worker and ack rule | In progress | architecture | Submit workers append canonical command results and venue events before JetStream ack; cancel/modify still need stream-worker support |
 | A32 | Canonical event log and projection watermarks | Planned | architecture | Separate venue outcomes from leaderboard/UI projections and expose lag |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
-| A34 | Stream-ack role split and partition ownership | In progress | architecture | Split runtime modes into API, worker, and projector only; workers own explicit non-overlapping partition ranges |
-| A35 | Canonical append store | Planned | architecture | Make canonical command results and venue events the stream-ack completion boundary before normalized projections |
+| A34 | Stream-ack role split and partition ownership | Done | architecture | Local deploy-shaped profile starts separate API, worker, and projector containers; workers own explicit non-overlapping partition ranges |
+| A35 | Canonical append store | In progress | architecture | Runtime canonical command-result and venue-event tables exist; submit workers append canonical facts before ack while normalized writes remain until projector ownership is separated |
 | A36 | Async market-simulation projections | Planned | architecture | Move order/trade/status/timeline/leaderboard/run read models behind projector watermarks and rebuilds |
 | A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
 | A38 | DigitalOcean benchmark harness | Deferred | validation | Deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
@@ -348,6 +348,7 @@ Exit criteria:
 - [x] Add scoped idempotency guard with payload-hash conflict behavior.
 - [x] Add SubmitOrder partition worker that preserves per-partition ordering.
 - [x] Persist SubmitOrder canonical command result and event log before JetStream ack.
+- [x] Add runtime canonical command-result and venue-event append tables for stream-ack submit outcomes.
 - [ ] Extend partition worker processing to cancel/modify commands.
 - [ ] Add projection watermarks and lag snapshots.
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.

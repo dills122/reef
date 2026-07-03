@@ -25,6 +25,26 @@ data class PersistableSubmitOutcome(
     val lifecycleEvents: List<RuntimeEvent>
 )
 
+data class CanonicalSubmitOutcome(
+    val runId: String,
+    val venueSessionId: String,
+    val partitionId: Int,
+    val partitionSequence: Long,
+    val streamName: String,
+    val streamSequence: Long,
+    val commandId: String,
+    val idempotencyKey: String,
+    val payloadHash: String,
+    val instrumentId: String,
+    val commandType: String,
+    val resultStatus: String,
+    val rejectCode: String,
+    val acceptedAt: String,
+    val completedAt: String,
+    val engineShardId: String,
+    val outcome: PersistableSubmitOutcome
+)
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -82,6 +102,9 @@ interface RuntimePersistence {
     }
     fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
         outcomes.forEach { persistSubmitOutcome(it) }
+    }
+    fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
+        // In-memory/default persistence keeps canonical append as a no-op unless implemented by the store.
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
     fun acceptedOrders(): List<PersistedOrder>
