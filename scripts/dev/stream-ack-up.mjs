@@ -31,9 +31,14 @@ async function bootstrapCommandStream() {
   const maxBytes = env("STREAM_ACK_COMMAND_STREAM_MAX_BYTES", "1073741824");
 
   console.log(`bootstrapping JetStream stream ${stream} (${subjects})...`);
+  if (await streamExists(stream)) {
+    console.log(`JetStream stream ${stream} already exists; leaving existing stream configuration in place.`);
+    return;
+  }
   await run("docker", [
     "compose",
     "run",
+    "-T",
     "--rm",
     "nats-box",
     "nats",
@@ -56,6 +61,32 @@ async function bootstrapCommandStream() {
     env("STREAM_ACK_COMMAND_STREAM_DUPE_WINDOW", "2m"),
     "--defaults",
   ]);
+}
+
+async function streamExists(stream) {
+  try {
+    await run(
+      "docker",
+      [
+        "compose",
+        "run",
+        "-T",
+        "--rm",
+        "nats-box",
+        "nats",
+        "--server",
+        "nats://nats:4222",
+        "stream",
+        "info",
+        stream,
+        "--json",
+      ],
+      { passthrough: false },
+    );
+    return true;
+  } catch (_error) {
+    return false;
+  }
 }
 
 function setDefault(name, value) {

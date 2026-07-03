@@ -180,6 +180,8 @@ make dev-up-stream-ack
 
 In this mode the API returns `202` only after JetStream publish acknowledgment. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
+The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
+
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
 - `DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING=1`
