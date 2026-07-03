@@ -17,6 +17,15 @@ async function postJson(url, payload, headers = {}) {
   return response.body;
 }
 
+function isAcceptedResponse(body) {
+  try {
+    const parsed = JSON.parse(body);
+    return String(parsed.status ?? "").toLowerCase() === "accepted" || parsed.accepted === true;
+  } catch (_error) {
+    return body.includes('"accepted"');
+  }
+}
+
 function requestJson(method, url, payload, headers = {}, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     let parsed;
@@ -113,7 +122,7 @@ const submitResponse = await postJson(
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-submit-1" },
 );
-if (!submitResponse.includes('"accepted"')) {
+if (!isAcceptedResponse(submitResponse)) {
   throw new Error(`smoke failure: submit did not return accepted payload: ${submitResponse}`);
 }
 
@@ -135,7 +144,7 @@ const cancelResponse = await postJson(
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-cancel-1" },
 );
-if (!cancelResponse.includes('"accepted"')) {
+if (!isAcceptedResponse(cancelResponse)) {
   throw new Error(`smoke failure: cancel did not return accepted payload: ${cancelResponse}`);
 }
 
