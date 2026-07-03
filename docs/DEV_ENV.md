@@ -178,12 +178,27 @@ make dev-up-stream-ack
 - `STREAM_ACK_PARTITION_COUNT=16`
 - `STREAM_ACK_INTAKE_STORE=postgres`
 - `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
+- `STREAM_ACK_WORKER_ENABLED=true`
+- `STREAM_ACK_WORKER_PARTITIONS=all`
+- `STREAM_ACK_WORKER_BATCH_SIZE=100`
 
 In this mode the API returns `202` only after JetStream publish acknowledgment. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
-Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. Partition lag and oldest-unprocessed age are added with the partition worker/consumer slice.
+Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`.
+
+Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The first worker slice consumes `SubmitOrder` subjects partition-by-partition, persists the canonical runtime result/events, and acknowledges JetStream only after the DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
+
+Run the submit-only stream-ack stress profile:
+
+```bash
+make dev-stress-stream-ack
+```
+
+This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
+
+Partition lag and oldest-unprocessed age remain follow-up telemetry once the worker consumer exposes durable consumer sequence state.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`

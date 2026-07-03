@@ -33,6 +33,11 @@ class PlatformHttpServer(
     private val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
     private val streamCommandMaxStorageUtilization: Double =
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
+    private val streamCommandWorkerEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_WORKER_ENABLED", false),
+    private val streamCommandWorkerPartitions: String = RuntimeEnv.string("STREAM_ACK_WORKER_PARTITIONS", "0"),
+    private val streamCommandWorkerBatchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
+    private val streamCommandWorkerPollMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_POLL_MS", 25L, min = 1L),
+    private val streamCommandWorkerFetchTimeoutMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", 200L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -133,6 +138,14 @@ class PlatformHttpServer(
                 return@createContext
             }
             writeJson(exchange, 200, streamCommandHealthJson())
+        }
+
+        server.createContext("/internal/stream-ack/worker/stats") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, streamCommandWorkerStatsJson())
         }
 
         server.createContext("/api/v1/commands/") { exchange ->
@@ -353,6 +366,9 @@ class PlatformHttpServer(
                     ).start()
                 }
             }
+        }
+        if (streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
+            startStreamCommandWorkers()
         }
         println("platform-runtime listening on :$port")
         return server
@@ -986,6 +1002,62 @@ class PlatformHttpServer(
             "checkedAt" to snapshot.checkedAt.toString(),
             "error" to snapshot.error
         )
+    }
+
+    private fun streamCommandWorkerStatsJson(): String {
+        val stats = StreamCommandWorkerMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to streamCommandWorkerEnabled,
+            "processingMode" to commandProcessingMode.configValue,
+            "partitions" to streamWorkerPartitions(),
+            "batchSize" to streamCommandWorkerBatchSize,
+            "pollIntervalMs" to streamCommandWorkerPollMs,
+            "fetchTimeoutMs" to streamCommandWorkerFetchTimeoutMs,
+            "metrics" to mapOf(
+                "fetched" to stats.fetched,
+                "completed" to stats.completed,
+                "failed" to stats.failed,
+                "ackFailed" to stats.ackFailed,
+                "unsupported" to stats.unsupported,
+                "emptyPolls" to stats.emptyPolls,
+                "lastFetchedAt" to stats.lastFetchedAt,
+                "lastCompletedAt" to stats.lastCompletedAt,
+                "lastFailedAt" to stats.lastFailedAt,
+                "lastAckFailedAt" to stats.lastAckFailedAt,
+                "lastError" to stats.lastError
+            )
+        )
+    }
+
+    private fun startStreamCommandWorkers() {
+        val partitions = streamWorkerPartitions()
+        if (partitions.isEmpty()) {
+            System.err.println("stream_command_worker_unavailable reason=no_partitions_configured")
+            return
+        }
+        partitions.forEach { partition ->
+            val source = StreamCommandWorkerFactory.sourceForPartition(streamCommandConfig, partition)
+            StreamCommandWorker(
+                source = source,
+                api = api,
+                batchSize = streamCommandWorkerBatchSize,
+                pollIntervalMs = streamCommandWorkerPollMs,
+                fetchTimeout = java.time.Duration.ofMillis(streamCommandWorkerFetchTimeoutMs),
+                workerName = "reef-stream-command-worker-p$partition"
+            ).start()
+        }
+    }
+
+    private fun streamWorkerPartitions(): List<Int> {
+        val raw = streamCommandWorkerPartitions.trim()
+        if (raw.equals("all", ignoreCase = true)) {
+            return (0 until streamCommandConfig.partitionCount).toList()
+        }
+        return raw.split(",")
+            .mapNotNull { value -> value.trim().toIntOrNull() }
+            .filter { it in 0 until streamCommandConfig.partitionCount }
+            .distinct()
+            .sorted()
     }
 }
 

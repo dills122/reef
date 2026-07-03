@@ -722,7 +722,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
+			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = orderID
 			payload["instrumentId"] = instrumentID
 			payload["participantId"] = cfg.ParticipantID
@@ -762,7 +762,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
+			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = orderID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
@@ -796,7 +796,7 @@ func runWorker(
 				results <- result
 				continue
 			}
-			payload := buildCommandPayload(cfg, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
+			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
 			payload["orderId"] = orderID
 			payload["reason"] = "load test"
 			status, body, err := doPOST(
@@ -1369,19 +1369,20 @@ func commandHeaders(cfg Config, workerID int, commandID, traceID string) map[str
 	}
 }
 
-func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, persona, strategyID string, reqID int64) map[string]string {
+func buildCommandPayload(cfg Config, sessionID, commandID, traceID, actorID, actorType, persona, strategyID string, reqID int64) map[string]string {
 	payload := map[string]string{
-		"commandId":     commandID,
-		"traceId":       traceID,
-		"causationId":   "",
-		"correlationId": traceID,
-		"actorId":       actorID,
-		"actorType":     actorType,
-		"strategyId":    strategyID,
-		"runId":         cfg.RunID,
-		"runKind":       cfg.RunKind,
-		"scenarioId":    cfg.ScenarioID,
-		"occurredAt":    commandOccurredAt(cfg, reqID),
+		"commandId":      commandID,
+		"traceId":        traceID,
+		"causationId":    "",
+		"correlationId":  traceID,
+		"actorId":        actorID,
+		"actorType":      actorType,
+		"strategyId":     strategyID,
+		"runId":          cfg.RunID,
+		"runKind":        cfg.RunKind,
+		"scenarioId":     cfg.ScenarioID,
+		"venueSessionId": commandVenueSessionID(cfg, sessionID),
+		"occurredAt":     commandOccurredAt(cfg, reqID),
 	}
 	if persona != "" {
 		payload["persona"] = persona
@@ -1393,6 +1394,19 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 		payload["seed"] = strconv.FormatInt(cfg.Seed, 10)
 	}
 	return payload
+}
+
+func commandVenueSessionID(cfg Config, sessionID string) string {
+	if value := strings.TrimSpace(cfg.SessionName); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(sessionID); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(cfg.RunID); value != "" {
+		return value
+	}
+	return "load-session"
 }
 
 func commandOccurredAt(cfg Config, reqID int64) string {

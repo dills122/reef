@@ -333,8 +333,9 @@ Exit criteria:
 - [ ] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry. Stream health and publish-ack latency are present; partition lag and oldest age need the worker consumer.
 - [x] Implement `stream-ack` API mode behind a flag.
 - [x] Add scoped idempotency guard with payload-hash conflict behavior.
-- [ ] Add partition worker that preserves per-partition ordering.
-- [ ] Persist canonical command result and event log before JetStream ack.
+- [x] Add SubmitOrder partition worker that preserves per-partition ordering.
+- [x] Persist SubmitOrder canonical command result and event log before JetStream ack.
+- [ ] Extend partition worker processing to cancel/modify commands.
 - [ ] Add projection watermarks and lag snapshots.
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
 

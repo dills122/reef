@@ -11,6 +11,12 @@ setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1");
 setDefault("STREAM_ACK_PARTITION_COUNT", "16");
 setDefault("STREAM_ACK_INTAKE_STORE", "postgres");
 setDefault("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", "2000");
+setDefault("STREAM_ACK_WORKER_ENABLED", "true");
+setDefault("STREAM_ACK_WORKER_PARTITIONS", "all");
+setDefault("STREAM_ACK_WORKER_BATCH_SIZE", "100");
+setDefault("STREAM_ACK_WORKER_POLL_MS", "10");
+setDefault("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", "200");
+setDefault("STREAM_ACK_WORKER_ACK_WAIT_MS", "30000");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["stream-ack"]));
 
 console.log("stream-ack runtime settings:");
@@ -20,6 +26,9 @@ console.log(`  stream=${env("STREAM_ACK_COMMAND_STREAM")}`);
 console.log(`  subjectPrefix=${env("STREAM_ACK_SUBJECT_PREFIX")}`);
 console.log(`  partitions=${env("STREAM_ACK_PARTITION_COUNT")}`);
 console.log(`  intakeStore=${env("STREAM_ACK_INTAKE_STORE")}`);
+console.log(`  workerEnabled=${env("STREAM_ACK_WORKER_ENABLED")}`);
+console.log(`  workerPartitions=${env("STREAM_ACK_WORKER_PARTITIONS")}`);
+console.log(`  workerBatchSize=${env("STREAM_ACK_WORKER_BATCH_SIZE")}`);
 
 await devUp();
 await bootstrapCommandStream();

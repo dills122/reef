@@ -36,6 +36,7 @@ const dbDiagnosticsSchemas = parseCsvStrings(
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
+const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -219,12 +220,16 @@ function resolveActionMix(profileName) {
   if (profileName === "abuse-trip") {
     return { submit: "35", modify: "45", cancel: "20" };
   }
+  if (profileName === "stream-submit") {
+    return { submit: "100", modify: "0", cancel: "0" };
+  }
   return { submit: "70", modify: "20", cancel: "10" };
 }
 
 async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
+  const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
   try {
     await run(
       "go",
@@ -276,6 +281,10 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
       attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });
     }
+    if (captureStreamAckWorkerStats) {
+      const afterStreamWorkers = await sampleStreamAckWorkers(runtimeUrl);
+      attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
+    }
   }
 }
 
@@ -286,6 +295,61 @@ async function sampleCommandAccounting(runtimeUrl, runId) {
     url: `${runtimeUrl}/internal/commands/accounting?runId=${encodedRunId}`,
     captureJson: true,
   });
+}
+
+async function sampleStreamAckWorkers(runtimeUrl) {
+  return requestAppProbe({
+    name: "runtime.streamAckWorkers",
+    url: `${runtimeUrl}/internal/stream-ack/worker/stats`,
+    captureJson: true,
+  });
+}
+
+function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeStreamWorkers?.json ?? null;
+    const after = afterStreamWorkers?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const delta = streamWorkerDelta(before, after, durationSeconds);
+    report.streamAckWorkers = {
+      before,
+      after,
+      delta,
+      probes: {
+        before: accountingProbeSummary(beforeStreamWorkers),
+        after: accountingProbeSummary(afterStreamWorkers),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    if (delta) {
+      console.log(
+        `  stream-workers fetchedDelta=${delta.fetchedDelta} completedDelta=${delta.completedDelta} failedDelta=${delta.failedDelta} ackFailedDelta=${delta.ackFailedDelta} completedRps=${delta.completedRps.toFixed(2)}`,
+      );
+    }
+  } catch (error) {
+    console.warn(`  stream-worker stats unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function streamWorkerDelta(before, after, durationSeconds) {
+  const beforeMetrics = before?.metrics;
+  const afterMetrics = after?.metrics;
+  if (!beforeMetrics || !afterMetrics) return null;
+  const fetchedDelta = Number(afterMetrics.fetched ?? 0) - Number(beforeMetrics.fetched ?? 0);
+  const completedDelta = Number(afterMetrics.completed ?? 0) - Number(beforeMetrics.completed ?? 0);
+  const failedDelta = Number(afterMetrics.failed ?? 0) - Number(beforeMetrics.failed ?? 0);
+  const ackFailedDelta = Number(afterMetrics.ackFailed ?? 0) - Number(beforeMetrics.ackFailed ?? 0);
+  const unsupportedDelta = Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0);
+  return {
+    fetchedDelta,
+    completedDelta,
+    failedDelta,
+    ackFailedDelta,
+    unsupportedDelta,
+    fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
+    completedRps: durationSeconds > 0 ? completedDelta / durationSeconds : 0,
+  };
 }
 
 function attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting }) {
@@ -393,6 +457,8 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.hotPath", url: `${runtimeUrl}/internal/perf/hot-path`, captureJson: true },
     { name: "runtime.dbPools", url: `${runtimeUrl}/internal/perf/db-pools`, captureJson: true },
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
+    { name: "runtime.streamAckHealth", url: `${runtimeUrl}/internal/stream-ack/health`, captureJson: true },
+    { name: "runtime.streamAckWorkers", url: `${runtimeUrl}/internal/stream-ack/worker/stats`, captureJson: true },
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];

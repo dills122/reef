@@ -282,12 +282,15 @@ func TestBuildCommandPayloadIncludesScenarioMetadata(t *testing.T) {
 		ScenarioID:    "scenario-1",
 		Seed:          4242,
 	}
-	payload := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer", 1)
+	payload := buildCommandPayload(cfg, "session-1", "cmd-1", "trace-1", "actor-1", "retail", "dip_buyer", "dip_buyer", 1)
 	if payload["scenarioRunId"] != "sim-1" {
 		t.Fatalf("expected scenarioRunId, got: %+v", payload)
 	}
 	if payload["runId"] != "run-1" || payload["runKind"] != "stress" || payload["scenarioId"] != "scenario-1" {
 		t.Fatalf("expected run metadata, got: %+v", payload)
+	}
+	if payload["venueSessionId"] != "session-1" {
+		t.Fatalf("expected venueSessionId, got: %+v", payload)
 	}
 	if payload["seed"] != "4242" {
 		t.Fatalf("expected seed metadata, got: %+v", payload)
@@ -300,8 +303,8 @@ func TestBuildCommandPayloadUsesDeterministicCommandClock(t *testing.T) {
 		CommandClockStep:  2 * time.Second,
 	}
 
-	first := buildCommandPayload(cfg, "cmd-1", "trace-1", "actor-1", "retail", "", "", 1)
-	third := buildCommandPayload(cfg, "cmd-3", "trace-3", "actor-1", "retail", "", "", 3)
+	first := buildCommandPayload(cfg, "session-1", "cmd-1", "trace-1", "actor-1", "retail", "", "", 1)
+	third := buildCommandPayload(cfg, "session-1", "cmd-3", "trace-3", "actor-1", "retail", "", "", 3)
 
 	if first["occurredAt"] != "2026-03-14T18:00:00Z" {
 		t.Fatalf("unexpected first command timestamp: %+v", first)
