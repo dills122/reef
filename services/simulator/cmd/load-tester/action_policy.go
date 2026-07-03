@@ -159,6 +159,7 @@ func updateRecoveryState(state *workerState, cfg Config) {
 		return
 	}
 	state.rejectStreak++
+	state.submitOnlyTicks = maxInt(state.submitOnlyTicks, lifecycleRecoveryTicks(cfg.Mode))
 	if state.rejectStreak >= 3 {
 		if cfg.Mode == "capacity-baseline" {
 			state.submitOnlyTicks = 36
@@ -167,6 +168,13 @@ func updateRecoveryState(state *workerState, cfg Config) {
 		}
 		state.rejectStreak = 0
 	}
+}
+
+func lifecycleRecoveryTicks(mode string) int {
+	if mode == "capacity-baseline" {
+		return 12
+	}
+	return 8
 }
 
 func compactTrackedOrders(orders []string, cfg Config) []string {

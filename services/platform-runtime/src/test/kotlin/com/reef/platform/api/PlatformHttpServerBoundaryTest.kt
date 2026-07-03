@@ -756,6 +756,152 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun asyncCommandStatsEndpointReturnsQueueDepths() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-async-stats"
+                ),
+                body = validSubmitBody("cmd-async-stats", "trace-async-stats", "ord-async-stats")
+            )
+            val stats = get(server.address.port, "/internal/commands/async/stats")
+
+            assertEquals(202, submit.status)
+            assertEquals(200, stats.status)
+            assertContains(stats.body, "\"processingMode\":\"captured-ack\"")
+            assertContains(stats.body, "\"workerThreads\":1")
+            assertContains(stats.body, "\"sampleMs\":100")
+            assertContains(stats.body, "\"RECEIVED\":1")
+            assertContains(stats.body, "\"PROCESSING\":0")
+            assertContains(stats.body, "\"COMPLETED\":0")
+            assertContains(stats.body, "\"FAILED\":0")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun commandAccountingEndpointReturnsRunScopedCounts() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-accounting"
+                ),
+                body = validSubmitBody("cmd-accounting", "trace-accounting", "ord-accounting")
+                    .replace("\"timeInForce\":\"DAY\"", "\"timeInForce\":\"DAY\",\"runId\":\"run-1\",\"runKind\":\"stress\",\"scenarioId\":\"scenario-1\"")
+            )
+            val accounting = get(server.address.port, "/internal/commands/accounting?runId=run-1")
+
+            assertEquals(202, submit.status)
+            assertEquals(200, accounting.status)
+            assertContains(accounting.body, "\"available\":true")
+            assertContains(accounting.body, "\"runId\":\"run-1\"")
+            assertContains(accounting.body, "\"accepted\":1")
+            assertContains(accounting.body, "\"received\":1")
+            assertContains(accounting.body, "\"active\":1")
+            assertContains(accounting.body, "\"terminal\":0")
+            assertContains(accounting.body, "\"accountingGap\":0")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedAckBackpressureRejectsNewCommandsButAllowsDuplicateReplay() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandIntakeMaxActive = 1,
+            commandIntakeBackpressureSampleMs = 0
+        )
+        try {
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-backpressure-1"
+                ),
+                body = validSubmitBody("cmd-backpressure-1", "trace-backpressure-1", "ord-backpressure-1")
+            )
+            val duplicate = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-backpressure-1"
+                ),
+                body = validSubmitBody("cmd-backpressure-1", "trace-backpressure-1", "ord-backpressure-1")
+            )
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-backpressure-2"
+                ),
+                body = validSubmitBody("cmd-backpressure-2", "trace-backpressure-2", "ord-backpressure-2")
+            )
+
+            assertEquals(202, first.status)
+            assertEquals(202, duplicate.status)
+            assertEquals(429, rejected.status)
+            assertContains(rejected.body, "\"code\":\"COMMAND_INTAKE_BACKPRESSURE\"")
+            assertEquals(1L, commandLogStore.accountingSnapshot().accepted)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun dbPoolStatsEndpointReturnsPoolList() {
+        val server = testServer()
+        try {
+            val response = get(server.address.port, "/internal/perf/db-pools")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"pools\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedAckReplaysFirstAcceptedResponseForSameIdempotencyKey() {
         val captureStore = CommandLogCommandCaptureStore(
             delegate = NoopCommandCaptureStore(),
@@ -791,6 +937,40 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(first.body, second.body)
             assertContains(second.body, "\"commandId\":\"cmd-ack-first\"")
             assertEquals(0, gateway.submitCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedAckSkipsIdempotencyStoreForNewAcceptedCommand() {
+        val idempotencyStore = CountingIdempotencyStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            idempotencyStore = idempotencyStore
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-ack-no-idempotency"
+                ),
+                body = validSubmitBody("cmd-ack-no-idempotency", "trace-ack-no-idempotency", "ord-ack-no-idempotency")
+            )
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-ack-no-idempotency\"")
+            assertEquals(0, idempotencyStore.findCalls)
+            assertEquals(0, idempotencyStore.saveCalls)
         } finally {
             server.stop(0)
         }
@@ -992,7 +1172,11 @@ class PlatformHttpServerBoundaryTest {
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
-        seedOrderAuthorization: Boolean = true
+        seedOrderAuthorization: Boolean = true,
+        commandIntakeMaxActive: Long = 0L,
+        commandIntakeMaxStaleProcessing: Long = 0L,
+        commandIntakeBackpressureSampleMs: Long = 100L,
+        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
         if (seedOrderAuthorization) {
@@ -1014,11 +1198,14 @@ class PlatformHttpServerBoundaryTest {
             api = api,
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
-            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
             commandProcessingMode = commandProcessingMode,
+            commandIntakeMaxActive = commandIntakeMaxActive,
+            commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
+            commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
         ).start()
     }
@@ -1200,6 +1387,26 @@ private class RecordingCommandCaptureStore : CommandCaptureStore {
         errorMessage: String
     ) {
         failedCalls++
+    }
+}
+
+private class CountingIdempotencyStore : IdempotencyStore {
+    var findCalls: Int = 0
+    var saveCalls: Int = 0
+
+    override fun find(clientId: String, route: String, idempotencyKey: String): IdempotencyResult? {
+        findCalls++
+        return null
+    }
+
+    override fun save(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        result: IdempotencyResult,
+        ttlClass: IdempotencyTtlClass
+    ) {
+        saveCalls++
     }
 }
 

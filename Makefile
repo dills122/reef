@@ -7,7 +7,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime test-simulator fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-down dev-reset dev-db-migrate dev-smoke dev-stress dev-stress-diagnostics dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
+.PHONY: test test-go test-platform-runtime test-simulator fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-captured-ack dev-down dev-reset dev-db-migrate dev-smoke dev-stress dev-stress-captured-ack dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
 
 test: test-go test-simulator test-platform-runtime
 
@@ -42,6 +42,10 @@ dev-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/up.mjs
 
+dev-up-captured-ack:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/captured-ack-up.mjs
+
 dev-down:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/down.mjs
@@ -62,9 +66,25 @@ dev-stress:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/stress.mjs
 
+dev-stress-captured-ack:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/captured-ack-stress.mjs
+
 dev-stress-diagnostics:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1 $(JS_RUNTIME) scripts/dev/stress.mjs
+
+dev-intake-bench:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/intake-bench.mjs
+
+dev-command-log-prune:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/command-log-prune.mjs
+
+dev-command-log-pin:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/command-log-pin.mjs
 
 dev-admin:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

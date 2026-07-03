@@ -18,6 +18,13 @@ data class ReferenceDataValidation(
     val accountBelongsToParticipant: Boolean = true
 )
 
+data class PersistableSubmitOutcome(
+    val commandId: String,
+    val result: SubmitOrderResult,
+    val acceptedOrder: PersistedOrder?,
+    val lifecycleEvents: List<RuntimeEvent>
+)
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -64,6 +71,17 @@ interface RuntimePersistence {
             saveTrades(result.trades)
         }
         saveEvents(lifecycleEvents)
+    }
+    fun persistSubmitOutcome(outcome: PersistableSubmitOutcome) {
+        persistSubmitOutcome(
+            commandId = outcome.commandId,
+            result = outcome.result,
+            acceptedOrder = outcome.acceptedOrder,
+            lifecycleEvents = outcome.lifecycleEvents
+        )
+    }
+    fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {
+        outcomes.forEach { persistSubmitOutcome(it) }
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
     fun acceptedOrders(): List<PersistedOrder>

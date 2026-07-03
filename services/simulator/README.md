@@ -68,7 +68,7 @@ go run ./cmd/load-tester \
 ### Mode Guidance
 
 - `chaos`: randomized actions regardless of order lifecycle state; useful for resilience and rejection-path testing.
-- `strict-lifecycle`: forces submit when no local live orders exist and prunes clearly terminal rejected orders from worker state; useful for cleaner business-throughput measurements.
+- `strict-lifecycle`: forces submit when no local live orders exist, prunes clearly terminal rejected orders from worker state, and briefly backs off to submit-only recovery after stale lifecycle rejects; useful for cleaner business-throughput measurements.
 - `capacity-baseline`: throughput-focused profile with submit-heavy behavior and reduced invalid modify/cancel noise; useful for capacity benchmarking.
 
 ### Profile Model
@@ -87,6 +87,7 @@ seed `bot-{worker}` actors.
 ### Report Additions
 
 - `acceptedBusinessOpsRps`: successful business operations per second
+- `quality`: end-to-end success, valid-intent success, invalid-intent rate, and system-failure proxy metrics
 - `rejectReasons`: grouped rejection code/reason breakdown
 - `rejectTaxonomy`: reject-code counts with percentage-of-failures/rejects (includes boundary error envelopes such as `ABUSE_BLOCKED` on non-2xx responses when present)
 
@@ -116,6 +117,41 @@ go run ./cmd/load-tester \
 ```
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
+
+## Intake Bench CLI
+
+`cmd/intake-bench` is a narrower accepted-command ingress benchmark. It sends minimal valid `/api/v1/orders/submit` payloads and reports raw accepted RPS, latency percentiles, status-code counts, and errors. It intentionally skips strategy selection, lifecycle state, seeding, trace checks, and tailing so it can separate platform-runtime intake capacity from simulator behavior.
+
+Example:
+
+```bash
+cd services/simulator
+go run ./cmd/intake-bench \
+  --base-url http://localhost:8080 \
+  --duration 30s \
+  --workers 256 \
+  --rate 10000 \
+  --rate-schedule precise \
+  --actor-id-prefix bot \
+  --pretty-summary \
+  --report-out /tmp/reef-intake-bench.json
+```
+
+From the repo root, use:
+
+```bash
+make dev-intake-bench
+```
+
+Useful env overrides:
+
+- `DEV_INTAKE_DURATION`
+- `DEV_INTAKE_WORKERS`
+- `DEV_INTAKE_RATE`
+- `DEV_INTAKE_RATE_SCHEDULE=drop|precise`
+- `DEV_INTAKE_ACTOR_ID_PREFIX` (`bot` by default, matching seeded load-test actors)
+- `DEV_INTAKE_ARTIFACT_DIR`
+- `DEV_INTAKE_REPORT_OUT`
 
 Deterministic replay runs can set `--command-clock-start 2026-03-14T18:00:00Z`
 and `--command-clock-step 1s` (or `REEF_COMMAND_CLOCK_START` /

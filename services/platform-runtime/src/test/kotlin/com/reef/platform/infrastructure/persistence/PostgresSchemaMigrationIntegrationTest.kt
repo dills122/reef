@@ -25,12 +25,25 @@ class PostgresSchemaMigrationIntegrationTest {
                 FROM public.reef_schema_migrations
                 WHERE migration_id IN (
                   'runtime/0003_live_runtime_persistence.sql',
+                  'runtime/0004_bulk_submit_outcomes.sql',
+                  'runtime/0005_set_based_submit_outcomes.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
                   'boundary/0004_command_capture_legacy_defaults.sql',
                   'command_log/0001_commands.sql',
-                  'command_log/0002_command_results.sql'
+                  'command_log/0002_command_results.sql',
+                  'command_log/0003_queue_result_split.sql',
+                  'command_log/0004_terminal_results_active_queue.sql',
+                  'command_log/0005_result_terminal_metadata.sql',
+                  'command_log/0006_command_append_function.sql',
+                  'command_log/0007_retention_pins.sql',
+                  'command_log/0008_command_append_queue_timestamp.sql',
+                  'command_log/0009_run_metadata.sql',
+                  'command_log/0010_drop_legacy_status_index.sql',
+                  'command_log/0011_unlogged_active_queue.sql',
+                  'command_log/0012_command_payloads.sql',
+                  'command_log/0013_drop_hot_path_foreign_keys.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -50,7 +63,20 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0004_command_capture_legacy_defaults.sql",
                     "command_log/0001_commands.sql",
                     "command_log/0002_command_results.sql",
-                    "runtime/0003_live_runtime_persistence.sql"
+                    "command_log/0003_queue_result_split.sql",
+                    "command_log/0004_terminal_results_active_queue.sql",
+                    "command_log/0005_result_terminal_metadata.sql",
+                    "command_log/0006_command_append_function.sql",
+                    "command_log/0007_retention_pins.sql",
+                    "command_log/0008_command_append_queue_timestamp.sql",
+                    "command_log/0009_run_metadata.sql",
+                    "command_log/0010_drop_legacy_status_index.sql",
+                    "command_log/0011_unlogged_active_queue.sql",
+                    "command_log/0012_command_payloads.sql",
+                    "command_log/0013_drop_hot_path_foreign_keys.sql",
+                    "runtime/0003_live_runtime_persistence.sql",
+                    "runtime/0004_bulk_submit_outcomes.sql",
+                    "runtime/0005_set_based_submit_outcomes.sql"
                 ),
                 appliedMigrations
             )
@@ -60,7 +86,11 @@ class PostgresSchemaMigrationIntegrationTest {
                 "auth.auth_roles",
                 "boundary.api_command_captures",
                 "boundary.api_idempotency_records",
+                "command_log.command_payloads",
+                "command_log.command_results",
+                "command_log.command_work_queue",
                 "command_log.commands",
+                "command_log.retention_pins",
                 "runtime.executions",
                 "runtime.orders",
                 "runtime.reference_instruments",
@@ -85,7 +115,11 @@ class PostgresSchemaMigrationIntegrationTest {
                     'auth_actor_roles',
                     'api_idempotency_records',
                     'api_command_captures',
-                    'commands'
+                    'commands',
+                    'command_payloads',
+                    'command_work_queue',
+                    'command_results',
+                    'retention_pins'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -97,6 +131,79 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertEquals(expectedTables, actualTables)
+
+            val retentionPinColumns = conn.prepareStatement(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'command_log'
+                  AND table_name = 'retention_pins'
+                  AND column_name IN (
+                    'pin_id',
+                    'selector_type',
+                    'selector_value',
+                    'reason',
+                    'created_at',
+                    'updated_at'
+                  )
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                setOf(
+                    "pin_id",
+                    "selector_type",
+                    "selector_value",
+                    "reason",
+                    "created_at",
+                    "updated_at"
+                ),
+                retentionPinColumns
+            )
+
+            val commandLogFunctions = conn.prepareStatement(
+                """
+                SELECT routine_schema || '.' || routine_name AS routine_name
+                FROM information_schema.routines
+                WHERE routine_schema = 'command_log'
+                  AND routine_name = 'command_append'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("routine_name"))
+                    rows
+                }
+            }
+
+            assertEquals(setOf("command_log.command_append"), commandLogFunctions)
+
+            val commandLogForeignKeys = conn.prepareStatement(
+                """
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid IN (
+                  'command_log.command_payloads'::regclass,
+                  'command_log.command_work_queue'::regclass,
+                  'command_log.command_results'::regclass
+                )
+                  AND contype = 'f'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("conname"))
+                    rows
+                }
+            }
+
+            assertTrue(commandLogForeignKeys.isEmpty(), "unexpected command-log hot-path foreign keys: $commandLogForeignKeys")
 
             val commandCaptureColumns = conn.prepareStatement(
                 """
@@ -174,6 +281,34 @@ class PostgresSchemaMigrationIntegrationTest {
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val runtimeFunctions = conn.prepareStatement(
+                """
+                SELECT routine_schema || '.' || routine_name AS routine_name
+                FROM information_schema.routines
+                WHERE routine_schema = 'runtime'
+                  AND routine_name IN (
+                    'runtime_validate_reference_data',
+                    'runtime_persist_submit_outcome',
+                    'runtime_persist_submit_outcomes'
+                  )
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("routine_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                setOf(
+                    "runtime.runtime_validate_reference_data",
+                    "runtime.runtime_persist_submit_outcome",
+                    "runtime.runtime_persist_submit_outcomes"
+                ),
+                runtimeFunctions
             )
 
             val publicTables = conn.prepareStatement(

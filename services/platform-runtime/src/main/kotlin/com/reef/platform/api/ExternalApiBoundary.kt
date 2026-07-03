@@ -590,7 +590,10 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
         val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
         val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
-        PostgresIdempotencyStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword), retentionPolicy)
+        PostgresIdempotencyStore(
+            RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "idempotency"),
+            retentionPolicy
+        )
     } else {
         InMemoryIdempotencyStore()
     }

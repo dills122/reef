@@ -119,21 +119,73 @@ Run stress with automatic pre/post DB diagnostics capture:
 make dev-stress-diagnostics
 ```
 
+Run the durable captured-ack queue profile used for async drain and bot-arena capacity work:
+
+```bash
+make dev-up-captured-ack
+make dev-stress-captured-ack
+```
+
+`dev-up-captured-ack` starts `platform-runtime` with:
+- `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
+- `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
+- `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=captured-ack`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=4`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE=250`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS=5`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS=60000`
+- `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=false`
+
+In this profile, `command_log.commands` is the canonical durable command capture path. The legacy boundary command-capture table is disabled by default to avoid duplicate hot-path writes; set `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres` explicitly when testing legacy capture behavior.
+
+Durable captured-ack intake backpressure is enabled by default in `dev-up-captured-ack`:
+- `EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS` defaults to `asyncThreads * asyncBatchSize * 2`.
+- `EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS=0` disables active queue-depth rejection.
+- `EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING=0` disables stale-processing rejection.
+- `EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS=100` caches queue-depth samples briefly so backpressure checks do not add a full queue probe to every request.
+- When enabled, new commands receive `429 COMMAND_INTAKE_BACKPRESSURE` before durable acceptance; duplicate idempotency replays still return their existing command status.
+
+Override the worker count for drain sweeps, for example:
+
+```bash
+EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS=16 make dev-up-captured-ack
+```
+
 Diagnostic artifacts are written under the stress artifact root with suffix `-diagnostics`:
-- `pre-meta.json`, `post-meta.json`
+- `pre-db-diagnostics.json`, `post-db-diagnostics.json`
 - `pre-pg_stat_bgwriter.csv`, `post-pg_stat_bgwriter.csv`
 - `pre-pg_stat_checkpointer.csv`, `post-pg_stat_checkpointer.csv` (Postgres 17+ when available)
-- `pre-table-sizes.csv`, `post-table-sizes.csv`
-- `pre-table-count-estimates.csv`, `post-table-count-estimates.csv`
+- `pre-table-stats.csv`, `post-table-stats.csv`
 - `postgres-logs.txt`
+
+Stress telemetry also samples runtime health, hot-path timings, async command queue stats, runtime DB pool stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
+
+Captured-ack stress reports also attach `commandAccounting` when the runtime exposes `/internal/commands/accounting`. The accounting block records the run-scoped pre/post snapshots, accepted delta, completed/failed terminal delta, active queue depth after the step, stale processing count, completed rps, and accepted-command accounting gap. `make dev-stress-captured-ack` sets `DEV_STRESS_FAIL_ON_ACCOUNTING_GAP=1` by default.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
+- `DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING=1`
+- `DEV_STRESS_FAIL_ON_ACCOUNTING_GAP=0|1`
+- `DEV_STRESS_RUN_ID=<stable-run-id>`
+- `DEV_STRESS_RUN_KIND=stress`
+- `DEV_STRESS_SCENARIO_ID=<mode-or-scenario>`
 - `DEV_STRESS_DB_SERVICE=postgres`
 - `DEV_STRESS_DB_USER=reef`
 - `DEV_STRESS_DB_NAME=reef`
-- `DEV_STRESS_DB_SCHEMA=runtime`
+- `DEV_STRESS_DB_SCHEMAS=runtime,boundary,command_log`
 - `DEV_STRESS_DB_LOG_SINCE=30m`
+- `DEV_STRESS_RATE_SCHEDULE=drop|precise` controls load-tester rate scheduling (`drop` is the default; `precise` is useful for capacity sweeps with larger worker counts)
+
+Raw intake benchmarks accept matching run metadata:
+- `DEV_INTAKE_RUN_ID=<stable-run-id>`
+- `DEV_INTAKE_RUN_KIND=intake-bench`
+- `DEV_INTAKE_SCENARIO_ID=raw-intake`
+- `DEV_INTAKE_CAPTURE_COMMAND_ACCOUNTING=1` attaches command accounting and drain-rate data to the JSON report.
+- `DEV_INTAKE_COMMAND_DRAIN_WAIT_MS=30000` controls how long the runner waits for active commands to drain after load stops.
+- `DEV_INTAKE_COMMAND_DRAIN_POLL_MS=1000` controls drain polling frequency.
+- `DEV_INTAKE_FAIL_ON_ACCOUNTING_GAP=1` fails the run if the final accounting snapshot reports a gap.
 
 Run replay-pack drift validation against baseline scenario:
 
@@ -233,6 +285,79 @@ Disable boundary route usage only for legacy comparison/debug:
 make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode capacity-baseline --use-api-v1=false --pretty-summary"
 ```
 
+Raw accepted-command intake benchmark:
+
+```bash
+DEV_INTAKE_DURATION=30s \
+DEV_INTAKE_WORKERS=256 \
+DEV_INTAKE_RATE=10000 \
+DEV_INTAKE_RATE_SCHEDULE=precise \
+DEV_INTAKE_ACTOR_ID_PREFIX=bot \
+DEV_INTAKE_ARTIFACT_DIR=/tmp/reef-intake-$(date +%Y%m%d-%H%M%S) \
+DEV_INTAKE_REPORT_OUT=/tmp/reef-intake-bench.json \
+make dev-intake-bench JS_RUNTIME=node
+```
+
+Use this before architecture changes when the goal is to separate platform-runtime `/api/v1/orders/submit` intake capacity from simulator strategy/lifecycle overhead.
+
+`dev-intake-bench` captures pre/post DB diagnostics by default and embeds a `dbDiagnostics` object into the JSON report. It also writes raw snapshots under `*-db-diagnostics-workers-<workers>-rate-<rate>/`. Disable this with `DEV_INTAKE_CAPTURE_DB_DIAGNOSTICS=0`, or adjust schemas with `DEV_INTAKE_DB_SCHEMAS=runtime,boundary,command_log`.
+
+When command accounting is enabled, the report also includes `commandAccounting` with before/after/drained snapshots, accepted rps, completed-during-load rps, active backlog after load, final active depth, final accounting gap, drain seconds, post-load drained count, and post-load drain rps. This is the preferred local gate for captured-ack throughput work because accepted rps alone does not prove the worker queue can drain.
+
+## Command-log lifecycle
+
+Prune terminal command-log history with a dry-run-first dev tool:
+
+```bash
+make dev-command-log-prune
+```
+
+The default mode reports how many completed/failed command records are eligible for pruning but does not delete rows. It never selects active `command_work_queue` rows. Apply pruning explicitly:
+
+```bash
+DEV_COMMAND_LOG_PRUNE_APPLY=1 \
+DEV_COMMAND_LOG_PRUNE_OLDER_THAN=24h \
+make dev-command-log-prune
+```
+
+Useful knobs:
+- `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=24h` accepts `ms`, `s`, `m`, `h`, or `d`
+- `DEV_COMMAND_LOG_PRUNE_BATCH_SIZE=50000`
+- `DEV_COMMAND_LOG_PRUNE_MAX_BATCHES=100`
+- `DEV_COMMAND_LOG_PRUNE_VACUUM=1`
+- `DEV_COMMAND_LOG_PRUNE_CAPTURE_DB_DIAGNOSTICS=1`
+
+Vacuum runs after applied pruning using `PARALLEL 0` to reduce Docker shared-memory pressure. If vacuum still fails locally, pruning remains applied and the report records the vacuum error; rerun later with more Docker shared memory or `DEV_COMMAND_LOG_PRUNE_VACUUM=0`.
+
+Protect a named run/session before pruning by adding a retention pin. Intake and load-test idempotency keys start with a session prefix, so `idempotency_prefix` is the usual selector:
+
+```bash
+DEV_COMMAND_LOG_PIN_ACTION=upsert \
+DEV_COMMAND_LOG_PIN_SELECTOR_TYPE=idempotency_prefix \
+DEV_COMMAND_LOG_PIN_SELECTOR_VALUE=intake-1782954356175044000 \
+DEV_COMMAND_LOG_PIN_REASON="keep post-prune benchmark run" \
+make dev-command-log-pin
+```
+
+List pins:
+
+```bash
+make dev-command-log-pin
+```
+
+Delete a pin:
+
+```bash
+DEV_COMMAND_LOG_PIN_ACTION=delete \
+DEV_COMMAND_LOG_PIN_SELECTOR_TYPE=idempotency_prefix \
+DEV_COMMAND_LOG_PIN_SELECTOR_VALUE=intake-1782954356175044000 \
+make dev-command-log-pin
+```
+
+Supported selectors are `command_id`, `idempotency_prefix`, `trace_id`, `correlation_id`, and `client_id`. Prune excludes pinned commands in addition to active queue rows.
+
+For loaded local benchmark databases, use `DEV_COMMAND_LOG_PRUNE_OLDER_THAN=0s` only when all unpinned terminal command history can be discarded. Export important audit history or add retention pins before pruning.
+
 30-minute fixed-load soak (clean reset recommended first):
 
 ```bash
@@ -296,8 +421,16 @@ Compose sets:
 - runtime DB JDBC: `RUNTIME_POSTGRES_JDBC_URL` (`currentSchema=runtime` remains configured, but runtime storage uses explicit `runtime.*` and `auth.*` names)
 - boundary idempotency persistence: `EXTERNAL_API_IDEMPOTENCY_STORE=postgres`
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
-- optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`)
+- optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, durable request payloads in `command_log.command_payloads`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
+- command-log payload mode: `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table|inline` (default `side-table`). `side-table` keeps hot command metadata rows narrow while retaining the full durable request payload for worker replay.
 - command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
+- async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
+- async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`
+- async command worker runtime pool: `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true` makes captured-ack workers execute through a separate `async-runtime` persistence pool. The dev default is `false` because captured-ack intake no longer uses runtime persistence on the hot accept path; turn it on for isolation A/B runs.
+- async command worker lease: claimed `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`; this prevents runtime restarts from permanently stranding in-flight commands.
+- async command worker stats: `GET /internal/commands/async/stats` returns worker settings, active queue status counts from `command_log.command_work_queue`, and async claim/complete/fail counters. Postgres mode does not count historical terminal results on this hot probe.
+- DB pool stats: `GET /internal/perf/db-pools` returns Hikari pool name plus active/idle/total/waiter counts for runtime-managed pools.
+- DB pool sizing: `RUNTIME_DB_POOL_MAX` and `RUNTIME_DB_POOL_MIN_IDLE` are global defaults. Named hot-path pools apply conservative role defaults so those values do not multiply directly across every pool. Override individual pools with `RUNTIME_DB_POOL_<POOL>_MAX` and `RUNTIME_DB_POOL_<POOL>_MIN_IDLE`, where `<POOL>` is the uppercase pool id with punctuation converted to underscores, such as `COMMAND_LOG` or `ASYNC_RUNTIME`.
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 

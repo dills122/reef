@@ -1,11 +1,14 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { basename, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import {
+  captureDbDiagnosticsLogs,
+  captureDbDiagnosticsSnapshot,
+  defaultDiagnosticSchemas,
+} from "./lib/db-diagnostics.mjs";
 
 loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
@@ -15,6 +18,9 @@ const traceLimit = env("DEV_STRESS_TRACE_CHECK_LIMIT", "100");
 const out = env("DEV_STRESS_REPORT_OUT", "/tmp/reef-load-report-dev-stress.json");
 const mode = env("DEV_STRESS_MODE", "strict-lifecycle");
 const profile = env("DEV_STRESS_PROFILE", "default");
+const runKind = env("DEV_STRESS_RUN_KIND", "stress");
+const scenarioId = env("DEV_STRESS_SCENARIO_ID", `${mode}:${profile}`);
+const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
 const sweepWorkers = parseCsvInts(env("DEV_STRESS_SWEEP_WORKERS", ""));
@@ -24,8 +30,12 @@ const captureDbDiagnostics = env("DEV_STRESS_CAPTURE_DB_DIAGNOSTICS", "0") === "
 const dbDiagnosticsService = env("DEV_STRESS_DB_SERVICE", "postgres");
 const dbDiagnosticsUser = env("DEV_STRESS_DB_USER", "reef");
 const dbDiagnosticsName = env("DEV_STRESS_DB_NAME", "reef");
-const dbDiagnosticsSchema = env("DEV_STRESS_DB_SCHEMA", "runtime");
+const dbDiagnosticsSchemas = parseCsvStrings(
+  env("DEV_STRESS_DB_SCHEMAS", env("DEV_STRESS_DB_SCHEMA", defaultDiagnosticSchemas.join(","))),
+);
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
+const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
+const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -60,31 +70,41 @@ if (captureDbDiagnostics) {
     service: dbDiagnosticsService,
     dbUser: dbDiagnosticsUser,
     dbName: dbDiagnosticsName,
-    schema: dbDiagnosticsSchema,
+    schemas: dbDiagnosticsSchemas,
   });
 }
 try {
   for (const rate of rates) {
     if (sweepWorkers.length > 0) {
       for (const workerCount of sweepWorkers) {
+        const runId = runIdForStep({ rate, workerCount });
         await runStressStep({
           runtimeUrl,
           duration,
           workers: String(workerCount),
           rate,
+          rateSchedule,
           mode,
+          runId,
+          runKind,
+          scenarioId,
           traceLimit,
           actionMix,
           reportOut: `${baseOut}-rate-${rate}-workers-${workerCount}.json`,
         });
       }
     } else {
+      const runId = runIdForStep({ rate, workerCount: workers });
       await runStressStep({
         runtimeUrl,
         duration,
         workers,
         rate,
+        rateSchedule,
         mode,
+        runId,
+        runKind,
+        scenarioId,
         traceLimit,
         actionMix,
         reportOut: `${baseOut}-rate-${rate}.json`,
@@ -100,7 +120,7 @@ try {
       service: dbDiagnosticsService,
       dbUser: dbDiagnosticsUser,
       dbName: dbDiagnosticsName,
-      schema: dbDiagnosticsSchema,
+      schemas: dbDiagnosticsSchemas,
     });
     await captureDbDiagnosticsLogs({
       diagnosticsDir,
@@ -170,120 +190,23 @@ function parseCsvInts(raw) {
     .filter((value) => Number.isFinite(value) && value > 0);
 }
 
+function parseCsvStrings(raw) {
+  return String(raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function runIdForStep({ rate, workerCount }) {
+  return env(
+    "DEV_STRESS_RUN_ID",
+    `${reportBaseName}-rate-${rate}-workers-${workerCount}-${Date.now()}`,
+  );
+}
+
 function resetDir(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
-}
-
-async function captureDbDiagnosticsSnapshot({ diagnosticsDir, stage, service, dbUser, dbName, schema }) {
-  mkdirSync(diagnosticsDir, { recursive: true });
-  const info = { capturedAt: new Date().toISOString(), stage, service, dbUser, dbName, schema };
-  try {
-    const safeSchema = normalizeSchemaName(schema);
-    const serverVersion = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: "show server_version_num;",
-    });
-    const bgwriterRows = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: "select * from pg_stat_bgwriter;",
-    });
-    const checkpointerRows = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql:
-        "select coalesce((select count(1) from pg_catalog.pg_views where schemaname='pg_catalog' and viewname='pg_stat_checkpointer'),0);",
-    });
-    const hasCheckpointer = Number(checkpointerRows[0] ?? 0) > 0;
-    const checkpointerData = hasCheckpointer
-      ? await queryDbCsv({
-          service,
-          dbUser,
-          dbName,
-          sql: "select * from pg_stat_checkpointer;",
-        })
-      : [];
-    const tableSizes = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: `
-select c.relname, pg_total_relation_size(c.oid) as bytes
-from pg_class c
-join pg_namespace n on n.oid = c.relnamespace
-where n.nspname='${safeSchema}' and c.relkind='r'
-order by pg_total_relation_size(c.oid) desc
-limit 20;`,
-    });
-    const tableCounts = await queryDbCsv({
-      service,
-      dbUser,
-      dbName,
-      sql: `
-select relname, n_live_tup
-from pg_stat_user_tables
-where schemaname='${safeSchema}'
-order by n_live_tup desc
-limit 20;`,
-    });
-
-    writeFileSync(join(diagnosticsDir, `${stage}-meta.json`), JSON.stringify({ ...info, serverVersion }, null, 2));
-    writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_bgwriter.csv`), bgwriterRows.join("\n") + "\n");
-    if (hasCheckpointer) {
-      writeFileSync(
-        join(diagnosticsDir, `${stage}-pg_stat_checkpointer.csv`),
-        checkpointerData.join("\n") + "\n",
-      );
-    }
-    writeFileSync(join(diagnosticsDir, `${stage}-table-sizes.csv`), tableSizes.join("\n") + "\n");
-    writeFileSync(join(diagnosticsDir, `${stage}-table-count-estimates.csv`), tableCounts.join("\n") + "\n");
-  } catch (error) {
-    writeFileSync(
-      join(diagnosticsDir, `${stage}-capture-error.txt`),
-      `${new Date().toISOString()} ${String(error?.message || error)}\n`,
-    );
-  }
-}
-
-function normalizeSchemaName(raw) {
-  const value = String(raw ?? "").trim();
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-    throw new Error(`invalid schema identifier: ${value}`);
-  }
-  return value;
-}
-
-async function captureDbDiagnosticsLogs({ diagnosticsDir, service, since }) {
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      "docker",
-      ["compose", "-f", "docker-compose.yml", "logs", "--since", since, service],
-      { cwd: process.cwd() },
-    );
-    writeFileSync(join(diagnosticsDir, "postgres-logs.txt"), `${stdout}${stderr}`);
-  } catch (error) {
-    writeFileSync(
-      join(diagnosticsDir, "postgres-logs-error.txt"),
-      `${new Date().toISOString()} ${String(error?.message || error)}\n`,
-    );
-  }
-}
-
-async function queryDbCsv({ service, dbUser, dbName, sql }) {
-  const { stdout } = await execFileAsync(
-    "docker",
-    ["compose", "-f", "docker-compose.yml", "exec", "-T", service, "psql", "-U", dbUser, "-d", dbName, "-At", "-F", ",", "-c", sql],
-    { cwd: process.cwd() },
-  );
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 function resolveActionMix(profileName) {
@@ -299,45 +222,146 @@ function resolveActionMix(profileName) {
   return { submit: "70", modify: "20", cancel: "10" };
 }
 
-async function runStressStep({ runtimeUrl, duration, workers, rate, mode, traceLimit, actionMix, reportOut }) {
-  console.log(`step rate=${rate} rps workers=${workers}`);
-  await run(
-    "go",
-    [
-      "run",
-      "./cmd/load-tester",
-      "--base-url",
-      runtimeUrl,
-      "--duration",
-      duration,
-      "--workers",
-      workers,
-      "--rate",
-      String(rate),
-      "--mode",
-      mode,
-      "--submit-pct",
-      actionMix.submit,
-      "--modify-pct",
-      actionMix.modify,
-      "--cancel-pct",
-      actionMix.cancel,
-      "--profile-mm-pct",
-      "35",
-      "--profile-inst-pct",
-      "30",
-      "--profile-retail-pct",
-      "25",
-      "--profile-noise-pct",
-      "10",
-      "--trace-check-limit",
-      traceLimit,
-      "--pretty-summary",
-      "--report-out",
-      reportOut,
-    ],
-    { cwd: "services/simulator" },
-  );
+async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
+  console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
+  const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
+  try {
+    await run(
+      "go",
+      [
+        "run",
+        "./cmd/load-tester",
+        "--base-url",
+        runtimeUrl,
+        "--duration",
+        duration,
+        "--workers",
+        workers,
+        "--rate",
+        String(rate),
+        "--rate-schedule",
+        rateSchedule,
+        "--mode",
+        mode,
+        "--run-id",
+        runId,
+        "--run-kind",
+        runKind,
+        "--scenario-id",
+        scenarioId,
+        "--submit-pct",
+        actionMix.submit,
+        "--modify-pct",
+        actionMix.modify,
+        "--cancel-pct",
+        actionMix.cancel,
+        "--profile-mm-pct",
+        "35",
+        "--profile-inst-pct",
+        "30",
+        "--profile-retail-pct",
+        "25",
+        "--profile-noise-pct",
+        "10",
+        "--trace-check-limit",
+        traceLimit,
+        "--pretty-summary",
+        "--report-out",
+        reportOut,
+      ],
+      { cwd: "services/simulator" },
+    );
+  } finally {
+    if (captureCommandAccounting) {
+      const afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
+      attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });
+    }
+  }
+}
+
+async function sampleCommandAccounting(runtimeUrl, runId) {
+  const encodedRunId = encodeURIComponent(runId);
+  return requestAppProbe({
+    name: "runtime.commandAccounting",
+    url: `${runtimeUrl}/internal/commands/accounting?runId=${encodedRunId}`,
+    captureJson: true,
+  });
+}
+
+function attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeAccounting?.json ?? null;
+    const after = afterAccounting?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const delta = commandAccountingDelta(before, after, durationSeconds);
+    report.commandAccounting = {
+      runId,
+      before,
+      after,
+      delta,
+      probes: {
+        before: accountingProbeSummary(beforeAccounting),
+        after: accountingProbeSummary(afterAccounting),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    if (delta) {
+      console.log(
+        `  command-accounting acceptedDelta=${delta.acceptedDelta} terminalDelta=${delta.terminalDelta} active=${delta.activeAfter} gap=${delta.accountingGapAfter} completedRps=${delta.completedRps.toFixed(2)}`,
+      );
+      if (failOnAccountingGap && delta.accountingGapAfter !== 0) {
+        throw new Error(`command accounting gap for run ${runId}: ${delta.accountingGapAfter}`);
+      }
+    }
+  } catch (error) {
+    if (failOnAccountingGap) {
+      throw error;
+    }
+    console.warn(`  command-accounting unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function commandAccountingDelta(before, after, durationSeconds) {
+  if (!before?.available || !after?.available) return null;
+  const acceptedDelta = Number(after.accepted ?? 0) - Number(before.accepted ?? 0);
+  const completedDelta = Number(after.completed ?? 0) - Number(before.completed ?? 0);
+  const failedDelta = Number(after.failed ?? 0) - Number(before.failed ?? 0);
+  const terminalDelta = completedDelta + failedDelta;
+  return {
+    acceptedDelta,
+    completedDelta,
+    failedDelta,
+    terminalDelta,
+    activeAfter: Number(after.active ?? 0),
+    receivedAfter: Number(after.received ?? 0),
+    processingAfter: Number(after.processing ?? 0),
+    staleProcessingAfter: Number(after.staleProcessing ?? 0),
+    accountingGapAfter: Number(after.accountingGap ?? 0),
+    acceptedRps: durationSeconds > 0 ? acceptedDelta / durationSeconds : 0,
+    completedRps: durationSeconds > 0 ? terminalDelta / durationSeconds : 0,
+  };
+}
+
+function accountingProbeSummary(probe) {
+  if (!probe) return null;
+  return {
+    ok: probe.ok,
+    status: probe.status,
+    latencyMs: probe.latencyMs,
+    error: probe.error,
+    bodyError: probe.bodyError,
+  };
+}
+
+function parseDurationSeconds(raw) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  const match = value.match(/^(\d+(?:\.\d+)?)(ms|s|m|h)$/);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const multiplier = { ms: 0.001, s: 1, m: 60, h: 3600 }[unit] ?? 0;
+  return amount * multiplier;
 }
 
 function startTelemetryCapture({ outPath, intervalMs, runtimeUrl, engineUrl }) {
@@ -366,30 +390,63 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
   const probes = [
     { name: "runtime.health", url: `${runtimeUrl}/health` },
     { name: "runtime.metrics", url: `${runtimeUrl}/actuator/prometheus` },
+    { name: "runtime.hotPath", url: `${runtimeUrl}/internal/perf/hot-path`, captureJson: true },
+    { name: "runtime.dbPools", url: `${runtimeUrl}/internal/perf/db-pools`, captureJson: true },
+    { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];
   const results = [];
   for (const probe of probes) {
-    const started = Date.now();
-    try {
-      const response = await fetch(probe.url, { method: "GET" });
-      results.push({
-        name: probe.name,
-        status: response.status,
-        ok: response.ok,
-        latencyMs: Date.now() - started,
+    results.push(await requestAppProbe(probe));
+  }
+  return { sampledAt, probes: results };
+}
+
+async function requestAppProbe(probe) {
+  const started = Date.now();
+  return new Promise((resolve) => {
+    const url = new URL(probe.url);
+    const client = url.protocol === "https:" ? https : http;
+    const req = client.request(url, { method: "GET", timeout: 2000 }, (response) => {
+      const chunks = [];
+      let bytes = 0;
+      response.on("data", (chunk) => {
+        bytes += chunk.length;
+        if (bytes <= 1024 * 1024) {
+          chunks.push(chunk);
+        }
       });
-    } catch (error) {
-      results.push({
+      response.on("end", () => {
+        const result = {
+          name: probe.name,
+          status: response.statusCode,
+          ok: response.statusCode >= 200 && response.statusCode < 300,
+          latencyMs: Date.now() - started,
+        };
+        if (probe.captureJson) {
+          try {
+            result.json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          } catch (error) {
+            result.bodyError = String(error.message || error);
+          }
+        }
+        resolve(result);
+      });
+    });
+    req.on("timeout", () => {
+      req.destroy(new Error("timeout"));
+    });
+    req.on("error", (error) => {
+      resolve({
         name: probe.name,
         ok: false,
         latencyMs: Date.now() - started,
         error: String(error.message || error),
       });
-    }
-  }
-  return { sampledAt, probes: results };
+    });
+    req.end();
+  });
 }
 
 async function sampleDockerStats(sampledAt) {
@@ -509,17 +566,7 @@ function buildKpiSummary(reportFiles, invalidCodes) {
       const filename = basename(path);
       const workerMatch = filename.match(/workers-(\d+)\.json$/);
       const rateMatch = filename.match(/rate-(\d+)/);
-      const totalRequests = Number(report.totalRequests ?? 0);
-      const totalSuccess = Number(report.totalSuccess ?? 0);
-      const totalFailures = Number(report.totalFailures ?? 0);
-      const invalidIntentRejectCount = invalidCodes.reduce(
-        (acc, code) => acc + rejectCount(report, code),
-        0,
-      );
-      const validIntentRequestCount = Math.max(totalRequests - invalidIntentRejectCount, 0);
-      const validIntentSuccessRatePct =
-        validIntentRequestCount > 0 ? (totalSuccess / validIntentRequestCount) * 100 : 0;
-      const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0);
+      const quality = qualityFromReport(report, invalidCodes);
       const traceChecked = Number(report.traceChecks?.checked ?? 0);
       const tracePass = Number(report.traceChecks?.pass ?? 0);
       samples.push({
@@ -528,10 +575,10 @@ function buildKpiSummary(reportFiles, invalidCodes) {
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
         throughputRps: Number(report.throughputRps ?? 0),
         acceptedBusinessOpsRps: Number(report.acceptedBusinessOpsRps ?? 0),
-        endToEndSuccessRatePct: totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0,
-        validIntentSuccessRatePct,
-        invalidIntentRatePct: totalRequests > 0 ? (invalidIntentRejectCount / totalRequests) * 100 : 0,
-        systemFailureRateProxyPct: totalRequests > 0 ? (systemFailureProxyCount / totalRequests) * 100 : 0,
+        endToEndSuccessRatePct: quality.endToEndSuccessRatePct,
+        validIntentSuccessRatePct: quality.validIntentSuccessRatePct,
+        invalidIntentRatePct: quality.invalidIntentRatePct,
+        systemFailureRateProxyPct: quality.systemFailureRatePct,
         tracePassRatePct: traceChecked > 0 ? (tracePass / traceChecked) * 100 : 100,
         p95LatencyMs: Number(report.latencyMs?.p95 ?? 0),
         p99LatencyMs: Number(report.latencyMs?.p99 ?? 0),
@@ -574,6 +621,33 @@ function buildKpiSummary(reportFiles, invalidCodes) {
     qualityCap90: quality90,
     qualityCap95: quality95,
     samples,
+  };
+}
+
+function qualityFromReport(report, invalidCodes) {
+  if (report.quality && typeof report.quality === "object") {
+    return {
+      endToEndSuccessRatePct: Number(report.quality.endToEndSuccessRatePct ?? 0),
+      validIntentSuccessRatePct: Number(report.quality.validIntentSuccessRatePct ?? 0),
+      invalidIntentRatePct: Number(report.quality.invalidIntentRatePct ?? 0),
+      systemFailureRatePct: Number(report.quality.systemFailureRatePct ?? 0),
+    };
+  }
+  const totalRequests = Number(report.totalRequests ?? 0);
+  const totalSuccess = Number(report.totalSuccess ?? 0);
+  const totalFailures = Number(report.totalFailures ?? 0);
+  const invalidIntentRejectCount = invalidCodes.reduce(
+    (acc, code) => acc + rejectCount(report, code),
+    0,
+  );
+  const validIntentRequestCount = Math.max(totalRequests - invalidIntentRejectCount, 0);
+  const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0);
+  return {
+    endToEndSuccessRatePct: totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0,
+    validIntentSuccessRatePct:
+      validIntentRequestCount > 0 ? (totalSuccess / validIntentRequestCount) * 100 : 0,
+    invalidIntentRatePct: totalRequests > 0 ? (invalidIntentRejectCount / totalRequests) * 100 : 0,
+    systemFailureRatePct: totalRequests > 0 ? (systemFailureProxyCount / totalRequests) * 100 : 0,
   };
 }
 

@@ -18,6 +18,7 @@ data class PostgresRuntimeSqlNames(
     val submitResults = qualify(runtimeSchemaName, "submit_results")
     val validateReferenceDataFunction = qualify(runtimeSchemaName, "runtime_validate_reference_data")
     val persistSubmitOutcomeFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcome")
+    val persistSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcomes")
 
     val authRoles = qualify(authSchemaName, "auth_roles")
     val authActorRoles = qualify(authSchemaName, "auth_actor_roles")

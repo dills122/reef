@@ -1,11 +1,21 @@
 package com.reef.platform.api
 
+import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
+
+private data class CommandIntakeBackpressureSnapshot(
+    val active: Long,
+    val staleProcessing: Long,
+    val sampledAtMs: Long
+)
 
 class PlatformHttpServer(
     private val port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -16,11 +26,25 @@ class PlatformHttpServer(
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
     private val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
+    private val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+    private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
+    private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
+    private val asyncCommandWorkerBatchSize: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE", 100, min = 1),
+    private val asyncCommandWorkerPollMs: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS", 25L),
+    private val asyncCommandWorkerDedicatedRuntimePoolEnabled: Boolean =
+        RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
+    private val commandIntakeMaxActive: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS", 0L, min = 0L),
+    private val commandIntakeMaxStaleProcessing: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING", 0L, min = 0L),
+    private val commandIntakeBackpressureSampleMs: Long =
+        RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
 ) {
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
+    @Volatile
+    private var backpressureSnapshot: CommandIntakeBackpressureSnapshot? = null
+    private val backpressureSnapshotLock = Any()
 
     constructor(
         port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -35,6 +59,7 @@ class PlatformHttpServer(
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
         commandStatusLookup = deps.commandStatusLookup,
+        capturedCommandQueue = deps.capturedCommandQueue,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -54,6 +79,41 @@ class PlatformHttpServer(
                 return@createContext
             }
             writeJson(exchange, 200, abuseStatsJson(abuseProtectionHook.stats()))
+        }
+
+        server.createContext("/internal/perf/hot-path") { exchange ->
+            when (exchange.requestMethod) {
+                "GET" -> writeJson(exchange, 200, JsonCodec.writeObject("metrics" to HotPathMetrics.snapshot()))
+                "POST" -> {
+                    HotPathMetrics.reset()
+                    writeJson(exchange, 200, JsonCodec.writeObject("status" to "reset"))
+                }
+                else -> methodNotAllowed(exchange)
+            }
+        }
+
+        server.createContext("/internal/perf/db-pools") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, dbPoolStatsJson())
+        }
+
+        server.createContext("/internal/commands/async/stats") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, asyncCommandStatsJson())
+        }
+
+        server.createContext("/internal/commands/accounting") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, commandAccountingJson(queryValue(exchange, "runId")))
         }
 
         server.createContext("/api/v1/commands/") { exchange ->
@@ -258,8 +318,34 @@ class PlatformHttpServer(
         }
 
         server.start()
+        if (asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val queue = capturedCommandQueue
+            if (queue == null) {
+                System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
+            } else {
+                val workerApi = asyncCommandWorkerApi()
+                (1..asyncCommandWorkerThreads).forEach { index ->
+                    AsyncCommandProcessor(
+                        queue = queue,
+                        api = workerApi,
+                        batchSize = asyncCommandWorkerBatchSize,
+                        pollIntervalMs = asyncCommandWorkerPollMs,
+                        workerName = "reef-async-command-processor-$index"
+                    ).start()
+                }
+            }
+        }
         println("platform-runtime listening on :$port")
         return server
+    }
+
+    private fun asyncCommandWorkerApi(): PlatformApi {
+        if (!asyncCommandWorkerDedicatedRuntimePoolEnabled) return api
+        return PlatformApi(
+            OrderApplicationService(
+                runtimePersistence = defaultRuntimePersistence("async-runtime")
+            )
+        )
     }
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
@@ -371,8 +457,24 @@ class PlatformHttpServer(
             writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
             return
         }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val existingStatus = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
+            if (existingStatus != null) {
+                writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existingStatus, correlationId)
+                return
+            }
+            val backpressure = commandIntakeBackpressure()
+            if (backpressure != null) {
+                writeJson(exchange, backpressure.status, boundary.toErrorJson(backpressure, correlationId))
+                return
+            }
+        }
+
         val reservation = try {
-            commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
+            HotPathMetrics.time("api.commandCapture.reserve") {
+                commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
+            }
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
@@ -392,61 +494,78 @@ class PlatformHttpServer(
         }
 
         if (commandProcessingMode != CommandProcessingMode.SyncResult && commandStatusLookup == null) {
-            commandCaptureStore.markFailed(
-                clientId,
-                route,
-                idempotencyKey,
-                503,
-                "COMMAND_STATUS_UNAVAILABLE",
-                "command status lookup is required for ${commandProcessingMode.configValue}"
-            )
-            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
-            return
-        }
-
-        val abuseViolation = abuseProtectionHook.allow(clientId, route)
-        if (abuseViolation != null) {
-            commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
-            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
-            return
-        }
-
-        val cached = idempotencyStore.find(clientId, route, idempotencyKey)
-        if (cached != null) {
-            commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
-            writeJson(exchange, cached.status, cached.payload)
-            return
-        }
-
-        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
-            val status = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
-            if (status == null) {
+            HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(
                     clientId,
                     route,
                     idempotencyKey,
                     503,
                     "COMMAND_STATUS_UNAVAILABLE",
-                    "captured command status not found"
+                    "command status lookup is required for ${commandProcessingMode.configValue}"
                 )
+            }
+            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
+            return
+        }
+
+        val abuseViolation = abuseProtectionHook.allow(clientId, route)
+        if (abuseViolation != null) {
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
+            }
+            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            return
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
+            val status = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
+            if (status == null) {
+                HotPathMetrics.time("api.commandCapture.markFailed") {
+                    commandCaptureStore.markFailed(
+                        clientId,
+                        route,
+                        idempotencyKey,
+                        503,
+                        "COMMAND_STATUS_UNAVAILABLE",
+                        "captured command status not found"
+                    )
+                }
                 writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
                 return
             }
             val payload = CommandStatusResponse.acceptedJson(status)
-            rememberIdempotentResult(exchange, route, 202, payload)
             writeJson(exchange, 202, payload)
             return
         }
 
+        val cached = HotPathMetrics.time("api.idempotency.find") {
+            idempotencyStore.find(clientId, route, idempotencyKey)
+        }
+        if (cached != null) {
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
+            }
+            writeJson(exchange, cached.status, cached.payload)
+            return
+        }
+
         if (commandProcessingMode == CommandProcessingMode.CapturedSyncEngine) {
-            commandCaptureStore.markProcessing(clientId, route, idempotencyKey)
+            HotPathMetrics.time("api.commandCapture.markProcessing") {
+                commandCaptureStore.markProcessing(clientId, route, idempotencyKey)
+            }
         }
 
         try {
-            val payload = operation(body)
+            val payload = HotPathMetrics.time("api.operation") {
+                operation(body)
+            }
             abuseProtectionHook.observe(clientId, route, 200, rejectCode(payload))
-            rememberIdempotentResult(exchange, route, 200, payload)
-            commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
+            HotPathMetrics.time("api.idempotency.save") {
+                rememberIdempotentResult(exchange, route, 200, payload)
+            }
+            HotPathMetrics.time("api.commandCapture.markCompleted") {
+                commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
+            }
             writeJson(exchange, 200, payload)
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
@@ -454,7 +573,9 @@ class PlatformHttpServer(
             System.err.println(
                 "runtime_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
             )
-            commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
+            HotPathMetrics.time("api.commandCapture.markFailed") {
+                commandCaptureStore.markFailed(clientId, route, idempotencyKey, 503, errorClass, errorMessage)
+            }
             writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
         }
     }
@@ -480,13 +601,6 @@ class PlatformHttpServer(
         }
         if (status != null && commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val payload = CommandStatusResponse.acceptedJson(status)
-            idempotencyStore.save(
-                clientId,
-                route,
-                idempotencyKey,
-                IdempotencyResult(202, payload),
-                idempotencyRetentionPolicy.ttlFor(route)
-            )
             writeJson(exchange, 202, payload)
             return
         }
@@ -566,6 +680,142 @@ class PlatformHttpServer(
             "activeBlockedClients" to stats.activeBlockedClients
         )
     }
+
+    private fun asyncCommandStatsJson(): String {
+        val queueCounts = capturedCommandQueue
+            ?.statusCounts()
+            ?.mapKeys { (status, _) -> status.name }
+            ?: emptyMap()
+        val counts = CommandLogStatus.values().associate { status ->
+            status.name to (queueCounts[status.name] ?: 0L)
+        }
+        val metrics = AsyncCommandProcessorMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to asyncCommandWorkerEnabled,
+            "processingMode" to commandProcessingMode.configValue,
+            "workerThreads" to asyncCommandWorkerThreads,
+            "batchSize" to asyncCommandWorkerBatchSize,
+            "pollIntervalMs" to asyncCommandWorkerPollMs,
+            "intakeBackpressure" to mapOf(
+                "maxActiveCommands" to commandIntakeMaxActive,
+                "maxStaleProcessing" to commandIntakeMaxStaleProcessing,
+                "sampleMs" to commandIntakeBackpressureSampleMs
+            ),
+            "queue" to counts,
+            "metrics" to mapOf(
+                "claimed" to metrics.claimed,
+                "completed" to metrics.completed,
+                "failed" to metrics.failed,
+                "emptyPolls" to metrics.emptyPolls,
+                "lastClaimedAt" to metrics.lastClaimedAt,
+                "lastCompletedAt" to metrics.lastCompletedAt,
+                "lastFailedAt" to metrics.lastFailedAt
+            )
+        )
+    }
+
+    private fun commandIntakeBackpressure(): BoundaryError? {
+        if (commandIntakeMaxActive <= 0L && commandIntakeMaxStaleProcessing <= 0L) {
+            return null
+        }
+        val queue = capturedCommandQueue ?: return null
+        val snapshot = commandIntakeBackpressureSnapshot(queue)
+        if (commandIntakeMaxStaleProcessing > 0L && snapshot.staleProcessing >= commandIntakeMaxStaleProcessing) {
+            return BoundaryError(
+                429,
+                "COMMAND_INTAKE_BACKPRESSURE",
+                "command intake rejected because stale processing count is ${snapshot.staleProcessing}"
+            )
+        }
+        if (commandIntakeMaxActive > 0L && snapshot.active >= commandIntakeMaxActive) {
+            return BoundaryError(
+                429,
+                "COMMAND_INTAKE_BACKPRESSURE",
+                "command intake rejected because active command queue depth is ${snapshot.active}"
+            )
+        }
+        return null
+    }
+
+    private fun commandIntakeBackpressureSnapshot(queue: CapturedCommandQueue): CommandIntakeBackpressureSnapshot {
+        val now = System.currentTimeMillis()
+        backpressureSnapshot?.let { cached ->
+            if (commandIntakeBackpressureSampleMs > 0L && now - cached.sampledAtMs < commandIntakeBackpressureSampleMs) {
+                return cached
+            }
+        }
+        return synchronized(backpressureSnapshotLock) {
+            val lockedNow = System.currentTimeMillis()
+            backpressureSnapshot?.let { cached ->
+                if (commandIntakeBackpressureSampleMs > 0L && lockedNow - cached.sampledAtMs < commandIntakeBackpressureSampleMs) {
+                    return@synchronized cached
+                }
+            }
+            val sampled = HotPathMetrics.time("api.commandIntake.backpressureSnapshot") {
+                if (commandIntakeMaxStaleProcessing > 0L) {
+                    val accounting = queue.accountingSnapshot()
+                    CommandIntakeBackpressureSnapshot(
+                        active = accounting.active,
+                        staleProcessing = accounting.staleProcessing,
+                        sampledAtMs = lockedNow
+                    )
+                } else {
+                    val counts = queue.statusCounts()
+                    CommandIntakeBackpressureSnapshot(
+                        active = counts.getOrDefault(CommandLogStatus.RECEIVED, 0L) +
+                            counts.getOrDefault(CommandLogStatus.PROCESSING, 0L),
+                        staleProcessing = 0L,
+                        sampledAtMs = lockedNow
+                    )
+                }
+            }
+            backpressureSnapshot = sampled
+            sampled
+        }
+    }
+
+    private fun commandAccountingJson(runId: String): String {
+        val snapshot = capturedCommandQueue?.accountingSnapshot(runId)
+        if (snapshot == null) {
+            return JsonCodec.writeObject(
+                "available" to false,
+                "runId" to runId,
+                "error" to "captured command queue unavailable"
+            )
+        }
+        return JsonCodec.writeObject(
+            "available" to true,
+            "runId" to snapshot.runId,
+            "accepted" to snapshot.accepted,
+            "received" to snapshot.received,
+            "processing" to snapshot.processing,
+            "completed" to snapshot.completed,
+            "failed" to snapshot.failed,
+            "active" to snapshot.active,
+            "terminal" to snapshot.terminal,
+            "accountingGap" to snapshot.accountingGap,
+            "staleProcessing" to snapshot.staleProcessing
+        )
+    }
+
+    private fun dbPoolStatsJson(): String {
+        return JsonCodec.writeObject(
+            "pools" to RuntimeDataSources.snapshots().map { snapshot ->
+                mapOf(
+                    "key" to snapshot.key,
+                    "poolName" to snapshot.poolName,
+                    "jdbcUrl" to snapshot.jdbcUrl,
+                    "username" to snapshot.username,
+                    "maximumPoolSize" to snapshot.maximumPoolSize,
+                    "minimumIdle" to snapshot.minimumIdle,
+                    "activeConnections" to snapshot.activeConnections,
+                    "idleConnections" to snapshot.idleConnections,
+                    "totalConnections" to snapshot.totalConnections,
+                    "threadsAwaitingConnection" to snapshot.threadsAwaitingConnection
+                )
+            }
+        )
+    }
 }
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
@@ -583,6 +833,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
         commandStatusLookup = hooks.commandCaptureStore as? CommandStatusLookup,
+        capturedCommandQueue = hooks.commandCaptureStore as? CapturedCommandQueue,
         commandProcessingMode = hooks.commandProcessingMode
     )
 }
@@ -594,5 +845,6 @@ data class ServerBoundaryDeps(
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
     val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
+    val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

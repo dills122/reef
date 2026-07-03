@@ -48,6 +48,9 @@ Immediate implication:
 Current planning review:
 - [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./PROJECT_GOAL_PLAN_REVIEW.md)
 
+Exploratory planning:
+- [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md) proposes a tournament-style trading bot arena as a future simulation-control layer with sandboxed bot execution, modular game modes, replay, scoring, and leaderboards.
+
 ## Delivery Strategy
 
 The most effective sequence is:
@@ -88,12 +91,67 @@ Current execution checkpoint before that block:
 - make command idempotency atomic, replay clocks deterministic, and `/api/v1` validation strict enough to support scenario assertions
 - add CI-backed schema-placement validation, then narrow compatibility bootstrap now that local startup runs migrations and validates migrated objects
 - run the runtime DB/JSON/HTTP library benchmark gate before committing to hot-path library swaps
+- keep durable captured-ack traffic as the local fallback and comparison path while stream-ack is built
+- implement the stream-ack ingress foundation before treating bot-arena load as scalable beyond local fallback mode
 - deliver the simulator control-room MVP over existing CLI/report artifacts
 - complete venue order-state projections for submit/cancel/modify
 
 ## Major Workstreams
 
 Additional active workstream:
+
+### Workstream M: Throughput Scaling Foundation
+
+Goal:
+prepare Reef for bot-arena traffic and a basic Kubernetes deployment by reaching stable completed-throughput capacity without silent accepted-command loss.
+
+Scope:
+- durable `stream-ack` as the target high-throughput benchmark mode
+- Postgres `captured-ack` as the local fallback and A/B baseline
+- minimum `7500` completed commands/sec per runtime + engine instance, with `10000` preferred
+- accepted-command accounting across terminal results, active queue work, stale leases, and drain time
+- run/session attribution for stress tests, simulator runs, and future arena runs
+- durable-intake backpressure that rejects before acceptance when the system cannot safely drain
+- JetStream durable publish-ack-before-202 semantics for accepted commands
+- deterministic partition routing by run/session/instrument so book-affine commands stay ordered
+- partition workers that commit canonical Postgres command results and lifecycle events before JetStream ack
+- projection isolation, watermarks, and lag telemetry for read models, leaderboards, and analytics
+- Kubernetes readiness, liveness, graceful shutdown, lease reclaim, and per-pod metric labeling
+
+Exit criteria:
+- no accepted-command accounting gaps in stream-ack stress reports
+- queue backlog remains bounded and drains to zero after load stops
+- per-instance throughput reaches the minimum completed-throughput target or the next bottleneck is measured
+- bot-originated traffic can use the same command/API path with run/bot attribution
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
+### Workstream L: Bot Arena Exploration
+
+Goal:
+evaluate a tournament-style bot arena without weakening Reef's core venue, simulator, and API boundary discipline.
+
+Scope:
+- TypeScript-first bot SDK backed by language-neutral protobuf contracts
+- gRPC/protobuf arena runtime protocol between sandbox workers and the arena orchestrator
+- operator-controlled market maker and background-flow bots as tested liquidity/traffic providers
+- modular game modes with strict visible-data, action, risk, and scoring policies
+- replay and audit data model that scales without storing every full snapshot forever
+- separate arena storage boundary for competition metadata, replay indexes, leaderboards, and bot registry data
+- low-cost infrastructure path that starts local/scheduled and scales worker pools only when tournaments run
+- scale-out design by tournament run, shard, instrument group, sandbox worker, and matching-engine partition
+
+Exit criteria:
+- arena architecture decision is accepted or explicitly rejected
+- built-in bot liquidity model is proven with deterministic tests
+- sandbox threat model and public-submission quarantine path are documented
+- first game mode contract is stable enough for implementation planning
+- arena storage split and retention policy are implementation-ready
+- cost and capacity envelope is measured before public submissions are enabled
 
 ### Workstream K: Runtime Performance Library Investigation
 
@@ -359,9 +417,10 @@ Checkpoint:
 - intraday writes must persist in real time to the canonical hot store
 - EOD jobs produce derived analytics and archive artifacts only
 
-2. Keep NATS as distribution, not sole source of truth
+2. Keep NATS from becoming the venue outcome source of truth
 - canonical audit/event history remains in Postgres append-only tables
-- NATS retention can remain short-lived for replay window and fanout
+- event-fanout NATS retention can remain short-lived for replay window and fanout
+- stream-ack accepted-command retention is a separate retained ingress log with explicit replay windows
 
 3. Keep scheduler infrastructure intentionally small
 - one job-runner with DB-backed state machine is preferred initially

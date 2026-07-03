@@ -1,5 +1,19 @@
 package com.reef.platform.api
 
+import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.Account
+import com.reef.platform.domain.ActorRoleBinding
+import com.reef.platform.domain.CancelOrderCommand
+import com.reef.platform.domain.EngineOrderAccepted
+import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Participant
+import com.reef.platform.domain.Permission
+import com.reef.platform.domain.RoleDefinition
+import com.reef.platform.domain.SubmitOrderCommand
+import com.reef.platform.domain.SubmitOrderResult
+import com.reef.platform.infrastructure.engine.EngineGateway
+import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import java.time.Instant
@@ -58,7 +72,10 @@ class CommandCaptureStoreTest {
                   "commandId":"cmd-1",
                   "traceId":"trace-1",
                   "correlationId":"corr-payload",
-                  "actorId":"actor-1"
+                  "actorId":"actor-1",
+                  "runId":"run-1",
+                  "runKind":"stress",
+                  "scenarioId":"scenario-1"
                 }
             """.trimIndent()
         )
@@ -70,6 +87,9 @@ class CommandCaptureStoreTest {
         assertEquals("corr-payload", record.correlationId)
         assertEquals("actor-1", record.actorId)
         assertEquals("SubmitOrder", record.commandType)
+        assertEquals("run-1", record.runId)
+        assertEquals("stress", record.runKind)
+        assertEquals("scenario-1", record.scenarioId)
         assertEquals(Instant.parse("2026-06-04T14:00:00Z"), record.receivedAt)
         assertEquals(CommandLogStatus.RECEIVED, record.status)
         assertEquals(CommandProcessingMode.CapturedSyncEngine, captureStore.findCommandStatus("cmd-1")?.processingMode)
@@ -155,6 +175,131 @@ class CommandCaptureStoreTest {
         assertEquals(CommandLogStatus.FAILED, commandLogStore.findByCommandId("cmd-2")?.status)
         assertEquals("runtime unavailable", commandLogStore.findByCommandId("cmd-2")?.lastError)
     }
+
+    @Test
+    fun commandLogStoreReturnsPendingCommandsInReceivedOrder() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val first = CommandLogRecord(
+            commandId = "cmd-pending-1",
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-pending-1",
+            traceId = "trace-pending-1",
+            correlationId = "trace-pending-1",
+            actorId = "actor-1",
+            commandType = "SubmitOrder",
+            receivedAt = Instant.parse("2026-06-04T14:00:00Z"),
+            payloadJson = "{}"
+        )
+        val second = first.copy(
+            commandId = "cmd-pending-2",
+            idempotencyKey = "idem-pending-2",
+            receivedAt = Instant.parse("2026-06-04T14:00:01Z")
+        )
+        commandLogStore.append(second)
+        commandLogStore.append(first)
+        commandLogStore.markProcessing("cmd-pending-2")
+
+        val pending = commandLogStore.findByStatus(CommandLogStatus.RECEIVED, 10)
+
+        assertEquals(listOf("cmd-pending-1"), pending.map { it.commandId })
+    }
+
+    @Test
+    fun asyncCommandProcessorCompletesCapturedAckCommand() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
+        persistence.saveRole(RoleDefinition("order_trader", listOf(Permission.ORDER_SUBMIT)))
+        persistence.saveActorRoleBinding(ActorRoleBinding("actor-1", "order_trader"))
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            clock = { Instant.parse("2026-06-04T14:00:00Z") }
+        )
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-async-1",
+            correlationId = "trace-async-1",
+            requestPayload = validAsyncSubmitPayload("cmd-async-1", "trace-async-1", "ord-async-1")
+        )
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = AsyncAcceptedEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val processor = AsyncCommandProcessor(
+            queue = captureStore,
+            api = api,
+            batchSize = 10,
+            pollIntervalMs = 1L
+        )
+
+        assertEquals(1, processor.processOnce())
+
+        val status = captureStore.findCommandStatus("cmd-async-1")
+        assertNotNull(status)
+        assertEquals(CommandLogStatus.COMPLETED, status.status)
+        assertEquals(200, status.responseStatus)
+        assertTrue(status.responsePayloadJson.contains("\"accepted\""))
+        assertNotNull(persistence.acceptedOrder("ord-async-1"))
+    }
+
+    @Test
+    fun asyncCommandProcessorPersistsSubmitBatchBeforeCompletingCommands() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
+        persistence.saveRole(RoleDefinition("order_trader", listOf(Permission.ORDER_SUBMIT)))
+        persistence.saveActorRoleBinding(ActorRoleBinding("actor-1", "order_trader"))
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = InMemoryCommandLogStore(),
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            clock = { Instant.parse("2026-06-04T14:00:00Z") }
+        )
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-async-batch-1",
+            correlationId = "trace-async-batch-1",
+            requestPayload = validAsyncSubmitPayload("cmd-async-batch-1", "trace-async-batch-1", "ord-async-batch-1")
+        )
+        captureStore.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-async-batch-2",
+            correlationId = "trace-async-batch-2",
+            requestPayload = validAsyncSubmitPayload("cmd-async-batch-2", "trace-async-batch-2", "ord-async-batch-2")
+        )
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = AsyncAcceptedEngineGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val processor = AsyncCommandProcessor(
+            queue = captureStore,
+            api = api,
+            batchSize = 10,
+            pollIntervalMs = 1L
+        )
+
+        assertEquals(2, processor.processOnce())
+
+        val first = captureStore.findCommandStatus("cmd-async-batch-1")
+        val second = captureStore.findCommandStatus("cmd-async-batch-2")
+        assertEquals(CommandLogStatus.COMPLETED, first?.status)
+        assertEquals(CommandLogStatus.COMPLETED, second?.status)
+        assertNotNull(persistence.acceptedOrder("ord-async-batch-1"))
+        assertNotNull(persistence.acceptedOrder("ord-async-batch-2"))
+        assertEquals(2, persistence.acceptedOrders().size)
+    }
 }
 
 private class RecordingCommandLogCaptureStore : CommandCaptureStore {
@@ -238,5 +383,49 @@ class PostgresCommandLogCaptureIntegrationTest {
         val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
         val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
         return RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+    }
+}
+
+private fun validAsyncSubmitPayload(commandId: String, traceId: String, orderId: String): String {
+    return """
+        {
+          "commandId":"$commandId",
+          "traceId":"$traceId",
+          "causationId":"",
+          "correlationId":"$traceId",
+          "actorId":"actor-1",
+          "occurredAt":"2026-06-04T14:00:00Z",
+          "orderId":"$orderId",
+          "instrumentId":"AAPL",
+          "participantId":"participant-1",
+          "accountId":"account-1",
+          "side":"BUY",
+          "orderType":"LIMIT",
+          "quantityUnits":"100",
+          "limitPrice":"150250000000",
+          "currency":"USD",
+          "timeInForce":"DAY"
+        }
+    """.trimIndent()
+}
+
+private class AsyncAcceptedEngineGateway : EngineGateway {
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = "2026-06-04T14:00:00Z"
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        error("cancel not expected")
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        error("modify not expected")
     }
 }

@@ -4,6 +4,7 @@ import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
+import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
@@ -61,6 +62,16 @@ data class CommandCaptureReceipt(
     companion object {
         val Accepted = CommandCaptureReceipt(accepted = true)
     }
+}
+
+interface CapturedCommandQueue {
+    fun claimReceivedCommands(limit: Int): List<CommandLogRecord>
+    fun statusCounts(): Map<CommandLogStatus, Long>
+    fun accountingSnapshot(runId: String = ""): CommandLogAccountingSnapshot
+    fun markCommandProcessing(commandId: String)
+    fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String)
+    fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String)
+    fun markCommandTerminal(updates: List<CommandTerminalUpdate>)
 }
 
 class NoopCommandCaptureStore : CommandCaptureStore {
@@ -207,7 +218,7 @@ class CommandLogCommandCaptureStore(
     private val commandLogStore: CommandLogStore,
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val clock: () -> Instant = { Instant.now() }
-) : CommandCaptureStore, CommandStatusLookup {
+) : CommandCaptureStore, CommandStatusLookup, CapturedCommandQueue {
     override fun reserveReceived(
         clientId: String,
         route: String,
@@ -215,7 +226,12 @@ class CommandLogCommandCaptureStore(
         correlationId: String,
         requestPayload: String
     ): CommandCaptureReceipt {
-        val appendResult = commandLogStore.append(newCommandLogRecord(clientId, route, idempotencyKey, correlationId, requestPayload))
+        val record = HotPathMetrics.time("api.commandCapture.buildRecord") {
+            newCommandLogRecord(clientId, route, idempotencyKey, correlationId, requestPayload)
+        }
+        val appendResult = HotPathMetrics.time("api.commandLog.append") {
+            commandLogStore.append(record)
+        }
         if (!appendResult.appended) {
             return CommandCaptureReceipt(
                 accepted = false,
@@ -278,8 +294,36 @@ class CommandLogCommandCaptureStore(
         return commandLogStore.findByIdempotency(clientId, route, idempotencyKey)?.toStatusView(commandProcessingMode)
     }
 
-    private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
-        val parsedCommandId = JsonCodec.fieldAsString(requestPayload, "commandId")
+    override fun claimReceivedCommands(limit: Int): List<CommandLogRecord> {
+        return commandLogStore.claimReceived(limit)
+    }
+
+    override fun statusCounts(): Map<CommandLogStatus, Long> {
+        return commandLogStore.statusCounts()
+    }
+
+    override fun accountingSnapshot(runId: String): CommandLogAccountingSnapshot {
+        return commandLogStore.accountingSnapshot(runId)
+    }
+
+    override fun markCommandProcessing(commandId: String) {
+        commandLogStore.markProcessing(commandId)
+    }
+
+    override fun markCommandCompleted(commandId: String, responseStatus: Int, responsePayloadJson: String) {
+        commandLogStore.markCompleted(commandId, responseStatus, responsePayloadJson)
+    }
+
+    override fun markCommandFailed(commandId: String, responseStatus: Int, errorMessage: String) {
+        commandLogStore.markFailed(commandId, responseStatus, errorMessage)
+    }
+
+    override fun markCommandTerminal(updates: List<CommandTerminalUpdate>) {
+        commandLogStore.markTerminal(updates)
+    }
+
+    private fun commandId(clientId: String, route: String, idempotencyKey: String, payload: JsonDocument?): String {
+        val parsedCommandId = payload?.string("commandId").orEmpty()
         if (parsedCommandId.isNotBlank()) return parsedCommandId
         val source = "$clientId|$route|$idempotencyKey"
         return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
@@ -292,27 +336,40 @@ class CommandLogCommandCaptureStore(
         correlationId: String,
         requestPayload: String
     ): CommandLogRecord {
+        val parsedPayload = parsePayloadOrNull(requestPayload)
         return CommandLogRecord(
-            commandId = commandId(clientId, route, idempotencyKey, requestPayload),
+            commandId = commandId(clientId, route, idempotencyKey, parsedPayload),
             clientId = clientId,
             route = route,
             idempotencyKey = idempotencyKey,
-            traceId = JsonCodec.fieldAsString(requestPayload, "traceId").ifBlank { correlationId },
-            correlationId = JsonCodec.fieldAsString(requestPayload, "correlationId").ifBlank { correlationId },
-            actorId = JsonCodec.fieldAsString(requestPayload, "actorId").ifBlank { clientId },
+            traceId = parsedPayload?.string("traceId").orEmpty().ifBlank { correlationId },
+            correlationId = parsedPayload?.string("correlationId").orEmpty().ifBlank { correlationId },
+            actorId = parsedPayload?.string("actorId").orEmpty().ifBlank { clientId },
             commandType = commandType(route),
+            runId = parsedPayload?.string("runId").orEmpty()
+                .ifBlank { parsedPayload?.string("scenarioRunId").orEmpty() },
+            runKind = parsedPayload?.string("runKind").orEmpty(),
+            scenarioId = parsedPayload?.string("scenarioId").orEmpty(),
             receivedAt = clock(),
-            payloadJson = payloadJson(requestPayload)
+            payloadJson = payloadJson(requestPayload, parsedPayload)
         )
     }
 
-    private fun payloadJson(requestPayload: String): String {
+    private fun parsePayloadOrNull(requestPayload: String): JsonDocument? {
         return try {
             JsonCodec.parseObject(requestPayload)
-            requestPayload
         } catch (_: Exception) {
-            JsonCodec.writeObject("rawPayload" to requestPayload)
+            null
         }
+    }
+
+    private fun payloadJson(requestPayload: String, parsedPayload: JsonDocument?): String {
+        if (parsedPayload != null) return requestPayload
+        return JsonCodec.writeObject("rawPayload" to requestPayload)
+    }
+
+    private fun payloadJson(requestPayload: String): String {
+        return payloadJson(requestPayload, parsePayloadOrNull(requestPayload))
     }
 
     private fun commandType(route: String): String {
@@ -513,7 +570,7 @@ internal fun defaultCommandCaptureStore(
             val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
             val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
             val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
-            PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword))
+            PostgresCommandCaptureStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-capture"))
         }
     }
     return when (val commandLogMode = (lookup("EXTERNAL_API_COMMAND_LOG_MODE") ?: "disabled").trim().lowercase()) {
@@ -529,7 +586,9 @@ internal fun defaultCommandCaptureStore(
             val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             CommandLogCommandCaptureStore(
                 delegate = captureStore,
-                commandLogStore = PostgresCommandLogStore(RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)),
+                commandLogStore = PostgresCommandLogStore(
+                    RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-log")
+                ),
                 commandProcessingMode = commandProcessingMode
             )
         }

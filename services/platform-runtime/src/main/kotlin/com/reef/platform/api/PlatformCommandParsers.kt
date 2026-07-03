@@ -15,6 +15,9 @@ object PlatformCommandParsers {
         "actorType",
         "strategyId",
         "persona",
+        "runId",
+        "runKind",
+        "scenarioId",
         "scenarioRunId",
         "seed"
     )

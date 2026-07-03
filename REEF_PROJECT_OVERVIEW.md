@@ -222,7 +222,7 @@ A trade should be traceable from initial order intent to final outcome through s
 
 ### Messaging and data
 - **Postgres** for canonical relational state
-- **NATS** as an eventual lightweight message backbone
+- **NATS/JetStream** as the target lightweight async backbone and durable accepted-command ingress log for high-throughput stream-ack mode
 - append-only **event log** for replay and audit
 - likely **Protobuf** for shared cross-language contracts
 

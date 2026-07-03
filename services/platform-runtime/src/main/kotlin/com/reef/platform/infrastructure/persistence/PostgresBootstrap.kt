@@ -70,7 +70,8 @@ object PostgresSchemaRequirements {
             ).map(PostgresSchemaObject::parse),
             functions = listOf(
                 names.validateReferenceDataFunction,
-                names.persistSubmitOutcomeFunction
+                names.persistSubmitOutcomeFunction,
+                names.persistSubmitOutcomesFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
@@ -107,28 +108,76 @@ object PostgresSchemaRequirements {
         )
     }
 
-    fun commandLog(commands: String): PostgresSchemaRequirement {
-        val table = PostgresSchemaObject.parse(commands)
+    fun commandLog(
+        commands: String,
+        payloads: String = "command_log.command_payloads",
+        workQueue: String = "command_log.command_work_queue",
+        results: String = "command_log.command_results",
+        retentionPins: String = "command_log.retention_pins",
+        appendFunction: String = "command_log.command_append"
+    ): PostgresSchemaRequirement {
+        val commandTable = PostgresSchemaObject.parse(commands)
+        val payloadTable = PostgresSchemaObject.parse(payloads)
+        val queueTable = PostgresSchemaObject.parse(workQueue)
+        val resultTable = PostgresSchemaObject.parse(results)
+        val retentionPinTable = PostgresSchemaObject.parse(retentionPins)
         return PostgresSchemaRequirement(
-            tables = listOf(table),
+            tables = listOf(commandTable, payloadTable, queueTable, resultTable, retentionPinTable),
+            functions = listOf(PostgresSchemaObject.parse(appendFunction)),
             columns = listOf(
-                "command_id",
-                "client_id",
-                "route",
-                "idempotency_key",
-                "trace_id",
-                "correlation_id",
-                "actor_id",
-                "command_type",
-                "received_at",
-                "payload_json",
-                "status",
-                "attempt_count",
-                "last_error",
-                "created_at",
-                "response_status",
-                "response_payload_json"
-            ).map { column -> PostgresSchemaColumn(table, column) }
+                listOf(
+                    "command_id",
+                    "client_id",
+                    "route",
+                    "idempotency_key",
+                    "trace_id",
+                    "correlation_id",
+                    "actor_id",
+                    "command_type",
+                    "run_id",
+                    "run_kind",
+                    "scenario_id",
+                    "received_at",
+                    "payload_json",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "created_at",
+                    "response_status",
+                    "response_payload_json"
+                ).map { column -> PostgresSchemaColumn(commandTable, column) },
+                listOf(
+                    "command_id",
+                    "payload_json",
+                    "created_at"
+                ).map { column -> PostgresSchemaColumn(payloadTable, column) },
+                listOf(
+                    "command_id",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "leased_by",
+                    "leased_until",
+                    "updated_at"
+                ).map { column -> PostgresSchemaColumn(queueTable, column) },
+                listOf(
+                    "command_id",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "response_status",
+                    "response_payload_json",
+                    "completed_at"
+                ).map { column -> PostgresSchemaColumn(resultTable, column) },
+                listOf(
+                    "pin_id",
+                    "selector_type",
+                    "selector_value",
+                    "reason",
+                    "created_at",
+                    "updated_at"
+                ).map { column -> PostgresSchemaColumn(retentionPinTable, column) }
+            ).flatten()
         )
     }
 }

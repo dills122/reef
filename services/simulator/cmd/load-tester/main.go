@@ -27,6 +27,9 @@ type Config struct {
 	SessionConfigPath   string
 	SessionName         string
 	ScenarioRunID       string
+	RunID               string
+	RunKind             string
+	ScenarioID          string
 	Seed                int64
 	HasSessionConfig    bool
 	SideBiasBuyPct      int
@@ -69,6 +72,7 @@ type Config struct {
 	HTTPMaxConnsHost    int
 	HTTPIdleConnTimeout time.Duration
 	UseApiV1            bool
+	LegacyInternalRoute bool
 	ClientIDPrefix      string
 	CommandClockStart   string
 	CommandClockStep    time.Duration
@@ -120,6 +124,7 @@ type summary struct {
 	TopErrors              []errorSummary            `json:"topErrors"`
 	RejectReasons          []errorSummary            `json:"rejectReasons"`
 	RejectTaxonomy         []rejectTaxonomySummary   `json:"rejectTaxonomy"`
+	Quality                qualitySummary            `json:"quality"`
 	LatencyMs              latencySummary            `json:"latencyMs"`
 	TraceChecks            traceChecks               `json:"traceChecks"`
 }
@@ -142,6 +147,7 @@ type actionSummary struct {
 type latencySummary = reporting.LatencySummary
 type errorSummary = reporting.ErrorSummary
 type rejectTaxonomySummary = reporting.RejectTaxonomySummary
+type qualitySummary = reporting.QualitySummary
 
 type traceChecks struct {
 	Checked       int      `json:"checked"`
@@ -171,6 +177,8 @@ const (
 	profileRetail        = "retail"
 	profileNoise         = "noise"
 )
+
+var defaultInvalidIntentRejectCodes = []string{"INVALID_STATE", "NOT_FOUND", "VALIDATION_ERROR"}
 
 type trade struct {
 	EventID       string `json:"eventId"`
@@ -222,6 +230,9 @@ func main() {
 
 	started := time.Now().UTC()
 	sessionID := fmt.Sprintf("load-%d", started.UnixNano())
+	if cfg.RunID == "" {
+		cfg.RunID = sessionID
+	}
 	client := buildHTTPClient(cfg)
 	defer client.CloseIdleConnections()
 
@@ -303,6 +314,9 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.StrictMinLiveOrders, "strict-min-live-orders", cfg.StrictMinLiveOrders, "minimum local live-order depth before modify/cancel in strict modes")
 	flag.StringVar(&cfg.ReportOut, "report-out", cfg.ReportOut, "optional json report output path")
 	flag.StringVar(&cfg.Mode, "mode", cfg.Mode, "traffic mode: chaos, strict-lifecycle, or capacity-baseline")
+	flag.StringVar(&cfg.RunID, "run-id", cfg.RunID, "run/session id stamped into command payloads")
+	flag.StringVar(&cfg.RunKind, "run-kind", cfg.RunKind, "run kind stamped into command payloads")
+	flag.StringVar(&cfg.ScenarioID, "scenario-id", cfg.ScenarioID, "scenario id stamped into command payloads")
 	flag.BoolVar(&cfg.Tail, "tail", cfg.Tail, "stream new trades/events during the run")
 	flag.DurationVar(&cfg.TailInterval, "tail-interval", cfg.TailInterval, "tail poll interval")
 	flag.IntVar(&cfg.TailLines, "tail-lines", cfg.TailLines, "max trade/event rows per tail poll")
@@ -316,6 +330,7 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.HTTPMaxConnsHost, "http-max-conns-per-host", cfg.HTTPMaxConnsHost, "http client transport max total connections per host (0 = no transport-side limit)")
 	flag.DurationVar(&cfg.HTTPIdleConnTimeout, "http-idle-conn-timeout", cfg.HTTPIdleConnTimeout, "http client idle connection timeout")
 	flag.BoolVar(&cfg.UseApiV1, "use-api-v1", cfg.UseApiV1, "submit/modify/cancel via /api/v1 boundary routes")
+	flag.BoolVar(&cfg.LegacyInternalRoute, "legacy-internal-route", cfg.LegacyInternalRoute, "send internal marker header when use-api-v1=false")
 	flag.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix used for /api/v1 traffic")
 	flag.StringVar(&cfg.CommandClockStart, "command-clock-start", cfg.CommandClockStart, "optional RFC3339 start time for deterministic command occurredAt values")
 	flag.DurationVar(&cfg.CommandClockStep, "command-clock-step", cfg.CommandClockStep, "deterministic command clock step")
@@ -422,6 +437,9 @@ func defaultConfigFromEnv() Config {
 		StrictMinLiveOrders: envInt("REEF_STRICT_MIN_LIVE_ORDERS", 4),
 		ReportOut:           envOr("REEF_REPORT_OUT", ""),
 		Mode:                envOr("REEF_MODE", "chaos"),
+		RunID:               envOr("REEF_RUN_ID", ""),
+		RunKind:             envOr("REEF_RUN_KIND", "stress"),
+		ScenarioID:          envOr("REEF_SCENARIO_ID", ""),
 		Tail:                envBool("REEF_TAIL", false),
 		TailInterval:        envDuration("REEF_TAIL_INTERVAL", 2*time.Second),
 		TailLines:           envInt("REEF_TAIL_LINES", 5),
@@ -435,6 +453,7 @@ func defaultConfigFromEnv() Config {
 		HTTPMaxConnsHost:    envInt("REEF_HTTP_MAX_CONNS_PER_HOST", 0),
 		HTTPIdleConnTimeout: envDuration("REEF_HTTP_IDLE_CONN_TIMEOUT", 90*time.Second),
 		UseApiV1:            envBool("REEF_USE_API_V1", true),
+		LegacyInternalRoute: envBool("REEF_LEGACY_INTERNAL_ROUTE", false),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
 		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
 		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
@@ -445,6 +464,12 @@ func mergeSessionConfig(defaults Config, session sessionconfig.RuntimeConfig) Co
 	cfg := defaults
 	cfg.SessionName = session.SessionName
 	cfg.ScenarioRunID = session.ScenarioRunID
+	if cfg.RunID == "" {
+		cfg.RunID = session.ScenarioRunID
+	}
+	if cfg.ScenarioID == "" {
+		cfg.ScenarioID = session.SessionName
+	}
 	cfg.Seed = session.Seed
 	cfg.BaseURL = session.BaseURL
 	cfg.Duration = session.Duration
@@ -576,6 +601,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["use-api-v1"] {
 		cfg.UseApiV1 = parsed.UseApiV1
+	}
+	if explicit["legacy-internal-route"] {
+		cfg.LegacyInternalRoute = parsed.LegacyInternalRoute
 	}
 	if explicit["client-id-prefix"] {
 		cfg.ClientIDPrefix = parsed.ClientIDPrefix
@@ -973,11 +1001,16 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 	report.TopErrors = topErrors(errorCounts, 8)
 	report.RejectReasons = topErrors(rejectReasons, 12)
 	report.RejectTaxonomy = summarizeRejectTaxonomy(rejectCodes, report.TotalFailures, totalRejects, 12)
+	report.Quality = computeQuality(report.TotalRequests, report.TotalSuccess, report.TotalFailures, rejectCodes, defaultInvalidIntentRejectCodes)
 	return report
 }
 
 func summarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []rejectTaxonomySummary {
 	return reporting.SummarizeRejectTaxonomy(rejectCodes, totalFailures, totalRejects, limit)
+}
+
+func computeQuality(totalRequests, totalSuccess, totalFailures int64, rejectCodes map[string]int64, invalidIntentCodes []string) qualitySummary {
+	return reporting.ComputeQuality(totalRequests, totalSuccess, totalFailures, rejectCodes, invalidIntentCodes)
 }
 
 func updateDimensionSummary(target map[string]profileSummary, key string, action Action, success bool) {
@@ -1322,6 +1355,11 @@ func commandRoute(cfg Config, action Action) string {
 
 func commandHeaders(cfg Config, workerID int, commandID, traceID string) map[string]string {
 	if !cfg.UseApiV1 {
+		if cfg.LegacyInternalRoute {
+			return map[string]string{
+				"X-Reef-Internal-Route": "true",
+			}
+		}
 		return nil
 	}
 	return map[string]string{
@@ -1340,6 +1378,9 @@ func buildCommandPayload(cfg Config, commandID, traceID, actorID, actorType, per
 		"actorId":       actorID,
 		"actorType":     actorType,
 		"strategyId":    strategyID,
+		"runId":         cfg.RunID,
+		"runKind":       cfg.RunKind,
+		"scenarioId":    cfg.ScenarioID,
 		"occurredAt":    commandOccurredAt(cfg, reqID),
 	}
 	if persona != "" {
@@ -1410,6 +1451,8 @@ func printPrettySummary(report summary) {
 	fmt.Printf("  requests=%d success=%d failures=%d throughput=%.2f rps accepted=%.2f rps\n",
 		report.TotalRequests, report.TotalSuccess, report.TotalFailures, report.ThroughputRPS, report.AcceptedBusinessOpsRPS)
 	fmt.Printf("  success-rate=%.2f%%\n", successRate)
+	fmt.Printf("  valid-intent-success=%.2f%% invalid-intent=%.2f%% system-failure=%.2f%%\n",
+		report.Quality.ValidIntentSuccessRatePct, report.Quality.InvalidIntentRatePct, report.Quality.SystemFailureRatePct)
 	fmt.Printf("  latency(ms): min=%.2f p50=%.2f p95=%.2f p99=%.2f max=%.2f\n\n",
 		report.LatencyMs.Min, report.LatencyMs.P50, report.LatencyMs.P95, report.LatencyMs.P99, report.LatencyMs.Max)
 

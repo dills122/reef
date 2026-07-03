@@ -94,6 +94,10 @@ Responsibilities:
 Design rule:
 - simulator implementation language is less important than command-path parity, deterministic seeds, traceable run artifacts, and replay assertions.
 
+Exploratory extension:
+- [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) proposes a future tournament-style bot arena on top of the simulation control plane. The arena would use sandboxed bot execution, tested operator-controlled liquidity and background-flow bots, modular game modes, replayable runs, separate arena storage for competition metadata, and leaderboard analytics while preserving venue command-path parity.
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the target high-throughput venue-ingress path for bot-arena scale: JetStream as the durable accepted-command log, deterministic partition workers, and Postgres as the canonical venue outcome/event store.
+
 ### 3.5 Admin operations surface (CLI first)
 
 Admin controls should be implemented as application-layer use cases first and exposed via a CLI adapter in early phases.
@@ -743,11 +747,14 @@ Use an in-process event bus inside the Kotlin runtime where appropriate. Keep co
 Introduce **NATS** as the lightweight async backbone.
 
 Potential uses:
+- durable accepted-command ingress for high-throughput `stream-ack` mode
 - publishing domain events
 - decoupling read-model updaters
 - simulator notifications
 - engine integration if desired
 - background workers
+
+For the bot-arena scaling track, NATS/JetStream is not only a fanout bus. It is the target retained command-ingress log for accepted commands, while Postgres remains authoritative for command results and venue lifecycle events.
 
 ## 18. Shared Contracts
 

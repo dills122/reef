@@ -329,8 +329,9 @@ Status: accepted
 
 Summary:
 - Reef should track a concrete single-instance throughput objective before horizontal scale-out.
-- planning anchor target is 5,000 accepted req/s per runtime + engine instance, with staged near-term and stretch targets documented in SLO baselines.
+- original planning anchor target was 5,000 accepted req/s per runtime + engine instance, with staged near-term and stretch targets documented in SLO baselines.
 - horizontal scaling should multiply this strong per-instance unit rather than compensate for unresolved single-node bottlenecks.
+- superseded for the bot-arena scaling track by D-035, which raises the active target to `7500-10000` completed commands/sec with no accepted-command accounting gaps.
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
@@ -400,7 +401,8 @@ Status: accepted
 
 Summary:
 - after reaching the tuned local `~3k rps` single-instance capacity profile, further throughput work should prioritize architecture changes over more thread/pool tuning.
-- the active target is `5k` accepted requests per second per runtime + engine instance before relying on horizontal scale-out.
+- the then-active target was `5k` accepted requests per second per runtime + engine instance before relying on horizontal scale-out.
+- superseded for the bot-arena scaling track by D-035, which uses completed command lifecycle throughput rather than accepted-request intake.
 - Reef should separate durable command intake from downstream runtime persistence through an append-only `command_log` slice.
 - synchronous command-result behavior remains available for compatibility and deterministic tests.
 - async/batched runtime persistence and read-model projection isolation are the next major scaling levers.
@@ -416,7 +418,7 @@ Primary references:
 Status: accepted
 
 Summary:
-- the next high-value sprint should build a local simulator testing/admin UI before deeper `5k` architecture changes.
+- the next high-value sprint should build a local simulator testing/admin UI before deeper throughput architecture changes.
 - the UI should orchestrate existing simulator/dev scripts through a local-only control API rather than replacing the CLI.
 - UI-launched runs must produce the same report artifacts and reproduction commands as CLI-launched runs.
 - the control API must use allowlisted commands and artifact path guardrails; no arbitrary shell execution from the browser.
@@ -444,3 +446,130 @@ Summary:
 Primary references:
 - [`docs/SPRINT_CRITICAL_QUALITY_HARDENING.md`](./SPRINT_CRITICAL_QUALITY_HARDENING.md)
 - [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md)
+
+### D-031: Captured-Ack Async Command Worker
+
+Status: accepted
+
+Summary:
+- `captured-ack` remains opt-in and is not the default external API behavior.
+- When `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=true`, the runtime starts one or more background workers that atomically claim `RECEIVED` command-log records, execute the existing platform API operation, and mark each command `COMPLETED` or `FAILED`.
+- The command log is the write-ahead intake record and idempotency anchor for this mode.
+- Captured-ack `202` responses replay from the command log instead of writing a second boundary idempotency row on the intake path.
+- `/internal/commands/async/stats` reports worker settings, command-log status counts, and async claim/complete/fail counters for drain testing.
+- This is the accepted-command write-ahead slice. It decouples request acknowledgment from full runtime persistence, but it does not yet implement batched persistence, projection isolation, partitioned event storage, or multi-instance worker coordination.
+- Synchronous `sync-result` remains available for compatibility and deterministic tests.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+
+### D-033: Command Log Lifecycle Controls
+
+Status: accepted
+
+Summary:
+- `command_log.commands` and `command_log.command_results` are canonical command intake/audit history, but unbounded local stress history is not a useful default for iterative throughput work.
+- command-log pruning must be explicit and dry-run-first in local tooling.
+- pruning may delete terminal command history only when no active `command_work_queue` row exists for the command.
+- named replay/audit runs can be protected with `command_log.retention_pins` before broad arena-run pruning.
+- retention pins support exact command IDs and session-friendly selectors such as idempotency-key prefixes.
+- physical partitioning remains a follow-up after prune/retest evidence shows how much table lifecycle alone recovers.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+
+### D-034: Command Log Partitioning Direction
+
+Status: accepted
+
+Summary:
+- Do not range-partition the current `command_log.commands` table in place.
+- `commands` remains the hot command-ID/idempotency lookup table until a v2 schema deliberately changes the key shape.
+- partitioning should first target terminal history/archive tables where `completed_at`, `received_at`, or run/session metadata are natural lifecycle keys.
+- command payloads should be split from the hot command index before partitioning bulky command history.
+- active queue rows should stay small through active-only semantics, pruning, and worker drain improvements rather than time partitioning.
+- the next implementation slice is run/session attribution so arena and simulator workloads can be retained, pruned, and diagnosed by run.
+
+Primary references:
+- [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
+### D-035: Completed Throughput And No-Loss Scaling Target
+
+Status: accepted
+
+Summary:
+- the active bot-arena scaling target is completed command lifecycle throughput, not raw accepted-request intake.
+- the minimum target is `7500` completed commands per second per runtime + engine instance.
+- the preferred target is `10000` completed commands per second per runtime + engine instance.
+- if the runtime returns an accepted response, the command must be durably captured and must either reach terminal `COMPLETED`/`FAILED` state or remain visible as active leased/retryable work.
+- overload must reject or throttle before durable acceptance when the system cannot safely drain more work.
+- `stream-ack` is the target high-throughput mode for this track.
+- Postgres `captured-ack` remains a local fallback and A/B baseline, not the final bot-arena throughput architecture.
+- `sync-result` remains the deterministic correctness and compatibility mode.
+- raw intake and capacity-baseline profiles remain diagnostics only; they do not prove release readiness without completed-throughput accounting and queue drain.
+- Kubernetes scale-out must not be used to hide per-instance write amplification, queue backlog, or accepted-command accounting gaps.
+- bot traffic must use the same public command/API path as other simulator traffic, with run/session/bot attribution and no direct state mutation.
+
+Primary references:
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
+### D-036: Stream-Ack Ingress And Partitioned Processing Direction
+
+Status: accepted
+
+Summary:
+- JetStream should be introduced early for the bot-arena high-throughput track as the durable accepted-command ingress log.
+- JetStream is not the canonical venue outcome store; Postgres remains authoritative for command results, lifecycle events, orders, executions, and trades.
+- The runtime may return `202 Accepted` in `stream-ack` mode only after a durable JetStream publish acknowledgment.
+- publish failure, publish timeout, or unsafe stream/worker/DB health must return explicit `429` or `503` before durable acceptance.
+- accepted-command streams use retained log semantics with file storage and explicit replay windows, not JetStream WorkQueue retention.
+- command subjects include a deterministic partition token, with submit/cancel/modify for the same book routed to the same partition lane.
+- cancel/modify commands must carry enough routing metadata to avoid synchronous DB lookup on the throughput hot path.
+- JetStream message dedupe is not enough for business idempotency; Reef must keep a scoped idempotency guard with payload hashes and command/stream references.
+- partition workers ack JetStream only after canonical command result and event-log writes commit.
+- projection workers, leaderboard updates, and analytics are downstream rebuildable consumers with watermarks and lag metrics.
+- failure tests must cover publish retry, redelivery before DB commit, redelivery after DB commit before ack, deterministic replay, and projection rebuild.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
+### D-032: Command Log Queue And Result Split
+
+Status: accepted
+
+Summary:
+- `command_log.commands` remains the durable inbound command intake record and idempotency anchor.
+- mutable worker state belongs in `command_log.command_work_queue`, not on the command intake row.
+- terminal response payloads belong in `command_log.command_results`, not on the command intake row.
+- command status APIs compose command metadata, queue state, and result rows so public status behavior remains stable.
+- this split is intended to reduce indexed status updates and dead tuples on the command intake table before deeper async/batched runtime persistence work.
+- first benchmark evidence showed this split alone regresses accepted ingress because it adds active-queue/result writes; follow-up work must reduce write amplification before treating the split as a throughput win.
+- command intake can use the opt-in `command_log.command_append(...)` database routine so command insert, active-queue enqueue, and duplicate replay stay in one database call.
+- benchmark evidence did not justify making that routine the default: `EXTERNAL_API_COMMAND_LOG_APPEND_MODE=inline` remains the default until a function or batched intake path beats it.
+- durable request payloads can live in `command_log.command_payloads` while new `command_log.commands` rows keep a slim compatibility payload. `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table` is the default because it narrows the hot command metadata row without losing worker replay data; `inline` remains available for A/B testing.
+- batched terminal result and queue-completion writes are now the default async completion path, but 2026-07-02 stress evidence did not recover the `7500` completed/sec target.
+- captured-ack submit workers batch runtime outcome persistence by preparing submit outcomes for the claimed batch, persisting them with one schema-owned `runtime.runtime_persist_submit_outcomes(jsonb)` call, and only then marking command-log terminal rows. The current bulk routine performs set-based submit-result, order, execution, trade, event, and trace-sequence writes, preserving no-complete-before-persist ordering while reducing app-to-DB round trips.
+- the next measured bottlenecks are command-log reserve/write amplification and per-command runtime persistence, not async queue claim mechanics.
+- `command_log.command_work_queue` is recoverable active scheduling state and can be unlogged to reduce WAL churn; no-loss accounting still depends on logged `command_log.commands` for accepted commands and logged `command_log.command_results` for terminal outcomes.
+- bootstrap must continue reconstructing active queue rows from durable commands without terminal results after restart.
+- first quick loaded-stack evidence for the unlogged active queue recovered a `3945.78 accepted rps` point with eventual `59395/59395` terminal commands and `0` accounting gap, but it is still below the `7500` completed/sec target.
+- captured-ack dev/stress profiles should disable legacy boundary command capture by default because durable command capture is already provided by `command_log.commands`; keeping both writes on the hot path reduced the quick loaded-stack point to about `1646 accepted rps`.
+- first quick loaded-stack evidence after disabling duplicate legacy capture reached `4757.19 accepted rps` with eventual `71559/71559` terminal commands and `0` accounting gap.
+- new captured-ack commands should not perform the synchronous idempotency-store lookup after command-log reservation; command-log idempotency already guards duplicate replay in this mode.
+- first quick loaded-stack evidence after skipping that redundant lookup reached `4851.68 accepted rps` with eventual `73005/73005` terminal commands and `0` accounting gap.
+- drain-accounted worker sweeps show that raising async worker count alone does not reach the completed-throughput target. The best corrected loaded-stack point accepted `4801.95 rps`, but completed only `532.38/sec` during load and drained the remaining backlog afterward at `3743.31/sec`.
+- first bulk runtime procedure evidence stayed lossless (`0` final active and `0` accounting gap), improved the `8k/8s` post-load drain point to `4417.50/sec`, and reached `2135.68 completed/sec` during a `15k/15s` pressure run, but still left command-log append and runtime batch persistence as the measured blockers.
+- command-log child tables (`command_payloads`, `command_work_queue`, and `command_results`) no longer keep same-schema foreign keys to `command_log.commands` on the hot write path. Accepted-command durability remains anchored by logged `command_log.commands` plus logged `command_payloads`; terminal durability remains in logged `command_results`; active queue state remains derived/reconstructable. Prune deletes child rows explicitly before command rows instead of relying on cascade.
+- first evidence after set-based runtime persistence and command-log FK removal stayed lossless, reached `4014.61 accepted rps`, `2404.21 completed/sec` during load, and `5606.43/sec` post-load drain with `8` async workers. A `16` worker comparison lowered accepted throughput and did not improve completed throughput enough, so `8` workers remains the better current local profile.
+- superseded by D-036 for the bot-arena high-throughput path: the next major throughput slice should build stream-ack ingress and partitioned processing rather than continue small command-log write-amplification tuning.
+
+Primary references:
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
