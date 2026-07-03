@@ -361,7 +361,7 @@ class StreamCommandWorkerTest {
         assertEquals(0, projected)
         assertEquals(null, persistence.acceptedOrder("ord-projector-owned-1"))
         assertEquals(0, persistence.projectionStatus("runtime-normalized-submit", listOf(5)).lag)
-        assertEquals(21, persistence.projectionStatus("runtime-normalized-submit", listOf(4)).lag)
+        assertEquals(2, persistence.projectionStatus("runtime-normalized-submit", listOf(4)).lag)
     }
 
     @Test

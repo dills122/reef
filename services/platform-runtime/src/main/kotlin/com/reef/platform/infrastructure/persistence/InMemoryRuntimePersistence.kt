@@ -194,12 +194,13 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .map { (partitionId, outcomes) ->
                 val projected = watermarks[partitionId] ?: 0L
                 val canonicalMax = outcomes.maxOf { it.partitionSequence }
+                val backlogCount = outcomes.count { it.partitionSequence > projected }.toLong()
                 ProjectionWatermark(
                     projectionName = projectionName,
                     partitionId = partitionId,
                     lastPartitionSequence = projected,
                     canonicalMaxPartitionSequence = canonicalMax,
-                    lag = (canonicalMax - projected).coerceAtLeast(0L),
+                    lag = backlogCount,
                     updatedAt = "",
                     lastError = ""
                 )

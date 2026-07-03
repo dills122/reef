@@ -413,7 +413,8 @@ class PostgresRuntimePersistence(
                         FROM outcomes
                         CROSS JOIN LATERAL jsonb_array_elements(
                           CASE
-                            WHEN $streamAckCanonicalEventRowsEnabled AND jsonb_typeof(outcome->'events') = 'array' THEN outcome->'events'
+                            WHEN COALESCE(NULLIF(current_setting('reef.stream_ack_canonical_event_rows_enabled', TRUE), ''), 'true')::BOOLEAN
+                              AND jsonb_typeof(outcome->'events') = 'array' THEN outcome->'events'
                             ELSE '[]'::jsonb
                           END
                         ) WITH ORDINALITY AS event_rows(event, event_ordinality)
@@ -1323,6 +1324,12 @@ class PostgresRuntimePersistence(
         if (outcomes.isEmpty()) return
         canonicalConnection().use { conn ->
             conn.prepareStatement(
+                "SELECT set_config('reef.stream_ack_canonical_event_rows_enabled', ?, FALSE)"
+            ).use { ps ->
+                ps.setString(1, streamAckCanonicalEventRowsEnabled.toString())
+                ps.execute()
+            }
+            conn.prepareStatement(
                 """
                 SELECT ${names.appendCanonicalSubmitOutcomesFunction}(?::jsonb)
                 """.trimIndent()
@@ -1568,12 +1575,6 @@ class PostgresRuntimePersistence(
                 WITH requested_partitions AS (
                   SELECT unnest(?::INTEGER[]) AS partition_id
                 ),
-                canonical_partitions AS (
-                  SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
-                  FROM ${names.canonicalCommandResults}
-                  WHERE cardinality(?::INTEGER[]) = 0 OR partition_id IN (SELECT partition_id FROM requested_partitions)
-                  GROUP BY partition_id
-                ),
                 watermark_partitions AS (
                   SELECT
                     projection_name,
@@ -1589,6 +1590,19 @@ class PostgresRuntimePersistence(
                       OR partition_id = -1
                     )
                 ),
+                canonical_partitions AS (
+                  SELECT
+                    canonical.partition_id,
+                    MAX(canonical.partition_seq) AS canonical_max_partition_seq,
+                    COUNT(*) FILTER (
+                      WHERE canonical.partition_seq > COALESCE(watermark_partitions.last_partition_seq, 0)
+                    ) AS lag
+                  FROM ${names.canonicalCommandResults} canonical
+                  LEFT JOIN watermark_partitions
+                    ON watermark_partitions.partition_id = canonical.partition_id
+                  WHERE cardinality(?::INTEGER[]) = 0 OR canonical.partition_id IN (SELECT partition_id FROM requested_partitions)
+                  GROUP BY canonical.partition_id
+                ),
                 owned_partitions AS (
                   SELECT partition_id FROM requested_partitions
                   UNION
@@ -1601,11 +1615,7 @@ class PostgresRuntimePersistence(
                   owned_partitions.partition_id,
                   COALESCE(watermark_partitions.last_partition_seq, 0) AS last_partition_seq,
                   COALESCE(canonical_partitions.canonical_max_partition_seq, 0) AS canonical_max_partition_seq,
-                  GREATEST(
-                    COALESCE(canonical_partitions.canonical_max_partition_seq, 0) -
-                    COALESCE(watermark_partitions.last_partition_seq, 0),
-                    0
-                  ) AS lag,
+                  COALESCE(canonical_partitions.lag, 0) AS lag,
                   COALESCE(watermark_partitions.updated_at::TEXT, '') AS updated_at,
                   COALESCE(watermark_partitions.last_error, '') AS last_error
                 FROM owned_partitions
@@ -1629,8 +1639,8 @@ class PostgresRuntimePersistence(
             ).use { ps ->
                 val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
                 ps.setArray(1, partitionArray)
-                ps.setArray(2, partitionArray)
-                ps.setString(3, projectionName)
+                ps.setString(2, projectionName)
+                ps.setArray(3, partitionArray)
                 ps.setArray(4, partitionArray)
                 ps.setString(5, projectionName)
                 ps.executeQuery().use { rs ->
@@ -1669,22 +1679,22 @@ class PostgresRuntimePersistence(
     }
 
     private fun projectionStatusAcrossStores(projectionName: String, partitions: List<Int>): ProjectionStatus {
-        val canonicalMaxByPartition = canonicalMaxPartitionSequences(partitions)
         val watermarkRows = projectionWatermarkRows(projectionName, partitions)
-        val partitionIds = (partitions + canonicalMaxByPartition.keys + watermarkRows.keys)
+        val canonicalStatsByPartition = canonicalPartitionStats(partitions, watermarkRows)
+        val partitionIds = (partitions + canonicalStatsByPartition.keys + watermarkRows.keys)
             .filter { it >= 0 }
             .distinct()
             .sorted()
         val watermarks = partitionIds.map { partitionId ->
             val watermark = watermarkRows[partitionId]
-            val canonicalMax = canonicalMaxByPartition[partitionId] ?: 0L
+            val canonicalStats = canonicalStatsByPartition[partitionId]
             val projected = watermark?.lastPartitionSequence ?: 0L
             ProjectionWatermark(
                 projectionName = watermark?.projectionName ?: projectionName,
                 partitionId = partitionId,
                 lastPartitionSequence = projected,
-                canonicalMaxPartitionSequence = canonicalMax,
-                lag = (canonicalMax - projected).coerceAtLeast(0L),
+                canonicalMaxPartitionSequence = canonicalStats?.maxPartitionSequence ?: 0L,
+                lag = canonicalStats?.backlogCount ?: 0L,
                 updatedAt = watermark?.updatedAt.orEmpty(),
                 lastError = watermark?.lastError.orEmpty()
             )
@@ -1705,29 +1715,47 @@ class PostgresRuntimePersistence(
         )
     }
 
-    private fun canonicalMaxPartitionSequences(partitions: List<Int>): Map<Int, Long> {
+    private data class CanonicalPartitionStats(val maxPartitionSequence: Long, val backlogCount: Long)
+
+    private fun canonicalPartitionStats(
+        partitions: List<Int>,
+        watermarks: Map<Int, ProjectionWatermark>
+    ): Map<Int, CanonicalPartitionStats> {
         canonicalConnection().use { conn ->
-            val sql = if (partitions.isEmpty()) {
+            val watermarkPartitions = watermarks.keys.filter { it >= 0 }.sorted()
+            val watermarkSequences = watermarkPartitions.map { watermarks.getValue(it).lastPartitionSequence }
+            conn.prepareStatement(
                 """
-                SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
-                FROM ${names.canonicalCommandResults}
-                GROUP BY partition_id
+                WITH watermark_partitions AS (
+                  SELECT *
+                  FROM unnest(?::INTEGER[], ?::BIGINT[]) AS watermark(partition_id, last_partition_seq)
+                )
+                SELECT
+                  canonical.partition_id,
+                  MAX(canonical.partition_seq) AS canonical_max_partition_seq,
+                  COUNT(*) FILTER (
+                    WHERE canonical.partition_seq > COALESCE(watermark_partitions.last_partition_seq, 0)
+                  ) AS lag
+                FROM ${names.canonicalCommandResults} canonical
+                LEFT JOIN watermark_partitions
+                  ON watermark_partitions.partition_id = canonical.partition_id
+                WHERE cardinality(?::INTEGER[]) = 0 OR canonical.partition_id = ANY(?::INTEGER[])
+                GROUP BY canonical.partition_id
                 """.trimIndent()
-            } else {
-                """
-                SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
-                FROM ${names.canonicalCommandResults}
-                WHERE partition_id = ANY(?::INTEGER[])
-                GROUP BY partition_id
-                """.trimIndent()
-            }
-            conn.prepareStatement(sql).use { ps ->
-                if (partitions.isNotEmpty()) {
-                    ps.setArray(1, conn.createArrayOf("integer", partitions.toTypedArray()))
-                }
+            ).use { ps ->
+                val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
+                ps.setArray(1, conn.createArrayOf("integer", watermarkPartitions.toTypedArray()))
+                ps.setArray(2, conn.createArrayOf("bigint", watermarkSequences.toTypedArray()))
+                ps.setArray(3, partitionArray)
+                ps.setArray(4, partitionArray)
                 ps.executeQuery().use { rs ->
-                    val out = mutableMapOf<Int, Long>()
-                    while (rs.next()) out[rs.getInt("partition_id")] = rs.getLong("canonical_max_partition_seq")
+                    val out = mutableMapOf<Int, CanonicalPartitionStats>()
+                    while (rs.next()) {
+                        out[rs.getInt("partition_id")] = CanonicalPartitionStats(
+                            maxPartitionSequence = rs.getLong("canonical_max_partition_seq"),
+                            backlogCount = rs.getLong("lag")
+                        )
+                    }
                     return out
                 }
             }
