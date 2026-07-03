@@ -190,17 +190,17 @@ Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpre
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The first worker slice consumes `SubmitOrder` subjects partition-by-partition, persists the canonical runtime result/events, and acknowledges JetStream only after the DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
 
+The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
+
 Run the submit-only stream-ack stress profile:
 
 ```bash
 make dev-stress-stream-ack
 ```
 
-This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
+This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after global and per-partition deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
 The stream-ack stress target uses `packages/scenario-definitions/stream-ack-submit-stress.yaml` so submit traffic spreads across 16 instruments and therefore multiple deterministic stream partitions. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
-
-Partition lag and oldest-unprocessed age remain follow-up telemetry once the worker consumer exposes durable consumer sequence state.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`

@@ -1025,7 +1025,48 @@ class PlatformHttpServer(
                 "lastFailedAt" to stats.lastFailedAt,
                 "lastAckFailedAt" to stats.lastAckFailedAt,
                 "lastError" to stats.lastError
-            )
+            ),
+            "partitionMetrics" to stats.partitions.map { partition ->
+                mapOf(
+                    "partition" to partition.partition,
+                    "fetched" to partition.fetched,
+                    "completed" to partition.completed,
+                    "failed" to partition.failed,
+                    "ackFailed" to partition.ackFailed,
+                    "unsupported" to partition.unsupported,
+                    "localInFlight" to partition.localInFlight,
+                    "maxDeliveredCount" to partition.maxDeliveredCount,
+                    "lastFetchedStreamSequence" to partition.lastFetchedStreamSequence,
+                    "lastCompletedStreamSequence" to partition.lastCompletedStreamSequence,
+                    "lastFetchedAt" to partition.lastFetchedAt,
+                    "lastCompletedAt" to partition.lastCompletedAt,
+                    "lastFailedAt" to partition.lastFailedAt,
+                    "lastAckFailedAt" to partition.lastAckFailedAt,
+                    "oldestLocalInFlightAt" to partition.oldestLocalInFlightAt,
+                    "oldestLocalInFlightAgeMs" to partition.oldestLocalInFlightAgeMs,
+                    "lastError" to partition.lastError
+                )
+            },
+            "consumerMetrics" to stats.consumers.map { consumer ->
+                mapOf(
+                    "partition" to consumer.partition,
+                    "durableName" to consumer.durableName,
+                    "filterSubject" to consumer.filterSubject,
+                    "pending" to consumer.pending,
+                    "waiting" to consumer.waiting,
+                    "ackPending" to consumer.ackPending,
+                    "redelivered" to consumer.redelivered,
+                    "deliveredConsumerSequence" to consumer.deliveredConsumerSequence,
+                    "deliveredStreamSequence" to consumer.deliveredStreamSequence,
+                    "ackFloorConsumerSequence" to consumer.ackFloorConsumerSequence,
+                    "ackFloorStreamSequence" to consumer.ackFloorStreamSequence,
+                    "streamLastSequence" to consumer.streamLastSequence,
+                    "streamLag" to consumer.streamLag,
+                    "lastActiveAt" to consumer.lastActiveAt,
+                    "sampledAt" to consumer.sampledAt,
+                    "error" to consumer.error
+                )
+            }
         )
     }
 
@@ -1037,9 +1078,13 @@ class PlatformHttpServer(
         }
         partitions.forEach { partition ->
             val source = StreamCommandWorkerFactory.sourceForPartition(streamCommandConfig, partition)
+            if (source is StreamCommandTelemetrySource) {
+                StreamCommandWorkerMetrics.registerConsumerTelemetry(partition, source)
+            }
             StreamCommandWorker(
                 source = source,
                 api = api,
+                partition = partition,
                 batchSize = streamCommandWorkerBatchSize,
                 pollIntervalMs = streamCommandWorkerPollMs,
                 fetchTimeout = java.time.Duration.ofMillis(streamCommandWorkerFetchTimeoutMs),

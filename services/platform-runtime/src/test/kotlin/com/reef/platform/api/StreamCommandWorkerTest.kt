@@ -19,6 +19,7 @@ import kotlin.test.assertNotNull
 class StreamCommandWorkerTest {
     @Test
     fun submitWorkerPersistsCanonicalOutcomeBeforeAck() {
+        StreamCommandWorkerMetrics.resetForTests()
         val persistence = seededPersistence()
         val gateway = CountingAcceptedGateway()
         val api = PlatformApi(
@@ -43,6 +44,7 @@ class StreamCommandWorkerTest {
 
     @Test
     fun redeliveryAfterPersistBeforeAckDoesNotCallEngineAgain() {
+        StreamCommandWorkerMetrics.resetForTests()
         val persistence = seededPersistence()
         val gateway = CountingAcceptedGateway()
         val api = PlatformApi(
@@ -70,6 +72,7 @@ class StreamCommandWorkerTest {
 
     @Test
     fun unsupportedStreamCommandIsTerminated() {
+        StreamCommandWorkerMetrics.resetForTests()
         val persistence = seededPersistence()
         val api = PlatformApi(
             OrderApplicationService(
@@ -88,6 +91,62 @@ class StreamCommandWorkerTest {
         assertEquals(1, delivery.termCalls)
         assertEquals(0, delivery.ackCalls)
         assertEquals(0, delivery.nakCalls)
+    }
+
+    @Test
+    fun workerMetricsTrackPartitionCountersAndConsumerSnapshots() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = CountingAcceptedGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-partition", "ord-worker-partition"),
+            streamSequence = 42,
+            deliveredCount = 3
+        )
+        val worker = StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            partition = 7
+        )
+        StreamCommandWorkerMetrics.registerConsumerTelemetry(
+            7,
+            FixedTelemetrySource(
+                StreamCommandConsumerSnapshot(
+                    partition = 7,
+                    durableName = "durable-p07",
+                    filterSubject = "reef.cmd.v1.p07.>",
+                    pending = 12,
+                    ackPending = 2,
+                    redelivered = 1,
+                    ackFloorStreamSequence = 40,
+                    streamLastSequence = 52,
+                    streamLag = 12,
+                    sampledAt = "2026-07-03T00:00:01Z"
+                )
+            )
+        )
+
+        worker.processOnce()
+
+        val snapshot = StreamCommandWorkerMetrics.snapshot()
+        val partition = snapshot.partitions.single()
+        val consumer = snapshot.consumers.single()
+        assertEquals(7, partition.partition)
+        assertEquals(1, partition.fetched)
+        assertEquals(1, partition.completed)
+        assertEquals(0, partition.localInFlight)
+        assertEquals(3, partition.maxDeliveredCount)
+        assertEquals(42, partition.lastFetchedStreamSequence)
+        assertEquals(42, partition.lastCompletedStreamSequence)
+        assertEquals(7, consumer.partition)
+        assertEquals(12, consumer.pending)
+        assertEquals(2, consumer.ackPending)
+        assertEquals(12, consumer.streamLag)
     }
 
     private fun seededPersistence(): InMemoryRuntimePersistence {
@@ -153,6 +212,12 @@ private class QueueStreamCommandSource(
         if (queue.isEmpty()) return emptyList()
         return listOf(queue.removeFirst())
     }
+}
+
+private class FixedTelemetrySource(
+    private val snapshot: StreamCommandConsumerSnapshot
+) : StreamCommandTelemetrySource {
+    override fun consumerSnapshot(): StreamCommandConsumerSnapshot = snapshot
 }
 
 private class RecordingDelivery(

@@ -328,8 +328,14 @@ function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, 
     };
     writeFileSync(reportOut, JSON.stringify(report, null, 2));
     if (delta) {
+      const hotPartitions = delta.partitionDeltas
+        .slice()
+        .sort((a, b) => b.completedDelta - a.completedDelta)
+        .slice(0, 4)
+        .map((partition) => `p${partition.partition}:${partition.completedDelta}`)
+        .join(" ");
       console.log(
-        `  stream-workers fetchedDelta=${delta.fetchedDelta} completedDelta=${delta.completedDelta} failedDelta=${delta.failedDelta} ackFailedDelta=${delta.ackFailedDelta} completedRps=${delta.completedRps.toFixed(2)}`,
+        `  stream-workers fetchedDelta=${delta.fetchedDelta} completedDelta=${delta.completedDelta} failedDelta=${delta.failedDelta} ackFailedDelta=${delta.ackFailedDelta} completedRps=${delta.completedRps.toFixed(2)} hotPartitions=${hotPartitions}`,
       );
     }
   } catch (error) {
@@ -346,6 +352,7 @@ function streamWorkerDelta(before, after, durationSeconds) {
   const failedDelta = Number(afterMetrics.failed ?? 0) - Number(beforeMetrics.failed ?? 0);
   const ackFailedDelta = Number(afterMetrics.ackFailed ?? 0) - Number(beforeMetrics.ackFailed ?? 0);
   const unsupportedDelta = Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0);
+  const partitionDeltas = streamWorkerPartitionDeltas(before, after, durationSeconds);
   return {
     fetchedDelta,
     completedDelta,
@@ -354,7 +361,40 @@ function streamWorkerDelta(before, after, durationSeconds) {
     unsupportedDelta,
     fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
     completedRps: durationSeconds > 0 ? completedDelta / durationSeconds : 0,
+    partitionDeltas,
+    consumerMetrics: after?.consumerMetrics ?? [],
   };
+}
+
+function streamWorkerPartitionDeltas(before, after, durationSeconds) {
+  const beforeByPartition = new Map(
+    (before?.partitionMetrics ?? []).map((partition) => [Number(partition.partition), partition]),
+  );
+  return (after?.partitionMetrics ?? [])
+    .map((afterPartition) => {
+      const partition = Number(afterPartition.partition);
+      const beforePartition = beforeByPartition.get(partition) ?? {};
+      const fetchedDelta = Number(afterPartition.fetched ?? 0) - Number(beforePartition.fetched ?? 0);
+      const completedDelta = Number(afterPartition.completed ?? 0) - Number(beforePartition.completed ?? 0);
+      const failedDelta = Number(afterPartition.failed ?? 0) - Number(beforePartition.failed ?? 0);
+      const ackFailedDelta = Number(afterPartition.ackFailed ?? 0) - Number(beforePartition.ackFailed ?? 0);
+      const unsupportedDelta = Number(afterPartition.unsupported ?? 0) - Number(beforePartition.unsupported ?? 0);
+      return {
+        partition,
+        fetchedDelta,
+        completedDelta,
+        failedDelta,
+        ackFailedDelta,
+        unsupportedDelta,
+        fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
+        completedRps: durationSeconds > 0 ? completedDelta / durationSeconds : 0,
+        localInFlightAfter: Number(afterPartition.localInFlight ?? 0),
+        lastFetchedStreamSequence: Number(afterPartition.lastFetchedStreamSequence ?? 0),
+        lastCompletedStreamSequence: Number(afterPartition.lastCompletedStreamSequence ?? 0),
+        maxDeliveredCount: Number(afterPartition.maxDeliveredCount ?? 0),
+      };
+    })
+    .sort((a, b) => a.partition - b.partition);
 }
 
 function attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting }) {
