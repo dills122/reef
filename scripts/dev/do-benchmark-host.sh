@@ -44,6 +44,7 @@ commands:
   run            provision, sync, run the benchmark, fetch artifacts, and check reports
   check          check fetched benchmark artifacts without touching DO resources
   remote-status  show remote host and compose status
+  reset-remote   stop remote compose, remove volumes, and wipe remote benchmark artifacts
   logs           fetch recent remote compose logs to stdout
   fetch          fetch /tmp/reef-do-benchmark artifacts into reports/do-benchmark
   fetch-destroy  fetch artifacts, then destroy the droplet
@@ -83,6 +84,7 @@ main() {
     run) cmd_run ;;
     check) cmd_check ;;
     remote-status) cmd_remote_status ;;
+    reset-remote) cmd_reset_remote ;;
     logs) cmd_logs ;;
     fetch) cmd_fetch ;;
     fetch-destroy) cmd_fetch_destroy ;;
@@ -149,6 +151,19 @@ echo
 echo "docker compose:"
 cd "$REMOTE_DIR"
 docker compose ps || true
+REMOTE
+}
+
+cmd_reset_remote() {
+  configure_tf_vars optional
+  wait_for_ssh
+  remote_script <<'REMOTE'
+set -euo pipefail
+cd "$REMOTE_DIR"
+docker compose down --volumes --remove-orphans || true
+rm -rf "$REMOTE_ARTIFACT_ROOT"
+mkdir -p "$REMOTE_ARTIFACT_ROOT"
+echo "remote benchmark Docker volumes and artifacts reset"
 REMOTE
 }
 
@@ -378,11 +393,18 @@ remote_script() {
   user="$(ssh_user)"
   private_key="$(private_key_path)"
 
-  ssh_base "$user" "$host" "$private_key" \
-    REMOTE_DIR="$REMOTE_DIR" \
-    REMOTE_ARTIFACT_ROOT="$REMOTE_ARTIFACT_ROOT" \
-    "${env_args[@]}" \
-    bash -s
+  if [ "${#env_args[@]}" -gt 0 ]; then
+    ssh_base "$user" "$host" "$private_key" \
+      REMOTE_DIR="$REMOTE_DIR" \
+      REMOTE_ARTIFACT_ROOT="$REMOTE_ARTIFACT_ROOT" \
+      "${env_args[@]}" \
+      bash -s
+  else
+    ssh_base "$user" "$host" "$private_key" \
+      REMOTE_DIR="$REMOTE_DIR" \
+      REMOTE_ARTIFACT_ROOT="$REMOTE_ARTIFACT_ROOT" \
+      bash -s
+  fi
 }
 
 ssh_base() {
