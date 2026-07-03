@@ -10,6 +10,9 @@ if (!target) {
 const requiredRates = parseCsvInts(process.env.REEF_DO_REQUIRED_RATES || "2500,5000");
 const allowBackpressure429 = process.env.REEF_DO_ALLOW_429 === "1";
 const requireTraceChecks = process.env.REEF_DO_REQUIRE_TRACE_CHECKS === "1";
+const minAttemptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ATTEMPTED_RPS);
+const minAcceptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ACCEPTED_RPS);
+const minWorkerCompletedRps = parseOptionalNumber(process.env.REEF_DO_MIN_WORKER_COMPLETED_RPS);
 const failures = [];
 
 if (!existsSync(target)) {
@@ -45,8 +48,22 @@ function validateReport(path, report) {
   const total = Number(report.totalRequests ?? 0);
   const success = Number(report.totalSuccess ?? 0);
   const failuresCount = Number(report.totalFailures ?? 0);
+  const attemptedRps = reportMetric(report, "attemptedCommandsPerSecond", "throughputRps");
+  const acceptedRps = reportMetric(report, "acceptedCommandsPerSecond", "acceptedBusinessOpsRps");
+  const workerCompletedRps = reportMetric(report, "workerCompletedCommandsPerSecond");
   if (total <= 0) {
     failures.push(`${label}: totalRequests must be > 0`);
+  }
+  if (minAttemptedRps !== undefined && attemptedRps < minAttemptedRps) {
+    failures.push(`${label}: actual attempted rps ${formatNumber(attemptedRps)} < required ${formatNumber(minAttemptedRps)}`);
+  }
+  if (minAcceptedRps !== undefined && acceptedRps < minAcceptedRps) {
+    failures.push(`${label}: actual accepted rps ${formatNumber(acceptedRps)} < required ${formatNumber(minAcceptedRps)}`);
+  }
+  if (minWorkerCompletedRps !== undefined && workerCompletedRps < minWorkerCompletedRps) {
+    failures.push(
+      `${label}: actual worker-completed rps ${formatNumber(workerCompletedRps)} < required ${formatNumber(minWorkerCompletedRps)}`,
+    );
   }
 
   const statusCodes = normalizeStatusCodes(report.statusCodes ?? {});
@@ -183,6 +200,23 @@ function normalizeStatusCodes(raw) {
   return new Map(
     Object.entries(raw).map(([key, value]) => [Number(key), Number(value ?? 0)]),
   );
+}
+
+function reportMetric(report, unitMetricName, fallbackReportName) {
+  const unitMetric = Number(report.unitMetrics?.[unitMetricName]);
+  if (Number.isFinite(unitMetric)) return unitMetric;
+  const fallback = fallbackReportName ? Number(report[fallbackReportName]) : Number.NaN;
+  return Number.isFinite(fallback) ? fallback : 0;
+}
+
+function parseOptionalNumber(raw) {
+  if (raw === undefined || String(raw).trim() === "") return undefined;
+  const numeric = Number(String(raw).trim());
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function formatNumber(value) {
+  return Number(value).toFixed(2);
 }
 
 function walk(path) {

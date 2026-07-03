@@ -39,8 +39,12 @@ Start with one CPU-Optimized Droplet and the same Docker Compose role split used
 platform-api
 platform-worker-0
 platform-worker-1
+platform-worker-2
+platform-worker-3
 platform-projector-0
 platform-projector-1
+platform-projector-2
+platform-projector-3
 matching-engine
 nats
 postgres
@@ -204,7 +208,7 @@ Run these before another broad high-rate soak:
    - compare a few hot instruments against evenly distributed instruments
    - report commands/completions/pending by partition, top instruments, top bots, and cancel/modify partition routing versus original submit partition where available
 
-Scale worker and projector process counts only after these measurements show the DB write path can absorb the extra drain. More consumers can make canonical or projection Postgres hotter if write amplification remains the limiter.
+Scale worker and projector process counts as part of a batch fix only when the failed evidence already shows under-provisioned drain shape and clean worker correctness counters. More consumers can still make canonical or projection Postgres hotter if write amplification remains the limiter, so the next run must preserve DB/WAL/lag diagnostics and actual delivered-RPS gates.
 
 ## Capacity Headroom Rule
 
@@ -259,6 +263,9 @@ The next DO soak should not rerun the failed shape. This branch applies a batch 
 - Canonical write amplification: stream-ack throughput defaults keep full submit outcomes in `canonical_command_results.result_payload` but stop duplicating every lifecycle event into `canonical_venue_events` rows.
 - Hot canonical indexes: stream-ack throughput defaults avoid broader query indexes on canonical append tables; projection still keeps the partition/sequence index it needs.
 - Drain headroom: worker batch, ack wait, max ack-pending, projector batch, and projector poll defaults are raised together to reduce commits and avoid tiny in-flight ceilings.
+- Deploy shape: the default stream-ack stack now uses `64` partitions, `4` worker processes, and `4` projector processes with explicit non-overlapping partition ownership.
+- Venue-core intake gate: the default stream-ack and DO profiles use `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=venue-core`, and venue-core no longer samples projection status for admission control. Projection lag stays visible but does not define canonical venue intake capacity.
+- Benchmark truth gate: DO report validation now fails when actual attempted or accepted throughput is below `REEF_DO_MIN_ATTEMPTED_RPS` / `REEF_DO_MIN_ACCEPTED_RPS`, defaulting to `2000` for the current milestone.
 - Evidence: stress reports include worker batch publish-repair timing so the next run shows whether this path remains hot.
 
 ## OpenTofu Harness Plan

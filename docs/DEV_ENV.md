@@ -167,7 +167,7 @@ Diagnostic artifacts are written under the stress artifact root with suffix `-di
 - `postgres-logs.txt`
 
 Stress telemetry also samples runtime health, hot-path timings, async command queue stats, runtime DB pool stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
-For stream-ack runs, worker-drain telemetry samples `platform-worker-0` and `platform-worker-1` directly from `REEF_PLATFORM_WORKER_0_HOST_PORT` and `REEF_PLATFORM_WORKER_1_HOST_PORT`; override with `DEV_STRESS_STREAM_ACK_WORKER_URLS` for custom worker layouts.
+For stream-ack runs, worker-drain telemetry samples `platform-worker-0` through `platform-worker-3` directly from `REEF_PLATFORM_WORKER_0_HOST_PORT` through `REEF_PLATFORM_WORKER_3_HOST_PORT`; override with `DEV_STRESS_STREAM_ACK_WORKER_URLS` for custom worker layouts.
 
 Captured-ack stress reports also attach `commandAccounting` when the runtime exposes `/internal/commands/accounting`. The accounting block records the run-scoped pre/post snapshots, accepted delta, completed/failed terminal delta, active queue depth after the step, stale processing count, completed rps, and accepted-command accounting gap. `make dev-stress-captured-ack` sets `DEV_STRESS_FAIL_ON_ACCOUNTING_GAP=1` by default.
 
@@ -177,32 +177,39 @@ Run the first JetStream-backed accepted-command profile:
 make dev-up-stream-ack
 ```
 
-`dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0`, `platform-worker-1`, `platform-projector-0`, `platform-projector-1`, `matching-engine`, `nats`, and `postgres`), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
+`dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0` through `platform-worker-3`, `platform-projector-0` through `platform-projector-3`, `matching-engine`, `nats`, and Postgres services), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`
 - `STREAM_ACK_NATS_URL=nats://nats:4222`
 - `STREAM_ACK_COMMAND_STREAM=REEF_COMMANDS`
 - `STREAM_ACK_SUBJECT_PREFIX=reef.cmd.v1`
-- `STREAM_ACK_PARTITION_COUNT=16`
+- `STREAM_ACK_PARTITION_COUNT=64`
 - `STREAM_ACK_INTAKE_STORE=postgres`
 - `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
 - `STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100`
 - `STREAM_ACK_MAX_WORKER_STREAM_LAG=50000`
-- `STREAM_ACK_MAX_PROJECTOR_LAG=250000`
+- `STREAM_ACK_MAX_PROJECTOR_LAG=0`
+- `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=venue-core`
 - `STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS=500`
-- `STREAM_ACK_MARK_PUBLISHED_MODE=async`
-- `STREAM_ACK_MARK_PUBLISHED_WORKERS=2`
-- `STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY=100000`
+- `STREAM_ACK_MARK_PUBLISHED_MODE=worker`
+- `STREAM_ACK_MARK_PUBLISHED_WORKERS=4`
+- `STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY=500000`
 - `STREAM_ACK_WORKER_ENABLED=true`
-- `STREAM_ACK_WORKER_0_PARTITIONS=0,1,2,3,4,5,6,7`
-- `STREAM_ACK_WORKER_1_PARTITIONS=8,9,10,11,12,13,14,15`
-- `STREAM_ACK_WORKER_BATCH_SIZE=250`
+- `STREAM_ACK_WORKER_0_PARTITIONS=0..15`
+- `STREAM_ACK_WORKER_1_PARTITIONS=16..31`
+- `STREAM_ACK_WORKER_2_PARTITIONS=32..47`
+- `STREAM_ACK_WORKER_3_PARTITIONS=48..63`
+- `STREAM_ACK_WORKER_BATCH_SIZE=1000`
 - `STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true`
+- `STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED=false`
+- `STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED=false`
 - `STREAM_ACK_PROJECTOR_ENABLED=true`
-- `STREAM_ACK_PROJECTOR_0_PARTITIONS=0,1,2,3,4,5,6,7`
-- `STREAM_ACK_PROJECTOR_1_PARTITIONS=8,9,10,11,12,13,14,15`
+- `STREAM_ACK_PROJECTOR_0_PARTITIONS=0..15`
+- `STREAM_ACK_PROJECTOR_1_PARTITIONS=16..31`
+- `STREAM_ACK_PROJECTOR_2_PARTITIONS=32..47`
+- `STREAM_ACK_PROJECTOR_3_PARTITIONS=48..63`
 - `STREAM_ACK_PROJECTION_NAME=runtime-normalized-submit`
-- `STREAM_ACK_PROJECTOR_BATCH_SIZE=250`
-- `STREAM_ACK_PROJECTOR_POLL_MS=50`
+- `STREAM_ACK_PROJECTOR_BATCH_SIZE=2000`
+- `STREAM_ACK_PROJECTOR_POLL_MS=10`
 - `RUNTIME_DB_URL=jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary`
 - `RUNTIME_PROJECTION_POSTGRES_JDBC_URL=jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX=24`
@@ -218,17 +225,17 @@ In this mode `platform-api` returns `202` only after JetStream publish acknowled
 
 The API container owns the larger `stream-intake` boundary DB pool because it is the only role that accepts public stream commands. Worker and projector roles keep tiny `stream-intake` pools for startup/internal compatibility while using their dedicated canonical/projection pools for drain and read-model work.
 
-In stream-ack mode, `STREAM_ACK_MARK_PUBLISHED_MODE=async` moves the post-publish boundary metadata update out of the synchronous response path after JetStream durable publish acknowledgement. Stream workers also repair the same metadata by `commandId` after canonical commit and before JetStream ack, so an API crash after publish still has a durable-message repair path. Set `STREAM_ACK_MARK_PUBLISHED_MODE=sync` to force the API to update boundary metadata before returning.
+In stream-ack mode, `STREAM_ACK_MARK_PUBLISHED_MODE=worker` removes the post-publish boundary metadata update from the synchronous response path after JetStream durable publish acknowledgement. Stream workers repair the same metadata by `commandId` in batches after canonical commit and before JetStream ack, so an API crash after publish still has a durable-message repair path. Set `STREAM_ACK_MARK_PUBLISHED_MODE=sync` to force the API to update boundary metadata before returning.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
 Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling JetStream management on every accepted command.
 
-The deploy-shaped stream-ack profile also enables conservative drain-side backpressure. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured JetStream worker durable consumers from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, and `STREAM_ACK_MAX_PROJECTOR_LAG` samples canonical projection lag from the runtime/projection stores. When either positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Set either threshold to `0` to disable that gate.
+The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured JetStream worker durable consumers from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`; when the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
 
-Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT`, default `8084`) and `platform-projector-1` (`REEF_PLATFORM_PROJECTOR_1_HOST_PORT`, default `8085`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes from the runtime Postgres service, update the normalized order/execution/trade/runtime-event read tables in the projection Postgres service, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture both endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
+Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes from the runtime Postgres service, update the normalized order/execution/trade/runtime-event read tables in the projection Postgres service, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
@@ -514,7 +521,7 @@ Compose sets:
 - DB pool sizing: `RUNTIME_DB_POOL_MAX` and `RUNTIME_DB_POOL_MIN_IDLE` are global defaults. Named hot-path pools apply conservative role defaults so those values do not multiply directly across every pool. Override individual pools with `RUNTIME_DB_POOL_<POOL>_MAX` and `RUNTIME_DB_POOL_<POOL>_MIN_IDLE`, where `<POOL>` is the uppercase pool id with punctuation converted to underscores, such as `COMMAND_LOG` or `ASYNC_RUNTIME`.
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
-- stream-ack partition workers: `platform-worker-0` defaults to `STREAM_ACK_WORKER_0_PARTITIONS=0,1,2,3,4,5,6,7`; `platform-worker-1` defaults to `STREAM_ACK_WORKER_1_PARTITIONS=8,9,10,11,12,13,14,15`. These ranges are explicit and non-overlapping for the default `STREAM_ACK_PARTITION_COUNT=16`.
+- stream-ack partition workers: `platform-worker-0` through `platform-worker-3` default to four explicit non-overlapping `16`-partition ranges over the default `STREAM_ACK_PARTITION_COUNT=64`.
 
 Postgres init creates domain schemas:
 - `runtime`

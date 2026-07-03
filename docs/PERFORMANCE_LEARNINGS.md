@@ -58,6 +58,13 @@ Immediate implications:
 2. Run venue-core canonical ablations until `2000 completed/sec` is stable for a `5m` soak, then promote to `5000/sec`, then `7500/sec`.
 3. Run projector catch-up and hot-partition versus even-distribution ablations before broad scaling.
 4. Treat projection write amplification and partition skew as first-class bottleneck suspects.
+5. Do not accept configured-rate results as benchmark evidence unless actual attempted and accepted RPS meet the active target; the July 3 follow-up runs under-delivered actual load even when response failures were clean.
+
+Current fix batch:
+
+- Use the deploy-shaped stream-ack profile with `64` partitions, `4` worker processes, and `4` projector processes before the next `2k/sec` soak.
+- Keep `venue-core` as the default DO drain-backpressure policy so projection lag is measured but does not throttle canonical command acceptance.
+- Gate DO reports on actual attempted and accepted RPS, defaulting to `2000/sec` for the current milestone.
 
 ## Stream-Ack Post-Soak Optimization Priorities
 

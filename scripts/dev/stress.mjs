@@ -432,9 +432,13 @@ function defaultStreamAckWorkerUrls(runtimeUrl) {
   const parsed = new URL(runtimeUrl);
   const worker0Port = env("REEF_PLATFORM_WORKER_0_HOST_PORT", "8082");
   const worker1Port = env("REEF_PLATFORM_WORKER_1_HOST_PORT", "8083");
+  const worker2Port = env("REEF_PLATFORM_WORKER_2_HOST_PORT", "8086");
+  const worker3Port = env("REEF_PLATFORM_WORKER_3_HOST_PORT", "8087");
   return [
     `${parsed.protocol}//${parsed.hostname}:${worker0Port}`,
     `${parsed.protocol}//${parsed.hostname}:${worker1Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${worker2Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${worker3Port}`,
   ];
 }
 
@@ -442,9 +446,13 @@ function defaultStreamAckProjectorUrls(runtimeUrl) {
   const parsed = new URL(runtimeUrl);
   const projector0Port = env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", env("REEF_PLATFORM_PROJECTOR_HOST_PORT", "8084"));
   const projector1Port = env("REEF_PLATFORM_PROJECTOR_1_HOST_PORT", "8085");
+  const projector2Port = env("REEF_PLATFORM_PROJECTOR_2_HOST_PORT", "8088");
+  const projector3Port = env("REEF_PLATFORM_PROJECTOR_3_HOST_PORT", "8089");
   return [
     `${parsed.protocol}//${parsed.hostname}:${projector0Port}`,
     `${parsed.protocol}//${parsed.hostname}:${projector1Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${projector2Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${projector3Port}`,
   ];
 }
 

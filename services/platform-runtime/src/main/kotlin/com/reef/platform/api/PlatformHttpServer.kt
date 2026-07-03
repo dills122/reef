@@ -1128,7 +1128,9 @@ class PlatformHttpServer(
     }
 
     private fun buildStreamCommandDrainBackpressureSampler(): StreamCommandDrainBackpressureSampler? {
-        if (streamCommandMaxWorkerStreamLag <= 0L && streamCommandMaxProjectorLag <= 0L) {
+        val projectorLagCanGate =
+            streamCommandDrainBackpressurePolicy == StreamCommandDrainBackpressurePolicy.ControlRoomFresh
+        if (streamCommandMaxWorkerStreamLag <= 0L && (!projectorLagCanGate || streamCommandMaxProjectorLag <= 0L)) {
             return null
         }
         val workerSources = if (streamCommandMaxWorkerStreamLag > 0L) {
@@ -1144,7 +1146,7 @@ class PlatformHttpServer(
         } else {
             emptyList()
         }
-        val projectionStatusProvider: (() -> ProjectionStatus?)? = if (streamCommandMaxProjectorLag > 0L) {
+        val projectionStatusProvider: (() -> ProjectionStatus?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
             { api.projectionStatus(streamAckProjectionName, emptyList()) }
         } else {
             null

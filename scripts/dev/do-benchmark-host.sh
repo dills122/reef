@@ -126,6 +126,8 @@ cmd_run() {
   remote_collect_artifacts "$run_id" || status=$?
   fetch_artifacts || status=$?
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
+  REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-2000}" \
+  REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-2000}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
   return "$status"
 }
@@ -134,6 +136,8 @@ cmd_check() {
   local report_dir
   report_dir="$(benchmark_report_dir)"
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
+  REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-2000}" \
+  REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-2000}" \
     node scripts/dev/do-benchmark-check.mjs "$report_dir"
 }
 
@@ -237,7 +241,7 @@ remote_run_benchmark() {
   local duration="${REEF_DO_STRESS_DURATION:-30s}"
   local trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-200}"
   local min_success="${REEF_DO_MIN_SUCCESS_RATE_PCT:-100}"
-  local drain_backpressure_policy="${REEF_DO_DRAIN_BACKPRESSURE_POLICY:-${STREAM_ACK_DRAIN_BACKPRESSURE_POLICY:-control-room-fresh}}"
+  local drain_backpressure_policy="${REEF_DO_DRAIN_BACKPRESSURE_POLICY:-${STREAM_ACK_DRAIN_BACKPRESSURE_POLICY:-venue-core}}"
 
   echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration drain_backpressure_policy=$drain_backpressure_policy"
   remote_script \
