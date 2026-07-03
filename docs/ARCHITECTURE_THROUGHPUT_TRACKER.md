@@ -378,7 +378,10 @@ Latest stream-ack notes:
   - `2500` nominal rps: `72937` accepted and worker-completed, `2199.58/sec`, p95 `89.41ms`, p99 `156.34ms`, trace pass `71%`; projector projected `63853` during the step at `1925.63/sec` and ended with lag `163028`.
   - `5000` nominal rps: `91706` accepted and worker-completed, `2763.98/sec`, p95 `108.29ms`, p99 `229.53ms`, trace pass `50%`; projector projected `64250` during the step at `1936.47/sec` and ended with lag `555190`.
   - workers reported `0` failures and `0` ack failures at every step; projector caught up to lag `0` after the run stopped. The current ceiling moved from worker canonical persistence to projector throughput and projection freshness.
-- Projector ownership is now split across `platform-projector-0` and `platform-projector-1`, with explicit non-overlapping partition ranges and fair per-partition projection batching. Next stress validation should compare projection lag and projected/sec against the single-projector baseline above.
+- Projector ownership is now split across `platform-projector-0` and `platform-projector-1`, with explicit non-overlapping partition ranges and fair per-partition projection batching. Split-projector validation on `REEF_COMMANDS`:
+  - `2500` nominal rps: `69179` accepted and worker-completed, `2087.99/sec`, p95 `147.26ms`, p99 `238.20ms`, trace pass `63%`; projectors projected `51802` during the step at `1563.51/sec` and ended with lag `177646`.
+  - `5000` nominal rps: `88217` accepted and worker-completed, `2654.48/sec`, p95 `151.80ms`, p99 `210.00ms`, trace pass `36%`; projectors projected `52314` during the step at `1574.15/sec` and ended with lag `589132`.
+  - workers again reported `0` failures, `0` ack failures, and `0` durable consumer stream lag; projectors caught up to lag `0` after the run stopped. Projector throughput remained below the previous single-projector baseline, so the next optimization target is projector persistence and hot-partition projection cost, not API intake or JetStream worker drain.
 - Follow-up probes that did not beat the spread-profile baseline:
   - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
   - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`
