@@ -38,7 +38,8 @@ function writeStreamAckSpreadSessionConfig() {
 }
 
 function streamAckSpreadSessionConfig() {
-  const equities = Array.from({ length: 64 }, (_, index) => {
+  const instrumentCount = Number(process.env.DEV_STRESS_STREAM_ACK_INSTRUMENTS || "64");
+  const equities = Array.from({ length: Math.max(1, instrumentCount) }, (_, index) => {
     const number = index + 1;
     const symbol = `STK${String(number).padStart(3, "0")}`;
     const base = 100_000_000_000 + number * 1_000_000_000;

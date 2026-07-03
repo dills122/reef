@@ -358,6 +358,12 @@ Latest stream-ack notes:
   - `2500` nominal rps: `74187` accepted/completed, `2222.68/sec`, p95 `61.97ms`, p99 `115.59ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
   - `5000` nominal rps: `104431` accepted/completed, `3106.74/sec`, p95 `101.58ms`, p99 `136.16ms`, trace pass `96%`, active partitions `16`, worker failures `0`.
 - Net result: the durable stream-ack processed ceiling moved from about `2000/sec` to about `3100/sec` on the local stack while preserving `202`-after-publish and DB-before-stream-ack semantics. Remaining bottlenecks are runtime/Postgres CPU and batched persistence cost (`~28ms` average per `persistSubmitOutcomes` batch in the spread run), not JetStream publish durability. Intake-pool pressure improved materially (`maxDbPoolWaiters` dropped from `56` to `14`).
+- Follow-up probes that did not beat the spread-profile baseline:
+  - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
+  - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`
+  - `32` stream partitions regressed to `2586.44/sec`, so extra worker lanes added contention rather than throughput on the local stack
+  - hot-path auth/reference lookup caching reduced those lookup timings but shifted pressure into larger/slower persistence batches; cache plus batch `250` reached `2915.98/sec`, and cache plus batch `100` reached `2876.79/sec`
+  - a `256`-instrument stress shape reduced hot-partition skew but regressed to `2128.20/sec`; keep the default generated stream-ack stress shape at `64` instruments for ceiling comparisons, and use `DEV_STRESS_STREAM_ACK_INSTRUMENTS` for broader realism probes
 
 Exit criteria:
 - `202` is returned only after JetStream durable publish ack.

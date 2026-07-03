@@ -205,7 +205,7 @@ make dev-stress-stream-ack
 
 This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after global and per-partition deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
-The stream-ack stress target generates a 64-instrument session config under `/tmp/reef-stream-ack-stress` by default so submit traffic has enough independent routing keys to exercise deterministic stream partitions. Set `DEV_STRESS_SESSION_CONFIG` to run a fixed session file instead. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
+The stream-ack stress target generates a 64-instrument session config under `/tmp/reef-stream-ack-stress` by default so submit traffic has enough independent routing keys to exercise deterministic stream partitions. Set `DEV_STRESS_STREAM_ACK_INSTRUMENTS` to change the generated instrument count, or set `DEV_STRESS_SESSION_CONFIG` to run a fixed session file instead. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
