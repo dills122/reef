@@ -10,6 +10,13 @@ Primary plan:
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
 
+Architecture checkpoint:
+- D-037 reframes stream-ack as the high-throughput path for a deterministic simulated market venue.
+- the main success metric is `completed/sec`: worker processed the command, canonical command result and venue events committed, and JetStream message acked.
+- `accepted/sec` is durable ingress capacity, `projected/sec` is read-model catch-up, and `visible/sec` is UI/control-room freshness.
+- the next large architectural work is role split, canonical append store, async projections, engine shards, then DigitalOcean benchmark harness.
+- engine sharding should not precede canonical append/projection separation unless evidence shows the engine is the current bottleneck.
+
 Current measured reference:
 - best local ceiling probe: `2961.43 rps` total, `2919.27 rps` accepted, `98.58%` success
 - profile: `capacity-baseline`, target `6500`, workers `768`, gRPC runtime-engine, runtime threads `64`, DB pool max `48`
@@ -54,7 +61,8 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 Current architecture direction:
 - Postgres `captured-ack` remains a correctness baseline and local fallback, but it is not the final high-throughput design for the bot-arena target.
 - The next major throughput track is `stream-ack`: durable JetStream publish ack before `202`, deterministic partition routing by run/session/instrument, partition workers that commit canonical Postgres results/events before JetStream ack, and downstream projection workers with watermarks.
-- The first stream-ack target is `5000` durable publish-ack accepted rps with visible lag and no accepted-command gaps, followed by `5000` processed rps, then `10000` accepted/processed rps.
+- The next stream-ack target is not more command-log tuning. The phase order is role split and explicit partition ownership, canonical append store, async projections, engine shards, then a DigitalOcean benchmark harness.
+- Near-term benchmarks must report attempted/sec, accepted/sec, completed/sec, projected/sec where applicable, backlog/lag, DB flush p95/p99, and replay/checksum evidence before claiming progress toward `7500-10000` completed/sec.
 
 Latest accounting smoke:
 - 2026-07-02 captured-ack smoke after run attribution, accounting telemetry, backpressure, and terminal-write batching: `DEV_STRESS_DURATION=10s`, `DEV_STRESS_RATES=200`, `DEV_STRESS_SWEEP_WORKERS=16`.
@@ -161,6 +169,11 @@ Drain-accounted worker sweep:
 | A31 | Stream partition worker and ack rule | Planned | architecture | Ack JetStream only after canonical command result and event log commit |
 | A32 | Canonical event log and projection watermarks | Planned | architecture | Separate venue outcomes from leaderboard/UI projections and expose lag |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
+| A34 | Stream-ack role split and partition ownership | Planned | architecture | Split runtime modes into API, worker, projector, and all-in-one; workers own explicit non-overlapping partition ranges |
+| A35 | Canonical append store | Planned | architecture | Make canonical command results and venue events the stream-ack completion boundary before normalized projections |
+| A36 | Async market-simulation projections | Planned | architecture | Move order/trade/status/timeline/leaderboard/run read models behind projector watermarks and rebuilds |
+| A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
+| A38 | DigitalOcean benchmark harness | Deferred | validation | Deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
 
 ## Milestone Checklist
 

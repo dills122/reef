@@ -8,6 +8,51 @@ The current Postgres `captured-ack` path is useful as a correctness baseline and
 
 The target architecture uses JetStream as a durable, ordered ingress log and Postgres as the canonical venue outcome/event store.
 
+## Product Framing
+
+Reef's high-throughput path is a deterministic simulated market venue. It should borrow the shape of real market infrastructure for command durability, same-book ordering, matching correctness, audit, replay, and projections, while staying local-first and game/simulator oriented.
+
+This means the core stream-ack path must answer two questions for every accepted command:
+
+- what did Reef durably accept?
+- what did the simulated venue decide?
+
+Everything else is downstream observation, scoring, or operator experience.
+
+Target shape:
+
+```text
+bot / simulator / manual client
+  -> API command boundary
+  -> durable accepted-command stream
+  -> deterministic partition lane
+  -> matching / lifecycle decision
+  -> canonical append-only facts
+  -> async projections
+  -> UI, run state, reports, leaderboards, replay indexes
+```
+
+Avoid designing the throughput path as:
+
+```text
+request
+  -> synchronously mutate every normalized table and read model
+  -> update UI/control-room state
+  -> treat DB row state as workflow engine, audit log, and projection
+```
+
+The synchronous path can remain as a correctness/debug fallback. It is not the target architecture for bot-arena or simulator-scale throughput.
+
+## Research Basis
+
+The architecture uses official vendor guidance as constraints, not as a copy of any one product:
+
+- [NATS JetStream streams](https://docs.nats.io/nats-concepts/jetstream/streams) are message stores; JetStream publish calls can acknowledge successful storage, streams support retention/discard policy, and `Nats-Msg-Id` deduplication is a transport aid rather than a complete business-idempotency model.
+- [NATS JetStream consumers](https://docs.nats.io/nats-concepts/jetstream/consumers) track delivery and acknowledgements, can redeliver unacknowledged messages, and pull consumers are recommended by NATS for new projects when scalability, flow control, or error handling matter.
+- [NATS subject mapping and partitioning](https://docs.nats.io/nats-concepts/subject_mapping) supports deterministic token partitioning, including composite partition keys; Reef uses that pattern so same-book lifecycle commands stay in one ordered lane.
+- [PostgreSQL bulk-loading guidance](https://www.postgresql.org/docs/current/populate.html) favors fewer commits and bulk-oriented writes for large row volumes; Reef applies that as batched canonical append persistence rather than per-projection hot-path mutation.
+- [PostgreSQL table partitioning guidance](https://www.postgresql.org/docs/current/ddl-partitioning.html) supports splitting large logical tables into smaller physical pieces when query, update, bulk load, or retention patterns justify it; Reef should partition canonical/run artifacts by run/session/time only when access patterns justify the operational cost.
+
 ## Target Guarantees
 
 - minimum `7500` completed commands/sec per runtime + engine instance
@@ -20,6 +65,22 @@ The target architecture uses JetStream as a durable, ordered ingress log and Pos
 - overload rejects before durable acceptance
 
 Accepted throughput remains diagnostic. Release readiness depends on completed throughput, terminal accounting, bounded lag, and deterministic replay.
+
+## Throughput Metric Taxonomy
+
+Use these definitions in stress reports, docs, and release gates:
+
+| Metric | Definition | Release meaning |
+|---|---|---|
+| `attempted/sec` | client attempted requests per second | load-generator pressure only |
+| `accepted/sec` | API returned `202` after durable JetStream publish acknowledgement | durable ingress capacity |
+| `completed/sec` | worker processed command, canonical result/events committed, and JetStream message acked | primary venue throughput target |
+| `projected/sec` | async projections caught up from canonical facts | read-model and scoring capacity |
+| `visible/sec` | projected state visible to UI/control-room users | operator experience capacity |
+
+`completed/sec` does not require synchronous updates to order blotters, trade grids, trace timelines, leaderboard counters, run summaries, search indexes, or UI read models. Those are projection requirements with explicit lag and watermark evidence.
+
+Backpressure must look at completed throughput, oldest unprocessed age, and lag growth. A system accepting `10000/sec` while completing `3000/sec` with unbounded backlog is overloaded, not successful.
 
 ## Architecture Shape
 
@@ -137,6 +198,61 @@ Split the data model into three responsibilities:
 
 Do not put leaderboard, UI read-model, or analytics writes on the command completion hot path.
 
+In stream-ack mode, canonical append-only facts become the completion boundary. Normalized order, execution, trade, status, trace, leaderboard, report, and UI tables are projections unless a future decision explicitly promotes a field back into the canonical completion transaction.
+
+Minimum canonical result direction:
+
+```text
+canonical_command_results
+  run_id
+  venue_session_id
+  partition_id
+  partition_seq
+  stream_name
+  stream_seq
+  command_id
+  idempotency_key
+  payload_hash
+  instrument_id
+  command_type
+  result_status
+  reject_code
+  accepted_at
+  completed_at
+  engine_shard_id
+```
+
+Minimum canonical event direction:
+
+```text
+canonical_venue_events
+  run_id
+  venue_session_id
+  partition_id
+  partition_seq
+  event_seq
+  command_id
+  event_id
+  event_type
+  aggregate_type
+  aggregate_id
+  instrument_id
+  deterministic_event_index
+  payload
+  emitted_at
+```
+
+Initial uniqueness rules:
+
+```text
+unique(run_id, command_id)
+unique(run_id, partition_id, partition_seq)
+unique(run_id, event_id)
+unique(run_id, command_id, deterministic_event_index)
+```
+
+These names are schema direction, not final migration DDL. The implementation should choose final names/types in the data-platform and Kotlin runtime slices.
+
 Initial projection tables/counters should include:
 
 - `run_metrics_1s`
@@ -187,42 +303,54 @@ Backpressure decisions should be recorded with reason codes so stress reports ca
 
 | Phase | Target | Gate |
 |---|---|---|
-| 1 | `5000` stream-ack accepted rps | durable publish ack, no accepted-command gaps, lag visible |
-| 2 | `5000` processed rps | bounded backlog, stable canonical DB flush |
-| 3 | `5000` projected rps | projections keep up or expose bounded lag |
-| 4 | `10000` stream-ack accepted rps | no loss, no gaps, deterministic command replay |
-| 5 | `10000` processed rps | sustained completed throughput with bounded backlog |
-| 6 | `25000` cluster rps | batching, partition scale, and projection isolation proven |
+| 0 | architecture decision checkpoint | D-037 locks market-simulation framing, metric definitions, phase order, partition/idempotency rules, and crash/replay tests |
+| 1 | role split and partition ownership | API, worker, projector, and all-in-one modes; workers own explicit non-overlapping partition ranges |
+| 2 | canonical append store | workers commit canonical command results and venue events before stream ack; normalized tables are not completion requirements |
+| 3 | async projection system | order/trade/status/timeline/leaderboard/run projections have watermarks, lag metrics, and rebuild path |
+| 4 | engine shards | partition ranges map to engine shards after canonical persistence no longer hides engine parallelism |
+| 5 | DigitalOcean benchmark harness | deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
 
 The current Postgres `captured-ack` path should remain available for local fallback and comparison, but it should not be treated as the final throughput architecture for the bot-arena target.
 
 ## Implementation Work Plan
 
-1. Contract and configuration
+0. Architecture decision checkpoint
+- record D-037 as the stream-ack canonical append and projection split
+- define accepted/completed/projected/visible metrics
+- define the canonical append boundary and projection ownership
+- require crash/redelivery/replay tests before throughput claims
+
+1. Role split and partition ownership
+- add runtime modes for API, worker, projector, and all-in-one local operation
+- run API without stream workers in deployable throughput profiles
+- run workers with explicit partition range ownership
+- keep local all-in-one mode for simple development and correctness tests
+
+2. Contract and configuration
 - define command envelope fields in protobuf/contracts
 - define partition key and subject builder
 - add stream version and partition-count configuration
 - update simulator/arena command generation to include routing metadata
 
-2. Local JetStream profile
+3. Local JetStream profile
 - add NATS/JetStream to the local dev profile
 - create command stream bootstrap script
 - expose stream health and lag diagnostics
 - add publish-ack latency telemetry
 
-3. Stream-ack API mode
+4. Stream-ack API mode
 - add `stream-ack` processing mode beside `sync-result` and `captured-ack`
 - validate command, idempotency key, routing metadata, and visible actor context
 - publish to JetStream and return `202` only after publish ack
 - return `429`/`503` before acceptance when stream health fails
 
-4. Idempotency guard
+5. Idempotency guard
 - add scoped idempotency projection
 - store payload hash, command id, stream sequence, and first-seen timestamp
 - implement same-key/same-hash replay and same-key/different-hash conflict
 - add crash/retry tests around publish acknowledgment
 
-5. Partition worker
+6. Canonical append store and partition worker
 - consume assigned subject partitions
 - preserve ordering per partition
 - execute existing venue command path
@@ -230,18 +358,24 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - ack JetStream after commit only
 - add redelivery idempotency tests
 
-6. Canonical event log
+7. Canonical replay support
 - formalize event IDs and command-result linkage
 - keep lifecycle events separate from projections
 - support deterministic replay checksums
 - support projection rebuild from canonical events
 
-7. Projection isolation
+8. Projection isolation
 - add projection worker and watermarks
 - move leaderboard/metrics/UI reads to projection tables
 - expose projection lag in stress reports and control-room views
 
-8. Backpressure and operations
+9. Engine shard split
+- map partition ranges to engine shard IDs
+- preserve same-book ordering across shard assignment
+- measure shard distribution and hot-partition behavior
+- do this after canonical append/projection split unless profiling proves the engine is the next bottleneck
+
+10. Backpressure and operations
 - combine stream, worker, DB, and projection health into explicit overload decisions
 - add Kubernetes readiness/liveness/drain behavior for partition ownership
 - add dead-letter handling and operator remediation path

@@ -6,6 +6,7 @@ These documents define how Reef should be built as the repository grows into the
 
 - [Onboarding](../ONBOARDING.md): contributor ramp-up path, prerequisites, first-run, and troubleshooting
 - [Engineering Delivery Policy](../ENGINEERING_DELIVERY_POLICY.md): delivery mode matrix, refactor triggers, and non-negotiable feature-test requirements
+- [Repository Scope And Priorities](./repository-scope-and-priorities.md): repo-level correctness, throughput, audit, replay, and safe-change priorities
 - [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules
 - [Data Platform](./data-platform.md): canonical persistence posture, datatype standards, write-path rules, retention, and data pitfalls
 - [Inter-Service Communication](./inter-service-communication.md): service transport, protobuf/gRPC direction, metadata/idempotency standards
@@ -24,8 +25,9 @@ These documents define how Reef should be built as the repository grows into the
 
 When adding a new module or service:
 
-1. start with the architecture steering
+1. start with repository scope and architecture steering
 2. follow the relevant language/framework steering
 3. preserve domain boundaries even if implementation starts in a simplified form
+4. evaluate hot-path changes against correctness, replay, and throughput evidence
 
 If a local optimization conflicts with the steering, prefer the steering unless there is a documented reason to deviate.
