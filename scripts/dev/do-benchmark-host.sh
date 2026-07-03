@@ -182,9 +182,9 @@ provision_stack() {
   log "configuring OpenTofu variables"
   configure_tf_vars
   log "initializing OpenTofu in $INFRA_DIR"
-  tofu init
+  tofu init -input=false
   log "applying OpenTofu stack"
-  tofu apply -auto-approve
+  tofu apply -input=false -auto-approve
   log "waiting for benchmark host readiness"
   wait_for_ssh
 }
