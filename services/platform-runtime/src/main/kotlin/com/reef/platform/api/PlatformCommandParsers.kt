@@ -21,6 +21,7 @@ object PlatformCommandParsers {
         "scenarioRunId",
         "seed",
         "venueSessionId",
+        "instrumentId",
         "clientOrderId",
         "botId",
         "botVersion"
