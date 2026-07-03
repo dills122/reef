@@ -143,6 +143,7 @@ Minimum for the first DO test:
 - DB pool waiters stay at `0` or are clearly isolated to a known pool with an explanation.
 - `202` semantics remain unchanged.
 - Stress artifacts are fetched locally before destroying the Droplet.
+- Embedded load-tester trace checks are diagnostic by default for submit-only stream-ack stress runs. Use `REEF_DO_REQUIRE_TRACE_CHECKS=1` only with profiles where every sampled command is expected to have projected trace events.
 
 Healthy `5000` target:
 
@@ -184,6 +185,7 @@ The host-control script should support:
 - `status`
 - `sync`
 - `run`
+- `check`
 - `start`
 - `remote-status`
 - `logs`
@@ -192,7 +194,7 @@ The host-control script should support:
 - `run-destroy`
 - `destroy`
 
-`run` should start the stack and execute the benchmark sequence without destroying the Droplet. `run-destroy` should execute the same sequence, fetch artifacts, and destroy only after fetch succeeds or after enough failure artifacts have been collected to diagnose the run. `fetch-destroy` should be available for manual cleanup after failed or interrupted runs.
+`run` should start the stack and execute the benchmark sequence without destroying the Droplet. `check` should rerun local report gates against fetched artifacts without touching DigitalOcean resources. `run-destroy` should execute the same sequence, fetch artifacts, and destroy only after fetch succeeds or after enough failure artifacts have been collected to diagnose the run. `fetch-destroy` should be available for manual cleanup after failed or interrupted runs.
 
 ## Reference Pattern From Liars Dice
 

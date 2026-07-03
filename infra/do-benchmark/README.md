@@ -24,7 +24,12 @@ Typical flow:
 REEF_DO_CONFIRM_DESTROYABLE=1 scripts/dev/do-benchmark-host.sh up
 scripts/dev/do-benchmark-host.sh sync
 scripts/dev/do-benchmark-host.sh run
-scripts/dev/do-benchmark-host.sh fetch-destroy
+scripts/dev/do-benchmark-host.sh check
+scripts/dev/do-benchmark-host.sh destroy
 ```
 
-`run-destroy` provisions the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and destroys resources in one command.
+Use `run` while iterating; it provisions or reuses the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and leaves resources available for inspection. Use `check` to rerun report gates against fetched artifacts without touching DigitalOcean. Use `destroy` or `fetch-destroy` only when you intentionally want to remove the billable resources.
+
+`run-destroy` provisions the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and destroys resources in one command. Keep it for final lifecycle confirmation, not for every debugging iteration.
+
+Default report gates validate measured stress reports, expected rates, no unexpected `5xx`, no unallowed failures, worker failure counters, projector health, and telemetry probes. Embedded load-tester trace checks are diagnostic for submit-only stream-ack stress runs because not every accepted submit produces a projected runtime event; set `REEF_DO_REQUIRE_TRACE_CHECKS=1` when running a profile where every sampled command is expected to have trace events.

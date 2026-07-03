@@ -42,6 +42,7 @@ commands:
   sync           rsync the current checkout to the droplet
   start          start the remote stream-ack stack
   run            provision, sync, run the benchmark, fetch artifacts, and check reports
+  check          check fetched benchmark artifacts without touching DO resources
   remote-status  show remote host and compose status
   logs           fetch recent remote compose logs to stdout
   fetch          fetch /tmp/reef-do-benchmark artifacts into reports/do-benchmark
@@ -79,6 +80,7 @@ main() {
     sync) cmd_sync ;;
     start) cmd_start ;;
     run) cmd_run ;;
+    check) cmd_check ;;
     remote-status) cmd_remote_status ;;
     logs) cmd_logs ;;
     fetch) cmd_fetch ;;
@@ -123,6 +125,13 @@ cmd_run() {
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
   return "$status"
+}
+
+cmd_check() {
+  local report_dir
+  report_dir="$(benchmark_report_dir)"
+  REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
+    node scripts/dev/do-benchmark-check.mjs "$report_dir"
 }
 
 cmd_remote_status() {
@@ -533,6 +542,16 @@ benchmark_run_id() {
     return
   fi
   date -u +"do-benchmark-%Y%m%dT%H%M%SZ"
+}
+
+benchmark_report_dir() {
+  if [ -n "${REEF_DO_RUN_ID:-}" ]; then
+    printf '%s/%s' "$LOCAL_REPORT_ROOT" "$REEF_DO_RUN_ID"
+    return
+  fi
+  find "$LOCAL_REPORT_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'do-benchmark-*' -print |
+    sort |
+    tail -n 1
 }
 
 sanitize_token() {

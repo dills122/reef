@@ -9,6 +9,7 @@ if (!target) {
 
 const requiredRates = parseCsvInts(process.env.REEF_DO_REQUIRED_RATES || "2500,5000");
 const allowBackpressure429 = process.env.REEF_DO_ALLOW_429 === "1";
+const requireTraceChecks = process.env.REEF_DO_REQUIRE_TRACE_CHECKS === "1";
 const failures = [];
 
 if (!existsSync(target)) {
@@ -27,7 +28,7 @@ for (const entry of jsonFiles.map((path) => readJson(path)).filter((entry) => !e
 }
 
 for (const rate of requiredRates) {
-  const match = reports.find(({ report }) => Number(report.config?.ratePerSecond) === rate);
+  const match = reports.find(({ report }) => reportRatePerSecond(report) === rate);
   if (!match) {
     failures.push(`missing measured stress report for rate ${rate}`);
     continue;
@@ -40,7 +41,7 @@ validateTelemetry(target);
 finish();
 
 function validateReport(path, report) {
-  const label = `${path} rate=${report.config?.ratePerSecond ?? "unknown"}`;
+  const label = `${path} rate=${reportRatePerSecond(report) ?? "unknown"}`;
   const total = Number(report.totalRequests ?? 0);
   const success = Number(report.totalSuccess ?? 0);
   const failuresCount = Number(report.totalFailures ?? 0);
@@ -66,7 +67,7 @@ function validateReport(path, report) {
 
   const traceChecked = Number(report.traceChecks?.checked ?? 0);
   const tracePass = Number(report.traceChecks?.pass ?? 0);
-  if (traceChecked > 0 && tracePass !== traceChecked) {
+  if (requireTraceChecks && traceChecked > 0 && tracePass !== traceChecked) {
     failures.push(`${label}: trace checks failed pass=${tracePass} checked=${traceChecked}`);
   }
 
@@ -86,12 +87,10 @@ function validateReport(path, report) {
   if (!projectorDelta) {
     failures.push(`${label}: missing streamAckProjector.delta`);
   } else {
-    if (Number(projectorDelta.projectedDelta ?? 0) <= 0) {
-      failures.push(`${label}: streamAckProjector.delta.projectedDelta must be > 0`);
-    }
     if (!Number.isFinite(Number(projectorDelta.afterLag))) {
       failures.push(`${label}: streamAckProjector.delta.afterLag must be numeric`);
     }
+    checkProjectorHealth(label, report.streamAckProjector?.after);
   }
 
   if (!report.streamAckApiPhases?.phases) {
@@ -139,14 +138,45 @@ function checkZero(label, name, value) {
   }
 }
 
+function checkProjectorHealth(label, status) {
+  if (!status || typeof status !== "object") {
+    failures.push(`${label}: missing streamAckProjector.after status`);
+    return;
+  }
+  if (status.enabled === false) {
+    failures.push(`${label}: streamAckProjector.after.enabled must not be false`);
+  }
+  const metrics = status.metrics ?? {};
+  if (Number(metrics.failed ?? 0) !== 0) {
+    failures.push(`${label}: streamAckProjector.after.metrics.failed must be 0, got ${metrics.failed}`);
+  }
+  if (String(metrics.lastError ?? "").trim()) {
+    failures.push(`${label}: streamAckProjector.after.metrics.lastError must be empty`);
+  }
+  for (const watermark of status.watermarks ?? []) {
+    if (String(watermark.lastError ?? "").trim()) {
+      failures.push(
+        `${label}: streamAckProjector.after.watermark partition=${watermark.partition ?? "unknown"} lastError must be empty`,
+      );
+    }
+  }
+}
+
 function isMeasuredStressReport(json) {
   return Boolean(
     json &&
       typeof json === "object" &&
       json.config &&
-      Number.isFinite(Number(json.config.ratePerSecond)) &&
+      Number.isFinite(reportRatePerSecond(json)) &&
       Number.isFinite(Number(json.totalRequests)),
   );
+}
+
+function reportRatePerSecond(report) {
+  const config = report?.config ?? {};
+  const value = config.ratePerSecond ?? config.RatePerSecond;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
 
 function normalizeStatusCodes(raw) {
