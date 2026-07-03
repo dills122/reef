@@ -186,6 +186,9 @@ make dev-up-stream-ack
 - `STREAM_ACK_INTAKE_STORE=postgres`
 - `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
 - `STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100`
+- `STREAM_ACK_MAX_WORKER_STREAM_LAG=50000`
+- `STREAM_ACK_MAX_PROJECTOR_LAG=250000`
+- `STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS=500`
 - `STREAM_ACK_MARK_PUBLISHED_MODE=async`
 - `STREAM_ACK_MARK_PUBLISHED_WORKERS=2`
 - `STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY=100000`
@@ -220,6 +223,8 @@ In stream-ack mode, `STREAM_ACK_MARK_PUBLISHED_MODE=async` moves the post-publis
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
 Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling JetStream management on every accepted command.
+
+The deploy-shaped stream-ack profile also enables conservative drain-side backpressure. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured JetStream worker durable consumers from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, and `STREAM_ACK_MAX_PROJECTOR_LAG` samples canonical projection lag from the runtime/projection stores. When either positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Set either threshold to `0` to disable that gate.
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
 

@@ -308,19 +308,25 @@ private class NatsStreamCommandDelivery(
 
 object StreamCommandWorkerFactory {
     fun sourceForPartition(config: StreamCommandConfig, partition: Int): StreamCommandSource {
-        val width = maxOf(2, (config.partitionCount - 1).toString().length)
-        val partitionToken = "p${partition.toString().padStart(width, '0')}"
-        val filterSubject = "${config.subjectPrefix.trim('.')}.$partitionToken.>"
         val durableName = RuntimeEnv.string(
             "STREAM_ACK_WORKER_DURABLE_PREFIX",
             "reef-stream-worker"
-        ) + "-$partitionToken"
+        ) + "-${partitionToken(config, partition)}"
         return NatsStreamCommandSource(
             config = config,
             partition = partition,
-            filterSubject = filterSubject,
+            filterSubject = filterSubject(config, partition),
             durableName = durableName
         )
+    }
+
+    fun filterSubject(config: StreamCommandConfig, partition: Int): String {
+        return "${config.subjectPrefix.trim('.')}.${partitionToken(config, partition)}.>"
+    }
+
+    fun partitionToken(config: StreamCommandConfig, partition: Int): String {
+        val width = maxOf(2, (config.partitionCount - 1).toString().length)
+        return "p${partition.toString().padStart(width, '0')}"
     }
 }
 

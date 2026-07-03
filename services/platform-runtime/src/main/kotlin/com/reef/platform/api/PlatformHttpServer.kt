@@ -4,12 +4,15 @@ import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 private data class CommandIntakeBackpressureSnapshot(
     val active: Long,
@@ -20,6 +23,11 @@ private data class CommandIntakeBackpressureSnapshot(
 private data class CachedStreamCommandHealthSnapshot(
     val sampledAtMs: Long,
     val snapshot: StreamCommandHealthSnapshot
+)
+
+private data class CachedStreamCommandDrainBackpressureSnapshot(
+    val sampledAtMs: Long,
+    val snapshot: StreamCommandDrainBackpressureSnapshot
 )
 
 private fun streamCommandPublicationMarker(
@@ -76,6 +84,14 @@ class PlatformHttpServer(
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
     private val streamCommandBackpressureSampleMs: Long =
         RuntimeEnv.long("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
+    private val streamCommandMaxWorkerStreamLag: Long =
+        RuntimeEnv.long("STREAM_ACK_MAX_WORKER_STREAM_LAG", 0L, min = 0L),
+    private val streamCommandMaxProjectorLag: Long =
+        RuntimeEnv.long("STREAM_ACK_MAX_PROJECTOR_LAG", 0L, min = 0L),
+    private val streamCommandDrainBackpressureSampleMs: Long =
+        RuntimeEnv.long("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", 500L, min = 0L),
+    private val streamCommandBackpressureWorkerDurables: String =
+        RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", ""),
     private val streamCommandWorkerEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_WORKER_ENABLED", false),
     private val streamCommandWorkerPartitions: String = RuntimeEnv.string("STREAM_ACK_WORKER_PARTITIONS", "0"),
     private val streamCommandWorkerBatchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
@@ -109,8 +125,14 @@ class PlatformHttpServer(
     @Volatile
     private var streamBackpressureSnapshot: CachedStreamCommandHealthSnapshot? = null
     private val streamBackpressureSnapshotLock = Any()
+    @Volatile
+    private var streamDrainBackpressureSnapshot: CachedStreamCommandDrainBackpressureSnapshot? = null
+    private val streamDrainBackpressureSamplerStarted = AtomicBoolean(false)
     private val streamCommandPublicationMarker: StreamCommandPublicationMarker? =
         streamCommandPublicationMarker(streamCommandIntakeStore, streamCommandMarkPublishedMode, runtimeRole)
+    private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
+        buildStreamCommandDrainBackpressureSampler()
+    }
 
     constructor(
         port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -133,6 +155,10 @@ class PlatformHttpServer(
         streamCommandMarkPublishedMode = deps.streamCommandMarkPublishedMode,
         streamCommandMaxStorageUtilization = deps.streamCommandMaxStorageUtilization,
         streamCommandBackpressureSampleMs = deps.streamCommandBackpressureSampleMs,
+        streamCommandMaxWorkerStreamLag = deps.streamCommandMaxWorkerStreamLag,
+        streamCommandMaxProjectorLag = deps.streamCommandMaxProjectorLag,
+        streamCommandDrainBackpressureSampleMs = deps.streamCommandDrainBackpressureSampleMs,
+        streamCommandBackpressureWorkerDurables = deps.streamCommandBackpressureWorkerDurables,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -439,6 +465,9 @@ class PlatformHttpServer(
         }
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startCanonicalProjector()
+        }
+        if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
+            startStreamCommandDrainBackpressureSampler()
         }
         println("platform-runtime role=${runtimeRole.configValue} listening on :$port")
         return server
@@ -1040,7 +1069,26 @@ class PlatformHttpServer(
                 "stream command intake rejected because storage utilization is ${health.storageUtilization}"
             )
         }
+        val drainBackpressure = streamCommandDrainBackpressure()
+        if (drainBackpressure != null) {
+            return drainBackpressure
+        }
         return null
+    }
+
+    private fun streamCommandDrainBackpressure(): BoundaryError? {
+        if (streamCommandMaxWorkerStreamLag <= 0L && streamCommandMaxProjectorLag <= 0L) {
+            return null
+        }
+        val snapshot = streamCommandDrainBackpressureSnapshot() ?: return null
+        return snapshot.backpressure(
+            maxWorkerStreamLag = streamCommandMaxWorkerStreamLag,
+            maxProjectorLag = streamCommandMaxProjectorLag
+        )
+    }
+
+    private fun streamCommandDrainBackpressureSnapshot(): StreamCommandDrainBackpressureSnapshot? {
+        return streamDrainBackpressureSnapshot?.snapshot
     }
 
     private fun streamCommandBackpressureSnapshot(): StreamCommandHealthSnapshot? {
@@ -1064,6 +1112,47 @@ class PlatformHttpServer(
             streamBackpressureSnapshot = CachedStreamCommandHealthSnapshot(lockedNow, sampled)
             sampled
         }
+    }
+
+    private fun buildStreamCommandDrainBackpressureSampler(): StreamCommandDrainBackpressureSampler? {
+        if (streamCommandMaxWorkerStreamLag <= 0L && streamCommandMaxProjectorLag <= 0L) {
+            return null
+        }
+        val workerSources = if (streamCommandMaxWorkerStreamLag > 0L) {
+            streamCommandBackpressureWorkerDurableNames().mapIndexed { index, durableName ->
+                val partition = partitionFromDurableName(durableName) ?: index
+                NatsStreamCommandSource(
+                    config = streamCommandConfig,
+                    partition = partition,
+                    filterSubject = StreamCommandWorkerFactory.filterSubject(streamCommandConfig, partition),
+                    durableName = durableName
+                )
+            }
+        } else {
+            emptyList()
+        }
+        val projectionStatusProvider: (() -> ProjectionStatus?)? = if (streamCommandMaxProjectorLag > 0L) {
+            { api.projectionStatus(streamAckProjectionName, emptyList()) }
+        } else {
+            null
+        }
+        if (workerSources.isEmpty() && projectionStatusProvider == null) {
+            return null
+        }
+        return StreamCommandDrainBackpressureSampler(workerSources, projectionStatusProvider)
+    }
+
+    private fun streamCommandBackpressureWorkerDurableNames(): List<String> {
+        return streamCommandBackpressureWorkerDurables
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun partitionFromDurableName(durableName: String): Int? {
+        val suffix = Regex("""-p(\d+)$""").find(durableName) ?: return null
+        return suffix.groupValues[1].toIntOrNull()
     }
 
     private fun commandIntakeBackpressureSnapshot(queue: CapturedCommandQueue): CommandIntakeBackpressureSnapshot {
@@ -1166,6 +1255,12 @@ class PlatformHttpServer(
             "storageUtilization" to snapshot.storageUtilization,
             "maxStorageUtilization" to streamCommandMaxStorageUtilization,
             "backpressureSampleMs" to streamCommandBackpressureSampleMs,
+            "drainBackpressure" to mapOf(
+                "maxWorkerStreamLag" to streamCommandMaxWorkerStreamLag,
+                "maxProjectorLag" to streamCommandMaxProjectorLag,
+                "sampleMs" to streamCommandDrainBackpressureSampleMs,
+                "workerDurables" to streamCommandBackpressureWorkerDurableNames()
+            ),
             "markPublishedMode" to streamCommandMarkPublishedMode,
             "publishAckLastMs" to snapshot.publishAckLastMs,
             "publishAckMaxMs" to snapshot.publishAckMaxMs,
@@ -1282,6 +1377,29 @@ class PlatformHttpServer(
         ).start()
     }
 
+    private fun startStreamCommandDrainBackpressureSampler() {
+        val sampler = streamCommandDrainBackpressureSampler ?: return
+        if (!streamDrainBackpressureSamplerStarted.compareAndSet(false, true)) return
+        thread(name = "reef-stream-drain-backpressure-sampler", isDaemon = true) {
+            while (true) {
+                try {
+                    val sampled = HotPathMetrics.time("streamDrainBackpressure.sample") {
+                        sampler.snapshot()
+                    }
+                    streamDrainBackpressureSnapshot = CachedStreamCommandDrainBackpressureSnapshot(
+                        sampledAtMs = System.currentTimeMillis(),
+                        snapshot = sampled
+                    )
+                } catch (ex: Exception) {
+                    System.err.println(
+                        "stream_drain_backpressure_sample_failed message=${ex.message ?: "unknown"}"
+                    )
+                }
+                Thread.sleep(streamCommandDrainBackpressureSampleMs.coerceAtLeast(50L))
+            }
+        }
+    }
+
     private fun projectorPartitions(): List<Int> {
         return configuredPartitions(streamAckProjectorPartitions)
     }
@@ -1353,5 +1471,13 @@ data class ServerBoundaryDeps(
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
     val streamCommandBackpressureSampleMs: Long =
         RuntimeEnv.long("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
+    val streamCommandMaxWorkerStreamLag: Long =
+        RuntimeEnv.long("STREAM_ACK_MAX_WORKER_STREAM_LAG", 0L, min = 0L),
+    val streamCommandMaxProjectorLag: Long =
+        RuntimeEnv.long("STREAM_ACK_MAX_PROJECTOR_LAG", 0L, min = 0L),
+    val streamCommandDrainBackpressureSampleMs: Long =
+        RuntimeEnv.long("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", 500L, min = 0L),
+    val streamCommandBackpressureWorkerDurables: String =
+        RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", ""),
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

@@ -269,10 +269,14 @@ class StreamCommandWorkerTest {
             batchSize = 10
         )
 
+        assertEquals(null, persistence.acceptedOrder("ord-projector-1"))
         val projected = projector.processOnce()
+        val replayed = projector.processOnce()
 
         assertEquals(1, projected)
+        assertEquals(0, replayed)
         assertNotNull(persistence.acceptedOrder("ord-projector-1"))
+        assertEquals(1, persistence.acceptedOrders().size)
         val status = persistence.projectionStatus("runtime-normalized-submit")
         assertEquals(0, status.lag)
         assertEquals(12, status.watermarks.single().lastPartitionSequence)
