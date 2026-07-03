@@ -11,6 +11,12 @@ import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 
+private data class CommandIntakeBackpressureSnapshot(
+    val active: Long,
+    val staleProcessing: Long,
+    val sampledAtMs: Long
+)
+
 class PlatformHttpServer(
     private val port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
     private val api: PlatformApi = PlatformApi(),
@@ -30,10 +36,15 @@ class PlatformHttpServer(
         RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
     private val commandIntakeMaxActive: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS", 0L, min = 0L),
     private val commandIntakeMaxStaleProcessing: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING", 0L, min = 0L),
+    private val commandIntakeBackpressureSampleMs: Long =
+        RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
 ) {
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
+    @Volatile
+    private var backpressureSnapshot: CommandIntakeBackpressureSnapshot? = null
+    private val backpressureSnapshotLock = Any()
 
     constructor(
         port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -687,7 +698,8 @@ class PlatformHttpServer(
             "pollIntervalMs" to asyncCommandWorkerPollMs,
             "intakeBackpressure" to mapOf(
                 "maxActiveCommands" to commandIntakeMaxActive,
-                "maxStaleProcessing" to commandIntakeMaxStaleProcessing
+                "maxStaleProcessing" to commandIntakeMaxStaleProcessing,
+                "sampleMs" to commandIntakeBackpressureSampleMs
             ),
             "queue" to counts,
             "metrics" to mapOf(
@@ -707,7 +719,7 @@ class PlatformHttpServer(
             return null
         }
         val queue = capturedCommandQueue ?: return null
-        val snapshot = queue.accountingSnapshot()
+        val snapshot = commandIntakeBackpressureSnapshot(queue)
         if (commandIntakeMaxStaleProcessing > 0L && snapshot.staleProcessing >= commandIntakeMaxStaleProcessing) {
             return BoundaryError(
                 429,
@@ -723,6 +735,43 @@ class PlatformHttpServer(
             )
         }
         return null
+    }
+
+    private fun commandIntakeBackpressureSnapshot(queue: CapturedCommandQueue): CommandIntakeBackpressureSnapshot {
+        val now = System.currentTimeMillis()
+        backpressureSnapshot?.let { cached ->
+            if (commandIntakeBackpressureSampleMs > 0L && now - cached.sampledAtMs < commandIntakeBackpressureSampleMs) {
+                return cached
+            }
+        }
+        return synchronized(backpressureSnapshotLock) {
+            val lockedNow = System.currentTimeMillis()
+            backpressureSnapshot?.let { cached ->
+                if (commandIntakeBackpressureSampleMs > 0L && lockedNow - cached.sampledAtMs < commandIntakeBackpressureSampleMs) {
+                    return@synchronized cached
+                }
+            }
+            val sampled = HotPathMetrics.time("api.commandIntake.backpressureSnapshot") {
+                if (commandIntakeMaxStaleProcessing > 0L) {
+                    val accounting = queue.accountingSnapshot()
+                    CommandIntakeBackpressureSnapshot(
+                        active = accounting.active,
+                        staleProcessing = accounting.staleProcessing,
+                        sampledAtMs = lockedNow
+                    )
+                } else {
+                    val counts = queue.statusCounts()
+                    CommandIntakeBackpressureSnapshot(
+                        active = counts.getOrDefault(CommandLogStatus.RECEIVED, 0L) +
+                            counts.getOrDefault(CommandLogStatus.PROCESSING, 0L),
+                        staleProcessing = 0L,
+                        sampledAtMs = lockedNow
+                    )
+                }
+            }
+            backpressureSnapshot = sampled
+            sampled
+        }
     }
 
     private fun commandAccountingJson(runId: String): String {

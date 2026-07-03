@@ -784,6 +784,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, stats.status)
             assertContains(stats.body, "\"processingMode\":\"captured-ack\"")
             assertContains(stats.body, "\"workerThreads\":1")
+            assertContains(stats.body, "\"sampleMs\":100")
             assertContains(stats.body, "\"RECEIVED\":1")
             assertContains(stats.body, "\"PROCESSING\":0")
             assertContains(stats.body, "\"COMPLETED\":0")
@@ -845,7 +846,8 @@ class PlatformHttpServerBoundaryTest {
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
             captureStore = captureStore,
             commandProcessingMode = CommandProcessingMode.CapturedAck,
-            commandIntakeMaxActive = 1
+            commandIntakeMaxActive = 1,
+            commandIntakeBackpressureSampleMs = 0
         )
         try {
             val first = post(
@@ -1173,6 +1175,7 @@ class PlatformHttpServerBoundaryTest {
         seedOrderAuthorization: Boolean = true,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
+        commandIntakeBackpressureSampleMs: Long = 100L,
         idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
@@ -1202,6 +1205,7 @@ class PlatformHttpServerBoundaryTest {
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
+            commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
             legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
         ).start()
     }

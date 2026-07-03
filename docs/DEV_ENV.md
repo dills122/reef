@@ -140,9 +140,11 @@ make dev-stress-captured-ack
 
 In this profile, `command_log.commands` is the canonical durable command capture path. The legacy boundary command-capture table is disabled by default to avoid duplicate hot-path writes; set `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres` explicitly when testing legacy capture behavior.
 
-Durable captured-ack intake backpressure is opt-in:
+Durable captured-ack intake backpressure is enabled by default in `dev-up-captured-ack`:
+- `EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS` defaults to `asyncThreads * asyncBatchSize * 2`.
 - `EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS=0` disables active queue-depth rejection.
 - `EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING=0` disables stale-processing rejection.
+- `EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS=100` caches queue-depth samples briefly so backpressure checks do not add a full queue probe to every request.
 - When enabled, new commands receive `429 COMMAND_INTAKE_BACKPRESSURE` before durable acceptance; duplicate idempotency replays still return their existing command status.
 
 Override the worker count for drain sweeps, for example:
