@@ -69,7 +69,7 @@ The clean `7500 rps`, `384` worker, `5m` DO soak on July 3, 2026 proved that the
 - Runtime Postgres and projection Postgres were both CPU-hot and write-heavy.
 - Several partitions were hot while other partitions had little or no lag.
 
-Do not keep rerunning `7500/384` at the same shape. The next target is `1500-2000 completed/sec` for `5m`, with accepted throughput close to completed throughput, bounded worker lag, and projection lag either bounded or explicitly non-gating in the test mode.
+Do not keep rerunning `7500/384` at the same shape. The next gate is `2000 completed/sec` sustained for a minimum `5m` soak, with accepted throughput close to completed throughput, bounded worker lag, and projection lag either bounded or explicitly non-gating in the test mode. Once `2000/sec` is stable and boring, the promotion ladder is `5000/sec`, then `7500/sec`, then larger ceiling probes.
 
 ## Backpressure Policy Modes
 
@@ -100,9 +100,9 @@ Use these defaults for the first implementation unless a later decision explicit
 4. Start the deploy-shaped stream-ack stack.
 5. Purge the retained local benchmark stream before a measured run, or use a run-specific stream name.
 6. Run a smoke check.
-7. Run `2500` submit-only stream-ack stress.
-8. Run `5000` submit-only stream-ack stress.
-9. Only if `2000` completed/sec is healthy and boring, move toward `3000`; do not return to `7500` until completed throughput, drain, and write amplification evidence support it.
+7. Run venue-core `2000 completed/sec` target soak for at least `5m`.
+8. Only after `2000/sec` is stable, run `5000 completed/sec` target soak for at least `5m`.
+9. Only after `5000/sec` is stable, return to `7500 completed/sec` and larger ceiling probes.
 10. Fetch stress reports, telemetry, logs, and selected DB/NATS diagnostics.
 11. Destroy the Droplet unless we are actively iterating.
 
@@ -114,7 +114,7 @@ Required gates for `run` and `run-destroy`:
 
 - `make dev-smoke` passes before measured stress.
 - Every measured report exists and has parseable JSON.
-- `2500` and `5000` report `100%` success, except intentional pre-acceptance `429` backpressure when a backpressure scenario is explicitly requested.
+- The active promotion-tier reports `100%` success, except intentional pre-acceptance `429` backpressure when a backpressure scenario is explicitly requested.
 - Unexpected `5xx` count is `0`.
 - `streamAckWorkers.delta.failedDelta == 0`.
 - `streamAckWorkers.delta.ackFailedDelta == 0`.
@@ -163,9 +163,12 @@ reports/do-benchmark/<timestamp-or-run-name>/
 
 ## Success Criteria
 
-Minimum for the first DO test:
+Minimum for each promotion tier:
 
-- `2500` and `5000` runs have `100%` success or only intentional pre-acceptance `429` backpressure.
+- The tier holds its target completed throughput for at least `5m`.
+- `2000 completed/sec` is the first required stable target; after that, promote to `5000/sec`, then `7500/sec`.
+- Accepted throughput is within `5-10%` of worker completed throughput unless the difference is explained by intentional pre-acceptance backpressure.
+- The tier has `100%` success or only intentional pre-acceptance `429` backpressure.
 - No unexpected `5xx`.
 - Worker `failed=0` and `ackFailed=0`.
 - Accepted commands are either completed/projected during the window or have visible lag that drains afterward.
@@ -174,11 +177,11 @@ Minimum for the first DO test:
 - Stress artifacts are fetched locally before destroying the Droplet.
 - Embedded load-tester trace checks are diagnostic by default for submit-only stream-ack stress runs. Use `REEF_DO_REQUIRE_TRACE_CHECKS=1` only with profiles where every sampled command is expected to have projected trace events.
 
-Healthy `5000` target:
+Healthy promotion target:
 
-- accepted throughput near or above the latest local `~3.8k/sec` point
+- the current tier sustains the target completed/sec rate for `5m`
 - p95 roughly under `150ms`
-- worker completed throughput materially closer to accepted throughput than the local run, or clear evidence of the new limiting subsystem
+- worker completed throughput materially close to accepted throughput, or clear evidence of the next limiting subsystem
 - projection lag visible and bounded, not silent
 
 ## Next Ablation Sequence
@@ -187,7 +190,7 @@ Run these before another broad high-rate soak:
 
 1. Canonical-only venue-core run:
    - set `REEF_DO_DRAIN_BACKPRESSURE_POLICY=venue-core`
-   - start at `1500`, then `2000`
+   - use `2000 completed/sec` as the first required stable `5m` soak target; smaller probes are allowed only as diagnostics
    - success means accepted is within `5-10%` of worker completed, worker lag is bounded, failures and ack failures are `0`, and post-run drain is clean
 
 2. Projector catch-up run:
@@ -200,6 +203,19 @@ Run these before another broad high-rate soak:
    - report commands/completions/pending by partition, top instruments, top bots, and cancel/modify partition routing versus original submit partition where available
 
 Scale worker and projector process counts only after these measurements show the DB write path can absorb the extra drain. More consumers can make canonical or projection Postgres hotter if write amplification remains the limiter.
+
+## Capacity Headroom Rule
+
+Do not optimize for just-barely-enough capacity. If the active target is `2000 completed/sec`, it is acceptable for a subsystem to handle `5000-6000/sec` when the extra cost and complexity are reasonable. The goal is to make each promotion tier boring, not fragile.
+
+Headroom is healthy when:
+
+- it gives roughly `2-3x` the current target capacity
+- it avoids constant retuning between `2000`, `5000`, and `7500`
+- it does not weaken `202` semantics, ordering, replay, audit, or idempotency
+- it does not create a major cost jump just to hide avoidable write amplification
+
+Avoid brute-force scaling when it is close to `10x` cost/complexity for a small gain, or when it hides rows/command, WAL bytes/command, commits/command, projection write amplification, or hot-partition behavior that should be fixed.
 
 ## Post-Ablation Fix Order
 

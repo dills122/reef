@@ -46,7 +46,7 @@ From a clean single-droplet DO soak (`stream-ack`, `7500 rps`, `workers=384`, `5
    - projector lag backpressure dominated
    - worker stream lag backpressure followed
    - worker failed and ack-failed counters stayed clean
-3. Accepted/sec alone is the wrong success target. The next milestone should be `1500-2000 completed/sec` sustained, with accepted throughput within `5-10%` of completed throughput and a clean post-run drain.
+3. Accepted/sec alone is the wrong success target. The next milestone is `2000 completed/sec` sustained for at least `5m`, with accepted throughput within `5-10%` of completed throughput and a clean post-run drain.
 4. Projection/UI freshness must be measured separately from venue-core capacity:
    - `control-room-fresh` mode may reject on projection lag
    - `venue-core` mode should report projection lag without letting it define canonical command capacity
@@ -55,7 +55,7 @@ From a clean single-droplet DO soak (`stream-ack`, `7500 rps`, `workers=384`, `5
 Immediate implications:
 
 1. Do not keep rerunning `7500/384` at the same config.
-2. Run venue-core canonical ablations at `1500`, then `2000`, before moving higher.
+2. Run venue-core canonical ablations until `2000 completed/sec` is stable for a `5m` soak, then promote to `5000/sec`, then `7500/sec`.
 3. Run projector catch-up and hot-partition versus even-distribution ablations before broad scaling.
 4. Treat projection write amplification and partition skew as first-class bottleneck suspects.
 
@@ -80,7 +80,10 @@ Highest-value fixes after the next ablations:
 4. Tune configuration only with measurement:
    - NATS pull batch, `MaxAckPending`, worker fetch loop, DB batch size, and pool sizes should move together
    - raising pending limits or pool sizes can hide overload if the DB write path remains the limiter
-5. Keep the hard pivot explicit:
+5. Provision for practical headroom:
+   - `2-3x` subsystem headroom over the current target is acceptable when cost and complexity are reasonable
+   - avoid `10x` cost/complexity jumps or broad brute-force scaling that hides avoidable write amplification
+6. Keep the hard pivot explicit:
    - JetStream as the canonical event log and Postgres as projection/query storage is a reserve option only if compact canonical Postgres append remains the ceiling
    - adopting that option would require a new architecture decision, retention/replay/checksum requirements, and an updated audit/query story
 

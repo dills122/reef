@@ -578,7 +578,9 @@ Status: accepted
 Summary:
 - the July 3, 2026 DO soak does not invalidate the stream-ack macro architecture; it shows that the current hot path still writes and projects too much per completed command for the target.
 - the next optimization target is `completed/sec`, not accepted/sec, with accepted throughput close to worker-completed throughput and a clean post-load drain.
+- the promotion ladder is `2000 completed/sec` sustained for at least `5m`, then `5000/sec`, then `7500/sec` and larger ceiling probes only after the lower tier is stable.
 - before scaling workers/projectors broadly, Reef must measure rows/command, WAL bytes/command, commits/command, projection work items/command, and partition skew.
+- practical `2-3x` subsystem headroom over the active tier is acceptable when cost and complexity are reasonable; avoid expensive brute-force capacity that hides inefficient writes or hot-partition behavior.
 - canonical Postgres remains authoritative under D-036/D-037, but the canonical write shape may be collapsed from per-event rows into compact command/event batch records when replay, idempotency, ordering, checksums, and audit semantics remain intact.
 - projection writes should be optimized as a separate streaming system: batch, coalesce repeated aggregate updates, reduce hot indexes, use staging/merge paths where useful, and allow unlogged/disposable storage only for rebuildable projection caches.
 - hot partitions should be treated as either routing bugs or legitimate hot-book market behavior; even-distribution and hot-book benchmarks must be labeled separately.
