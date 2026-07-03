@@ -250,13 +250,13 @@ export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
 
 echo "[$(date -Is)] stage: make dev-up-stream-ack"
-make dev-up-stream-ack
+make dev-up-stream-ack </dev/null
 echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
 echo "[$(date -Is)] stage: make dev-smoke"
-make dev-smoke
+make dev-smoke </dev/null
 echo "[$(date -Is)] stage complete: make dev-smoke"
 echo "[$(date -Is)] stage: make dev-stress-stream-ack"
-make dev-stress-stream-ack
+make dev-stress-stream-ack </dev/null
 echo "[$(date -Is)] stage complete: make dev-stress-stream-ack"
 echo "[$(date -Is)] remote benchmark complete"
 REMOTE
