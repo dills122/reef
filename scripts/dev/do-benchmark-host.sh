@@ -203,6 +203,8 @@ remote_run_benchmark() {
   local run_id="$1"
   local stream_name
   stream_name="REEF_COMMANDS_$(sanitize_token "$run_id")"
+  local subject_prefix
+  subject_prefix="reef.do_benchmark.$(sanitize_token "$run_id")"
   local durable_prefix
   durable_prefix="reef-stream-worker-$(sanitize_token "$run_id")"
   local rates="${REEF_DO_STRESS_RATES:-2500,5000}"
@@ -211,10 +213,11 @@ remote_run_benchmark() {
   local trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-200}"
   local min_success="${REEF_DO_MIN_SUCCESS_RATE_PCT:-100}"
 
-  echo "running remote benchmark run_id=$run_id stream=$stream_name rates=$rates workers=$workers duration=$duration"
+  echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration"
   remote_script \
     REEF_BENCHMARK_RUN_ID="$run_id" \
     REEF_BENCHMARK_STREAM="$stream_name" \
+    REEF_BENCHMARK_SUBJECT_PREFIX="$subject_prefix" \
     REEF_BENCHMARK_DURABLE_PREFIX="$durable_prefix" \
     REEF_BENCHMARK_RATES="$rates" \
     REEF_BENCHMARK_WORKERS="$workers" \
@@ -231,11 +234,13 @@ cd "$REMOTE_DIR"
 echo "[$(date -Is)] remote benchmark starting"
 echo "run_id=$REEF_BENCHMARK_RUN_ID"
 echo "stream=$REEF_BENCHMARK_STREAM"
+echo "subject_prefix=$REEF_BENCHMARK_SUBJECT_PREFIX"
 echo "durable_prefix=$REEF_BENCHMARK_DURABLE_PREFIX"
 echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS duration=$REEF_BENCHMARK_DURATION"
 
 export JS_RUNTIME=node
 export STREAM_ACK_COMMAND_STREAM="$REEF_BENCHMARK_STREAM"
+export STREAM_ACK_SUBJECT_PREFIX="$REEF_BENCHMARK_SUBJECT_PREFIX"
 export STREAM_ACK_WORKER_DURABLE_PREFIX="$REEF_BENCHMARK_DURABLE_PREFIX"
 export DEV_STRESS_ARTIFACT_DIR="$artifact_dir"
 export DEV_STRESS_REPORT_OUT="$artifact_dir/stream-ack-stress.json"
