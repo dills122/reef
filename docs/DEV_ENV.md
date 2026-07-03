@@ -185,6 +185,7 @@ make dev-up-stream-ack
 - `STREAM_ACK_PARTITION_COUNT=16`
 - `STREAM_ACK_INTAKE_STORE=postgres`
 - `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
+- `STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100`
 - `STREAM_ACK_WORKER_ENABLED=true`
 - `STREAM_ACK_WORKER_0_PARTITIONS=0,1,2,3,4,5,6,7`
 - `STREAM_ACK_WORKER_1_PARTITIONS=8,9,10,11,12,13,14,15`
@@ -209,7 +210,7 @@ In this mode `platform-api` returns `202` only after JetStream publish acknowled
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
-Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`.
+Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling JetStream management on every accepted command.
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
 

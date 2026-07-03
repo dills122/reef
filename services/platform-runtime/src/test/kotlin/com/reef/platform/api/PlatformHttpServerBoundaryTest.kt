@@ -55,6 +55,9 @@ class PlatformHttpServerBoundaryTest {
             )
         )
         try {
+            val reset = post(server.address.port, "/internal/perf/hot-path", emptyMap(), "")
+            assertEquals(200, reset.status)
+
             val response = post(
                 port = server.address.port,
                 path = "/api/v1/orders/submit",
@@ -1032,6 +1035,13 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(1, publisher.published.size)
             assertEquals("client-1|/api/v1/orders/submit|idem-stream-1", publisher.published.single().natsMessageId)
             assertEquals(0, gateway.submitCalls)
+
+            val hotPath = get(server.address.port, "/internal/perf/hot-path")
+            assertEquals(200, hotPath.status)
+            assertContains(hotPath.body, "\"api.streamAck.reserve\"")
+            assertContains(hotPath.body, "\"api.streamAck.publishAck\"")
+            assertContains(hotPath.body, "\"api.streamAck.markPublished\"")
+            assertContains(hotPath.body, "\"api.streamAck.total\"")
         } finally {
             server.stop(0)
         }
@@ -1186,6 +1196,55 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"messages\":3")
             assertContains(response.body, "\"storageUtilization\":0.5")
             assertContains(response.body, "\"publishAckLastMs\":7")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckBackpressureCachesStreamHealthWithinSampleWindow() {
+        val publisher = RecordingStreamCommandPublisher()
+        val healthCheck = CountingStreamCommandHealthCheck(
+            StreamCommandHealthSnapshot(
+                available = true,
+                streamName = "REEF_COMMANDS",
+                byteCount = 100,
+                maxBytes = 1000,
+                storageUtilization = 0.1
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher,
+            streamCommandHealthCheck = healthCheck,
+            streamCommandBackpressureSampleMs = 10_000L
+        )
+        try {
+            val first = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-health-cache-1"
+                ),
+                body = validSubmitBody("cmd-stream-health-cache-1", "trace-stream-health-cache-1", "ord-stream-health-cache-1", extra = streamRoutingExtra())
+            )
+            val second = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-health-cache-2"
+                ),
+                body = validSubmitBody("cmd-stream-health-cache-2", "trace-stream-health-cache-2", "ord-stream-health-cache-2", extra = streamRoutingExtra())
+            )
+
+            assertEquals(202, first.status)
+            assertEquals(202, second.status)
+            assertEquals(2, publisher.published.size)
+            assertEquals(1, healthCheck.calls.get())
         } finally {
             server.stop(0)
         }
@@ -1470,7 +1529,8 @@ class PlatformHttpServerBoundaryTest {
         streamCommandPublisher: StreamCommandPublisher? = null,
         streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
         streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
-        streamCommandMaxStorageUtilization: Double = 0.95
+        streamCommandMaxStorageUtilization: Double = 0.95,
+        streamCommandBackpressureSampleMs: Long = 100L
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
         if (seedOrderAuthorization) {
@@ -1502,6 +1562,7 @@ class PlatformHttpServerBoundaryTest {
             streamCommandHealthCheck = streamCommandHealthCheck,
             streamCommandConfig = streamCommandConfig,
             streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
+            streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
@@ -1732,6 +1793,17 @@ private class FixedStreamCommandHealthCheck(
     private val snapshot: StreamCommandHealthSnapshot
 ) : StreamCommandHealthCheck {
     override fun snapshot(): StreamCommandHealthSnapshot = snapshot
+}
+
+private class CountingStreamCommandHealthCheck(
+    private val snapshot: StreamCommandHealthSnapshot
+) : StreamCommandHealthCheck {
+    val calls = AtomicInteger(0)
+
+    override fun snapshot(): StreamCommandHealthSnapshot {
+        calls.incrementAndGet()
+        return snapshot
+    }
 }
 
 private class StaticAcceptedEngineGateway : EngineGateway {

@@ -17,6 +17,11 @@ private data class CommandIntakeBackpressureSnapshot(
     val sampledAtMs: Long
 )
 
+private data class CachedStreamCommandHealthSnapshot(
+    val sampledAtMs: Long,
+    val snapshot: StreamCommandHealthSnapshot
+)
+
 enum class PlatformRuntimeRole(
     val configValue: String,
     val publicHttpEnabled: Boolean,
@@ -56,6 +61,8 @@ class PlatformHttpServer(
     private val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
     private val streamCommandMaxStorageUtilization: Double =
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
+    private val streamCommandBackpressureSampleMs: Long =
+        RuntimeEnv.long("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     private val streamCommandWorkerEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_WORKER_ENABLED", false),
     private val streamCommandWorkerPartitions: String = RuntimeEnv.string("STREAM_ACK_WORKER_PARTITIONS", "0"),
     private val streamCommandWorkerBatchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
@@ -86,6 +93,9 @@ class PlatformHttpServer(
     @Volatile
     private var backpressureSnapshot: CommandIntakeBackpressureSnapshot? = null
     private val backpressureSnapshotLock = Any()
+    @Volatile
+    private var streamBackpressureSnapshot: CachedStreamCommandHealthSnapshot? = null
+    private val streamBackpressureSnapshotLock = Any()
 
     constructor(
         port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -106,6 +116,7 @@ class PlatformHttpServer(
         streamCommandHealthCheck = deps.streamCommandHealthCheck,
         streamCommandConfig = deps.streamCommandConfig,
         streamCommandMaxStorageUtilization = deps.streamCommandMaxStorageUtilization,
+        streamCommandBackpressureSampleMs = deps.streamCommandBackpressureSampleMs,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -717,91 +728,112 @@ class PlatformHttpServer(
         correlationId: String,
         body: String
     ) {
-        val intakeStore = streamCommandIntakeStore
-        val publisher = streamCommandPublisher
-        if (intakeStore == null || publisher == null) {
-            writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable"))
-            return
-        }
-
-        val envelopeResult = StreamCommandEnvelopeBuilder.fromRequest(
-            clientId = clientId,
-            route = route,
-            idempotencyKey = idempotencyKey,
-            body = body,
-            config = streamCommandConfig
-        )
-        val envelope = when (envelopeResult) {
-            is EitherBoundaryError.Error -> {
-                writeJson(exchange, envelopeResult.error.status, boundary.toErrorJson(envelopeResult.error, correlationId))
+        val started = System.nanoTime()
+        try {
+            val intakeStore = streamCommandIntakeStore
+            val publisher = streamCommandPublisher
+            if (intakeStore == null || publisher == null) {
+                writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable"))
                 return
             }
-            is EitherBoundaryError.Envelope -> envelopeResult.envelope
-        }
 
-        val abuseViolation = abuseProtectionHook.allow(clientId, route)
-        if (abuseViolation != null) {
-            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
-            return
-        }
-
-        val streamBackpressure = streamCommandBackpressure()
-        if (streamBackpressure != null) {
-            writeJson(exchange, streamBackpressure.status, boundary.toErrorJson(streamBackpressure, correlationId))
-            return
-        }
-
-        val initialReference = envelope.reference(streamCommandConfig.streamName)
-        val reservation = try {
-            intakeStore.reserve(envelope, initialReference)
-        } catch (ex: Exception) {
-            val errorMessage = ex.message ?: "unknown"
-            System.err.println(
-                "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonFields.escape(errorMessage)}"
-            )
-            writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable", errorMessage))
-            return
-        }
-
-        when (reservation) {
-            is StreamCommandReservation.Conflict -> {
-                writeJson(
-                    exchange,
-                    409,
-                    boundary.toErrorJson(
-                        BoundaryError(
-                            409,
-                            "IDEMPOTENCY_PAYLOAD_CONFLICT",
-                            "idempotency key was already used with a different command payload"
-                        ),
-                        correlationId
-                    )
+            val envelopeResult = HotPathMetrics.time("api.streamAck.envelope") {
+                StreamCommandEnvelopeBuilder.fromRequest(
+                    clientId = clientId,
+                    route = route,
+                    idempotencyKey = idempotencyKey,
+                    body = body,
+                    config = streamCommandConfig
                 )
-                return
             }
-            is StreamCommandReservation.Replay -> {
-                if (reservation.reference.streamSequence > 0L) {
-                    writeJson(exchange, 202, StreamCommandResponse.acceptedJson(reservation.reference))
+            val envelope = when (envelopeResult) {
+                is EitherBoundaryError.Error -> {
+                    writeJson(exchange, envelopeResult.error.status, boundary.toErrorJson(envelopeResult.error, correlationId))
                     return
                 }
+                is EitherBoundaryError.Envelope -> envelopeResult.envelope
             }
-            is StreamCommandReservation.Reserved -> {
-            }
-        }
 
-        val ack = try {
-            publisher.publish(envelope)
-        } catch (ex: Exception) {
-            val errorMessage = ex.message ?: "unknown"
-            System.err.println(
-                "stream_command_publish_failed route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=${envelope.subject} message=${JsonFields.escape(errorMessage)}"
-            )
-            writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", errorMessage))
-            return
+            val abuseViolation = HotPathMetrics.time("api.streamAck.abuse") {
+                abuseProtectionHook.allow(clientId, route)
+            }
+            if (abuseViolation != null) {
+                writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+                return
+            }
+
+            val streamBackpressure = HotPathMetrics.time("api.streamAck.backpressure") {
+                streamCommandBackpressure()
+            }
+            if (streamBackpressure != null) {
+                writeJson(exchange, streamBackpressure.status, boundary.toErrorJson(streamBackpressure, correlationId))
+                return
+            }
+
+            val initialReference = envelope.reference(streamCommandConfig.streamName)
+            val reservation = try {
+                HotPathMetrics.time("api.streamAck.reserve") {
+                    intakeStore.reserve(envelope, initialReference)
+                }
+            } catch (ex: Exception) {
+                val errorMessage = ex.message ?: "unknown"
+                System.err.println(
+                    "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonFields.escape(errorMessage)}"
+                )
+                writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable", errorMessage))
+                return
+            }
+
+            when (reservation) {
+                is StreamCommandReservation.Conflict -> {
+                    writeJson(
+                        exchange,
+                        409,
+                        boundary.toErrorJson(
+                            BoundaryError(
+                                409,
+                                "IDEMPOTENCY_PAYLOAD_CONFLICT",
+                                "idempotency key was already used with a different command payload"
+                            ),
+                            correlationId
+                        )
+                    )
+                    return
+                }
+                is StreamCommandReservation.Replay -> {
+                    if (reservation.reference.streamSequence > 0L) {
+                        HotPathMetrics.time("api.streamAck.writeResponse") {
+                            writeJson(exchange, 202, StreamCommandResponse.acceptedJson(reservation.reference))
+                        }
+                        return
+                    }
+                }
+                is StreamCommandReservation.Reserved -> {
+                }
+            }
+
+            val ack = try {
+                HotPathMetrics.time("api.streamAck.publishAck") {
+                    publisher.publish(envelope)
+                }
+            } catch (ex: Exception) {
+                val errorMessage = ex.message ?: "unknown"
+                System.err.println(
+                    "stream_command_publish_failed route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=${envelope.subject} message=${JsonFields.escape(errorMessage)}"
+                )
+                writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", errorMessage))
+                return
+            }
+            HotPathMetrics.time("api.streamAck.markPublished") {
+                intakeStore.markPublished(envelope.scope, envelope.idempotencyKey, ack.streamSequence)
+            }
+            val publishedReference = envelope.reference(ack.streamName, ack.streamSequence)
+            HotPathMetrics.time("api.streamAck.writeResponse") {
+                writeJson(exchange, 202, StreamCommandResponse.acceptedJson(publishedReference))
+            }
+        } finally {
+            HotPathMetrics.record("api.streamAck.total", System.nanoTime() - started)
         }
-        val publishedReference = intakeStore.markPublished(envelope.scope, envelope.idempotencyKey, ack.streamSequence)
-            ?: envelope.reference(ack.streamName, ack.streamSequence)
-        writeJson(exchange, 202, StreamCommandResponse.acceptedJson(publishedReference))
     }
 
     private fun writeDuplicateCommandReservation(
@@ -962,7 +994,7 @@ class PlatformHttpServer(
     }
 
     private fun streamCommandBackpressure(): BoundaryError? {
-        val health = streamCommandHealthCheck?.snapshot() ?: return null
+        val health = streamCommandBackpressureSnapshot() ?: return null
         if (!health.available) {
             return BoundaryError(
                 503,
@@ -982,6 +1014,29 @@ class PlatformHttpServer(
             )
         }
         return null
+    }
+
+    private fun streamCommandBackpressureSnapshot(): StreamCommandHealthSnapshot? {
+        val healthCheck = streamCommandHealthCheck ?: return null
+        val now = System.currentTimeMillis()
+        streamBackpressureSnapshot?.let { cached ->
+            if (streamCommandBackpressureSampleMs > 0L && now - cached.sampledAtMs < streamCommandBackpressureSampleMs) {
+                return cached.snapshot
+            }
+        }
+        return synchronized(streamBackpressureSnapshotLock) {
+            val lockedNow = System.currentTimeMillis()
+            streamBackpressureSnapshot?.let { cached ->
+                if (streamCommandBackpressureSampleMs > 0L && lockedNow - cached.sampledAtMs < streamCommandBackpressureSampleMs) {
+                    return@synchronized cached.snapshot
+                }
+            }
+            val sampled = HotPathMetrics.time("api.streamAck.backpressureSnapshot") {
+                healthCheck.snapshot()
+            }
+            streamBackpressureSnapshot = CachedStreamCommandHealthSnapshot(lockedNow, sampled)
+            sampled
+        }
     }
 
     private fun commandIntakeBackpressureSnapshot(queue: CapturedCommandQueue): CommandIntakeBackpressureSnapshot {
@@ -1083,6 +1138,7 @@ class PlatformHttpServer(
             "maxBytes" to snapshot.maxBytes,
             "storageUtilization" to snapshot.storageUtilization,
             "maxStorageUtilization" to streamCommandMaxStorageUtilization,
+            "backpressureSampleMs" to streamCommandBackpressureSampleMs,
             "publishAckLastMs" to snapshot.publishAckLastMs,
             "publishAckMaxMs" to snapshot.publishAckMaxMs,
             "checkedAt" to snapshot.checkedAt.toString(),
@@ -1265,5 +1321,7 @@ data class ServerBoundaryDeps(
     val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
     val streamCommandMaxStorageUtilization: Double =
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
+    val streamCommandBackpressureSampleMs: Long =
+        RuntimeEnv.long("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

@@ -78,7 +78,7 @@ sealed class StreamCommandReservation {
 
 interface StreamCommandIntakeStore {
     fun reserve(envelope: StreamCommandEnvelope, reference: StreamCommandReference): StreamCommandReservation
-    fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): StreamCommandReference?
+    fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean
     fun findByCommandId(commandId: String): StreamCommandReference?
 }
 
@@ -118,13 +118,13 @@ class InMemoryStreamCommandIntakeStore : StreamCommandIntakeStore {
         }
     }
 
-    override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): StreamCommandReference? {
+    override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean {
         val key = key(scope, idempotencyKey)
         synchronized(this) {
-            val existing = byIdempotency[key] ?: return null
+            val existing = byIdempotency[key] ?: return false
             val published = existing.reference.copy(streamSequence = streamSequence)
             byIdempotency[key] = existing.copy(reference = published)
-            return published
+            return true
         }
     }
 
@@ -209,7 +209,7 @@ class PostgresStreamCommandIntakeStore(
         return StreamCommandReservation.Replay(existing.reference)
     }
 
-    override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): StreamCommandReference? {
+    override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
@@ -218,23 +218,12 @@ class PostgresStreamCommandIntakeStore(
                     published = TRUE,
                     published_at = COALESCE(published_at, NOW())
                 WHERE scope = ? AND idempotency_key = ?
-                RETURNING command_id, route, subject, stream_name, partition, stream_sequence
                 """.trimIndent()
             ).use { ps ->
                 ps.setLong(1, streamSequence)
                 ps.setString(2, scope)
                 ps.setString(3, idempotencyKey)
-                ps.executeQuery().use { rs ->
-                    if (!rs.next()) return null
-                    return StreamCommandReference(
-                        commandId = rs.getString("command_id"),
-                        route = rs.getString("route"),
-                        subject = rs.getString("subject"),
-                        streamName = rs.getString("stream_name"),
-                        partition = rs.getInt("partition"),
-                        streamSequence = rs.getLong("stream_sequence")
-                    )
-                }
+                return ps.executeUpdate() > 0
             }
         }
     }

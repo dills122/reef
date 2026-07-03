@@ -76,7 +76,7 @@ class StreamCommandIntakeTest {
         val conflict = store.reserve(changedEnvelope, changedEnvelope.reference("REEF_COMMANDS"))
 
         assertIs<StreamCommandReservation.Reserved>(first)
-        assertEquals(42L, published?.streamSequence)
+        assertTrue(published)
         assertEquals(42L, assertIs<StreamCommandReservation.Replay>(replay).reference.streamSequence)
         assertIs<StreamCommandReservation.Conflict>(conflict)
     }

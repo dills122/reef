@@ -40,6 +40,7 @@ const dbDiagnosticsSchemas = parseCsvStrings(
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
+const captureHotPath = env("DEV_STRESS_CAPTURE_HOT_PATH", "1") !== "0";
 const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
 const streamAckWorkerUrls = parseCsvStrings(
   env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
@@ -245,6 +246,9 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
   const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
+  if (captureHotPath) {
+    await resetHotPath(runtimeUrl);
+  }
   try {
     await run(
       "go",
@@ -305,6 +309,10 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterProjector = await sampleStreamAckProjectors();
       attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
     }
+    if (captureHotPath) {
+      const afterHotPath = await sampleHotPath(runtimeUrl);
+      attachHotPathPhases({ reportOut, afterHotPath });
+    }
   }
 }
 
@@ -335,6 +343,57 @@ async function sampleStreamAckWorkers() {
     probes,
     json: aggregateStreamAckWorkerStats(probes),
   };
+}
+
+async function resetHotPath(runtimeUrl) {
+  return requestAppProbe({
+    name: "runtime.hotPath.reset",
+    url: `${runtimeUrl}/internal/perf/hot-path`,
+    method: "POST",
+    captureJson: true,
+  });
+}
+
+async function sampleHotPath(runtimeUrl) {
+  return requestAppProbe({
+    name: "runtime.hotPath",
+    url: `${runtimeUrl}/internal/perf/hot-path`,
+    captureJson: true,
+  });
+}
+
+function attachHotPathPhases({ reportOut, afterHotPath }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const phases = afterHotPath?.json?.metrics?.phases ?? {};
+    const streamAckPhases = Object.fromEntries(
+      Object.entries(phases)
+        .filter(([name]) => name.startsWith("api.streamAck."))
+        .sort(([left], [right]) => left.localeCompare(right)),
+    );
+    report.streamAckApiPhases = {
+      phases: streamAckPhases,
+      probe: accountingProbeSummary(afterHotPath),
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+
+    const total = streamAckPhases["api.streamAck.total"];
+    const reserve = streamAckPhases["api.streamAck.reserve"];
+    const publishAck = streamAckPhases["api.streamAck.publishAck"];
+    const markPublished = streamAckPhases["api.streamAck.markPublished"];
+    if (total || reserve || publishAck || markPublished) {
+      console.log(
+        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)}`,
+      );
+    }
+  } catch (error) {
+    console.warn(`  hot-path phases unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function formatPhaseAvg(phase) {
+  if (!phase) return "n/a";
+  return `${Number(phase.avgMs ?? 0).toFixed(2)}ms`;
 }
 
 function defaultStreamAckWorkerUrls(runtimeUrl) {
@@ -793,7 +852,7 @@ async function requestAppProbe(probe) {
   return new Promise((resolve) => {
     const url = new URL(probe.url);
     const client = url.protocol === "https:" ? https : http;
-    const req = client.request(url, { method: "GET", timeout: 2000 }, (response) => {
+    const req = client.request(url, { method: probe.method ?? "GET", timeout: 2000 }, (response) => {
       const chunks = [];
       let bytes = 0;
       response.on("data", (chunk) => {

@@ -11,6 +11,7 @@ setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1");
 setDefault("STREAM_ACK_PARTITION_COUNT", "16");
 setDefault("STREAM_ACK_INTAKE_STORE", "postgres");
 setDefault("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", "2000");
+setDefault("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", "100");
 setDefault("STREAM_ACK_WORKER_ENABLED", "true");
 setDefault("STREAM_ACK_WORKER_0_PARTITIONS", "0,1,2,3,4,5,6,7");
 setDefault("STREAM_ACK_WORKER_1_PARTITIONS", "8,9,10,11,12,13,14,15");
@@ -44,6 +45,7 @@ console.log(`  workerBatchSize=${env("STREAM_ACK_WORKER_BATCH_SIZE")}`);
 console.log(`  projectorEnabled=${env("STREAM_ACK_PROJECTOR_ENABLED")}`);
 console.log(`  projector0Partitions=${env("STREAM_ACK_PROJECTOR_0_PARTITIONS")}`);
 console.log(`  projector1Partitions=${env("STREAM_ACK_PROJECTOR_1_PARTITIONS")}`);
+console.log(`  backpressureSampleMs=${env("STREAM_ACK_BACKPRESSURE_SAMPLE_MS")}`);
 console.log(`  boundaryJdbcUrl=${env("RUNTIME_DB_URL", "jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary")}`);
 console.log(`  projectionJdbcUrl=${env("RUNTIME_PROJECTION_POSTGRES_JDBC_URL", "jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime")}`);
 
