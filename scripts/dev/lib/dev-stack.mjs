@@ -65,6 +65,7 @@ async function startPostgres(context) {
     "--wait-timeout",
     context.waitTimeoutSeconds,
     "postgres",
+    "boundary-postgres",
     "projection-postgres",
   ]);
 }

@@ -196,6 +196,7 @@ make dev-up-stream-ack
 - `STREAM_ACK_PROJECTION_NAME=runtime-normalized-submit`
 - `STREAM_ACK_PROJECTOR_BATCH_SIZE=250`
 - `STREAM_ACK_PROJECTOR_POLL_MS=50`
+- `RUNTIME_DB_URL=jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary`
 - `RUNTIME_PROJECTION_POSTGRES_JDBC_URL=jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX=24`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE=8`
@@ -214,7 +215,7 @@ Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The 
 
 Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT`, default `8084`) and `platform-projector-1` (`REEF_PLATFORM_PROJECTOR_1_HOST_PORT`, default `8085`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes from the runtime Postgres service, update the normalized order/execution/trade/runtime-event read tables in the projection Postgres service, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture both endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
-Local Docker includes a separate `projection-postgres` service (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) so the projection write path can be measured independently from canonical worker commits. Startup applies the same forward migrations to both `postgres` and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
+Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 

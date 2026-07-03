@@ -146,7 +146,7 @@ Drain-accounted worker sweep:
 | A8 | Read-model schema/projection isolation | Not started | architecture | Remove projection writes from hot path |
 | A9 | Postgres outbox publisher | Deferred | architecture | Still needed for event distribution; no longer a precondition for stream-ack ingress |
 | A10 | NATS JetStream stream-ack ingress | Planned | architecture | Durable accepted-command log with publish-ack-before-202 and retained replay window |
-| A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
+| A11 | Physical DB split evaluation | In progress | architecture | Local stream-ack now separates boundary intake, canonical runtime facts, and submit projections across three Postgres containers |
 | A12 | Boundary capture hot-path reduction | In progress | architecture | Captured-ack dev profile now disables duplicate legacy boundary command capture; command-log append remains the canonical durable capture path |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
@@ -386,6 +386,11 @@ Latest stream-ack notes:
   - `2500` nominal rps: `67190` accepted, worker-completed, and projected, `2011.60/sec`, p95 `163.25ms`, p99 `234.83ms`, trace pass `97%`, projector lag `0`.
   - `5000` nominal rps: `81661` accepted, worker-completed, and projected, `2442.63/sec`, p95 `130.93ms`, p99 `243.43ms`, trace pass `96%`, projector lag `0`.
   - placement check: primary runtime DB held `148851` canonical submit rows and `0` submit projection rows; projection DB held `148851` submit projection rows and `0` canonical submit rows. Max durable worker stream lag stayed `0`; max sampled projector lag was `1186` and drained by step end. The storage split materially improved projection freshness versus the shared-DB split-projector run, so continue physical store separation before deeper projector SQL tuning.
+- Boundary/idempotency storage now runs against `boundary-postgres` through `RUNTIME_DB_URL`, so stream-intake rows and scoped idempotency writes are measured independently from canonical worker commits. Clean three-DB validation after resetting local Docker volumes:
+  - `2500` nominal rps: `71779` accepted, worker-completed, and projected, `2152.30/sec`, p95 `132.96ms`, p99 `190.01ms`, trace pass `96%`, projector lag `0`.
+  - `5000` nominal rps: `84433` accepted, worker-completed, and projected, `2540.33/sec`, p95 `121.01ms`, p99 `207.01ms`, trace pass `95%`, projector lag `0`.
+  - placement check: primary runtime DB held `156212` canonical submit rows and `0` boundary intake/projection rows; boundary DB held `156212` stream-intake rows and `0` canonical/projection rows; projection DB held `156212` submit projection rows and `0` canonical/boundary rows. Max sampled DB pool waiters were `1` on stream-intake, `0` on canonical runtime, and `0` on projection; max durable worker stream lag stayed `0`, with sampled projector lag draining to `0` by step end.
+  - result versus the prior projection-only DB split: the `2500` step improved from `2011.60/sec` to `2152.30/sec`, and the `5000` step improved from `2442.63/sec` to `2540.33/sec`, with lower p95/p99 and no final projection lag. Continue physical store separation and domain-specific migration ownership before deeper SQL tuning.
 - Follow-up probes that did not beat the spread-profile baseline:
   - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
   - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`

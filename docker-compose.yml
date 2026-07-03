@@ -20,9 +20,9 @@ x-platform-runtime-environment: &platform-runtime-environment
   RUNTIME_PROJECTION_POSTGRES_USER: "${RUNTIME_PROJECTION_POSTGRES_USER:-reef}"
   RUNTIME_PROJECTION_POSTGRES_PASSWORD: "${RUNTIME_PROJECTION_POSTGRES_PASSWORD:-reef}"
   EXTERNAL_API_IDEMPOTENCY_STORE: "${EXTERNAL_API_IDEMPOTENCY_STORE:-postgres}"
-  RUNTIME_DB_URL: "jdbc:postgresql://postgres:5432/reef?currentSchema=boundary"
-  RUNTIME_DB_USER: "reef"
-  RUNTIME_DB_PASSWORD: "reef"
+  RUNTIME_DB_URL: "${RUNTIME_DB_URL:-jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary}"
+  RUNTIME_DB_USER: "${RUNTIME_DB_USER:-reef}"
+  RUNTIME_DB_PASSWORD: "${RUNTIME_DB_PASSWORD:-reef}"
   PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED: "${PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED:-true}"
   EXTERNAL_API_COMMAND_CAPTURE_MODE: "${EXTERNAL_API_COMMAND_CAPTURE_MODE:-postgres}"
   EXTERNAL_API_COMMAND_LOG_MODE: "${EXTERNAL_API_COMMAND_LOG_MODE:-disabled}"
@@ -94,6 +94,8 @@ x-platform-runtime-service: &platform-runtime-service
     <<: *platform-runtime-environment
   depends_on:
     postgres:
+      condition: service_healthy
+    boundary-postgres:
       condition: service_healthy
     projection-postgres:
       condition: service_healthy
@@ -169,6 +171,40 @@ services:
       - "${REEF_PROJECTION_POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - reef-projection-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  boundary-postgres:
+    image: postgres:16-alpine
+    container_name: reef-boundary-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_BOUNDARY_PG_MAX_CONNECTIONS:-160}"
+      - "-c"
+      - "max_wal_size=${REEF_BOUNDARY_PG_MAX_WAL_SIZE:-16GB}"
+      - "-c"
+      - "min_wal_size=${REEF_BOUNDARY_PG_MIN_WAL_SIZE:-4GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_BOUNDARY_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_BOUNDARY_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_BOUNDARY_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_BOUNDARY_PG_LOG_CHECKPOINTS:-on}"
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_BOUNDARY_POSTGRES_HOST_PORT:-5434}:5432"
+    volumes:
+      - reef-boundary-postgres-data:/var/lib/postgresql/data
       - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
@@ -322,5 +358,6 @@ services:
 
 volumes:
   reef-postgres-data:
+  reef-boundary-postgres-data:
   reef-projection-postgres-data:
   reef-nats-data:

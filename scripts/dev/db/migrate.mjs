@@ -149,6 +149,14 @@ function migrationTargets() {
       dbName: env("REEF_PROJECTION_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
     });
   }
+  if (env("REEF_BOUNDARY_POSTGRES_MIGRATIONS", "1") !== "0") {
+    targets.push({
+      label: "boundary",
+      service: env("REEF_BOUNDARY_POSTGRES_SERVICE", "boundary-postgres"),
+      user: env("REEF_BOUNDARY_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
+      dbName: env("REEF_BOUNDARY_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+    });
+  }
   return targets;
 }
 

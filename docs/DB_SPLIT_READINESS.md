@@ -72,11 +72,13 @@ This document defines constraints for the local Postgres model so scoped DB extr
 - admin table bootstrap: admin-specific durable tables are still planned unless explicitly covered by runtime/auth storage
 - command log table ownership: migrations create schema-qualified `command_log.commands`; runtime wiring is available behind `EXTERNAL_API_COMMAND_LOG_MODE`
 - read-model bootstrap: planned under `read_model`
-- projection DB bootstrap: Docker starts `projection-postgres` and the dev migration runner applies the same forward migrations to it for the current submit-projection proof slice
+- boundary/projection DB bootstrap: Docker starts `boundary-postgres` and `projection-postgres`, and the dev migration runner applies the same forward migrations to both proof-slice databases
 
 Runtime, boundary, and auth persistence now targets explicit domain schemas instead of relying on root-level tables or JDBC `currentSchema` placement. Migration files represent the live table shapes, and local startup applies migrations before the full stack starts. Docker/local runtime uses `RUNTIME_DB_BOOTSTRAP_MODE=validate` by default so Postgres-backed stores fail fast if migrated objects are missing. `compat` remains available as a local repair fallback.
 
 `RUNTIME_PROJECTION_POSTGRES_JDBC_URL` enables a physical projection store. When set, `PostgresRuntimePersistence` keeps canonical append/reference/auth access on `RUNTIME_POSTGRES_JDBC_URL` and routes submit-result/order/execution/trade/runtime-event projection reads and writes through the projection JDBC pool. The stream-ack projector reads canonical payloads from the runtime DB, writes normalized projection rows to the projection DB, and advances projection-local watermarks. When unset, both paths share the runtime data source for backward compatibility.
+
+`RUNTIME_DB_URL` points boundary/idempotency/stream-intake storage at `boundary-postgres` in local Docker. This keeps JetStream publish acceptance metadata and scoped idempotency rows off the canonical runtime database while preserving `202` only after durable JetStream publish acknowledgement.
 
 ## Current implementation checkpoint
 
@@ -84,6 +86,7 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - `PostgresRuntimePersistence` can route normalized projection tables and watermarks to `RUNTIME_PROJECTION_POSTGRES_JDBC_URL` while keeping canonical command results and venue events on `RUNTIME_POSTGRES_JDBC_URL`.
 - `PostgresRuntimePersistence` uses explicit `auth.*` table names for roles and actor-role bindings.
 - `PostgresIdempotencyStore` uses explicit `boundary.api_idempotency_records`.
+- `StreamCommandIntake` uses `RUNTIME_DB_URL`, which targets `boundary-postgres` in local Docker.
 - `PostgresCommandCaptureStore` uses explicit `boundary.api_command_captures`.
 - `CommandLogCommandCaptureStore` can append inbound API commands to `command_log.commands` behind `EXTERNAL_API_COMMAND_LOG_MODE`.
 - Schema-name overrides are limited to simple identifiers before SQL interpolation.
@@ -92,7 +95,7 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - Clean-stack verification passed with `make dev-db-migrate` against local Postgres on 2026-06-04.
 - `PostgresSchemaMigrationIntegrationTest` verifies migration ledger entries, schema-owned table placement, validation-mode store construction, and command-capture writes with a JDBC URL that does not set `currentSchema`.
 - Full local-stack smoke passed after applying migrations, including boundary command capture and `/api/v1` submit/cancel flow.
-- `make dev-up` and `make dev-reset` start canonical and projection Postgres services, apply migrations, then start the full stack.
+- `make dev-up` and `make dev-reset` start canonical, boundary, and projection Postgres services, apply migrations, then start the full stack.
 - Docker/local runtime defaults to schema validation mode.
 - Service-side compatibility bootstrap remains available through `RUNTIME_DB_BOOTSTRAP_MODE=compat`, not as the local default.
 
