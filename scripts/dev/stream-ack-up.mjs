@@ -78,32 +78,40 @@ async function bootstrapCommandStream() {
     console.log(`JetStream stream ${stream} already exists; leaving existing stream configuration in place.`);
     return;
   }
-  await run("docker", [
-    "compose",
-    "run",
-    "-T",
-    "--rm",
-    "nats-box",
-    "nats",
-    "--server",
-    "nats://nats:4222",
-    "stream",
-    "add",
-    stream,
-    "--subjects",
-    subjects,
-    "--storage",
-    "file",
-    "--retention",
-    "limits",
-    "--discard",
-    "new",
-    "--max-bytes",
-    maxBytes,
-    "--dupe-window",
-    env("STREAM_ACK_COMMAND_STREAM_DUPE_WINDOW", "2m"),
-    "--defaults",
-  ]);
+  try {
+    await run("docker", [
+      "compose",
+      "run",
+      "-T",
+      "--rm",
+      "nats-box",
+      "nats",
+      "--server",
+      "nats://nats:4222",
+      "stream",
+      "add",
+      stream,
+      "--subjects",
+      subjects,
+      "--storage",
+      "file",
+      "--retention",
+      "limits",
+      "--discard",
+      "new",
+      "--max-bytes",
+      maxBytes,
+      "--dupe-window",
+      env("STREAM_ACK_COMMAND_STREAM_DUPE_WINDOW", "2m"),
+      "--defaults",
+    ]);
+  } catch (error) {
+    if (await streamExists(stream)) {
+      console.warn(`JetStream stream ${stream} exists after create returned nonzero; continuing.`);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function streamExists(stream) {
