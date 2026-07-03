@@ -9,6 +9,7 @@ Primary plan:
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
+- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 
 Architecture checkpoint:
 - D-037 reframes stream-ack as the high-throughput path for a deterministic simulated market venue.
@@ -173,7 +174,7 @@ Drain-accounted worker sweep:
 | A35 | Canonical append store | Done | architecture | Submit workers append canonical command results and venue events before ack; normalized submit writes moved out of the worker path |
 | A36 | Async market-simulation projections | In progress | architecture | `platform-projector-0` and `platform-projector-1` materialize normalized submit read tables from canonical facts with partition-scoped watermarks; broader order/trade/status/timeline/leaderboard/run projections remain follow-up |
 | A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
-| A38 | DigitalOcean benchmark harness | Deferred | validation | Deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
+| A38 | DigitalOcean benchmark harness | Planned | validation | Test intent and evidence plan documented; next slice is OpenTofu + host-control scaffold for deployed API/workers/projectors/engine/NATS/Postgres evidence |
 
 ## Milestone Checklist
 
