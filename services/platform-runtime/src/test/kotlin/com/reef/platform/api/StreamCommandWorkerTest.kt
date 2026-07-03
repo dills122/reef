@@ -145,6 +145,70 @@ class StreamCommandWorkerTest {
     }
 
     @Test
+    fun submitWorkerRepairsPublishedMarkerBeforeAckingDelivery() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val marker = RecordingPublicationMarker()
+        var repairedBeforeAck = false
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-marker", "ord-worker-marker"),
+            streamSequence = 77,
+            onAck = {
+                repairedBeforeAck = marker.marked["cmd-worker-marker"] == 77L
+            }
+        )
+        val worker = StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            publicationMarker = marker,
+            partition = 5
+        )
+
+        val processed = worker.processOnce()
+
+        assertEquals(1, processed)
+        assertEquals(1, delivery.ackCalls)
+        assertTrue(repairedBeforeAck)
+        assertEquals(77L, marker.marked["cmd-worker-marker"])
+    }
+
+    @Test
+    fun submitWorkerNaksDeliveryWhenPublicationMarkerCannotRepair() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-marker-missing", "ord-worker-marker-missing"),
+            streamSequence = 78
+        )
+        val worker = StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            publicationMarker = MissingPublicationMarker,
+            partition = 5
+        )
+
+        val processed = worker.processOnce()
+
+        assertEquals(1, processed)
+        assertEquals(0, delivery.ackCalls)
+        assertEquals(1, delivery.nakCalls)
+    }
+
+    @Test
     fun canonicalProjectorMaterializesNormalizedSubmitOutcomesAndWatermarks() {
         StreamCommandWorkerMetrics.resetForTests()
         CanonicalProjectionMetrics.resetForTests()
@@ -379,6 +443,19 @@ private class FixedTelemetrySource(
     private val snapshot: StreamCommandConsumerSnapshot
 ) : StreamCommandTelemetrySource {
     override fun consumerSnapshot(): StreamCommandConsumerSnapshot = snapshot
+}
+
+private class RecordingPublicationMarker : StreamCommandPublicationMarker {
+    val marked = mutableMapOf<String, Long>()
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        marked[commandId] = streamSequence
+        return true
+    }
+}
+
+private object MissingPublicationMarker : StreamCommandPublicationMarker {
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean = false
 }
 
 private class RecordingDelivery(

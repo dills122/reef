@@ -39,6 +39,7 @@ interface StreamCommandTelemetrySource {
 class StreamCommandWorker(
     private val source: StreamCommandSource,
     private val api: PlatformApi,
+    private val publicationMarker: StreamCommandPublicationMarker? = null,
     private val partition: Int = -1,
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_POLL_MS", 25L, min = 1L),
@@ -117,11 +118,31 @@ class StreamCommandWorker(
 
         preparedSubmits.forEach { prepared ->
             try {
+                markPublished(prepared)
+            } catch (ex: Exception) {
+                safeNak(prepared.delivery)
+                StreamCommandWorkerMetrics.recordFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
+                return@forEach
+            }
+
+            try {
                 prepared.delivery.ack()
                 StreamCommandWorkerMetrics.recordCompleted(partition, prepared.delivery.streamSequence)
             } catch (ex: Exception) {
                 StreamCommandWorkerMetrics.recordAckFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
             }
+        }
+    }
+
+    private fun markPublished(prepared: PreparedStreamSubmit) {
+        val marker = publicationMarker ?: return
+        val marked = HotPathMetrics.time("streamWorker.markPublished") {
+            marker.markPublishedByCommandId(prepared.outcome.commandId, prepared.delivery.streamSequence)
+        }
+        if (!marked) {
+            throw IllegalStateException(
+                "stream_worker_mark_published_missing commandId=${prepared.outcome.commandId} streamSequence=${prepared.delivery.streamSequence}"
+            )
         }
     }
 

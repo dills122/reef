@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
@@ -14,8 +15,10 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicLong
 import javax.sql.DataSource
+import kotlin.concurrent.thread
 import kotlin.math.max
 
 data class StreamCommandConfig(
@@ -76,7 +79,11 @@ sealed class StreamCommandReservation {
     data class Conflict(val existingPayloadHash: String) : StreamCommandReservation()
 }
 
-interface StreamCommandIntakeStore {
+interface StreamCommandPublicationMarker {
+    fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean
+}
+
+interface StreamCommandIntakeStore : StreamCommandPublicationMarker {
     fun reserve(envelope: StreamCommandEnvelope, reference: StreamCommandReference): StreamCommandReservation
     fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean
     fun findByCommandId(commandId: String): StreamCommandReference?
@@ -121,6 +128,16 @@ class InMemoryStreamCommandIntakeStore : StreamCommandIntakeStore {
     override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean {
         val key = key(scope, idempotencyKey)
         synchronized(this) {
+            val existing = byIdempotency[key] ?: return false
+            val published = existing.reference.copy(streamSequence = streamSequence)
+            byIdempotency[key] = existing.copy(reference = published)
+            return true
+        }
+    }
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        synchronized(this) {
+            val key = byCommandId[commandId] ?: return false
             val existing = byIdempotency[key] ?: return false
             val published = existing.reference.copy(streamSequence = streamSequence)
             byIdempotency[key] = existing.copy(reference = published)
@@ -228,6 +245,24 @@ class PostgresStreamCommandIntakeStore(
         }
     }
 
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE ${names.streamCommandIntake}
+                SET stream_sequence = CASE WHEN stream_sequence = 0 THEN ? ELSE stream_sequence END,
+                    published = TRUE,
+                    published_at = COALESCE(published_at, NOW())
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setLong(1, streamSequence)
+                ps.setString(2, commandId)
+                return ps.executeUpdate() > 0
+            }
+        }
+    }
+
     override fun findByCommandId(commandId: String): StreamCommandReference? {
         return findExistingByCommandId(commandId)?.reference
     }
@@ -293,6 +328,43 @@ class PostgresStreamCommandIntakeStore(
         val payloadHash: String,
         val reference: StreamCommandReference
     )
+}
+
+class AsyncStreamCommandPublicationMarker(
+    private val delegate: StreamCommandPublicationMarker,
+    workerCount: Int = RuntimeEnv.int("STREAM_ACK_MARK_PUBLISHED_WORKERS", 2, min = 1),
+    queueCapacity: Int = RuntimeEnv.int("STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY", 100_000, min = 1)
+) : StreamCommandPublicationMarker {
+    private data class PublishedCommand(val commandId: String, val streamSequence: Long)
+
+    private val queue = LinkedBlockingQueue<PublishedCommand>(queueCapacity)
+
+    init {
+        repeat(workerCount) { index ->
+            thread(name = "reef-stream-published-marker-$index", isDaemon = true) {
+                while (true) {
+                    val next = queue.take()
+                    try {
+                        HotPathMetrics.time("api.streamAck.markPublished.asyncFlush") {
+                            delegate.markPublishedByCommandId(next.commandId, next.streamSequence)
+                        }
+                    } catch (ex: Exception) {
+                        System.err.println(
+                            "stream_async_mark_published_failed commandId=${next.commandId} streamSequence=${next.streamSequence} message=${ex.message ?: "unknown"}"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        val queued = queue.offer(PublishedCommand(commandId, streamSequence))
+        if (queued) return true
+        return HotPathMetrics.time("api.streamAck.markPublished.queueFullSync") {
+            delegate.markPublishedByCommandId(commandId, streamSequence)
+        }
+    }
 }
 
 data class StreamPublishAck(val streamName: String, val streamSequence: Long)

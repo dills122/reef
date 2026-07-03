@@ -381,9 +381,11 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     const reserve = streamAckPhases["api.streamAck.reserve"];
     const publishAck = streamAckPhases["api.streamAck.publishAck"];
     const markPublished = streamAckPhases["api.streamAck.markPublished"];
-    if (total || reserve || publishAck || markPublished) {
+    const enqueuePublished = streamAckPhases["api.streamAck.enqueuePublished"];
+    const asyncFlush = streamAckPhases["api.streamAck.markPublished.asyncFlush"];
+    if (total || reserve || publishAck || markPublished || enqueuePublished) {
       console.log(
-        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)}`,
+        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
       );
     }
   } catch (error) {

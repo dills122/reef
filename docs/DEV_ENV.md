@@ -186,6 +186,9 @@ make dev-up-stream-ack
 - `STREAM_ACK_INTAKE_STORE=postgres`
 - `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
 - `STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100`
+- `STREAM_ACK_MARK_PUBLISHED_MODE=async`
+- `STREAM_ACK_MARK_PUBLISHED_WORKERS=2`
+- `STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY=100000`
 - `STREAM_ACK_WORKER_ENABLED=true`
 - `STREAM_ACK_WORKER_0_PARTITIONS=0,1,2,3,4,5,6,7`
 - `STREAM_ACK_WORKER_1_PARTITIONS=8,9,10,11,12,13,14,15`
@@ -211,6 +214,8 @@ make dev-up-stream-ack
 In this mode `platform-api` returns `202` only after JetStream publish acknowledgment. The worker containers expose health and internal metrics endpoints, but public command intake routes are not mounted in worker or projector roles. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
 The API container owns the larger `stream-intake` boundary DB pool because it is the only role that accepts public stream commands. Worker and projector roles keep tiny `stream-intake` pools for startup/internal compatibility while using their dedicated canonical/projection pools for drain and read-model work.
+
+In stream-ack mode, `STREAM_ACK_MARK_PUBLISHED_MODE=async` moves the post-publish boundary metadata update out of the synchronous response path after JetStream durable publish acknowledgement. Stream workers also repair the same metadata by `commandId` after canonical commit and before JetStream ack, so an API crash after publish still has a durable-message repair path. Set `STREAM_ACK_MARK_PUBLISHED_MODE=sync` to force the API to update boundary metadata before returning.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 

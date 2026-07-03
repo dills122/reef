@@ -22,6 +22,18 @@ private data class CachedStreamCommandHealthSnapshot(
     val snapshot: StreamCommandHealthSnapshot
 )
 
+private fun streamCommandPublicationMarker(
+    store: StreamCommandIntakeStore?,
+    mode: String,
+    runtimeRole: PlatformRuntimeRole
+): StreamCommandPublicationMarker? {
+    val marker = store ?: return null
+    return when (mode.trim().lowercase()) {
+        "async" -> if (runtimeRole == PlatformRuntimeRole.Api) AsyncStreamCommandPublicationMarker(marker) else marker
+        else -> marker
+    }
+}
+
 enum class PlatformRuntimeRole(
     val configValue: String,
     val publicHttpEnabled: Boolean,
@@ -59,6 +71,7 @@ class PlatformHttpServer(
     private val streamCommandPublisher: StreamCommandPublisher? = null,
     private val streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
     private val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
+    private val streamCommandMarkPublishedMode: String = RuntimeEnv.string("STREAM_ACK_MARK_PUBLISHED_MODE", "sync"),
     private val streamCommandMaxStorageUtilization: Double =
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
     private val streamCommandBackpressureSampleMs: Long =
@@ -96,6 +109,8 @@ class PlatformHttpServer(
     @Volatile
     private var streamBackpressureSnapshot: CachedStreamCommandHealthSnapshot? = null
     private val streamBackpressureSnapshotLock = Any()
+    private val streamCommandPublicationMarker: StreamCommandPublicationMarker? =
+        streamCommandPublicationMarker(streamCommandIntakeStore, streamCommandMarkPublishedMode, runtimeRole)
 
     constructor(
         port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -115,6 +130,7 @@ class PlatformHttpServer(
         streamCommandPublisher = deps.streamCommandPublisher,
         streamCommandHealthCheck = deps.streamCommandHealthCheck,
         streamCommandConfig = deps.streamCommandConfig,
+        streamCommandMarkPublishedMode = deps.streamCommandMarkPublishedMode,
         streamCommandMaxStorageUtilization = deps.streamCommandMaxStorageUtilization,
         streamCommandBackpressureSampleMs = deps.streamCommandBackpressureSampleMs,
         commandProcessingMode = deps.commandProcessingMode
@@ -824,15 +840,26 @@ class PlatformHttpServer(
                 writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", errorMessage))
                 return
             }
-            HotPathMetrics.time("api.streamAck.markPublished") {
-                intakeStore.markPublished(envelope.scope, envelope.idempotencyKey, ack.streamSequence)
-            }
+            markStreamCommandPublished(envelope.commandId, ack.streamSequence)
             val publishedReference = envelope.reference(ack.streamName, ack.streamSequence)
             HotPathMetrics.time("api.streamAck.writeResponse") {
                 writeJson(exchange, 202, StreamCommandResponse.acceptedJson(publishedReference))
             }
         } finally {
             HotPathMetrics.record("api.streamAck.total", System.nanoTime() - started)
+        }
+    }
+
+    private fun markStreamCommandPublished(commandId: String, streamSequence: Long) {
+        val marker = streamCommandPublicationMarker ?: return
+        if (streamCommandMarkPublishedMode.trim().lowercase() == "async") {
+            HotPathMetrics.time("api.streamAck.enqueuePublished") {
+                marker.markPublishedByCommandId(commandId, streamSequence)
+            }
+            return
+        }
+        HotPathMetrics.time("api.streamAck.markPublished") {
+            marker.markPublishedByCommandId(commandId, streamSequence)
         }
     }
 
@@ -1139,6 +1166,7 @@ class PlatformHttpServer(
             "storageUtilization" to snapshot.storageUtilization,
             "maxStorageUtilization" to streamCommandMaxStorageUtilization,
             "backpressureSampleMs" to streamCommandBackpressureSampleMs,
+            "markPublishedMode" to streamCommandMarkPublishedMode,
             "publishAckLastMs" to snapshot.publishAckLastMs,
             "publishAckMaxMs" to snapshot.publishAckMaxMs,
             "checkedAt" to snapshot.checkedAt.toString(),
@@ -1228,6 +1256,7 @@ class PlatformHttpServer(
             StreamCommandWorker(
                 source = source,
                 api = workerApi,
+                publicationMarker = streamCommandIntakeStore,
                 partition = partition,
                 batchSize = streamCommandWorkerBatchSize,
                 pollIntervalMs = streamCommandWorkerPollMs,
@@ -1319,6 +1348,7 @@ data class ServerBoundaryDeps(
     val streamCommandPublisher: StreamCommandPublisher? = null,
     val streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
     val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
+    val streamCommandMarkPublishedMode: String = RuntimeEnv.string("STREAM_ACK_MARK_PUBLISHED_MODE", "sync"),
     val streamCommandMaxStorageUtilization: Double =
         RuntimeEnv.string("STREAM_ACK_MAX_STORAGE_UTILIZATION", "0.95").toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 0.95,
     val streamCommandBackpressureSampleMs: Long =
