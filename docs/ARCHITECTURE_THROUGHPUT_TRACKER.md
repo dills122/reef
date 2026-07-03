@@ -347,6 +347,17 @@ Latest stream-ack notes:
   - `2500` nominal rps: `69479` accepted, `2230.22 accepted/sec`, `1946.27 completed/sec`, p95 `136.18ms`, p99 `170.69ms`, trace pass `84%`, worker failures `0`.
   - `5000` nominal rps: `66993` accepted, `2157.24 accepted/sec`, `2003.09 completed/sec`, p95 `147.35ms`, p99 `180.99ms`, trace pass `75%`, worker failures `0`.
 - The 16-instrument run used `8` active stream partitions; partition `6` was hottest at `51830` commands. Runtime peaked near `354%` CPU, Postgres near `303%` CPU, and DB pool waiters peaked at `51`, so the next bottleneck is runtime/Postgres contention plus partition skew under worker load, not JetStream publish acknowledgement.
+- Stream workers now prepare fetched submit batches, persist the batch with one runtime persistence call, then ack each JetStream delivery after the batch commit path returns. The stream-ack dev profile also enables a dedicated `stream-runtime` DB pool (`max=24`, `minIdle=8`) and raises the worker batch size to `250`.
+- Batch persistence validation on `REEF_COMMANDS_BATCH_FULL`:
+  - `1000` nominal rps: `28464` accepted/completed, `916.12/sec`, p95 `80.53ms`, p99 `156.81ms`, trace pass `100%`, worker failures `0`.
+  - `2500` nominal rps: `72598` accepted/completed, `2333.84/sec`, p95 `112.51ms`, p99 `153.21ms`, trace pass `97%`, worker failures `0`.
+  - `5000` nominal rps: `77861` accepted, `77776` worker completed, `2500.20 completed/sec`, p95 `128.06ms`, p99 `182.96ms`, trace pass `95%`, worker failures `0`.
+- The batch run moved the processed ceiling from roughly `2000/sec` to `2500/sec` and improved trace completion at high load, but it still exposed `stream-intake` pool waiters and partition skew. The dev profile now gives `stream-intake` its own pool (`max=32`, `minIdle=8`) and the stream-ack stress target generates a 64-instrument session config so deterministic routing has enough independent instrument keys to exercise all partitions.
+- Spread-profile validation on `REEF_COMMANDS_SPREAD_FULL`:
+  - `1000` nominal rps: `28887` accepted/completed, `870.39/sec`, p95 `49.66ms`, p99 `61.55ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
+  - `2500` nominal rps: `74187` accepted/completed, `2222.68/sec`, p95 `61.97ms`, p99 `115.59ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
+  - `5000` nominal rps: `104431` accepted/completed, `3106.74/sec`, p95 `101.58ms`, p99 `136.16ms`, trace pass `96%`, active partitions `16`, worker failures `0`.
+- Net result: the durable stream-ack processed ceiling moved from about `2000/sec` to about `3100/sec` on the local stack while preserving `202`-after-publish and DB-before-stream-ack semantics. Remaining bottlenecks are runtime/Postgres CPU and batched persistence cost (`~28ms` average per `persistSubmitOutcomes` batch in the spread run), not JetStream publish durability. Intake-pool pressure improved materially (`maxDbPoolWaiters` dropped from `56` to `14`).
 
 Exit criteria:
 - `202` is returned only after JetStream durable publish ack.

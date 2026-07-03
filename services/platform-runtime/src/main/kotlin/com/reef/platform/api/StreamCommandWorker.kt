@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import io.nats.client.JetStreamSubscription
 import io.nats.client.Nats
 import io.nats.client.Options
@@ -66,35 +67,52 @@ class StreamCommandWorker(
             source.fetch(batchSize, fetchTimeout)
         }
         StreamCommandWorkerMetrics.recordFetched(partition, deliveries)
-        deliveries.forEach { delivery -> process(delivery) }
+        processBatch(deliveries)
         return deliveries.size
     }
 
-    private fun process(delivery: StreamCommandDelivery) {
-        if (commandType(delivery.subject) != "SubmitOrder") {
-            delivery.term()
-            StreamCommandWorkerMetrics.recordUnsupported(partition)
+    private fun processBatch(deliveries: List<StreamCommandDelivery>) {
+        val preparedSubmits = mutableListOf<PreparedStreamSubmit>()
+        deliveries.forEach { delivery ->
+            if (commandType(delivery.subject) != "SubmitOrder") {
+                delivery.term()
+                StreamCommandWorkerMetrics.recordUnsupported(partition)
+                return@forEach
+            }
+
+            try {
+                val outcome = HotPathMetrics.time("streamWorker.prepareSubmitOrder") {
+                    api.prepareSubmitOrder(delivery.payloadJson)
+                }
+                preparedSubmits.add(PreparedStreamSubmit(delivery, outcome))
+            } catch (ex: Exception) {
+                safeNak(delivery)
+                StreamCommandWorkerMetrics.recordFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
+            }
+        }
+
+        if (preparedSubmits.isEmpty()) return
+
+        try {
+            HotPathMetrics.time("streamWorker.persistSubmitOutcomes") {
+                api.persistSubmitOutcomes(preparedSubmits.map { it.outcome })
+            }
+        } catch (ex: Exception) {
+            val error = ex.message ?: ex::class.simpleName ?: "unknown"
+            preparedSubmits.forEach { prepared ->
+                safeNak(prepared.delivery)
+                StreamCommandWorkerMetrics.recordFailed(partition, error)
+            }
             return
         }
 
-        try {
-            val outcome = HotPathMetrics.time("streamWorker.prepareSubmitOrder") {
-                api.prepareSubmitOrder(delivery.payloadJson)
+        preparedSubmits.forEach { prepared ->
+            try {
+                prepared.delivery.ack()
+                StreamCommandWorkerMetrics.recordCompleted(partition, prepared.delivery.streamSequence)
+            } catch (ex: Exception) {
+                StreamCommandWorkerMetrics.recordAckFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
             }
-            HotPathMetrics.time("streamWorker.persistSubmitOutcome") {
-                api.persistSubmitOutcomes(listOf(outcome))
-            }
-        } catch (ex: Exception) {
-            safeNak(delivery)
-            StreamCommandWorkerMetrics.recordFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
-            return
-        }
-
-        try {
-            delivery.ack()
-            StreamCommandWorkerMetrics.recordCompleted(partition, delivery.streamSequence)
-        } catch (ex: Exception) {
-            StreamCommandWorkerMetrics.recordAckFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
         }
     }
 
@@ -109,6 +127,11 @@ class StreamCommandWorker(
         return subject.substringAfterLast('.', missingDelimiterValue = "")
     }
 }
+
+private data class PreparedStreamSubmit(
+    val delivery: StreamCommandDelivery,
+    val outcome: PersistableSubmitOutcome
+)
 
 class NatsStreamCommandSource(
     private val natsUrl: String = RuntimeEnv.string("STREAM_ACK_NATS_URL", "nats://localhost:4222"),

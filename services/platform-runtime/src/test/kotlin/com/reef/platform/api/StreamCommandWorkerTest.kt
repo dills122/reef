@@ -71,6 +71,47 @@ class StreamCommandWorkerTest {
     }
 
     @Test
+    fun submitWorkerPersistsFetchedSubmitBatchBeforeAckingDeliveries() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val first = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-batch-1", "ord-worker-batch-1"),
+            streamSequence = 10
+        )
+        val second = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-batch-2", "ord-worker-batch-2"),
+            streamSequence = 11
+        )
+        val worker = StreamCommandWorker(
+            source = FixedBatchStreamCommandSource(first, second),
+            api = api,
+            partition = 3
+        )
+
+        val processed = worker.processOnce()
+
+        assertEquals(2, processed)
+        assertEquals(2, gateway.submitCalls)
+        assertEquals(1, first.ackCalls)
+        assertEquals(1, second.ackCalls)
+        assertEquals(0, first.nakCalls + second.nakCalls)
+        assertNotNull(persistence.submitResult("cmd-worker-batch-1"))
+        assertNotNull(persistence.submitResult("cmd-worker-batch-2"))
+        val partition = StreamCommandWorkerMetrics.snapshot().partitions.single()
+        assertEquals(3, partition.partition)
+        assertEquals(2, partition.fetched)
+        assertEquals(2, partition.completed)
+        assertEquals(11, partition.lastCompletedStreamSequence)
+    }
+
+    @Test
     fun unsupportedStreamCommandIsTerminated() {
         StreamCommandWorkerMetrics.resetForTests()
         val persistence = seededPersistence()
@@ -200,6 +241,18 @@ private class FixedStreamCommandSource(
         if (delivered) return emptyList()
         delivered = true
         return listOf(delivery)
+    }
+}
+
+private class FixedBatchStreamCommandSource(
+    private vararg val deliveries: StreamCommandDelivery
+) : StreamCommandSource {
+    private var delivered = false
+
+    override fun fetch(batchSize: Int, timeout: Duration): List<StreamCommandDelivery> {
+        if (delivered) return emptyList()
+        delivered = true
+        return deliveries.toList()
     }
 }
 

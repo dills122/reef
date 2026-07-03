@@ -38,6 +38,8 @@ class PlatformHttpServer(
     private val streamCommandWorkerBatchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
     private val streamCommandWorkerPollMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_POLL_MS", 25L, min = 1L),
     private val streamCommandWorkerFetchTimeoutMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", 200L, min = 1L),
+    private val streamCommandWorkerDedicatedRuntimePoolEnabled: Boolean =
+        RuntimeEnv.bool("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -379,6 +381,15 @@ class PlatformHttpServer(
         return PlatformApi(
             OrderApplicationService(
                 runtimePersistence = defaultRuntimePersistence("async-runtime")
+            )
+        )
+    }
+
+    private fun streamCommandWorkerApi(): PlatformApi {
+        if (!streamCommandWorkerDedicatedRuntimePoolEnabled) return api
+        return PlatformApi(
+            OrderApplicationService(
+                runtimePersistence = defaultRuntimePersistence("stream-runtime")
             )
         )
     }
@@ -1013,6 +1024,7 @@ class PlatformHttpServer(
             "batchSize" to streamCommandWorkerBatchSize,
             "pollIntervalMs" to streamCommandWorkerPollMs,
             "fetchTimeoutMs" to streamCommandWorkerFetchTimeoutMs,
+            "dedicatedRuntimePoolEnabled" to streamCommandWorkerDedicatedRuntimePoolEnabled,
             "metrics" to mapOf(
                 "fetched" to stats.fetched,
                 "completed" to stats.completed,
@@ -1076,6 +1088,7 @@ class PlatformHttpServer(
             System.err.println("stream_command_worker_unavailable reason=no_partitions_configured")
             return
         }
+        val workerApi = streamCommandWorkerApi()
         partitions.forEach { partition ->
             val source = StreamCommandWorkerFactory.sourceForPartition(streamCommandConfig, partition)
             if (source is StreamCommandTelemetrySource) {
@@ -1083,7 +1096,7 @@ class PlatformHttpServer(
             }
             StreamCommandWorker(
                 source = source,
-                api = api,
+                api = workerApi,
                 partition = partition,
                 batchSize = streamCommandWorkerBatchSize,
                 pollIntervalMs = streamCommandWorkerPollMs,

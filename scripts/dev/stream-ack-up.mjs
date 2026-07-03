@@ -13,10 +13,15 @@ setDefault("STREAM_ACK_INTAKE_STORE", "postgres");
 setDefault("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", "2000");
 setDefault("STREAM_ACK_WORKER_ENABLED", "true");
 setDefault("STREAM_ACK_WORKER_PARTITIONS", "all");
-setDefault("STREAM_ACK_WORKER_BATCH_SIZE", "100");
+setDefault("STREAM_ACK_WORKER_BATCH_SIZE", "250");
 setDefault("STREAM_ACK_WORKER_POLL_MS", "10");
 setDefault("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", "200");
 setDefault("STREAM_ACK_WORKER_ACK_WAIT_MS", "30000");
+setDefault("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", "true");
+setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_MAX", "32");
+setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE", "8");
+setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MAX", "24");
+setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE", "8");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["stream-ack"]));
 
 console.log("stream-ack runtime settings:");

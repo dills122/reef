@@ -180,7 +180,12 @@ make dev-up-stream-ack
 - `STREAM_ACK_MAX_STORAGE_UTILIZATION=0.95`
 - `STREAM_ACK_WORKER_ENABLED=true`
 - `STREAM_ACK_WORKER_PARTITIONS=all`
-- `STREAM_ACK_WORKER_BATCH_SIZE=100`
+- `STREAM_ACK_WORKER_BATCH_SIZE=250`
+- `STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true`
+- `RUNTIME_DB_POOL_STREAM_INTAKE_MAX=32`
+- `RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE=8`
+- `RUNTIME_DB_POOL_STREAM_RUNTIME_MAX=24`
+- `RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE=8`
 
 In this mode the API returns `202` only after JetStream publish acknowledgment. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
@@ -188,7 +193,7 @@ The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the scri
 
 Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`.
 
-Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The first worker slice consumes `SubmitOrder` subjects partition-by-partition, persists the canonical runtime result/events, and acknowledges JetStream only after the DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
+Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, persists the canonical runtime result/events in one batch call, and acknowledges JetStream deliveries only after the DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 
@@ -200,7 +205,7 @@ make dev-stress-stream-ack
 
 This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after global and per-partition deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
-The stream-ack stress target uses `packages/scenario-definitions/stream-ack-submit-stress.yaml` so submit traffic spreads across 16 instruments and therefore multiple deterministic stream partitions. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
+The stream-ack stress target generates a 64-instrument session config under `/tmp/reef-stream-ack-stress` by default so submit traffic has enough independent routing keys to exercise deterministic stream partitions. Set `DEV_STRESS_SESSION_CONFIG` to run a fixed session file instead. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`

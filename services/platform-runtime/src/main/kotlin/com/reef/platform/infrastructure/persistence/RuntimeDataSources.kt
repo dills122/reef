@@ -67,6 +67,8 @@ object RuntimeDataSources {
         return when (poolName) {
             "command-log", "default" -> globalDefault
             "runtime", "async-runtime" -> globalDefault.coerceAtMost(16)
+            "stream-intake" -> globalDefault.coerceAtLeast(32)
+            "stream-runtime" -> globalDefault.coerceAtLeast(24)
             "command-capture", "idempotency" -> globalDefault.coerceAtMost(8)
             "admin-runtime" -> globalDefault.coerceAtMost(4)
             else -> globalDefault.coerceAtMost(8)
@@ -78,6 +80,7 @@ object RuntimeDataSources {
             "default" -> globalDefault
             "command-log" -> globalDefault.coerceAtMost(8)
             "runtime", "async-runtime" -> globalDefault.coerceAtMost(4)
+            "stream-intake", "stream-runtime" -> globalDefault.coerceAtLeast(8)
             else -> globalDefault.coerceAtMost(2)
         }
         return roleDefault.coerceIn(0, maximumPoolSize)
