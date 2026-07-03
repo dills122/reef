@@ -78,6 +78,9 @@ class PlatformHttpServerBoundaryTest {
     fun apiV1SubmitReplaysFirstResponseForSameIdempotencyKey() {
         val server = testServerWithGateway(EchoOrderEngineGateway())
         try {
+            val reset = post(server.address.port, "/internal/perf/hot-path", emptyMap(), "")
+            assertEquals(200, reset.status)
+
             val headers = mapOf(
                 "X-Client-Id" to "client-1",
                 "Idempotency-Key" to "idem-1"
@@ -136,6 +139,13 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, second.status)
             assertEquals(first.body, second.body)
             assertContains(second.body, "\"orderId\":\"ord-first\"")
+
+            val hotPath = get(server.address.port, "/internal/perf/hot-path")
+            assertEquals(200, hotPath.status)
+            assertContains(hotPath.body, "\"api.mutation.total\"")
+            assertContains(hotPath.body, "\"api.parse.submitOrder\"")
+            assertContains(hotPath.body, "\"runtime.submitOrder.total\"")
+            assertContains(hotPath.body, "\"api.writeResponse\"")
         } finally {
             server.stop(0)
         }

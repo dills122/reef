@@ -42,6 +42,7 @@ type Config struct {
 	Workers             int
 	RatePerSecond       int
 	RateSchedule        string
+	RateQueueDepth      int
 	RequestTimeout      time.Duration
 	SubmitPct           int
 	ModifyPct           int
@@ -128,6 +129,28 @@ type summary struct {
 	Quality                qualitySummary            `json:"quality"`
 	LatencyMs              latencySummary            `json:"latencyMs"`
 	TraceChecks            traceChecks               `json:"traceChecks"`
+	LoadSchedule           loadScheduleSummary       `json:"loadSchedule"`
+}
+
+type loadScheduleSummary struct {
+	Mode                  string  `json:"mode"`
+	TargetRatePerSecond   int     `json:"targetRatePerSecond"`
+	TargetRequests        int64   `json:"targetRequests"`
+	Scheduled             int64   `json:"scheduled"`
+	Enqueued              int64   `json:"enqueued"`
+	Dropped               int64   `json:"dropped"`
+	Completed             int64   `json:"completed"`
+	ScheduleDeficit       int64   `json:"scheduleDeficit"`
+	CompletionDeficit     int64   `json:"completionDeficit"`
+	EnqueuedPerSecond     float64 `json:"enqueuedPerSecond"`
+	CompletedPerSecond    float64 `json:"completedPerSecond"`
+	CompletionToTargetPct float64 `json:"completionToTargetPct"`
+}
+
+type loadScheduleCounters struct {
+	scheduled int64
+	enqueued  int64
+	dropped   int64
 }
 
 type profileSummary struct {
@@ -229,8 +252,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	started := time.Now().UTC()
-	sessionID := fmt.Sprintf("load-%d", started.UnixNano())
+	sessionCreatedAt := time.Now().UTC()
+	sessionID := fmt.Sprintf("load-%d", sessionCreatedAt.UnixNano())
 	if cfg.RunID == "" {
 		cfg.RunID = sessionID
 	}
@@ -242,6 +265,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	started := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Duration)
 	defer cancel()
 
@@ -250,8 +274,9 @@ func main() {
 	traceSeen := sync.Map{}
 	var wg sync.WaitGroup
 	rateCh := make(chan struct{}, rateChannelDepth(cfg))
+	rateCounters := &loadScheduleCounters{}
 	if cfg.RatePerSecond > 0 {
-		go tokenFeeder(ctx, cfg.RatePerSecond, cfg.RateSchedule, rateCh)
+		go tokenFeeder(ctx, cfg.RatePerSecond, cfg.RateSchedule, rateCh, rateCounters)
 	}
 	if cfg.Tail {
 		go tailLoop(ctx, client, cfg)
@@ -277,7 +302,7 @@ func main() {
 	}
 
 	finished := time.Now().UTC()
-	report := buildSummary(sessionID, started, finished, cfg, all)
+	report := buildSummary(sessionID, started, finished, cfg, all, rateCounters.summary(cfg, len(all), finished.Sub(started).Seconds()))
 	report.TraceChecks = runTraceChecks(client, cfg, &traceSeen)
 	printSummary(report)
 	if cfg.ReportOut != "" {
@@ -298,6 +323,7 @@ func parseConfig() (Config, error) {
 	flag.IntVar(&cfg.Workers, "workers", cfg.Workers, "concurrent workers")
 	flag.IntVar(&cfg.RatePerSecond, "rate", cfg.RatePerSecond, "global request rate per second (0 = unthrottled)")
 	flag.StringVar(&cfg.RateSchedule, "rate-schedule", cfg.RateSchedule, "rate scheduler: drop or precise")
+	flag.IntVar(&cfg.RateQueueDepth, "rate-queue-depth", cfg.RateQueueDepth, "rate-token queue depth (0 = scheduler default)")
 	flag.DurationVar(&cfg.RequestTimeout, "timeout", cfg.RequestTimeout, "request timeout")
 	flag.IntVar(&cfg.SubmitPct, "submit-pct", cfg.SubmitPct, "submit action percentage")
 	flag.IntVar(&cfg.ModifyPct, "modify-pct", cfg.ModifyPct, "modify action percentage")
@@ -370,6 +396,9 @@ func parseConfig() (Config, error) {
 	if cfg.SubmitPct+cfg.ModifyPct+cfg.CancelPct != 100 {
 		return cfg, errors.New("submit-pct + modify-pct + cancel-pct must equal 100")
 	}
+	if cfg.RateQueueDepth < 0 {
+		return cfg, errors.New("rate-queue-depth must be >= 0")
+	}
 	if !isValidRateSchedule(cfg.RateSchedule) {
 		return cfg, errors.New("rate-schedule must be drop or precise")
 	}
@@ -421,6 +450,7 @@ func defaultConfigFromEnv() Config {
 		Workers:             envInt("REEF_WORKERS", 8),
 		RatePerSecond:       envInt("REEF_RATE", 0),
 		RateSchedule:        envOr("REEF_RATE_SCHEDULE", rateScheduleDrop),
+		RateQueueDepth:      envInt("REEF_RATE_QUEUE_DEPTH", 0),
 		RequestTimeout:      envDuration("REEF_TIMEOUT", 5*time.Second),
 		SubmitPct:           envInt("REEF_SUBMIT_PCT", 60),
 		ModifyPct:           envInt("REEF_MODIFY_PCT", 25),
@@ -512,6 +542,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["rate-schedule"] {
 		cfg.RateSchedule = parsed.RateSchedule
+	}
+	if explicit["rate-queue-depth"] {
+		cfg.RateQueueDepth = parsed.RateQueueDepth
 	}
 	if explicit["timeout"] {
 		cfg.RequestTimeout = parsed.RequestTimeout
@@ -861,13 +894,61 @@ func fillResult(result *requestResult, status int, body []byte, err error, start
 	result.Success = true
 }
 
-func buildSummary(sessionID string, started, finished time.Time, cfg Config, results []requestResult) summary {
+func (c *loadScheduleCounters) summary(cfg Config, completed int, durationSeconds float64) loadScheduleSummary {
+	targetRequests := int64(cfg.Duration.Seconds() * float64(cfg.RatePerSecond))
+	if cfg.RatePerSecond <= 0 {
+		targetRequests = int64(completed)
+	}
+	scheduled := int64(0)
+	enqueued := int64(completed)
+	dropped := int64(0)
+	if c != nil {
+		scheduled = atomic.LoadInt64(&c.scheduled)
+		enqueued = atomic.LoadInt64(&c.enqueued)
+		dropped = atomic.LoadInt64(&c.dropped)
+	}
+	if cfg.RatePerSecond <= 0 {
+		scheduled = int64(completed)
+		enqueued = int64(completed)
+	}
+	completedCount := int64(completed)
+	scheduleDeficit := targetRequests - scheduled
+	if scheduleDeficit < 0 {
+		scheduleDeficit = 0
+	}
+	completionDeficit := targetRequests - completedCount
+	if completionDeficit < 0 {
+		completionDeficit = 0
+	}
+	out := loadScheduleSummary{
+		Mode:                cfg.RateSchedule,
+		TargetRatePerSecond: cfg.RatePerSecond,
+		TargetRequests:      targetRequests,
+		Scheduled:           scheduled,
+		Enqueued:            enqueued,
+		Dropped:             dropped,
+		Completed:           completedCount,
+		ScheduleDeficit:     scheduleDeficit,
+		CompletionDeficit:   completionDeficit,
+	}
+	if durationSeconds > 0 {
+		out.EnqueuedPerSecond = float64(enqueued) / durationSeconds
+		out.CompletedPerSecond = float64(completedCount) / durationSeconds
+	}
+	if targetRequests > 0 {
+		out.CompletionToTargetPct = (float64(completedCount) / float64(targetRequests)) * 100
+	}
+	return out
+}
+
+func buildSummary(sessionID string, started, finished time.Time, cfg Config, results []requestResult, loadSchedule loadScheduleSummary) summary {
 	report := summary{
 		SessionID:       sessionID,
 		StartedAt:       started,
 		FinishedAt:      finished,
 		DurationSeconds: finished.Sub(started).Seconds(),
 		Config:          cfg,
+		LoadSchedule:    loadSchedule,
 		ByAction: map[Action]actionSummary{
 			ActionSubmit: {},
 			ActionModify: {},
@@ -1062,6 +1143,9 @@ func applyActionLatencyBuckets(current *profileSummary, buckets map[Action][]flo
 }
 
 func runTraceChecks(client *http.Client, cfg Config, seen *sync.Map) traceChecks {
+	if cfg.TraceCheckLimit <= 0 {
+		return traceChecks{Checked: 0, FailedTraceID: make([]string, 0)}
+	}
 	traceIDs := make([]string, 0, cfg.TraceCheckLimit)
 	seen.Range(func(key, _ any) bool {
 		traceIDs = append(traceIDs, key.(string))
@@ -1468,6 +1552,21 @@ func printPrettySummary(report summary) {
 	fmt.Printf("Totals\n")
 	fmt.Printf("  requests=%d success=%d failures=%d throughput=%.2f rps accepted=%.2f rps\n",
 		report.TotalRequests, report.TotalSuccess, report.TotalFailures, report.ThroughputRPS, report.AcceptedBusinessOpsRPS)
+	if report.Config.RatePerSecond > 0 {
+		fmt.Printf(
+			"  schedule=%s target=%d scheduled=%d enqueued=%d dropped=%d completed=%d completion=%.2f%%\n",
+			report.LoadSchedule.Mode,
+			report.LoadSchedule.TargetRequests,
+			report.LoadSchedule.Scheduled,
+			report.LoadSchedule.Enqueued,
+			report.LoadSchedule.Dropped,
+			report.LoadSchedule.Completed,
+			report.LoadSchedule.CompletionToTargetPct,
+		)
+		if report.LoadSchedule.ScheduleDeficit > 0 || report.LoadSchedule.CompletionDeficit > 0 {
+			fmt.Printf("  schedule-deficit=%d completion-deficit=%d\n", report.LoadSchedule.ScheduleDeficit, report.LoadSchedule.CompletionDeficit)
+		}
+	}
 	fmt.Printf("  success-rate=%.2f%%\n", successRate)
 	fmt.Printf("  valid-intent-success=%.2f%% invalid-intent=%.2f%% system-failure=%.2f%%\n",
 		report.Quality.ValidIntentSuccessRatePct, report.Quality.InvalidIntentRatePct, report.Quality.SystemFailureRatePct)

@@ -26,6 +26,7 @@ const runKind = env("DEV_STRESS_RUN_KIND", "stress");
 const scenarioId = env("DEV_STRESS_SCENARIO_ID", `${mode}:${profile}`);
 const sessionConfig = env("DEV_STRESS_SESSION_CONFIG", "");
 const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
+const rateQueueDepth = env("DEV_STRESS_RATE_QUEUE_DEPTH", env("REEF_RATE_QUEUE_DEPTH", ""));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
 const sweepWorkers = parseCsvInts(env("DEV_STRESS_SWEEP_WORKERS", ""));
@@ -294,6 +295,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
         String(rate),
         "--rate-schedule",
         rateSchedule,
+        ...(rateQueueDepth ? ["--rate-queue-depth", rateQueueDepth] : []),
         "--mode",
         mode,
         "--run-id",
@@ -395,11 +397,18 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
   try {
     const report = JSON.parse(readFileSync(reportOut, "utf8"));
     const phases = afterHotPath?.json?.metrics?.phases ?? {};
+    const sortedPhases = Object.fromEntries(
+      Object.entries(phases).sort(([left], [right]) => left.localeCompare(right)),
+    );
     const streamAckPhases = Object.fromEntries(
       Object.entries(phases)
         .filter(([name]) => name.startsWith("api.streamAck.") || name.startsWith("streamWorker."))
         .sort(([left], [right]) => left.localeCompare(right)),
     );
+    report.hotPathPhases = {
+      phases: sortedPhases,
+      probe: accountingProbeSummary(afterHotPath),
+    };
     report.streamAckApiPhases = {
       phases: streamAckPhases,
       probe: accountingProbeSummary(afterHotPath),
@@ -416,6 +425,19 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     if (total || reserve || publishAck || markPublished || markPublishedBatch || enqueuePublished) {
       console.log(
         `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} workerMarkPublishedBatchAvg=${formatPhaseAvg(markPublishedBatch)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
+      );
+    }
+    const mutationTotal = phases["api.mutation.total"];
+    const operation = phases["api.operation"];
+    const parseSubmit = phases["api.parse.submitOrder"];
+    const runtimeTotal = phases["runtime.submitOrder.total"];
+    const engineSubmit = phases["runtime.engine.submit"];
+    const persistence = phases["runtime.persistence.persistSubmitOutcome"];
+    const serialize = phases["api.response.serializeSubmitOrder"];
+    const writeResponse = phases["api.writeResponse"];
+    if (mutationTotal || operation || runtimeTotal || engineSubmit) {
+      console.log(
+        `  sync-hot-path totalAvg=${formatPhaseAvg(mutationTotal)} operationAvg=${formatPhaseAvg(operation)} parseAvg=${formatPhaseAvg(parseSubmit)} runtimeAvg=${formatPhaseAvg(runtimeTotal)} engineAvg=${formatPhaseAvg(engineSubmit)} persistAvg=${formatPhaseAvg(persistence)} serializeAvg=${formatPhaseAvg(serialize)} writeAvg=${formatPhaseAvg(writeResponse)}`,
       );
     }
   } catch (error) {

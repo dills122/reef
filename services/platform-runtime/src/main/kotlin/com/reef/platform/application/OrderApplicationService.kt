@@ -19,6 +19,7 @@ import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
@@ -33,11 +34,13 @@ class OrderApplicationService(
     private val eventSchemaVersion = "v1"
 
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
-        val outcome = prepareSubmitOrder(command)
-        HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
-            runtimePersistence.persistSubmitOutcome(outcome)
+        return HotPathMetrics.time("runtime.submitOrder.total") {
+            val outcome = prepareSubmitOrder(command)
+            HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+                runtimePersistence.persistSubmitOutcome(outcome)
+            }
+            outcome.result
         }
-        return outcome.result
     }
 
     fun prepareSubmitOrder(command: SubmitOrderCommand): PersistableSubmitOutcome {
@@ -624,9 +627,12 @@ class OrderApplicationService(
 }
 
 internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePersistence {
-    val persistence = System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory"
-    if (persistence != "postgres") {
-        return InMemoryRuntimePersistence()
+    val persistence = (System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory").trim().lowercase()
+    when (persistence) {
+        "inmemory", "memory" -> return InMemoryRuntimePersistence()
+        "noop", "no-op", "benchmark-noop" -> return NoopRuntimePersistence()
+        "postgres" -> {}
+        else -> throw IllegalArgumentException("Unsupported RUNTIME_PERSISTENCE: $persistence")
     }
 
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"

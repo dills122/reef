@@ -6,6 +6,7 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
@@ -18,11 +19,24 @@ class PlatformApi(
     }
 
     fun submitOrder(body: String): String {
-        return toJson(orderService.submitOrder(PlatformCommandParsers.submitOrder(body)))
+        val command = HotPathMetrics.time("api.parse.submitOrder") {
+            PlatformCommandParsers.submitOrder(body)
+        }
+        val result = HotPathMetrics.time("api.orderService.submitOrder") {
+            orderService.submitOrder(command)
+        }
+        return HotPathMetrics.time("api.response.serializeSubmitOrder") {
+            toJson(result)
+        }
     }
 
     fun prepareSubmitOrder(body: String): PersistableSubmitOutcome {
-        return orderService.prepareSubmitOrder(PlatformCommandParsers.submitOrder(body))
+        val command = HotPathMetrics.time("api.parse.submitOrder") {
+            PlatformCommandParsers.submitOrder(body)
+        }
+        return HotPathMetrics.time("api.orderService.prepareSubmitOrder") {
+            orderService.prepareSubmitOrder(command)
+        }
     }
 
     fun persistSubmitOutcomes(outcomes: List<PersistableSubmitOutcome>) {

@@ -264,6 +264,9 @@ Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_DB_SCHEMAS=runtime,boundary,command_log`
 - `DEV_STRESS_DB_LOG_SINCE=30m`
 - `DEV_STRESS_RATE_SCHEDULE=drop|precise` controls load-tester rate scheduling (`drop` is the default; `precise` is useful for capacity sweeps with larger worker counts)
+- `DEV_STRESS_RATE_QUEUE_DEPTH=<tokens>` sets the rate-token queue depth passed to the load tester; use this with `precise` to make target/scheduled/enqueued/completed gaps explicit.
+
+Stress reports distinguish configured rate from generated and completed load. The load tester reports `loadSchedule.targetRequests`, `scheduled`, `enqueued`, `dropped`, `completed`, `scheduleDeficit`, and `completionDeficit`. Check those fields before treating throughput as a server-side capacity number.
 
 Raw intake benchmarks accept matching run metadata:
 - `DEV_INTAKE_RUN_ID=<stable-run-id>`
@@ -284,6 +287,49 @@ Run matching-engine benchmark baseline:
 
 ```bash
 make bench-matching-engine
+```
+
+Run matching-engine sustained load harness:
+
+```bash
+make bench-matching-engine-load
+```
+
+The sustained harness runs in-process against the Go engine only, so it isolates matching behavior from HTTP, runtime, queue, and database costs. Defaults target `10k/s` for `30s` and write `summary.json` plus `intervals.csv` under `reports/matching-engine-load/<run-id>/`. Pass `ARGS` to vary the load shape, for example:
+
+```bash
+make bench-matching-engine-load ARGS="--rate 10000 --duration 60s --scenario alternating-cross --workers 1 --instruments 1 --min-processed-rate 10000"
+```
+
+Run the runtime + engine no-DB benchmark profile:
+
+```bash
+make dev-stress-runtime-nodb
+```
+
+This profile is for bottleneck isolation only. It starts the normal local runtime and matching-engine path, but configures the platform request path with:
+
+- `RUNTIME_PERSISTENCE=noop`
+- `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory`
+- `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
+- `EXTERNAL_API_COMMAND_LOG_MODE=disabled`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result`
+- `STREAM_ACK_INTAKE_STORE=inmemory`
+- `STREAM_ACK_WORKER_ENABLED=false`
+- `STREAM_ACK_PROJECTOR_ENABLED=false`
+
+`noop` runtime persistence keeps reference/auth setup data so validation and authorization still run, but it drops submit outcomes, orders, executions, trades, lifecycle events, canonical rows, and projections. The default no-DB stress wrapper disables trace checks with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test. It also defaults to `DEV_STRESS_RATE_SCHEDULE=precise` and `DEV_STRESS_RATE_QUEUE_DEPTH=200000` so generated-load accounting is visible during ceiling tests.
+
+Each stress report includes `hotPathPhases.phases` from `/internal/perf/hot-path`. For no-DB sync-result runs, start with `api.mutation.total`, `api.operation`, `api.parse.submitOrder`, `runtime.submitOrder.total`, `runtime.engine.submit`, `runtime.persistence.persistSubmitOutcome`, `api.response.serializeSubmitOrder`, and `api.writeResponse`. `runtime.engine.submit` measures the platform runtime gateway call to the engine, including transport and response parsing; compare it against the matching-engine-only harness before attributing that time to matching logic itself.
+
+Use this comparison ladder when isolating throughput collapse:
+
+```text
+matching-engine only
+runtime + engine + HTTP, no DB/write-model persistence
+runtime + engine + boundary DB only
+runtime + engine + canonical DB only
+full platform with projections
 ```
 
 Run matching-engine benchmark guardrail check (CI-equivalent):

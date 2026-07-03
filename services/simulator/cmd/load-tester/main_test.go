@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -81,7 +84,7 @@ func TestBuildSummaryIncludesActorAndStrategyAttribution(t *testing.T) {
 		{ActorID: "mm-1", Persona: "electronic_liquidity_provider", StrategyID: "two_sided_quote", Profile: "market_maker", Action: ActionModify, Success: false, Latency: 20 * time.Millisecond, StatusCode: 409, ErrorText: "rejected"},
 		{ActorID: "ret-1", Persona: "dip_buyer", StrategyID: "dip_buyer", Profile: "retail", Action: ActionSubmit, Success: true, Latency: 12 * time.Millisecond, StatusCode: 200},
 	}
-	report := buildSummary("s-1", start, end, Config{}, results)
+	report := buildSummary("s-1", start, end, Config{}, results, loadScheduleSummary{})
 	if report.ByActor["mm-1"].Requests != 2 {
 		t.Fatalf("expected actor attribution, got %+v", report.ByActor["mm-1"])
 	}
@@ -102,7 +105,7 @@ func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
 		{Profile: "retail", Action: ActionCancel, Success: false, Latency: 10 * time.Millisecond, StatusCode: 409, ErrorText: "rejected:NOT_FOUND", RejectCode: "NOT_FOUND"},
 		{Profile: "retail", Action: ActionSubmit, Success: false, Latency: 10 * time.Millisecond, StatusCode: 500, ErrorText: "http 500"},
 	}
-	report := buildSummary("s-1", start, end, Config{}, results)
+	report := buildSummary("s-1", start, end, Config{}, results, loadScheduleSummary{})
 	if len(report.RejectTaxonomy) != 2 {
 		t.Fatalf("expected 2 reject taxonomy rows, got %d", len(report.RejectTaxonomy))
 	}
@@ -128,6 +131,17 @@ func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
 	}
 	if !approxEqual(report.Quality.ValidIntentSuccessRatePct, 0) {
 		t.Fatalf("expected no valid-intent successes in fixture, got %+v", report.Quality)
+	}
+}
+
+func TestRunTraceChecksSkipsWhenLimitDisabled(t *testing.T) {
+	seen := sync.Map{}
+	seen.Store("trace-1", struct{}{})
+
+	checks := runTraceChecks(&http.Client{}, Config{TraceCheckLimit: 0}, &seen)
+
+	if checks.Checked != 0 || checks.Pass != 0 || checks.Fail != 0 {
+		t.Fatalf("expected trace checks to be disabled, got %+v", checks)
 	}
 }
 
@@ -495,14 +509,60 @@ func TestRateScheduleValidationAndChannelDepth(t *testing.T) {
 	if got := rateChannelDepth(Config{RateSchedule: rateScheduleDrop, Workers: 8}); got != 1 {
 		t.Fatalf("expected drop scheduler channel depth=1, got %d", got)
 	}
-	if got := rateChannelDepth(Config{RateSchedule: rateSchedulePrecise, Workers: 8}); got != 16 {
-		t.Fatalf("expected precise scheduler channel depth=16, got %d", got)
+	if got := rateChannelDepth(Config{RateSchedule: rateSchedulePrecise, Workers: 8, RatePerSecond: 450}); got != 450 {
+		t.Fatalf("expected precise scheduler channel depth=450, got %d", got)
 	}
-	if got := rateChannelDepth(Config{RateSchedule: " PRECISE ", Workers: 8}); got != 16 {
-		t.Fatalf("expected normalized precise scheduler channel depth=16, got %d", got)
+	if got := rateChannelDepth(Config{RateSchedule: " PRECISE ", Workers: 8, RatePerSecond: 20}); got != 32 {
+		t.Fatalf("expected normalized precise scheduler channel depth=32, got %d", got)
 	}
 	if got := rateChannelDepth(Config{RateSchedule: rateSchedulePrecise, Workers: 0}); got != 1 {
 		t.Fatalf("expected precise scheduler minimum channel depth=1, got %d", got)
+	}
+	if got := rateChannelDepth(Config{RateSchedule: rateSchedulePrecise, Workers: 8, RatePerSecond: 450, RateQueueDepth: 99}); got != 99 {
+		t.Fatalf("expected explicit rate queue depth=99, got %d", got)
+	}
+}
+
+func TestBatchedTokenFeederRecordsDropAccounting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	out := make(chan struct{}, 1)
+	counters := &loadScheduleCounters{}
+
+	tokenFeeder(ctx, 10_000, rateScheduleDrop, out, counters)
+
+	if atomic.LoadInt64(&counters.scheduled) == 0 {
+		t.Fatalf("expected scheduled tokens")
+	}
+	if atomic.LoadInt64(&counters.enqueued) != 1 {
+		t.Fatalf("expected exactly one enqueued token in full drop queue, got %d", atomic.LoadInt64(&counters.enqueued))
+	}
+	if atomic.LoadInt64(&counters.dropped) == 0 {
+		t.Fatalf("expected dropped tokens")
+	}
+}
+
+func TestLoadScheduleSummaryReportsDeficits(t *testing.T) {
+	counters := &loadScheduleCounters{}
+	atomic.StoreInt64(&counters.scheduled, 80)
+	atomic.StoreInt64(&counters.enqueued, 70)
+	atomic.StoreInt64(&counters.dropped, 10)
+
+	summary := counters.summary(Config{
+		RateSchedule:   rateScheduleDrop,
+		RatePerSecond:  100,
+		Duration:       time.Second,
+		RateQueueDepth: 1,
+	}, 60, time.Second.Seconds())
+
+	if summary.TargetRequests != 100 || summary.Scheduled != 80 || summary.Enqueued != 70 || summary.Dropped != 10 || summary.Completed != 60 {
+		t.Fatalf("unexpected schedule summary: %+v", summary)
+	}
+	if summary.ScheduleDeficit != 20 || summary.CompletionDeficit != 40 {
+		t.Fatalf("unexpected deficits: %+v", summary)
+	}
+	if !approxEqual(summary.CompletionToTargetPct, 60) {
+		t.Fatalf("unexpected completion percent: %+v", summary)
 	}
 }
 

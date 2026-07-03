@@ -624,12 +624,27 @@ class PlatformHttpServer(
         route: String,
         operation: (String) -> String
     ) {
+        val started = System.nanoTime()
+        try {
+            handleApiV1MutationMeasured(exchange, route, operation)
+        } finally {
+            HotPathMetrics.record("api.mutation.total", System.nanoTime() - started)
+        }
+    }
+
+    private fun handleApiV1MutationMeasured(
+        exchange: HttpExchange,
+        route: String,
+        operation: (String) -> String
+    ) {
         if (exchange.requestMethod != "POST") {
             methodNotAllowed(exchange)
             return
         }
 
-        val violation = boundary.checkWrite(exchange.requestHeaders, route)
+        val violation = HotPathMetrics.time("api.boundary.checkWrite") {
+            boundary.checkWrite(exchange.requestHeaders, route)
+        }
         if (violation != null) {
             writeJson(exchange, violation.status, boundary.toErrorJson(violation, correlationId(exchange)))
             return
@@ -638,8 +653,12 @@ class PlatformHttpServer(
         val clientId = boundary.clientId(exchange.requestHeaders).orEmpty()
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders).orEmpty()
         val correlationId = correlationId(exchange)
-        val body = readRequestBody(exchange) ?: return
-        val validationError = PlatformCommandParsers.validateApiV1Command(route, body)
+        val body = HotPathMetrics.time("api.readRequestBody") {
+            readRequestBody(exchange)
+        } ?: return
+        val validationError = HotPathMetrics.time("api.command.validate") {
+            PlatformCommandParsers.validateApiV1Command(route, body)
+        }
         if (validationError != null) {
             writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
             return
@@ -703,7 +722,9 @@ class PlatformHttpServer(
             return
         }
 
-        val abuseViolation = abuseProtectionHook.allow(clientId, route)
+        val abuseViolation = HotPathMetrics.time("api.abuse.allow") {
+            abuseProtectionHook.allow(clientId, route)
+        }
         if (abuseViolation != null) {
             HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(clientId, route, idempotencyKey, abuseViolation.status, abuseViolation.code, abuseViolation.message)
@@ -740,7 +761,9 @@ class PlatformHttpServer(
             HotPathMetrics.time("api.commandCapture.markCompleted") {
                 commandCaptureStore.markCompleted(clientId, route, idempotencyKey, cached.status, cached.payload)
             }
-            writeJson(exchange, cached.status, cached.payload)
+            HotPathMetrics.time("api.writeResponse") {
+                writeJson(exchange, cached.status, cached.payload)
+            }
             return
         }
 
@@ -761,7 +784,9 @@ class PlatformHttpServer(
             HotPathMetrics.time("api.commandCapture.markCompleted") {
                 commandCaptureStore.markCompleted(clientId, route, idempotencyKey, 200, payload)
             }
-            writeJson(exchange, 200, payload)
+            HotPathMetrics.time("api.writeResponse") {
+                writeJson(exchange, 200, payload)
+            }
         } catch (ex: Exception) {
             val errorClass = ex::class.simpleName ?: "Exception"
             val errorMessage = ex.message ?: "unknown"
