@@ -4,6 +4,12 @@ build/
 out/
 bin/
 coverage/
+reports/do-benchmark/
+infra/do-benchmark/.terraform/
+infra/do-benchmark/terraform.tfstate
+infra/do-benchmark/terraform.tfstate.backup
+infra/do-benchmark/*.tfvars
+.tmp-do-known-hosts
 
 # Codex local integration links. These point at user-specific template
 # checkouts and are recreated with `bun run codex:links`.
