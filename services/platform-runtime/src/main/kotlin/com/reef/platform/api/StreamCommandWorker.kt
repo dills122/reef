@@ -146,9 +146,10 @@ class StreamCommandWorker(
                 }
             )
         }
-        if (marked != preparedSubmits.size) {
+        val expected = preparedSubmits.map { prepared -> prepared.outcome.commandId }.distinct().size
+        if (marked != expected) {
             throw IllegalStateException(
-                "stream_worker_mark_published_missing marked=$marked expected=${preparedSubmits.size}"
+                "stream_worker_mark_published_missing marked=$marked expected=$expected"
             )
         }
     }

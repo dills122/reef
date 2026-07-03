@@ -304,27 +304,36 @@ class PostgresStreamCommandIntakeStore(
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
-                WITH updates AS (
-                  SELECT
+                WITH requested AS (
+                  SELECT DISTINCT ON (item->>'commandId')
                     item->>'commandId' AS command_id,
                     COALESCE((item->>'streamSequence')::BIGINT, 0) AS stream_sequence
                   FROM jsonb_array_elements(?::jsonb) AS item
+                  ORDER BY item->>'commandId'
+                ),
+                already_published AS (
+                  SELECT intake.command_id
+                  FROM ${names.streamCommandIntake} intake
+                  JOIN requested ON requested.command_id = intake.command_id
+                  WHERE intake.stream_sequence > 0
+                    AND intake.published = TRUE
                 ),
                 updated AS (
                   UPDATE ${names.streamCommandIntake} intake
-                  SET stream_sequence = CASE WHEN intake.stream_sequence = 0 THEN updates.stream_sequence ELSE intake.stream_sequence END,
+                  SET stream_sequence = CASE WHEN intake.stream_sequence = 0 THEN requested.stream_sequence ELSE intake.stream_sequence END,
                       published = TRUE,
                       published_at = COALESCE(intake.published_at, NOW())
-                  FROM updates
-                  WHERE intake.command_id = updates.command_id
+                  FROM requested
+                  WHERE intake.command_id = requested.command_id
                     AND (intake.stream_sequence = 0 OR intake.published = FALSE)
                   RETURNING intake.command_id
+                ),
+                marked AS (
+                  SELECT command_id FROM already_published
+                  UNION
+                  SELECT command_id FROM updated
                 )
-                SELECT COUNT(*)::BIGINT AS marked
-                FROM ${names.streamCommandIntake} intake
-                JOIN updates ON updates.command_id = intake.command_id
-                WHERE intake.stream_sequence > 0
-                  AND intake.published = TRUE
+                SELECT COUNT(*)::BIGINT AS marked FROM marked
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, payload)

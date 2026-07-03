@@ -180,6 +180,48 @@ class StreamCommandWorkerTest {
     }
 
     @Test
+    fun submitWorkerAcceptsIdempotentBatchPublicationMarkerCounts() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val marker = DistinctBatchPublicationMarker()
+        val first = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-batch-marker-1", "ord-worker-batch-marker-1"),
+            streamSequence = 90
+        )
+        val second = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-batch-marker-2", "ord-worker-batch-marker-2"),
+            streamSequence = 91
+        )
+        val worker = StreamCommandWorker(
+            source = FixedBatchStreamCommandSource(first, second),
+            api = api,
+            publicationMarker = marker,
+            partition = 5
+        )
+
+        val processed = worker.processOnce()
+
+        assertEquals(2, processed)
+        assertEquals(1, first.ackCalls)
+        assertEquals(1, second.ackCalls)
+        assertEquals(0, first.nakCalls + second.nakCalls)
+        assertEquals(
+            mapOf(
+                "cmd-worker-batch-marker-1" to 90L,
+                "cmd-worker-batch-marker-2" to 91L
+            ),
+            marker.marked
+        )
+    }
+
+    @Test
     fun submitWorkerNaksDeliveryWhenPublicationMarkerCannotRepair() {
         StreamCommandWorkerMetrics.resetForTests()
         val persistence = seededPersistence()
@@ -490,6 +532,20 @@ private class RecordingPublicationMarker : StreamCommandPublicationMarker {
     override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
         marked[commandId] = streamSequence
         return true
+    }
+}
+
+private class DistinctBatchPublicationMarker : StreamCommandPublicationMarker {
+    val marked = mutableMapOf<String, Long>()
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        marked[commandId] = streamSequence
+        return true
+    }
+
+    override fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
+        commands.forEach { (commandId, streamSequence) -> marked[commandId] = streamSequence }
+        return commands.map { it.first }.distinct().size
     }
 }
 
