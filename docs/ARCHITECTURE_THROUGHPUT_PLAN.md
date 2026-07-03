@@ -8,6 +8,7 @@ The active goal is to move from tuned synchronous throughput to a production-sha
 
 Detailed execution plan:
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 ## Current Baseline
 
@@ -33,10 +34,12 @@ Current captured-ack evidence from the bot-arena scaling branch:
 - raw durable intake can exceed `7k accepted rps` in narrow local benchmarks.
 - async worker drain is currently below target: about `4k-4.3k completed/sec` at `16` workers and about `4.9k completed/sec` at `24` workers, with worsening persistence and completion latency.
 - indexed queue claims and lease reclaim fixed correctness/drain blockers, but they did not remove the remaining write-amplification ceiling.
+- the best set-based runtime persistence and command-log FK tuning evidence stayed lossless, but still reached only about `4015 accepted rps`, `2404 completed/sec` during load, and `5606/sec` post-load drain.
 
 Interpretation:
 - the next capacity gate is not whether the API can accept commands.
 - the next capacity gate is whether accepted commands reach terminal state at `7500-10000 completed/sec` without unbounded backlog, unexplained gaps, or lossy overload behavior.
+- the current Postgres `captured-ack` path remains a useful fallback and baseline, but it should not be treated as the final bot-arena throughput architecture.
 
 ## Per-Instance Scaling Model
 
@@ -67,7 +70,9 @@ Implications:
 
 4. Keep Postgres canonical.
 - Postgres remains the canonical lifecycle/event store.
-- Event transport can be introduced later, but it is not the sole source of truth.
+- For the bot-arena throughput track, JetStream can be introduced earlier as the durable accepted-command ingress log.
+- Postgres remains the canonical record of command results, lifecycle events, orders, executions, and trades.
+- Event transport is not the sole source of venue truth.
 
 5. Make every performance change measurable.
 - Each architecture slice needs before/after accepted throughput, p95/p99, top errors, and DB diagnostics.
@@ -82,16 +87,20 @@ Implications:
 ```text
 client / simulator
   -> external API boundary
-  -> durable command log append
+  -> validation, auth, risk, and idempotency guard
+  -> durable command log append or JetStream durable publish ack
   -> fast accepted/correlated response or synchronous result mode
-  -> command processor
+  -> command processor / partition worker
   -> matching engine
   -> canonical runtime persistence
-  -> outbox/event distribution
+  -> canonical event/result log
+  -> outbox/event distribution or projection feed
   -> read-model projection
 ```
 
 The critical shift is separating durable command intake from heavier downstream persistence and projection work.
+
+The target high-throughput variant is `stream-ack`: the boundary returns `202` only after JetStream confirms durable publish, partition workers ack JetStream only after canonical Postgres results/events commit, and projections run downstream from the canonical event log.
 
 ## DB Slice Model
 
@@ -302,23 +311,36 @@ Move query/UI projection writes out of the command request path.
 - Projection lag is observable.
 - Read model can be rebuilt from runtime state/events in local dev.
 
-## Priority 6: Async Backbone
+## Priority 6: Stream-Ack Async Backbone
 
 ### Objective
 
-Introduce NATS JetStream when internal queues and DB-backed processing need distribution or replay windows.
+Introduce NATS JetStream as the durable accepted-command ingress log for the bot-arena throughput target, with Postgres remaining canonical for venue outcomes.
 
 ### Design
 
-- Postgres outbox remains canonical.
-- Publisher reads outbox and publishes to NATS.
-- Consumers are idempotent by `event_id`.
+- Use a retained JetStream command log, not WorkQueue retention, for accepted commands.
+- Return `202` only after durable publish ack.
+- Use deterministic subjects such as `reef.cmd.v1.pXX.<venueSessionId>.<instrumentId>.<commandType>`.
+- Route by `hash(venueSessionId + instrumentId) % partitionCount`, or `hash(runId + venueSessionId + instrumentId) % partitionCount` for isolated simulator/arena runs.
+- Require submit/cancel/modify commands to carry routing metadata so the hot path does not need a synchronous DB lookup.
+- Use a scoped idempotency guard with payload hashes; JetStream dedupe alone is not business idempotency.
+- Partition workers process commands, commit canonical command results plus event log rows in Postgres, then ack JetStream.
+- Projection workers consume canonical events and maintain lag/watermark tables outside the command hot path.
 
 ### Acceptance Criteria
 
-- Postgres state/event transaction commits atomically with outbox row.
-- Publisher can resume after restart without event loss.
-- Duplicate delivery does not duplicate business effects.
+- API publish ack failures return explicit `429`/`503` before durable acceptance.
+- Duplicate same-key/same-body commands replay the same command reference.
+- Duplicate same-key/different-body commands return `409`.
+- Crash before DB commit redelivers and produces one terminal result.
+- Crash after DB commit but before JetStream ack redelivers without duplicate trades/events.
+- Hot single-instrument load preserves partition ordering.
+- Multi-instrument load processes partitions concurrently.
+- Projection lag is visible and does not block command processing.
+
+Reference:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 
 ## Target Milestones
 
@@ -329,12 +351,12 @@ Introduce NATS JetStream when internal queues and DB-backed processing need dist
 | M3 batched persistence | reduce write round trips | `25-100%+` possible |
 | M4 partition/retention | stabilize long soaks | lower degradation risk |
 | M5 read-model async | reduce hot-path write amplification | improved p99 and growth control |
-| M6 outbox/NATS | distribution without losing canonical Postgres | scalable async workflows |
+| M6 stream-ack JetStream | durable partitioned ingress without losing canonical Postgres outcomes | scalable async workflows |
 
 ## Target Metrics
 
 Minimum stable target:
-- `7500` completed commands/sec per runtime + engine instance in durable `captured-ack` mode
+- `7500` completed commands/sec per runtime + engine instance in durable `stream-ack` mode
 - `0` silent drops or unexplained accepted-command gaps
 - bounded queue backlog during load
 - queue drains to zero after load stops
@@ -342,7 +364,7 @@ Minimum stable target:
 - overload is explicit rejection/throttle, not hidden loss
 
 Preferred target:
-- `10000` completed commands/sec per runtime + engine instance in durable `captured-ack` mode
+- `10000` completed commands/sec per runtime + engine instance in durable `stream-ack` mode
 - `0` silent drops or unexplained accepted-command gaps
 - sustained `10-15m` run plus clean post-run drain
 - trace pass `>= 99%`
@@ -355,20 +377,22 @@ Diagnostic targets:
 ## Decision Gates
 
 1. Do not physically split databases until schema-level diagnostics show contention that cannot be fixed with schema/index/partition changes.
-2. Do not make `captured-ack` the default until the product/API semantics for asynchronous command completion are explicit.
-3. Do not introduce NATS before Postgres outbox and idempotent consumers are designed.
+2. Do not make `captured-ack` or `stream-ack` the default until the product/API semantics for asynchronous command completion are explicit.
+3. Do not use JetStream as the sole venue outcome store; canonical command results and lifecycle events must commit to Postgres.
 4. Do not remove synchronous mode; it remains required for deterministic tests and compatibility.
 5. Do not add indexes to hot write tables without benchmark evidence.
 6. Do not use Kubernetes scale-out to mask per-instance write amplification or accepted-command accounting gaps.
+7. Do not ack JetStream before canonical command results and lifecycle events are durable.
 
 ## First Sprint Recommendation
 
-Build the first slice from the throughput scaling work plan:
+Build the first stream-ack architecture slice while preserving the current fallback modes:
 
-1. Add run/session attribution to command-log intake.
-2. Add backlog-adjusted accounting metrics to captured-ack stress reports.
-3. Fail stress validation on accepted-command accounting gaps.
-4. Add explicit durable-intake backpressure thresholds.
-5. Implement and benchmark batched command completion.
+1. Define the command envelope, routing metadata, partition key, and JetStream subject contract.
+2. Add the local JetStream dev profile and command stream bootstrap.
+3. Add stream health, publish-ack latency, lag, and partition-depth telemetry.
+4. Implement `stream-ack` publish behind a mode flag without removing `sync-result` or Postgres `captured-ack`.
+5. Add scoped idempotency guard tests for replay and payload-hash conflict.
+6. Add the first partition worker with DB-commit-before-ack crash/redelivery tests.
 
-This turns the current queue/drain findings into a measurable path toward `7500-10000` completed commands/sec without weakening no-loss guarantees.
+This turns the current queue/drain findings into a larger architecture move toward `7500-10000` completed commands/sec without weakening no-loss guarantees.

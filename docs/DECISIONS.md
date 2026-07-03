@@ -506,7 +506,8 @@ Summary:
 - the preferred target is `10000` completed commands per second per runtime + engine instance.
 - if the runtime returns an accepted response, the command must be durably captured and must either reach terminal `COMPLETED`/`FAILED` state or remain visible as active leased/retryable work.
 - overload must reject or throttle before durable acceptance when the system cannot safely drain more work.
-- `captured-ack` is the primary high-throughput benchmark mode for this track.
+- `stream-ack` is the target high-throughput mode for this track.
+- Postgres `captured-ack` remains a local fallback and A/B baseline, not the final bot-arena throughput architecture.
 - `sync-result` remains the deterministic correctness and compatibility mode.
 - raw intake and capacity-baseline profiles remain diagnostics only; they do not prove release readiness without completed-throughput accounting and queue drain.
 - Kubernetes scale-out must not be used to hide per-instance write amplification, queue backlog, or accepted-command accounting gaps.
@@ -514,6 +515,28 @@ Summary:
 
 Primary references:
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+
+### D-036: Stream-Ack Ingress And Partitioned Processing Direction
+
+Status: accepted
+
+Summary:
+- JetStream should be introduced early for the bot-arena high-throughput track as the durable accepted-command ingress log.
+- JetStream is not the canonical venue outcome store; Postgres remains authoritative for command results, lifecycle events, orders, executions, and trades.
+- The runtime may return `202 Accepted` in `stream-ack` mode only after a durable JetStream publish acknowledgment.
+- publish failure, publish timeout, or unsafe stream/worker/DB health must return explicit `429` or `503` before durable acceptance.
+- accepted-command streams use retained log semantics with file storage and explicit replay windows, not JetStream WorkQueue retention.
+- command subjects include a deterministic partition token, with submit/cancel/modify for the same book routed to the same partition lane.
+- cancel/modify commands must carry enough routing metadata to avoid synchronous DB lookup on the throughput hot path.
+- JetStream message dedupe is not enough for business idempotency; Reef must keep a scoped idempotency guard with payload hashes and command/stream references.
+- partition workers ack JetStream only after canonical command result and event-log writes commit.
+- projection workers, leaderboard updates, and analytics are downstream rebuildable consumers with watermarks and lag metrics.
+- failure tests must cover publish retry, redelivery before DB commit, redelivery after DB commit before ack, deterministic replay, and projection rebuild.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 
@@ -545,7 +568,7 @@ Summary:
 - first bulk runtime procedure evidence stayed lossless (`0` final active and `0` accounting gap), improved the `8k/8s` post-load drain point to `4417.50/sec`, and reached `2135.68 completed/sec` during a `15k/15s` pressure run, but still left command-log append and runtime batch persistence as the measured blockers.
 - command-log child tables (`command_payloads`, `command_work_queue`, and `command_results`) no longer keep same-schema foreign keys to `command_log.commands` on the hot write path. Accepted-command durability remains anchored by logged `command_log.commands` plus logged `command_payloads`; terminal durability remains in logged `command_results`; active queue state remains derived/reconstructable. Prune deletes child rows explicitly before command rows instead of relying on cascade.
 - first evidence after set-based runtime persistence and command-log FK removal stayed lossless, reached `4014.61 accepted rps`, `2404.21 completed/sec` during load, and `5606.43/sec` post-load drain with `8` async workers. A `16` worker comparison lowered accepted throughput and did not improve completed throughput enough, so `8` workers remains the better current local profile.
-- the next throughput slice should reduce command-log append write amplification and runtime/command-log write contention before further worker-count tuning.
+- superseded by D-036 for the bot-arena high-throughput path: the next major throughput slice should build stream-ack ingress and partitioned processing rather than continue small command-log write-amplification tuning.
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)

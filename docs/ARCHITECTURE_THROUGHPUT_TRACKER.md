@@ -6,6 +6,7 @@ Track architecture work needed to move beyond accepted-request intake toward sus
 
 Primary plan:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
 
@@ -39,7 +40,7 @@ Hot-path timing reference from the Bot Arena planning branch:
 
 Scaling intent:
 - reach stable `7500` completed commands/sec per instance before relying on horizontal scale-out.
-- prefer `10000` completed commands/sec per instance if write-amplification work gets there without weakening accounting or replay.
+- prefer `10000` completed commands/sec per instance through stream-ack ingress, partitioned processing, and batched canonical persistence without weakening accounting or replay.
 - use per-instance throughput as the unit that cluster capacity multiplies.
 - keep cluster-wide tests separate from single-instance ceiling and quality gates.
 - treat accepted rps as diagnostic; completed rps, queue drain, and accepted-command accounting are the release gates.
@@ -49,6 +50,11 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 - async drain now avoids the earlier indexed-claim and stale-lease blockers.
 - drain sweep evidence: `4` workers about `2k completed/sec`, `8` workers about `3k completed/sec`, `16` workers about `4k-4.3k completed/sec`, and `24` workers about `4.9k completed/sec` with worse persistence/complete latency.
 - DB pools showed no waiter pressure, so the next likely bottleneck is write amplification across command completion and runtime persistence.
+
+Current architecture direction:
+- Postgres `captured-ack` remains a correctness baseline and local fallback, but it is not the final high-throughput design for the bot-arena target.
+- The next major throughput track is `stream-ack`: durable JetStream publish ack before `202`, deterministic partition routing by run/session/instrument, partition workers that commit canonical Postgres results/events before JetStream ack, and downstream projection workers with watermarks.
+- The first stream-ack target is `5000` durable publish-ack accepted rps with visible lag and no accepted-command gaps, followed by `5000` processed rps, then `10000` accepted/processed rps.
 
 Latest accounting smoke:
 - 2026-07-02 captured-ack smoke after run attribution, accounting telemetry, backpressure, and terminal-write batching: `DEV_STRESS_DURATION=10s`, `DEV_STRESS_RATES=200`, `DEV_STRESS_SWEEP_WORKERS=16`.
@@ -130,8 +136,8 @@ Drain-accounted worker sweep:
 | A6 | Async batched runtime persistence | Not started | architecture | Biggest likely throughput lever |
 | A7 | Runtime event/table partitioning | Not started | architecture | Long-soak stability |
 | A8 | Read-model schema/projection isolation | Not started | architecture | Remove projection writes from hot path |
-| A9 | Postgres outbox publisher | Not started | architecture | Precondition for NATS |
-| A10 | NATS JetStream integration | Deferred | architecture | Wait until outbox is real |
+| A9 | Postgres outbox publisher | Deferred | architecture | Still needed for event distribution; no longer a precondition for stream-ack ingress |
+| A10 | NATS JetStream stream-ack ingress | Planned | architecture | Durable accepted-command log with publish-ack-before-202 and retained replay window |
 | A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
 | A12 | Boundary capture hot-path reduction | In progress | architecture | Captured-ack dev profile now disables duplicate legacy boundary command capture; command-log append remains the canonical durable capture path |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
@@ -145,11 +151,16 @@ Drain-accounted worker sweep:
 | A21 | Completed-throughput target and no-loss plan | Done | planning | Active target is now `7500` completed/sec minimum, `10000` preferred, with no accepted-command accounting gaps |
 | A22 | Run/session attribution for throughput runs | Done | feature | `run_id`, `run_kind`, and `scenario_id` are captured on command-log rows from stress/intake payload metadata |
 | A23 | Backlog-adjusted stress/intake accounting | In progress | feature | Runtime exposes `/internal/commands/accounting`; stress and intake reports attach accepted, terminal, active, stale, completed-rps, accounting-gap, and drain-time/rate data |
-| A24 | Durable-intake backpressure thresholds | In progress | reliability | Opt-in active-depth and stale-processing rejection added; queue-age and drain-rate thresholds remain next |
+| A24 | Durable-intake backpressure thresholds | In progress | reliability | Postgres captured-ack has active-depth experiments; stream-ack must combine stream, worker, DB, and projection health before acceptance |
 | A25 | Batched command completion | Done | performance | Async processor flushes terminal command updates in one transaction per claimed batch; A/B showed no target recovery, so command-log reserve and runtime persistence are the next bottlenecks |
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
 | A27 | Bot-arena venue-path readiness | Not started | architecture | Built-in and user bots must use the same command/API path with run/bot attribution and guardrails |
 | A28 | Recoverable active command queue | In progress | performance | `command_work_queue` is derived active state and can be unlogged/reconstructed while accepted commands and terminal outcomes stay durable; quick loaded-stack run recovered `3945.78 accepted rps` with eventual `0` gap |
+| A29 | Stream-ack command contract and partitioning | Planned | contract | Command envelope must include run/session/instrument routing metadata and deterministic subject partitioning |
+| A30 | Stream-ack idempotency guard | Planned | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
+| A31 | Stream partition worker and ack rule | Planned | architecture | Ack JetStream only after canonical command result and event log commit |
+| A32 | Canonical event log and projection watermarks | Planned | architecture | Separate venue outcomes from leaderboard/UI projections and expose lag |
+| A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
 
 ## Milestone Checklist
 
@@ -314,17 +325,25 @@ Exit criteria:
 Exit criteria:
 - Command hot path writes only command/runtime canonical state, not UI-specific projection tables.
 
-### M7: Outbox And NATS
+### M7: Stream-Ack Ingress And Partitioned Processing
 
-- [ ] Add outbox table/routine for runtime events.
-- [ ] Commit domain state + event + outbox atomically.
-- [ ] Add outbox publisher.
-- [ ] Add idempotent consumer contract.
-- [ ] Add NATS dev profile.
-- [ ] Add replay/duplicate delivery tests.
+- [ ] Define stream-ack command envelope and protobuf/contract updates.
+- [ ] Define deterministic partition key and subject builder.
+- [ ] Add local NATS/JetStream dev profile and stream bootstrap.
+- [ ] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry.
+- [ ] Implement `stream-ack` API mode behind a flag.
+- [ ] Add scoped idempotency guard with payload-hash conflict behavior.
+- [ ] Add partition worker that preserves per-partition ordering.
+- [ ] Persist canonical command result and event log before JetStream ack.
+- [ ] Add projection watermarks and lag snapshots.
+- [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
 
 Exit criteria:
-- NATS can be enabled without replacing Postgres as canonical history.
+- `202` is returned only after JetStream durable publish ack.
+- JetStream is not used as the canonical venue outcome store.
+- Hot single-instrument load preserves ordering while multi-instrument load uses partition concurrency.
+- Crash/redelivery tests do not duplicate trades, events, or terminal command results.
+- First phase reaches `5000` stream-ack accepted rps with no accepted-command gaps and visible lag.
 
 ## Performance Gates
 
@@ -353,13 +372,14 @@ Regression budget:
 
 ## Open Decisions
 
-1. Should `captured-ack` grow a dedicated async processor in M4, or stay intake-only until the batch writer exists?
+1. Should `captured-ack` grow more dedicated async processing, or remain a fallback while stream-ack is built?
 - current prototype: `202 Accepted` with `commandId`, status, processing mode, and status URL
 - risk: simulator and existing clients currently expect synchronous accepted/rejected result unless explicitly run in captured mode
+- recommendation: keep it as fallback and A/B baseline unless a change directly supports stream-ack migration
 
 2. Should command log live in Postgres only first, or add JetStream early?
-- recommendation: Postgres first
-- reason: command capture is canonical durability, not transient transport
+- recommendation: add JetStream early for the bot-arena high-throughput track through `stream-ack`
+- reason: accepted-command ingress needs a retained ordered log, while Postgres remains canonical for venue outcomes
 
 3. Should physical DB split happen now?
 - recommendation: no

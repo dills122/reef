@@ -9,7 +9,7 @@ This plan supersedes the earlier `5k accepted rps` target for the active bot-are
 ## Non-Negotiable Goals
 
 1. No accepted command is silently lost.
-- If the runtime returns an accepted response, the command must have a durable command-log record.
+- If the runtime returns an accepted response, the command must have a durable command-log or stream record.
 - Every accepted command must reach a terminal `COMPLETED` or `FAILED` result, or remain visible as active work with lease/retry metadata.
 - Overload must reject or throttle before durable acceptance when the system cannot safely process more work.
 
@@ -40,7 +40,7 @@ This plan supersedes the earlier `5k accepted rps` target for the active bot-are
 | Error behavior | overload is explicit rejection/throttle, not hidden loss |
 | Benchmark duration | sustained `10-15m` run plus post-run drain check before treating a result as stable |
 
-These targets apply to the durable `captured-ack` venue path, not the stripped-down capacity-baseline mode. `sync-result` remains the correctness and compatibility mode.
+These targets apply to the durable `stream-ack` venue path, not the stripped-down capacity-baseline mode. Postgres `captured-ack` remains the local fallback and A/B baseline. `sync-result` remains the correctness and compatibility mode.
 
 ## Benchmark Modes
 
@@ -48,7 +48,8 @@ These targets apply to the durable `captured-ack` venue path, not the stripped-d
 |---|---|---|
 | `sync-result` | deterministic compatibility and strict request/result behavior | correctness gate |
 | `captured-sync-engine` | transitional capture plus synchronous execution shape | contract comparison |
-| `captured-ack` | durable accepted response with async command processing | primary high-throughput gate |
+| `captured-ack` | Postgres-backed durable accepted response with async command processing | local fallback and A/B baseline |
+| `stream-ack` | JetStream-backed durable accepted response with partition workers | primary high-throughput gate |
 | capacity baseline | isolate simulator/client/runtime overhead | diagnostic only |
 | raw intake benchmark | isolate durable append and API intake | diagnostic only |
 
@@ -67,11 +68,13 @@ Current evidence from the bot-arena throughput branch:
   - `24` workers: about `4.9k completed/sec`, with worse per-command persistence and completion latency
 - DB pools did not show connection-wait pressure during the sweep.
 - the likely remaining bottleneck is write amplification across command results, queue completion, and runtime persistence.
+- later set-based runtime persistence plus command-log FK tuning stayed lossless, but still reached only about `4015 accepted rps`, `2404 completed/sec` during load, and `5606/sec` post-load drain.
 
 Interpretation:
 - Reef is not blocked on the matching engine for this traffic shape.
 - The API can accept near the minimum target in narrow intake tests, but the full accepted-to-terminal lifecycle cannot yet drain at the required rate.
-- The next work should reduce write amplification and add stronger accounting/backpressure before relying on more workers or pods.
+- The Postgres `captured-ack` path remains valuable for local fallback and measurement, but more small command-log tuning is unlikely to reach the target alone.
+- The next major work should introduce stream-ack ingress, deterministic partition workers, canonical DB commit before stream ack, and projection isolation before relying on more workers or pods.
 
 ## Work Plan
 
@@ -104,33 +107,40 @@ Exit criteria:
 - overload does not create invisible loss.
 - accepted commands remain either terminal or visible active work during and after failure tests.
 
-### P2: Reduce Command Intake Write Cost
+### P2: Stream-Ack Command Ingress
 
-Objective: keep durable acceptance fast without duplicating hot-path writes.
-
-Deliverables:
-- keep `command_log.commands` narrow as the command-ID and idempotency anchor.
-- split bulky request payloads out of the hot command index.
-- keep active queue rows small and active-only.
-- benchmark inline append versus function append only under the completed-throughput gate.
-
-Exit criteria:
-- durable intake remains above the minimum target without increasing accounting gaps or queue instability.
-
-### P3: Batch Command Completion
-
-Objective: reduce per-command result and queue-completion write overhead.
+Objective: make durable acceptance a JetStream publish-ack operation with deterministic partition routing.
 
 Deliverables:
-- batch terminal result inserts/upserts.
-- batch active queue deletes or terminal transitions.
-- keep completion idempotent so retries cannot duplicate terminal results.
-- expose batch size, flush interval, flush latency, and failed-batch metrics.
+- define command envelope fields in protobuf/contracts.
+- define subject shape `reef.cmd.v1.pXX.<venueSessionId>.<instrumentId>.<commandType>`.
+- route by `hash(venueSessionId + instrumentId) % partitionCount`, or include `runId` for isolated arena/simulator runs.
+- add NATS/JetStream local profile and command stream bootstrap.
+- return `202` only after durable publish ack.
+- reject with explicit `429` or `503` before durable acceptance when stream health is unsafe.
+- keep Postgres `captured-ack` available as the fallback and comparison profile.
 
 Exit criteria:
-- completed throughput improves materially without weakening status lookup or retry semantics.
+- first phase reaches `5000` stream-ack accepted rps with no accepted-command gaps and visible stream lag.
 
-### P4: Batch Runtime Persistence
+### P3: Stream Idempotency And Partition Workers
+
+Objective: process accepted stream commands exactly once at the business outcome layer under at-least-once delivery.
+
+Deliverables:
+- add scoped idempotency guard with payload hash, command ID, stream sequence, and first-seen timestamp.
+- replay same-key/same-body requests and reject same-key/different-body requests with `409`.
+- add partition workers that preserve per-partition ordering.
+- execute existing venue command path from workers.
+- write canonical command result and event log in one DB transaction.
+- ack JetStream only after canonical DB commit.
+- handle redelivery after DB commit without duplicate trades, events, or terminal command results.
+
+Exit criteria:
+- crash/retry tests prove no duplicate venue outcomes.
+- first processed phase reaches `5000` completed commands/sec with bounded backlog.
+
+### P4: Batch Canonical Runtime Persistence
 
 Objective: reduce runtime write-model round trips for high-volume order flow.
 
@@ -150,8 +160,10 @@ Objective: remove UI/query projection writes from command processing while keepi
 
 Deliverables:
 - keep Postgres as canonical event and lifecycle history.
-- introduce outbox/projection workers only after canonical write timing is explicit.
+- formalize canonical command-result and event-log linkage for stream workers.
+- introduce projection workers only after canonical write timing is explicit.
 - add projection lag and rebuild controls.
+- add projection watermarks and lag snapshots for run, partition, bot, and symbol metrics.
 - keep status APIs compatible while implementation moves behind projections.
 
 Exit criteria:
@@ -177,10 +189,10 @@ Exit criteria:
 Objective: prepare a basic cluster without pretending kube solves the hot path.
 
 Deliverables:
-- define config profiles for `sync-result`, `captured-ack`, and capacity diagnostics.
+- define config profiles for `sync-result`, `captured-ack`, `stream-ack`, and capacity diagnostics.
 - add readiness checks that consider database health and intake safety.
 - add liveness checks that do not kill pods during normal drain.
-- implement graceful shutdown: stop accepting, finish or release leased work, flush batches, then exit.
+- implement graceful shutdown: stop accepting, finish or release leased/owned partition work, flush batches, then exit.
 - document pod resource requests, limits, and required environment variables.
 - add per-pod and cluster-wide metric labeling.
 
@@ -208,10 +220,11 @@ Exit criteria:
 
 The next implementation slice should be:
 
-1. Add run/session attribution to command-log intake and stress tooling.
-2. Add backlog-adjusted accounting metrics to captured-ack stress reports.
-3. Add no-loss validation that fails a stress run on accepted-command gaps.
-4. Add explicit backlog and lease-age thresholds for durable intake backpressure.
-5. Implement and benchmark batched command completion.
+1. Define stream-ack command envelope, routing metadata, subject shape, and partition key.
+2. Add local NATS/JetStream profile and command stream bootstrap.
+3. Add stream health, publish-ack latency, partition lag, and oldest-age metrics to stress reports.
+4. Implement `stream-ack` API publish behind a flag while keeping `sync-result` and Postgres `captured-ack`.
+5. Add scoped idempotency guard tests for same-body replay and payload-hash conflict.
+6. Add the first partition worker and crash/redelivery tests for DB-commit-before-ack.
 
 Only after that slice should Reef treat more async workers, Kubernetes replicas, or bot traffic as capacity improvements.

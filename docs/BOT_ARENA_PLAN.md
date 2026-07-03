@@ -31,6 +31,7 @@ The current working direction is:
 - use Redis only for ephemeral coordination, rate limits, leases, and live caches, not as the sole durable store for competition records
 - design the run plane for early horizontal scale by tournament run, shard, instrument group, sandbox worker, and matching-engine partition
 - inherit the throughput scaling target from [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md): at least `7500` completed commands/sec per runtime + engine instance, preferably `10000`, with zero silent accepted-command loss
+- use [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md) as the target venue-ingress design for high-throughput bot traffic
 
 This direction can change, but changing it should update this document and any accepted decision records that later depend on it.
 
@@ -62,7 +63,7 @@ The arena should support specialized competitions and aggregate seasons:
 
 The game layer must not redefine Reef as a retail trading application. It should remain a controlled simulation and benchmarking surface for strategy behavior, market microstructure, and platform throughput.
 
-Arena readiness depends on completed-throughput capacity, not only request intake. Before attaching public bot traffic, Reef should prove that accepted bot-originated commands are durably captured, terminally accounted, and drained without unexplained gaps under the captured-ack stress profile.
+Arena readiness depends on completed-throughput capacity, not only request intake. Before attaching public bot traffic, Reef should prove that accepted bot-originated commands are durably captured, terminally accounted, and drained without unexplained gaps under the `stream-ack` stress profile. Postgres `captured-ack` remains useful for local fallback and A/B comparison.
 
 ## Architecture Fit
 
@@ -87,6 +88,8 @@ The matching engine should not know whether an order came from a manual user, si
 For scale, the arena should define a dedicated bot-runtime communication layer using protobuf contracts and likely gRPC transport. That protocol should connect sandboxed bot workers to the arena orchestrator; it should not give bot code direct access to the matching engine or internal platform state.
 
 The venue command gateway should preserve `/api/v1` boundary semantics: validation, identity context, idempotency, rate limits, abuse controls, command capture, and audit metadata. The initial implementation can call the existing HTTP boundary for simplicity, but the scalable target can use a gRPC or in-process application boundary as long as command-path parity and boundary controls are preserved.
+
+For high-throughput arena runs, the scalable target is `stream-ack`: bot-originated actions pass the arena risk gate, publish to the retained JetStream command stream with a durable ack before acceptance, route by deterministic run/session/instrument partition, and reach canonical Postgres command results and lifecycle events before the worker acks the stream message.
 
 Candidate ownership:
 
@@ -496,7 +499,8 @@ The scale-out path should add distribution where it matters:
 - arena orchestrators scale by tournament/run count
 - matching engines scale by run, venue partition, or instrument group
 - replay and leaderboard jobs scale as asynchronous batch/read-model work
-- NATS or another explicit queue/backbone can be introduced when run scheduling and metrics fanout justify it
+- JetStream-backed `stream-ack` ingress is the target venue command path for high-throughput bot traffic
+- NATS or another explicit queue/backbone can still be used for run scheduling and metrics fanout where those concerns justify it
 
 Scale unit:
 
@@ -524,8 +528,8 @@ Performance posture:
 - optimize callback batching, snapshot construction, and action validation before adding deployment complexity
 - keep matching-engine determinism and serial book processing as the baseline
 - measure accepted actions/sec, decision latency, reject rate, timeout rate, and replay reconstruction cost per run
-- benchmark the REST boundary against a gRPC/in-process command gateway before replacing the simple path
-- identify whether the current throughput ceiling is HTTP, JSON serialization, idempotency storage, database writes, event logging, engine matching, or simulator client pressure before changing core architecture
+- benchmark the REST boundary against stream-ack, gRPC, or in-process command gateways before replacing the simple path
+- identify whether the remaining throughput ceiling is stream publish ack, partition worker concurrency, idempotency storage, canonical DB commits, event logging, engine matching, projection lag, or simulator client pressure before changing core architecture again
 - make scale tests part of arena acceptance, including single-run throughput, multi-run throughput, worker saturation, replay reconstruction, and leaderboard aggregation lag
 
 First local stress baseline:
@@ -595,7 +599,7 @@ First local stress baseline:
 - How should aggregate season scoring normalize across very different game modes?
 - How much controlled background-flow code should be public versus private to keep the market understandable but not trivially exploitable?
 - Which run partitioning strategy should come first: by tournament run, instrument group, or explicit shard?
-- At what measured thresholds should NATS/queue-backed orchestration become mandatory rather than optional?
+- What stream-ack threshold and failure-test evidence is required before public bot submissions can use the scalable path?
 
 ## Concerns And Discussion Points
 
