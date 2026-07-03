@@ -66,7 +66,25 @@ Current fix batch:
 - Keep `venue-core` as the default DO drain-backpressure policy so projection lag is measured but does not throttle canonical command acceptance.
 - Gate DO reports on actual attempted and accepted RPS, defaulting to `2000/sec` for the current milestone.
 
+## Stream-Ack Sunset Checkpoint (July 3, 2026)
+
+The `64`-partition, `4`-worker, `4`-projector, venue-core soak did not recover the target and should be treated as a stop point for this architecture shape, not as a prompt for more small tuning.
+
+Clean DO run: `reports/do-benchmark/do-benchmark-20260703T195008Z`
+
+- configured load: `4000 rps`, `768` load-generator workers, `5m`
+- actual attempted/accepted: `1636.20 rps`, `496128` accepted, `0` HTTP failures
+- worker completed: `1486.67 rps`
+- projected: `819.98 rps`, ending projection lag `202156`
+- API phase average: `19.52ms`, including `7.77ms` reserve, `6.66ms` publish ack, and `4.13ms` backpressure
+- runtime Postgres: about `2.18KB` WAL per accepted command and `4.42` commits per worker-completed command
+- projection Postgres: about `6.24KB` WAL per accepted command, with `runtime_events`, `executions`, `trades`, `submit_results`, `orders`, and trace tables dominating write amplification
+
+Conclusion: this stack preserved correctness semantics better than the older path, but it is not a credible base for the `2k/sec` with headroom target. Further work should pivot to a new design rather than continue incremental stream-ack/Postgres projection tuning.
+
 ## Stream-Ack Post-Soak Optimization Priorities
+
+This section is retained as historical context from before the sunset checkpoint above. Do not treat it as the active delivery path.
 
 The macro architecture is now in the right family: durable stream ingress, ordered partition workers, canonical facts, and async projections. The remaining performance risk is that the hot path still performs too much database and projection work per command.
 
