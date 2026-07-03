@@ -6,6 +6,8 @@ loadDotEnv();
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const waitTimeout = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "90"));
 const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
+const smokeRunId = env("DEV_SMOKE_RUN_ID", "smoke-run-1");
+const smokeVenueSessionId = env("DEV_SMOKE_VENUE_SESSION_ID", "smoke-session-1");
 
 async function postJson(url, payload, headers = {}) {
   const response = await requestJson("POST", url, payload, headers, 5000);
@@ -13,6 +15,15 @@ async function postJson(url, payload, headers = {}) {
     throw new Error(`POST ${url} failed (${response.statusCode}): ${response.body}`);
   }
   return response.body;
+}
+
+function isAcceptedResponse(body) {
+  try {
+    const parsed = JSON.parse(body);
+    return String(parsed.status ?? "").toLowerCase() === "accepted" || parsed.accepted === true;
+  } catch (_error) {
+    return body.includes('"accepted"');
+  }
 }
 
 function requestJson(method, url, payload, headers = {}, timeoutMs = 5000) {
@@ -95,6 +106,8 @@ const submitResponse = await postJson(
     causationId: "smoke-causation-1",
     correlationId: "smoke-correlation-1",
     actorId: "smoke-user",
+    runId: smokeRunId,
+    venueSessionId: smokeVenueSessionId,
     occurredAt: "2026-05-01T13:00:00Z",
     orderId: "smoke-ord-1",
     instrumentId: "AAPL",
@@ -109,7 +122,7 @@ const submitResponse = await postJson(
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-submit-1" },
 );
-if (!submitResponse.includes('"accepted"')) {
+if (!isAcceptedResponse(submitResponse)) {
   throw new Error(`smoke failure: submit did not return accepted payload: ${submitResponse}`);
 }
 
@@ -122,13 +135,16 @@ const cancelResponse = await postJson(
     causationId: "smoke-causation-2",
     correlationId: "smoke-correlation-2",
     actorId: "smoke-user",
+    runId: smokeRunId,
+    venueSessionId: smokeVenueSessionId,
     occurredAt: "2026-05-01T13:00:10Z",
     orderId: "smoke-ord-1",
+    instrumentId: "AAPL",
     reason: "smoke cancel",
   },
   { "X-Client-Id": "local-smoke-client", "Idempotency-Key": "smoke-cancel-1" },
 );
-if (!cancelResponse.includes('"accepted"')) {
+if (!isAcceptedResponse(cancelResponse)) {
   throw new Error(`smoke failure: cancel did not return accepted payload: ${cancelResponse}`);
 }
 

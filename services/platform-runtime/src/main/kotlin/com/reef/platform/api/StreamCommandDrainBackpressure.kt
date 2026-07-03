@@ -2,6 +2,23 @@ package com.reef.platform.api
 
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 
+enum class StreamCommandDrainBackpressurePolicy(val configValue: String) {
+    ControlRoomFresh("control-room-fresh"),
+    VenueCore("venue-core");
+
+    companion object {
+        fun fromConfig(raw: String): StreamCommandDrainBackpressurePolicy {
+            return when (raw.trim().lowercase().replace("_", "-")) {
+                "", ControlRoomFresh.configValue, "fresh", "projection-fresh" -> ControlRoomFresh
+                VenueCore.configValue, "core", "venue" -> VenueCore
+                else -> throw IllegalArgumentException(
+                    "Unsupported STREAM_ACK_DRAIN_BACKPRESSURE_POLICY '$raw'; expected control-room-fresh or venue-core"
+                )
+            }
+        }
+    }
+}
+
 data class StreamCommandDrainBackpressureSnapshot(
     val maxWorkerStreamLag: Long,
     val workerSamples: Int,
@@ -9,7 +26,11 @@ data class StreamCommandDrainBackpressureSnapshot(
     val projectorLag: Long,
     val projectionName: String
 ) {
-    fun backpressure(maxWorkerStreamLag: Long, maxProjectorLag: Long): BoundaryError? {
+    fun backpressure(
+        maxWorkerStreamLag: Long,
+        maxProjectorLag: Long,
+        policy: StreamCommandDrainBackpressurePolicy = StreamCommandDrainBackpressurePolicy.ControlRoomFresh
+    ): BoundaryError? {
         if (maxWorkerStreamLag > 0L && this.maxWorkerStreamLag >= maxWorkerStreamLag) {
             return BoundaryError(
                 429,
@@ -17,7 +38,11 @@ data class StreamCommandDrainBackpressureSnapshot(
                 "stream command intake rejected because worker stream lag is ${this.maxWorkerStreamLag}"
             )
         }
-        if (maxProjectorLag > 0L && projectorLag >= maxProjectorLag) {
+        if (
+            policy == StreamCommandDrainBackpressurePolicy.ControlRoomFresh &&
+            maxProjectorLag > 0L &&
+            projectorLag >= maxProjectorLag
+        ) {
             return BoundaryError(
                 429,
                 "STREAM_COMMAND_PROJECTOR_BACKPRESSURE",

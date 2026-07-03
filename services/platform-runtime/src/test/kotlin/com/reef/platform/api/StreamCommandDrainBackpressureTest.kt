@@ -39,6 +39,42 @@ class StreamCommandDrainBackpressureTest {
     }
 
     @Test
+    fun allowsProjectorLagWhenVenueCorePolicyIsConfigured() {
+        val snapshot = StreamCommandDrainBackpressureSampler(
+            workerSources = emptyList(),
+            projectionStatusProvider = {
+                ProjectionStatus(
+                    projectionName = "runtime-normalized-submit",
+                    projectedCount = 10,
+                    lag = 500,
+                    watermarks = emptyList()
+                )
+            }
+        ).snapshot()
+
+        val error = snapshot.backpressure(
+            maxWorkerStreamLag = 0,
+            maxProjectorLag = 400,
+            policy = StreamCommandDrainBackpressurePolicy.VenueCore
+        )
+
+        assertNull(error)
+        assertEquals(500L, snapshot.projectorLag)
+    }
+
+    @Test
+    fun parsesBackpressurePolicyAliases() {
+        assertEquals(
+            StreamCommandDrainBackpressurePolicy.ControlRoomFresh,
+            StreamCommandDrainBackpressurePolicy.fromConfig("control_room_fresh")
+        )
+        assertEquals(
+            StreamCommandDrainBackpressurePolicy.VenueCore,
+            StreamCommandDrainBackpressurePolicy.fromConfig("venue-core")
+        )
+    }
+
+    @Test
     fun allowsIntakeWhenDrainLagIsBelowThresholds() {
         val snapshot = StreamCommandDrainBackpressureSampler(
             workerSources = listOf(FixedStreamCommandTelemetrySource(streamLag = 25)),

@@ -8,28 +8,38 @@ setDefault("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setDefault("EXTERNAL_API_COMMAND_LOG_MODE", "disabled");
 setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS");
 setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1");
-setDefault("STREAM_ACK_PARTITION_COUNT", "16");
+setDefault("STREAM_ACK_PARTITION_COUNT", "64");
 setDefault("STREAM_ACK_INTAKE_STORE", "postgres");
 setDefault("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", "2000");
 setDefault("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", "100");
-setDefault("STREAM_ACK_MARK_PUBLISHED_MODE", "async");
-setDefault("STREAM_ACK_MARK_PUBLISHED_WORKERS", "2");
-setDefault("STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY", "100000");
+setDefault("STREAM_ACK_MARK_PUBLISHED_MODE", "worker");
+setDefault("STREAM_ACK_MARK_PUBLISHED_WORKERS", "4");
+setDefault("STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY", "500000");
 setDefault("STREAM_ACK_WORKER_ENABLED", "true");
-setDefault("STREAM_ACK_WORKER_0_PARTITIONS", "0,1,2,3,4,5,6,7");
-setDefault("STREAM_ACK_WORKER_1_PARTITIONS", "8,9,10,11,12,13,14,15");
-setDefault("STREAM_ACK_WORKER_BATCH_SIZE", "250");
+setDefault("STREAM_ACK_WORKER_0_PARTITIONS", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15");
+setDefault("STREAM_ACK_WORKER_1_PARTITIONS", "16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31");
+setDefault("STREAM_ACK_WORKER_2_PARTITIONS", "32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47");
+setDefault("STREAM_ACK_WORKER_3_PARTITIONS", "48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63");
+setDefault("STREAM_ACK_WORKER_BATCH_SIZE", "1000");
 setDefault("STREAM_ACK_WORKER_POLL_MS", "10");
 setDefault("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", "200");
-setDefault("STREAM_ACK_WORKER_ACK_WAIT_MS", "30000");
+setDefault("STREAM_ACK_WORKER_ACK_WAIT_MS", "60000");
+setDefault("STREAM_ACK_WORKER_MAX_ACK_PENDING", "4000");
 setDefault("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", "true");
+setDefault("STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED", "false");
+setDefault("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED", "false");
 setDefault("STREAM_ACK_MAX_WORKER_STREAM_LAG", "50000");
-setDefault("STREAM_ACK_MAX_PROJECTOR_LAG", "250000");
+setDefault("STREAM_ACK_MAX_PROJECTOR_LAG", "0");
+setDefault("STREAM_ACK_DRAIN_BACKPRESSURE_POLICY", "venue-core");
 setDefault("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", "500");
 setDefault("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", streamAckWorkerDurables());
 setDefault("STREAM_ACK_PROJECTOR_ENABLED", "true");
-setDefault("STREAM_ACK_PROJECTOR_0_PARTITIONS", "0,1,2,3,4,5,6,7");
-setDefault("STREAM_ACK_PROJECTOR_1_PARTITIONS", "8,9,10,11,12,13,14,15");
+setDefault("STREAM_ACK_PROJECTOR_0_PARTITIONS", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15");
+setDefault("STREAM_ACK_PROJECTOR_1_PARTITIONS", "16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31");
+setDefault("STREAM_ACK_PROJECTOR_2_PARTITIONS", "32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47");
+setDefault("STREAM_ACK_PROJECTOR_3_PARTITIONS", "48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63");
+setDefault("STREAM_ACK_PROJECTOR_BATCH_SIZE", "2000");
+setDefault("STREAM_ACK_PROJECTOR_POLL_MS", "10");
 setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_API_MAX", "64");
 setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_API_MIN_IDLE", "16");
 setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX", "4");
@@ -50,12 +60,22 @@ console.log(`  intakeStore=${env("STREAM_ACK_INTAKE_STORE")}`);
 console.log(`  workerEnabled=${env("STREAM_ACK_WORKER_ENABLED")}`);
 console.log(`  worker0Partitions=${env("STREAM_ACK_WORKER_0_PARTITIONS")}`);
 console.log(`  worker1Partitions=${env("STREAM_ACK_WORKER_1_PARTITIONS")}`);
+console.log(`  worker2Partitions=${env("STREAM_ACK_WORKER_2_PARTITIONS")}`);
+console.log(`  worker3Partitions=${env("STREAM_ACK_WORKER_3_PARTITIONS")}`);
 console.log(`  workerBatchSize=${env("STREAM_ACK_WORKER_BATCH_SIZE")}`);
+console.log(`  workerAckWaitMs=${env("STREAM_ACK_WORKER_ACK_WAIT_MS")}`);
+console.log(`  workerMaxAckPending=${env("STREAM_ACK_WORKER_MAX_ACK_PENDING")}`);
+console.log(`  canonicalEventRows=${env("STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED")}`);
+console.log(`  canonicalQueryIndexes=${env("STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED")}`);
 console.log(`  projectorEnabled=${env("STREAM_ACK_PROJECTOR_ENABLED")}`);
 console.log(`  projector0Partitions=${env("STREAM_ACK_PROJECTOR_0_PARTITIONS")}`);
 console.log(`  projector1Partitions=${env("STREAM_ACK_PROJECTOR_1_PARTITIONS")}`);
+console.log(`  projector2Partitions=${env("STREAM_ACK_PROJECTOR_2_PARTITIONS")}`);
+console.log(`  projector3Partitions=${env("STREAM_ACK_PROJECTOR_3_PARTITIONS")}`);
+console.log(`  projectorBatchSize=${env("STREAM_ACK_PROJECTOR_BATCH_SIZE")}`);
 console.log(`  backpressureSampleMs=${env("STREAM_ACK_BACKPRESSURE_SAMPLE_MS")}`);
 console.log(`  drainBackpressureSampleMs=${env("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS")}`);
+console.log(`  drainBackpressurePolicy=${env("STREAM_ACK_DRAIN_BACKPRESSURE_POLICY")}`);
 console.log(`  maxWorkerStreamLag=${env("STREAM_ACK_MAX_WORKER_STREAM_LAG")}`);
 console.log(`  maxProjectorLag=${env("STREAM_ACK_MAX_PROJECTOR_LAG")}`);
 console.log(`  markPublishedMode=${env("STREAM_ACK_MARK_PUBLISHED_MODE")}`);
@@ -78,32 +98,40 @@ async function bootstrapCommandStream() {
     console.log(`JetStream stream ${stream} already exists; leaving existing stream configuration in place.`);
     return;
   }
-  await run("docker", [
-    "compose",
-    "run",
-    "-T",
-    "--rm",
-    "nats-box",
-    "nats",
-    "--server",
-    "nats://nats:4222",
-    "stream",
-    "add",
-    stream,
-    "--subjects",
-    subjects,
-    "--storage",
-    "file",
-    "--retention",
-    "limits",
-    "--discard",
-    "new",
-    "--max-bytes",
-    maxBytes,
-    "--dupe-window",
-    env("STREAM_ACK_COMMAND_STREAM_DUPE_WINDOW", "2m"),
-    "--defaults",
-  ]);
+  try {
+    await run("docker", [
+      "compose",
+      "run",
+      "-T",
+      "--rm",
+      "nats-box",
+      "nats",
+      "--server",
+      "nats://nats:4222",
+      "stream",
+      "add",
+      stream,
+      "--subjects",
+      subjects,
+      "--storage",
+      "file",
+      "--retention",
+      "limits",
+      "--discard",
+      "new",
+      "--max-bytes",
+      maxBytes,
+      "--dupe-window",
+      env("STREAM_ACK_COMMAND_STREAM_DUPE_WINDOW", "2m"),
+      "--defaults",
+    ]);
+  } catch (error) {
+    if (await streamExists(stream)) {
+      console.warn(`JetStream stream ${stream} exists after create returned nonzero; continuing.`);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function streamExists(stream) {
@@ -144,10 +172,14 @@ function setValue(name, value) {
 
 function streamAckWorkerDurables() {
   const prefix = env("STREAM_ACK_WORKER_DURABLE_PREFIX", "reef-stream-worker");
-  return [
-    ...durablesForWorker(`${prefix}-w0`, env("STREAM_ACK_WORKER_0_PARTITIONS", "0,1,2,3,4,5,6,7")),
-    ...durablesForWorker(`${prefix}-w1`, env("STREAM_ACK_WORKER_1_PARTITIONS", "8,9,10,11,12,13,14,15")),
-  ].join(",");
+  return [0, 1, 2, 3]
+    .flatMap((workerIndex) =>
+      durablesForWorker(
+        `${prefix}-w${workerIndex}`,
+        env(`STREAM_ACK_WORKER_${workerIndex}_PARTITIONS`, ""),
+      ),
+    )
+    .join(",");
 }
 
 function durablesForWorker(prefix, rawPartitions) {
@@ -162,7 +194,7 @@ function parsePartitions(raw) {
 }
 
 function partitionToken(partition) {
-  const partitionCount = Number.parseInt(env("STREAM_ACK_PARTITION_COUNT", "16"), 10);
+  const partitionCount = Number.parseInt(env("STREAM_ACK_PARTITION_COUNT", "64"), 10);
   const width = Math.max(2, String(partitionCount - 1).length);
   return `p${String(partition).padStart(width, "0")}`;
 }

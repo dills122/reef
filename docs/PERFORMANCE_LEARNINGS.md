@@ -33,6 +33,96 @@ Immediate implications:
 1. Throughput target is reachable, but long-run stability depends on datastore lifecycle controls.
 2. Postgres WAL/checkpoint tuning and data retention/partitioning are not optional follow-up items.
 
+## DigitalOcean Stream-Ack Soak Learnings (July 3, 2026)
+
+From a clean single-droplet DO soak (`stream-ack`, `7500 rps`, `workers=384`, `5m`):
+
+1. The current shape is not a healthy `7500 rps` soak configuration:
+   - `867415` attempted
+   - `388260` accepted, about `1281 accepted/sec`
+   - `310807` worker completed, about `1025 completed/sec`
+   - `268782` projected, about `887 projection work items/sec`
+2. Protective `429` backpressure worked, but the reject taxonomy showed downstream drain pressure rather than API instability:
+   - projector lag backpressure dominated
+   - worker stream lag backpressure followed
+   - worker failed and ack-failed counters stayed clean
+3. Accepted/sec alone is the wrong success target. The next milestone is `2000 completed/sec` sustained for at least `5m`, with accepted throughput within `5-10%` of completed throughput and a clean post-run drain.
+4. Projection/UI freshness must be measured separately from venue-core capacity:
+   - `control-room-fresh` mode may reject on projection lag
+   - `venue-core` mode should report projection lag without letting it define canonical command capacity
+5. Runtime and projection Postgres both showed heavy CPU/write pressure. Future runs must report rows/command, WAL bytes/command, commits/command, and partition skew before scaling workers or projectors.
+
+Immediate implications:
+
+1. Do not keep rerunning `7500/384` at the same config.
+2. Run venue-core canonical ablations until `2000 completed/sec` is stable for a `5m` soak, then promote to `5000/sec`, then `7500/sec`.
+3. Run projector catch-up and hot-partition versus even-distribution ablations before broad scaling.
+4. Treat projection write amplification and partition skew as first-class bottleneck suspects.
+5. Do not accept configured-rate results as benchmark evidence unless actual attempted and accepted RPS meet the active target; the July 3 follow-up runs under-delivered actual load even when response failures were clean.
+
+Current fix batch:
+
+- Use the deploy-shaped stream-ack profile with `64` partitions, `4` worker processes, and `4` projector processes before the next `2k/sec` soak.
+- Keep `venue-core` as the default DO drain-backpressure policy so projection lag is measured but does not throttle canonical command acceptance.
+- Gate DO reports on actual attempted and accepted RPS, defaulting to `2000/sec` for the current milestone.
+
+## Stream-Ack Sunset Checkpoint (July 3, 2026)
+
+The `64`-partition, `4`-worker, `4`-projector, venue-core soak did not recover the target and should be treated as a stop point for this architecture shape, not as a prompt for more small tuning.
+
+Clean DO run: `reports/do-benchmark/do-benchmark-20260703T195008Z`
+
+- configured load: `4000 rps`, `768` load-generator workers, `5m`
+- actual attempted/accepted: `1636.20 rps`, `496128` accepted, `0` HTTP failures
+- worker completed: `1486.67 rps`
+- projected: `819.98 rps`, ending projection lag `202156`
+- API phase average: `19.52ms`, including `7.77ms` reserve, `6.66ms` publish ack, and `4.13ms` backpressure
+- runtime Postgres: about `2.18KB` WAL per accepted command and `4.42` commits per worker-completed command
+- projection Postgres: about `6.24KB` WAL per accepted command, with `runtime_events`, `executions`, `trades`, `submit_results`, `orders`, and trace tables dominating write amplification
+
+Conclusion: this stack preserved correctness semantics better than the older path, but it is not a credible base for the `2k/sec` with headroom target. Further work should pivot to a new design rather than continue incremental stream-ack/Postgres projection tuning.
+
+## Stream-Ack Post-Soak Optimization Priorities
+
+This section is retained as historical context from before the sunset checkpoint above. Do not treat it as the active delivery path.
+
+The macro architecture is now in the right family: durable stream ingress, ordered partition workers, canonical facts, and async projections. The remaining performance risk is that the hot path still performs too much database and projection work per command.
+
+Highest-value fixes after the next ablations:
+
+1. Collapse canonical writes while preserving replay and audit:
+   - consider compact command/event records or worker-batch event records
+   - preserve partition sequence ranges, stream sequence ranges, command counts, event counts, payload format, checksum, and command lookup
+   - reduce rows/command, commits/command, WAL bytes/command, and hot indexes
+2. Make projectors cheaper:
+   - coalesce repeated aggregate updates inside a batch
+   - write final current state once per batch
+   - move nonessential timeline/search/report writes to slower rebuildable jobs
+   - use staging/merge paths and unlogged caches only for rebuildable projection data
+3. Treat partition skew as domain signal:
+   - even-distribution and hot-book tests measure different capacities
+   - more partitions do not fix one legitimately hot instrument that must preserve order
+4. Tune configuration only with measurement:
+   - NATS pull batch, `MaxAckPending`, worker fetch loop, DB batch size, and pool sizes should move together
+   - raising pending limits or pool sizes can hide overload if the DB write path remains the limiter
+5. Provision for practical headroom:
+   - `2-3x` subsystem headroom over the current target is acceptable when cost and complexity are reasonable
+   - avoid `10x` cost/complexity jumps or broad brute-force scaling that hides avoidable write amplification
+6. Avoid barely-stable milestones:
+   - a `2000 completed/sec` run with saturated CPU/IO, growing lag, slow drain, or no credible path to `5000/sec` is not a capacity win
+   - prefer bottleneck-removing changes and practical overcapacity over small parameter nudges that only make one run pass
+7. Keep the hard pivot explicit:
+   - JetStream as the canonical event log and Postgres as projection/query storage is a reserve option only if compact canonical Postgres append remains the ceiling
+   - adopting that option would require a new architecture decision, retention/replay/checksum requirements, and an updated audit/query story
+
+First batch fix applied before the next DO soak:
+
+1. Remove duplicate API-side publish-marker DB pressure from the stream-ack throughput profile.
+2. Batch worker publish-marker repair before JetStream ack.
+3. Stop duplicating submit lifecycle events into per-event canonical rows in throughput mode; keep the full outcome payload in canonical command results.
+4. Avoid nonessential canonical query indexes in throughput mode.
+5. Raise worker/projector batch and ack-pending headroom together so the next run tests a meaningfully different drain shape.
+
 ## Runtime Library Investigation Priorities
 
 Before swapping libraries, benchmark candidates against Reef's actual command, persistence, and simulator workloads.

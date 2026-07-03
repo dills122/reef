@@ -200,7 +200,15 @@ Do not put leaderboard, UI read-model, or analytics writes on the command comple
 
 In stream-ack mode, canonical append-only facts become the completion boundary. Normalized order, execution, trade, status, trace, leaderboard, report, and UI tables are projections unless a future decision explicitly promotes a field back into the canonical completion transaction.
 
-Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack. `platform-projector-0` and `platform-projector-1` apply canonical submit outcomes into the existing normalized order/execution/trade/runtime-event read tables for explicit non-overlapping partition ranges and advance `runtime.projection_watermarks` so lag is visible.
+Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack. `platform-projector-0` through `platform-projector-3` apply canonical submit outcomes into the existing normalized order/execution/trade/runtime-event read tables for explicit non-overlapping partition ranges and advance `runtime.projection_watermarks` so lag is visible.
+
+Post-DO soak direction: the canonical completion boundary stays in Postgres for now, but the write shape should become more compact if measurements show row/commit/WAL amplification is the limiter. Acceptable next shapes include:
+
+- one command-result row plus one canonical event row that contains a compact event array for the command
+- one canonical event-batch row per worker batch with partition sequence range, stream sequence range, command count, event count, payload format, checksum, and creation time
+- minimal hot indexes on canonical append tables, with richer query shapes rebuilt by projections
+
+Any compact batch format must preserve deterministic replay, command/result lookup, partition ordering, duplicate suppression, and checksum/audit evidence. It must not make normalized read tables part of the stream-ack completion boundary again.
 
 Minimum canonical result direction:
 
@@ -264,6 +272,15 @@ Initial projection tables/counters should include:
 - `projection_watermarks`
 - `stream_lag_snapshots`
 
+Projection optimization direction:
+
+- coalesce repeated updates for the same order or aggregate inside one projection batch
+- write final current state once per batch where possible
+- write metrics into time buckets instead of per-event counters
+- keep detailed timeline/search/audit conveniences on slower rebuildable paths when they are not required for live control-room freshness
+- use staging tables plus batch merge/upsert paths where they reduce per-row overhead
+- consider unlogged tables only for rebuildable projection caches, never for canonical command results or canonical venue facts
+
 ## Backpressure Inputs
 
 Backpressure must reject before durable acceptance when the system cannot safely drain.
@@ -311,6 +328,7 @@ Backpressure decisions should be recorded with reason codes so stress reports ca
 | 3 | async projection system | order/trade/status/timeline/leaderboard/run projections have watermarks, lag metrics, and rebuild path |
 | 4 | engine shards | partition ranges map to engine shards after canonical persistence no longer hides engine parallelism |
 | 5 | DigitalOcean benchmark harness | deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
+| 6 | post-soak write-collapse pass | rows/command, WAL bytes/command, commits/command, and partition skew evidence drives compact canonical batches and projection write reduction |
 
 The current Postgres `captured-ack` path should remain available for local fallback and comparison, but it should not be treated as the final throughput architecture for the bot-arena target.
 
@@ -383,6 +401,14 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - combine stream, worker, DB, and projection health into explicit overload decisions
 - add Kubernetes readiness/liveness/drain behavior for partition ownership
 - add dead-letter handling and operator remediation path
+
+11. Post-soak write-collapse pass
+- run venue-core canonical ablations before broad scaling
+- add projector-only catch-up benchmark against a fixed canonical backlog
+- compare even-distribution and hot-book workloads explicitly
+- collapse canonical event writes only after rows/command, WAL bytes/command, commits/command, and replay requirements are measured
+- batch or stream worker-to-engine interactions only when the DB write shape no longer hides engine overhead
+- keep a JetStream canonical event-log pivot as a separate future decision, not an implicit implementation detail
 
 ## Current-App Changes Needed
 

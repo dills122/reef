@@ -558,6 +558,7 @@ Summary:
 - redelivery after worker crash is a normal design case; deterministic IDs and uniqueness constraints must prevent duplicate trades, executions, lifecycle events, and terminal command results.
 - submit, cancel, and modify commands affecting the same run/session/instrument must use the same deterministic partition lane; cancel/modify must carry routing metadata rather than requiring hot-path lookup.
 - backpressure must be based on drain health and completed throughput, not durable acceptance rate alone.
+- drain backpressure policy must be explicit: `control-room-fresh` can reject on worker and projection lag, while `venue-core` reports projection lag without letting read-model freshness define the canonical venue throughput ceiling.
 - no `7500-10000` completed/sec claim is valid without accepted/completed/projected accounting, bounded lag, p95/p99 evidence, zero accepted-command gaps, and replay or checksum evidence.
 
 Primary references:
@@ -569,6 +570,29 @@ Primary references:
 - [NATS Subject Mapping and Partitioning](https://docs.nats.io/nats-concepts/subject_mapping)
 - [PostgreSQL Populating a Database](https://www.postgresql.org/docs/current/populate.html)
 - [PostgreSQL Table Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
+
+### D-038: Stream-Ack Post-Soak Optimization Direction
+
+Status: accepted
+
+Summary:
+- the July 3, 2026 DO soak does not invalidate the stream-ack macro architecture; it shows that the current hot path still writes and projects too much per completed command for the target.
+- the next optimization target is `completed/sec`, not accepted/sec, with accepted throughput close to worker-completed throughput and a clean post-load drain.
+- the promotion ladder is `2000 completed/sec` sustained for at least `5m`, then `5000/sec`, then `7500/sec` and larger ceiling probes only after the lower tier is stable.
+- before scaling workers/projectors broadly, Reef must measure rows/command, WAL bytes/command, commits/command, projection work items/command, and partition skew.
+- practical `2-3x` subsystem headroom over the active tier is acceptable when cost and complexity are reasonable; avoid expensive brute-force capacity that hides inefficient writes or hot-partition behavior.
+- a barely stable `2000/sec` soak with saturated resources, growing lag, slow drain, or no credible path to `5000/sec` is not a successful milestone for this track.
+- implementation work should prefer bottleneck-class fixes and practical headroom over micro-tuning a narrow pass at the current tier.
+- canonical Postgres remains authoritative under D-036/D-037, but the canonical write shape may be collapsed from per-event rows into compact command/event batch records when replay, idempotency, ordering, checksums, and audit semantics remain intact.
+- projection writes should be optimized as a separate streaming system: batch, coalesce repeated aggregate updates, reduce hot indexes, use staging/merge paths where useful, and allow unlogged/disposable storage only for rebuildable projection caches.
+- hot partitions should be treated as either routing bugs or legitimate hot-book market behavior; even-distribution and hot-book benchmarks must be labeled separately.
+- the preferred infrastructure split order is load generator first, canonical Postgres second, projection Postgres third, and NATS only after JetStream metrics show pressure.
+- using JetStream as the canonical venue event log with Postgres as projection/query storage is a reserved hard-pivot option only if a compact canonical Postgres append path still caps completed throughput; adopting it would require a new decision that supersedes the D-036/D-037 completion boundary.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
 ### D-032: Command Log Queue And Result Split
 

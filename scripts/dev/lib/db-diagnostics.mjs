@@ -20,7 +20,7 @@ export async function captureDbDiagnosticsSnapshot({
   const safeSchemas = schemas.map(normalizeSchemaName);
   const info = { capturedAt, stage, service, dbUser, dbName, schemas: safeSchemas };
   try {
-    const [serverVersionRows, bgwriterRows, hasCheckpointerRows, tables] = await Promise.all([
+    const [serverVersionRows, bgwriterRows, walRows, databaseRows, hasCheckpointerRows, tables] = await Promise.all([
       queryDbRows({
         service,
         dbUser,
@@ -33,6 +33,43 @@ export async function captureDbDiagnosticsSnapshot({
         dbUser,
         dbName,
         sql: "select * from pg_stat_bgwriter;",
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
+        sql: "select wal_records, wal_fpi, wal_bytes, wal_buffers_full, wal_write, wal_sync, wal_write_time, wal_sync_time from pg_stat_wal;",
+        columns: [
+          "walRecords",
+          "walFpi",
+          "walBytes",
+          "walBuffersFull",
+          "walWrite",
+          "walSync",
+          "walWriteTime",
+          "walSyncTime",
+        ],
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
+        sql: "select xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, conflicts, temp_files, temp_bytes, deadlocks from pg_stat_database where datname = current_database();",
+        columns: [
+          "xactCommit",
+          "xactRollback",
+          "blocksRead",
+          "blocksHit",
+          "tuplesReturned",
+          "tuplesFetched",
+          "tuplesInserted",
+          "tuplesUpdated",
+          "tuplesDeleted",
+          "conflicts",
+          "tempFiles",
+          "tempBytes",
+          "deadlocks",
+        ],
       }),
       queryDbRows({
         service,
@@ -83,12 +120,16 @@ export async function captureDbDiagnosticsSnapshot({
       serverVersionNum: serverVersionRows[0]?.serverVersionNum ?? "",
       tablesBySchema: groupTablesBySchema(tables),
       bgwriter: bgwriterRows[0] ?? {},
+      wal: coerceNumericStats(walRows[0] ?? {}),
+      database: coerceNumericStats(databaseRows[0] ?? {}),
       checkpointer: checkpointerRows[0] ?? {},
     };
 
     writeFileSync(join(diagnosticsDir, `${stage}-db-diagnostics.json`), JSON.stringify(snapshot, null, 2));
     writeFileSync(join(diagnosticsDir, `${stage}-table-stats.csv`), toCsv(tables) + "\n");
     writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_bgwriter.csv`), toCsv(bgwriterRows) + "\n");
+    writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_wal.csv`), toCsv(walRows) + "\n");
+    writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_database.csv`), toCsv(databaseRows) + "\n");
     if (hasCheckpointer) {
       writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_checkpointer.csv`), toCsv(checkpointerRows) + "\n");
     }
@@ -139,7 +180,12 @@ export function summarizeDiagnosticsDelta(preResult, postResult) {
     });
   }
   deltas.sort((a, b) => Math.abs(b.totalBytesDelta) - Math.abs(a.totalBytesDelta));
-  return { ok: true, tables: deltas };
+  return {
+    ok: true,
+    tables: deltas,
+    wal: numericDelta(preResult.snapshot.wal, postResult.snapshot.wal),
+    database: numericDelta(preResult.snapshot.database, postResult.snapshot.database),
+  };
 }
 
 function tableStatsSql(schemas) {
@@ -236,6 +282,13 @@ function flattenTables(tablesBySchema) {
     }
   }
   return flattened;
+}
+
+function numericDelta(pre, post) {
+  const keys = new Set([...Object.keys(pre ?? {}), ...Object.keys(post ?? {})]);
+  return Object.fromEntries(
+    [...keys].map((key) => [key, numberValue(post?.[key]) - numberValue(pre?.[key])]),
+  );
 }
 
 function toCsv(rows) {

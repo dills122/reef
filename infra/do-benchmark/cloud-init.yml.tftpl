@@ -1,0 +1,72 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: ${ssh_user}
+    gecos: Reef Benchmark
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+  - htop
+  - iotop
+  - jq
+  - make
+  - net-tools
+  - nodejs
+  - npm
+  - rsync
+  - sysstat
+  - unzip
+  - golang-go
+
+write_files:
+  - path: /usr/local/sbin/reef-benchmark-bootstrap
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      install -m 0755 -d /etc/apt/keyrings
+      if [ ! -f /etc/apt/keyrings/docker.asc ]; then
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+      fi
+
+      codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+      docker_list=/etc/apt/sources.list.d/docker.list
+      if [ ! -f "$docker_list" ]; then
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $codename stable" > "$docker_list"
+      fi
+
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        docker-ce \
+        docker-ce-cli \
+        containerd.io \
+        docker-buildx-plugin \
+        docker-compose-plugin
+
+      systemctl enable --now docker
+      usermod -aG docker ${ssh_user}
+
+      install -d -o ${ssh_user} -g ${ssh_user} /home/${ssh_user}/reef
+      install -d -o ${ssh_user} -g ${ssh_user} /home/${ssh_user}/reports
+      install -d -o ${ssh_user} -g ${ssh_user} /tmp/reef-do-benchmark
+
+      echo "reef benchmark host ready" > /var/log/reef-benchmark-bootstrap.done
+
+runcmd:
+  - [bash, /usr/local/sbin/reef-benchmark-bootstrap]

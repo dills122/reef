@@ -7,7 +7,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime test-simulator fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-captured-ack dev-up-stream-ack dev-down dev-reset dev-db-migrate dev-smoke dev-stress dev-stress-captured-ack dev-stress-stream-ack dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare
+.PHONY: test test-go test-platform-runtime test-simulator fmt-go check-proto-additive bench-matching-engine bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-captured-ack dev-up-stream-ack dev-down dev-reset dev-db-migrate dev-smoke dev-stress dev-stress-captured-ack dev-stress-stream-ack dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark
 
 test: test-go test-simulator test-platform-runtime
 
@@ -114,3 +114,6 @@ dev-throughput-campaign:
 dev-throughput-compare:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/throughput-compare.mjs
+
+do-benchmark:
+	./scripts/dev/do-benchmark-host.sh $(ARGS)

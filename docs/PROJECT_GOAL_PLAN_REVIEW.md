@@ -4,9 +4,33 @@
 
 2026-06-04
 
+Latest checkpoint addendum: 2026-07-03
+
 ## Purpose
 
 This review reconciles Reef's stated vision, roadmap, steering documents, and current implementation state. It is intended to prevent planning drift as the project grows from an API-first venue slice into a simulation-first market-infrastructure platform.
+
+## 2026-07-03 Checkpoint Addendum
+
+The critique below remains useful for the broad product direction, but it predates the merged stream-ack architecture shift and the latest latency/backpressure work. For the high-throughput track, the current execution checkpoint is now the stream-ack path described by D-036, D-037, [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md), [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md), and [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md).
+
+Current state:
+
+- The old Postgres `captured-ack` path remains a local fallback and A/B baseline, not the target architecture for the bot-arena throughput track.
+- The deploy-shaped stream-ack stack now separates API, workers, projectors, NATS, matching engine, boundary DB, runtime DB, and projection DB.
+- API acceptance in stream-ack mode is tied to JetStream durable publish acknowledgement.
+- Submit workers append canonical command results and venue events before acknowledging JetStream messages.
+- Normalized submit read models are now asynchronous projections with partition-owned watermarks and visible lag.
+- Drain-side stream/backpressure signals are present, including worker stream lag and projector lag thresholds.
+
+Updated near-term ladder for the high-throughput track:
+
+1. Keep stream-ack local evidence reproducible and lossless.
+2. Build the DigitalOcean benchmark harness as a capacity-discovery environment, not a release declaration.
+3. Use the first DO run to locate the limiting subsystem across CPU, disk/WAL, JetStream, canonical runtime persistence, projection persistence, and load generation.
+4. Only after the DO evidence, decide whether the next implementation slice is engine sharding, persistence tuning, projection tuning, load-generator split, or infrastructure split.
+
+Before proceeding into DO IaC, Reef should not restart broad persistence/control-room/post-trade work for this track. The required update is narrower: make sure the IaC harness preserves the stream-ack guarantees, captures accepted/completed/projected evidence, fetches artifacts before destroy, and fails clearly on worker/projector/ack/accounting anomalies.
 
 ## Current Goal Assessment
 
