@@ -58,6 +58,18 @@ Suggested first sizes:
 
 Use a single-host load generator first because it keeps setup simple and removes laptop/Docker Desktop noise. If CPU saturation is ambiguous, split load generation onto a second droplet later.
 
+## Pre-IaC Defaults
+
+Use these defaults for the first implementation unless a later decision explicitly changes them:
+
+- Region: `sfo3`.
+- First size: `c-8`; treat `c-16` as a follow-up ceiling probe, not the default.
+- OpenTofu state: local state for the first benchmark harness. Add Spaces/S3-compatible remote state only when the benchmark environment becomes shared or long-lived.
+- Repo transfer: `rsync` the current local checkout to the Droplet. This keeps uncommitted benchmark-harness iteration testable without pushing work-in-progress branches.
+- Load generator: run on the same Droplet over SSH for the first signal. Add a second load-generator Droplet only if Docker CPU stats or host metrics show ambiguous contention.
+- API exposure: do not open the API publicly by default. Run stress commands over SSH on the Droplet, and restrict the firewall to SSH from configured CIDRs.
+- Cleanup: destroy is the normal end state for `run-destroy` and `fetch-destroy`.
+
 ## Benchmark Sequence
 
 1. Provision the Droplet with OpenTofu.
@@ -71,6 +83,27 @@ Use a single-host load generator first because it keeps setup simple and removes
 9. Only if `5000` is healthy, run one larger exploratory probe, probably `7500` before anything bigger.
 10. Fetch stress reports, telemetry, logs, and selected DB/NATS diagnostics.
 11. Destroy the Droplet unless we are actively iterating.
+
+## Harness Validation Gates
+
+The host-control script should fail the run, fetch artifacts, and keep or destroy the Droplet according to the requested command when any required gate fails.
+
+Required gates for `run` and `run-destroy`:
+
+- `make dev-smoke` passes before measured stress.
+- Every measured report exists and has parseable JSON.
+- `2500` and `5000` report `100%` success, except intentional pre-acceptance `429` backpressure when a backpressure scenario is explicitly requested.
+- Unexpected `5xx` count is `0`.
+- `streamAckWorkers.delta.failedDelta == 0`.
+- `streamAckWorkers.delta.ackFailedDelta == 0`.
+- `streamAckWorkers.delta.unsupportedDelta == 0`.
+- Worker completed delta is nonzero and can be compared with accepted throughput.
+- Projector stats are present, projected delta is nonzero, and final lag is reported.
+- DB pool stats are captured; any nonzero waiter count must be visible in the fetched artifact bundle.
+- Hot-path phase timing and stream-ack health probes are captured.
+- Artifacts are fetched locally before any destroy step.
+
+These gates should be enforced by the benchmark host script or a small report-check helper, not left as manual interpretation of console output.
 
 ## Evidence To Capture
 
@@ -159,6 +192,8 @@ The host-control script should support:
 - `run-destroy`
 - `destroy`
 
+`run` should start the stack and execute the benchmark sequence without destroying the Droplet. `run-destroy` should execute the same sequence, fetch artifacts, and destroy only after fetch succeeds or after enough failure artifacts have been collected to diagnose the run. `fetch-destroy` should be available for manual cleanup after failed or interrupted runs.
+
 ## Reference Pattern From Liars Dice
 
 The useful pattern in `/Users/dsteele/repos/liars-dice-private/lab/infra/do-runner` is:
@@ -181,10 +216,6 @@ The DigitalOcean docs currently state that CPU Droplet billing begins when the D
 
 ## Decisions Needed Before Implementation
 
-- Region: default to `sfo3` unless there is a better target.
-- First size: default to `c-8`, with `c-16` as follow-up.
-- State: local OpenTofu state first, or DO Spaces S3-compatible backend from day one.
 - SSH key: which public key should cloud-init install.
-- Repo transfer: `rsync` local checkout first, or remote `git clone`.
-- Load generator: same droplet first, second droplet later only if CPU contention is ambiguous.
-- Whether to open the API port publicly for local driving, or run all stress commands over SSH on the Droplet.
+- Allowed SSH CIDR: auto-detect current public IPv4 `/32` by default, with an override for known fixed CIDRs.
+- Cost guard: whether the lifecycle script should require an explicit `REEF_DO_CONFIRM_DESTROYABLE=1` or similar acknowledgement before creating billable resources.
