@@ -17,7 +17,7 @@ The local result justifies the move:
 
 1. Does the expected droplet hardware improve accepted, completed, and projected throughput versus local Docker Desktop?
 2. Does the bottleneck move to CPU, disk IO/WAL, JetStream storage, runtime canonical persistence, projection persistence, or the load generator?
-3. Can the stack hold `2500` and `5000` submit-only stream-ack runs with `100%` success and no unexplained accepted-command gaps?
+3. Can the stack hold `2500` and `5000` submit-only stream-ack runs with `100%` success, accepted throughput within `5-10%` of worker completed throughput, and no unexplained accepted-command gaps?
 4. At `5000`, do workers and projectors lag only temporarily, and do they catch up without failures or ack failures?
 5. Does drain-side backpressure stay inactive under healthy conditions and reject before publish when lag/storage thresholds are exceeded?
 6. Is one droplet a reasonable first deployment shape, or do we need to split load generation or databases before the next test?
@@ -58,6 +58,28 @@ Suggested first sizes:
 
 Use a single-host load generator first because it keeps setup simple and removes laptop/Docker Desktop noise. If CPU saturation is ambiguous, split load generation onto a second droplet later.
 
+## Current DO Soak Finding
+
+The clean `7500 rps`, `384` worker, `5m` DO soak on July 3, 2026 proved that the current single-droplet shape is not a healthy `7500` soak configuration:
+
+- Accepted: `388260` of `867415` requests, or about `1281 accepted/sec`.
+- Worker completed: `310807`, or about `1025 completed/sec`.
+- Projector applied: `268782`, or about `887 projection work items/sec`.
+- Rejections were protective `429`s, dominated by projector lag backpressure and then worker lag backpressure.
+- Runtime Postgres and projection Postgres were both CPU-hot and write-heavy.
+- Several partitions were hot while other partitions had little or no lag.
+
+Do not keep rerunning `7500/384` at the same shape. The next target is `1500-2000 completed/sec` for `5m`, with accepted throughput close to completed throughput, bounded worker lag, and projection lag either bounded or explicitly non-gating in the test mode.
+
+## Backpressure Policy Modes
+
+Stream-ack drain backpressure has two explicit policies:
+
+- `control-room-fresh`: default. Worker lag and projection lag can both reject new intake before durable acceptance. Use this when UI/read-model freshness is part of the service objective.
+- `venue-core`: worker/stream/canonical health can reject new intake, but projection lag is reported without blocking command acceptance. Use this to measure canonical venue capacity separately from projection freshness.
+
+Projection lag is still operationally important in `venue-core` mode. It is just not allowed to define the venue-core completed/sec ceiling unless it threatens storage, recovery, or another canonical safety boundary.
+
 ## Pre-IaC Defaults
 
 Use these defaults for the first implementation unless a later decision explicitly changes them:
@@ -80,7 +102,7 @@ Use these defaults for the first implementation unless a later decision explicit
 6. Run a smoke check.
 7. Run `2500` submit-only stream-ack stress.
 8. Run `5000` submit-only stream-ack stress.
-9. Only if `5000` is healthy, run one larger exploratory probe, probably `7500` before anything bigger.
+9. Only if `2000` completed/sec is healthy and boring, move toward `3000`; do not return to `7500` until completed throughput, drain, and write amplification evidence support it.
 10. Fetch stress reports, telemetry, logs, and selected DB/NATS diagnostics.
 11. Destroy the Droplet unless we are actively iterating.
 
@@ -111,8 +133,13 @@ For each run:
 
 - attempted/sec
 - accepted/sec
-- worker completed/sec
-- projected/sec
+- worker completed commands/sec
+- canonical events/sec
+- projection work items/sec
+- projection rows/sec where available
+- rows/command
+- WAL bytes/command
+- commits/command
 - p50/p95/p99 API latency
 - response code distribution
 - reject taxonomy
@@ -120,6 +147,8 @@ For each run:
 - worker failures and ack failures
 - JetStream stream lag/storage utilization
 - projector lag and watermark state
+- partition skew: completed, pending, ack-pending, and stream lag by partition
+- hot instruments/bots by partition when workload attribution is available
 - DB pool waiters by pool
 - hot-path phase timings
 - Docker CPU/memory stats
@@ -151,6 +180,26 @@ Healthy `5000` target:
 - p95 roughly under `150ms`
 - worker completed throughput materially closer to accepted throughput than the local run, or clear evidence of the new limiting subsystem
 - projection lag visible and bounded, not silent
+
+## Next Ablation Sequence
+
+Run these before another broad high-rate soak:
+
+1. Canonical-only venue-core run:
+   - set `REEF_DO_DRAIN_BACKPRESSURE_POLICY=venue-core`
+   - start at `1500`, then `2000`
+   - success means accepted is within `5-10%` of worker completed, worker lag is bounded, failures and ack failures are `0`, and post-run drain is clean
+
+2. Projector catch-up run:
+   - preload or retain a fixed canonical backlog
+   - stop API/worker intake
+   - measure projection work items/sec, projection rows/sec, projection DB CPU, WAL bytes/sec, lag drain rate, and top SQL where available
+
+3. Hot-partition versus even-distribution run:
+   - compare a few hot instruments against evenly distributed instruments
+   - report commands/completions/pending by partition, top instruments, top bots, and cancel/modify partition routing versus original submit partition where available
+
+Scale worker and projector process counts only after these measurements show the DB write path can absorb the extra drain. More consumers can make canonical or projection Postgres hotter if write amplification remains the limiter.
 
 ## OpenTofu Harness Plan
 

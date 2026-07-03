@@ -10,6 +10,7 @@ import {
   captureDbDiagnosticsLogs,
   captureDbDiagnosticsSnapshot,
   defaultDiagnosticSchemas,
+  summarizeDiagnosticsDelta,
 } from "./lib/db-diagnostics.mjs";
 
 loadDotEnv();
@@ -32,6 +33,7 @@ const rates = parseCsvInts(env("DEV_STRESS_RATES", "100,200,300,400"));
 const artifactDir = env("DEV_STRESS_ARTIFACT_DIR", "/tmp");
 const captureDbDiagnostics = env("DEV_STRESS_CAPTURE_DB_DIAGNOSTICS", "0") === "1";
 const dbDiagnosticsService = env("DEV_STRESS_DB_SERVICE", "postgres");
+const dbDiagnosticsServices = parseCsvStrings(env("DEV_STRESS_DB_SERVICES", dbDiagnosticsService));
 const dbDiagnosticsUser = env("DEV_STRESS_DB_USER", "reef");
 const dbDiagnosticsName = env("DEV_STRESS_DB_NAME", "reef");
 const dbDiagnosticsSchemas = parseCsvStrings(
@@ -61,6 +63,7 @@ const recommendationOut = join(artifactDir, `${reportBaseName}-recommendation.js
 const kpiOutJson = join(artifactDir, `${reportBaseName}-kpi.json`);
 const kpiOutMd = join(artifactDir, `${reportBaseName}-kpi.md`);
 const diagnosticsDir = join(artifactDir, `${reportBaseName}-diagnostics`);
+const diagnosticsSummaryOut = join(artifactDir, `${reportBaseName}-diagnostics-summary.json`);
 const actionMix = resolveActionMix(profile);
 const invalidIntentCodes = env(
   "DEV_STRESS_INVALID_INTENT_CODES",
@@ -72,6 +75,8 @@ const invalidIntentCodes = env(
 
 console.log(`running stepped stress profile against ${runtimeUrl} (mode=${mode}, profile=${profile})`);
 
+let preDiagnosticsResults = [];
+let postDiagnosticsResults = [];
 const telemetry = startTelemetryCapture({
   outPath: telemetryOut,
   intervalMs: telemetryIntervalMs,
@@ -80,14 +85,7 @@ const telemetry = startTelemetryCapture({
 });
 if (captureDbDiagnostics) {
   resetDir(diagnosticsDir);
-  await captureDbDiagnosticsSnapshot({
-    diagnosticsDir,
-    stage: "pre",
-    service: dbDiagnosticsService,
-    dbUser: dbDiagnosticsUser,
-    dbName: dbDiagnosticsName,
-    schemas: dbDiagnosticsSchemas,
-  });
+  preDiagnosticsResults = await captureDbDiagnosticsSnapshotsForServices("pre");
 }
 try {
   for (const rate of rates) {
@@ -130,19 +128,8 @@ try {
 } finally {
   await telemetry.stop();
   if (captureDbDiagnostics) {
-    await captureDbDiagnosticsSnapshot({
-      diagnosticsDir,
-      stage: "post",
-      service: dbDiagnosticsService,
-      dbUser: dbDiagnosticsUser,
-      dbName: dbDiagnosticsName,
-      schemas: dbDiagnosticsSchemas,
-    });
-    await captureDbDiagnosticsLogs({
-      diagnosticsDir,
-      service: dbDiagnosticsService,
-      since: dbDiagnosticsLogSince,
-    });
+    postDiagnosticsResults = await captureDbDiagnosticsSnapshotsForServices("post");
+    await captureDbDiagnosticsLogsForServices();
   }
 }
 
@@ -164,6 +151,16 @@ for (const rate of rates) {
 console.log(`  ${telemetryOut}`);
 if (captureDbDiagnostics) {
   console.log(`  ${diagnosticsDir}`);
+}
+
+if (captureDbDiagnostics) {
+  const diagnosticsSummary = buildDiagnosticsSummary({
+    preDiagnosticsResults,
+    postDiagnosticsResults,
+    reportFiles,
+  });
+  writeFileSync(diagnosticsSummaryOut, JSON.stringify(diagnosticsSummary, null, 2));
+  console.log(`  ${diagnosticsSummaryOut}`);
 }
 
 const recommendation = buildRecommendation(reportFiles);
@@ -223,6 +220,37 @@ function runIdForStep({ rate, workerCount }) {
 function resetDir(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
+}
+
+async function captureDbDiagnosticsSnapshotsForServices(stage) {
+  const results = [];
+  for (const service of dbDiagnosticsServices) {
+    const result = await captureDbDiagnosticsSnapshot({
+      diagnosticsDir: diagnosticsDirForService(service),
+      stage,
+      service,
+      dbUser: dbDiagnosticsUser,
+      dbName: dbDiagnosticsName,
+      schemas: dbDiagnosticsSchemas,
+    });
+    results.push({ service, result });
+  }
+  return results;
+}
+
+async function captureDbDiagnosticsLogsForServices() {
+  for (const service of dbDiagnosticsServices) {
+    await captureDbDiagnosticsLogs({
+      diagnosticsDir: diagnosticsDirForService(service),
+      service,
+      since: dbDiagnosticsLogSince,
+    });
+  }
+}
+
+function diagnosticsDirForService(service) {
+  if (dbDiagnosticsServices.length <= 1) return diagnosticsDir;
+  return join(diagnosticsDir, service);
 }
 
 function resolveActionMix(profileName) {
@@ -313,6 +341,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterHotPath = await sampleHotPath(runtimeUrl);
       attachHotPathPhases({ reportOut, afterHotPath });
     }
+    attachDerivedStressMetrics({ reportOut, duration });
   }
 }
 
@@ -668,6 +697,97 @@ function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, a
   }
 }
 
+function attachDerivedStressMetrics({ reportOut, duration }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const attemptedCommands = Number(report.totalRequests ?? 0);
+    const acceptedCommands = Number(report.totalSuccess ?? 0);
+    const workerCompletedCommands = Number(report.streamAckWorkers?.delta?.completedDelta ?? 0);
+    const projectedWorkItems = Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
+    report.unitMetrics = {
+      units: {
+        attemptedCommands: "commands submitted by the load generator",
+        acceptedCommands: "commands durably accepted by the API with 202",
+        workerCompletedCommands: "commands completed by stream-ack workers after canonical persistence",
+        projectedWorkItems: "projection work items applied by stream-ack projectors",
+        projectionLag: "projector backlog in projection work items / partition sequence units",
+      },
+      durationSeconds,
+      attemptedCommands,
+      acceptedCommands,
+      workerCompletedCommands,
+      projectedWorkItems,
+      attemptedCommandsPerSecond: perSecond(attemptedCommands, durationSeconds),
+      acceptedCommandsPerSecond: perSecond(acceptedCommands, durationSeconds),
+      workerCompletedCommandsPerSecond: perSecond(workerCompletedCommands, durationSeconds),
+      projectedWorkItemsPerSecond: perSecond(projectedWorkItems, durationSeconds),
+      completedToAcceptedRatio: ratio(workerCompletedCommands, acceptedCommands),
+      projectedToCompletedRatio: ratio(projectedWorkItems, workerCompletedCommands),
+      projectionLagAfter: Number(report.streamAckProjector?.delta?.afterLag ?? 0),
+    };
+    report.partitionSkew = buildPartitionSkew(report.streamAckWorkers?.delta);
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+  } catch (error) {
+    console.warn(`  derived stress metrics unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function buildPartitionSkew(workerDelta) {
+  const partitionDeltas = workerDelta?.partitionDeltas ?? [];
+  const consumerByPartition = new Map(
+    (workerDelta?.consumerMetrics ?? [])
+      .map((consumer) => [Number(consumer.partition), consumer])
+      .filter(([partition]) => Number.isFinite(partition)),
+  );
+  const partitions = partitionDeltas.map((partitionDelta) => {
+    const partition = Number(partitionDelta.partition);
+    const consumer = consumerByPartition.get(partition) ?? {};
+    return {
+      partition,
+      fetchedCommands: Number(partitionDelta.fetchedDelta ?? 0),
+      completedCommands: Number(partitionDelta.completedDelta ?? 0),
+      failedCommands: Number(partitionDelta.failedDelta ?? 0),
+      ackFailedCommands: Number(partitionDelta.ackFailedDelta ?? 0),
+      localInFlightAfter: Number(partitionDelta.localInFlightAfter ?? consumer.localInFlight ?? 0),
+      streamLagAfter: Number(consumer.streamLag ?? 0),
+      ackPendingAfter: Number(consumer.ackPending ?? consumer.numAckPending ?? 0),
+      maxDeliveredCount: Number(partitionDelta.maxDeliveredCount ?? consumer.maxDeliveredCount ?? 0),
+    };
+  });
+  const completedValues = partitions.map((partition) => partition.completedCommands);
+  const positiveCompleted = completedValues.filter((value) => value > 0);
+  const maxCompleted = completedValues.length ? Math.max(...completedValues) : 0;
+  const minPositiveCompleted = positiveCompleted.length ? Math.min(...positiveCompleted) : 0;
+  const totalCompleted = completedValues.reduce((sum, value) => sum + value, 0);
+  return {
+    units: {
+      fetchedCommands: "commands fetched by worker partition",
+      completedCommands: "commands completed by worker partition",
+      streamLagAfter: "JetStream stream sequence lag after the step",
+      ackPendingAfter: "consumer ack-pending messages after the step",
+    },
+    partitionCount: partitions.length,
+    activePartitions: positiveCompleted.length,
+    completedCommands: {
+      total: totalCompleted,
+      average: partitions.length > 0 ? totalCompleted / partitions.length : 0,
+      max: maxCompleted,
+      minPositive: minPositiveCompleted,
+      skewRatio: minPositiveCompleted > 0 ? maxCompleted / minPositiveCompleted : null,
+    },
+    topByCompletedCommands: partitions
+      .slice()
+      .sort((a, b) => b.completedCommands - a.completedCommands)
+      .slice(0, 8),
+    topByStreamLag: partitions
+      .slice()
+      .sort((a, b) => b.streamLagAfter - a.streamLagAfter)
+      .slice(0, 8),
+    partitions,
+  };
+}
+
 function streamWorkerDelta(before, after, durationSeconds) {
   const beforeMetrics = before?.metrics;
   const afterMetrics = after?.metrics;
@@ -796,6 +916,106 @@ function parseDurationSeconds(raw) {
   const unit = match[2];
   const multiplier = { ms: 0.001, s: 1, m: 60, h: 3600 }[unit] ?? 0;
   return amount * multiplier;
+}
+
+function perSecond(count, durationSeconds) {
+  return durationSeconds > 0 ? count / durationSeconds : 0;
+}
+
+function ratio(numerator, denominator) {
+  return denominator > 0 ? numerator / denominator : null;
+}
+
+function buildDiagnosticsSummary({ preDiagnosticsResults, postDiagnosticsResults, reportFiles }) {
+  const reportTotals = readReportTotals(reportFiles);
+  const services = {};
+  for (const { service, result: preResult } of preDiagnosticsResults) {
+    const postResult = postDiagnosticsResults.find((entry) => entry.service === service)?.result ?? null;
+    services[service] = buildDiagnosticsServiceSummary({
+      preResult,
+      postResult,
+      reportTotals,
+    });
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    ok: Object.values(services).every((serviceSummary) => serviceSummary.ok),
+    reportTotals,
+    services,
+  };
+}
+
+function buildDiagnosticsServiceSummary({ preResult, postResult, reportTotals }) {
+  const delta = summarizeDiagnosticsDelta(preResult, postResult);
+  if (!delta.ok) {
+    return {
+      ok: false,
+      reason: delta.reason,
+    };
+  }
+  const canonicalEvents = tableMetric(delta.tables, "runtime.canonical_venue_events", "insertsDelta");
+  const canonicalCommandResults = tableMetric(delta.tables, "runtime.canonical_command_results", "insertsDelta");
+  return {
+    ok: true,
+    units: {
+      walBytes: "PostgreSQL WAL bytes from pg_stat_wal during the captured window",
+      commits: "database commits from pg_stat_database during the captured window",
+      canonicalEvents: "rows inserted into runtime.canonical_venue_events",
+      canonicalCommandResults: "rows inserted into runtime.canonical_command_results",
+      workerCompletedCommands: "commands completed by stream-ack workers in measured reports",
+    },
+    unitMetrics: {
+      canonicalEvents,
+      canonicalCommandResults,
+      walBytes: Number(delta.wal?.walBytes ?? 0),
+      commits: Number(delta.database?.xactCommit ?? 0),
+      tuplesInserted: Number(delta.database?.tuplesInserted ?? 0),
+      tuplesUpdated: Number(delta.database?.tuplesUpdated ?? 0),
+      canonicalEventsPerAcceptedCommand: ratio(canonicalEvents, reportTotals.acceptedCommands),
+      canonicalEventsPerWorkerCompletedCommand: ratio(canonicalEvents, reportTotals.workerCompletedCommands),
+      commandResultsPerAcceptedCommand: ratio(canonicalCommandResults, reportTotals.acceptedCommands),
+      commandResultsPerWorkerCompletedCommand: ratio(canonicalCommandResults, reportTotals.workerCompletedCommands),
+      walBytesPerAcceptedCommand: ratio(Number(delta.wal?.walBytes ?? 0), reportTotals.acceptedCommands),
+      walBytesPerWorkerCompletedCommand: ratio(Number(delta.wal?.walBytes ?? 0), reportTotals.workerCompletedCommands),
+      commitsPerAcceptedCommand: ratio(Number(delta.database?.xactCommit ?? 0), reportTotals.acceptedCommands),
+      commitsPerWorkerCompletedCommand: ratio(Number(delta.database?.xactCommit ?? 0), reportTotals.workerCompletedCommands),
+    },
+    wal: delta.wal,
+    database: delta.database,
+    topTablesByBytes: delta.tables.slice(0, 20),
+    topTablesByInserts: delta.tables
+      .slice()
+      .sort((a, b) => Math.abs(Number(b.insertsDelta ?? 0)) - Math.abs(Number(a.insertsDelta ?? 0)))
+      .slice(0, 20),
+  };
+}
+
+function readReportTotals(reportFiles) {
+  const totals = {
+    reportCount: 0,
+    attemptedCommands: 0,
+    acceptedCommands: 0,
+    workerCompletedCommands: 0,
+    projectedWorkItems: 0,
+  };
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      totals.reportCount += 1;
+      totals.attemptedCommands += Number(report.totalRequests ?? 0);
+      totals.acceptedCommands += Number(report.totalSuccess ?? 0);
+      totals.workerCompletedCommands += Number(report.streamAckWorkers?.delta?.completedDelta ?? 0);
+      totals.projectedWorkItems += Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
+    } catch {
+      // skip unreadable report
+    }
+  }
+  return totals;
+}
+
+function tableMetric(tables, tableName, metricName) {
+  const match = (tables ?? []).find((table) => table.table === tableName);
+  return Number(match?.[metricName] ?? 0);
 }
 
 function startTelemetryCapture({ outPath, intervalMs, runtimeUrl, engineUrl }) {

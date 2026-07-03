@@ -558,6 +558,7 @@ Summary:
 - redelivery after worker crash is a normal design case; deterministic IDs and uniqueness constraints must prevent duplicate trades, executions, lifecycle events, and terminal command results.
 - submit, cancel, and modify commands affecting the same run/session/instrument must use the same deterministic partition lane; cancel/modify must carry routing metadata rather than requiring hot-path lookup.
 - backpressure must be based on drain health and completed throughput, not durable acceptance rate alone.
+- drain backpressure policy must be explicit: `control-room-fresh` can reject on worker and projection lag, while `venue-core` reports projection lag without letting read-model freshness define the canonical venue throughput ceiling.
 - no `7500-10000` completed/sec claim is valid without accepted/completed/projected accounting, bounded lag, p95/p99 evidence, zero accepted-command gaps, and replay or checksum evidence.
 
 Primary references:

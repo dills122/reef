@@ -33,6 +33,32 @@ Immediate implications:
 1. Throughput target is reachable, but long-run stability depends on datastore lifecycle controls.
 2. Postgres WAL/checkpoint tuning and data retention/partitioning are not optional follow-up items.
 
+## DigitalOcean Stream-Ack Soak Learnings (July 3, 2026)
+
+From a clean single-droplet DO soak (`stream-ack`, `7500 rps`, `workers=384`, `5m`):
+
+1. The current shape is not a healthy `7500 rps` soak configuration:
+   - `867415` attempted
+   - `388260` accepted, about `1281 accepted/sec`
+   - `310807` worker completed, about `1025 completed/sec`
+   - `268782` projected, about `887 projection work items/sec`
+2. Protective `429` backpressure worked, but the reject taxonomy showed downstream drain pressure rather than API instability:
+   - projector lag backpressure dominated
+   - worker stream lag backpressure followed
+   - worker failed and ack-failed counters stayed clean
+3. Accepted/sec alone is the wrong success target. The next milestone should be `1500-2000 completed/sec` sustained, with accepted throughput within `5-10%` of completed throughput and a clean post-run drain.
+4. Projection/UI freshness must be measured separately from venue-core capacity:
+   - `control-room-fresh` mode may reject on projection lag
+   - `venue-core` mode should report projection lag without letting it define canonical command capacity
+5. Runtime and projection Postgres both showed heavy CPU/write pressure. Future runs must report rows/command, WAL bytes/command, commits/command, and partition skew before scaling workers or projectors.
+
+Immediate implications:
+
+1. Do not keep rerunning `7500/384` at the same config.
+2. Run venue-core canonical ablations at `1500`, then `2000`, before moving higher.
+3. Run projector catch-up and hot-partition versus even-distribution ablations before broad scaling.
+4. Treat projection write amplification and partition skew as first-class bottleneck suspects.
+
 ## Runtime Library Investigation Priorities
 
 Before swapping libraries, benchmark candidates against Reef's actual command, persistence, and simulator workloads.

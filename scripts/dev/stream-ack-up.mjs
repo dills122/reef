@@ -25,6 +25,7 @@ setDefault("STREAM_ACK_WORKER_ACK_WAIT_MS", "30000");
 setDefault("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", "true");
 setDefault("STREAM_ACK_MAX_WORKER_STREAM_LAG", "50000");
 setDefault("STREAM_ACK_MAX_PROJECTOR_LAG", "250000");
+setDefault("STREAM_ACK_DRAIN_BACKPRESSURE_POLICY", "control-room-fresh");
 setDefault("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", "500");
 setDefault("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", streamAckWorkerDurables());
 setDefault("STREAM_ACK_PROJECTOR_ENABLED", "true");
@@ -56,6 +57,7 @@ console.log(`  projector0Partitions=${env("STREAM_ACK_PROJECTOR_0_PARTITIONS")}`
 console.log(`  projector1Partitions=${env("STREAM_ACK_PROJECTOR_1_PARTITIONS")}`);
 console.log(`  backpressureSampleMs=${env("STREAM_ACK_BACKPRESSURE_SAMPLE_MS")}`);
 console.log(`  drainBackpressureSampleMs=${env("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS")}`);
+console.log(`  drainBackpressurePolicy=${env("STREAM_ACK_DRAIN_BACKPRESSURE_POLICY")}`);
 console.log(`  maxWorkerStreamLag=${env("STREAM_ACK_MAX_WORKER_STREAM_LAG")}`);
 console.log(`  maxProjectorLag=${env("STREAM_ACK_MAX_PROJECTOR_LAG")}`);
 console.log(`  markPublishedMode=${env("STREAM_ACK_MARK_PUBLISHED_MODE")}`);

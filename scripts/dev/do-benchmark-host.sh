@@ -63,6 +63,7 @@ optional:
   REEF_DO_STRESS_RATES=2500,5000
   REEF_DO_STRESS_WORKERS=256
   REEF_DO_STRESS_DURATION=30s
+  REEF_DO_DRAIN_BACKPRESSURE_POLICY=control-room-fresh
 USAGE
 }
 
@@ -221,8 +222,9 @@ remote_run_benchmark() {
   local duration="${REEF_DO_STRESS_DURATION:-30s}"
   local trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-200}"
   local min_success="${REEF_DO_MIN_SUCCESS_RATE_PCT:-100}"
+  local drain_backpressure_policy="${REEF_DO_DRAIN_BACKPRESSURE_POLICY:-${STREAM_ACK_DRAIN_BACKPRESSURE_POLICY:-control-room-fresh}}"
 
-  echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration"
+  echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration drain_backpressure_policy=$drain_backpressure_policy"
   remote_script \
     REEF_BENCHMARK_RUN_ID="$run_id" \
     REEF_BENCHMARK_STREAM="$stream_name" \
@@ -232,7 +234,8 @@ remote_run_benchmark() {
     REEF_BENCHMARK_WORKERS="$workers" \
     REEF_BENCHMARK_DURATION="$duration" \
     REEF_BENCHMARK_TRACE_LIMIT="$trace_limit" \
-    REEF_BENCHMARK_MIN_SUCCESS="$min_success" <<'REMOTE'
+    REEF_BENCHMARK_MIN_SUCCESS="$min_success" \
+    REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY="$drain_backpressure_policy" <<'REMOTE'
 set -euo pipefail
 artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
 log_dir="$artifact_dir/logs"
@@ -246,11 +249,13 @@ echo "stream=$REEF_BENCHMARK_STREAM"
 echo "subject_prefix=$REEF_BENCHMARK_SUBJECT_PREFIX"
 echo "durable_prefix=$REEF_BENCHMARK_DURABLE_PREFIX"
 echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS duration=$REEF_BENCHMARK_DURATION"
+echo "drain_backpressure_policy=$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
 
 export JS_RUNTIME=node
 export STREAM_ACK_COMMAND_STREAM="$REEF_BENCHMARK_STREAM"
 export STREAM_ACK_SUBJECT_PREFIX="$REEF_BENCHMARK_SUBJECT_PREFIX"
 export STREAM_ACK_WORKER_DURABLE_PREFIX="$REEF_BENCHMARK_DURABLE_PREFIX"
+export STREAM_ACK_DRAIN_BACKPRESSURE_POLICY="$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
 export DEV_STRESS_ARTIFACT_DIR="$artifact_dir"
 export DEV_STRESS_REPORT_OUT="$artifact_dir/stream-ack-stress.json"
 export DEV_STRESS_RATES="$REEF_BENCHMARK_RATES"
@@ -262,6 +267,7 @@ export DEV_STRESS_RATE_SCHEDULE=precise
 export DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS=1
 export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
+export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
 
 echo "[$(date -Is)] stage: make dev-up-stream-ack"
 make dev-up-stream-ack </dev/null
