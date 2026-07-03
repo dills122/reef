@@ -17,8 +17,31 @@ private data class CommandIntakeBackpressureSnapshot(
     val sampledAtMs: Long
 )
 
+enum class PlatformRuntimeRole(
+    val configValue: String,
+    val publicHttpEnabled: Boolean,
+    val backgroundWorkersEnabled: Boolean
+) {
+    Api("api", publicHttpEnabled = true, backgroundWorkersEnabled = false),
+    Worker("worker", publicHttpEnabled = false, backgroundWorkersEnabled = true),
+    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = false);
+
+    companion object {
+        fun from(raw: String): PlatformRuntimeRole {
+            val normalized = raw.trim().lowercase()
+            return entries.firstOrNull { it.configValue == normalized }
+                ?: throw IllegalArgumentException("Unsupported PLATFORM_RUNTIME_ROLE: $raw")
+        }
+
+        fun fromEnv(): PlatformRuntimeRole {
+            return from(RuntimeEnv.string("PLATFORM_RUNTIME_ROLE", "api"))
+        }
+    }
+}
+
 class PlatformHttpServer(
     private val port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
+    private val runtimeRole: PlatformRuntimeRole = PlatformRuntimeRole.fromEnv(),
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
@@ -150,6 +173,15 @@ class PlatformHttpServer(
             writeJson(exchange, 200, streamCommandWorkerStatsJson())
         }
 
+        server.createContext("/internal/projector/status") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, projectorStatusJson())
+        }
+
+        if (runtimeRole.publicHttpEnabled) {
         server.createContext("/api/v1/commands/") { exchange ->
             handleCommandStatusLookup(exchange)
         }
@@ -350,9 +382,10 @@ class PlatformHttpServer(
             val traceId = path.removeSuffix("/events").trimEnd('/')
             writeJson(exchange, 200, api.traceEvents(traceId))
         }
+        }
 
         server.start()
-        if (asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+        if (runtimeRole.backgroundWorkersEnabled && asyncCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val queue = capturedCommandQueue
             if (queue == null) {
                 System.err.println("async_command_worker_unavailable reason=missing_captured_command_queue")
@@ -369,10 +402,10 @@ class PlatformHttpServer(
                 }
             }
         }
-        if (streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
+        if (runtimeRole.backgroundWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandWorkers()
         }
-        println("platform-runtime listening on :$port")
+        println("platform-runtime role=${runtimeRole.configValue} listening on :$port")
         return server
     }
 
@@ -414,6 +447,14 @@ class PlatformHttpServer(
         } else {
             JsonCodec.writeObject("error" to error, "message" to message)
         }
+    }
+
+    private fun projectorStatusJson(): String {
+        return JsonCodec.writeObject(
+            "role" to runtimeRole.configValue,
+            "status" to if (runtimeRole == PlatformRuntimeRole.Projector) "placeholder" else "inactive",
+            "implementation" to "placeholder"
+        )
     }
 
     private fun runtimeUnavailableJson(ex: Exception): String {

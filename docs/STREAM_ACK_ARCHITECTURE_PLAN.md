@@ -304,7 +304,7 @@ Backpressure decisions should be recorded with reason codes so stress reports ca
 | Phase | Target | Gate |
 |---|---|---|
 | 0 | architecture decision checkpoint | D-037 locks market-simulation framing, metric definitions, phase order, partition/idempotency rules, and crash/replay tests |
-| 1 | role split and partition ownership | API, worker, projector, and all-in-one modes; workers own explicit non-overlapping partition ranges |
+| 1 | role split and partition ownership | API, worker, and projector runtime roles only; workers own explicit non-overlapping partition ranges |
 | 2 | canonical append store | workers commit canonical command results and venue events before stream ack; normalized tables are not completion requirements |
 | 3 | async projection system | order/trade/status/timeline/leaderboard/run projections have watermarks, lag metrics, and rebuild path |
 | 4 | engine shards | partition ranges map to engine shards after canonical persistence no longer hides engine parallelism |
@@ -321,10 +321,10 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - require crash/redelivery/replay tests before throughput claims
 
 1. Role split and partition ownership
-- add runtime modes for API, worker, projector, and all-in-one local operation
+- add runtime modes for API, worker, and projector local operation
 - run API without stream workers in deployable throughput profiles
 - run workers with explicit partition range ownership
-- keep local all-in-one mode for simple development and correctness tests
+- keep local and deploy-shaped runtime processes separated; do not add an all-in-one fallback mode
 
 2. Contract and configuration
 - define command envelope fields in protobuf/contracts

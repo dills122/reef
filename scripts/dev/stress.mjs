@@ -41,6 +41,9 @@ const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
 const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
+const streamAckWorkerUrls = parseCsvStrings(
+  env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
+);
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -302,12 +305,154 @@ async function sampleCommandAccounting(runtimeUrl, runId) {
   });
 }
 
-async function sampleStreamAckWorkers(runtimeUrl) {
-  return requestAppProbe({
-    name: "runtime.streamAckWorkers",
-    url: `${runtimeUrl}/internal/stream-ack/worker/stats`,
-    captureJson: true,
-  });
+async function sampleStreamAckWorkers() {
+  const probes = await Promise.all(
+    streamAckWorkerUrls.map((baseUrl, index) =>
+      requestAppProbe({
+        name: `streamAckWorker.${index}.stats`,
+        url: `${baseUrl}/internal/stream-ack/worker/stats`,
+        captureJson: true,
+      }),
+    ),
+  );
+  return {
+    ok: probes.every((probe) => probe.ok),
+    status: probes.find((probe) => !probe.ok)?.status ?? 200,
+    latencyMs: Math.max(0, ...probes.map((probe) => Number(probe.latencyMs ?? 0))),
+    error: probes.find((probe) => probe.error)?.error ?? "",
+    probes,
+    json: aggregateStreamAckWorkerStats(probes),
+  };
+}
+
+function defaultStreamAckWorkerUrls(runtimeUrl) {
+  const parsed = new URL(runtimeUrl);
+  const worker0Port = env("REEF_PLATFORM_WORKER_0_HOST_PORT", "8082");
+  const worker1Port = env("REEF_PLATFORM_WORKER_1_HOST_PORT", "8083");
+  return [
+    `${parsed.protocol}//${parsed.hostname}:${worker0Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${worker1Port}`,
+  ];
+}
+
+function aggregateStreamAckWorkerStats(probes) {
+  const workerStats = probes
+    .map((probe, index) => ({ index, url: streamAckWorkerUrls[index], stats: probe.json }))
+    .filter((worker) => worker.stats);
+  const metrics = sumStreamWorkerMetrics(workerStats.map((worker) => worker.stats.metrics));
+  const partitionMetrics = mergeStreamWorkerPartitions(
+    workerStats.flatMap((worker) => worker.stats.partitionMetrics ?? []),
+  );
+  return {
+    enabled: workerStats.some((worker) => worker.stats.enabled === true),
+    processingMode: workerStats.find((worker) => worker.stats.processingMode)?.stats.processingMode ?? "",
+    workers: workerStats.map((worker) => ({
+      index: worker.index,
+      url: worker.url,
+      enabled: worker.stats.enabled,
+      partitions: worker.stats.partitions ?? [],
+      metrics: worker.stats.metrics ?? {},
+    })),
+    partitions: [...new Set(workerStats.flatMap((worker) => worker.stats.partitions ?? []))]
+      .map((partition) => Number(partition))
+      .filter((partition) => Number.isFinite(partition))
+      .sort((a, b) => a - b),
+    metrics,
+    partitionMetrics,
+    consumerMetrics: workerStats.flatMap((worker) => worker.stats.consumerMetrics ?? []),
+  };
+}
+
+function sumStreamWorkerMetrics(metricsList) {
+  const totals = {
+    fetched: 0,
+    completed: 0,
+    failed: 0,
+    ackFailed: 0,
+    unsupported: 0,
+    emptyPolls: 0,
+    lastFetchedAt: "",
+    lastCompletedAt: "",
+    lastFailedAt: "",
+    lastAckFailedAt: "",
+    lastError: "",
+  };
+  for (const metrics of metricsList) {
+    if (!metrics) continue;
+    totals.fetched += Number(metrics.fetched ?? 0);
+    totals.completed += Number(metrics.completed ?? 0);
+    totals.failed += Number(metrics.failed ?? 0);
+    totals.ackFailed += Number(metrics.ackFailed ?? 0);
+    totals.unsupported += Number(metrics.unsupported ?? 0);
+    totals.emptyPolls += Number(metrics.emptyPolls ?? 0);
+    totals.lastFetchedAt = maxIso(totals.lastFetchedAt, metrics.lastFetchedAt ?? "");
+    totals.lastCompletedAt = maxIso(totals.lastCompletedAt, metrics.lastCompletedAt ?? "");
+    totals.lastFailedAt = maxIso(totals.lastFailedAt, metrics.lastFailedAt ?? "");
+    totals.lastAckFailedAt = maxIso(totals.lastAckFailedAt, metrics.lastAckFailedAt ?? "");
+    totals.lastError = metrics.lastError || totals.lastError;
+  }
+  return totals;
+}
+
+function mergeStreamWorkerPartitions(partitions) {
+  const byPartition = new Map();
+  for (const raw of partitions) {
+    const partition = Number(raw.partition);
+    if (!Number.isFinite(partition)) continue;
+    const current = byPartition.get(partition) ?? {
+      partition,
+      fetched: 0,
+      completed: 0,
+      failed: 0,
+      ackFailed: 0,
+      unsupported: 0,
+      localInFlight: 0,
+      maxDeliveredCount: 0,
+      lastFetchedStreamSequence: 0,
+      lastCompletedStreamSequence: 0,
+      lastFetchedAt: "",
+      lastCompletedAt: "",
+      lastFailedAt: "",
+      lastAckFailedAt: "",
+      oldestLocalInFlightAt: "",
+      oldestLocalInFlightAgeMs: 0,
+      lastError: "",
+    };
+    current.fetched += Number(raw.fetched ?? 0);
+    current.completed += Number(raw.completed ?? 0);
+    current.failed += Number(raw.failed ?? 0);
+    current.ackFailed += Number(raw.ackFailed ?? 0);
+    current.unsupported += Number(raw.unsupported ?? 0);
+    current.localInFlight += Number(raw.localInFlight ?? 0);
+    current.maxDeliveredCount = Math.max(current.maxDeliveredCount, Number(raw.maxDeliveredCount ?? 0));
+    current.lastFetchedStreamSequence = Math.max(
+      current.lastFetchedStreamSequence,
+      Number(raw.lastFetchedStreamSequence ?? 0),
+    );
+    current.lastCompletedStreamSequence = Math.max(
+      current.lastCompletedStreamSequence,
+      Number(raw.lastCompletedStreamSequence ?? 0),
+    );
+    current.lastFetchedAt = maxIso(current.lastFetchedAt, raw.lastFetchedAt ?? "");
+    current.lastCompletedAt = maxIso(current.lastCompletedAt, raw.lastCompletedAt ?? "");
+    current.lastFailedAt = maxIso(current.lastFailedAt, raw.lastFailedAt ?? "");
+    current.lastAckFailedAt = maxIso(current.lastAckFailedAt, raw.lastAckFailedAt ?? "");
+    current.oldestLocalInFlightAgeMs = Math.max(
+      current.oldestLocalInFlightAgeMs,
+      Number(raw.oldestLocalInFlightAgeMs ?? 0),
+    );
+    current.oldestLocalInFlightAt =
+      current.oldestLocalInFlightAt || raw.oldestLocalInFlightAt || "";
+    current.lastError = raw.lastError || current.lastError;
+    byPartition.set(partition, current);
+  }
+  return [...byPartition.values()].sort((a, b) => a.partition - b.partition);
+}
+
+function maxIso(left, right) {
+  if (!left) return right || "";
+  if (!right) return left;
+  return right > left ? right : left;
 }
 
 function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers }) {
@@ -504,6 +649,11 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "runtime.streamAckHealth", url: `${runtimeUrl}/internal/stream-ack/health`, captureJson: true },
     { name: "runtime.streamAckWorkers", url: `${runtimeUrl}/internal/stream-ack/worker/stats`, captureJson: true },
+    ...streamAckWorkerUrls.map((baseUrl, index) => ({
+      name: `streamAckWorker.${index}.stats`,
+      url: `${baseUrl}/internal/stream-ack/worker/stats`,
+      captureJson: true,
+    })),
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];

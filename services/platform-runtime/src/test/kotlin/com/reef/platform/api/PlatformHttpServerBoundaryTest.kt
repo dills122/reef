@@ -222,6 +222,31 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun workerRoleDoesNotExposePublicCommandIntake() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            runtimeRole = PlatformRuntimeRole.Worker
+        )
+        try {
+            val internal = get(server.address.port, "/internal/stream-ack/worker/stats")
+            val publicSubmit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-worker-role"
+                ),
+                body = validSubmitBody("cmd-worker-role", "trace-worker-role", "ord-worker-role", extra = streamRoutingExtra())
+            )
+
+            assertEquals(200, internal.status)
+            assertEquals(404, publicSubmit.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun legacyMutationRoutesRequireInternalMarkerWhenGateEnabled() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
@@ -1425,11 +1450,12 @@ class PlatformHttpServerBoundaryTest {
     data class HttpResponse(val status: Int, val body: String)
 
     private fun testServer(boundary: ExternalApiBoundary = ExternalApiBoundary()): com.sun.net.httpserver.HttpServer {
-        return testServerWithGateway(StaticAcceptedEngineGateway(), boundary)
+        return testServerWithGateway(StaticAcceptedEngineGateway(), boundary = boundary)
     }
 
     private fun testServerWithGateway(
         gateway: EngineGateway,
+        runtimeRole: PlatformRuntimeRole = PlatformRuntimeRole.Api,
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
@@ -1463,6 +1489,7 @@ class PlatformHttpServerBoundaryTest {
         )
         return PlatformHttpServer(
             port = 0,
+            runtimeRole = runtimeRole,
             api = api,
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,

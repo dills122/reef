@@ -169,7 +169,7 @@ Drain-accounted worker sweep:
 | A31 | Stream partition worker and ack rule | Planned | architecture | Ack JetStream only after canonical command result and event log commit |
 | A32 | Canonical event log and projection watermarks | Planned | architecture | Separate venue outcomes from leaderboard/UI projections and expose lag |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
-| A34 | Stream-ack role split and partition ownership | Planned | architecture | Split runtime modes into API, worker, projector, and all-in-one; workers own explicit non-overlapping partition ranges |
+| A34 | Stream-ack role split and partition ownership | In progress | architecture | Split runtime modes into API, worker, and projector only; workers own explicit non-overlapping partition ranges |
 | A35 | Canonical append store | Planned | architecture | Make canonical command results and venue events the stream-ack completion boundary before normalized projections |
 | A36 | Async market-simulation projections | Planned | architecture | Move order/trade/status/timeline/leaderboard/run read models behind projector watermarks and rebuilds |
 | A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |

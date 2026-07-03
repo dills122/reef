@@ -16,7 +16,7 @@ if (commandProcessingMode) {
     process.env.EXTERNAL_API_COMMAND_LOG_MODE = commandLogMode;
   }
   try {
-    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-runtime"]);
+    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-api"]);
     await waitForHttp(`${runtimeUrl}/health`, 90, 2000);
   } finally {
     if (previousProcessingMode == null) {
