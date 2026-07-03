@@ -59,6 +59,31 @@ Immediate implications:
 3. Run projector catch-up and hot-partition versus even-distribution ablations before broad scaling.
 4. Treat projection write amplification and partition skew as first-class bottleneck suspects.
 
+## Stream-Ack Post-Soak Optimization Priorities
+
+The macro architecture is now in the right family: durable stream ingress, ordered partition workers, canonical facts, and async projections. The remaining performance risk is that the hot path still performs too much database and projection work per command.
+
+Highest-value fixes after the next ablations:
+
+1. Collapse canonical writes while preserving replay and audit:
+   - consider compact command/event records or worker-batch event records
+   - preserve partition sequence ranges, stream sequence ranges, command counts, event counts, payload format, checksum, and command lookup
+   - reduce rows/command, commits/command, WAL bytes/command, and hot indexes
+2. Make projectors cheaper:
+   - coalesce repeated aggregate updates inside a batch
+   - write final current state once per batch
+   - move nonessential timeline/search/report writes to slower rebuildable jobs
+   - use staging/merge paths and unlogged caches only for rebuildable projection data
+3. Treat partition skew as domain signal:
+   - even-distribution and hot-book tests measure different capacities
+   - more partitions do not fix one legitimately hot instrument that must preserve order
+4. Tune configuration only with measurement:
+   - NATS pull batch, `MaxAckPending`, worker fetch loop, DB batch size, and pool sizes should move together
+   - raising pending limits or pool sizes can hide overload if the DB write path remains the limiter
+5. Keep the hard pivot explicit:
+   - JetStream as the canonical event log and Postgres as projection/query storage is a reserve option only if compact canonical Postgres append remains the ceiling
+   - adopting that option would require a new architecture decision, retention/replay/checksum requirements, and an updated audit/query story
+
 ## Runtime Library Investigation Priorities
 
 Before swapping libraries, benchmark candidates against Reef's actual command, persistence, and simulator workloads.

@@ -201,6 +201,35 @@ Run these before another broad high-rate soak:
 
 Scale worker and projector process counts only after these measurements show the DB write path can absorb the extra drain. More consumers can make canonical or projection Postgres hotter if write amplification remains the limiter.
 
+## Post-Ablation Fix Order
+
+Use the ablation results to choose implementation work in this order:
+
+1. Projection write reduction:
+   - coalesce repeated aggregate updates inside a projector batch
+   - write current state once per batch where possible
+   - move nonessential timeline/search/report conveniences to slower rebuildable jobs
+   - reduce hot projection indexes
+   - use staging/merge or unlogged rebuildable caches only where correctness allows
+
+2. Canonical write collapse:
+   - keep Postgres as the authoritative canonical outcome store for now
+   - reduce canonical rows/command, commits/command, WAL bytes/command, and hot indexes
+   - evaluate compact command/event batch records that preserve partition ordering, replay, checksums, idempotency, and command lookup
+
+3. Hot-lane and worker batching:
+   - treat hot partitions as either routing bugs or legitimate hot-book limits
+   - tune fetch batch, ack-pending, and worker DB batch size together
+   - move toward batch or long-lived stream interaction with engine shards only after persistence metrics show engine overhead is visible
+
+4. Physical resource split:
+   - split load generation first
+   - split canonical Postgres next if canonical commit/WAL remains hot after write reduction
+   - split projection Postgres if freshness matters and projection DB remains hot
+   - split NATS only if publish/consumer metrics show JetStream pressure
+
+If compact canonical Postgres append still caps completed throughput around `1k-2k/sec`, evaluate a separate architecture decision for a retained JetStream canonical event stream with Postgres as async projection/query storage. Do not make that pivot implicitly during benchmark tuning.
+
 ## OpenTofu Harness Plan
 
 Add an intentionally small stack under something like:

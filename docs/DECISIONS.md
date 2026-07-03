@@ -571,6 +571,25 @@ Primary references:
 - [PostgreSQL Populating a Database](https://www.postgresql.org/docs/current/populate.html)
 - [PostgreSQL Table Partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html)
 
+### D-038: Stream-Ack Post-Soak Optimization Direction
+
+Status: accepted
+
+Summary:
+- the July 3, 2026 DO soak does not invalidate the stream-ack macro architecture; it shows that the current hot path still writes and projects too much per completed command for the target.
+- the next optimization target is `completed/sec`, not accepted/sec, with accepted throughput close to worker-completed throughput and a clean post-load drain.
+- before scaling workers/projectors broadly, Reef must measure rows/command, WAL bytes/command, commits/command, projection work items/command, and partition skew.
+- canonical Postgres remains authoritative under D-036/D-037, but the canonical write shape may be collapsed from per-event rows into compact command/event batch records when replay, idempotency, ordering, checksums, and audit semantics remain intact.
+- projection writes should be optimized as a separate streaming system: batch, coalesce repeated aggregate updates, reduce hot indexes, use staging/merge paths where useful, and allow unlogged/disposable storage only for rebuildable projection caches.
+- hot partitions should be treated as either routing bugs or legitimate hot-book market behavior; even-distribution and hot-book benchmarks must be labeled separately.
+- the preferred infrastructure split order is load generator first, canonical Postgres second, projection Postgres third, and NATS only after JetStream metrics show pressure.
+- using JetStream as the canonical venue event log with Postgres as projection/query storage is a reserved hard-pivot option only if a compact canonical Postgres append path still caps completed throughput; adopting it would require a new decision that supersedes the D-036/D-037 completion boundary.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted

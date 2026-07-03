@@ -378,7 +378,7 @@ Diagnostic targets:
 
 1. Do not physically split databases until schema-level diagnostics show contention that cannot be fixed with schema/index/partition changes.
 2. Do not make `captured-ack` or `stream-ack` the default until the product/API semantics for asynchronous command completion are explicit.
-3. Do not use JetStream as the sole venue outcome store; canonical command results and lifecycle events must commit to Postgres.
+3. Do not use JetStream as the sole venue outcome store in the current accepted architecture; canonical command results and lifecycle events must commit to Postgres unless a future explicit decision supersedes D-036/D-037 with retained event-stream durability, replay, checksum, retention, and audit/query requirements.
 4. Do not remove synchronous mode; it remains required for deterministic tests and compatibility.
 5. Do not add indexes to hot write tables without benchmark evidence.
 6. Do not use Kubernetes scale-out to mask per-instance write amplification or accepted-command accounting gaps.
