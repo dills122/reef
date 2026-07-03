@@ -35,6 +35,11 @@ private static final long serialVersionUID = 0L;
     occurredAt_ = "";
     traceId_ = "";
     causationId_ = "";
+    runId_ = "";
+    venueSessionId_ = "";
+    clientOrderId_ = "";
+    botId_ = "";
+    botVersion_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -323,6 +328,201 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int RUN_ID_FIELD_NUMBER = 8;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object runId_ = "";
+  /**
+   * <code>string run_id = 8;</code>
+   * @return The runId.
+   */
+  @java.lang.Override
+  public java.lang.String getRunId() {
+    java.lang.Object ref = runId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      runId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string run_id = 8;</code>
+   * @return The bytes for runId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRunIdBytes() {
+    java.lang.Object ref = runId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      runId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int VENUE_SESSION_ID_FIELD_NUMBER = 9;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object venueSessionId_ = "";
+  /**
+   * <code>string venue_session_id = 9;</code>
+   * @return The venueSessionId.
+   */
+  @java.lang.Override
+  public java.lang.String getVenueSessionId() {
+    java.lang.Object ref = venueSessionId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      venueSessionId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string venue_session_id = 9;</code>
+   * @return The bytes for venueSessionId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getVenueSessionIdBytes() {
+    java.lang.Object ref = venueSessionId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      venueSessionId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int CLIENT_ORDER_ID_FIELD_NUMBER = 10;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object clientOrderId_ = "";
+  /**
+   * <code>string client_order_id = 10;</code>
+   * @return The clientOrderId.
+   */
+  @java.lang.Override
+  public java.lang.String getClientOrderId() {
+    java.lang.Object ref = clientOrderId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      clientOrderId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string client_order_id = 10;</code>
+   * @return The bytes for clientOrderId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getClientOrderIdBytes() {
+    java.lang.Object ref = clientOrderId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      clientOrderId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int BOT_ID_FIELD_NUMBER = 11;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object botId_ = "";
+  /**
+   * <code>string bot_id = 11;</code>
+   * @return The botId.
+   */
+  @java.lang.Override
+  public java.lang.String getBotId() {
+    java.lang.Object ref = botId_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      botId_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string bot_id = 11;</code>
+   * @return The bytes for botId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBotIdBytes() {
+    java.lang.Object ref = botId_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      botId_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int BOT_VERSION_FIELD_NUMBER = 12;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object botVersion_ = "";
+  /**
+   * <code>string bot_version = 12;</code>
+   * @return The botVersion.
+   */
+  @java.lang.Override
+  public java.lang.String getBotVersion() {
+    java.lang.Object ref = botVersion_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs =
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      botVersion_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string bot_version = 12;</code>
+   * @return The bytes for botVersion.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBotVersionBytes() {
+    java.lang.Object ref = botVersion_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b =
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      botVersion_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -358,6 +558,21 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(causationId_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 7, causationId_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(runId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 8, runId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(venueSessionId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 9, venueSessionId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(clientOrderId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 10, clientOrderId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(botId_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 11, botId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(botVersion_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 12, botVersion_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -388,6 +603,21 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(causationId_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(7, causationId_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(runId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(8, runId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(venueSessionId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(9, venueSessionId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(clientOrderId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(10, clientOrderId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(botId_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(11, botId_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(botVersion_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(12, botVersion_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -417,6 +647,16 @@ private static final long serialVersionUID = 0L;
         .equals(other.getTraceId())) return false;
     if (!getCausationId()
         .equals(other.getCausationId())) return false;
+    if (!getRunId()
+        .equals(other.getRunId())) return false;
+    if (!getVenueSessionId()
+        .equals(other.getVenueSessionId())) return false;
+    if (!getClientOrderId()
+        .equals(other.getClientOrderId())) return false;
+    if (!getBotId()
+        .equals(other.getBotId())) return false;
+    if (!getBotVersion()
+        .equals(other.getBotVersion())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -442,6 +682,16 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getTraceId().hashCode();
     hash = (37 * hash) + CAUSATION_ID_FIELD_NUMBER;
     hash = (53 * hash) + getCausationId().hashCode();
+    hash = (37 * hash) + RUN_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getRunId().hashCode();
+    hash = (37 * hash) + VENUE_SESSION_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getVenueSessionId().hashCode();
+    hash = (37 * hash) + CLIENT_ORDER_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getClientOrderId().hashCode();
+    hash = (37 * hash) + BOT_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getBotId().hashCode();
+    hash = (37 * hash) + BOT_VERSION_FIELD_NUMBER;
+    hash = (53 * hash) + getBotVersion().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -580,6 +830,11 @@ private static final long serialVersionUID = 0L;
       occurredAt_ = "";
       traceId_ = "";
       causationId_ = "";
+      runId_ = "";
+      venueSessionId_ = "";
+      clientOrderId_ = "";
+      botId_ = "";
+      botVersion_ = "";
       return this;
     }
 
@@ -634,6 +889,21 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.causationId_ = causationId_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.runId_ = runId_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.venueSessionId_ = venueSessionId_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.clientOrderId_ = clientOrderId_;
+      }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.botId_ = botId_;
+      }
+      if (((from_bitField0_ & 0x00000800) != 0)) {
+        result.botVersion_ = botVersion_;
+      }
     }
 
     @java.lang.Override
@@ -681,6 +951,31 @@ private static final long serialVersionUID = 0L;
       if (!other.getCausationId().isEmpty()) {
         causationId_ = other.causationId_;
         bitField0_ |= 0x00000040;
+        onChanged();
+      }
+      if (!other.getRunId().isEmpty()) {
+        runId_ = other.runId_;
+        bitField0_ |= 0x00000080;
+        onChanged();
+      }
+      if (!other.getVenueSessionId().isEmpty()) {
+        venueSessionId_ = other.venueSessionId_;
+        bitField0_ |= 0x00000100;
+        onChanged();
+      }
+      if (!other.getClientOrderId().isEmpty()) {
+        clientOrderId_ = other.clientOrderId_;
+        bitField0_ |= 0x00000200;
+        onChanged();
+      }
+      if (!other.getBotId().isEmpty()) {
+        botId_ = other.botId_;
+        bitField0_ |= 0x00000400;
+        onChanged();
+      }
+      if (!other.getBotVersion().isEmpty()) {
+        botVersion_ = other.botVersion_;
+        bitField0_ |= 0x00000800;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -744,6 +1039,31 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 58
+            case 66: {
+              runId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 66
+            case 74: {
+              venueSessionId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 74
+            case 82: {
+              clientOrderId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 82
+            case 90: {
+              botId_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 90
+            case 98: {
+              botVersion_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000800;
+              break;
+            } // case 98
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1261,6 +1581,366 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       causationId_ = value;
       bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object runId_ = "";
+    /**
+     * <code>string run_id = 8;</code>
+     * @return The runId.
+     */
+    public java.lang.String getRunId() {
+      java.lang.Object ref = runId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        runId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string run_id = 8;</code>
+     * @return The bytes for runId.
+     */
+    public com.google.protobuf.ByteString
+        getRunIdBytes() {
+      java.lang.Object ref = runId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        runId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string run_id = 8;</code>
+     * @param value The runId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRunId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      runId_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string run_id = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRunId() {
+      runId_ = getDefaultInstance().getRunId();
+      bitField0_ = (bitField0_ & ~0x00000080);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string run_id = 8;</code>
+     * @param value The bytes for runId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRunIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      runId_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object venueSessionId_ = "";
+    /**
+     * <code>string venue_session_id = 9;</code>
+     * @return The venueSessionId.
+     */
+    public java.lang.String getVenueSessionId() {
+      java.lang.Object ref = venueSessionId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        venueSessionId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string venue_session_id = 9;</code>
+     * @return The bytes for venueSessionId.
+     */
+    public com.google.protobuf.ByteString
+        getVenueSessionIdBytes() {
+      java.lang.Object ref = venueSessionId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        venueSessionId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string venue_session_id = 9;</code>
+     * @param value The venueSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVenueSessionId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      venueSessionId_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string venue_session_id = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearVenueSessionId() {
+      venueSessionId_ = getDefaultInstance().getVenueSessionId();
+      bitField0_ = (bitField0_ & ~0x00000100);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string venue_session_id = 9;</code>
+     * @param value The bytes for venueSessionId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVenueSessionIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      venueSessionId_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object clientOrderId_ = "";
+    /**
+     * <code>string client_order_id = 10;</code>
+     * @return The clientOrderId.
+     */
+    public java.lang.String getClientOrderId() {
+      java.lang.Object ref = clientOrderId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        clientOrderId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string client_order_id = 10;</code>
+     * @return The bytes for clientOrderId.
+     */
+    public com.google.protobuf.ByteString
+        getClientOrderIdBytes() {
+      java.lang.Object ref = clientOrderId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        clientOrderId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string client_order_id = 10;</code>
+     * @param value The clientOrderId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setClientOrderId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      clientOrderId_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string client_order_id = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearClientOrderId() {
+      clientOrderId_ = getDefaultInstance().getClientOrderId();
+      bitField0_ = (bitField0_ & ~0x00000200);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string client_order_id = 10;</code>
+     * @param value The bytes for clientOrderId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setClientOrderIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      clientOrderId_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object botId_ = "";
+    /**
+     * <code>string bot_id = 11;</code>
+     * @return The botId.
+     */
+    public java.lang.String getBotId() {
+      java.lang.Object ref = botId_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        botId_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string bot_id = 11;</code>
+     * @return The bytes for botId.
+     */
+    public com.google.protobuf.ByteString
+        getBotIdBytes() {
+      java.lang.Object ref = botId_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        botId_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string bot_id = 11;</code>
+     * @param value The botId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBotId(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      botId_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string bot_id = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBotId() {
+      botId_ = getDefaultInstance().getBotId();
+      bitField0_ = (bitField0_ & ~0x00000400);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string bot_id = 11;</code>
+     * @param value The bytes for botId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBotIdBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      botId_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object botVersion_ = "";
+    /**
+     * <code>string bot_version = 12;</code>
+     * @return The botVersion.
+     */
+    public java.lang.String getBotVersion() {
+      java.lang.Object ref = botVersion_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        botVersion_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string bot_version = 12;</code>
+     * @return The bytes for botVersion.
+     */
+    public com.google.protobuf.ByteString
+        getBotVersionBytes() {
+      java.lang.Object ref = botVersion_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        botVersion_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string bot_version = 12;</code>
+     * @param value The botVersion to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBotVersion(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      botVersion_ = value;
+      bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string bot_version = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBotVersion() {
+      botVersion_ = getDefaultInstance().getBotVersion();
+      bitField0_ = (bitField0_ & ~0x00000800);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string bot_version = 12;</code>
+     * @param value The bytes for botVersion to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBotVersionBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      botVersion_ = value;
+      bitField0_ |= 0x00000800;
       onChanged();
       return this;
     }

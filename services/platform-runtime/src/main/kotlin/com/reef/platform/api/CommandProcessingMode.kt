@@ -3,7 +3,8 @@ package com.reef.platform.api
 enum class CommandProcessingMode(val configValue: String) {
     SyncResult("sync-result"),
     CapturedSyncEngine("captured-sync-engine"),
-    CapturedAck("captured-ack");
+    CapturedAck("captured-ack"),
+    StreamAck("stream-ack");
 
     companion object {
         fun from(raw: String?): CommandProcessingMode {

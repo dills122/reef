@@ -977,6 +977,161 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun streamAckPublishesCommandAndReturnsAcceptedReferenceWithoutExecutingEngine() {
+        val publisher = RecordingStreamCommandPublisher()
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-1"
+                ),
+                body = validSubmitBody("cmd-stream-1", "trace-stream-1", "ord-stream-1", extra = streamRoutingExtra())
+            )
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-stream-1\"")
+            assertContains(response.body, "\"status\":\"ACCEPTED\"")
+            assertContains(response.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(response.body, "\"stream\":\"REEF_COMMANDS\"")
+            assertContains(response.body, "\"subject\":\"reef.cmd.v1.")
+            assertContains(response.body, "\"streamSequence\":1")
+            assertEquals(1, publisher.published.size)
+            assertEquals("client-1|/api/v1/orders/submit|idem-stream-1", publisher.published.single().natsMessageId)
+            assertEquals(0, gateway.submitCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckReplaysSameIdempotencyKeyAndBodyWithoutRepublishing() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-stream-replay"
+            )
+            val body = validSubmitBody("cmd-stream-replay", "trace-stream-replay", "ord-stream-replay", extra = streamRoutingExtra())
+            val first = post(server.address.port, "/api/v1/orders/submit", headers, body)
+            val second = post(server.address.port, "/api/v1/orders/submit", headers, body)
+
+            assertEquals(202, first.status)
+            assertEquals(202, second.status)
+            assertEquals(first.body, second.body)
+            assertEquals(1, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckRejectsSameIdempotencyKeyWithDifferentBody() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-stream-conflict"
+            )
+            val first = post(
+                server.address.port,
+                "/api/v1/orders/submit",
+                headers,
+                validSubmitBody("cmd-stream-conflict", "trace-stream-conflict", "ord-stream-conflict", extra = streamRoutingExtra())
+            )
+            val second = post(
+                server.address.port,
+                "/api/v1/orders/submit",
+                headers,
+                validSubmitBody("cmd-stream-conflict-2", "trace-stream-conflict-2", "ord-stream-conflict-2", extra = streamRoutingExtra())
+            )
+
+            assertEquals(202, first.status)
+            assertEquals(409, second.status)
+            assertContains(second.body, "\"code\":\"IDEMPOTENCY_PAYLOAD_CONFLICT\"")
+            assertEquals(1, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckRequiresRoutingMetadataBeforePublish() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-missing-routing"
+                ),
+                body = validCancelBody("cmd-stream-missing-routing", "trace-stream-missing-routing", "ord-stream-missing-routing")
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"STREAM_ROUTING_METADATA_REQUIRED\"")
+            assertEquals(0, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckReturnsUnavailableWhenPublishAckFails() {
+        val publisher = RecordingStreamCommandPublisher(fail = true)
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-publish-fail"
+                ),
+                body = validSubmitBody("cmd-stream-publish-fail", "trace-stream-publish-fail", "ord-stream-publish-fail", extra = streamRoutingExtra())
+            )
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"error\":\"stream command publish unavailable\"")
+            assertEquals(1, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedModesRequireCommandStatusLookup() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
@@ -1176,7 +1331,10 @@ class PlatformHttpServerBoundaryTest {
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
         commandIntakeBackpressureSampleMs: Long = 100L,
-        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
+        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore(),
+        streamCommandIntakeStore: StreamCommandIntakeStore? = null,
+        streamCommandPublisher: StreamCommandPublisher? = null,
+        streamCommandConfig: StreamCommandConfig = StreamCommandConfig()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
         if (seedOrderAuthorization) {
@@ -1202,6 +1360,9 @@ class PlatformHttpServerBoundaryTest {
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
+            streamCommandIntakeStore = streamCommandIntakeStore,
+            streamCommandPublisher = streamCommandPublisher,
+            streamCommandConfig = streamCommandConfig,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
@@ -1281,6 +1442,10 @@ class PlatformHttpServerBoundaryTest {
               "limitPrice":"150250000001"$extra
             }
         """.trimIndent()
+    }
+
+    private fun streamRoutingExtra(): String {
+        return ",\"runId\":\"run-1\",\"venueSessionId\":\"session-1\",\"clientOrderId\":\"clord-1\",\"botId\":\"bot-1\",\"botVersion\":\"v1\""
     }
 
     private fun bodyWithoutField(body: String, field: String): String {
@@ -1407,6 +1572,20 @@ private class CountingIdempotencyStore : IdempotencyStore {
         ttlClass: IdempotencyTtlClass
     ) {
         saveCalls++
+    }
+}
+
+private class RecordingStreamCommandPublisher(
+    private val fail: Boolean = false
+) : StreamCommandPublisher {
+    val published = mutableListOf<StreamCommandEnvelope>()
+
+    override fun publish(envelope: StreamCommandEnvelope): StreamPublishAck {
+        published.add(envelope)
+        if (fail) {
+            error("publish ack timeout")
+        }
+        return StreamPublishAck("REEF_COMMANDS", published.size.toLong())
     }
 }
 

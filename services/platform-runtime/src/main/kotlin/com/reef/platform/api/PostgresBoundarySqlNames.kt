@@ -7,6 +7,7 @@ data class PostgresBoundarySqlNames(
 
     val idempotencyRecords = qualify("api_idempotency_records")
     val commandCaptures = qualify("api_command_captures")
+    val streamCommandIntake = qualify("stream_command_intake")
     val commandCapturesStatusUpdatedIndex = "idx_api_command_captures_status_updated"
 
     private fun qualify(name: String): String {

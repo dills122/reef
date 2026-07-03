@@ -254,3 +254,18 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - shift throughput work from one hot Postgres command queue to partitioned stream ingress plus canonical batched DB commits
 - isolate arena metadata and leaderboard projections from the trading hot path
 - add contract-first routing metadata before public bot traffic depends on cancel/modify behavior
+
+## Implementation Checkpoint
+
+The first stream-ack slice is implemented behind `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`:
+
+- command metadata now has additive routing fields for `runId`, `venueSessionId`, `clientOrderId`, `botId`, and `botVersion`
+- the API validates stream routing metadata before publish
+- subjects are built as `reef.cmd.v1.pXX.<venueSessionId>.<instrumentId>.<commandType>`
+- the partition key is `runId + venueSessionId + instrumentId`
+- `boundary.stream_command_intake` stores scoped idempotency keys, payload hashes, command references, subjects, partitions, and stream sequences
+- same key and same payload replays the accepted stream reference
+- same key and different payload returns `409`
+- `make dev-up-stream-ack` starts the local JetStream profile and bootstraps the retained command stream
+
+The partition worker, stream lag telemetry, redelivery-safe canonical DB commit path, and replay checksum tests remain follow-up work.

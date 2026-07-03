@@ -93,6 +93,12 @@ services:
       EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS: "${EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COMMANDS:-0}"
       EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING: "${EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING:-0}"
       EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS: "${EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS:-100}"
+      STREAM_ACK_NATS_URL: "${STREAM_ACK_NATS_URL:-nats://nats:4222}"
+      STREAM_ACK_COMMAND_STREAM: "${STREAM_ACK_COMMAND_STREAM:-REEF_COMMANDS}"
+      STREAM_ACK_SUBJECT_PREFIX: "${STREAM_ACK_SUBJECT_PREFIX:-reef.cmd.v1}"
+      STREAM_ACK_PARTITION_COUNT: "${STREAM_ACK_PARTITION_COUNT:-16}"
+      STREAM_ACK_INTAKE_STORE: "${STREAM_ACK_INTAKE_STORE:-postgres}"
+      STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS: "${STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS:-2000}"
       EXTERNAL_API_ABUSE_BREAKER_MODE: "${EXTERNAL_API_ABUSE_BREAKER_MODE:-off}"
       EXTERNAL_API_ABUSE_BREAKER_ENABLED: "${EXTERNAL_API_ABUSE_BREAKER_ENABLED:-true}"
       EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED: "${EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED:-true}"
@@ -142,6 +148,29 @@ services:
       timeout: 3s
       retries: 20
 
+  nats:
+    image: nats:2.11-alpine
+    container_name: reef-nats
+    profiles: ["stream-ack"]
+    command: ["-js", "-sd", "/data/jetstream", "-m", "8222"]
+    ports:
+      - "${REEF_NATS_HOST_PORT:-4222}:4222"
+      - "${REEF_NATS_MONITOR_HOST_PORT:-8222}:8222"
+    volumes:
+      - reef-nats-data:/data/jetstream
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats-box:
+    image: natsio/nats-box:0.18.0
+    profiles: ["stream-ack-tools"]
+    depends_on:
+      nats:
+        condition: service_healthy
+
   jaeger:
     image: jaegertracing/all-in-one:1.58
     container_name: reef-jaeger
@@ -164,3 +193,4 @@ services:
 
 volumes:
   reef-postgres-data:
+  reef-nats-data:

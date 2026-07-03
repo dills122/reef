@@ -93,4 +93,64 @@ public interface CommandMetadataOrBuilder extends
    */
   com.google.protobuf.ByteString
       getCausationIdBytes();
+
+  /**
+   * <code>string run_id = 8;</code>
+   * @return The runId.
+   */
+  java.lang.String getRunId();
+  /**
+   * <code>string run_id = 8;</code>
+   * @return The bytes for runId.
+   */
+  com.google.protobuf.ByteString
+      getRunIdBytes();
+
+  /**
+   * <code>string venue_session_id = 9;</code>
+   * @return The venueSessionId.
+   */
+  java.lang.String getVenueSessionId();
+  /**
+   * <code>string venue_session_id = 9;</code>
+   * @return The bytes for venueSessionId.
+   */
+  com.google.protobuf.ByteString
+      getVenueSessionIdBytes();
+
+  /**
+   * <code>string client_order_id = 10;</code>
+   * @return The clientOrderId.
+   */
+  java.lang.String getClientOrderId();
+  /**
+   * <code>string client_order_id = 10;</code>
+   * @return The bytes for clientOrderId.
+   */
+  com.google.protobuf.ByteString
+      getClientOrderIdBytes();
+
+  /**
+   * <code>string bot_id = 11;</code>
+   * @return The botId.
+   */
+  java.lang.String getBotId();
+  /**
+   * <code>string bot_id = 11;</code>
+   * @return The bytes for botId.
+   */
+  com.google.protobuf.ByteString
+      getBotIdBytes();
+
+  /**
+   * <code>string bot_version = 12;</code>
+   * @return The botVersion.
+   */
+  java.lang.String getBotVersion();
+  /**
+   * <code>string bot_version = 12;</code>
+   * @return The bytes for botVersion.
+   */
+  com.google.protobuf.ByteString
+      getBotVersionBytes();
 }

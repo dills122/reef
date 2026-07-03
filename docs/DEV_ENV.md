@@ -164,6 +164,22 @@ Stress telemetry also samples runtime health, hot-path timings, async command qu
 
 Captured-ack stress reports also attach `commandAccounting` when the runtime exposes `/internal/commands/accounting`. The accounting block records the run-scoped pre/post snapshots, accepted delta, completed/failed terminal delta, active queue depth after the step, stale processing count, completed rps, and accepted-command accounting gap. `make dev-stress-captured-ack` sets `DEV_STRESS_FAIL_ON_ACCOUNTING_GAP=1` by default.
 
+Run the first JetStream-backed accepted-command profile:
+
+```bash
+make dev-up-stream-ack
+```
+
+`dev-up-stream-ack` starts the normal local stack with the `stream-ack` compose profile, boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime is configured with:
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`
+- `STREAM_ACK_NATS_URL=nats://nats:4222`
+- `STREAM_ACK_COMMAND_STREAM=REEF_COMMANDS`
+- `STREAM_ACK_SUBJECT_PREFIX=reef.cmd.v1`
+- `STREAM_ACK_PARTITION_COUNT=16`
+- `STREAM_ACK_INTAKE_STORE=postgres`
+
+In this mode the API returns `202` only after JetStream publish acknowledgment. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
+
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
 - `DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING=1`

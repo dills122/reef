@@ -27,6 +27,9 @@ class PlatformHttpServer(
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
     private val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
     private val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
+    private val streamCommandIntakeStore: StreamCommandIntakeStore? = null,
+    private val streamCommandPublisher: StreamCommandPublisher? = null,
+    private val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -60,6 +63,9 @@ class PlatformHttpServer(
         commandCaptureStore = deps.commandCaptureStore,
         commandStatusLookup = deps.commandStatusLookup,
         capturedCommandQueue = deps.capturedCommandQueue,
+        streamCommandIntakeStore = deps.streamCommandIntakeStore,
+        streamCommandPublisher = deps.streamCommandPublisher,
+        streamCommandConfig = deps.streamCommandConfig,
         commandProcessingMode = deps.commandProcessingMode
     )
 
@@ -458,6 +464,11 @@ class PlatformHttpServer(
             return
         }
 
+        if (commandProcessingMode == CommandProcessingMode.StreamAck) {
+            handleStreamAckMutation(exchange, route, clientId, idempotencyKey, correlationId, body)
+            return
+        }
+
         if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
             val existingStatus = commandStatusLookup?.findCommandStatus(clientId, route, idempotencyKey)
             if (existingStatus != null) {
@@ -493,7 +504,10 @@ class PlatformHttpServer(
             return
         }
 
-        if (commandProcessingMode != CommandProcessingMode.SyncResult && commandStatusLookup == null) {
+        if (
+            commandProcessingMode in setOf(CommandProcessingMode.CapturedAck, CommandProcessingMode.CapturedSyncEngine) &&
+            commandStatusLookup == null
+        ) {
             HotPathMetrics.time("api.commandCapture.markFailed") {
                 commandCaptureStore.markFailed(
                     clientId,
@@ -578,6 +592,95 @@ class PlatformHttpServer(
             }
             writeJson(exchange, 503, simpleErrorJson("runtime unavailable", errorMessage))
         }
+    }
+
+    private fun handleStreamAckMutation(
+        exchange: HttpExchange,
+        route: String,
+        clientId: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String
+    ) {
+        val intakeStore = streamCommandIntakeStore
+        val publisher = streamCommandPublisher
+        if (intakeStore == null || publisher == null) {
+            writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable"))
+            return
+        }
+
+        val envelopeResult = StreamCommandEnvelopeBuilder.fromRequest(
+            clientId = clientId,
+            route = route,
+            idempotencyKey = idempotencyKey,
+            body = body,
+            config = streamCommandConfig
+        )
+        val envelope = when (envelopeResult) {
+            is EitherBoundaryError.Error -> {
+                writeJson(exchange, envelopeResult.error.status, boundary.toErrorJson(envelopeResult.error, correlationId))
+                return
+            }
+            is EitherBoundaryError.Envelope -> envelopeResult.envelope
+        }
+
+        val abuseViolation = abuseProtectionHook.allow(clientId, route)
+        if (abuseViolation != null) {
+            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            return
+        }
+
+        val initialReference = envelope.reference(streamCommandConfig.streamName)
+        val reservation = try {
+            intakeStore.reserve(envelope, initialReference)
+        } catch (ex: Exception) {
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonFields.escape(errorMessage)}"
+            )
+            writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable", errorMessage))
+            return
+        }
+
+        when (reservation) {
+            is StreamCommandReservation.Conflict -> {
+                writeJson(
+                    exchange,
+                    409,
+                    boundary.toErrorJson(
+                        BoundaryError(
+                            409,
+                            "IDEMPOTENCY_PAYLOAD_CONFLICT",
+                            "idempotency key was already used with a different command payload"
+                        ),
+                        correlationId
+                    )
+                )
+                return
+            }
+            is StreamCommandReservation.Replay -> {
+                if (reservation.reference.streamSequence > 0L) {
+                    writeJson(exchange, 202, StreamCommandResponse.acceptedJson(reservation.reference))
+                    return
+                }
+            }
+            is StreamCommandReservation.Reserved -> {
+            }
+        }
+
+        val ack = try {
+            publisher.publish(envelope)
+        } catch (ex: Exception) {
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "stream_command_publish_failed route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=${envelope.subject} message=${JsonFields.escape(errorMessage)}"
+            )
+            writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", errorMessage))
+            return
+        }
+        val publishedReference = intakeStore.markPublished(envelope.scope, envelope.idempotencyKey, ack.streamSequence)
+            ?: envelope.reference(ack.streamName, ack.streamSequence)
+        writeJson(exchange, 202, StreamCommandResponse.acceptedJson(publishedReference))
     }
 
     private fun writeDuplicateCommandReservation(
@@ -834,6 +937,17 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         commandCaptureStore = hooks.commandCaptureStore,
         commandStatusLookup = hooks.commandCaptureStore as? CommandStatusLookup,
         capturedCommandQueue = hooks.commandCaptureStore as? CapturedCommandQueue,
+        streamCommandIntakeStore = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
+            StreamCommandIntakeFactory.defaultStore()
+        } else {
+            null
+        },
+        streamCommandPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
+            StreamCommandIntakeFactory.defaultPublisher()
+        } else {
+            null
+        },
+        streamCommandConfig = StreamCommandConfig(),
         commandProcessingMode = hooks.commandProcessingMode
     )
 }
@@ -846,5 +960,8 @@ data class ServerBoundaryDeps(
     val commandCaptureStore: CommandCaptureStore,
     val commandStatusLookup: CommandStatusLookup? = commandCaptureStore as? CommandStatusLookup,
     val capturedCommandQueue: CapturedCommandQueue? = commandCaptureStore as? CapturedCommandQueue,
+    val streamCommandIntakeStore: StreamCommandIntakeStore? = null,
+    val streamCommandPublisher: StreamCommandPublisher? = null,
+    val streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )

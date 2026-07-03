@@ -327,12 +327,12 @@ Exit criteria:
 
 ### M7: Stream-Ack Ingress And Partitioned Processing
 
-- [ ] Define stream-ack command envelope and protobuf/contract updates.
-- [ ] Define deterministic partition key and subject builder.
-- [ ] Add local NATS/JetStream dev profile and stream bootstrap.
+- [x] Define stream-ack command envelope and protobuf/contract updates.
+- [x] Define deterministic partition key and subject builder.
+- [x] Add local NATS/JetStream dev profile and stream bootstrap.
 - [ ] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry.
-- [ ] Implement `stream-ack` API mode behind a flag.
-- [ ] Add scoped idempotency guard with payload-hash conflict behavior.
+- [x] Implement `stream-ack` API mode behind a flag.
+- [x] Add scoped idempotency guard with payload-hash conflict behavior.
 - [ ] Add partition worker that preserves per-partition ordering.
 - [ ] Persist canonical command result and event log before JetStream ack.
 - [ ] Add projection watermarks and lag snapshots.

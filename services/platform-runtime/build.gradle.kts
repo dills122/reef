@@ -15,6 +15,7 @@ dependencies {
     implementation("io.grpc:grpc-netty-shaded:1.73.0")
     implementation("io.grpc:grpc-protobuf:1.73.0")
     implementation("io.grpc:grpc-stub:1.73.0")
+    implementation("io.nats:jnats:2.25.3")
     implementation("com.google.protobuf:protobuf-java:4.33.2")
     testImplementation(kotlin("test"))
 }
