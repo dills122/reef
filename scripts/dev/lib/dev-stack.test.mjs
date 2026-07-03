@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { devReset, devUp } from "./dev-stack.mjs";
 
+const databaseServices = ["postgres", "boundary-postgres", "projection-postgres"];
+
 test("devUp starts postgres, runs migrations, then starts full stack", async () => {
   const calls = [];
   const processEnv = {};
@@ -21,9 +23,9 @@ test("devUp starts postgres, runs migrations, then starts full stack", async () 
 
   assert.equal(processEnv.COMPOSE_PROFILES, "redis");
   assert.deepEqual(calls, [
-    ["docker", ["compose", "up", "-d", "--wait", "--wait-timeout", "120", "postgres"]],
+    ["docker", ["compose", "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "120", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
-    ["docker", ["compose", "up", "-d", "--build", "--wait", "--wait-timeout", "120"]],
+    ["docker", ["compose", "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "120"]],
   ]);
 });
 
@@ -46,7 +48,7 @@ test("devUp fails before full stack when migrations fail", async () => {
   );
 
   assert.deepEqual(calls, [
-    ["docker", ["compose", "up", "-d", "--wait", "--wait-timeout", "300", "postgres"]],
+    ["docker", ["compose", "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
   ]);
 });
@@ -72,9 +74,9 @@ test("devReset wipes volumes, migrates, starts stack, and can run smoke", async 
   assert.equal(processEnv.DEV_WAIT_TIMEOUT_SECONDS, "15");
   assert.deepEqual(calls, [
     ["docker", ["compose", "down", "--volumes", "--remove-orphans"]],
-    ["docker", ["compose", "up", "-d", "--wait", "--wait-timeout", "300", "postgres"]],
+    ["docker", ["compose", "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
-    ["docker", ["compose", "up", "-d", "--build", "--wait", "--wait-timeout", "300"]],
+    ["docker", ["compose", "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "300"]],
     ["node", ["scripts/dev/smoke.mjs"]],
   ]);
   assert.ok(logs.some((message) => message.includes("running smoke verification")));
@@ -95,9 +97,9 @@ test("devReset skips smoke by default", async () => {
 
   assert.deepEqual(calls, [
     ["docker", ["compose", "down", "--volumes", "--remove-orphans"]],
-    ["docker", ["compose", "up", "-d", "--wait", "--wait-timeout", "300", "postgres"]],
+    ["docker", ["compose", "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "300", ...databaseServices]],
     ["node", ["scripts/dev/db/migrate.mjs"]],
-    ["docker", ["compose", "up", "-d", "--build", "--wait", "--wait-timeout", "300"]],
+    ["docker", ["compose", "up", "-d", "--build", "--remove-orphans", "--wait", "--wait-timeout", "300"]],
   ]);
   assert.ok(logs.some((message) => message.includes("skipping smoke verification")));
 });

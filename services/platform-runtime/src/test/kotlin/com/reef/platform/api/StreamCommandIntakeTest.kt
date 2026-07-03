@@ -76,9 +76,46 @@ class StreamCommandIntakeTest {
         val conflict = store.reserve(changedEnvelope, changedEnvelope.reference("REEF_COMMANDS"))
 
         assertIs<StreamCommandReservation.Reserved>(first)
-        assertEquals(42L, published?.streamSequence)
+        assertTrue(published)
         assertEquals(42L, assertIs<StreamCommandReservation.Replay>(replay).reference.streamSequence)
         assertIs<StreamCommandReservation.Conflict>(conflict)
+    }
+
+    @Test
+    fun asyncPublicationMarkerEventuallyMarksReservedCommandPublished() {
+        val store = InMemoryStreamCommandIntakeStore()
+        val envelope = assertIs<EitherBoundaryError.Envelope>(
+            StreamCommandEnvelopeBuilder.fromRequest(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-async",
+                body = validStreamSubmitBody()
+            )
+        ).envelope
+        val first = store.reserve(envelope, envelope.reference("REEF_COMMANDS"))
+        val marker = AsyncStreamCommandPublicationMarker(store, workerCount = 1, queueCapacity = 10)
+
+        assertIs<StreamCommandReservation.Reserved>(first)
+        assertTrue(marker.markPublishedByCommandId(envelope.commandId, 99L))
+        eventually {
+            val replay = store.reserve(envelope, envelope.reference("REEF_COMMANDS"))
+            assertEquals(99L, assertIs<StreamCommandReservation.Replay>(replay).reference.streamSequence)
+        }
+    }
+
+    private fun eventually(assertion: () -> Unit) {
+        val deadline = System.nanoTime() + 2_000_000_000L
+        var last: AssertionError? = null
+        while (System.nanoTime() < deadline) {
+            try {
+                assertion()
+                return
+            } catch (error: AssertionError) {
+                last = error
+                Thread.sleep(10)
+            }
+        }
+        throw last ?: AssertionError("condition was not met")
     }
 
     private fun validStreamSubmitBody(): String {

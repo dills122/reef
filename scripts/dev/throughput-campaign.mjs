@@ -187,7 +187,7 @@ async function configureRuntimeBoundary(overrides) {
     process.env[key] = value;
   }
   try {
-    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-runtime"]);
+    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-api"]);
     await waitForHttp("http://127.0.0.1:8080/health", 90, 2000);
   } finally {
     for (const key of Object.keys(overrides)) {

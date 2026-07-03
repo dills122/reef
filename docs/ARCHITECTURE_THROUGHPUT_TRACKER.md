@@ -9,6 +9,7 @@ Primary plan:
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)
+- [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 
 Architecture checkpoint:
 - D-037 reframes stream-ack as the high-throughput path for a deterministic simulated market venue.
@@ -146,7 +147,7 @@ Drain-accounted worker sweep:
 | A8 | Read-model schema/projection isolation | Not started | architecture | Remove projection writes from hot path |
 | A9 | Postgres outbox publisher | Deferred | architecture | Still needed for event distribution; no longer a precondition for stream-ack ingress |
 | A10 | NATS JetStream stream-ack ingress | Planned | architecture | Durable accepted-command log with publish-ack-before-202 and retained replay window |
-| A11 | Physical DB split evaluation | Deferred | decision | Only after diagnostics prove need |
+| A11 | Physical DB split evaluation | In progress | architecture | Local stream-ack now separates boundary intake, canonical runtime facts, and submit projections across three Postgres containers |
 | A12 | Boundary capture hot-path reduction | In progress | architecture | Captured-ack dev profile now disables duplicate legacy boundary command capture; command-log append remains the canonical durable capture path |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
 | A14 | Accepted-command write-ahead path | Done | architecture | `captured-ack` can run configurable async workers from atomically claimed command-log records |
@@ -166,14 +167,14 @@ Drain-accounted worker sweep:
 | A28 | Recoverable active command queue | In progress | performance | `command_work_queue` is derived active state and can be unlogged/reconstructed while accepted commands and terminal outcomes stay durable; quick loaded-stack run recovered `3945.78 accepted rps` with eventual `0` gap |
 | A29 | Stream-ack command contract and partitioning | Planned | contract | Command envelope must include run/session/instrument routing metadata and deterministic subject partitioning |
 | A30 | Stream-ack idempotency guard | Planned | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
-| A31 | Stream partition worker and ack rule | Planned | architecture | Ack JetStream only after canonical command result and event log commit |
-| A32 | Canonical event log and projection watermarks | Planned | architecture | Separate venue outcomes from leaderboard/UI projections and expose lag |
+| A31 | Stream partition worker and ack rule | In progress | architecture | Submit workers append canonical command results and venue events before JetStream ack; cancel/modify still need stream-worker support |
+| A32 | Canonical event log and projection watermarks | In progress | architecture | Submit projection watermarks and lag are exposed through partition-owned projectors; broader leaderboard/UI projections remain follow-up |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
-| A34 | Stream-ack role split and partition ownership | Planned | architecture | Split runtime modes into API, worker, projector, and all-in-one; workers own explicit non-overlapping partition ranges |
-| A35 | Canonical append store | Planned | architecture | Make canonical command results and venue events the stream-ack completion boundary before normalized projections |
-| A36 | Async market-simulation projections | Planned | architecture | Move order/trade/status/timeline/leaderboard/run read models behind projector watermarks and rebuilds |
+| A34 | Stream-ack role split and partition ownership | Done | architecture | Local deploy-shaped profile starts separate API, worker, and projector containers; workers own explicit non-overlapping partition ranges |
+| A35 | Canonical append store | Done | architecture | Submit workers append canonical command results and venue events before ack; normalized submit writes moved out of the worker path |
+| A36 | Async market-simulation projections | In progress | architecture | `platform-projector-0` and `platform-projector-1` materialize normalized submit read tables from canonical facts with partition-scoped watermarks; broader order/trade/status/timeline/leaderboard/run projections remain follow-up |
 | A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
-| A38 | DigitalOcean benchmark harness | Deferred | validation | Deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
+| A38 | DigitalOcean benchmark harness | Planned | validation | Test intent and evidence plan documented; next slice is OpenTofu + host-control scaffold for deployed API/workers/projectors/engine/NATS/Postgres evidence |
 
 ## Milestone Checklist
 
@@ -348,8 +349,10 @@ Exit criteria:
 - [x] Add scoped idempotency guard with payload-hash conflict behavior.
 - [x] Add SubmitOrder partition worker that preserves per-partition ordering.
 - [x] Persist SubmitOrder canonical command result and event log before JetStream ack.
+- [x] Add runtime canonical command-result and venue-event append tables for stream-ack submit outcomes.
+- [x] Move normalized SubmitOrder order/execution/trade/runtime-event writes behind partition-owned projector watermarks.
 - [ ] Extend partition worker processing to cancel/modify commands.
-- [ ] Add projection watermarks and lag snapshots.
+- [x] Add projection watermarks and lag snapshots for normalized submit projection.
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
 
 Latest stream-ack notes:
@@ -371,6 +374,44 @@ Latest stream-ack notes:
   - `2500` nominal rps: `74187` accepted/completed, `2222.68/sec`, p95 `61.97ms`, p99 `115.59ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
   - `5000` nominal rps: `104431` accepted/completed, `3106.74/sec`, p95 `101.58ms`, p99 `136.16ms`, trace pass `96%`, active partitions `16`, worker failures `0`.
 - Net result: the durable stream-ack processed ceiling moved from about `2000/sec` to about `3100/sec` on the local stack while preserving `202`-after-publish and DB-before-stream-ack semantics. Remaining bottlenecks are runtime/Postgres CPU and batched persistence cost (`~28ms` average per `persistSubmitOutcomes` batch in the spread run), not JetStream publish durability. Intake-pool pressure improved materially (`maxDbPoolWaiters` dropped from `56` to `14`).
+- Post-projector validation on the deploy-shaped stream-ack stack (`platform-api`, two workers, one projector) after moving normalized submit writes behind `runtime-normalized-submit`:
+  - `1000` nominal rps: `28721` accepted, worker-completed, and projected, `858.46/sec`, p95 `59.14ms`, p99 `82.67ms`, trace pass `100%`, projector lag `0`.
+  - `2500` nominal rps: `72937` accepted and worker-completed, `2199.58/sec`, p95 `89.41ms`, p99 `156.34ms`, trace pass `71%`; projector projected `63853` during the step at `1925.63/sec` and ended with lag `163028`.
+  - `5000` nominal rps: `91706` accepted and worker-completed, `2763.98/sec`, p95 `108.29ms`, p99 `229.53ms`, trace pass `50%`; projector projected `64250` during the step at `1936.47/sec` and ended with lag `555190`.
+  - workers reported `0` failures and `0` ack failures at every step; projector caught up to lag `0` after the run stopped. The current ceiling moved from worker canonical persistence to projector throughput and projection freshness.
+- Projector ownership is now split across `platform-projector-0` and `platform-projector-1`, with explicit non-overlapping partition ranges and fair per-partition projection batching. Split-projector validation on `REEF_COMMANDS`:
+  - `2500` nominal rps: `69179` accepted and worker-completed, `2087.99/sec`, p95 `147.26ms`, p99 `238.20ms`, trace pass `63%`; projectors projected `51802` during the step at `1563.51/sec` and ended with lag `177646`.
+  - `5000` nominal rps: `88217` accepted and worker-completed, `2654.48/sec`, p95 `151.80ms`, p99 `210.00ms`, trace pass `36%`; projectors projected `52314` during the step at `1574.15/sec` and ended with lag `589132`.
+  - workers again reported `0` failures, `0` ack failures, and `0` durable consumer stream lag; projectors caught up to lag `0` after the run stopped. Projector throughput remained below the previous single-projector baseline, so the next optimization target is projector persistence and hot-partition projection cost, not API intake or JetStream worker drain.
+- Normalized submit projections now run against `projection-postgres` via `RUNTIME_PROJECTION_POSTGRES_JDBC_URL`, while workers append canonical facts to the primary runtime Postgres. Clean split-DB validation after resetting local Docker volumes:
+  - `2500` nominal rps: `67190` accepted, worker-completed, and projected, `2011.60/sec`, p95 `163.25ms`, p99 `234.83ms`, trace pass `97%`, projector lag `0`.
+  - `5000` nominal rps: `81661` accepted, worker-completed, and projected, `2442.63/sec`, p95 `130.93ms`, p99 `243.43ms`, trace pass `96%`, projector lag `0`.
+  - placement check: primary runtime DB held `148851` canonical submit rows and `0` submit projection rows; projection DB held `148851` submit projection rows and `0` canonical submit rows. Max durable worker stream lag stayed `0`; max sampled projector lag was `1186` and drained by step end. The storage split materially improved projection freshness versus the shared-DB split-projector run, so continue physical store separation before deeper projector SQL tuning.
+- Boundary/idempotency storage now runs against `boundary-postgres` through `RUNTIME_DB_URL`, so stream-intake rows and scoped idempotency writes are measured independently from canonical worker commits. Clean three-DB validation after resetting local Docker volumes:
+  - `2500` nominal rps: `71779` accepted, worker-completed, and projected, `2152.30/sec`, p95 `132.96ms`, p99 `190.01ms`, trace pass `96%`, projector lag `0`.
+  - `5000` nominal rps: `84433` accepted, worker-completed, and projected, `2540.33/sec`, p95 `121.01ms`, p99 `207.01ms`, trace pass `95%`, projector lag `0`.
+  - placement check: primary runtime DB held `156212` canonical submit rows and `0` boundary intake/projection rows; boundary DB held `156212` stream-intake rows and `0` canonical/projection rows; projection DB held `156212` submit projection rows and `0` canonical/boundary rows. Max sampled DB pool waiters were `1` on stream-intake, `0` on canonical runtime, and `0` on projection; max durable worker stream lag stayed `0`, with sampled projector lag draining to `0` by step end.
+  - result versus the prior projection-only DB split: the `2500` step improved from `2011.60/sec` to `2152.30/sec`, and the `5000` step improved from `2442.63/sec` to `2540.33/sec`, with lower p95/p99 and no final projection lag. Continue physical store separation and domain-specific migration ownership before deeper SQL tuning.
+- Stream-ack API phase timing now resets per stress step and reports `api.streamAck.*` phases. The first measured pass showed API average time was far below client p95 but still doing avoidable work: at `5000` nominal rps, API total averaged `23.12ms`, with reserve `7.43ms`, publish ack `3.85ms`, mark-published `6.82ms`, and backpressure `4.61ms`; stream-intake pool waiters peaked at `55`.
+- Stream backpressure now samples JetStream stream health for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100` instead of calling stream management on every request. Cached-backpressure validation on the warm three-DB stack:
+  - `2500` nominal rps: `71860` accepted, worker-completed, and projected, `2162.18/sec`, p50 `51.92ms`, p95 `119.46ms`, p99 `212.11ms`, trace pass `93%`, projector lag `0`.
+  - `5000` nominal rps latency probe: `85253` accepted, `2550.19/sec`, p50 `83.57ms`, p95 `135.99ms`, p99 `218.68ms`, trace pass `94.5%`; immediate worker/projector samples completed/projected about `84.3k` before the sampling window closed, with projector lag reported as `0`.
+  - API backpressure phase average dropped to `0.58ms` at `2500` and `0.35ms` at `5000`; publish ack averaged `2.58-2.90ms`. Max sampled stream-intake waiters dropped from `55` to `11`, while canonical runtime and projection pools stayed at `0` waiters. The remaining API cost is boundary DB reserve and mark-published, not JetStream publish acknowledgement.
+- The stream-intake boundary pool is now role-owned instead of multiplied uniformly across API, workers, and projectors. `platform-api` owns a `16/64` stream-intake pool; background roles keep `0/4` compatibility pools. Warm-stack validation:
+  - `2500` nominal rps: `72782` accepted, worker-completed, and projected, `2185.21/sec`, p50 `50.73ms`, p95 `109.26ms`, p99 `176.69ms`, trace pass `95%`, projector lag `0`.
+  - `5000` nominal rps: `95627` accepted, `2869.86/sec`, p50 `74.37ms`, p95 `118.63ms`, p99 `197.64ms`, trace pass `93%`; immediate worker/projector samples completed/projected about `94.4k`, with `0` worker failures, `0` ack failures, and projector lag reported as `0`.
+  - max sampled DB pool waiters were `0` for stream-intake, canonical runtime, and projection pools. API total averaged `11.80ms` at `2500` and `19.55ms` at `5000`; reserve and mark-published remain the dominant boundary costs, so the next deeper cut needs a durable published-metadata reconciler before moving `markPublished` off the synchronous response path.
+- Stream-ack publish metadata marking now supports `STREAM_ACK_MARK_PUBLISHED_MODE=async` in the deploy-shaped dev profile. The API returns after JetStream durable publish ack and enqueues the boundary metadata update; stream workers also repair the same metadata by command id after canonical commit and before JetStream ack, NAKing for redelivery if the repair cannot be completed. Warm-stack validation:
+  - `2500` nominal rps: `71365` accepted, `2149.75/sec`, p50 `47.71ms`, p95 `136.02ms`, p99 `208.96ms`, trace pass `85%`; workers completed/projected `69100`, worker failures `0`, ack failures `0`, final reported projector lag `0`.
+  - `5000` nominal rps: `129942` accepted, `3899.69/sec`, p50 `53.54ms`, p95 `83.93ms`, p99 `124.79ms`, trace pass `62.5%`; workers completed `104592` and projectors projected `105099` during the step, with final reported projector lag `5759`, worker failures `0`, and ack failures `0`.
+  - API enqueue-published averaged `0.019ms` at `2500` and `1.02ms` at `5000`; async flush averaged `1.42ms` and `2.20ms`. Max sampled DB pool waiters stayed `0` for stream-intake, canonical runtime, and projection. A boundary DB verification after the run showed all `968946` intake rows published with nonzero stream sequence and `0` unpublished rows.
+  - result: moving post-publish metadata out of the synchronous response path raised the observed `5000` nominal acceptance point from `2869.86/sec` to `3899.69/sec` and reduced p95 from `118.63ms` to `83.93ms`. The cost moved to asynchronous drain/projection freshness, visible in lower trace pass rate and nonzero end-of-window lag at `5000`; the next slice should harden redelivery/replay tests and then raise worker/projector completed throughput rather than retuning API intake.
+- Projector replay/idempotency and drain-side backpressure are now covered before the DO/OpenTofu slice. Projector tests assert that normalized submit projection rebuilds from canonical rows and a second projection pass applies `0` rows without duplicating read models. Worker/projector lag gates are configured through `STREAM_ACK_MAX_WORKER_STREAM_LAG`, `STREAM_ACK_MAX_PROJECTOR_LAG`, `STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS`, and `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`; API roles sample lag in a background daemon so requests only read the latest snapshot.
+  - an initial validation run proved the pre-existing stream storage gate works: the retained local `REEF_COMMANDS` stream had reached `~95%` of max bytes, so the API returned `429 STREAM_COMMAND_BACKPRESSURE`. The stream was purged before measuring the drain-gate implementation.
+  - clean-stream validation with background lag sampling enabled: `2500` nominal rps accepted `74503` commands at `2245.47/sec`, p50 `46.45ms`, p95 `61.88ms`, p99 `100.16ms`, trace pass `94%`, worker/projector completed `72811`, projector lag `0`.
+  - `5000` nominal rps accepted `127010` commands at `3816.61/sec`, p50 `54.92ms`, p95 `85.27ms`, p99 `124.16ms`, trace pass `64%`; workers completed `100114`, projectors projected `100207`, end-window projector lag `4716`, worker failures `0`, ack failures `0`.
+  - request-path backpressure remained cheap with background sampling: `api.streamAck.backpressure` averaged `0.11ms` at `2500` and `0.31ms` at `5000`; max sampled DB pool waiters stayed `0` for stream-intake, canonical runtime, and projection. Max sampled projector lag was `5296`, below the conservative local threshold `250000`; max worker stream lag stayed `0`.
+- Remaining tightening before DigitalOcean/OpenTofu infra: add broader crash/restart integration coverage around API publish-before-marker enqueue and worker/projector process restarts; then start the DO droplet IaC harness and compare local evidence against expected hardware.
 - Follow-up probes that did not beat the spread-profile baseline:
   - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
   - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`

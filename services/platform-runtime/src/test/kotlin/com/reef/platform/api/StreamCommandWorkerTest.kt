@@ -15,6 +15,7 @@ import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class StreamCommandWorkerTest {
     @Test
@@ -28,18 +29,43 @@ class StreamCommandWorkerTest {
                 runtimePersistence = persistence
             )
         )
-        val delivery = RecordingDelivery(payloadJson = validSubmitBody("cmd-worker-1", "ord-worker-1"))
+        var ackObservedCanonical = false
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-1", "ord-worker-1"),
+            onAck = {
+                ackObservedCanonical = persistence.canonicalSubmitOutcomes()
+                    .any { it.commandId == "cmd-worker-1" }
+            }
+        )
         val source = FixedStreamCommandSource(delivery)
-        val worker = StreamCommandWorker(source = source, api = api)
+        val worker = StreamCommandWorker(source = source, api = api, partition = 0)
 
         val processed = worker.processOnce()
 
         assertEquals(1, processed)
         assertEquals(1, gateway.submitCalls)
         assertEquals(1, delivery.ackCalls)
+        assertTrue(ackObservedCanonical)
         assertEquals(0, delivery.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-1"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-1"))
+        val canonical = persistence.canonicalSubmitOutcomes().single()
+        assertEquals("run-worker-1", canonical.runId)
+        assertEquals("session-worker-1", canonical.venueSessionId)
+        assertEquals(0, canonical.partitionId)
+        assertEquals(1, canonical.partitionSequence)
+        assertEquals("REEF_COMMANDS", canonical.streamName)
+        assertEquals(1, canonical.streamSequence)
+        assertEquals("AAPL", canonical.instrumentId)
+        assertEquals("SubmitOrder", canonical.commandType)
+        assertEquals("accepted", canonical.resultStatus)
+        assertTrue(canonical.payloadHash.isNotBlank())
+
+        val projected = persistence.projectCanonicalSubmitOutcomes("runtime-normalized-submit", 100, emptyList())
+
+        assertEquals(1, projected)
         assertNotNull(persistence.acceptedOrder("ord-worker-1"))
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit", emptyList()).lag)
     }
 
     @Test
@@ -67,7 +93,8 @@ class StreamCommandWorkerTest {
         assertEquals(1, second.ackCalls)
         assertEquals(0, first.nakCalls + second.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-redeliver"))
-        assertNotNull(persistence.acceptedOrder("ord-worker-redeliver"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-redeliver"))
+        assertEquals(1, persistence.canonicalSubmitOutcomes().size)
     }
 
     @Test
@@ -104,11 +131,195 @@ class StreamCommandWorkerTest {
         assertEquals(0, first.nakCalls + second.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-batch-1"))
         assertNotNull(persistence.submitResult("cmd-worker-batch-2"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-batch-1"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-batch-2"))
+        assertEquals(
+            listOf(10L, 11L),
+            persistence.canonicalSubmitOutcomes().map { it.streamSequence }
+        )
         val partition = StreamCommandWorkerMetrics.snapshot().partitions.single()
         assertEquals(3, partition.partition)
         assertEquals(2, partition.fetched)
         assertEquals(2, partition.completed)
         assertEquals(11, partition.lastCompletedStreamSequence)
+    }
+
+    @Test
+    fun submitWorkerRepairsPublishedMarkerBeforeAckingDelivery() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val marker = RecordingPublicationMarker()
+        var repairedBeforeAck = false
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-marker", "ord-worker-marker"),
+            streamSequence = 77,
+            onAck = {
+                repairedBeforeAck = marker.marked["cmd-worker-marker"] == 77L
+            }
+        )
+        val worker = StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            publicationMarker = marker,
+            partition = 5
+        )
+
+        val processed = worker.processOnce()
+
+        assertEquals(1, processed)
+        assertEquals(1, delivery.ackCalls)
+        assertTrue(repairedBeforeAck)
+        assertEquals(77L, marker.marked["cmd-worker-marker"])
+    }
+
+    @Test
+    fun submitWorkerNaksDeliveryWhenPublicationMarkerCannotRepair() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-worker-marker-missing", "ord-worker-marker-missing"),
+            streamSequence = 78
+        )
+        val worker = StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            publicationMarker = MissingPublicationMarker,
+            partition = 5
+        )
+
+        val processed = worker.processOnce()
+
+        assertEquals(1, processed)
+        assertEquals(0, delivery.ackCalls)
+        assertEquals(1, delivery.nakCalls)
+    }
+
+    @Test
+    fun redeliveryAfterPublicationMarkerFailureDoesNotDuplicateCanonicalOutcome() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val payload = validSubmitBody("cmd-worker-marker-redeliver", "ord-worker-marker-redeliver")
+        val first = RecordingDelivery(payloadJson = payload, streamSequence = 79)
+        val second = RecordingDelivery(payloadJson = payload, streamSequence = 79, deliveredCount = 2)
+        val marker = FailingThenRecordingPublicationMarker()
+        val worker = StreamCommandWorker(
+            source = QueueStreamCommandSource(first, second),
+            api = api,
+            publicationMarker = marker,
+            partition = 5
+        )
+
+        worker.processOnce()
+        worker.processOnce()
+
+        assertEquals(1, gateway.submitCalls)
+        assertEquals(0, first.ackCalls)
+        assertEquals(1, first.nakCalls)
+        assertEquals(1, second.ackCalls)
+        assertEquals(0, second.nakCalls)
+        assertEquals(1, persistence.canonicalSubmitOutcomes().size)
+        assertEquals(79L, persistence.canonicalSubmitOutcomes().single().streamSequence)
+        assertEquals(79L, marker.marked["cmd-worker-marker-redeliver"])
+    }
+
+    @Test
+    fun canonicalProjectorMaterializesNormalizedSubmitOutcomesAndWatermarks() {
+        StreamCommandWorkerMetrics.resetForTests()
+        CanonicalProjectionMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = CountingAcceptedGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-projector-1", "ord-projector-1"),
+            streamSequence = 12
+        )
+        StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            partition = 4
+        ).processOnce()
+        val projector = CanonicalProjectionWorker(
+            api = api,
+            projectionName = "runtime-normalized-submit",
+            batchSize = 10
+        )
+
+        assertEquals(null, persistence.acceptedOrder("ord-projector-1"))
+        val projected = projector.processOnce()
+        val replayed = projector.processOnce()
+
+        assertEquals(1, projected)
+        assertEquals(0, replayed)
+        assertNotNull(persistence.acceptedOrder("ord-projector-1"))
+        assertEquals(1, persistence.acceptedOrders().size)
+        val status = persistence.projectionStatus("runtime-normalized-submit")
+        assertEquals(0, status.lag)
+        assertEquals(12, status.watermarks.single().lastPartitionSequence)
+        assertEquals(1, CanonicalProjectionMetrics.snapshot().projected)
+    }
+
+    @Test
+    fun canonicalProjectorOnlyProjectsOwnedPartitions() {
+        StreamCommandWorkerMetrics.resetForTests()
+        CanonicalProjectionMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = CountingAcceptedGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val first = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-projector-owned-1", "ord-projector-owned-1"),
+            streamSequence = 20
+        )
+        val second = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-projector-owned-2", "ord-projector-owned-2"),
+            streamSequence = 21
+        )
+        StreamCommandWorker(
+            source = FixedBatchStreamCommandSource(first, second),
+            api = api,
+            partition = 4
+        ).processOnce()
+        val projector = CanonicalProjectionWorker(
+            api = api,
+            projectionName = "runtime-normalized-submit",
+            partitions = listOf(5),
+            batchSize = 10
+        )
+
+        val projected = projector.processOnce()
+
+        assertEquals(0, projected)
+        assertEquals(null, persistence.acceptedOrder("ord-projector-owned-1"))
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit", listOf(5)).lag)
+        assertEquals(21, persistence.projectionStatus("runtime-normalized-submit", listOf(4)).lag)
     }
 
     @Test
@@ -273,18 +484,47 @@ private class FixedTelemetrySource(
     override fun consumerSnapshot(): StreamCommandConsumerSnapshot = snapshot
 }
 
+private class RecordingPublicationMarker : StreamCommandPublicationMarker {
+    val marked = mutableMapOf<String, Long>()
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        marked[commandId] = streamSequence
+        return true
+    }
+}
+
+private object MissingPublicationMarker : StreamCommandPublicationMarker {
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean = false
+}
+
+private class FailingThenRecordingPublicationMarker : StreamCommandPublicationMarker {
+    val marked = mutableMapOf<String, Long>()
+    private var failed = false
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        if (!failed) {
+            failed = true
+            return false
+        }
+        marked[commandId] = streamSequence
+        return true
+    }
+}
+
 private class RecordingDelivery(
     override val subject: String = "reef.cmd.v1.p00.session-1.AAPL.SubmitOrder",
     override val payloadJson: String,
     override val streamSequence: Long = 1,
     override val deliveredCount: Long = 1,
-    private val failAck: Boolean = false
+    private val failAck: Boolean = false,
+    private val onAck: () -> Unit = {}
 ) : StreamCommandDelivery {
     var ackCalls = 0
     var nakCalls = 0
     var termCalls = 0
 
     override fun ack() {
+        onAck()
         ackCalls++
         if (failAck) error("ack failed")
     }

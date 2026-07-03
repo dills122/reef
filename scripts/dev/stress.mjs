@@ -40,7 +40,18 @@ const dbDiagnosticsSchemas = parseCsvStrings(
 const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
+const captureHotPath = env("DEV_STRESS_CAPTURE_HOT_PATH", "1") !== "0";
 const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
+const streamAckWorkerUrls = parseCsvStrings(
+  env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
+);
+const captureStreamAckProjectorStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR", captureStreamAckWorkerStats ? "1" : "0") === "1";
+const streamAckProjectorUrls = parseCsvStrings(
+  env(
+    "DEV_STRESS_STREAM_ACK_PROJECTOR_URLS",
+    env("DEV_STRESS_STREAM_ACK_PROJECTOR_URL", defaultStreamAckProjectorUrls(runtimeUrl).join(",")),
+  ),
+);
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -234,6 +245,10 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
+  const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
+  if (captureHotPath) {
+    await resetHotPath(runtimeUrl);
+  }
   try {
     await run(
       "go",
@@ -290,6 +305,14 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterStreamWorkers = await sampleStreamAckWorkers(runtimeUrl);
       attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
     }
+    if (captureStreamAckProjectorStats) {
+      const afterProjector = await sampleStreamAckProjectors();
+      attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
+    }
+    if (captureHotPath) {
+      const afterHotPath = await sampleHotPath(runtimeUrl);
+      attachHotPathPhases({ reportOut, afterHotPath });
+    }
   }
 }
 
@@ -302,12 +325,282 @@ async function sampleCommandAccounting(runtimeUrl, runId) {
   });
 }
 
-async function sampleStreamAckWorkers(runtimeUrl) {
+async function sampleStreamAckWorkers() {
+  const probes = await Promise.all(
+    streamAckWorkerUrls.map((baseUrl, index) =>
+      requestAppProbe({
+        name: `streamAckWorker.${index}.stats`,
+        url: `${baseUrl}/internal/stream-ack/worker/stats`,
+        captureJson: true,
+      }),
+    ),
+  );
+  return {
+    ok: probes.every((probe) => probe.ok),
+    status: probes.find((probe) => !probe.ok)?.status ?? 200,
+    latencyMs: Math.max(0, ...probes.map((probe) => Number(probe.latencyMs ?? 0))),
+    error: probes.find((probe) => probe.error)?.error ?? "",
+    probes,
+    json: aggregateStreamAckWorkerStats(probes),
+  };
+}
+
+async function resetHotPath(runtimeUrl) {
   return requestAppProbe({
-    name: "runtime.streamAckWorkers",
-    url: `${runtimeUrl}/internal/stream-ack/worker/stats`,
+    name: "runtime.hotPath.reset",
+    url: `${runtimeUrl}/internal/perf/hot-path`,
+    method: "POST",
     captureJson: true,
   });
+}
+
+async function sampleHotPath(runtimeUrl) {
+  return requestAppProbe({
+    name: "runtime.hotPath",
+    url: `${runtimeUrl}/internal/perf/hot-path`,
+    captureJson: true,
+  });
+}
+
+function attachHotPathPhases({ reportOut, afterHotPath }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const phases = afterHotPath?.json?.metrics?.phases ?? {};
+    const streamAckPhases = Object.fromEntries(
+      Object.entries(phases)
+        .filter(([name]) => name.startsWith("api.streamAck."))
+        .sort(([left], [right]) => left.localeCompare(right)),
+    );
+    report.streamAckApiPhases = {
+      phases: streamAckPhases,
+      probe: accountingProbeSummary(afterHotPath),
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+
+    const total = streamAckPhases["api.streamAck.total"];
+    const reserve = streamAckPhases["api.streamAck.reserve"];
+    const publishAck = streamAckPhases["api.streamAck.publishAck"];
+    const markPublished = streamAckPhases["api.streamAck.markPublished"];
+    const enqueuePublished = streamAckPhases["api.streamAck.enqueuePublished"];
+    const asyncFlush = streamAckPhases["api.streamAck.markPublished.asyncFlush"];
+    if (total || reserve || publishAck || markPublished || enqueuePublished) {
+      console.log(
+        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
+      );
+    }
+  } catch (error) {
+    console.warn(`  hot-path phases unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function formatPhaseAvg(phase) {
+  if (!phase) return "n/a";
+  return `${Number(phase.avgMs ?? 0).toFixed(2)}ms`;
+}
+
+function defaultStreamAckWorkerUrls(runtimeUrl) {
+  const parsed = new URL(runtimeUrl);
+  const worker0Port = env("REEF_PLATFORM_WORKER_0_HOST_PORT", "8082");
+  const worker1Port = env("REEF_PLATFORM_WORKER_1_HOST_PORT", "8083");
+  return [
+    `${parsed.protocol}//${parsed.hostname}:${worker0Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${worker1Port}`,
+  ];
+}
+
+function defaultStreamAckProjectorUrls(runtimeUrl) {
+  const parsed = new URL(runtimeUrl);
+  const projector0Port = env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", env("REEF_PLATFORM_PROJECTOR_HOST_PORT", "8084"));
+  const projector1Port = env("REEF_PLATFORM_PROJECTOR_1_HOST_PORT", "8085");
+  return [
+    `${parsed.protocol}//${parsed.hostname}:${projector0Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${projector1Port}`,
+  ];
+}
+
+async function sampleStreamAckProjectors() {
+  const probes = await Promise.all(
+    streamAckProjectorUrls.map((baseUrl, index) =>
+      requestAppProbe({
+        name: `streamAckProjector.${index}.status`,
+        url: `${baseUrl}/internal/projector/status`,
+        captureJson: true,
+      }),
+    ),
+  );
+  return {
+    ok: probes.every((probe) => probe.ok),
+    status: probes.find((probe) => !probe.ok)?.status ?? 200,
+    latencyMs: Math.max(0, ...probes.map((probe) => Number(probe.latencyMs ?? 0))),
+    error: probes.find((probe) => probe.error)?.error ?? "",
+    probes,
+    json: aggregateStreamAckProjectorStatus(probes),
+  };
+}
+
+function aggregateStreamAckProjectorStatus(probes) {
+  const projectors = probes
+    .map((probe, index) => ({ index, url: streamAckProjectorUrls[index], status: probe.json }))
+    .filter((projector) => projector.status);
+  const metrics = {
+    projected: 0,
+    failed: 0,
+    emptyPolls: 0,
+    lastProjectedAt: "",
+    lastFailedAt: "",
+    lastError: "",
+  };
+  let projectedCount = 0;
+  let lag = 0;
+  for (const projector of projectors) {
+    const rawMetrics = projector.status.metrics ?? {};
+    metrics.projected += Number(rawMetrics.projected ?? 0);
+    metrics.failed += Number(rawMetrics.failed ?? 0);
+    metrics.emptyPolls += Number(rawMetrics.emptyPolls ?? 0);
+    metrics.lastProjectedAt = maxIso(metrics.lastProjectedAt, rawMetrics.lastProjectedAt ?? "");
+    metrics.lastFailedAt = maxIso(metrics.lastFailedAt, rawMetrics.lastFailedAt ?? "");
+    metrics.lastError = rawMetrics.lastError || metrics.lastError;
+    projectedCount = Math.max(projectedCount, Number(projector.status.projectedCount ?? 0));
+    lag += Number(projector.status.lag ?? 0);
+  }
+  return {
+    enabled: projectors.some((projector) => projector.status.status === "running"),
+    implementation: projectors.find((projector) => projector.status.implementation)?.status.implementation ?? "",
+    projectionName: projectors.find((projector) => projector.status.projectionName)?.status.projectionName ?? "",
+    projectedCount,
+    lag,
+    metrics,
+    projectors: projectors.map((projector) => ({
+      index: projector.index,
+      url: projector.url,
+      status: projector.status.status,
+      partitions: projector.status.partitions ?? [],
+      projectedCount: projector.status.projectedCount,
+      lag: projector.status.lag,
+      metrics: projector.status.metrics ?? {},
+    })),
+    watermarks: projectors.flatMap((projector) => projector.status.watermarks ?? []),
+  };
+}
+
+function aggregateStreamAckWorkerStats(probes) {
+  const workerStats = probes
+    .map((probe, index) => ({ index, url: streamAckWorkerUrls[index], stats: probe.json }))
+    .filter((worker) => worker.stats);
+  const metrics = sumStreamWorkerMetrics(workerStats.map((worker) => worker.stats.metrics));
+  const partitionMetrics = mergeStreamWorkerPartitions(
+    workerStats.flatMap((worker) => worker.stats.partitionMetrics ?? []),
+  );
+  return {
+    enabled: workerStats.some((worker) => worker.stats.enabled === true),
+    processingMode: workerStats.find((worker) => worker.stats.processingMode)?.stats.processingMode ?? "",
+    workers: workerStats.map((worker) => ({
+      index: worker.index,
+      url: worker.url,
+      enabled: worker.stats.enabled,
+      partitions: worker.stats.partitions ?? [],
+      metrics: worker.stats.metrics ?? {},
+    })),
+    partitions: [...new Set(workerStats.flatMap((worker) => worker.stats.partitions ?? []))]
+      .map((partition) => Number(partition))
+      .filter((partition) => Number.isFinite(partition))
+      .sort((a, b) => a - b),
+    metrics,
+    partitionMetrics,
+    consumerMetrics: workerStats.flatMap((worker) => worker.stats.consumerMetrics ?? []),
+  };
+}
+
+function sumStreamWorkerMetrics(metricsList) {
+  const totals = {
+    fetched: 0,
+    completed: 0,
+    failed: 0,
+    ackFailed: 0,
+    unsupported: 0,
+    emptyPolls: 0,
+    lastFetchedAt: "",
+    lastCompletedAt: "",
+    lastFailedAt: "",
+    lastAckFailedAt: "",
+    lastError: "",
+  };
+  for (const metrics of metricsList) {
+    if (!metrics) continue;
+    totals.fetched += Number(metrics.fetched ?? 0);
+    totals.completed += Number(metrics.completed ?? 0);
+    totals.failed += Number(metrics.failed ?? 0);
+    totals.ackFailed += Number(metrics.ackFailed ?? 0);
+    totals.unsupported += Number(metrics.unsupported ?? 0);
+    totals.emptyPolls += Number(metrics.emptyPolls ?? 0);
+    totals.lastFetchedAt = maxIso(totals.lastFetchedAt, metrics.lastFetchedAt ?? "");
+    totals.lastCompletedAt = maxIso(totals.lastCompletedAt, metrics.lastCompletedAt ?? "");
+    totals.lastFailedAt = maxIso(totals.lastFailedAt, metrics.lastFailedAt ?? "");
+    totals.lastAckFailedAt = maxIso(totals.lastAckFailedAt, metrics.lastAckFailedAt ?? "");
+    totals.lastError = metrics.lastError || totals.lastError;
+  }
+  return totals;
+}
+
+function mergeStreamWorkerPartitions(partitions) {
+  const byPartition = new Map();
+  for (const raw of partitions) {
+    const partition = Number(raw.partition);
+    if (!Number.isFinite(partition)) continue;
+    const current = byPartition.get(partition) ?? {
+      partition,
+      fetched: 0,
+      completed: 0,
+      failed: 0,
+      ackFailed: 0,
+      unsupported: 0,
+      localInFlight: 0,
+      maxDeliveredCount: 0,
+      lastFetchedStreamSequence: 0,
+      lastCompletedStreamSequence: 0,
+      lastFetchedAt: "",
+      lastCompletedAt: "",
+      lastFailedAt: "",
+      lastAckFailedAt: "",
+      oldestLocalInFlightAt: "",
+      oldestLocalInFlightAgeMs: 0,
+      lastError: "",
+    };
+    current.fetched += Number(raw.fetched ?? 0);
+    current.completed += Number(raw.completed ?? 0);
+    current.failed += Number(raw.failed ?? 0);
+    current.ackFailed += Number(raw.ackFailed ?? 0);
+    current.unsupported += Number(raw.unsupported ?? 0);
+    current.localInFlight += Number(raw.localInFlight ?? 0);
+    current.maxDeliveredCount = Math.max(current.maxDeliveredCount, Number(raw.maxDeliveredCount ?? 0));
+    current.lastFetchedStreamSequence = Math.max(
+      current.lastFetchedStreamSequence,
+      Number(raw.lastFetchedStreamSequence ?? 0),
+    );
+    current.lastCompletedStreamSequence = Math.max(
+      current.lastCompletedStreamSequence,
+      Number(raw.lastCompletedStreamSequence ?? 0),
+    );
+    current.lastFetchedAt = maxIso(current.lastFetchedAt, raw.lastFetchedAt ?? "");
+    current.lastCompletedAt = maxIso(current.lastCompletedAt, raw.lastCompletedAt ?? "");
+    current.lastFailedAt = maxIso(current.lastFailedAt, raw.lastFailedAt ?? "");
+    current.lastAckFailedAt = maxIso(current.lastAckFailedAt, raw.lastAckFailedAt ?? "");
+    current.oldestLocalInFlightAgeMs = Math.max(
+      current.oldestLocalInFlightAgeMs,
+      Number(raw.oldestLocalInFlightAgeMs ?? 0),
+    );
+    current.oldestLocalInFlightAt =
+      current.oldestLocalInFlightAt || raw.oldestLocalInFlightAt || "";
+    current.lastError = raw.lastError || current.lastError;
+    byPartition.set(partition, current);
+  }
+  return [...byPartition.values()].sort((a, b) => a.partition - b.partition);
+}
+
+function maxIso(left, right) {
+  if (!left) return right || "";
+  if (!right) return left;
+  return right > left ? right : left;
 }
 
 function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers }) {
@@ -340,6 +633,38 @@ function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, 
     }
   } catch (error) {
     console.warn(`  stream-worker stats unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeProjector?.json ?? null;
+    const after = afterProjector?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const projectedDelta = Number(after?.metrics?.projected ?? 0) - Number(before?.metrics?.projected ?? 0);
+    const lagDelta = Number(after?.lag ?? 0) - Number(before?.lag ?? 0);
+    report.streamAckProjector = {
+      before,
+      after,
+      delta: {
+        projectedDelta,
+        projectedRps: durationSeconds > 0 ? projectedDelta / durationSeconds : 0,
+        lagDelta,
+        beforeLag: Number(before?.lag ?? 0),
+        afterLag: Number(after?.lag ?? 0),
+      },
+      probes: {
+        before: accountingProbeSummary(beforeProjector),
+        after: accountingProbeSummary(afterProjector),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    console.log(
+      `  projector projectedDelta=${projectedDelta} projectedRps=${report.streamAckProjector.delta.projectedRps.toFixed(2)} afterLag=${report.streamAckProjector.delta.afterLag}`,
+    );
+  } catch (error) {
+    console.warn(`  projector stats unavailable: ${error?.message ?? error}`);
   }
 }
 
@@ -504,6 +829,16 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "runtime.streamAckHealth", url: `${runtimeUrl}/internal/stream-ack/health`, captureJson: true },
     { name: "runtime.streamAckWorkers", url: `${runtimeUrl}/internal/stream-ack/worker/stats`, captureJson: true },
+    ...streamAckProjectorUrls.map((baseUrl, index) => ({
+      name: `streamAckProjector.${index}.status`,
+      url: `${baseUrl}/internal/projector/status`,
+      captureJson: true,
+    })),
+    ...streamAckWorkerUrls.map((baseUrl, index) => ({
+      name: `streamAckWorker.${index}.stats`,
+      url: `${baseUrl}/internal/stream-ack/worker/stats`,
+      captureJson: true,
+    })),
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];
@@ -519,7 +854,7 @@ async function requestAppProbe(probe) {
   return new Promise((resolve) => {
     const url = new URL(probe.url);
     const client = url.protocol === "https:" ? https : http;
-    const req = client.request(url, { method: "GET", timeout: 2000 }, (response) => {
+    const req = client.request(url, { method: probe.method ?? "GET", timeout: 2000 }, (response) => {
       const chunks = [];
       let bytes = 0;
       response.on("data", (chunk) => {

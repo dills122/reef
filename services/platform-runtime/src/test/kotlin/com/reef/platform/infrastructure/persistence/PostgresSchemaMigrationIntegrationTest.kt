@@ -27,6 +27,9 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0003_live_runtime_persistence.sql',
                   'runtime/0004_bulk_submit_outcomes.sql',
                   'runtime/0005_set_based_submit_outcomes.sql',
+                  'runtime/0006_canonical_append_store.sql',
+                  'runtime/0007_projection_watermarks.sql',
+                  'runtime/0008_partitioned_projection_batching.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -76,7 +79,10 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0013_drop_hot_path_foreign_keys.sql",
                     "runtime/0003_live_runtime_persistence.sql",
                     "runtime/0004_bulk_submit_outcomes.sql",
-                    "runtime/0005_set_based_submit_outcomes.sql"
+                    "runtime/0005_set_based_submit_outcomes.sql",
+                    "runtime/0006_canonical_append_store.sql",
+                    "runtime/0007_projection_watermarks.sql",
+                    "runtime/0008_partitioned_projection_batching.sql"
                 ),
                 appliedMigrations
             )
@@ -96,6 +102,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.reference_instruments",
                 "runtime.runtime_events",
                 "runtime.submit_results",
+                "runtime.canonical_command_results",
+                "runtime.canonical_venue_events",
+                "runtime.projection_watermarks",
                 "runtime.trades"
             )
 
@@ -110,6 +119,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     'trades',
                     'runtime_events',
                     'submit_results',
+                    'canonical_command_results',
+                    'canonical_venue_events',
+                    'projection_watermarks',
                     'reference_instruments',
                     'auth_roles',
                     'auth_actor_roles',
@@ -291,7 +303,9 @@ class PostgresSchemaMigrationIntegrationTest {
                   AND routine_name IN (
                     'runtime_validate_reference_data',
                     'runtime_persist_submit_outcome',
-                    'runtime_persist_submit_outcomes'
+                    'runtime_persist_submit_outcomes',
+                    'runtime_append_canonical_submit_outcomes',
+                    'runtime_project_canonical_submit_outcomes'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -306,7 +320,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 setOf(
                     "runtime.runtime_validate_reference_data",
                     "runtime.runtime_persist_submit_outcome",
-                    "runtime.runtime_persist_submit_outcomes"
+                    "runtime.runtime_persist_submit_outcomes",
+                    "runtime.runtime_append_canonical_submit_outcomes",
+                    "runtime.runtime_project_canonical_submit_outcomes"
                 ),
                 runtimeFunctions
             )
@@ -322,6 +338,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     'trades',
                     'runtime_events',
                     'submit_results',
+                    'canonical_command_results',
+                    'canonical_venue_events',
+                    'projection_watermarks',
                     'reference_instruments',
                     'auth_roles',
                     'auth_actor_roles',

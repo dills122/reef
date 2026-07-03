@@ -11,17 +11,33 @@ setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1");
 setDefault("STREAM_ACK_PARTITION_COUNT", "16");
 setDefault("STREAM_ACK_INTAKE_STORE", "postgres");
 setDefault("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", "2000");
+setDefault("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", "100");
+setDefault("STREAM_ACK_MARK_PUBLISHED_MODE", "async");
+setDefault("STREAM_ACK_MARK_PUBLISHED_WORKERS", "2");
+setDefault("STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY", "100000");
 setDefault("STREAM_ACK_WORKER_ENABLED", "true");
-setDefault("STREAM_ACK_WORKER_PARTITIONS", "all");
+setDefault("STREAM_ACK_WORKER_0_PARTITIONS", "0,1,2,3,4,5,6,7");
+setDefault("STREAM_ACK_WORKER_1_PARTITIONS", "8,9,10,11,12,13,14,15");
 setDefault("STREAM_ACK_WORKER_BATCH_SIZE", "250");
 setDefault("STREAM_ACK_WORKER_POLL_MS", "10");
 setDefault("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", "200");
 setDefault("STREAM_ACK_WORKER_ACK_WAIT_MS", "30000");
 setDefault("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", "true");
-setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_MAX", "32");
-setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE", "8");
+setDefault("STREAM_ACK_MAX_WORKER_STREAM_LAG", "50000");
+setDefault("STREAM_ACK_MAX_PROJECTOR_LAG", "250000");
+setDefault("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", "500");
+setDefault("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", streamAckWorkerDurables());
+setDefault("STREAM_ACK_PROJECTOR_ENABLED", "true");
+setDefault("STREAM_ACK_PROJECTOR_0_PARTITIONS", "0,1,2,3,4,5,6,7");
+setDefault("STREAM_ACK_PROJECTOR_1_PARTITIONS", "8,9,10,11,12,13,14,15");
+setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_API_MAX", "64");
+setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_API_MIN_IDLE", "16");
+setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX", "4");
+setDefault("RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE", "0");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MAX", "24");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE", "8");
+setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX", "24");
+setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE", "8");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["stream-ack"]));
 
 console.log("stream-ack runtime settings:");
@@ -32,8 +48,21 @@ console.log(`  subjectPrefix=${env("STREAM_ACK_SUBJECT_PREFIX")}`);
 console.log(`  partitions=${env("STREAM_ACK_PARTITION_COUNT")}`);
 console.log(`  intakeStore=${env("STREAM_ACK_INTAKE_STORE")}`);
 console.log(`  workerEnabled=${env("STREAM_ACK_WORKER_ENABLED")}`);
-console.log(`  workerPartitions=${env("STREAM_ACK_WORKER_PARTITIONS")}`);
+console.log(`  worker0Partitions=${env("STREAM_ACK_WORKER_0_PARTITIONS")}`);
+console.log(`  worker1Partitions=${env("STREAM_ACK_WORKER_1_PARTITIONS")}`);
 console.log(`  workerBatchSize=${env("STREAM_ACK_WORKER_BATCH_SIZE")}`);
+console.log(`  projectorEnabled=${env("STREAM_ACK_PROJECTOR_ENABLED")}`);
+console.log(`  projector0Partitions=${env("STREAM_ACK_PROJECTOR_0_PARTITIONS")}`);
+console.log(`  projector1Partitions=${env("STREAM_ACK_PROJECTOR_1_PARTITIONS")}`);
+console.log(`  backpressureSampleMs=${env("STREAM_ACK_BACKPRESSURE_SAMPLE_MS")}`);
+console.log(`  drainBackpressureSampleMs=${env("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS")}`);
+console.log(`  maxWorkerStreamLag=${env("STREAM_ACK_MAX_WORKER_STREAM_LAG")}`);
+console.log(`  maxProjectorLag=${env("STREAM_ACK_MAX_PROJECTOR_LAG")}`);
+console.log(`  markPublishedMode=${env("STREAM_ACK_MARK_PUBLISHED_MODE")}`);
+console.log(`  streamIntakeApiPool=${env("RUNTIME_DB_POOL_STREAM_INTAKE_API_MIN_IDLE")}/${env("RUNTIME_DB_POOL_STREAM_INTAKE_API_MAX")}`);
+console.log(`  streamIntakeBackgroundPool=${env("RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE")}/${env("RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX")}`);
+console.log(`  boundaryJdbcUrl=${env("RUNTIME_DB_URL", "jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary")}`);
+console.log(`  projectionJdbcUrl=${env("RUNTIME_PROJECTION_POSTGRES_JDBC_URL", "jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime")}`);
 
 await devUp();
 await bootstrapCommandStream();
@@ -111,6 +140,31 @@ function setDefault(name, value) {
 
 function setValue(name, value) {
   process.env[name] = value;
+}
+
+function streamAckWorkerDurables() {
+  const prefix = env("STREAM_ACK_WORKER_DURABLE_PREFIX", "reef-stream-worker");
+  return [
+    ...durablesForWorker(`${prefix}-w0`, env("STREAM_ACK_WORKER_0_PARTITIONS", "0,1,2,3,4,5,6,7")),
+    ...durablesForWorker(`${prefix}-w1`, env("STREAM_ACK_WORKER_1_PARTITIONS", "8,9,10,11,12,13,14,15")),
+  ].join(",");
+}
+
+function durablesForWorker(prefix, rawPartitions) {
+  return parsePartitions(rawPartitions).map((partition) => `${prefix}-${partitionToken(partition)}`);
+}
+
+function parsePartitions(raw) {
+  return String(raw)
+    .split(",")
+    .map((value) => Number.parseInt(value.trim(), 10))
+    .filter((value) => Number.isInteger(value) && value >= 0);
+}
+
+function partitionToken(partition) {
+  const partitionCount = Number.parseInt(env("STREAM_ACK_PARTITION_COUNT", "16"), 10);
+  const width = Math.max(2, String(partitionCount - 1).length);
+  return `p${String(partition).padStart(width, "0")}`;
 }
 
 function appendProfiles(raw, additions) {

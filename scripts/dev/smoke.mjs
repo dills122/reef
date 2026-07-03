@@ -58,7 +58,7 @@ function requestJson(method, url, payload, headers = {}, timeoutMs = 5000) {
 
 console.log("waiting for matching-engine health...");
 await waitForHttp(`${engineUrl}/health`, waitTimeout);
-console.log("waiting for platform-runtime health...");
+console.log("waiting for platform-api health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
 
 console.log("seeding reference data...");

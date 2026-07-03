@@ -21,6 +21,9 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_events",
                 "runtime.runtime_trace_sequences",
                 "runtime.submit_results",
+                "runtime.canonical_command_results",
+                "runtime.canonical_venue_events",
+                "runtime.projection_watermarks",
                 "auth.auth_roles",
                 "auth.auth_actor_roles"
             ),
@@ -30,7 +33,9 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.runtime_validate_reference_data",
                 "runtime.runtime_persist_submit_outcome",
-                "runtime.runtime_persist_submit_outcomes"
+                "runtime.runtime_persist_submit_outcomes",
+                "runtime.runtime_append_canonical_submit_outcomes",
+                "runtime.runtime_project_canonical_submit_outcomes"
             ),
             requirements.functions.map { it.qualifiedName }.toSet()
         )
@@ -44,6 +49,41 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.runtime_events" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.canonical_command_results.command_id:text",
+                "runtime.canonical_command_results.partition_seq:bigint",
+                "runtime.canonical_command_results.stream_seq:bigint",
+                "runtime.canonical_command_results.result_payload:jsonb"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.canonical_command_results" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.canonical_venue_events.event_id:text",
+                "runtime.canonical_venue_events.event_seq:bigint",
+                "runtime.canonical_venue_events.payload:jsonb"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.canonical_venue_events" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.projection_watermarks.projection_name:text",
+                "runtime.projection_watermarks.partition_id:integer",
+                "runtime.projection_watermarks.last_partition_seq:bigint",
+                "runtime.projection_watermarks.last_error:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.projection_watermarks" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

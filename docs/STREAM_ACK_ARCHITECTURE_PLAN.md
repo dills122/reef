@@ -200,6 +200,8 @@ Do not put leaderboard, UI read-model, or analytics writes on the command comple
 
 In stream-ack mode, canonical append-only facts become the completion boundary. Normalized order, execution, trade, status, trace, leaderboard, report, and UI tables are projections unless a future decision explicitly promotes a field back into the canonical completion transaction.
 
+Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack. `platform-projector-0` and `platform-projector-1` apply canonical submit outcomes into the existing normalized order/execution/trade/runtime-event read tables for explicit non-overlapping partition ranges and advance `runtime.projection_watermarks` so lag is visible.
+
 Minimum canonical result direction:
 
 ```text
@@ -304,7 +306,7 @@ Backpressure decisions should be recorded with reason codes so stress reports ca
 | Phase | Target | Gate |
 |---|---|---|
 | 0 | architecture decision checkpoint | D-037 locks market-simulation framing, metric definitions, phase order, partition/idempotency rules, and crash/replay tests |
-| 1 | role split and partition ownership | API, worker, projector, and all-in-one modes; workers own explicit non-overlapping partition ranges |
+| 1 | role split and partition ownership | API, worker, and projector runtime roles only; workers own explicit non-overlapping partition ranges |
 | 2 | canonical append store | workers commit canonical command results and venue events before stream ack; normalized tables are not completion requirements |
 | 3 | async projection system | order/trade/status/timeline/leaderboard/run projections have watermarks, lag metrics, and rebuild path |
 | 4 | engine shards | partition ranges map to engine shards after canonical persistence no longer hides engine parallelism |
@@ -321,10 +323,10 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - require crash/redelivery/replay tests before throughput claims
 
 1. Role split and partition ownership
-- add runtime modes for API, worker, projector, and all-in-one local operation
+- add runtime modes for API, worker, and projector local operation
 - run API without stream workers in deployable throughput profiles
 - run workers with explicit partition range ownership
-- keep local all-in-one mode for simple development and correctness tests
+- keep local and deploy-shaped runtime processes separated; do not add an all-in-one fallback mode
 
 2. Contract and configuration
 - define command envelope fields in protobuf/contracts
@@ -357,6 +359,7 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - write canonical command result and event log in one DB transaction
 - ack JetStream after commit only
 - add redelivery idempotency tests
+- initial submit slice exists: workers batch append canonical submit outcomes before ack and retain normalized writes until projector ownership is separated
 
 7. Canonical replay support
 - formalize event IDs and command-result linkage
@@ -368,6 +371,7 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - add projection worker and watermarks
 - move leaderboard/metrics/UI reads to projection tables
 - expose projection lag in stress reports and control-room views
+- initial submit projector exists: `runtime-normalized-submit` materializes normalized submit read tables from canonical command results outside the worker ack path
 
 9. Engine shard split
 - map partition ranges to engine shard IDs

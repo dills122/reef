@@ -60,10 +60,13 @@ async function startPostgres(context) {
     "compose",
     "up",
     "-d",
+    "--remove-orphans",
     "--wait",
     "--wait-timeout",
     context.waitTimeoutSeconds,
     "postgres",
+    "boundary-postgres",
+    "projection-postgres",
   ]);
 }
 
@@ -77,6 +80,7 @@ async function startFullStack(context) {
     "up",
     "-d",
     "--build",
+    "--remove-orphans",
     "--wait",
     "--wait-timeout",
     context.waitTimeoutSeconds,

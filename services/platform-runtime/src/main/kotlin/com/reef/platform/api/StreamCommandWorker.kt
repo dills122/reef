@@ -2,6 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import io.nats.client.JetStreamSubscription
 import io.nats.client.Nats
@@ -9,6 +10,7 @@ import io.nats.client.Options
 import io.nats.client.PullSubscribeOptions
 import io.nats.client.api.AckPolicy
 import io.nats.client.api.ConsumerConfiguration
+import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -37,10 +39,12 @@ interface StreamCommandTelemetrySource {
 class StreamCommandWorker(
     private val source: StreamCommandSource,
     private val api: PlatformApi,
+    private val publicationMarker: StreamCommandPublicationMarker? = null,
     private val partition: Int = -1,
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_POLL_MS", 25L, min = 1L),
     private val fetchTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", 200L, min = 1L)),
+    private val streamName: String = RuntimeEnv.string("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS"),
     private val workerName: String = "reef-stream-command-worker"
 ) {
     private val running = AtomicBoolean(false)
@@ -84,7 +88,13 @@ class StreamCommandWorker(
                 val outcome = HotPathMetrics.time("streamWorker.prepareSubmitOrder") {
                     api.prepareSubmitOrder(delivery.payloadJson)
                 }
-                preparedSubmits.add(PreparedStreamSubmit(delivery, outcome))
+                preparedSubmits.add(
+                    PreparedStreamSubmit(
+                        delivery = delivery,
+                        outcome = outcome,
+                        canonicalOutcome = canonicalSubmitOutcome(delivery, outcome)
+                    )
+                )
             } catch (ex: Exception) {
                 safeNak(delivery)
                 StreamCommandWorkerMetrics.recordFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
@@ -94,8 +104,8 @@ class StreamCommandWorker(
         if (preparedSubmits.isEmpty()) return
 
         try {
-            HotPathMetrics.time("streamWorker.persistSubmitOutcomes") {
-                api.persistSubmitOutcomes(preparedSubmits.map { it.outcome })
+            HotPathMetrics.time("streamWorker.appendCanonicalSubmitOutcomes") {
+                api.appendCanonicalSubmitOutcomes(preparedSubmits.map { it.canonicalOutcome })
             }
         } catch (ex: Exception) {
             val error = ex.message ?: ex::class.simpleName ?: "unknown"
@@ -108,11 +118,31 @@ class StreamCommandWorker(
 
         preparedSubmits.forEach { prepared ->
             try {
+                markPublished(prepared)
+            } catch (ex: Exception) {
+                safeNak(prepared.delivery)
+                StreamCommandWorkerMetrics.recordFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
+                return@forEach
+            }
+
+            try {
                 prepared.delivery.ack()
                 StreamCommandWorkerMetrics.recordCompleted(partition, prepared.delivery.streamSequence)
             } catch (ex: Exception) {
                 StreamCommandWorkerMetrics.recordAckFailed(partition, ex.message ?: ex::class.simpleName ?: "unknown")
             }
+        }
+    }
+
+    private fun markPublished(prepared: PreparedStreamSubmit) {
+        val marker = publicationMarker ?: return
+        val marked = HotPathMetrics.time("streamWorker.markPublished") {
+            marker.markPublishedByCommandId(prepared.outcome.commandId, prepared.delivery.streamSequence)
+        }
+        if (!marked) {
+            throw IllegalStateException(
+                "stream_worker_mark_published_missing commandId=${prepared.outcome.commandId} streamSequence=${prepared.delivery.streamSequence}"
+            )
         }
     }
 
@@ -126,11 +156,46 @@ class StreamCommandWorker(
     private fun commandType(subject: String): String {
         return subject.substringAfterLast('.', missingDelimiterValue = "")
     }
+
+    private fun canonicalSubmitOutcome(
+        delivery: StreamCommandDelivery,
+        outcome: PersistableSubmitOutcome
+    ): CanonicalSubmitOutcome {
+        val payload = JsonCodec.parseObjectOrEmpty(delivery.payloadJson)
+        val accepted = outcome.result.accepted
+        val rejected = outcome.result.rejected
+        val occurredAt = accepted?.occurredAt ?: rejected?.occurredAt.orEmpty()
+        return CanonicalSubmitOutcome(
+            runId = payload.string("runId").ifBlank { payload.string("scenarioRunId") },
+            venueSessionId = payload.string("venueSessionId"),
+            partitionId = partition,
+            partitionSequence = delivery.streamSequence,
+            streamName = streamName,
+            streamSequence = delivery.streamSequence,
+            commandId = outcome.commandId,
+            idempotencyKey = payload.string("idempotencyKey"),
+            payloadHash = sha256(delivery.payloadJson),
+            instrumentId = payload.string("instrumentId"),
+            commandType = commandType(delivery.subject),
+            resultStatus = if (accepted != null) "accepted" else "rejected",
+            rejectCode = rejected?.code.orEmpty(),
+            acceptedAt = payload.string("occurredAt").ifBlank { occurredAt },
+            completedAt = occurredAt,
+            engineShardId = "",
+            outcome = outcome
+        )
+    }
+
+    private fun sha256(value: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+    }
 }
 
 private data class PreparedStreamSubmit(
     val delivery: StreamCommandDelivery,
-    val outcome: PersistableSubmitOutcome
+    val outcome: PersistableSubmitOutcome,
+    val canonicalOutcome: CanonicalSubmitOutcome
 )
 
 class NatsStreamCommandSource(
@@ -243,19 +308,25 @@ private class NatsStreamCommandDelivery(
 
 object StreamCommandWorkerFactory {
     fun sourceForPartition(config: StreamCommandConfig, partition: Int): StreamCommandSource {
-        val width = maxOf(2, (config.partitionCount - 1).toString().length)
-        val partitionToken = "p${partition.toString().padStart(width, '0')}"
-        val filterSubject = "${config.subjectPrefix.trim('.')}.$partitionToken.>"
         val durableName = RuntimeEnv.string(
             "STREAM_ACK_WORKER_DURABLE_PREFIX",
             "reef-stream-worker"
-        ) + "-$partitionToken"
+        ) + "-${partitionToken(config, partition)}"
         return NatsStreamCommandSource(
             config = config,
             partition = partition,
-            filterSubject = filterSubject,
+            filterSubject = filterSubject(config, partition),
             durableName = durableName
         )
+    }
+
+    fun filterSubject(config: StreamCommandConfig, partition: Int): String {
+        return "${config.subjectPrefix.trim('.')}.${partitionToken(config, partition)}.>"
+    }
+
+    fun partitionToken(config: StreamCommandConfig, partition: Int): String {
+        val width = maxOf(2, (config.partitionCount - 1).toString().length)
+        return "p${partition.toString().padStart(width, '0')}"
     }
 }
 

@@ -33,7 +33,7 @@ export function loadDotEnv(paths = [".env", ".env.local"]) {
 }
 
 export function deriveDevUrls() {
-  const runtimeHostPort = env("REEF_PLATFORM_RUNTIME_HOST_PORT", "8080");
+  const runtimeHostPort = env("REEF_PLATFORM_API_HOST_PORT", env("REEF_PLATFORM_RUNTIME_HOST_PORT", "8080"));
   const engineHostPort = env("REEF_MATCHING_ENGINE_HOST_PORT", "8081");
   return {
     runtimeUrl: env("RUNTIME_BASE_URL", `http://127.0.0.1:${runtimeHostPort}`),

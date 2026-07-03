@@ -54,6 +54,9 @@ data class PostgresSchemaRequirement(
 object PostgresSchemaRequirements {
     fun runtime(names: PostgresRuntimeSqlNames): PostgresSchemaRequirement {
         val runtimeEvents = PostgresSchemaObject.parse(names.runtimeEvents)
+        val canonicalCommandResults = PostgresSchemaObject.parse(names.canonicalCommandResults)
+        val canonicalVenueEvents = PostgresSchemaObject.parse(names.canonicalVenueEvents)
+        val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -65,20 +68,36 @@ object PostgresSchemaRequirements {
                 names.runtimeEvents,
                 names.runtimeTraceSequences,
                 names.submitResults,
+                names.canonicalCommandResults,
+                names.canonicalVenueEvents,
+                names.projectionWatermarks,
                 names.authRoles,
                 names.authActorRoles
             ).map(PostgresSchemaObject::parse),
             functions = listOf(
                 names.validateReferenceDataFunction,
                 names.persistSubmitOutcomeFunction,
-                names.persistSubmitOutcomesFunction
+                names.persistSubmitOutcomesFunction,
+                names.appendCanonicalSubmitOutcomesFunction,
+                names.projectCanonicalSubmitOutcomesFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "occurred_at", "text"),
                 PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "payload_json", "jsonb"),
-                PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint")
+                PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint"),
+                PostgresSchemaColumn(canonicalCommandResults, "command_id", "text"),
+                PostgresSchemaColumn(canonicalCommandResults, "partition_seq", "bigint"),
+                PostgresSchemaColumn(canonicalCommandResults, "stream_seq", "bigint"),
+                PostgresSchemaColumn(canonicalCommandResults, "result_payload", "jsonb"),
+                PostgresSchemaColumn(canonicalVenueEvents, "event_id", "text"),
+                PostgresSchemaColumn(canonicalVenueEvents, "event_seq", "bigint"),
+                PostgresSchemaColumn(canonicalVenueEvents, "payload", "jsonb"),
+                PostgresSchemaColumn(projectionWatermarks, "projection_name", "text"),
+                PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
+                PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),
+                PostgresSchemaColumn(projectionWatermarks, "last_error", "text")
             )
         )
     }

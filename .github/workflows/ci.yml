@@ -85,8 +85,8 @@ jobs:
           node-version: '22'
       - name: Validate dev migration scripts
         run: node --test scripts/dev/lib/dev-stack.test.mjs scripts/dev/db/migrate.test.mjs
-      - name: Start Postgres
-        run: docker compose -f docker-compose.yml up -d postgres --wait --wait-timeout 120
+      - name: Start Postgres databases
+        run: docker compose -f docker-compose.yml up -d postgres boundary-postgres projection-postgres --wait --wait-timeout 120
       - name: Apply migrations
         run: JS_RUNTIME=node make dev-db-migrate
       - name: Run schema placement integration test
@@ -98,7 +98,7 @@ jobs:
         run: ./gradlew --no-daemon test --tests com.reef.platform.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
       - name: Dump Postgres logs on failure
         if: failure()
-        run: docker compose -f docker-compose.yml logs postgres
+        run: docker compose -f docker-compose.yml logs postgres boundary-postgres projection-postgres
       - name: Stop Postgres
         if: always()
         run: docker compose -f docker-compose.yml down --volumes --remove-orphans
