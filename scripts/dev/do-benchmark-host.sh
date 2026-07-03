@@ -460,16 +460,16 @@ tofu_bin() {
     printf '%s' "$TOFU_BIN"
     return
   fi
-  if command -v tofu >/dev/null 2>&1; then
-    printf 'tofu'
+  if type -P tofu >/dev/null 2>&1; then
+    type -P tofu
     return
   fi
-  if command -v opentofu >/dev/null 2>&1; then
-    printf 'opentofu'
+  if type -P opentofu >/dev/null 2>&1; then
+    type -P opentofu
     return
   fi
-  if command -v terraform >/dev/null 2>&1; then
-    printf 'terraform'
+  if type -P terraform >/dev/null 2>&1; then
+    type -P terraform
     return
   fi
   echo "missing tofu, opentofu, or terraform" >&2
