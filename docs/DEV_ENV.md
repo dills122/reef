@@ -201,12 +201,16 @@ make dev-up-stream-ack
 - `RUNTIME_PROJECTION_POSTGRES_JDBC_URL=jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX=24`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE=8`
-- `RUNTIME_DB_POOL_STREAM_INTAKE_MAX=32`
-- `RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE=8`
+- `RUNTIME_DB_POOL_STREAM_INTAKE_API_MAX=64`
+- `RUNTIME_DB_POOL_STREAM_INTAKE_API_MIN_IDLE=16`
+- `RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX=4`
+- `RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE=0`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_MAX=24`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE=8`
 
 In this mode `platform-api` returns `202` only after JetStream publish acknowledgment. The worker containers expose health and internal metrics endpoints, but public command intake routes are not mounted in worker or projector roles. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
+
+The API container owns the larger `stream-intake` boundary DB pool because it is the only role that accepts public stream commands. Worker and projector roles keep tiny `stream-intake` pools for startup/internal compatibility while using their dedicated canonical/projection pools for drain and read-model work.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
