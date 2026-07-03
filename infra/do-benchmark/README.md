@@ -27,4 +27,4 @@ scripts/dev/do-benchmark-host.sh run
 scripts/dev/do-benchmark-host.sh fetch-destroy
 ```
 
-`run-destroy` performs sync, run, fetch, report validation, and destroy in one command.
+`run-destroy` provisions the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and destroys resources in one command.

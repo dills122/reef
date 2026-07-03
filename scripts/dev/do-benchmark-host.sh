@@ -41,12 +41,12 @@ commands:
   status         print OpenTofu outputs
   sync           rsync the current checkout to the droplet
   start          start the remote stream-ack stack
-  run            sync, run the benchmark, fetch artifacts, and check reports
+  run            provision, sync, run the benchmark, fetch artifacts, and check reports
   remote-status  show remote host and compose status
   logs           fetch recent remote compose logs to stdout
   fetch          fetch /tmp/reef-do-benchmark artifacts into reports/do-benchmark
   fetch-destroy  fetch artifacts, then destroy the droplet
-  run-destroy    run benchmark, fetch artifacts, check reports, then destroy
+  run-destroy    provision, run benchmark, fetch artifacts, check reports, then destroy
   destroy        destroy the DO benchmark resources
 
 required for provisioning:
@@ -90,11 +90,7 @@ main() {
 }
 
 cmd_up() {
-  require_destroyable_confirmation
-  configure_tf_vars
-  tofu init
-  tofu apply -auto-approve
-  wait_for_ssh
+  provision_stack
 }
 
 cmd_status() {
@@ -115,8 +111,7 @@ cmd_start() {
 }
 
 cmd_run() {
-  configure_tf_vars optional
-  wait_for_ssh
+  provision_stack
   sync_repo
   local run_id
   run_id="$(benchmark_run_id)"
@@ -179,6 +174,14 @@ cmd_run_destroy() {
 cmd_destroy() {
   configure_tf_vars
   tofu destroy -auto-approve
+}
+
+provision_stack() {
+  require_destroyable_confirmation
+  configure_tf_vars
+  tofu init
+  tofu apply -auto-approve
+  wait_for_ssh
 }
 
 remote_start_stack() {
