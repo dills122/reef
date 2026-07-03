@@ -223,8 +223,16 @@ remote_run_benchmark() {
     REEF_BENCHMARK_MIN_SUCCESS="$min_success" <<'REMOTE'
 set -euo pipefail
 artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
-mkdir -p "$artifact_dir"
+log_dir="$artifact_dir/logs"
+mkdir -p "$log_dir"
+exec > >(tee -a "$log_dir/remote-benchmark.log") 2>&1
 cd "$REMOTE_DIR"
+
+echo "[$(date -Is)] remote benchmark starting"
+echo "run_id=$REEF_BENCHMARK_RUN_ID"
+echo "stream=$REEF_BENCHMARK_STREAM"
+echo "durable_prefix=$REEF_BENCHMARK_DURABLE_PREFIX"
+echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS duration=$REEF_BENCHMARK_DURATION"
 
 export JS_RUNTIME=node
 export STREAM_ACK_COMMAND_STREAM="$REEF_BENCHMARK_STREAM"
@@ -241,9 +249,16 @@ export DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS=1
 export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
 
+echo "[$(date -Is)] stage: make dev-up-stream-ack"
 make dev-up-stream-ack
+echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
+echo "[$(date -Is)] stage: make dev-smoke"
 make dev-smoke
+echo "[$(date -Is)] stage complete: make dev-smoke"
+echo "[$(date -Is)] stage: make dev-stress-stream-ack"
 make dev-stress-stream-ack
+echo "[$(date -Is)] stage complete: make dev-stress-stream-ack"
+echo "[$(date -Is)] remote benchmark complete"
 REMOTE
 }
 
