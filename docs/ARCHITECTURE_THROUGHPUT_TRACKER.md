@@ -373,6 +373,11 @@ Latest stream-ack notes:
   - `2500` nominal rps: `74187` accepted/completed, `2222.68/sec`, p95 `61.97ms`, p99 `115.59ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
   - `5000` nominal rps: `104431` accepted/completed, `3106.74/sec`, p95 `101.58ms`, p99 `136.16ms`, trace pass `96%`, active partitions `16`, worker failures `0`.
 - Net result: the durable stream-ack processed ceiling moved from about `2000/sec` to about `3100/sec` on the local stack while preserving `202`-after-publish and DB-before-stream-ack semantics. Remaining bottlenecks are runtime/Postgres CPU and batched persistence cost (`~28ms` average per `persistSubmitOutcomes` batch in the spread run), not JetStream publish durability. Intake-pool pressure improved materially (`maxDbPoolWaiters` dropped from `56` to `14`).
+- Post-projector validation on the deploy-shaped stream-ack stack (`platform-api`, two workers, `platform-projector`) after moving normalized submit writes behind `runtime-normalized-submit`:
+  - `1000` nominal rps: `28721` accepted, worker-completed, and projected, `858.46/sec`, p95 `59.14ms`, p99 `82.67ms`, trace pass `100%`, projector lag `0`.
+  - `2500` nominal rps: `72937` accepted and worker-completed, `2199.58/sec`, p95 `89.41ms`, p99 `156.34ms`, trace pass `71%`; projector projected `63853` during the step at `1925.63/sec` and ended with lag `163028`.
+  - `5000` nominal rps: `91706` accepted and worker-completed, `2763.98/sec`, p95 `108.29ms`, p99 `229.53ms`, trace pass `50%`; projector projected `64250` during the step at `1936.47/sec` and ended with lag `555190`.
+  - workers reported `0` failures and `0` ack failures at every step; projector caught up to lag `0` after the run stopped. The current ceiling moved from worker canonical persistence to projector throughput and projection freshness.
 - Follow-up probes that did not beat the spread-profile baseline:
   - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
   - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`
