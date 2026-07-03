@@ -209,6 +209,41 @@ class StreamCommandWorkerTest {
     }
 
     @Test
+    fun redeliveryAfterPublicationMarkerFailureDoesNotDuplicateCanonicalOutcome() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val payload = validSubmitBody("cmd-worker-marker-redeliver", "ord-worker-marker-redeliver")
+        val first = RecordingDelivery(payloadJson = payload, streamSequence = 79)
+        val second = RecordingDelivery(payloadJson = payload, streamSequence = 79, deliveredCount = 2)
+        val marker = FailingThenRecordingPublicationMarker()
+        val worker = StreamCommandWorker(
+            source = QueueStreamCommandSource(first, second),
+            api = api,
+            publicationMarker = marker,
+            partition = 5
+        )
+
+        worker.processOnce()
+        worker.processOnce()
+
+        assertEquals(1, gateway.submitCalls)
+        assertEquals(0, first.ackCalls)
+        assertEquals(1, first.nakCalls)
+        assertEquals(1, second.ackCalls)
+        assertEquals(0, second.nakCalls)
+        assertEquals(1, persistence.canonicalSubmitOutcomes().size)
+        assertEquals(79L, persistence.canonicalSubmitOutcomes().single().streamSequence)
+        assertEquals(79L, marker.marked["cmd-worker-marker-redeliver"])
+    }
+
+    @Test
     fun canonicalProjectorMaterializesNormalizedSubmitOutcomesAndWatermarks() {
         StreamCommandWorkerMetrics.resetForTests()
         CanonicalProjectionMetrics.resetForTests()
@@ -456,6 +491,20 @@ private class RecordingPublicationMarker : StreamCommandPublicationMarker {
 
 private object MissingPublicationMarker : StreamCommandPublicationMarker {
     override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean = false
+}
+
+private class FailingThenRecordingPublicationMarker : StreamCommandPublicationMarker {
+    val marked = mutableMapOf<String, Long>()
+    private var failed = false
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        if (!failed) {
+            failed = true
+            return false
+        }
+        marked[commandId] = streamSequence
+        return true
+    }
 }
 
 private class RecordingDelivery(
