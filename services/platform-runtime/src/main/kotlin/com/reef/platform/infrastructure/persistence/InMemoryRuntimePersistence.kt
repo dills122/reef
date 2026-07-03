@@ -13,6 +13,7 @@ import com.reef.platform.domain.TradeCreated
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
+    private val projectionWatermarks = mutableMapOf<String, MutableMap<Int, Long>>()
     private val submitResults = linkedMapOf<String, SubmitOrderResult>()
     private val instruments = linkedMapOf<String, Instrument>()
     private val participants = linkedMapOf<String, Participant>()
@@ -30,7 +31,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun submitResult(commandId: String): SubmitOrderResult? {
-        return submitResults[commandId]
+        return submitResults[commandId] ?: canonicalSubmitOutcomes[commandId]?.outcome?.result
     }
 
     override fun saveInstrument(instrument: Instrument) {
@@ -156,5 +157,51 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     fun canonicalSubmitOutcomes(): List<CanonicalSubmitOutcome> {
         return canonicalSubmitOutcomes.values.toList()
+    }
+
+    override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+        if (batchSize <= 0) return 0
+        val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }
+        val outcomes = canonicalSubmitOutcomes.values
+            .filter { outcome -> outcome.partitionSequence > (watermarks[outcome.partitionId] ?: 0L) }
+            .sortedWith(compareBy<CanonicalSubmitOutcome> { it.partitionId }.thenBy { it.partitionSequence })
+            .take(batchSize)
+        if (outcomes.isEmpty()) return 0
+        persistSubmitOutcomes(outcomes.map { it.outcome })
+        outcomes
+            .groupBy { it.partitionId }
+            .forEach { (partitionId, partitionOutcomes) ->
+                watermarks[partitionId] = maxOf(
+                    watermarks[partitionId] ?: 0L,
+                    partitionOutcomes.maxOf { it.partitionSequence }
+                )
+            }
+        return outcomes.size.toLong()
+    }
+
+    override fun projectionStatus(projectionName: String): ProjectionStatus {
+        val watermarks = projectionWatermarks[projectionName].orEmpty()
+        val partitions = canonicalSubmitOutcomes.values
+            .groupBy { it.partitionId }
+            .map { (partitionId, outcomes) ->
+                val projected = watermarks[partitionId] ?: 0L
+                val canonicalMax = outcomes.maxOf { it.partitionSequence }
+                ProjectionWatermark(
+                    projectionName = projectionName,
+                    partitionId = partitionId,
+                    lastPartitionSequence = projected,
+                    canonicalMaxPartitionSequence = canonicalMax,
+                    lag = (canonicalMax - projected).coerceAtLeast(0L),
+                    updatedAt = "",
+                    lastError = ""
+                )
+            }
+            .sortedBy { it.partitionId }
+        return ProjectionStatus(
+            projectionName = projectionName,
+            projectedCount = submitResults.size.toLong(),
+            lag = partitions.sumOf { it.lag },
+            watermarks = partitions
+        )
     }
 }

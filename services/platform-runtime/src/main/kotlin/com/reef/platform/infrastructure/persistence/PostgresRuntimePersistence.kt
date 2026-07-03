@@ -287,6 +287,19 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.projectionWatermarks} (
+                      projection_name TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      last_partition_seq BIGINT NOT NULL DEFAULT 0,
+                      last_projected_at TIMESTAMPTZ,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      last_error TEXT NOT NULL DEFAULT '',
+                      PRIMARY KEY (projection_name, partition_id)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE OR REPLACE FUNCTION ${names.validateReferenceDataFunction}(
                       p_instrument_id TEXT,
                       p_participant_id TEXT,
@@ -789,6 +802,97 @@ class PostgresRuntimePersistence(
                     $$;
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION ${names.projectCanonicalSubmitOutcomesFunction}(
+                      p_projection_name TEXT,
+                      p_batch_size INTEGER
+                    )
+                    RETURNS BIGINT
+                    LANGUAGE plpgsql
+                    AS $$
+                    DECLARE
+                      projected_count BIGINT := 0;
+                    BEGIN
+                      IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
+                        RETURN 0;
+                      END IF;
+
+                      WITH eligible AS (
+                        SELECT
+                          canonical.partition_id,
+                          canonical.partition_seq,
+                          canonical.result_payload
+                        FROM ${names.canonicalCommandResults} canonical
+                        LEFT JOIN ${names.projectionWatermarks} watermark
+                          ON watermark.projection_name = p_projection_name
+                         AND watermark.partition_id = canonical.partition_id
+                        WHERE canonical.partition_seq > COALESCE(watermark.last_partition_seq, 0)
+                        ORDER BY canonical.partition_id, canonical.partition_seq
+                        LIMIT p_batch_size
+                      ),
+                      projected AS (
+                        SELECT ${names.persistSubmitOutcomesFunction}(
+                          COALESCE(
+                            jsonb_agg(result_payload ORDER BY partition_id, partition_seq),
+                            '[]'::jsonb
+                          )
+                        ) AS count
+                        FROM eligible
+                      ),
+                      partition_max AS (
+                        SELECT partition_id, MAX(partition_seq) AS last_partition_seq
+                        FROM eligible
+                        GROUP BY partition_id
+                      ),
+                      upsert_watermarks AS (
+                        INSERT INTO ${names.projectionWatermarks}(
+                          projection_name,
+                          partition_id,
+                          last_partition_seq,
+                          last_projected_at,
+                          updated_at,
+                          last_error
+                        )
+                        SELECT
+                          p_projection_name,
+                          partition_id,
+                          last_partition_seq,
+                          now(),
+                          now(),
+                          ''
+                        FROM partition_max
+                        ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+                          last_partition_seq = GREATEST(
+                            ${names.projectionWatermarks}.last_partition_seq,
+                            EXCLUDED.last_partition_seq
+                          ),
+                          last_projected_at = EXCLUDED.last_projected_at,
+                          updated_at = EXCLUDED.updated_at,
+                          last_error = ''
+                        RETURNING 1
+                      )
+                      SELECT COALESCE(MAX(count), 0) INTO projected_count FROM projected;
+
+                      RETURN projected_count;
+                    EXCEPTION WHEN OTHERS THEN
+                      INSERT INTO ${names.projectionWatermarks}(
+                        projection_name,
+                        partition_id,
+                        last_partition_seq,
+                        last_projected_at,
+                        updated_at,
+                        last_error
+                      )
+                      VALUES (p_projection_name, -1, 0, NULL, now(), SQLERRM)
+                      ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+                        updated_at = EXCLUDED.updated_at,
+                        last_error = EXCLUDED.last_error;
+                      RAISE;
+                    END;
+                    $$;
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -832,7 +936,7 @@ class PostgresRuntimePersistence(
             ).use { ps ->
                 ps.setString(1, commandId)
                 ps.executeQuery().use { rs ->
-                    if (!rs.next()) return null
+                    if (!rs.next()) return canonicalSubmitResult(conn, commandId)
                     val resultType = rs.getString("result_type")
                     val orderId = rs.getString("order_id")
                     return if (resultType == "accepted") {
@@ -857,6 +961,50 @@ class PostgresRuntimePersistence(
                             )
                         )
                     }
+                }
+            }
+        }
+    }
+
+    private fun canonicalSubmitResult(conn: Connection, commandId: String): SubmitOrderResult? {
+        conn.prepareStatement(
+            """
+            SELECT
+              result_payload->>'resultType' AS result_type,
+              result_payload->>'eventId' AS event_id,
+              result_payload->>'orderId' AS order_id,
+              result_payload->>'engineOrderId' AS engine_order_id,
+              result_payload->>'code' AS code,
+              result_payload->>'reason' AS reason,
+              result_payload->>'occurredAt' AS occurred_at
+            FROM ${names.canonicalCommandResults}
+            WHERE command_id = ?
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, commandId)
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) return null
+                val resultType = rs.getString("result_type")
+                val orderId = rs.getString("order_id")
+                return if (resultType == "accepted") {
+                    SubmitOrderResult(
+                        accepted = EngineOrderAccepted(
+                            eventId = rs.getString("event_id"),
+                            orderId = orderId,
+                            engineOrderId = rs.getString("engine_order_id"),
+                            occurredAt = rs.getString("occurred_at")
+                        )
+                    )
+                } else {
+                    SubmitOrderResult(
+                        rejected = EngineOrderRejected(
+                            eventId = rs.getString("event_id"),
+                            orderId = orderId,
+                            code = rs.getString("code"),
+                            reason = rs.getString("reason"),
+                            occurredAt = rs.getString("occurred_at")
+                        )
+                    )
                 }
             }
         }
@@ -1048,6 +1196,109 @@ class PostgresRuntimePersistence(
                     }
                 }
             }
+        }
+    }
+
+    override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+        if (batchSize <= 0) return 0
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT ${names.projectCanonicalSubmitOutcomesFunction}(?, ?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.setInt(2, batchSize)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getLong(1)
+                }
+            }
+        }
+    }
+
+    override fun projectionStatus(projectionName: String): ProjectionStatus {
+        connection().use { conn ->
+            val watermarks = conn.prepareStatement(
+                """
+                WITH canonical_partitions AS (
+                  SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
+                  FROM ${names.canonicalCommandResults}
+                  GROUP BY partition_id
+                ),
+                watermark_partitions AS (
+                  SELECT
+                    projection_name,
+                    partition_id,
+                    last_partition_seq,
+                    updated_at,
+                    last_error
+                  FROM ${names.projectionWatermarks}
+                  WHERE projection_name = ?
+                )
+                SELECT
+                  COALESCE(watermark_partitions.projection_name, ?) AS projection_name,
+                  canonical_partitions.partition_id,
+                  COALESCE(watermark_partitions.last_partition_seq, 0) AS last_partition_seq,
+                  COALESCE(canonical_partitions.canonical_max_partition_seq, 0) AS canonical_max_partition_seq,
+                  GREATEST(
+                    COALESCE(canonical_partitions.canonical_max_partition_seq, 0) -
+                    COALESCE(watermark_partitions.last_partition_seq, 0),
+                    0
+                  ) AS lag,
+                  COALESCE(watermark_partitions.updated_at::TEXT, '') AS updated_at,
+                  COALESCE(watermark_partitions.last_error, '') AS last_error
+                FROM canonical_partitions
+                LEFT JOIN watermark_partitions
+                  ON watermark_partitions.partition_id = canonical_partitions.partition_id
+                UNION ALL
+                SELECT
+                  watermark_partitions.projection_name,
+                  watermark_partitions.partition_id,
+                  watermark_partitions.last_partition_seq,
+                  0,
+                  0,
+                  watermark_partitions.updated_at::TEXT,
+                  watermark_partitions.last_error
+                FROM watermark_partitions
+                WHERE watermark_partitions.partition_id = -1
+                ORDER BY partition_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.setString(2, projectionName)
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<ProjectionWatermark>()
+                    while (rs.next()) {
+                        rows.add(
+                            ProjectionWatermark(
+                                projectionName = rs.getString("projection_name"),
+                                partitionId = rs.getInt("partition_id"),
+                                lastPartitionSequence = rs.getLong("last_partition_seq"),
+                                canonicalMaxPartitionSequence = rs.getLong("canonical_max_partition_seq"),
+                                lag = rs.getLong("lag"),
+                                updatedAt = rs.getString("updated_at"),
+                                lastError = rs.getString("last_error")
+                            )
+                        )
+                    }
+                    rows
+                }
+            }
+            val projectedCount = conn.prepareStatement(
+                "SELECT COUNT(*) FROM ${names.submitResults}"
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getLong(1)
+                }
+            }
+            return ProjectionStatus(
+                projectionName = projectionName,
+                projectedCount = projectedCount,
+                lag = watermarks.sumOf { it.lag },
+                watermarks = watermarks
+            )
         }
     }
 

@@ -48,7 +48,7 @@ class StreamCommandWorkerTest {
         assertTrue(ackObservedCanonical)
         assertEquals(0, delivery.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-1"))
-        assertNotNull(persistence.acceptedOrder("ord-worker-1"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-1"))
         val canonical = persistence.canonicalSubmitOutcomes().single()
         assertEquals("run-worker-1", canonical.runId)
         assertEquals("session-worker-1", canonical.venueSessionId)
@@ -60,6 +60,12 @@ class StreamCommandWorkerTest {
         assertEquals("SubmitOrder", canonical.commandType)
         assertEquals("accepted", canonical.resultStatus)
         assertTrue(canonical.payloadHash.isNotBlank())
+
+        val projected = persistence.projectCanonicalSubmitOutcomes("runtime-normalized-submit", 100)
+
+        assertEquals(1, projected)
+        assertNotNull(persistence.acceptedOrder("ord-worker-1"))
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit").lag)
     }
 
     @Test
@@ -87,7 +93,7 @@ class StreamCommandWorkerTest {
         assertEquals(1, second.ackCalls)
         assertEquals(0, first.nakCalls + second.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-redeliver"))
-        assertNotNull(persistence.acceptedOrder("ord-worker-redeliver"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-redeliver"))
         assertEquals(1, persistence.canonicalSubmitOutcomes().size)
     }
 
@@ -125,6 +131,8 @@ class StreamCommandWorkerTest {
         assertEquals(0, first.nakCalls + second.nakCalls)
         assertNotNull(persistence.submitResult("cmd-worker-batch-1"))
         assertNotNull(persistence.submitResult("cmd-worker-batch-2"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-batch-1"))
+        assertEquals(null, persistence.acceptedOrder("ord-worker-batch-2"))
         assertEquals(
             listOf(10L, 11L),
             persistence.canonicalSubmitOutcomes().map { it.streamSequence }
@@ -134,6 +142,42 @@ class StreamCommandWorkerTest {
         assertEquals(2, partition.fetched)
         assertEquals(2, partition.completed)
         assertEquals(11, partition.lastCompletedStreamSequence)
+    }
+
+    @Test
+    fun canonicalProjectorMaterializesNormalizedSubmitOutcomesAndWatermarks() {
+        StreamCommandWorkerMetrics.resetForTests()
+        CanonicalProjectionMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = CountingAcceptedGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val delivery = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-projector-1", "ord-projector-1"),
+            streamSequence = 12
+        )
+        StreamCommandWorker(
+            source = FixedStreamCommandSource(delivery),
+            api = api,
+            partition = 4
+        ).processOnce()
+        val projector = CanonicalProjectionWorker(
+            api = api,
+            projectionName = "runtime-normalized-submit",
+            batchSize = 10
+        )
+
+        val projected = projector.processOnce()
+
+        assertEquals(1, projected)
+        assertNotNull(persistence.acceptedOrder("ord-projector-1"))
+        val status = persistence.projectionStatus("runtime-normalized-submit")
+        assertEquals(0, status.lag)
+        assertEquals(12, status.watermarks.single().lastPartitionSequence)
+        assertEquals(1, CanonicalProjectionMetrics.snapshot().projected)
     }
 
     @Test

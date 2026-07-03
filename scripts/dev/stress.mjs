@@ -44,6 +44,8 @@ const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS",
 const streamAckWorkerUrls = parseCsvStrings(
   env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
 );
+const captureStreamAckProjectorStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR", captureStreamAckWorkerStats ? "1" : "0") === "1";
+const streamAckProjectorUrl = env("DEV_STRESS_STREAM_ACK_PROJECTOR_URL", defaultStreamAckProjectorUrl(runtimeUrl));
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -237,6 +239,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
+  const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjector() : null;
   try {
     await run(
       "go",
@@ -293,6 +296,10 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterStreamWorkers = await sampleStreamAckWorkers(runtimeUrl);
       attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
     }
+    if (captureStreamAckProjectorStats) {
+      const afterProjector = await sampleStreamAckProjector();
+      attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
+    }
   }
 }
 
@@ -333,6 +340,20 @@ function defaultStreamAckWorkerUrls(runtimeUrl) {
     `${parsed.protocol}//${parsed.hostname}:${worker0Port}`,
     `${parsed.protocol}//${parsed.hostname}:${worker1Port}`,
   ];
+}
+
+function defaultStreamAckProjectorUrl(runtimeUrl) {
+  const parsed = new URL(runtimeUrl);
+  const projectorPort = env("REEF_PLATFORM_PROJECTOR_HOST_PORT", "8084");
+  return `${parsed.protocol}//${parsed.hostname}:${projectorPort}`;
+}
+
+async function sampleStreamAckProjector() {
+  return requestAppProbe({
+    name: "streamAckProjector.status",
+    url: `${streamAckProjectorUrl}/internal/projector/status`,
+    captureJson: true,
+  });
 }
 
 function aggregateStreamAckWorkerStats(probes) {
@@ -485,6 +506,38 @@ function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, 
     }
   } catch (error) {
     console.warn(`  stream-worker stats unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeProjector?.json ?? null;
+    const after = afterProjector?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const projectedDelta = Number(after?.metrics?.projected ?? 0) - Number(before?.metrics?.projected ?? 0);
+    const lagDelta = Number(after?.lag ?? 0) - Number(before?.lag ?? 0);
+    report.streamAckProjector = {
+      before,
+      after,
+      delta: {
+        projectedDelta,
+        projectedRps: durationSeconds > 0 ? projectedDelta / durationSeconds : 0,
+        lagDelta,
+        beforeLag: Number(before?.lag ?? 0),
+        afterLag: Number(after?.lag ?? 0),
+      },
+      probes: {
+        before: accountingProbeSummary(beforeProjector),
+        after: accountingProbeSummary(afterProjector),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    console.log(
+      `  projector projectedDelta=${projectedDelta} projectedRps=${report.streamAckProjector.delta.projectedRps.toFixed(2)} afterLag=${report.streamAckProjector.delta.afterLag}`,
+    );
+  } catch (error) {
+    console.warn(`  projector stats unavailable: ${error?.message ?? error}`);
   }
 }
 
@@ -649,6 +702,7 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "runtime.streamAckHealth", url: `${runtimeUrl}/internal/stream-ack/health`, captureJson: true },
     { name: "runtime.streamAckWorkers", url: `${runtimeUrl}/internal/stream-ack/worker/stats`, captureJson: true },
+    { name: "streamAckProjector.status", url: `${streamAckProjectorUrl}/internal/projector/status`, captureJson: true },
     ...streamAckWorkerUrls.map((baseUrl, index) => ({
       name: `streamAckWorker.${index}.stats`,
       url: `${baseUrl}/internal/stream-ack/worker/stats`,

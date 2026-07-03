@@ -56,6 +56,7 @@ object PostgresSchemaRequirements {
         val runtimeEvents = PostgresSchemaObject.parse(names.runtimeEvents)
         val canonicalCommandResults = PostgresSchemaObject.parse(names.canonicalCommandResults)
         val canonicalVenueEvents = PostgresSchemaObject.parse(names.canonicalVenueEvents)
+        val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -69,6 +70,7 @@ object PostgresSchemaRequirements {
                 names.submitResults,
                 names.canonicalCommandResults,
                 names.canonicalVenueEvents,
+                names.projectionWatermarks,
                 names.authRoles,
                 names.authActorRoles
             ).map(PostgresSchemaObject::parse),
@@ -76,7 +78,8 @@ object PostgresSchemaRequirements {
                 names.validateReferenceDataFunction,
                 names.persistSubmitOutcomeFunction,
                 names.persistSubmitOutcomesFunction,
-                names.appendCanonicalSubmitOutcomesFunction
+                names.appendCanonicalSubmitOutcomesFunction,
+                names.projectCanonicalSubmitOutcomesFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
@@ -90,7 +93,11 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(canonicalCommandResults, "result_payload", "jsonb"),
                 PostgresSchemaColumn(canonicalVenueEvents, "event_id", "text"),
                 PostgresSchemaColumn(canonicalVenueEvents, "event_seq", "bigint"),
-                PostgresSchemaColumn(canonicalVenueEvents, "payload", "jsonb")
+                PostgresSchemaColumn(canonicalVenueEvents, "payload", "jsonb"),
+                PostgresSchemaColumn(projectionWatermarks, "projection_name", "text"),
+                PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
+                PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),
+                PostgresSchemaColumn(projectionWatermarks, "last_error", "text")
             )
         )
     }

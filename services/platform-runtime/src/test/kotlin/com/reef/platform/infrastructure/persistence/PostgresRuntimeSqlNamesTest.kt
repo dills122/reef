@@ -17,10 +17,12 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.submit_results", names.submitResults)
         assertEquals("runtime.canonical_command_results", names.canonicalCommandResults)
         assertEquals("runtime.canonical_venue_events", names.canonicalVenueEvents)
+        assertEquals("runtime.projection_watermarks", names.projectionWatermarks)
         assertEquals("runtime.reference_instruments", names.referenceInstruments)
         assertEquals("runtime.runtime_persist_submit_outcome", names.persistSubmitOutcomeFunction)
         assertEquals("runtime.runtime_persist_submit_outcomes", names.persistSubmitOutcomesFunction)
         assertEquals("runtime.runtime_append_canonical_submit_outcomes", names.appendCanonicalSubmitOutcomesFunction)
+        assertEquals("runtime.runtime_project_canonical_submit_outcomes", names.projectCanonicalSubmitOutcomesFunction)
         assertEquals("auth.auth_roles", names.authRoles)
         assertEquals("auth.auth_actor_roles", names.authActorRoles)
     }

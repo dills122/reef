@@ -106,9 +106,6 @@ class StreamCommandWorker(
             HotPathMetrics.time("streamWorker.appendCanonicalSubmitOutcomes") {
                 api.appendCanonicalSubmitOutcomes(preparedSubmits.map { it.canonicalOutcome })
             }
-            HotPathMetrics.time("streamWorker.persistSubmitOutcomes") {
-                api.persistSubmitOutcomes(preparedSubmits.map { it.outcome })
-            }
         } catch (ex: Exception) {
             val error = ex.message ?: ex::class.simpleName ?: "unknown"
             preparedSubmits.forEach { prepared ->

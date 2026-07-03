@@ -24,7 +24,7 @@ enum class PlatformRuntimeRole(
 ) {
     Api("api", publicHttpEnabled = true, backgroundWorkersEnabled = false),
     Worker("worker", publicHttpEnabled = false, backgroundWorkersEnabled = true),
-    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = false);
+    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = true);
 
     companion object {
         fun from(raw: String): PlatformRuntimeRole {
@@ -63,6 +63,10 @@ class PlatformHttpServer(
     private val streamCommandWorkerFetchTimeoutMs: Long = RuntimeEnv.long("STREAM_ACK_WORKER_FETCH_TIMEOUT_MS", 200L, min = 1L),
     private val streamCommandWorkerDedicatedRuntimePoolEnabled: Boolean =
         RuntimeEnv.bool("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
+    private val streamAckProjectorEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_ENABLED", true),
+    private val streamAckProjectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
+    private val streamAckProjectorBatchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
+    private val streamAckProjectorPollMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -405,6 +409,9 @@ class PlatformHttpServer(
         if (runtimeRole.backgroundWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandWorkers()
         }
+        if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
+            startCanonicalProjector()
+        }
         println("platform-runtime role=${runtimeRole.configValue} listening on :$port")
         return server
     }
@@ -450,10 +457,34 @@ class PlatformHttpServer(
     }
 
     private fun projectorStatusJson(): String {
+        val status = api.projectionStatus(streamAckProjectionName)
+        val metrics = CanonicalProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
             "role" to runtimeRole.configValue,
-            "status" to if (runtimeRole == PlatformRuntimeRole.Projector) "placeholder" else "inactive",
-            "implementation" to "placeholder"
+            "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
+            "implementation" to "canonical-submit-projector",
+            "projectionName" to status.projectionName,
+            "projectedCount" to status.projectedCount,
+            "lag" to status.lag,
+            "metrics" to mapOf(
+                "projected" to metrics.projected,
+                "failed" to metrics.failed,
+                "emptyPolls" to metrics.emptyPolls,
+                "lastProjectedAt" to metrics.lastProjectedAt,
+                "lastFailedAt" to metrics.lastFailedAt,
+                "lastError" to metrics.lastError
+            ),
+            "watermarks" to status.watermarks.map { watermark ->
+                mapOf(
+                    "projectionName" to watermark.projectionName,
+                    "partition" to watermark.partitionId,
+                    "lastPartitionSequence" to watermark.lastPartitionSequence,
+                    "canonicalMaxPartitionSequence" to watermark.canonicalMaxPartitionSequence,
+                    "lag" to watermark.lag,
+                    "updatedAt" to watermark.updatedAt,
+                    "lastError" to watermark.lastError
+                )
+            }
         )
     }
 
@@ -1145,6 +1176,16 @@ class PlatformHttpServer(
                 workerName = "reef-stream-command-worker-p$partition"
             ).start()
         }
+    }
+
+    private fun startCanonicalProjector() {
+        CanonicalProjectionWorker(
+            api = api,
+            projectionName = streamAckProjectionName,
+            batchSize = streamAckProjectorBatchSize,
+            pollIntervalMs = streamAckProjectorPollMs,
+            workerName = "reef-canonical-projector-$streamAckProjectionName"
+        ).start()
     }
 
     private fun streamWorkerPartitions(): List<Int> {

@@ -189,6 +189,10 @@ make dev-up-stream-ack
 - `STREAM_ACK_WORKER_1_PARTITIONS=8,9,10,11,12,13,14,15`
 - `STREAM_ACK_WORKER_BATCH_SIZE=250`
 - `STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true`
+- `STREAM_ACK_PROJECTOR_ENABLED=true`
+- `STREAM_ACK_PROJECTION_NAME=runtime-normalized-submit`
+- `STREAM_ACK_PROJECTOR_BATCH_SIZE=250`
+- `STREAM_ACK_PROJECTOR_POLL_MS=50`
 - `RUNTIME_DB_POOL_STREAM_INTAKE_MAX=32`
 - `RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE=8`
 - `RUNTIME_DB_POOL_STREAM_RUNTIME_MAX=24`
@@ -200,7 +204,9 @@ The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the scri
 
 Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`.
 
-Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, persists the canonical runtime result/events in one batch call, and acknowledges JetStream deliveries only after the DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
+Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
+
+Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector` (`REEF_PLATFORM_PROJECTOR_HOST_PORT`, default `8084`). The projector reads canonical submit outcomes, updates the normalized order/execution/trade/runtime-event read tables, advances `runtime.projection_watermarks`, and reports projection lag per stream partition. Stress reports capture this block when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 

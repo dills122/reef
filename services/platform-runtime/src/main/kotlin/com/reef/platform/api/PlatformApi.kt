@@ -8,6 +8,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
+import com.reef.platform.infrastructure.persistence.ProjectionStatus
 
 class PlatformApi(
     private val orderService: OrderApplicationService = OrderApplicationService()
@@ -30,6 +31,14 @@ class PlatformApi(
 
     fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
         orderService.appendCanonicalSubmitOutcomes(outcomes)
+    }
+
+    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+        return orderService.projectCanonicalSubmitOutcomes(projectionName, batchSize)
+    }
+
+    fun projectionStatus(projectionName: String): ProjectionStatus {
+        return orderService.projectionStatus(projectionName)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {

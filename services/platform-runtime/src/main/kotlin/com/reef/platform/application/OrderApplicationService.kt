@@ -20,6 +20,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
+import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
@@ -208,6 +209,17 @@ class OrderApplicationService(
         HotPathMetrics.time("runtime.persistence.appendCanonicalSubmitOutcomes") {
             runtimePersistence.appendCanonicalSubmitOutcomes(outcomes)
         }
+    }
+
+    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+        if (batchSize <= 0) return 0
+        return HotPathMetrics.time("runtime.persistence.projectCanonicalSubmitOutcomes") {
+            runtimePersistence.projectCanonicalSubmitOutcomes(projectionName, batchSize)
+        }
+    }
+
+    fun projectionStatus(projectionName: String): ProjectionStatus {
+        return runtimePersistence.projectionStatus(projectionName)
     }
 
     fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {

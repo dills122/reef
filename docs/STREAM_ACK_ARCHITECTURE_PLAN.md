@@ -200,7 +200,7 @@ Do not put leaderboard, UI read-model, or analytics writes on the command comple
 
 In stream-ack mode, canonical append-only facts become the completion boundary. Normalized order, execution, trade, status, trace, leaderboard, report, and UI tables are projections unless a future decision explicitly promotes a field back into the canonical completion transaction.
 
-Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack; until the projector slice is complete, workers still also update the existing normalized order/execution/trade/runtime-event tables to preserve current read paths and stress checks.
+Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack. `platform-projector` applies canonical submit outcomes into the existing normalized order/execution/trade/runtime-event read tables and advances `runtime.projection_watermarks` so lag is visible.
 
 Minimum canonical result direction:
 
@@ -371,6 +371,7 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - add projection worker and watermarks
 - move leaderboard/metrics/UI reads to projection tables
 - expose projection lag in stress reports and control-room views
+- initial submit projector exists: `runtime-normalized-submit` materializes normalized submit read tables from canonical command results outside the worker ack path
 
 9. Engine shard split
 - map partition ranges to engine shard IDs

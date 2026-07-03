@@ -45,6 +45,23 @@ data class CanonicalSubmitOutcome(
     val outcome: PersistableSubmitOutcome
 )
 
+data class ProjectionWatermark(
+    val projectionName: String,
+    val partitionId: Int,
+    val lastPartitionSequence: Long,
+    val canonicalMaxPartitionSequence: Long,
+    val lag: Long,
+    val updatedAt: String,
+    val lastError: String
+)
+
+data class ProjectionStatus(
+    val projectionName: String,
+    val projectedCount: Long,
+    val lag: Long,
+    val watermarks: List<ProjectionWatermark>
+)
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -105,6 +122,12 @@ interface RuntimePersistence {
     }
     fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
         // In-memory/default persistence keeps canonical append as a no-op unless implemented by the store.
+    }
+    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+        return 0
+    }
+    fun projectionStatus(projectionName: String): ProjectionStatus {
+        return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
     fun acceptedOrders(): List<PersistedOrder>
