@@ -46,6 +46,7 @@ type Config struct {
 	SubmitPct           int
 	ModifyPct           int
 	CancelPct           int
+	ActionMixOverride   bool
 	InstrumentID        string
 	InstrumentSymbol    string
 	ParticipantID       string
@@ -523,6 +524,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["cancel-pct"] {
 		cfg.CancelPct = parsed.CancelPct
+	}
+	if explicit["submit-pct"] || explicit["modify-pct"] || explicit["cancel-pct"] {
+		cfg.ActionMixOverride = true
 	}
 	if explicit["instrument-id"] {
 		cfg.InstrumentID = parsed.InstrumentID

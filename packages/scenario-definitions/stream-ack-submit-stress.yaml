@@ -1,0 +1,176 @@
+session:
+  name: stream-ack-submit-stress
+  scenarioRunId: stream-ack-submit-stress
+  seed: 515151
+  mode: strict-lifecycle
+
+runtime:
+  baseUrl: http://localhost:8080
+  duration: 30s
+  workers: 256
+  ratePerSecond: 1000
+  timeout: 5s
+  traceCheckLimit: 200
+
+market:
+  timezone: America/New_York
+  equities:
+    - symbol: AAPL
+      instrumentId: AAPL
+      startingPriceNanos: 190000000000
+      avgDailyVolume: 60000000
+      sharesOutstanding: 15400000000
+      marketCap: 2926000000000
+      volatilityBps: 110
+      spreadBps: 4
+    - symbol: MSFT
+      instrumentId: MSFT
+      startingPriceNanos: 420000000000
+      avgDailyVolume: 22000000
+      sharesOutstanding: 7440000000
+      marketCap: 3124000000000
+      volatilityBps: 95
+      spreadBps: 4
+    - symbol: NVDA
+      instrumentId: NVDA
+      startingPriceNanos: 1030000000000
+      avgDailyVolume: 45000000
+      sharesOutstanding: 24600000000
+      marketCap: 2534000000000
+      volatilityBps: 185
+      spreadBps: 6
+    - symbol: AMZN
+      instrumentId: AMZN
+      startingPriceNanos: 185000000000
+      avgDailyVolume: 40000000
+      sharesOutstanding: 10500000000
+      marketCap: 1943000000000
+      volatilityBps: 130
+      spreadBps: 5
+    - symbol: META
+      instrumentId: META
+      startingPriceNanos: 480000000000
+      avgDailyVolume: 17000000
+      sharesOutstanding: 2550000000
+      marketCap: 1224000000000
+      volatilityBps: 140
+      spreadBps: 5
+    - symbol: GOOGL
+      instrumentId: GOOGL
+      startingPriceNanos: 175000000000
+      avgDailyVolume: 28000000
+      sharesOutstanding: 12400000000
+      marketCap: 2170000000000
+      volatilityBps: 125
+      spreadBps: 5
+    - symbol: TSLA
+      instrumentId: TSLA
+      startingPriceNanos: 245000000000
+      avgDailyVolume: 95000000
+      sharesOutstanding: 3200000000
+      marketCap: 784000000000
+      volatilityBps: 240
+      spreadBps: 8
+    - symbol: JPM
+      instrumentId: JPM
+      startingPriceNanos: 205000000000
+      avgDailyVolume: 9000000
+      sharesOutstanding: 2860000000
+      marketCap: 586000000000
+      volatilityBps: 90
+      spreadBps: 4
+    - symbol: XOM
+      instrumentId: XOM
+      startingPriceNanos: 118000000000
+      avgDailyVolume: 16000000
+      sharesOutstanding: 3950000000
+      marketCap: 466000000000
+      volatilityBps: 105
+      spreadBps: 5
+    - symbol: UNH
+      instrumentId: UNH
+      startingPriceNanos: 515000000000
+      avgDailyVolume: 3300000
+      sharesOutstanding: 920000000
+      marketCap: 474000000000
+      volatilityBps: 115
+      spreadBps: 7
+    - symbol: AVGO
+      instrumentId: AVGO
+      startingPriceNanos: 1700000000000
+      avgDailyVolume: 4200000
+      sharesOutstanding: 465000000
+      marketCap: 790000000000
+      volatilityBps: 180
+      spreadBps: 9
+    - symbol: AMD
+      instrumentId: AMD
+      startingPriceNanos: 165000000000
+      avgDailyVolume: 52000000
+      sharesOutstanding: 1620000000
+      marketCap: 267000000000
+      volatilityBps: 210
+      spreadBps: 7
+    - symbol: NFLX
+      instrumentId: NFLX
+      startingPriceNanos: 650000000000
+      avgDailyVolume: 4000000
+      sharesOutstanding: 430000000
+      marketCap: 280000000000
+      volatilityBps: 175
+      spreadBps: 8
+    - symbol: ORCL
+      instrumentId: ORCL
+      startingPriceNanos: 140000000000
+      avgDailyVolume: 8200000
+      sharesOutstanding: 2760000000
+      marketCap: 386000000000
+      volatilityBps: 110
+      spreadBps: 5
+    - symbol: COST
+      instrumentId: COST
+      startingPriceNanos: 850000000000
+      avgDailyVolume: 1800000
+      sharesOutstanding: 444000000
+      marketCap: 377000000000
+      volatilityBps: 95
+      spreadBps: 8
+    - symbol: CRM
+      instrumentId: CRM
+      startingPriceNanos: 255000000000
+      avgDailyVolume: 6200000
+      sharesOutstanding: 970000000
+      marketCap: 247000000000
+      volatilityBps: 145
+      spreadBps: 6
+
+actors:
+  - actorId: stream-mm-01
+    actorType: market_maker
+    strategyId: two_sided_quote
+    weight: 20
+  - actorId: stream-inst-01
+    actorType: institutional
+    strategyId: vwap_slice
+    weight: 20
+  - actorId: stream-inst-02
+    actorType: institutional
+    strategyId: tactical_entry
+    weight: 20
+  - actorId: stream-retail-01
+    actorType: retail
+    strategyId: dip_buyer
+    weight: 20
+  - actorId: stream-retail-02
+    actorType: retail
+    strategyId: passive_limit
+    weight: 20
+
+mix:
+  actions:
+    submitPct: 100
+    modifyPct: 0
+    cancelPct: 0
+  sideBias:
+    buyPct: 50
+    sellPct: 50

@@ -272,6 +272,6 @@ The first stream-ack slice is implemented behind `EXTERNAL_API_COMMAND_PROCESSIN
 - stream-ack dev mode enables pull workers for all partitions by default
 - `/internal/stream-ack/worker/stats` reports worker fetch, completion, failure, ack-failure, unsupported-command, and empty-poll counters
 - the first worker path processes `SubmitOrder` subjects sequentially per partition, persists the canonical runtime result/events, and acknowledges JetStream only after the DB commit path returns
-- `make dev-stress-stream-ack` runs a submit-only stream-ack stress profile and attaches stream-worker deltas to each report
+- `make dev-stress-stream-ack` runs a submit-only multi-instrument stream-ack stress profile and attaches stream-worker deltas to each report
 
 Cancel/modify stream processing, partition lag telemetry, oldest-unprocessed age, projection watermarks, and replay checksum tests remain follow-up work.

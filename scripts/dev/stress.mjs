@@ -2,7 +2,9 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "
 import http from "node:http";
 import https from "node:https";
 import { basename, join } from "node:path";
+import { execFile } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
+import { promisify } from "node:util";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 import {
   captureDbDiagnosticsLogs,
@@ -11,6 +13,7 @@ import {
 } from "./lib/db-diagnostics.mjs";
 
 loadDotEnv();
+const execFileAsync = promisify(execFile);
 const { runtimeUrl, engineUrl } = deriveDevUrls();
 const duration = env("DEV_STRESS_DURATION", "30s");
 const workers = env("DEV_STRESS_WORKERS", "12");
@@ -20,6 +23,7 @@ const mode = env("DEV_STRESS_MODE", "strict-lifecycle");
 const profile = env("DEV_STRESS_PROFILE", "default");
 const runKind = env("DEV_STRESS_RUN_KIND", "stress");
 const scenarioId = env("DEV_STRESS_SCENARIO_ID", `${mode}:${profile}`);
+const sessionConfig = env("DEV_STRESS_SESSION_CONFIG", "");
 const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
@@ -236,6 +240,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       [
         "run",
         "./cmd/load-tester",
+        ...(sessionConfig ? ["--session-config", sessionConfig] : []),
         "--base-url",
         runtimeUrl,
         "--duration",

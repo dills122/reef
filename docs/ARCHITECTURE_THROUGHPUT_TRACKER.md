@@ -339,6 +339,15 @@ Exit criteria:
 - [ ] Add projection watermarks and lag snapshots.
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
 
+Latest stream-ack notes:
+- The first single-instrument stream-ack run accepted all commands but routed through too few partitions: `5000` nominal rps accepted `100186` commands at `2441.99 accepted/sec`, while the worker completed `40056` during the step at `976.35/sec`; trace checks were `0%` because processing lagged behind accepted ingress.
+- The stream-ack stress profile now uses `packages/scenario-definitions/stream-ack-submit-stress.yaml`, a submit-only 16-instrument scenario, and telemetry now captures Docker stats again.
+- Isolated 16-instrument run on `REEF_COMMANDS_MULTI_16_FULL`:
+  - `1000` nominal rps: `28956` accepted, `928.80 accepted/sec`, `928.80 completed/sec`, p95 `47.77ms`, p99 `62.50ms`, trace pass `100%`, worker failures `0`.
+  - `2500` nominal rps: `69479` accepted, `2230.22 accepted/sec`, `1946.27 completed/sec`, p95 `136.18ms`, p99 `170.69ms`, trace pass `84%`, worker failures `0`.
+  - `5000` nominal rps: `66993` accepted, `2157.24 accepted/sec`, `2003.09 completed/sec`, p95 `147.35ms`, p99 `180.99ms`, trace pass `75%`, worker failures `0`.
+- The 16-instrument run used `8` active stream partitions; partition `6` was hottest at `51830` commands. Runtime peaked near `354%` CPU, Postgres near `303%` CPU, and DB pool waiters peaked at `51`, so the next bottleneck is runtime/Postgres contention plus partition skew under worker load, not JetStream publish acknowledgement.
+
 Exit criteria:
 - `202` is returned only after JetStream durable publish ack.
 - JetStream is not used as the canonical venue outcome store.

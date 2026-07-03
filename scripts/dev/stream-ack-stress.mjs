@@ -2,6 +2,7 @@ import "./stream-ack-up.mjs";
 
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
 setDefault("DEV_STRESS_PROFILE", "stream-submit");
+setDefault("DEV_STRESS_SESSION_CONFIG", "../../packages/scenario-definitions/stream-ack-submit-stress.yaml");
 setDefault("DEV_STRESS_RATES", "1000,2500,5000");
 setDefault("DEV_STRESS_SWEEP_WORKERS", "256");
 setDefault("DEV_STRESS_TRACE_CHECK_LIMIT", "200");

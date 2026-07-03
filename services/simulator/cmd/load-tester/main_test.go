@@ -253,6 +253,25 @@ func TestChooseActionForProfileUsesConfigMixWhenNoSessionConfig(t *testing.T) {
 	}
 }
 
+func TestExplicitActionMixOverridesSessionProfileMix(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig:  true,
+		ActionMixOverride: true,
+		Mode:              "strict-lifecycle",
+		SubmitPct:         100,
+		ModifyPct:         0,
+		CancelPct:         0,
+	}
+	rng := rand.New(rand.NewSource(19))
+	actor := &sessionconfig.Actor{ActorID: "mm-1", ActorType: "market_maker", StrategyID: "two_sided_quote"}
+	for i := 0; i < 20; i++ {
+		action := chooseActionForActor(rng, cfg, true, profileMarketMaker, actor)
+		if action != ActionSubmit {
+			t.Fatalf("expected explicit submit-only mix to override session strategy, got %s", action)
+		}
+	}
+}
+
 func generateDecisionSequence(cfg Config, workerID int, count int) []string {
 	rng := rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
 	out := make([]string, 0, count)

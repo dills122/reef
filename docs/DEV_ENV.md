@@ -198,6 +198,8 @@ make dev-stress-stream-ack
 
 This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
+The stream-ack stress target uses `packages/scenario-definitions/stream-ack-submit-stress.yaml` so submit traffic spreads across 16 instruments and therefore multiple deterministic stream partitions. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
+
 Partition lag and oldest-unprocessed age remain follow-up telemetry once the worker consumer exposes durable consumer sequence state.
 
 Tune diagnostics capture knobs (optional):
