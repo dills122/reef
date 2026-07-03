@@ -37,7 +37,8 @@ If default host ports are already in use, override them at runtime:
 REEF_PLATFORM_API_HOST_PORT=18080 \
 REEF_PLATFORM_WORKER_0_HOST_PORT=18082 \
 REEF_PLATFORM_WORKER_1_HOST_PORT=18083 \
-REEF_PLATFORM_PROJECTOR_HOST_PORT=18084 \
+REEF_PLATFORM_PROJECTOR_0_HOST_PORT=18084 \
+REEF_PLATFORM_PROJECTOR_1_HOST_PORT=18085 \
 REEF_MATCHING_ENGINE_HOST_PORT=18081 \
 REEF_POSTGRES_HOST_PORT=15432 \
 JS_RUNTIME=node make dev-up
@@ -131,7 +132,7 @@ make dev-up-captured-ack
 make dev-stress-captured-ack
 ```
 
-`dev-up-captured-ack` starts the separated local runtime roles (`platform-api`, `platform-worker-0`, `platform-worker-1`, and `platform-projector`) with:
+`dev-up-captured-ack` starts the separated local runtime roles (`platform-api`, `platform-worker-0`, `platform-worker-1`, `platform-projector-0`, and `platform-projector-1`) with:
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
 - `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
 - `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table`
@@ -176,7 +177,7 @@ Run the first JetStream-backed accepted-command profile:
 make dev-up-stream-ack
 ```
 
-`dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0`, `platform-worker-1`, `platform-projector`, `matching-engine`, `nats`, and `postgres`), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
+`dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0`, `platform-worker-1`, `platform-projector-0`, `platform-projector-1`, `matching-engine`, `nats`, and `postgres`), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`
 - `STREAM_ACK_NATS_URL=nats://nats:4222`
 - `STREAM_ACK_COMMAND_STREAM=REEF_COMMANDS`
@@ -190,6 +191,8 @@ make dev-up-stream-ack
 - `STREAM_ACK_WORKER_BATCH_SIZE=250`
 - `STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true`
 - `STREAM_ACK_PROJECTOR_ENABLED=true`
+- `STREAM_ACK_PROJECTOR_0_PARTITIONS=0,1,2,3,4,5,6,7`
+- `STREAM_ACK_PROJECTOR_1_PARTITIONS=8,9,10,11,12,13,14,15`
 - `STREAM_ACK_PROJECTION_NAME=runtime-normalized-submit`
 - `STREAM_ACK_PROJECTOR_BATCH_SIZE=250`
 - `STREAM_ACK_PROJECTOR_POLL_MS=50`
@@ -206,7 +209,7 @@ Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpre
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
 
-Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector` (`REEF_PLATFORM_PROJECTOR_HOST_PORT`, default `8084`). The projector reads canonical submit outcomes, updates the normalized order/execution/trade/runtime-event read tables, advances `runtime.projection_watermarks`, and reports projection lag per stream partition. Stress reports capture this block when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default.
+Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT`, default `8084`) and `platform-projector-1` (`REEF_PLATFORM_PROJECTOR_1_HOST_PORT`, default `8085`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes, update the normalized order/execution/trade/runtime-event read tables, advance `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture both endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 

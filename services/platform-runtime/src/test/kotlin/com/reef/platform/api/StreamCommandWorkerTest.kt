@@ -61,11 +61,11 @@ class StreamCommandWorkerTest {
         assertEquals("accepted", canonical.resultStatus)
         assertTrue(canonical.payloadHash.isNotBlank())
 
-        val projected = persistence.projectCanonicalSubmitOutcomes("runtime-normalized-submit", 100)
+        val projected = persistence.projectCanonicalSubmitOutcomes("runtime-normalized-submit", 100, emptyList())
 
         assertEquals(1, projected)
         assertNotNull(persistence.acceptedOrder("ord-worker-1"))
-        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit").lag)
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit", emptyList()).lag)
     }
 
     @Test
@@ -178,6 +178,45 @@ class StreamCommandWorkerTest {
         assertEquals(0, status.lag)
         assertEquals(12, status.watermarks.single().lastPartitionSequence)
         assertEquals(1, CanonicalProjectionMetrics.snapshot().projected)
+    }
+
+    @Test
+    fun canonicalProjectorOnlyProjectsOwnedPartitions() {
+        StreamCommandWorkerMetrics.resetForTests()
+        CanonicalProjectionMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = CountingAcceptedGateway(),
+                runtimePersistence = persistence
+            )
+        )
+        val first = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-projector-owned-1", "ord-projector-owned-1"),
+            streamSequence = 20
+        )
+        val second = RecordingDelivery(
+            payloadJson = validSubmitBody("cmd-projector-owned-2", "ord-projector-owned-2"),
+            streamSequence = 21
+        )
+        StreamCommandWorker(
+            source = FixedBatchStreamCommandSource(first, second),
+            api = api,
+            partition = 4
+        ).processOnce()
+        val projector = CanonicalProjectionWorker(
+            api = api,
+            projectionName = "runtime-normalized-submit",
+            partitions = listOf(5),
+            batchSize = 10
+        )
+
+        val projected = projector.processOnce()
+
+        assertEquals(0, projected)
+        assertEquals(null, persistence.acceptedOrder("ord-projector-owned-1"))
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit", listOf(5)).lag)
+        assertEquals(21, persistence.projectionStatus("runtime-normalized-submit", listOf(4)).lag)
     }
 
     @Test

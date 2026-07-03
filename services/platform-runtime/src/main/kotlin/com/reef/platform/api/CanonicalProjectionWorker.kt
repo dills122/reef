@@ -10,6 +10,7 @@ import kotlin.concurrent.thread
 class CanonicalProjectionWorker(
     private val api: PlatformApi,
     private val projectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
+    private val partitions: List<Int> = emptyList(),
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
     private val workerName: String = "reef-canonical-projection-worker"
@@ -36,7 +37,7 @@ class CanonicalProjectionWorker(
     fun processOnce(): Long {
         return try {
             HotPathMetrics.time("projector.projectCanonicalSubmitOutcomes") {
-                api.projectCanonicalSubmitOutcomes(projectionName, batchSize)
+                api.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
             }.also { projected ->
                 if (projected > 0) {
                     CanonicalProjectionMetrics.recordProjected(projected)

@@ -33,12 +33,12 @@ class PlatformApi(
         orderService.appendCanonicalSubmitOutcomes(outcomes)
     }
 
-    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
-        return orderService.projectCanonicalSubmitOutcomes(projectionName, batchSize)
+    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+        return orderService.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
     }
 
-    fun projectionStatus(projectionName: String): ProjectionStatus {
-        return orderService.projectionStatus(projectionName)
+    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
+        return orderService.projectionStatus(projectionName, partitions)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {

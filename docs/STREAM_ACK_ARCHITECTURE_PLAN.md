@@ -200,7 +200,7 @@ Do not put leaderboard, UI read-model, or analytics writes on the command comple
 
 In stream-ack mode, canonical append-only facts become the completion boundary. Normalized order, execution, trade, status, trace, leaderboard, report, and UI tables are projections unless a future decision explicitly promotes a field back into the canonical completion transaction.
 
-Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack. `platform-projector` applies canonical submit outcomes into the existing normalized order/execution/trade/runtime-event read tables and advances `runtime.projection_watermarks` so lag is visible.
+Implementation note: `runtime.canonical_command_results` and `runtime.canonical_venue_events` now exist as the append-only stream-ack outcome store. Workers append canonical submit outcomes before JetStream ack. `platform-projector-0` and `platform-projector-1` apply canonical submit outcomes into the existing normalized order/execution/trade/runtime-event read tables for explicit non-overlapping partition ranges and advance `runtime.projection_watermarks` so lag is visible.
 
 Minimum canonical result direction:
 

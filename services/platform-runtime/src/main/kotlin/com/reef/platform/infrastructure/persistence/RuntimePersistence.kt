@@ -123,10 +123,10 @@ interface RuntimePersistence {
     fun appendCanonicalSubmitOutcomes(outcomes: List<CanonicalSubmitOutcome>) {
         // In-memory/default persistence keeps canonical append as a no-op unless implemented by the store.
     }
-    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
         return 0
     }
-    fun projectionStatus(projectionName: String): ProjectionStatus {
+    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
         return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
     }
     fun acceptedOrder(orderId: String): PersistedOrder?

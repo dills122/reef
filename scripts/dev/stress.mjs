@@ -45,7 +45,12 @@ const streamAckWorkerUrls = parseCsvStrings(
   env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
 );
 const captureStreamAckProjectorStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR", captureStreamAckWorkerStats ? "1" : "0") === "1";
-const streamAckProjectorUrl = env("DEV_STRESS_STREAM_ACK_PROJECTOR_URL", defaultStreamAckProjectorUrl(runtimeUrl));
+const streamAckProjectorUrls = parseCsvStrings(
+  env(
+    "DEV_STRESS_STREAM_ACK_PROJECTOR_URLS",
+    env("DEV_STRESS_STREAM_ACK_PROJECTOR_URL", defaultStreamAckProjectorUrls(runtimeUrl).join(",")),
+  ),
+);
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -239,7 +244,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
-  const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjector() : null;
+  const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
   try {
     await run(
       "go",
@@ -297,7 +302,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
     }
     if (captureStreamAckProjectorStats) {
-      const afterProjector = await sampleStreamAckProjector();
+      const afterProjector = await sampleStreamAckProjectors();
       attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
     }
   }
@@ -342,18 +347,79 @@ function defaultStreamAckWorkerUrls(runtimeUrl) {
   ];
 }
 
-function defaultStreamAckProjectorUrl(runtimeUrl) {
+function defaultStreamAckProjectorUrls(runtimeUrl) {
   const parsed = new URL(runtimeUrl);
-  const projectorPort = env("REEF_PLATFORM_PROJECTOR_HOST_PORT", "8084");
-  return `${parsed.protocol}//${parsed.hostname}:${projectorPort}`;
+  const projector0Port = env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", env("REEF_PLATFORM_PROJECTOR_HOST_PORT", "8084"));
+  const projector1Port = env("REEF_PLATFORM_PROJECTOR_1_HOST_PORT", "8085");
+  return [
+    `${parsed.protocol}//${parsed.hostname}:${projector0Port}`,
+    `${parsed.protocol}//${parsed.hostname}:${projector1Port}`,
+  ];
 }
 
-async function sampleStreamAckProjector() {
-  return requestAppProbe({
-    name: "streamAckProjector.status",
-    url: `${streamAckProjectorUrl}/internal/projector/status`,
-    captureJson: true,
-  });
+async function sampleStreamAckProjectors() {
+  const probes = await Promise.all(
+    streamAckProjectorUrls.map((baseUrl, index) =>
+      requestAppProbe({
+        name: `streamAckProjector.${index}.status`,
+        url: `${baseUrl}/internal/projector/status`,
+        captureJson: true,
+      }),
+    ),
+  );
+  return {
+    ok: probes.every((probe) => probe.ok),
+    status: probes.find((probe) => !probe.ok)?.status ?? 200,
+    latencyMs: Math.max(0, ...probes.map((probe) => Number(probe.latencyMs ?? 0))),
+    error: probes.find((probe) => probe.error)?.error ?? "",
+    probes,
+    json: aggregateStreamAckProjectorStatus(probes),
+  };
+}
+
+function aggregateStreamAckProjectorStatus(probes) {
+  const projectors = probes
+    .map((probe, index) => ({ index, url: streamAckProjectorUrls[index], status: probe.json }))
+    .filter((projector) => projector.status);
+  const metrics = {
+    projected: 0,
+    failed: 0,
+    emptyPolls: 0,
+    lastProjectedAt: "",
+    lastFailedAt: "",
+    lastError: "",
+  };
+  let projectedCount = 0;
+  let lag = 0;
+  for (const projector of projectors) {
+    const rawMetrics = projector.status.metrics ?? {};
+    metrics.projected += Number(rawMetrics.projected ?? 0);
+    metrics.failed += Number(rawMetrics.failed ?? 0);
+    metrics.emptyPolls += Number(rawMetrics.emptyPolls ?? 0);
+    metrics.lastProjectedAt = maxIso(metrics.lastProjectedAt, rawMetrics.lastProjectedAt ?? "");
+    metrics.lastFailedAt = maxIso(metrics.lastFailedAt, rawMetrics.lastFailedAt ?? "");
+    metrics.lastError = rawMetrics.lastError || metrics.lastError;
+    projectedCount = Math.max(projectedCount, Number(projector.status.projectedCount ?? 0));
+    lag += Number(projector.status.lag ?? 0);
+  }
+  return {
+    enabled: projectors.some((projector) => projector.status.status === "running"),
+    implementation: projectors.find((projector) => projector.status.implementation)?.status.implementation ?? "",
+    projectionName: projectors.find((projector) => projector.status.projectionName)?.status.projectionName ?? "",
+    projectedCount,
+    lag,
+    metrics,
+    projectors: projectors.map((projector) => ({
+      index: projector.index,
+      url: projector.url,
+      status: projector.status.status,
+      partitions: projector.status.partitions ?? [],
+      projectedCount: projector.status.projectedCount,
+      lag: projector.status.lag,
+      metrics: projector.status.metrics ?? {},
+    })),
+    watermarks: projectors.flatMap((projector) => projector.status.watermarks ?? []),
+  };
 }
 
 function aggregateStreamAckWorkerStats(probes) {
@@ -702,7 +768,11 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "runtime.asyncCommands", url: `${runtimeUrl}/internal/commands/async/stats`, captureJson: true },
     { name: "runtime.streamAckHealth", url: `${runtimeUrl}/internal/stream-ack/health`, captureJson: true },
     { name: "runtime.streamAckWorkers", url: `${runtimeUrl}/internal/stream-ack/worker/stats`, captureJson: true },
-    { name: "streamAckProjector.status", url: `${streamAckProjectorUrl}/internal/projector/status`, captureJson: true },
+    ...streamAckProjectorUrls.map((baseUrl, index) => ({
+      name: `streamAckProjector.${index}.status`,
+      url: `${baseUrl}/internal/projector/status`,
+      captureJson: true,
+    })),
     ...streamAckWorkerUrls.map((baseUrl, index) => ({
       name: `streamAckWorker.${index}.stats`,
       url: `${baseUrl}/internal/stream-ack/worker/stats`,

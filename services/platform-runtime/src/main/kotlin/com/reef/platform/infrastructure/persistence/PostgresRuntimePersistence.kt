@@ -893,6 +893,132 @@ class PostgresRuntimePersistence(
                     $$;
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    DROP FUNCTION IF EXISTS ${names.projectCanonicalSubmitOutcomesFunction}(TEXT, INTEGER)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION ${names.projectCanonicalSubmitOutcomesFunction}(
+                      p_projection_name TEXT,
+                      p_batch_size INTEGER,
+                      p_partitions INTEGER[] DEFAULT NULL
+                    )
+                    RETURNS BIGINT
+                    LANGUAGE plpgsql
+                    AS $$
+                    DECLARE
+                      projected_count BIGINT := 0;
+                    BEGIN
+                      IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
+                        RETURN 0;
+                      END IF;
+
+                      WITH selected_partitions AS (
+                        SELECT DISTINCT partition_id
+                        FROM (
+                          SELECT unnest(p_partitions) AS partition_id
+                          WHERE p_partitions IS NOT NULL AND cardinality(p_partitions) > 0
+                          UNION ALL
+                          SELECT DISTINCT partition_id
+                          FROM ${names.canonicalCommandResults}
+                          WHERE p_partitions IS NULL OR cardinality(p_partitions) = 0
+                        ) partitions
+                      ),
+                      partition_budget AS (
+                        SELECT GREATEST(
+                          1,
+                          CEIL(p_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
+                        ) AS per_partition_limit
+                      ),
+                      ranked AS (
+                        SELECT
+                          canonical.partition_id,
+                          canonical.partition_seq,
+                          canonical.result_payload,
+                          row_number() OVER (
+                            PARTITION BY canonical.partition_id
+                            ORDER BY canonical.partition_seq
+                          ) AS partition_row
+                        FROM ${names.canonicalCommandResults} canonical
+                        JOIN selected_partitions selected
+                          ON selected.partition_id = canonical.partition_id
+                        LEFT JOIN ${names.projectionWatermarks} watermark
+                          ON watermark.projection_name = p_projection_name
+                         AND watermark.partition_id = canonical.partition_id
+                        WHERE canonical.partition_seq > COALESCE(watermark.last_partition_seq, 0)
+                      ),
+                      eligible AS (
+                        SELECT partition_id, partition_seq, result_payload
+                        FROM ranked
+                        CROSS JOIN partition_budget
+                        WHERE partition_row <= partition_budget.per_partition_limit
+                        ORDER BY partition_row, partition_id, partition_seq
+                        LIMIT p_batch_size
+                      ),
+                      projected AS (
+                        SELECT ${names.persistSubmitOutcomesFunction}(
+                          COALESCE(
+                            jsonb_agg(result_payload ORDER BY partition_seq, partition_id),
+                            '[]'::jsonb
+                          )
+                        ) AS count
+                        FROM eligible
+                      ),
+                      partition_max AS (
+                        SELECT partition_id, MAX(partition_seq) AS last_partition_seq
+                        FROM eligible
+                        GROUP BY partition_id
+                      ),
+                      upsert_watermarks AS (
+                        INSERT INTO ${names.projectionWatermarks}(
+                          projection_name,
+                          partition_id,
+                          last_partition_seq,
+                          last_projected_at,
+                          updated_at,
+                          last_error
+                        )
+                        SELECT
+                          p_projection_name,
+                          partition_id,
+                          last_partition_seq,
+                          now(),
+                          now(),
+                          ''
+                        FROM partition_max
+                        ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+                          last_partition_seq = GREATEST(
+                            ${names.projectionWatermarks}.last_partition_seq,
+                            EXCLUDED.last_partition_seq
+                          ),
+                          last_projected_at = EXCLUDED.last_projected_at,
+                          updated_at = EXCLUDED.updated_at,
+                          last_error = ''
+                        RETURNING 1
+                      )
+                      SELECT COALESCE(MAX(count), 0) INTO projected_count FROM projected;
+
+                      RETURN projected_count;
+                    EXCEPTION WHEN OTHERS THEN
+                      INSERT INTO ${names.projectionWatermarks}(
+                        projection_name,
+                        partition_id,
+                        last_partition_seq,
+                        last_projected_at,
+                        updated_at,
+                        last_error
+                      )
+                      VALUES (p_projection_name, -1, 0, NULL, now(), SQLERRM)
+                      ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+                        updated_at = EXCLUDED.updated_at,
+                        last_error = EXCLUDED.last_error;
+                      RAISE;
+                    END;
+                    $$;
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -1199,16 +1325,17 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+    override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
         if (batchSize <= 0) return 0
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT ${names.projectCanonicalSubmitOutcomesFunction}(?, ?)
+                SELECT ${names.projectCanonicalSubmitOutcomesFunction}(?, ?, ?)
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, projectionName)
                 ps.setInt(2, batchSize)
+                ps.setArray(3, conn.createArrayOf("integer", partitions.toTypedArray()))
                 ps.executeQuery().use { rs ->
                     rs.next()
                     return rs.getLong(1)
@@ -1217,13 +1344,17 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectionStatus(projectionName: String): ProjectionStatus {
+    override fun projectionStatus(projectionName: String, partitions: List<Int>): ProjectionStatus {
         connection().use { conn ->
             val watermarks = conn.prepareStatement(
                 """
-                WITH canonical_partitions AS (
+                WITH requested_partitions AS (
+                  SELECT unnest(?::INTEGER[]) AS partition_id
+                ),
+                canonical_partitions AS (
                   SELECT partition_id, MAX(partition_seq) AS canonical_max_partition_seq
                   FROM ${names.canonicalCommandResults}
+                  WHERE cardinality(?::INTEGER[]) = 0 OR partition_id IN (SELECT partition_id FROM requested_partitions)
                   GROUP BY partition_id
                 ),
                 watermark_partitions AS (
@@ -1235,10 +1366,22 @@ class PostgresRuntimePersistence(
                     last_error
                   FROM ${names.projectionWatermarks}
                   WHERE projection_name = ?
+                    AND (
+                      cardinality(?::INTEGER[]) = 0
+                      OR partition_id IN (SELECT partition_id FROM requested_partitions)
+                      OR partition_id = -1
+                    )
+                ),
+                owned_partitions AS (
+                  SELECT partition_id FROM requested_partitions
+                  UNION
+                  SELECT partition_id FROM canonical_partitions
+                  UNION
+                  SELECT partition_id FROM watermark_partitions WHERE partition_id >= 0
                 )
                 SELECT
                   COALESCE(watermark_partitions.projection_name, ?) AS projection_name,
-                  canonical_partitions.partition_id,
+                  owned_partitions.partition_id,
                   COALESCE(watermark_partitions.last_partition_seq, 0) AS last_partition_seq,
                   COALESCE(canonical_partitions.canonical_max_partition_seq, 0) AS canonical_max_partition_seq,
                   GREATEST(
@@ -1248,9 +1391,11 @@ class PostgresRuntimePersistence(
                   ) AS lag,
                   COALESCE(watermark_partitions.updated_at::TEXT, '') AS updated_at,
                   COALESCE(watermark_partitions.last_error, '') AS last_error
-                FROM canonical_partitions
+                FROM owned_partitions
+                LEFT JOIN canonical_partitions
+                  ON canonical_partitions.partition_id = owned_partitions.partition_id
                 LEFT JOIN watermark_partitions
-                  ON watermark_partitions.partition_id = canonical_partitions.partition_id
+                  ON watermark_partitions.partition_id = owned_partitions.partition_id
                 UNION ALL
                 SELECT
                   watermark_partitions.projection_name,
@@ -1265,8 +1410,12 @@ class PostgresRuntimePersistence(
                 ORDER BY partition_id
                 """.trimIndent()
             ).use { ps ->
-                ps.setString(1, projectionName)
-                ps.setString(2, projectionName)
+                val partitionArray = conn.createArrayOf("integer", partitions.toTypedArray())
+                ps.setArray(1, partitionArray)
+                ps.setArray(2, partitionArray)
+                ps.setString(3, projectionName)
+                ps.setArray(4, partitionArray)
+                ps.setString(5, projectionName)
                 ps.executeQuery().use { rs ->
                     val rows = mutableListOf<ProjectionWatermark>()
                     while (rs.next()) {

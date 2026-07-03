@@ -65,6 +65,7 @@ class PlatformHttpServer(
         RuntimeEnv.bool("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
     private val streamAckProjectorEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_ENABLED", true),
     private val streamAckProjectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
+    private val streamAckProjectorPartitions: String = RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", "all"),
     private val streamAckProjectorBatchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val streamAckProjectorPollMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
@@ -457,13 +458,15 @@ class PlatformHttpServer(
     }
 
     private fun projectorStatusJson(): String {
-        val status = api.projectionStatus(streamAckProjectionName)
+        val partitions = projectorPartitions()
+        val status = api.projectionStatus(streamAckProjectionName, partitions)
         val metrics = CanonicalProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
             "role" to runtimeRole.configValue,
             "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
             "implementation" to "canonical-submit-projector",
             "projectionName" to status.projectionName,
+            "partitions" to partitions,
             "projectedCount" to status.projectedCount,
             "lag" to status.lag,
             "metrics" to mapOf(
@@ -1179,17 +1182,31 @@ class PlatformHttpServer(
     }
 
     private fun startCanonicalProjector() {
+        val partitions = projectorPartitions()
+        if (partitions.isEmpty()) {
+            System.err.println("canonical_projector_unavailable reason=no_partitions_configured")
+            return
+        }
         CanonicalProjectionWorker(
             api = api,
             projectionName = streamAckProjectionName,
+            partitions = partitions,
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,
             workerName = "reef-canonical-projector-$streamAckProjectionName"
         ).start()
     }
 
+    private fun projectorPartitions(): List<Int> {
+        return configuredPartitions(streamAckProjectorPartitions)
+    }
+
     private fun streamWorkerPartitions(): List<Int> {
-        val raw = streamCommandWorkerPartitions.trim()
+        return configuredPartitions(streamCommandWorkerPartitions)
+    }
+
+    private fun configuredPartitions(rawValue: String): List<Int> {
+        val raw = rawValue.trim()
         if (raw.equals("all", ignoreCase = true)) {
             return (0 until streamCommandConfig.partitionCount).toList()
         }

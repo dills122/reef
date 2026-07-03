@@ -159,12 +159,18 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return canonicalSubmitOutcomes.values.toList()
     }
 
-    override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+    override fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
         if (batchSize <= 0) return 0
+        val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }
         val outcomes = canonicalSubmitOutcomes.values
+            .filter { outcome -> partitionSet.isEmpty() || outcome.partitionId in partitionSet }
             .filter { outcome -> outcome.partitionSequence > (watermarks[outcome.partitionId] ?: 0L) }
-            .sortedWith(compareBy<CanonicalSubmitOutcome> { it.partitionId }.thenBy { it.partitionSequence })
+            .groupBy { it.partitionId }
+            .flatMap { (_, partitionOutcomes) ->
+                partitionOutcomes.sortedBy { it.partitionSequence }.take(batchSize)
+            }
+            .sortedWith(compareBy<CanonicalSubmitOutcome> { it.partitionSequence }.thenBy { it.partitionId })
             .take(batchSize)
         if (outcomes.isEmpty()) return 0
         persistSubmitOutcomes(outcomes.map { it.outcome })
@@ -179,9 +185,11 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return outcomes.size.toLong()
     }
 
-    override fun projectionStatus(projectionName: String): ProjectionStatus {
+    override fun projectionStatus(projectionName: String, partitions: List<Int>): ProjectionStatus {
+        val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks[projectionName].orEmpty()
-        val partitions = canonicalSubmitOutcomes.values
+        val watermarkRows = canonicalSubmitOutcomes.values
+            .filter { outcome -> partitionSet.isEmpty() || outcome.partitionId in partitionSet }
             .groupBy { it.partitionId }
             .map { (partitionId, outcomes) ->
                 val projected = watermarks[partitionId] ?: 0L
@@ -200,8 +208,8 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return ProjectionStatus(
             projectionName = projectionName,
             projectedCount = submitResults.size.toLong(),
-            lag = partitions.sumOf { it.lag },
-            watermarks = partitions
+            lag = watermarkRows.sumOf { it.lag },
+            watermarks = watermarkRows
         )
     }
 }

@@ -197,18 +197,33 @@ services:
     ports:
       - "${REEF_PLATFORM_WORKER_1_HOST_PORT:-8083}:8080"
 
-  platform-projector:
+  platform-projector-0:
     <<: *platform-runtime-service
-    container_name: reef-platform-projector
+    container_name: reef-platform-projector-0
     environment:
       <<: *platform-runtime-environment
       PLATFORM_RUNTIME_ROLE: "projector"
-      OTEL_SERVICE_NAME: "reef-platform-projector"
+      OTEL_SERVICE_NAME: "reef-platform-projector-0"
       STREAM_ACK_WORKER_ENABLED: "false"
       STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
+      STREAM_ACK_PROJECTOR_PARTITIONS: "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-0,1,2,3,4,5,6,7}"
       EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
     ports:
-      - "${REEF_PLATFORM_PROJECTOR_HOST_PORT:-8084}:8080"
+      - "${REEF_PLATFORM_PROJECTOR_0_HOST_PORT:-8084}:8080"
+
+  platform-projector-1:
+    <<: *platform-runtime-service
+    container_name: reef-platform-projector-1
+    environment:
+      <<: *platform-runtime-environment
+      PLATFORM_RUNTIME_ROLE: "projector"
+      OTEL_SERVICE_NAME: "reef-platform-projector-1"
+      STREAM_ACK_WORKER_ENABLED: "false"
+      STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
+      STREAM_ACK_PROJECTOR_PARTITIONS: "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-8,9,10,11,12,13,14,15}"
+      EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
+    ports:
+      - "${REEF_PLATFORM_PROJECTOR_1_HOST_PORT:-8085}:8080"
 
   redis:
     image: redis:7-alpine

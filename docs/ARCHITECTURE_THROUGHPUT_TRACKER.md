@@ -167,11 +167,11 @@ Drain-accounted worker sweep:
 | A29 | Stream-ack command contract and partitioning | Planned | contract | Command envelope must include run/session/instrument routing metadata and deterministic subject partitioning |
 | A30 | Stream-ack idempotency guard | Planned | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
 | A31 | Stream partition worker and ack rule | In progress | architecture | Submit workers append canonical command results and venue events before JetStream ack; cancel/modify still need stream-worker support |
-| A32 | Canonical event log and projection watermarks | In progress | architecture | Submit projection watermarks and lag are exposed through `platform-projector`; broader leaderboard/UI projections remain follow-up |
+| A32 | Canonical event log and projection watermarks | In progress | architecture | Submit projection watermarks and lag are exposed through partition-owned projectors; broader leaderboard/UI projections remain follow-up |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
 | A34 | Stream-ack role split and partition ownership | Done | architecture | Local deploy-shaped profile starts separate API, worker, and projector containers; workers own explicit non-overlapping partition ranges |
 | A35 | Canonical append store | Done | architecture | Submit workers append canonical command results and venue events before ack; normalized submit writes moved out of the worker path |
-| A36 | Async market-simulation projections | In progress | architecture | `platform-projector` materializes normalized submit read tables from canonical facts with watermarks; broader order/trade/status/timeline/leaderboard/run projections remain follow-up |
+| A36 | Async market-simulation projections | In progress | architecture | `platform-projector-0` and `platform-projector-1` materialize normalized submit read tables from canonical facts with partition-scoped watermarks; broader order/trade/status/timeline/leaderboard/run projections remain follow-up |
 | A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
 | A38 | DigitalOcean benchmark harness | Deferred | validation | Deployed API/workers/engine/NATS/Postgres with external load generator and accepted/completed/projected/replay evidence |
 
@@ -349,7 +349,7 @@ Exit criteria:
 - [x] Add SubmitOrder partition worker that preserves per-partition ordering.
 - [x] Persist SubmitOrder canonical command result and event log before JetStream ack.
 - [x] Add runtime canonical command-result and venue-event append tables for stream-ack submit outcomes.
-- [x] Move normalized SubmitOrder order/execution/trade/runtime-event writes behind `platform-projector` watermarks.
+- [x] Move normalized SubmitOrder order/execution/trade/runtime-event writes behind partition-owned projector watermarks.
 - [ ] Extend partition worker processing to cancel/modify commands.
 - [x] Add projection watermarks and lag snapshots for normalized submit projection.
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
@@ -373,11 +373,12 @@ Latest stream-ack notes:
   - `2500` nominal rps: `74187` accepted/completed, `2222.68/sec`, p95 `61.97ms`, p99 `115.59ms`, trace pass `100%`, active partitions `16`, worker failures `0`.
   - `5000` nominal rps: `104431` accepted/completed, `3106.74/sec`, p95 `101.58ms`, p99 `136.16ms`, trace pass `96%`, active partitions `16`, worker failures `0`.
 - Net result: the durable stream-ack processed ceiling moved from about `2000/sec` to about `3100/sec` on the local stack while preserving `202`-after-publish and DB-before-stream-ack semantics. Remaining bottlenecks are runtime/Postgres CPU and batched persistence cost (`~28ms` average per `persistSubmitOutcomes` batch in the spread run), not JetStream publish durability. Intake-pool pressure improved materially (`maxDbPoolWaiters` dropped from `56` to `14`).
-- Post-projector validation on the deploy-shaped stream-ack stack (`platform-api`, two workers, `platform-projector`) after moving normalized submit writes behind `runtime-normalized-submit`:
+- Post-projector validation on the deploy-shaped stream-ack stack (`platform-api`, two workers, one projector) after moving normalized submit writes behind `runtime-normalized-submit`:
   - `1000` nominal rps: `28721` accepted, worker-completed, and projected, `858.46/sec`, p95 `59.14ms`, p99 `82.67ms`, trace pass `100%`, projector lag `0`.
   - `2500` nominal rps: `72937` accepted and worker-completed, `2199.58/sec`, p95 `89.41ms`, p99 `156.34ms`, trace pass `71%`; projector projected `63853` during the step at `1925.63/sec` and ended with lag `163028`.
   - `5000` nominal rps: `91706` accepted and worker-completed, `2763.98/sec`, p95 `108.29ms`, p99 `229.53ms`, trace pass `50%`; projector projected `64250` during the step at `1936.47/sec` and ended with lag `555190`.
   - workers reported `0` failures and `0` ack failures at every step; projector caught up to lag `0` after the run stopped. The current ceiling moved from worker canonical persistence to projector throughput and projection freshness.
+- Projector ownership is now split across `platform-projector-0` and `platform-projector-1`, with explicit non-overlapping partition ranges and fair per-partition projection batching. Next stress validation should compare projection lag and projected/sec against the single-projector baseline above.
 - Follow-up probes that did not beat the spread-profile baseline:
   - direct JDBC submit-outcome persistence regressed the `5000` step to `2988.66/sec` and raised batch persistence cost to `~29.7ms`
   - worker batch size `500` regressed to `2822.92 completed/sec`; batch size `125` regressed to `2680.07 completed/sec`

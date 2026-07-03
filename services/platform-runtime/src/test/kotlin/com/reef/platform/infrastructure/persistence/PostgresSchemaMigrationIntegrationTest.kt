@@ -29,6 +29,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0005_set_based_submit_outcomes.sql',
                   'runtime/0006_canonical_append_store.sql',
                   'runtime/0007_projection_watermarks.sql',
+                  'runtime/0008_partitioned_projection_batching.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -80,7 +81,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0004_bulk_submit_outcomes.sql",
                     "runtime/0005_set_based_submit_outcomes.sql",
                     "runtime/0006_canonical_append_store.sql",
-                    "runtime/0007_projection_watermarks.sql"
+                    "runtime/0007_projection_watermarks.sql",
+                    "runtime/0008_partitioned_projection_batching.sql"
                 ),
                 appliedMigrations
             )

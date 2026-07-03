@@ -211,15 +211,15 @@ class OrderApplicationService(
         }
     }
 
-    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int): Long {
+    fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
         if (batchSize <= 0) return 0
         return HotPathMetrics.time("runtime.persistence.projectCanonicalSubmitOutcomes") {
-            runtimePersistence.projectCanonicalSubmitOutcomes(projectionName, batchSize)
+            runtimePersistence.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
         }
     }
 
-    fun projectionStatus(projectionName: String): ProjectionStatus {
-        return runtimePersistence.projectionStatus(projectionName)
+    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
+        return runtimePersistence.projectionStatus(projectionName, partitions)
     }
 
     fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
