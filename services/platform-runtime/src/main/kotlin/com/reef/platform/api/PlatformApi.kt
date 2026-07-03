@@ -10,6 +10,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import java.util.concurrent.CompletableFuture
 
 class PlatformApi(
     private val orderService: OrderApplicationService = OrderApplicationService()
@@ -36,6 +37,15 @@ class PlatformApi(
         }
         return HotPathMetrics.time("api.orderService.prepareSubmitOrder") {
             orderService.prepareSubmitOrder(command)
+        }
+    }
+
+    fun prepareSubmitOrderAsync(body: String): CompletableFuture<PersistableSubmitOutcome> {
+        val command = HotPathMetrics.time("api.parse.submitOrder") {
+            PlatformCommandParsers.submitOrder(body)
+        }
+        return HotPathMetrics.time("api.orderService.prepareSubmitOrderAsync") {
+            orderService.prepareSubmitOrderAsync(command)
         }
     }
 

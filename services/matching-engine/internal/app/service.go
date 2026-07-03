@@ -1,8 +1,8 @@
 package app
 
 import (
+	"container/heap"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,12 +20,14 @@ type Service struct {
 type restingOrder struct {
 	OrderID    string
 	LimitPrice int64
+	Sequence   int64
 }
 
 type orderBook struct {
-	mu    sync.Mutex
-	buys  []*restingOrder
-	sells []*restingOrder
+	mu           sync.Mutex
+	nextSequence int64
+	buys         orderQueue
+	sells        orderQueue
 }
 
 type orderRecord struct {
@@ -38,6 +40,11 @@ type orderRecord struct {
 	Currency          string
 	Status            domain.OrderStatus
 	LastUpdatedAt     string
+}
+
+type orderQueue struct {
+	orders []*restingOrder
+	side   domain.Side
 }
 
 type Option func(*Service)
@@ -114,17 +121,17 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if !s.reserveOrder(record) {
 		return rejectedResult("evt-reject-duplicate-order-id", cmd.OrderID, "DUPLICATE_ORDER_ID", "orderId already exists", now)
 	}
-	incoming := &restingOrder{OrderID: cmd.OrderID, LimitPrice: record.LimitPrice}
+	incoming := book.newRestingOrder(cmd.OrderID, record.LimitPrice)
 
 	if record.Side == domain.SideBuy {
 		s.matchBuy(book, incoming, &result, now)
 		if record.RemainingQuantity > 0 {
-			book.buys = s.insertBuy(book.buys, incoming)
+			book.buys.push(incoming)
 		}
 	} else {
 		s.matchSell(book, incoming, &result, now)
 		if record.RemainingQuantity > 0 {
-			book.sells = s.insertSell(book.sells, incoming)
+			book.sells.push(incoming)
 		}
 	}
 
@@ -211,11 +218,11 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	s.refreshOrderStatus(record)
 
 	if record.RemainingQuantity > 0 {
-		incoming := &restingOrder{OrderID: cmd.OrderID, LimitPrice: record.LimitPrice}
+		incoming := book.newRestingOrder(cmd.OrderID, record.LimitPrice)
 		if record.Side == domain.SideBuy {
-			book.buys = s.insertBuy(book.buys, incoming)
+			book.buys.push(incoming)
 		} else {
-			book.sells = s.insertSell(book.sells, incoming)
+			book.sells.push(incoming)
 		}
 	}
 
@@ -245,10 +252,10 @@ func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
 	defer book.mu.Unlock()
 
 	if side == domain.SideBuy {
-		return len(book.buys)
+		return book.buys.len()
 	}
 
-	return len(book.sells)
+	return book.sells.len()
 }
 
 func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
@@ -277,7 +284,7 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 	if existing, ok := s.books.Load(instrumentID); ok {
 		return existing.(*orderBook)
 	}
-	book := &orderBook{}
+	book := newOrderBook()
 	actual, _ := s.books.LoadOrStore(instrumentID, book)
 	return actual.(*orderBook)
 }
@@ -288,11 +295,11 @@ func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *doma
 		return
 	}
 
-	for incomingRecord.RemainingQuantity > 0 && len(book.sells) > 0 {
-		resting := book.sells[0]
+	for incomingRecord.RemainingQuantity > 0 && book.sells.len() > 0 {
+		resting := book.sells.peek()
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok {
-			book.sells = book.sells[1:]
+			book.sells.pop()
 			continue
 		}
 		if incomingRecord.LimitPrice < restingRecord.LimitPrice {
@@ -310,7 +317,7 @@ func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *doma
 		s.refreshOrderStatus(incomingRecord)
 		s.refreshOrderStatus(restingRecord)
 		if restingRecord.RemainingQuantity == 0 {
-			book.sells = book.sells[1:]
+			book.sells.pop()
 		}
 	}
 }
@@ -321,11 +328,11 @@ func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *dom
 		return
 	}
 
-	for incomingRecord.RemainingQuantity > 0 && len(book.buys) > 0 {
-		resting := book.buys[0]
+	for incomingRecord.RemainingQuantity > 0 && book.buys.len() > 0 {
+		resting := book.buys.peek()
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok {
-			book.buys = book.buys[1:]
+			book.buys.pop()
 			continue
 		}
 		if incomingRecord.LimitPrice > restingRecord.LimitPrice {
@@ -343,7 +350,7 @@ func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *dom
 		s.refreshOrderStatus(incomingRecord)
 		s.refreshOrderStatus(restingRecord)
 		if restingRecord.RemainingQuantity == 0 {
-			book.buys = book.buys[1:]
+			book.buys.pop()
 		}
 	}
 }
@@ -409,31 +416,93 @@ func minInt64(a int64, b int64) int64 {
 	return b
 }
 
-func (s *Service) insertBuy(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
-	// Price-time priority: higher bid first, FIFO at equal price.
-	idx := sort.Search(len(existing), func(i int) bool {
-		return existing[i].LimitPrice < incoming.LimitPrice
-	})
-	return insertAt(existing, incoming, idx)
-}
-
-func (s *Service) insertSell(existing []*restingOrder, incoming *restingOrder) []*restingOrder {
-	// Price-time priority: lower ask first, FIFO at equal price.
-	idx := sort.Search(len(existing), func(i int) bool {
-		return existing[i].LimitPrice > incoming.LimitPrice
-	})
-	return insertAt(existing, incoming, idx)
-}
-
-func insertAt[T any](existing []T, incoming T, idx int) []T {
-	if idx < 0 || idx > len(existing) {
-		idx = len(existing)
+func newOrderBook() *orderBook {
+	return &orderBook{
+		buys:  newOrderQueue(domain.SideBuy),
+		sells: newOrderQueue(domain.SideSell),
 	}
-	var zero T
-	existing = append(existing, zero)
-	copy(existing[idx+1:], existing[idx:])
-	existing[idx] = incoming
-	return existing
+}
+
+func (book *orderBook) newRestingOrder(orderID string, limitPrice int64) *restingOrder {
+	sequence := book.nextSequence
+	book.nextSequence++
+	return &restingOrder{
+		OrderID:    orderID,
+		LimitPrice: limitPrice,
+		Sequence:   sequence,
+	}
+}
+
+func newOrderQueue(side domain.Side) orderQueue {
+	queue := orderQueue{
+		orders: make([]*restingOrder, 0),
+		side:   side,
+	}
+	heap.Init(&queue)
+	return queue
+}
+
+func (q orderQueue) Len() int {
+	return len(q.orders)
+}
+
+func (q orderQueue) Less(i int, j int) bool {
+	left := q.orders[i]
+	right := q.orders[j]
+	if left.LimitPrice == right.LimitPrice {
+		return left.Sequence < right.Sequence
+	}
+	if q.side == domain.SideBuy {
+		return left.LimitPrice > right.LimitPrice
+	}
+	return left.LimitPrice < right.LimitPrice
+}
+
+func (q orderQueue) Swap(i int, j int) {
+	q.orders[i], q.orders[j] = q.orders[j], q.orders[i]
+}
+
+func (q *orderQueue) Push(value any) {
+	q.orders = append(q.orders, value.(*restingOrder))
+}
+
+func (q *orderQueue) Pop() any {
+	n := len(q.orders)
+	item := q.orders[n-1]
+	q.orders[n-1] = nil
+	q.orders = q.orders[:n-1]
+	return item
+}
+
+func (q *orderQueue) push(order *restingOrder) {
+	heap.Push(q, order)
+}
+
+func (q *orderQueue) pop() *restingOrder {
+	if len(q.orders) == 0 {
+		return nil
+	}
+	return heap.Pop(q).(*restingOrder)
+}
+
+func (q *orderQueue) peek() *restingOrder {
+	if len(q.orders) == 0 {
+		return nil
+	}
+	return q.orders[0]
+}
+
+func (q *orderQueue) len() int {
+	return len(q.orders)
+}
+
+func (q *orderQueue) removeOrderByID(orderID string) {
+	for idx, order := range q.orders {
+		if order.OrderID == orderID {
+			heap.Remove(q, idx)
+			return
+		}
+	}
 }
 
 func parsePositiveInt(value string) (int64, bool) {
@@ -458,19 +527,10 @@ func rejectedResult(eventID string, orderID string, code string, reason string, 
 
 func (s *Service) removeRestingOrder(book *orderBook, record *orderRecord) {
 	if record.Side == domain.SideBuy {
-		book.buys = removeOrderByID(book.buys, record.OrderID)
+		book.buys.removeOrderByID(record.OrderID)
 		return
 	}
-	book.sells = removeOrderByID(book.sells, record.OrderID)
-}
-
-func removeOrderByID(existing []*restingOrder, orderID string) []*restingOrder {
-	for idx, order := range existing {
-		if order.OrderID == orderID {
-			return append(existing[:idx], existing[idx+1:]...)
-		}
-	}
-	return existing
+	book.sells.removeOrderByID(record.OrderID)
 }
 
 func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {

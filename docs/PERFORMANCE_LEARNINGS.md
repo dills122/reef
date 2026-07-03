@@ -82,6 +82,45 @@ Clean DO run: `reports/do-benchmark/do-benchmark-20260703T195008Z`
 
 Conclusion: this stack preserved correctness semantics better than the older path, but it is not a credible base for the `2k/sec` with headroom target. Further work should pivot to a new design rather than continue incremental stream-ack/Postgres projection tuning.
 
+## Matching/Runtime No-DB Checkpoint (July 3, 2026)
+
+After isolating DB writes with `RUNTIME_PERSISTENCE=noop`, the matching engine itself is no longer the current limiter for multi-instrument submit-only runs.
+
+Engine-only evidence:
+
+- `reports/matching-engine-load/resting-15k-30s-heap/summary.json`
+- scenario: `resting-book`, `16` instruments, `15000 rps`, `30s`
+- result: `450000` processed, `15000.17/sec`, `0` failures, `p95=4us`, `p99=7us`
+
+Full no-DB runtime evidence:
+
+- `/tmp/reef-runtime-nodb-grpc-stream-multi-15k-30s-heap/runtime-nodb-grpc-stream-multi-15k-30s-heap-rate-15000-workers-512.json`
+- config: `ENGINE_TRANSPORT=grpc-stream`, `16` stream lanes, `512` load workers, `30s`
+- result: `12269.28/sec`, `100%` success, `p95=80.52ms`, `p99=103.15ms`, `runtime.engine.submit avg=4.30ms`
+- raising `PLATFORM_HTTP_THREADS` from `64` to `80` did not materially improve throughput and increased engine wait to about `5.09ms`
+
+Accepted-async no-DB evidence:
+
+- `/tmp/reef-runtime-nodb-accepted-async-15k-30s/runtime-nodb-accepted-async-15k-30s-rate-15000-workers-512.json`
+- config: `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async`, `ENGINE_TRANSPORT=grpc-stream`, `16` stream lanes, `512` load workers, `30s`
+- result: `10033.86/sec`, `100%` success, all responses `202`, `p95=91.48ms`, `p99=116.96ms`, `api.mutation.total avg=0.267ms`
+- worker telemetry showed the first one-at-a-time lane worker shape accepted faster than it drained: `received=280170`, `completed=71691`, `queued=208469`, `backpressured=0`
+- an oversized pipelined worker window (`EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=256`) raised acceptance to about `12042.35/sec` in a 15s run, but inflated `runtime.engine.submit avg` to `65.23ms`; this is stream flooding, not matching-engine compute
+- after Compose was updated to pass accepted-async tuning into the container, 15s `15000 rps` sweeps showed:
+  - window `16`: `8726.23/sec`, `p95=106.88ms`, `runtime.engine.submit avg=16.68ms`
+  - window `64`: `10323.06/sec`, `p95=92.91ms`, `runtime.engine.submit avg=37.66ms`
+  - window `128`: `10319.32/sec`, `p95=91.67ms`, `runtime.engine.submit avg=72.13ms`
+- raising load workers from `512` to `1024` at the selected `64` window reduced throughput to `8320.41/sec` and raised `p95` to `236.84ms`, so the remaining accepted-async ceiling is not simply too few load-generator workers
+- default accepted-async in-flight is therefore `64` per lane for the current no-DB isolation path; `128` did not improve accept throughput and materially worsened engine wait
+
+Immediate implications:
+
+1. Keep the heap-backed price-time book structure; sorted-slice resting-order insertion is not a safe base for growing-book stress.
+2. Do not keep tuning HTTP thread count as the main path to `15k/sec`; the synchronous request/response runtime-to-engine path is the remaining no-DB ceiling.
+3. Accepted-async proves the API hot path can stop waiting on engine completion, but the local JDK `HttpServer`/load-generator boundary still tops out around `10k-12k/sec` on this workstation before the background engine workers become the only limiter.
+4. Keep accepted-async worker in-flight bounded. The Compose/runtime defaults now expose `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64`; tune from there with telemetry instead of using unbounded or very large stream windows.
+5. The next non-DB architecture move should either replace the JDK `HttpServer`/sync handler shape with a measured async runtime boundary, or move the no-DB stress harness closer to the runtime process to separate HTTP front-door capacity from command lifecycle capacity.
+
 ## Stream-Ack Post-Soak Optimization Priorities
 
 This section is retained as historical context from before the sunset checkpoint above. Do not treat it as the active delivery path.

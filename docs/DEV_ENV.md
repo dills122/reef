@@ -320,6 +320,22 @@ This profile is for bottleneck isolation only. It starts the normal local runtim
 
 `noop` runtime persistence keeps reference/auth setup data so validation and authorization still run, but it drops submit outcomes, orders, executions, trades, lifecycle events, canonical rows, and projections. The default no-DB stress wrapper disables trace checks with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test. It also defaults to `DEV_STRESS_RATE_SCHEDULE=precise` and `DEV_STRESS_RATE_QUEUE_DEPTH=200000` so generated-load accounting is visible during ceiling tests.
 
+Transport comparison knobs:
+
+- `ENGINE_TRANSPORT=grpc` uses unary gRPC for runtime-to-engine calls.
+- `ENGINE_TRANSPORT=grpc-stream` uses experimental submit-order lanes with persistent bidirectional gRPC streams. The current proof path streams submit commands and keeps cancel/modify on unary gRPC.
+- `ENGINE_GRPC_STREAM_LANES=16` sets the number of runtime submit lanes. Commands currently route by `instrumentId`; this should evolve to `venueSessionId + instrumentId` when the runtime command model carries venue session directly.
+- `ENGINE_GRPC_STREAM_QUEUE_CAPACITY=100000` sets each lane in-flight capacity.
+
+Accepted-async no-DB isolation knobs:
+
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async` makes submit-order intake return a `202` command receipt after validation, idempotency reservation, and in-memory lane enqueue. It does not provide durable acceptance and is benchmark-only unless paired with a durable ingress design.
+- `EXTERNAL_API_ACCEPTED_ASYNC_LANES=16` sets in-memory worker lanes. Submit commands route by `instrumentId` to preserve per-instrument order.
+- `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000` sets per-lane queued command capacity.
+- `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64` bounds concurrent engine submissions per lane. Raising it can inflate engine wait time by flooding the gRPC stream.
+- `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`.
+- `GET /internal/commands/async/stats` includes an `acceptedAsync` block with queued, processing, completed, failed, duplicate, and backpressure counters.
+
 Each stress report includes `hotPathPhases.phases` from `/internal/perf/hot-path`. For no-DB sync-result runs, start with `api.mutation.total`, `api.operation`, `api.parse.submitOrder`, `runtime.submitOrder.total`, `runtime.engine.submit`, `runtime.persistence.persistSubmitOutcome`, `api.response.serializeSubmitOrder`, and `api.writeResponse`. `runtime.engine.submit` measures the platform runtime gateway call to the engine, including transport and response parsing; compare it against the matching-engine-only harness before attributing that time to matching logic itself.
 
 Use this comparison ladder when isolating throughput collapse:
@@ -557,12 +573,13 @@ Compose sets:
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, durable request payloads in `command_log.command_payloads`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
 - command-log payload mode: `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table|inline` (default `side-table`). `side-table` keeps hot command metadata rows narrow while retaining the full durable request payload for worker replay.
 - runtime role: `PLATFORM_RUNTIME_ROLE=api|worker|projector`. Compose sets this per service; there is no all-in-one runtime role.
-- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack` (default `sync-result`; captured modes require command-log capture, and `stream-ack` requires JetStream)
+- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
 - async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`
 - async command worker runtime pool: `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true` makes captured-ack workers execute through a separate `async-runtime` persistence pool. The dev default is `false` because captured-ack intake no longer uses runtime persistence on the hot accept path; turn it on for isolation A/B runs.
 - async command worker lease: claimed `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`; this prevents runtime restarts from permanently stranding in-flight commands.
 - async command worker stats: `GET /internal/commands/async/stats` returns worker settings, active queue status counts from `command_log.command_work_queue`, and async claim/complete/fail counters. Postgres mode does not count historical terminal results on this hot probe.
+- accepted-async tuning: `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, and `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` tune the in-memory no-DB accepted-async isolation path.
 - DB pool stats: `GET /internal/perf/db-pools` returns Hikari pool name plus active/idle/total/waiter counts for runtime-managed pools.
 - DB pool sizing: `RUNTIME_DB_POOL_MAX` and `RUNTIME_DB_POOL_MIN_IDLE` are global defaults. Named hot-path pools apply conservative role defaults so those values do not multiply directly across every pool. Override individual pools with `RUNTIME_DB_POOL_<POOL>_MAX` and `RUNTIME_DB_POOL_<POOL>_MIN_IDLE`, where `<POOL>` is the uppercase pool id with punctuation converted to underscores, such as `COMMAND_LOG` or `ASYNC_RUNTIME`.
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`

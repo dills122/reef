@@ -139,6 +139,12 @@ class PlatformHttpServer(
     private val streamDrainBackpressureSamplerStarted = AtomicBoolean(false)
     private val streamCommandPublicationMarker: StreamCommandPublicationMarker? =
         streamCommandPublicationMarker(streamCommandIntakeStore, streamCommandMarkPublishedMode, runtimeRole)
+    private val acceptedAsyncCommandIntake: AcceptedAsyncCommandIntake? =
+        if (runtimeRole.publicHttpEnabled && commandProcessingMode == CommandProcessingMode.AcceptedAsync) {
+            AcceptedAsyncCommandIntake(api)
+        } else {
+            null
+        }
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
         buildStreamCommandDrainBackpressureSampler()
     }
@@ -479,6 +485,9 @@ class PlatformHttpServer(
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
         }
+        if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.AcceptedAsync) {
+            acceptedAsyncCommandIntake?.start()
+        }
         println("platform-runtime role=${runtimeRole.configValue} listening on :$port")
         return server
     }
@@ -661,6 +670,11 @@ class PlatformHttpServer(
         }
         if (validationError != null) {
             writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
+            return
+        }
+
+        if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
+            handleAcceptedAsyncMutation(exchange, route, clientId, idempotencyKey, correlationId, body)
             return
         }
 
@@ -914,6 +928,73 @@ class PlatformHttpServer(
         }
     }
 
+    private fun handleAcceptedAsyncMutation(
+        exchange: HttpExchange,
+        route: String,
+        clientId: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String
+    ) {
+        val intake = acceptedAsyncCommandIntake
+        if (intake == null) {
+            writeJson(exchange, 503, simpleErrorJson("accepted async intake unavailable"))
+            return
+        }
+
+        val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
+        if (existing != null) {
+            writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existing, correlationId)
+            return
+        }
+
+        val abuseViolation = HotPathMetrics.time("api.abuse.allow") {
+            abuseProtectionHook.allow(clientId, route)
+        }
+        if (abuseViolation != null) {
+            writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            return
+        }
+
+        val receipt = try {
+            HotPathMetrics.time("api.acceptedAsync.reserve") {
+                intake.enqueueSubmit(clientId, route, idempotencyKey, correlationId, body)
+            }
+        } catch (ex: Exception) {
+            val errorClass = ex::class.simpleName ?: "Exception"
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "accepted_async_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId errorClass=$errorClass message=${JsonFields.escape(errorMessage)}"
+            )
+            writeJson(exchange, 503, simpleErrorJson("accepted async unavailable", errorMessage))
+            return
+        }
+
+        if (receipt.duplicate) {
+            writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, receipt.status, correlationId)
+            return
+        }
+        if (receipt.backpressure) {
+            writeJson(
+                exchange,
+                429,
+                boundary.toErrorJson(
+                    BoundaryError(429, "COMMAND_INTAKE_BACKPRESSURE", "accepted async lane queue is full"),
+                    correlationId
+                )
+            )
+            return
+        }
+
+        val status = receipt.status
+        if (!receipt.accepted || status == null) {
+            writeJson(exchange, 503, simpleErrorJson("accepted async command not accepted"))
+            return
+        }
+
+        writeJson(exchange, 202, CommandStatusResponse.acceptedJson(status))
+    }
+
     private fun markStreamCommandPublished(commandId: String, streamSequence: Long) {
         val marker = streamCommandPublicationMarker ?: return
         if (streamCommandMarkPublishedMode.trim().lowercase() == "async") {
@@ -946,7 +1027,7 @@ class PlatformHttpServer(
             writeJson(exchange, status.responseStatus, status.responsePayloadJson)
             return
         }
-        if (status != null && commandProcessingMode == CommandProcessingMode.CapturedAck) {
+        if (status != null && commandProcessingMode in setOf(CommandProcessingMode.CapturedAck, CommandProcessingMode.AcceptedAsync)) {
             val payload = CommandStatusResponse.acceptedJson(status)
             writeJson(exchange, 202, payload)
             return
@@ -975,7 +1056,7 @@ class PlatformHttpServer(
             methodNotAllowed(exchange)
             return
         }
-        val lookup = commandStatusLookup
+        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
         if (lookup == null) {
             writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
             return
@@ -1029,6 +1110,7 @@ class PlatformHttpServer(
     }
 
     private fun asyncCommandStatsJson(): String {
+        val acceptedAsyncStats = acceptedAsyncCommandIntake?.stats()
         val queueCounts = capturedCommandQueue
             ?.statusCounts()
             ?.mapKeys { (status, _) -> status.name }
@@ -1043,6 +1125,27 @@ class PlatformHttpServer(
             "workerThreads" to asyncCommandWorkerThreads,
             "batchSize" to asyncCommandWorkerBatchSize,
             "pollIntervalMs" to asyncCommandWorkerPollMs,
+            "acceptedAsync" to if (acceptedAsyncStats == null) {
+                mapOf("enabled" to false)
+            } else {
+                mapOf(
+                    "enabled" to acceptedAsyncStats.enabled,
+                    "laneCount" to acceptedAsyncStats.laneCount,
+                    "queueCapacityPerLane" to acceptedAsyncStats.queueCapacityPerLane,
+                    "inFlightPerLane" to acceptedAsyncStats.inFlightPerLane,
+                    "queued" to acceptedAsyncStats.queued,
+                    "maxLaneDepth" to acceptedAsyncStats.maxLaneDepth,
+                    "received" to acceptedAsyncStats.received,
+                    "duplicates" to acceptedAsyncStats.duplicates,
+                    "backpressured" to acceptedAsyncStats.backpressured,
+                    "processing" to acceptedAsyncStats.processing,
+                    "completed" to acceptedAsyncStats.completed,
+                    "failed" to acceptedAsyncStats.failed,
+                    "lastReceivedAt" to acceptedAsyncStats.lastReceivedAt,
+                    "lastCompletedAt" to acceptedAsyncStats.lastCompletedAt,
+                    "lastFailedAt" to acceptedAsyncStats.lastFailedAt
+                )
+            },
             "intakeBackpressure" to mapOf(
                 "maxActiveCommands" to commandIntakeMaxActive,
                 "maxStaleProcessing" to commandIntakeMaxStaleProcessing,

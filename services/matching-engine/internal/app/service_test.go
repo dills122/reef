@@ -437,19 +437,13 @@ func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 }
 
 func TestInsertBuyPriceTimePriority(t *testing.T) {
-	service := NewService()
-	orders := []*restingOrder{
-		{OrderID: "b1", LimitPrice: 101},
-		{OrderID: "b2", LimitPrice: 100},
-	}
+	orders := newOrderQueue(domain.SideBuy)
+	orders.push(&restingOrder{OrderID: "b1", LimitPrice: 101, Sequence: 0})
+	orders.push(&restingOrder{OrderID: "b2", LimitPrice: 100, Sequence: 1})
+	orders.push(&restingOrder{OrderID: "b3", LimitPrice: 102, Sequence: 2})
+	orders.push(&restingOrder{OrderID: "b4", LimitPrice: 100, Sequence: 3})
 
-	orders = service.insertBuy(orders, &restingOrder{OrderID: "b3", LimitPrice: 102})
-	if orders[0].OrderID != "b3" {
-		t.Fatalf("expected highest bid first, got %#v", orders)
-	}
-
-	orders = service.insertBuy(orders, &restingOrder{OrderID: "b4", LimitPrice: 100})
-	ids := []string{orders[0].OrderID, orders[1].OrderID, orders[2].OrderID, orders[3].OrderID}
+	ids := []string{orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID}
 	expected := []string{"b3", "b1", "b2", "b4"}
 	for i := range expected {
 		if ids[i] != expected[i] {
@@ -459,19 +453,13 @@ func TestInsertBuyPriceTimePriority(t *testing.T) {
 }
 
 func TestInsertSellPriceTimePriority(t *testing.T) {
-	service := NewService()
-	orders := []*restingOrder{
-		{OrderID: "s1", LimitPrice: 100},
-		{OrderID: "s2", LimitPrice: 101},
-	}
+	orders := newOrderQueue(domain.SideSell)
+	orders.push(&restingOrder{OrderID: "s1", LimitPrice: 100, Sequence: 0})
+	orders.push(&restingOrder{OrderID: "s2", LimitPrice: 101, Sequence: 1})
+	orders.push(&restingOrder{OrderID: "s3", LimitPrice: 99, Sequence: 2})
+	orders.push(&restingOrder{OrderID: "s4", LimitPrice: 101, Sequence: 3})
 
-	orders = service.insertSell(orders, &restingOrder{OrderID: "s3", LimitPrice: 99})
-	if orders[0].OrderID != "s3" {
-		t.Fatalf("expected lowest ask first, got %#v", orders)
-	}
-
-	orders = service.insertSell(orders, &restingOrder{OrderID: "s4", LimitPrice: 101})
-	ids := []string{orders[0].OrderID, orders[1].OrderID, orders[2].OrderID, orders[3].OrderID}
+	ids := []string{orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID}
 	expected := []string{"s3", "s1", "s2", "s4"}
 	for i := range expected {
 		if ids[i] != expected[i] {

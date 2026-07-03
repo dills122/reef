@@ -7,7 +7,7 @@ setValue("RUNTIME_PERSISTENCE", "noop");
 setValue("EXTERNAL_API_IDEMPOTENCY_STORE", "inmemory");
 setValue("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setValue("EXTERNAL_API_COMMAND_LOG_MODE", "disabled");
-setValue("EXTERNAL_API_COMMAND_PROCESSING_MODE", "sync-result");
+setDefault("EXTERNAL_API_COMMAND_PROCESSING_MODE", "sync-result");
 setValue("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", "false");
 setValue("STREAM_ACK_INTAKE_STORE", "inmemory");
 setValue("STREAM_ACK_WORKER_ENABLED", "false");
@@ -28,4 +28,10 @@ await devUp();
 
 function setValue(name, value) {
   process.env[name] = value;
+}
+
+function setDefault(name, value) {
+  if (!process.env[name]) {
+    process.env[name] = value;
+  }
 }

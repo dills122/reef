@@ -4,7 +4,8 @@ enum class CommandProcessingMode(val configValue: String) {
     SyncResult("sync-result"),
     CapturedSyncEngine("captured-sync-engine"),
     CapturedAck("captured-ack"),
-    StreamAck("stream-ack");
+    StreamAck("stream-ack"),
+    AcceptedAsync("accepted-async");
 
     companion object {
         fun from(raw: String?): CommandProcessingMode {

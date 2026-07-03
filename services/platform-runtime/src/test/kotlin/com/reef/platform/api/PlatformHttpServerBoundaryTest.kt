@@ -1,11 +1,14 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.Permission
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
@@ -833,6 +836,74 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun acceptedAsyncSubmitReturnsReceiptBeforeEngineCompletes() {
+        val gateway = BlockingFirstSubmitGateway()
+        val server = testServerWithGateway(
+            gateway = gateway,
+            commandProcessingMode = CommandProcessingMode.AcceptedAsync
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-accepted-async",
+                    "Idempotency-Key" to "idem-accepted-async"
+                ),
+                body = validSubmitBody("cmd-accepted-async", "trace-accepted-async", "ord-accepted-async")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-accepted-async")
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-accepted-async\"")
+            assertContains(response.body, "\"processingMode\":\"accepted-async\"")
+            assertTrue(gateway.awaitFirstSubmit())
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"processingMode\":\"accepted-async\"")
+            assertTrue(status.body.contains("\"status\":\"RECEIVED\"") || status.body.contains("\"status\":\"PROCESSING\""))
+
+            gateway.release()
+            val completed = waitForCommandStatus(server.address.port, "cmd-accepted-async", "COMPLETED")
+            assertContains(completed.body, "\"status\":\"COMPLETED\"")
+            assertContains(completed.body, "\"responseStatus\":200")
+        } finally {
+            gateway.release()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun acceptedAsyncStatsEndpointReportsLaneDrain() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.AcceptedAsync
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-accepted-async-stats",
+                    "Idempotency-Key" to "idem-accepted-async-stats"
+                ),
+                body = validSubmitBody("cmd-accepted-async-stats", "trace-accepted-async-stats", "ord-accepted-async-stats")
+            )
+            waitForCommandStatus(server.address.port, "cmd-accepted-async-stats", "COMPLETED")
+            val stats = get(server.address.port, "/internal/commands/async/stats")
+
+            assertEquals(202, response.status)
+            assertEquals(200, stats.status)
+            assertContains(stats.body, "\"processingMode\":\"accepted-async\"")
+            assertContains(stats.body, "\"acceptedAsync\"")
+            assertContains(stats.body, "\"enabled\":true")
+            assertContains(stats.body, "\"received\":1")
+            assertContains(stats.body, "\"completed\":1")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun commandAccountingEndpointReturnsRunScopedCounts() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1543,6 +1614,7 @@ class PlatformHttpServerBoundaryTest {
         streamCommandBackpressureSampleMs: Long = 100L
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
         if (seedOrderAuthorization) {
             seedOrderAuthorization(
                 persistence,
@@ -1598,6 +1670,18 @@ class PlatformHttpServerBoundaryTest {
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream.bufferedReader().readText()
         return HttpResponse(connection.responseCode, text)
+    }
+
+    private fun waitForCommandStatus(port: Int, commandId: String, status: String): HttpResponse {
+        var last = get(port, "/api/v1/commands/$commandId")
+        repeat(50) {
+            if (last.status == 200 && last.body.contains("\"status\":\"$status\"")) {
+                return last
+            }
+            Thread.sleep(20)
+            last = get(port, "/api/v1/commands/$commandId")
+        }
+        return last
     }
 
     private fun validSubmitBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
@@ -1704,6 +1788,12 @@ class PlatformHttpServerBoundaryTest {
                 body = """{"actorId":"$actorId","roleId":"order_trader"}"""
             )
         }
+    }
+
+    private fun seedOrderReferenceData(persistence: InMemoryRuntimePersistence) {
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
     }
 
     private fun seedOrderAuthorization(persistence: InMemoryRuntimePersistence, vararg actorIds: String) {

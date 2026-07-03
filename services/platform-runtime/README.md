@@ -27,7 +27,7 @@ Current state:
 - query endpoints for orders, trades, events, and trace timelines
 - transport path to the Go matching engine over HTTP or gRPC
 - unit-testable API and application layers
-- runtime-to-engine transport selection (`ENGINE_TRANSPORT=http|grpc`)
+- runtime-to-engine transport selection (`ENGINE_TRANSPORT=http|grpc|grpc-stream`)
 
 Current persistence caveat:
 
@@ -48,7 +48,9 @@ GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
 Transport config:
 
 - `ENGINE_TRANSPORT=grpc` (Docker dev default; real gRPC client path to matching-engine)
+- `ENGINE_TRANSPORT=grpc-stream` (experimental submit-order lane transport using persistent bidirectional gRPC streams; cancel/modify fall back to unary gRPC)
 - `ENGINE_TRANSPORT=http` (legacy HTTP client path, useful for A/B comparisons)
+- `ENGINE_GRPC_STREAM_LANES=16` and `ENGINE_GRPC_STREAM_QUEUE_CAPACITY=100000` tune the experimental stream transport lanes and per-lane in-flight capacity.
 - `MATCHING_ENGINE_BASE_URL` for HTTP transport (default `http://localhost:8081`)
 - `MATCHING_ENGINE_GRPC_TARGET` for gRPC transport target (default `localhost:9081`)
 - `ENGINE_GRPC_DEADLINE_MS` for runtime-to-engine gRPC command deadlines (default `2000`)
@@ -73,7 +75,8 @@ External boundary config:
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)
-- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack` (default `sync-result`; captured modes require command-log capture)
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
+- `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, and `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` tune the no-DB accepted-async submit intake. The default in-flight window is `64` per lane to avoid flooding the engine stream.
 - `RUNTIME_PERSISTENCE=inmemory|postgres|noop` (`noop` is benchmark-only: keeps reference/auth setup data but drops command outcomes, orders, trades, events, canonical facts, and projections)
 - `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true|false` (code default `false`; local compose default `true`; legacy mutation and reference-data POST routes also require `X-Reef-Internal-Route: true`)
 - `RUNTIME_DB_BOOTSTRAP_MODE=compat|validate` (Docker/local default `validate`; use `compat` only for local repair/debug)
