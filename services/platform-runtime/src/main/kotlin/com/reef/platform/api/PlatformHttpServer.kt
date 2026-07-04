@@ -11,6 +11,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
+import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -71,6 +72,7 @@ class PlatformHttpServer(
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+    private val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
@@ -201,6 +203,7 @@ class PlatformHttpServer(
         api = api,
         boundary = deps.boundary,
         abuseProtectionHook = deps.abuseProtectionHook,
+        accountRiskCheck = deps.accountRiskCheck,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
@@ -736,6 +739,14 @@ class PlatformHttpServer(
             }
         }
 
+        val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
+            return
+        }
+
         val reservation = try {
             HotPathMetrics.time("api.commandCapture.reserve") {
                 commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
@@ -899,6 +910,13 @@ class PlatformHttpServer(
             if (backpressure != null) {
                 return PlatformHotPathResponse(backpressure.status, boundary.toErrorJson(backpressure, correlationId))
             }
+        }
+
+        val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            return PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
         }
 
         val reservation = try {
@@ -1143,6 +1161,16 @@ class PlatformHttpServer(
             is EitherBoundaryError.Envelope -> envelopeResult.envelope
         }
 
+        val riskViolation = HotPathMetrics.time("api.streamAck.accountRisk") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+        }
+        if (riskViolation != null) {
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
+            )
+        }
+
         val abuseViolation = HotPathMetrics.time("api.streamAck.abuse") {
             abuseProtectionHook.allow(clientId, route)
         }
@@ -1254,6 +1282,61 @@ class PlatformHttpServer(
         return CompletableFuture.completedFuture(response)
     }
 
+    private fun accountRiskViolation(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope? = null
+    ): BoundaryError? {
+        val request = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+        return accountRiskCheck.evaluate(request).toBoundaryError()
+    }
+
+    private fun accountRiskRequest(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope?
+    ): AccountRiskCheckRequest {
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val commandType = envelope?.commandType ?: commandType(route)
+        return AccountRiskCheckRequest(
+            clientId = clientId,
+            route = route,
+            commandType = commandType,
+            commandId = envelope?.commandId ?: json.string("commandId"),
+            idempotencyKey = idempotencyKey,
+            correlationId = correlationId,
+            actorId = envelope?.actorId ?: json.string("actorId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId"),
+            botId = envelope?.botId ?: json.string("botId"),
+            runId = envelope?.runId ?: json.string("runId").ifBlank { json.string("scenarioRunId") },
+            venueSessionId = envelope?.venueSessionId ?: json.string("venueSessionId"),
+            instrumentId = envelope?.instrumentId ?: json.string("instrumentId"),
+            orderId = envelope?.orderId ?: json.string("orderId"),
+            payloadHash = envelope?.payloadHash ?: sha256Hex(body)
+        )
+    }
+
+    private fun commandType(route: String): String {
+        return when {
+            route.endsWith("/orders/submit") -> "SubmitOrder"
+            route.endsWith("/orders/cancel") -> "CancelOrder"
+            route.endsWith("/orders/modify") -> "ModifyOrder"
+            else -> "UnknownCommand"
+        }
+    }
+
+    private fun sha256Hex(value: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
     private fun handleAcceptedAsyncMutation(
         exchange: HttpExchange,
         route: String,
@@ -1271,6 +1354,14 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existing, correlationId)
+            return
+        }
+
+        val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
             return
         }
 
@@ -1334,6 +1425,13 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existing, correlationId)
+        }
+
+        val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            return PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
         }
 
         val abuseViolation = HotPathMetrics.time("api.abuse.allow") {
@@ -2129,6 +2227,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
             rateLimitHook = hooks.rateLimitHook
         ),
         abuseProtectionHook = hooks.abuseProtectionHook,
+        accountRiskCheck = hooks.accountRiskCheck,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
@@ -2149,6 +2248,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
 data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
     val abuseProtectionHook: AbuseProtectionHook,
+    val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,

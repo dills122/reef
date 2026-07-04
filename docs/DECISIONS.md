@@ -26,7 +26,8 @@ Status: accepted
 
 Summary:
 - User-facing APIs are versioned under `/api/v1`.
-- Boundary concerns (auth hook, idempotency, rate limits, validation, error envelope) are explicit architecture requirements.
+- Boundary concerns (auth hook, idempotency, rate limits, validation, account/bot risk pre-check, error envelope) are explicit architecture requirements.
+- Account/bot risk pre-checks run before durable command acceptance. Non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages; the first implementation is allow-all/static and must not perform projection reads or heavy synchronous exposure scans on the hot path.
 - Internal runtime/engine service contracts are not treated as public client contracts.
 
 Primary references:
