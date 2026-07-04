@@ -32,6 +32,19 @@ private data class CachedStreamCommandDrainBackpressureSnapshot(
     val snapshot: StreamCommandDrainBackpressureSnapshot
 )
 
+private data class PreparedApiV1Mutation(
+    val route: String,
+    val clientId: String,
+    val idempotencyKey: String,
+    val correlationId: String,
+    val body: String
+)
+
+private sealed class PreparedApiV1MutationResult {
+    data class Prepared(val request: PreparedApiV1Mutation) : PreparedApiV1MutationResult()
+    data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
+}
+
 private fun streamCommandPublicationMarker(
     store: StreamCommandIntakeStore?,
     mode: String,
@@ -840,36 +853,14 @@ class PlatformHttpServer(
         route: String,
         operation: (String) -> String
     ): PlatformHotPathResponse {
-        if (request.method != "POST") {
-            return methodNotAllowedResponse()
+        val prepared = when (val result = prepareApiV1MutationRequest(request, route)) {
+            is PreparedApiV1MutationResult.Prepared -> result.request
+            is PreparedApiV1MutationResult.Rejected -> return result.response
         }
-        if (request.body.toByteArray().size > maxRequestBodyBytes) {
-            return PlatformHotPathResponse(
-                413,
-                JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
-            )
-        }
-
-        val violation = HotPathMetrics.time("api.boundary.checkWrite") {
-            boundary.checkWrite(request.headers, route)
-        }
-        val correlationId = correlationId(request.headers)
-        if (violation != null) {
-            return PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId))
-        }
-
-        val clientId = boundary.clientId(request.headers).orEmpty()
-        val idempotencyKey = boundary.idempotencyKey(request.headers).orEmpty()
-        val body = request.body
-        val validationError = HotPathMetrics.time("api.command.validate") {
-            PlatformCommandParsers.validateApiV1Command(route, body)
-        }
-        if (validationError != null) {
-            return PlatformHotPathResponse(
-                400,
-                boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
-            )
-        }
+        val clientId = prepared.clientId
+        val idempotencyKey = prepared.idempotencyKey
+        val correlationId = prepared.correlationId
+        val body = prepared.body
 
         if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
             return handleAcceptedAsyncMutationResponse(route, clientId, idempotencyKey, correlationId, body)
@@ -1017,11 +1008,28 @@ class PlatformHttpServer(
         request: PlatformHotPathRequest,
         route: String
     ): CompletableFuture<PlatformHotPathResponse> {
+        val prepared = when (val result = prepareApiV1MutationRequest(request, route)) {
+            is PreparedApiV1MutationResult.Prepared -> result.request
+            is PreparedApiV1MutationResult.Rejected -> return CompletableFuture.completedFuture(result.response)
+        }
+        return handleStreamAckMutationResponse(
+            prepared.route,
+            prepared.clientId,
+            prepared.idempotencyKey,
+            prepared.correlationId,
+            prepared.body
+        )
+    }
+
+    private fun prepareApiV1MutationRequest(
+        request: PlatformHotPathRequest,
+        route: String
+    ): PreparedApiV1MutationResult {
         if (request.method != "POST") {
-            return CompletableFuture.completedFuture(methodNotAllowedResponse())
+            return PreparedApiV1MutationResult.Rejected(methodNotAllowedResponse())
         }
         if (request.body.toByteArray().size > maxRequestBodyBytes) {
-            return CompletableFuture.completedFuture(
+            return PreparedApiV1MutationResult.Rejected(
                 PlatformHotPathResponse(
                     413,
                     JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
@@ -1034,7 +1042,9 @@ class PlatformHttpServer(
         }
         val correlationId = correlationId(request.headers)
         if (violation != null) {
-            return CompletableFuture.completedFuture(PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId)))
+            return PreparedApiV1MutationResult.Rejected(
+                PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId))
+            )
         }
 
         val clientId = boundary.clientId(request.headers).orEmpty()
@@ -1044,7 +1054,7 @@ class PlatformHttpServer(
             PlatformCommandParsers.validateApiV1Command(route, body)
         }
         if (validationError != null) {
-            return CompletableFuture.completedFuture(
+            return PreparedApiV1MutationResult.Rejected(
                 PlatformHotPathResponse(
                     400,
                     boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
@@ -1052,7 +1062,15 @@ class PlatformHttpServer(
             )
         }
 
-        return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+        return PreparedApiV1MutationResult.Prepared(
+            PreparedApiV1Mutation(
+                route = route,
+                clientId = clientId,
+                idempotencyKey = idempotencyKey,
+                correlationId = correlationId,
+                body = body
+            )
+        )
     }
 
     private fun handleStreamAckMutation(
