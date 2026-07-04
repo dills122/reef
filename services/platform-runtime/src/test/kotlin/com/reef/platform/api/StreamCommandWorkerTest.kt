@@ -443,6 +443,28 @@ class StreamCommandWorkerTest {
         assertEquals(12, consumer.streamLag)
     }
 
+    @Test
+    fun workerStopInterruptsEmptyPollSleepAndStopsThread() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = CountingAcceptedGateway(),
+                runtimePersistence = seededPersistence()
+            )
+        )
+        val worker = StreamCommandWorker(
+            source = EmptyStreamCommandSource,
+            api = api,
+            pollIntervalMs = 5_000,
+            workerName = "reef-stream-command-worker-test-stop"
+        )
+
+        worker.start()
+        worker.stop()
+
+        assertTrue(worker.awaitStopped(Duration.ofSeconds(1)))
+    }
+
     private fun seededPersistence(): InMemoryRuntimePersistence {
         return InMemoryRuntimePersistence().also { persistence ->
             persistence.saveInstrument(com.reef.platform.domain.Instrument("AAPL", "AAPL"))
@@ -483,6 +505,10 @@ class StreamCommandWorkerTest {
             }
         """.trimIndent()
     }
+}
+
+private object EmptyStreamCommandSource : StreamCommandSource {
+    override fun fetch(batchSize: Int, timeout: Duration): List<StreamCommandDelivery> = emptyList()
 }
 
 private class FixedStreamCommandSource(
