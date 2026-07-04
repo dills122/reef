@@ -45,6 +45,12 @@ private sealed class PreparedApiV1MutationResult {
     data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
 }
 
+private val apiV1OrderMutationRoutes = setOf(
+    "/api/v1/orders/submit",
+    "/api/v1/orders/modify",
+    "/api/v1/orders/cancel"
+)
+
 private fun streamCommandPublicationMarker(
     store: StreamCommandIntakeStore?,
     mode: String,
@@ -534,22 +540,23 @@ class PlatformHttpServer(
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
         return diagnosticRoutes.handle(request.method, request.path, request.query) ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
-            request.path == "/api/v1/orders/submit" -> {
-                handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body ->
-                    api.submitOrder(body)
-                }
-            }
+            request.path == "/api/v1/orders/submit" ->
+                handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }
+            request.path == "/api/v1/orders/modify" ->
+                handleApiV1MutationResponse(request, "/api/v1/orders/modify") { body -> api.modifyOrder(body) }
+            request.path == "/api/v1/orders/cancel" ->
+                handleApiV1MutationResponse(request, "/api/v1/orders/cancel") { body -> api.cancelOrder(body) }
             else -> legacySetupRoutes.handle(request)
         }
     }
 
     internal fun handleHotPathRequestAsync(request: PlatformHotPathRequest): CompletableFuture<PlatformHotPathResponse?> {
         if (
-            request.path == "/api/v1/orders/submit" &&
+            request.path in apiV1OrderMutationRoutes &&
             request.method == "POST" &&
             commandProcessingMode == CommandProcessingMode.StreamAck
         ) {
-            return handleApiV1MutationResponseAsync(request, "/api/v1/orders/submit")
+            return handleApiV1MutationResponseAsync(request, request.path)
                 .thenApply { it as PlatformHotPathResponse? }
         }
         return CompletableFuture.completedFuture(handleHotPathRequest(request))

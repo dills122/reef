@@ -1091,6 +1091,55 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun nettyHotPathStreamAckPublishesModifyAndCancelRoutes() {
+        val publisher = RecordingStreamCommandPublisher()
+        val streamPublisher = PartitionedStreamCommandPublisher(
+            delegate = publisher,
+            queueCapacityPerLane = 10,
+            maxInFlightPerLane = 1
+        )
+        val server = testNettyHotPathServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = streamPublisher
+        )
+        try {
+            val modifyCancelRoutingExtra = ""","instrumentId":"AAPL"${streamRoutingExtra()}"""
+            val modify = post(
+                port = server.port,
+                path = "/api/v1/orders/modify",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-stream",
+                    "Idempotency-Key" to "idem-netty-stream-modify"
+                ),
+                body = validModifyBody("cmd-netty-stream-modify", "trace-netty-stream-modify", "ord-netty-stream", extra = modifyCancelRoutingExtra)
+            )
+            val cancel = post(
+                port = server.port,
+                path = "/api/v1/orders/cancel",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-stream",
+                    "Idempotency-Key" to "idem-netty-stream-cancel"
+                ),
+                body = validCancelBody("cmd-netty-stream-cancel", "trace-netty-stream-cancel", "ord-netty-stream", extra = modifyCancelRoutingExtra)
+            )
+
+            assertEquals(202, modify.status, modify.body)
+            assertEquals(202, cancel.status, cancel.body)
+            assertContains(modify.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(cancel.body, "\"processingMode\":\"stream-ack\"")
+            assertEquals(
+                listOf("/api/v1/orders/modify", "/api/v1/orders/cancel"),
+                publisher.published.map { it.route }
+            )
+            assertEquals(listOf("ModifyOrder", "CancelOrder"), publisher.published.map { it.commandType })
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun commandAccountingEndpointReturnsRunScopedCounts() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
