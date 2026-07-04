@@ -1,0 +1,6 @@
+{
+  "botFiles": [
+    "hello-bot.ts",
+    "simple-market-maker.ts"
+  ]
+}

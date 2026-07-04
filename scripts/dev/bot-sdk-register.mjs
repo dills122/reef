@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -18,12 +19,19 @@ const botModule = await import(pathToFileURL(botPath).href);
 const BotClass = botModule.default;
 const botDir = dirname(botPath);
 const existingFileNames = readdirSync(botDir).filter((name) => name.endsWith(".ts"));
+const registryPath = resolve(repoRoot, "packages/bot-sdk/bot-registry.example.json");
+const registryFileNames = existsSync(registryPath)
+  ? JSON.parse(readFileSync(registryPath, "utf8")).botFiles ?? []
+  : [];
+const gitAuthorEmail = readGitAuthorEmail(botPath);
 
 const report = await qualifyBotV1({
   fileName: basename(botPath),
   source,
   BotClass,
   existingFileNames,
+  registryFileNames,
+  gitAuthorEmail,
   tickCount: 5,
   policy: defaultBotRuntimePolicyV1,
   fixtureData: {
@@ -65,4 +73,22 @@ console.log(JSON.stringify(report, null, 2));
 
 if (report.status !== "accepted") {
   process.exit(1);
+}
+
+function readGitAuthorEmail(path) {
+  const logResult = spawnSync("git", ["log", "-1", "--format=%ae", "--", path], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const logEmail = logResult.stdout.trim();
+  if (logEmail.length > 0) {
+    return logEmail;
+  }
+
+  const configResult = spawnSync("git", ["config", "user.email"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const configEmail = configResult.stdout.trim();
+  return configEmail.length > 0 ? configEmail : undefined;
 }

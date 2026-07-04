@@ -48,6 +48,7 @@ export interface BotRegistrationReportV1 {
   readonly status: BotRegistrationStatusV1;
   readonly fileName: string;
   readonly metadata?: ReefBotMetadataV1;
+  readonly gitAuthorEmail?: string;
   readonly issues: readonly BotRegistrationIssueV1[];
 }
 
@@ -73,6 +74,8 @@ export interface BotQualificationOptionsV1 {
   readonly source: string;
   readonly BotClass: ReefBotV1Constructor;
   readonly existingFileNames?: readonly string[];
+  readonly registryFileNames?: readonly string[];
+  readonly gitAuthorEmail?: string;
   readonly tickCount?: number;
   readonly policy?: Partial<BotRuntimePolicyV1>;
   readonly fixtureData?: BotFixtureDataV1;
@@ -112,6 +115,8 @@ export function validateBotRegistrationV1(options: {
   readonly source: string;
   readonly BotClass: ReefBotV1Constructor;
   readonly existingFileNames?: readonly string[];
+  readonly registryFileNames?: readonly string[];
+  readonly gitAuthorEmail?: string;
 }): BotRegistrationReportV1 {
   const issues: BotRegistrationIssueV1[] = [];
   const metadata = readMetadata(options.BotClass, issues);
@@ -122,6 +127,20 @@ export function validateBotRegistrationV1(options: {
 
   if ((options.existingFileNames ?? []).filter((name) => name === options.fileName).length > 1) {
     issues.push(errorIssue("duplicate_file_name", `Bot filename ${options.fileName} is not unique.`));
+  }
+
+  const registryFileNames = options.registryFileNames ?? [];
+  const registryDuplicates = duplicateValues(registryFileNames);
+  for (const duplicateFileName of registryDuplicates) {
+    issues.push(errorIssue("duplicate_registry_file_name", `Bot registry contains duplicate filename ${duplicateFileName}.`));
+  }
+
+  if (registryFileNames.length > 0 && !registryFileNames.includes(options.fileName)) {
+    issues.push(errorIssue("unregistered_file_name", `Bot filename ${options.fileName} is not present in the registry.`));
+  }
+
+  if (options.gitAuthorEmail !== undefined && !isBasicEmail(options.gitAuthorEmail)) {
+    issues.push(errorIssue("invalid_git_author_email", "Git author email must pass basic email syntax validation."));
   }
 
   for (const pattern of forbiddenHostedPatterns) {
@@ -138,6 +157,7 @@ export function validateBotRegistrationV1(options: {
     status: hasError(issues) ? "do_not_merge" : "accepted",
     fileName: options.fileName,
     ...(metadata === undefined ? {} : { metadata }),
+    ...(options.gitAuthorEmail === undefined ? {} : { gitAuthorEmail: options.gitAuthorEmail }),
     issues,
   };
 }
@@ -342,7 +362,24 @@ function readMetadata(BotClass: ReefBotV1Constructor, issues: BotRegistrationIss
     }
   }
 
-  if (metadata.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(metadata.email)) {
+  if (metadata.name && !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(metadata.name)) {
+    issues.push(
+      errorIssue(
+        "invalid_bot_name",
+        "Metadata name must be 3-64 characters and use lowercase letters, numbers, dots, underscores, or hyphens.",
+      ),
+    );
+  }
+
+  if (metadata.version && !isSemverLike(metadata.version)) {
+    issues.push(errorIssue("invalid_bot_version", "Metadata version must be semver-like, for example 1.0.0."));
+  }
+
+  if (metadata.sdkVersion && !isSemverLike(metadata.sdkVersion)) {
+    issues.push(errorIssue("invalid_sdk_version", "Metadata sdkVersion must be semver-like, for example 1.0.0."));
+  }
+
+  if (metadata.email && !isBasicEmail(metadata.email)) {
     issues.push(errorIssue("invalid_email", "Metadata email must pass basic email syntax validation."));
   }
 
@@ -439,4 +476,24 @@ function rateLimitDenial(message: string): BotDenialV1 {
 
 function notFoundDenial(message: string): BotDenialV1 {
   return { code: "NOT_FOUND", message };
+}
+
+function duplicateValues(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+    }
+    seen.add(value);
+  }
+  return Array.from(duplicates).sort();
+}
+
+function isBasicEmail(value: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+}
+
+function isSemverLike(value: string): boolean {
+  return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value);
 }
