@@ -1566,6 +1566,7 @@ class PlatformHttpServer(
                 mapOf(
                     "enabled" to acceptedAsyncStats.enabled,
                     "laneCount" to acceptedAsyncStats.laneCount,
+                    "activeLaneCount" to acceptedAsyncStats.activeLaneCount,
                     "queueCapacityPerLane" to acceptedAsyncStats.queueCapacityPerLane,
                     "inFlightPerLane" to acceptedAsyncStats.inFlightPerLane,
                     "queued" to acceptedAsyncStats.queued,
@@ -1578,7 +1579,18 @@ class PlatformHttpServer(
                     "failed" to acceptedAsyncStats.failed,
                     "lastReceivedAt" to acceptedAsyncStats.lastReceivedAt,
                     "lastCompletedAt" to acceptedAsyncStats.lastCompletedAt,
-                    "lastFailedAt" to acceptedAsyncStats.lastFailedAt
+                    "lastFailedAt" to acceptedAsyncStats.lastFailedAt,
+                    "lanes" to acceptedAsyncStats.lanes.map { lane ->
+                        mapOf(
+                            "lane" to lane.lane,
+                            "queued" to lane.queued,
+                            "received" to lane.received,
+                            "backpressured" to lane.backpressured,
+                            "processing" to lane.processing,
+                            "completed" to lane.completed,
+                            "failed" to lane.failed
+                        )
+                    }
                 )
             },
             "intakeBackpressure" to mapOf(
@@ -1697,14 +1709,10 @@ class PlatformHttpServer(
             return null
         }
         val workerSources = if (streamCommandMaxWorkerStreamLag > 0L) {
-            streamCommandBackpressureWorkerDurableNames().mapIndexed { index, durableName ->
+            streamCommandBackpressureWorkerDurableNames().mapIndexedNotNull { index, durableName ->
                 val partition = partitionFromDurableName(durableName) ?: index
-                NatsStreamCommandSource(
-                    config = streamCommandConfig,
-                    partition = partition,
-                    filterSubject = StreamCommandWorkerFactory.filterSubject(streamCommandConfig, partition),
-                    durableName = durableName
-                )
+                StreamCommandWorkerFactory.sourceForPartition(streamCommandConfig, partition, durableName)
+                    as? StreamCommandTelemetrySource
             }
         } else {
             emptyList()

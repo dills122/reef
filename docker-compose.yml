@@ -42,9 +42,11 @@ x-platform-runtime-environment: &platform-runtime-environment
   EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS: "${EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS:-100}"
   EXTERNAL_API_ACCEPTED_ASYNC_LANES: "${EXTERNAL_API_ACCEPTED_ASYNC_LANES:-16}"
   EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY: "${EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY:-100000}"
-  EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE: "${EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE:-64}"
+  EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE: "${EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE:-32}"
   EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS: "${EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS:-0}"
   STREAM_ACK_NATS_URL: "${STREAM_ACK_NATS_URL:-nats://nats:4222}"
+  STREAM_ACK_LOG_PROVIDER: "${STREAM_ACK_LOG_PROVIDER:-jetstream}"
+  STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS: "${STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS:-redpanda:9092}"
   STREAM_ACK_COMMAND_STREAM: "${STREAM_ACK_COMMAND_STREAM:-REEF_COMMANDS}"
   STREAM_ACK_SUBJECT_PREFIX: "${STREAM_ACK_SUBJECT_PREFIX:-reef.cmd.v1}"
   STREAM_ACK_PARTITION_COUNT: "${STREAM_ACK_PARTITION_COUNT:-64}"
@@ -430,6 +432,46 @@ services:
       nats:
         condition: service_healthy
 
+  redpanda:
+    image: redpandadata/redpanda:v26.1.1
+    container_name: reef-redpanda
+    profiles: ["redpanda"]
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "${REEF_REDPANDA_SMP:-2}"
+      - --memory
+      - "${REEF_REDPANDA_MEMORY:-2G}"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - "PLAINTEXT://0.0.0.0:9092"
+      - --advertise-kafka-addr
+      - "PLAINTEXT://redpanda:9092"
+      - --pandaproxy-addr
+      - "0.0.0.0:8082"
+      - --advertise-pandaproxy-addr
+      - "redpanda:8082"
+      - --schema-registry-addr
+      - "0.0.0.0:8081"
+    ports:
+      - "${REEF_REDPANDA_KAFKA_HOST_PORT:-9092}:9092"
+      - "${REEF_REDPANDA_PROXY_HOST_PORT:-18082}:8082"
+      - "${REEF_REDPANDA_SCHEMA_REGISTRY_HOST_PORT:-18083}:8081"
+      - "${REEF_REDPANDA_ADMIN_HOST_PORT:-19644}:9644"
+    volumes:
+      - reef-redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info --brokers=localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   jaeger:
     image: jaegertracing/all-in-one:1.58
     container_name: reef-jaeger
@@ -455,3 +497,4 @@ volumes:
   reef-boundary-postgres-data:
   reef-projection-postgres-data:
   reef-nats-data:
+  reef-redpanda-data:

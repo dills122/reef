@@ -6,7 +6,7 @@ Define the high-throughput command path Reef should move toward for bot-arena an
 
 The current Postgres `captured-ack` path is useful as a correctness baseline and fallback, but the measured local ceiling is still below the required `7500-10000` completed commands/sec per runtime + engine instance. More small tuning on the same command-log hot path is unlikely to close the gap.
 
-The target architecture uses JetStream as a durable, ordered ingress log and Postgres as the canonical venue outcome/event store.
+The accepted target architecture uses JetStream as a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. Redpanda/Kafka-compatible ingress is now available as an opt-in comparison provider so Reef can test whether Kafka partition mechanics improve the same command-log shape before changing the accepted architecture decision.
 
 ## Product Framing
 
@@ -50,6 +50,7 @@ The architecture uses official vendor guidance as constraints, not as a copy of 
 - [NATS JetStream streams](https://docs.nats.io/nats-concepts/jetstream/streams) are message stores; JetStream publish calls can acknowledge successful storage, streams support retention/discard policy, and `Nats-Msg-Id` deduplication is a transport aid rather than a complete business-idempotency model.
 - [NATS JetStream consumers](https://docs.nats.io/nats-concepts/jetstream/consumers) track delivery and acknowledgements, can redeliver unacknowledged messages, and pull consumers are recommended by NATS for new projects when scalability, flow control, or error handling matter.
 - [NATS subject mapping and partitioning](https://docs.nats.io/nats-concepts/subject_mapping) supports deterministic token partitioning, including composite partition keys; Reef uses that pattern so same-book lifecycle commands stay in one ordered lane.
+- [Redpanda](https://docs.redpanda.com/streaming/current/get-started/architecture/) is a Kafka API-compatible streaming platform with partitioned topics. Reef's Redpanda comparison path maps `STREAM_ACK_COMMAND_STREAM` to a Kafka topic, routes `runId + venueSessionId + instrumentId` to an explicit partition, publishes with `acks=all`, encodes Kafka `(partition, offset)` into the canonical `stream_seq`, and commits offsets only after canonical facts are durable.
 - [PostgreSQL bulk-loading guidance](https://www.postgresql.org/docs/current/populate.html) favors fewer commits and bulk-oriented writes for large row volumes; Reef applies that as batched canonical append persistence rather than per-projection hot-path mutation.
 - [PostgreSQL table partitioning guidance](https://www.postgresql.org/docs/current/ddl-partitioning.html) supports splitting large logical tables into smaller physical pieces when query, update, bulk load, or retention patterns justify it; Reef should partition canonical/run artifacts by run/session/time only when access patterns justify the operational cost.
 
@@ -98,7 +99,7 @@ client / simulator / arena bot
   -> metrics, leaderboards, replay indexes, UI read models
 ```
 
-JetStream is the durable accepted-command log. Postgres remains the canonical record of what the venue decided.
+JetStream is the default durable accepted-command log. Redpanda can be selected with `STREAM_ACK_LOG_PROVIDER=redpanda` for A/B testing. Postgres remains the canonical record of what the venue decided in both provider modes.
 
 ## Stream Configuration Guardrails
 

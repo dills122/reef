@@ -896,6 +896,8 @@ class PlatformHttpServerBoundaryTest {
             assertContains(stats.body, "\"processingMode\":\"accepted-async\"")
             assertContains(stats.body, "\"acceptedAsync\"")
             assertContains(stats.body, "\"enabled\":true")
+            assertContains(stats.body, "\"activeLaneCount\"")
+            assertContains(stats.body, "\"lanes\"")
             assertContains(stats.body, "\"received\":1")
             assertContains(stats.body, "\"completed\":1")
         } finally {

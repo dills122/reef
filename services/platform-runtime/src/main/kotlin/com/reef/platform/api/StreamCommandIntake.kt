@@ -27,6 +27,23 @@ data class StreamCommandConfig(
     val partitionCount: Int = RuntimeEnv.int("STREAM_ACK_PARTITION_COUNT", 16, min = 1)
 )
 
+enum class StreamCommandLogProvider(val configValue: String) {
+    JetStream("jetstream"),
+    Redpanda("redpanda");
+
+    companion object {
+        fun fromEnv(): StreamCommandLogProvider {
+            return when (val raw = RuntimeEnv.string("STREAM_ACK_LOG_PROVIDER", JetStream.configValue).trim().lowercase()) {
+                JetStream.configValue, "nats", "nats-jetstream" -> JetStream
+                Redpanda.configValue, "kafka" -> Redpanda
+                else -> throw IllegalArgumentException(
+                    "Unsupported STREAM_ACK_LOG_PROVIDER '$raw'; expected jetstream or redpanda"
+                )
+            }
+        }
+    }
+}
+
 data class StreamCommandReference(
     val commandId: String,
     val route: String,
@@ -571,7 +588,10 @@ object StreamCommandIntakeFactory {
     }
 
     fun defaultPublisher(): StreamCommandPublisher {
-        return NatsJetStreamCommandPublisher()
+        return when (StreamCommandLogProvider.fromEnv()) {
+            StreamCommandLogProvider.JetStream -> NatsJetStreamCommandPublisher()
+            StreamCommandLogProvider.Redpanda -> KafkaStreamCommandPublisher()
+        }
     }
 }
 

@@ -122,12 +122,30 @@ Netty hot-path no-DB evidence:
 - hot-path telemetry: `api.mutation.total avg=0.04ms`, `runtime.engine.submit avg=7.20ms`
 - a shorter 15s confirmation also hit the target: `14987.25/sec`, `100%` success, `p95=61.79ms`, `p99=113.62ms`
 
+Coroutine accepted-async drain follow-up:
+
+- after the 5m DO soak showed accepted-async lane queues filling under `20k/sec`, the in-memory no-DB accepted-async drain was moved from hand-rolled blocking lane threads to `kotlinx.coroutines` bounded channels with per-lane drain counters
+- the gRPC stream submit client now waits for `ClientCallStreamObserver.isReady()` / `setOnReadyHandler(...)` before `onNext`, so runtime-to-engine streaming respects gRPC outbound flow-control instead of relying only on an application semaphore
+- local smoke: `/tmp/reef-runtime-nodb-coroutines-smoke/runtime-nodb-coroutines-smoke-rate-5000-workers-256.json`
+- config: `PLATFORM_HTTP_SERVER=netty`, `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64`, `ENGINE_TRANSPORT=grpc-stream`, `16` stream lanes, `5000 rps`, `256` load workers, `10s`
+- result: `49955` successful `202` responses, `4995.28/sec`, `100%` success, `p95=8.81ms`, `p99=32.67ms`, `runtime.engine.submit avg=5.78ms`
+- local 16-instrument confirmation: `/tmp/reef-runtime-nodb-coroutines-15k-30s-multi/runtime-nodb-coroutines-15k-30s-multi-rate-15000-workers-512.json`
+- result: `449927` successful `202` responses, `14997.03/sec`, `100%` success, `p95=34.42ms`, `p99=76.77ms`, `runtime.engine.submit avg=10.21ms`
+- DO 20k/sec 5m follow-up: `reports/do-benchmark/do-nodb-coroutines-20k-5m-20260703T234000Z`
+- result: `4063814` responses, `2199946` successful `202`, `1863868` `429 COMMAND_INTAKE_BACKPRESSURE`, `13471.31/sec` total, `7292.70/sec` accepted, `54.14%` success, `p95=111.81ms`, `p99=899.59ms`, `runtime.engine.submit avg=149.40ms`
+- post-run live stats showed `956751` still queued, `640` processing, and `1242545` completed; the 10 active instrument lanes were still near capacity, confirming the remaining sustained-load ceiling is the runtime-to-engine async drain, not the HTTP intake path
+- the first on-ready gRPC send pump plus deterministic lane scoring held a local 15k/sec 30s pass at `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64`, but overfilled the runtime-to-engine interface: `14990.24/sec`, `100%` success, `p95=66.28ms`, `p99=124.70ms`, `runtime.engine.submit avg=58.94ms`, ending telemetry `activeLaneCount=14`, `queued=76828`, `maxLaneDepth=28792`
+- lowering the same pump and lane-scored path to `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32` kept the local 15k/sec target clean without queue growth: `/tmp/reef-runtime-nodb-pump-lanes-if32-15k-30s-multi/runtime-nodb-pump-lanes-if32-15k-30s-multi-rate-15000-workers-512.json`, `14995.92/sec`, `100%` success, `p95=23.99ms`, `p99=55.75ms`, `runtime.engine.submit avg=10.07ms`, ending telemetry `activeLaneCount=14`, `queued=24`, `maxLaneDepth=6`
+- DO 20k/sec 5m retry with the same `32` window did not recover the sustained overload case: `reports/do-benchmark/do-nodb-pump-lanes-if32-20k-5m-20260704T0005Z`, `3960276` responses, `2369760` successful `202`, `1590516` `429 COMMAND_INTAKE_BACKPRESSURE`, `13185.83/sec` total, `7890.17/sec` accepted, `59.84%` success, `p95=121.27ms`, `p99=921.01ms`, `runtime.engine.submit avg=125.34ms`
+- DO post-run diagnostics showed all 14 active accepted-async lanes still nearly full (`queued=1370394`, `maxLaneDepth=97968`, `processing=413`, `completed=998939`) while Docker stats showed `reef-platform-api` saturated at about `749%` CPU and `4.35GiB` memory, with `reef-matching-engine` near idle (`~1%` CPU). The long-soak failure is now platform-runtime async queue/transport pressure under sustained backlog, not matching-engine compute.
+- the accepted-async default in-flight window is therefore `32` per lane for the no-DB isolation path; `64` is still valid as an explicit stress setting, but it now represents intentional queue pressure rather than the baseline
+
 Immediate implications:
 
 1. Keep the heap-backed price-time book structure; sorted-slice resting-order insertion is not a safe base for growing-book stress.
 2. Do not keep tuning JDK `HttpServer` thread count as the main path to `15k/sec`; the Netty hot-path adapter removed the previous local front-door ceiling for accepted-async no-DB runs.
 3. Accepted-async plus Netty proves the API hot path can accept submit commands at the `15k/sec` target on this workstation when DB writes are excluded. This is still not durable acceptance and must not be confused with the production ingress target.
-4. Keep accepted-async worker in-flight bounded. The Compose/runtime defaults now expose `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64`; tune from there with telemetry instead of using unbounded or very large stream windows.
+4. Keep accepted-async worker in-flight bounded. The Compose/runtime defaults now expose `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32`; tune from there with telemetry instead of using unbounded or very large stream windows.
 5. A flagged Netty hot-path adapter now exists behind `PLATFORM_HTTP_SERVER=netty` to isolate the JDK `HttpServer` boundary. Treat it as a benchmark adapter until the measured no-DB evidence justifies expanding its route surface.
 
 ## Stream-Ack Post-Soak Optimization Priorities

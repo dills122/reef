@@ -344,6 +344,7 @@ Exit criteria:
 - [x] Define stream-ack command envelope and protobuf/contract updates.
 - [x] Define deterministic partition key and subject builder.
 - [x] Add local NATS/JetStream dev profile and stream bootstrap.
+- [x] Add opt-in Redpanda/Kafka-compatible stream-ack provider for durable-log A/B testing.
 - [x] Add stream health, publish-ack latency, partition lag, and oldest-age telemetry.
 - [x] Implement `stream-ack` API mode behind a flag.
 - [x] Add scoped idempotency guard with payload-hash conflict behavior.
@@ -356,6 +357,7 @@ Exit criteria:
 - [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
 
 Latest stream-ack notes:
+- Redpanda/Kafka-compatible stream-ack is now available behind `STREAM_ACK_LOG_PROVIDER=redpanda`. It keeps the same command envelope, partition key, scoped idempotency guard, canonical Postgres completion boundary, and worker ack rule, but maps the command stream to a Kafka topic and commits offsets after canonical persistence. Treat this as an A/B provider path until soak evidence justifies a decision change.
 - The first single-instrument stream-ack run accepted all commands but routed through too few partitions: `5000` nominal rps accepted `100186` commands at `2441.99 accepted/sec`, while the worker completed `40056` during the step at `976.35/sec`; trace checks were `0%` because processing lagged behind accepted ingress.
 - The stream-ack stress profile now uses `packages/scenario-definitions/stream-ack-submit-stress.yaml`, a submit-only 16-instrument scenario, and telemetry now captures Docker stats again.
 - Isolated 16-instrument run on `REEF_COMMANDS_MULTI_16_FULL`:

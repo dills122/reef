@@ -594,6 +594,22 @@ Primary references:
 - [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 
+### D-039: Redpanda Stream-Ack Provider Comparison
+
+Status: provisional
+
+Summary:
+- D-036 remains the accepted high-throughput direction: JetStream is the default durable accepted-command ingress log, and Postgres remains the canonical venue outcome store.
+- Redpanda/Kafka-compatible ingress is added as an opt-in comparison provider behind `STREAM_ACK_LOG_PROVIDER=redpanda`.
+- The public command contract, partition key, scoped idempotency guard, and worker completion boundary are unchanged.
+- In Redpanda mode, the command stream name maps to a Kafka topic, the runtime publishes with explicit partition routing and `acks=all`, and workers manually commit offsets only after canonical submit outcomes are durable.
+- Redpanda should not be promoted over JetStream without comparable 5m soak evidence for accepted/sec, completed/sec, bounded lag, p95/p99, CPU/memory, restart/redelivery behavior, and replay/audit accounting.
+- This comparison is meant to test durable-log mechanics, not to move canonical venue facts out of Postgres.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted

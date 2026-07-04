@@ -179,6 +179,7 @@ make dev-up-stream-ack
 
 `dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0` through `platform-worker-3`, `platform-projector-0` through `platform-projector-3`, `matching-engine`, `nats`, and Postgres services), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`
+- `STREAM_ACK_LOG_PROVIDER=jetstream`
 - `STREAM_ACK_NATS_URL=nats://nats:4222`
 - `STREAM_ACK_COMMAND_STREAM=REEF_COMMANDS`
 - `STREAM_ACK_SUBJECT_PREFIX=reef.cmd.v1`
@@ -223,23 +224,31 @@ make dev-up-stream-ack
 
 In this mode `platform-api` returns `202` only after JetStream publish acknowledgment. The worker containers expose health and internal metrics endpoints, but public command intake routes are not mounted in worker or projector roles. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
+An opt-in Redpanda/Kafka-compatible comparison path is available without changing the public command contract:
+
+```bash
+STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack
+```
+
+This enables the Compose `redpanda` profile and sets `STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092` by default. The runtime creates or expands the Kafka topic named by `STREAM_ACK_COMMAND_STREAM` if needed, publishes with explicit partition routing and `acks=all`, encodes Kafka `(partition, offset)` into the canonical `stream_seq`, and workers commit Kafka offsets only after canonical submit outcomes are durable. Treat this as a provider comparison path until benchmark evidence and a decision update promote it over JetStream.
+
 The API container owns the larger `stream-intake` boundary DB pool because it is the only role that accepts public stream commands. Worker and projector roles keep tiny `stream-intake` pools for startup/internal compatibility while using their dedicated canonical/projection pools for drain and read-model work.
 
 In stream-ack mode, `STREAM_ACK_MARK_PUBLISHED_MODE=worker` removes the post-publish boundary metadata update from the synchronous response path after JetStream durable publish acknowledgement. Stream workers repair the same metadata by `commandId` in batches after canonical commit and before JetStream ack, so an API crash after publish still has a durable-message repair path. Set `STREAM_ACK_MARK_PUBLISHED_MODE=sync` to force the API to update boundary metadata before returning.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
-Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling JetStream management on every accepted command.
+Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or, for JetStream, when stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling stream management on every accepted command.
 
-The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured JetStream worker durable consumers from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`; when the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
+The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
-Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
+Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
 Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes from the runtime Postgres service, update the normalized order/execution/trade/runtime-event read tables in the projection Postgres service, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
-The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
+The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and durable-log consumer snapshots (`consumerMetrics`). JetStream snapshots include pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. Redpanda snapshots report committed offset, end offset, and lag for the assigned partition. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 
 Run the submit-only stream-ack stress profile:
 
@@ -324,7 +333,7 @@ Transport comparison knobs:
 
 - `ENGINE_TRANSPORT=grpc` uses unary gRPC for runtime-to-engine calls.
 - `ENGINE_TRANSPORT=grpc-stream` uses experimental submit-order lanes with persistent bidirectional gRPC streams. The current proof path streams submit commands and keeps cancel/modify on unary gRPC.
-- `ENGINE_GRPC_STREAM_LANES=16` sets the number of runtime submit lanes. Commands currently route by `instrumentId`; this should evolve to `venueSessionId + instrumentId` when the runtime command model carries venue session directly.
+- `ENGINE_GRPC_STREAM_LANES=16` sets the number of runtime submit lanes. Commands currently route by deterministic `instrumentId` lane scoring; this should evolve to `venueSessionId + instrumentId` when the runtime command model carries venue session directly.
 - `ENGINE_GRPC_STREAM_QUEUE_CAPACITY=100000` sets each lane in-flight capacity.
 
 HTTP boundary comparison knobs:
@@ -336,11 +345,11 @@ HTTP boundary comparison knobs:
 Accepted-async no-DB isolation knobs:
 
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async` makes submit-order intake return a `202` command receipt after validation, idempotency reservation, and in-memory lane enqueue. It does not provide durable acceptance and is benchmark-only unless paired with a durable ingress design.
-- `EXTERNAL_API_ACCEPTED_ASYNC_LANES=16` sets in-memory worker lanes. Submit commands route by `instrumentId` to preserve per-instrument order.
+- `EXTERNAL_API_ACCEPTED_ASYNC_LANES=16` sets in-memory worker lanes. Submit commands route by deterministic `instrumentId` lane scoring to preserve per-instrument order while avoiding obvious small-symbol-set modulo skew.
 - `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000` sets per-lane queued command capacity.
-- `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=64` bounds concurrent engine submissions per lane. Raising it can inflate engine wait time by flooding the gRPC stream.
+- `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32` bounds concurrent engine submissions per lane. Raising it can inflate engine wait time by flooding the gRPC stream.
 - `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`.
-- `GET /internal/commands/async/stats` includes an `acceptedAsync` block with queued, processing, completed, failed, duplicate, and backpressure counters.
+- `GET /internal/commands/async/stats` includes an `acceptedAsync` block with aggregate queued, processing, completed, failed, duplicate, and backpressure counters plus per-lane queue/drain counters for accepted-async no-DB diagnostics.
 
 Each stress report includes `hotPathPhases.phases` from `/internal/perf/hot-path`. For no-DB sync-result runs, start with `api.mutation.total`, `api.operation`, `api.parse.submitOrder`, `runtime.submitOrder.total`, `runtime.engine.submit`, `runtime.persistence.persistSubmitOutcome`, `api.response.serializeSubmitOrder`, and `api.writeResponse`. `runtime.engine.submit` measures the platform runtime gateway call to the engine, including transport and response parsing; compare it against the matching-engine-only harness before attributing that time to matching logic itself.
 

@@ -322,12 +322,23 @@ object StreamCommandWorkerFactory {
             "STREAM_ACK_WORKER_DURABLE_PREFIX",
             "reef-stream-worker"
         ) + "-${partitionToken(config, partition)}"
-        return NatsStreamCommandSource(
-            config = config,
-            partition = partition,
-            filterSubject = filterSubject(config, partition),
-            durableName = durableName
-        )
+        return sourceForPartition(config, partition, durableName)
+    }
+
+    fun sourceForPartition(config: StreamCommandConfig, partition: Int, durableName: String): StreamCommandSource {
+        return when (StreamCommandLogProvider.fromEnv()) {
+            StreamCommandLogProvider.JetStream -> NatsStreamCommandSource(
+                config = config,
+                partition = partition,
+                filterSubject = filterSubject(config, partition),
+                durableName = durableName
+            )
+            StreamCommandLogProvider.Redpanda -> KafkaStreamCommandSource(
+                config = config,
+                partition = partition,
+                durableName = durableName
+            )
+        }
     }
 
     fun filterSubject(config: StreamCommandConfig, partition: Int): String {
@@ -337,6 +348,10 @@ object StreamCommandWorkerFactory {
     fun partitionToken(config: StreamCommandConfig, partition: Int): String {
         val width = maxOf(2, (config.partitionCount - 1).toString().length)
         return "p${partition.toString().padStart(width, '0')}"
+    }
+
+    fun subjectForPartitionCommand(config: StreamCommandConfig, partition: Int, commandType: String): String {
+        return "${config.subjectPrefix.trim('.')}.${partitionToken(config, partition)}._._.$commandType"
     }
 }
 

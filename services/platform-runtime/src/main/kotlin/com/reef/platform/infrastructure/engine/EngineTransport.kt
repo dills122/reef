@@ -9,13 +9,16 @@ import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.partition.PartitionLaneHash
 import io.grpc.CallOptions
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.MethodDescriptor
 import io.grpc.StatusRuntimeException
 import io.grpc.protobuf.ProtoUtils
+import io.grpc.stub.ClientCallStreamObserver
 import io.grpc.stub.ClientCalls
+import io.grpc.stub.ClientResponseObserver
 import io.grpc.stub.StreamObserver
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
@@ -191,7 +194,7 @@ class GrpcStreamEngineClient(
 
     private fun lane(command: SubmitOrderCommand): SubmitStreamLane {
         val key = command.instrumentId
-        return lanes[Math.floorMod(key.hashCode(), lanes.size)]
+        return lanes[PartitionLaneHash.laneFor(key, lanes.size)]
     }
 }
 
@@ -206,10 +209,13 @@ private class SubmitStreamLane(
     queueCapacity: Int
 ) : AutoCloseable {
     private val inFlight = Semaphore(queueCapacity)
+    private val outbound = ConcurrentLinkedQueue<StreamSubmit>()
     private val pending = ConcurrentLinkedQueue<CompletableFuture<ProtoSubmitOrderResult>>()
     private val closed = AtomicBoolean(false)
     private val streamFailure = AtomicReference<Throwable?>()
     private val streamLock = Any()
+    @Volatile
+    private var readyObserver: ClientCallStreamObserver<SubmitOrder>? = null
     @Volatile
     private var requestObserver: StreamObserver<SubmitOrder> = openStream()
 
@@ -236,21 +242,19 @@ private class SubmitStreamLane(
         val response = CompletableFuture<ProtoSubmitOrderResult>()
         val item = StreamSubmit(command.toProtoSubmitOrder(), response)
         var acquired = false
-        var sent = false
         try {
             if (!inFlight.tryAcquire(deadlineMs, TimeUnit.MILLISECONDS)) {
                 throw EngineTransportException("engine gRPC SubmitOrders lane in-flight limit reached")
             }
             acquired = true
-            send(item)
-            sent = true
+            enqueue(item)
             return response
         } catch (ex: InterruptedException) {
             Thread.currentThread().interrupt()
-            if (acquired && !sent) inFlight.release()
+            if (acquired) inFlight.release()
             throw EngineTransportException("engine gRPC SubmitOrders interrupted", ex)
         } catch (ex: RuntimeException) {
-            if (acquired && !sent) inFlight.release()
+            if (acquired) inFlight.release()
             throw ex
         }
     }
@@ -259,17 +263,34 @@ private class SubmitStreamLane(
         if (!closed.compareAndSet(false, true)) return
         synchronized(streamLock) {
             requestObserver.onCompleted()
+            failOutbound(EngineTransportException("engine gRPC SubmitOrders lane closed"))
         }
         failPending(EngineTransportException("engine gRPC SubmitOrders lane closed"))
     }
 
-    private fun send(item: StreamSubmit) {
+    private fun enqueue(item: StreamSubmit) {
         synchronized(streamLock) {
             if (closed.get()) {
                 throw EngineTransportException("engine gRPC SubmitOrders lane closed")
             }
-            streamFailure.getAndSet(null)?.let {
-                requestObserver = reopenStream(requestObserver)
+            outbound.add(item)
+            pumpLocked()
+        }
+    }
+
+    private fun pumpLocked() {
+        streamFailure.getAndSet(null)?.let {
+            requestObserver = reopenStream(requestObserver)
+        }
+        while (true) {
+            val observer = readyObserver
+            if (observer != null && !observer.isReady) {
+                return
+            }
+            val item = outbound.poll() ?: return
+            if (item.response.isCancelled) {
+                inFlight.release()
+                continue
             }
             pending.add(item.response)
             try {
@@ -277,34 +298,18 @@ private class SubmitStreamLane(
             } catch (ex: RuntimeException) {
                 pending.remove(item.response)
                 item.response.completeExceptionally(ex)
+                inFlight.release()
                 requestObserver = reopenStream(requestObserver)
-                throw ex
             }
         }
     }
 
-    private fun openStream(): StreamObserver<SubmitOrder> {
-        val responseObserver = object : StreamObserver<ProtoSubmitOrderResult> {
-            override fun onNext(value: ProtoSubmitOrderResult) {
-                pending.poll()?.complete(value)
-                inFlight.release()
-            }
-
-            override fun onError(t: Throwable) {
-                streamFailure.set(t)
-                failPending(t)
-            }
-
-            override fun onCompleted() {
-                val error = EngineTransportException("engine gRPC SubmitOrders stream completed")
-                streamFailure.set(error)
-                failPending(error)
-            }
+    private fun failOutbound(error: Throwable) {
+        while (true) {
+            val item = outbound.poll() ?: return
+            item.response.completeExceptionally(error)
+            inFlight.release()
         }
-        return ClientCalls.asyncBidiStreamingCall(
-            channel.newCall(submitOrdersMethod, CallOptions.DEFAULT),
-            responseObserver
-        )
     }
 
     private fun reopenStream(current: StreamObserver<SubmitOrder>): StreamObserver<SubmitOrder> {
@@ -313,6 +318,45 @@ private class SubmitStreamLane(
         } catch (_: RuntimeException) {
         }
         return openStream()
+    }
+
+    private fun openStream(): StreamObserver<SubmitOrder> {
+        val responseObserver = object : ClientResponseObserver<SubmitOrder, ProtoSubmitOrderResult> {
+            override fun beforeStart(requestStream: ClientCallStreamObserver<SubmitOrder>) {
+                readyObserver = requestStream
+                requestStream.setOnReadyHandler {
+                    synchronized(streamLock) {
+                        pumpLocked()
+                    }
+                }
+            }
+
+            override fun onNext(value: ProtoSubmitOrderResult) {
+                pending.poll()?.complete(value)
+                inFlight.release()
+            }
+
+            override fun onError(t: Throwable) {
+                synchronized(streamLock) {
+                    streamFailure.set(t)
+                    failPending(t)
+                    pumpLocked()
+                }
+            }
+
+            override fun onCompleted() {
+                val error = EngineTransportException("engine gRPC SubmitOrders stream completed")
+                synchronized(streamLock) {
+                    streamFailure.set(error)
+                    failPending(error)
+                    pumpLocked()
+                }
+            }
+        }
+        return ClientCalls.asyncBidiStreamingCall(
+            channel.newCall(submitOrdersMethod, CallOptions.DEFAULT),
+            responseObserver
+        )
     }
 
     private fun failPending(error: Throwable) {
