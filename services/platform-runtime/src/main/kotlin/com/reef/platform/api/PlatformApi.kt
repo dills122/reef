@@ -10,6 +10,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.util.concurrent.CompletableFuture
 
 class PlatformApi(
@@ -63,6 +64,10 @@ class PlatformApi(
 
     fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
         return orderService.projectionStatus(projectionName, partitions)
+    }
+
+    fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        return orderService.materializeVenueEventBatch(batch)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {

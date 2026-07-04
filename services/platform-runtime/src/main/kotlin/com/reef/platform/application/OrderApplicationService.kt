@@ -23,6 +23,7 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
@@ -269,6 +270,12 @@ class OrderApplicationService(
 
     fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
         return runtimePersistence.projectionStatus(projectionName, partitions)
+    }
+
+    fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        return HotPathMetrics.time("runtime.persistence.materializeVenueEventBatch") {
+            runtimePersistence.materializeVenueEventBatch(batch)
+        }
     }
 
     fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
