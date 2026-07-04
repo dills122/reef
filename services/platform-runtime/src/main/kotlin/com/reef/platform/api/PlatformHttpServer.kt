@@ -1465,17 +1465,12 @@ class PlatformHttpServer(
             methodNotAllowed(exchange)
             return
         }
-        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-        if (lookup == null) {
-            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
-            return
-        }
         val commandId = exchange.requestURI.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
             writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
         }
-        val status = lookup.findCommandStatus(commandId)
+        val status = commandStatus(commandId)
         if (status == null) {
             writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
@@ -1487,15 +1482,25 @@ class PlatformHttpServer(
         if (request.method != "GET") {
             return methodNotAllowedResponse()
         }
-        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-            ?: return PlatformHotPathResponse(503, simpleErrorJson("command status unavailable"))
         val commandId = request.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
             return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
         }
-        val status = lookup.findCommandStatus(commandId)
+        val status = commandStatus(commandId)
             ?: return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
         return PlatformHotPathResponse(200, CommandStatusResponse.statusJson(status))
+    }
+
+    private fun commandStatus(commandId: String): CommandStatusView? {
+        try {
+            api.canonicalCommandOutcome(commandId)?.let { outcome ->
+                return outcome.toStatusView()
+            }
+        } catch (ex: Exception) {
+            System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
+        }
+        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
+        return lookup?.findCommandStatus(commandId)
     }
 
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {

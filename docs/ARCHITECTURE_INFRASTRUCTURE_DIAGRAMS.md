@@ -130,11 +130,12 @@ Current important implementation pieces:
 - `platform-materializer` consumes event batches and writes compact canonical Postgres rows.
 - `runtime.canonical_venue_event_batches` preserves replay-safe batch facts and checksums.
 - `runtime.canonical_command_outcomes` gives command-to-batch linkage and compact engine outcome lookup.
+- `/api/v1/commands/{commandId}` prefers canonical command outcomes when present and falls back to ingress/status surfaces while materialization catches up.
 - Normalized orders, executions, trades, runtime events, UI views, metrics, and leaderboards remain downstream projections.
 
 ## Target Direction
 
-The next target is to make canonical materialization visible through command status and then project lifecycle state from compact canonical rows.
+The next target is to project lifecycle state from compact canonical rows and make that state visible through persisted read APIs.
 
 ```mermaid
 flowchart LR
@@ -238,17 +239,12 @@ Target operating principles:
 
 ## Near-Term Slice Map
 
-1. Canonical command status lookup.
-   - Make `/api/v1/commands/{commandId}` prefer `runtime.canonical_command_outcomes` when present.
-   - Preserve fallback to command-log/status surfaces while materialization catches up.
-   - Make response language distinguish durable acceptance, engine processing, canonical materialization, and projection visibility.
-
-2. Venue lifecycle projection.
+1. Venue lifecycle projection.
    - Project submit/cancel/modify/fill/reject outcomes from canonical rows into normalized read tables.
    - Keep projections downstream and rebuildable.
    - Add deterministic tests that event batch, canonical rows, projection rows, and query APIs agree.
 
-3. Evidence promotion.
+2. Evidence promotion.
    - Run `make dev-smoke-venue-event-materializer` against Docker as the local end-to-end gate.
    - Promote the Redpanda/Kafka-compatible path to longer remote evidence only after replay/checksum and materialization smoke are clean.
    - Measure accepted, engine-published, materialized, projected, drain lag, and replay/checksum results together.

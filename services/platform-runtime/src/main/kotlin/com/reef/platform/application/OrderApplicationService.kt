@@ -1,8 +1,8 @@
 package com.reef.platform.application
 
-import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
+import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.Instrument
@@ -18,15 +18,16 @@ import com.reef.platform.infrastructure.engine.AsyncSubmitEngineGateway
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
-import com.reef.platform.infrastructure.persistence.ProjectionStatus
-import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
+import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
+import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.util.concurrent.CompletableFuture
 
 class OrderApplicationService(
@@ -275,6 +276,12 @@ class OrderApplicationService(
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return HotPathMetrics.time("runtime.persistence.materializeVenueEventBatch") {
             runtimePersistence.materializeVenueEventBatch(batch)
+        }
+    }
+
+    fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return HotPathMetrics.time("runtime.persistence.canonicalCommandOutcome") {
+            runtimePersistence.canonicalCommandOutcome(commandId)
         }
     }
 

@@ -59,6 +59,7 @@ The current gaps are:
    - Compact canonical batch storage and command/outcome lookup rows now exist for status, idempotent replay, audit, and projection inputs.
    - Kafka-compatible venue event batch materializer runtime role, diagnostics, and local smoke target now exist.
    - Event-batch replay/checksum tests now gate the materializer contract before throughput claims.
+   - `/api/v1/commands/{commandId}` now prefers materialized canonical command outcomes and falls back to existing status surfaces while materialization catches up.
 
 3. Complete venue lifecycle projection.
    - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.

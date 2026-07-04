@@ -7,6 +7,7 @@ import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
@@ -68,6 +69,10 @@ class PlatformApi(
 
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
         return orderService.materializeVenueEventBatch(batch)
+    }
+
+    fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return orderService.canonicalCommandOutcome(commandId)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {
