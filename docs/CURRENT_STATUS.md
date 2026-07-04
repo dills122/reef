@@ -31,6 +31,7 @@ Keep these distinctions explicit:
 - JetStream `stream-ack` proved the durable-acceptance shape, but July 2026 evidence showed the generic worker-to-engine path and write-heavy projection path are not the final high-throughput base.
 - The active high-throughput venue-core path is moving toward a Kafka-compatible durable command log, explicit command partitions, matching-engine direct consumption, durable venue event batches, command offset commit after durable event-batch publication, and asynchronous Postgres materialization from those event batches.
 - `202 Accepted` still means the configured durable ingress/log producer has acknowledged the command. Do not weaken that contract.
+- Order-entry APIs, market-data/history APIs, account/bot ledgers, settlement, and analytics are separate planes. See [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
 
 Current decision anchors:
 
@@ -61,6 +62,7 @@ Use these docs for active work:
 - Project framing: [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md)
 - Technical design: [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 - Current and target architecture diagrams: [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
+- Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./ROADMAP.md)
 - Decisions: [`DECISIONS.md`](./DECISIONS.md)
