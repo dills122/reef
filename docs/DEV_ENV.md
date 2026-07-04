@@ -62,6 +62,13 @@ Forward-only DB migrations run automatically during `make dev-up` and `make dev-
 make dev-db-migrate
 ```
 
+The first projection-backed market-data snapshot can be refreshed and read through the platform API:
+
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/market-data/snapshots"
+curl "http://127.0.0.1:8080/api/v1/market-data/snapshots/AAPL"
+```
+
 Stack startup passes `--remove-orphans` so renamed local services, such as the retired all-in-one runtime container, do not keep stale ports or process roles alive.
 
 Optional inline smoke during reset:

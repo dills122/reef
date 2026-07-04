@@ -243,6 +243,24 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.marketDataSnapshots} (
+                      projection_name TEXT NOT NULL,
+                      source_projection_name TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      best_bid_price TEXT NOT NULL DEFAULT '',
+                      best_bid_quantity TEXT NOT NULL DEFAULT '',
+                      best_ask_price TEXT NOT NULL DEFAULT '',
+                      best_ask_quantity TEXT NOT NULL DEFAULT '',
+                      currency TEXT NOT NULL DEFAULT '',
+                      last_partition_seq BIGINT NOT NULL DEFAULT 0,
+                      lag BIGINT NOT NULL DEFAULT 0,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (projection_name, instrument_id)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalCommandResults} (
                       command_id TEXT PRIMARY KEY,
                       run_id TEXT NOT NULL,
@@ -2353,6 +2371,155 @@ class PostgresRuntimePersistence(
                 }
             }
         }
+    }
+
+    override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val lastPartitionSequence = sourceStatus.watermarks
+            .filter { it.partitionId >= 0 }
+            .maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        projectionConnection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement("DELETE FROM ${names.marketDataSnapshots} WHERE projection_name = ?").use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.executeUpdate()
+                }
+                val inserted = conn.prepareStatement(
+                    """
+                    WITH priced_orders AS (
+                      SELECT
+                        instrument_id,
+                        side,
+                        currency,
+                        limit_price::NUMERIC AS price_num,
+                        quantity_units::NUMERIC AS quantity_num
+                      FROM ${names.orders}
+                      WHERE order_type = 'LIMIT'
+                        AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
+                        AND quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                    ),
+                    bid_prices AS (
+                      SELECT instrument_id, MAX(price_num) AS best_bid_price
+                      FROM priced_orders
+                      WHERE side = 'BUY'
+                      GROUP BY instrument_id
+                    ),
+                    ask_prices AS (
+                      SELECT instrument_id, MIN(price_num) AS best_ask_price
+                      FROM priced_orders
+                      WHERE side = 'SELL'
+                      GROUP BY instrument_id
+                    ),
+                    bid_totals AS (
+                      SELECT priced.instrument_id, SUM(priced.quantity_num) AS best_bid_quantity
+                      FROM priced_orders priced
+                      JOIN bid_prices best
+                        ON best.instrument_id = priced.instrument_id
+                       AND best.best_bid_price = priced.price_num
+                      WHERE priced.side = 'BUY'
+                      GROUP BY priced.instrument_id
+                    ),
+                    ask_totals AS (
+                      SELECT priced.instrument_id, SUM(priced.quantity_num) AS best_ask_quantity
+                      FROM priced_orders priced
+                      JOIN ask_prices best
+                        ON best.instrument_id = priced.instrument_id
+                       AND best.best_ask_price = priced.price_num
+                      WHERE priced.side = 'SELL'
+                      GROUP BY priced.instrument_id
+                    ),
+                    instruments AS (
+                      SELECT instrument_id, MAX(currency) AS currency
+                      FROM priced_orders
+                      GROUP BY instrument_id
+                    )
+                    INSERT INTO ${names.marketDataSnapshots}(
+                      projection_name,
+                      source_projection_name,
+                      instrument_id,
+                      best_bid_price,
+                      best_bid_quantity,
+                      best_ask_price,
+                      best_ask_quantity,
+                      currency,
+                      last_partition_seq,
+                      lag,
+                      updated_at
+                    )
+                    SELECT
+                      ?,
+                      ?,
+                      instruments.instrument_id,
+                      COALESCE(bid_prices.best_bid_price::TEXT, ''),
+                      COALESCE(bid_totals.best_bid_quantity::TEXT, ''),
+                      COALESCE(ask_prices.best_ask_price::TEXT, ''),
+                      COALESCE(ask_totals.best_ask_quantity::TEXT, ''),
+                      COALESCE(instruments.currency, ''),
+                      ?,
+                      ?,
+                      now()
+                    FROM instruments
+                    LEFT JOIN bid_prices ON bid_prices.instrument_id = instruments.instrument_id
+                    LEFT JOIN bid_totals ON bid_totals.instrument_id = instruments.instrument_id
+                    LEFT JOIN ask_prices ON ask_prices.instrument_id = instruments.instrument_id
+                    LEFT JOIN ask_totals ON ask_totals.instrument_id = instruments.instrument_id
+                    ORDER BY instruments.instrument_id
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.setString(2, sourceProjectionName)
+                    ps.setLong(3, lastPartitionSequence)
+                    ps.setLong(4, sourceStatus.lag)
+                    ps.executeUpdate().toLong()
+                }
+                conn.commit()
+                return inserted
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override fun marketDataSnapshot(instrumentId: String, projectionName: String): MarketDataSnapshot? {
+        return projectionQueryList(
+            """
+            SELECT
+              projection_name,
+              source_projection_name,
+              instrument_id,
+              best_bid_price,
+              best_bid_quantity,
+              best_ask_price,
+              best_ask_quantity,
+              currency,
+              last_partition_seq,
+              lag,
+              updated_at::TEXT AS updated_at
+            FROM ${names.marketDataSnapshots}
+            WHERE projection_name = ? AND instrument_id = ?
+            """.trimIndent(),
+            projectionName,
+            instrumentId
+        ) {
+            MarketDataSnapshot(
+                projectionName = getString("projection_name"),
+                sourceProjectionName = getString("source_projection_name"),
+                instrumentId = getString("instrument_id"),
+                bestBidPrice = getString("best_bid_price"),
+                bestBidQuantity = getString("best_bid_quantity"),
+                bestAskPrice = getString("best_ask_price"),
+                bestAskQuantity = getString("best_ask_quantity"),
+                currency = getString("currency"),
+                lastPartitionSequence = getLong("last_partition_seq"),
+                lag = getLong("lag"),
+                updatedAt = getString("updated_at")
+            )
+        }.firstOrNull()
     }
 
     private data class CanonicalPartitionStats(val maxPartitionSequence: Long, val backlogCount: Long)

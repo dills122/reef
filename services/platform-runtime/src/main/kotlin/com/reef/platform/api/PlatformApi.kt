@@ -9,6 +9,7 @@ import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
+import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
@@ -209,6 +210,33 @@ class PlatformApi(
         return JsonCodec.writeObject("orders" to orderService.persistedOrders().map { toOrderMap(it) })
     }
 
+    fun refreshMarketDataSnapshots(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): String {
+        val refreshed = orderService.refreshMarketDataSnapshots(projectionName, sourceProjectionName)
+        return JsonCodec.writeObject(
+            "projectionName" to projectionName,
+            "sourceProjectionName" to sourceProjectionName,
+            "refreshed" to refreshed
+        )
+    }
+
+    fun marketDataSnapshot(
+        instrumentId: String,
+        projectionName: String = "market-data-top-of-book"
+    ): String {
+        val snapshot = orderService.marketDataSnapshot(instrumentId, projectionName)
+        if (snapshot == null) {
+            return JsonCodec.writeObject(
+                "error" to "market data snapshot not found",
+                "instrumentId" to instrumentId,
+                "projectionName" to projectionName
+            )
+        }
+        return JsonCodec.writeObject("snapshot" to snapshot.toMap())
+    }
+
     fun trades(): String {
         return JsonCodec.writeObject("trades" to orderService.persistedTrades().map { it.toMap() })
     }
@@ -268,6 +296,20 @@ class PlatformApi(
         "price" to price,
         "currency" to currency,
         "occurredAt" to occurredAt
+    )
+
+    private fun MarketDataSnapshot.toMap(): Map<String, Any> = mapOf(
+        "projectionName" to projectionName,
+        "sourceProjectionName" to sourceProjectionName,
+        "instrumentId" to instrumentId,
+        "bestBidPrice" to bestBidPrice,
+        "bestBidQuantity" to bestBidQuantity,
+        "bestAskPrice" to bestAskPrice,
+        "bestAskQuantity" to bestAskQuantity,
+        "currency" to currency,
+        "lastPartitionSequence" to lastPartitionSequence,
+        "lag" to lag,
+        "updatedAt" to updatedAt
     )
 
     private fun RuntimeEvent.toMap(): Map<String, Any> = mapOf(

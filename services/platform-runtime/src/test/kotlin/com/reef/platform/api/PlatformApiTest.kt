@@ -6,10 +6,12 @@ import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
+import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -265,6 +267,57 @@ class PlatformApiTest {
         assertContains(api.instruments(), "\"instrumentId\":\"MSFT\"")
         assertContains(api.participants(), "\"participantId\":\"participant-9\"")
         assertContains(api.accounts(), "\"accountId\":\"account-9\"")
+    }
+
+    @Test
+    fun marketDataSnapshotApiReadsProjectedTopOfBook() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-1",
+                engineOrderId = "eng-bid-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:00Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ask-1",
+                engineOrderId = "eng-ask-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "75",
+                limitPrice = "150260000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:01Z"
+            )
+        )
+
+        assertContains(api.marketDataSnapshot("AAPL"), "\"error\":\"market data snapshot not found\"")
+        assertContains(api.refreshMarketDataSnapshots(), "\"refreshed\":1")
+        val response = api.marketDataSnapshot("AAPL")
+
+        assertContains(response, "\"snapshot\"")
+        assertContains(response, "\"projectionName\":\"market-data-top-of-book\"")
+        assertContains(response, "\"sourceProjectionName\":\"runtime-normalized-venue-outcomes\"")
+        assertContains(response, "\"bestBidPrice\":\"150250000000\"")
+        assertContains(response, "\"bestBidQuantity\":\"100\"")
+        assertContains(response, "\"bestAskPrice\":\"150260000000\"")
+        assertContains(response, "\"bestAskQuantity\":\"75\"")
+        assertContains(response, "\"lag\":0")
     }
 
     private fun validRequestBody(): String {

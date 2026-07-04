@@ -26,6 +26,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.canonical_venue_event_batches",
                 "runtime.canonical_command_outcomes",
                 "runtime.projection_watermarks",
+                "runtime.market_data_snapshots",
                 "auth.auth_roles",
                 "auth.auth_actor_roles"
             ),
@@ -110,6 +111,19 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.projection_watermarks" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.market_data_snapshots.projection_name:text",
+                "runtime.market_data_snapshots.source_projection_name:text",
+                "runtime.market_data_snapshots.instrument_id:text",
+                "runtime.market_data_snapshots.last_partition_seq:bigint",
+                "runtime.market_data_snapshots.lag:bigint"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.market_data_snapshots" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

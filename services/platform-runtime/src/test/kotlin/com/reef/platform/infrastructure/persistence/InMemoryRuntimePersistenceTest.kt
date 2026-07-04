@@ -109,6 +109,86 @@ class InMemoryRuntimePersistenceTest {
     }
 
     @Test
+    fun refreshesMarketDataSnapshotsFromAcceptedOrders() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-1",
+                engineOrderId = "eng-bid-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:00Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-2",
+                engineOrderId = "eng-bid-2",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "50",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:01Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ask-1",
+                engineOrderId = "eng-ask-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "75",
+                limitPrice = "150260000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:02Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ask-2",
+                engineOrderId = "eng-ask-2",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "80",
+                limitPrice = "150270000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:03Z"
+            )
+        )
+
+        assertEquals(1, persistence.refreshMarketDataSnapshots())
+        val snapshot = persistence.marketDataSnapshot("AAPL")
+        assertNotNull(snapshot)
+        assertEquals("market-data-top-of-book", snapshot.projectionName)
+        assertEquals("runtime-normalized-venue-outcomes", snapshot.sourceProjectionName)
+        assertEquals("150250000000", snapshot.bestBidPrice)
+        assertEquals("150", snapshot.bestBidQuantity)
+        assertEquals("150260000000", snapshot.bestAskPrice)
+        assertEquals("75", snapshot.bestAskQuantity)
+        assertEquals("USD", snapshot.currency)
+    }
+
+    @Test
     fun materializesVenueEventBatchIdempotently() {
         val persistence = InMemoryRuntimePersistence()
         val batch = venueEventBatch()

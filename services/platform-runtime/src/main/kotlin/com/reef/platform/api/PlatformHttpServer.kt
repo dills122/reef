@@ -391,6 +391,28 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.orders())
         }
 
+        server.createContext("/api/v1/market-data/snapshots/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
+            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
+            val response = api.marketDataSnapshot(instrumentId, projectionName)
+            val status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200
+            writeJson(exchange, status, response)
+        }
+
+        server.createContext("/api/v1/market-data/snapshots") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
+            val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
+        }
+
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -549,6 +571,25 @@ class PlatformHttpServer(
                 handleApiV1MutationResponse(request, "/api/v1/orders/modify") { body -> api.modifyOrder(body) }
             request.path == "/api/v1/orders/cancel" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/cancel") { body -> api.cancelOrder(body) }
+            request.path == "/api/v1/market-data/snapshots" && request.method == "POST" ->
+                PlatformHotPathResponse(
+                    status = 200,
+                    body = api.refreshMarketDataSnapshots(
+                        queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" },
+                        queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+                    )
+                )
+            request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {
+                val instrumentId = request.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
+                val response = api.marketDataSnapshot(
+                    instrumentId,
+                    queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" }
+                )
+                PlatformHotPathResponse(
+                    status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200,
+                    body = response
+                )
+            }
             else -> legacySetupRoutes.handle(request)
         }
     }

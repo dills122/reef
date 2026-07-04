@@ -43,6 +43,7 @@ Current decision anchors:
 - The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Accepted submit `orders` are reconstructed through the durable `command_log.command_payloads` join when the original command payload is available.
 - Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
 - Account/bot risk pre-checks now have a boundary contract and allow-all/static implementation that can reject, backpressure, or disable bots before command-log append, stream intake reservation, or durable publish.
+- Market-data reads have a first conservative projection-backed top-of-book slice: `runtime.market_data_snapshots` is refreshed from persisted accepted `LIMIT` orders and exposed at `/api/v1/market-data/snapshots/{instrumentId}` with source projection watermark/freshness fields.
 
 ## Current Forward Path
 
@@ -52,7 +53,7 @@ Work should follow this order unless a new decision supersedes it:
 2. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
 3. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
 4. Prove compact persistence projection end to end: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
-5. Complete persisted venue lifecycle projections for submit/cancel/modify so query APIs match engine lifecycle state.
+5. Complete persisted open-order quantity projection so market-data snapshots account for cancels, replaces, fills, and venue-session-specific depth.
 6. Build the simulator control-room MVP on top of existing scripts and artifacts.
 7. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
 8. Expand post-trade modules only after timeline and replay assertions prove causation end to end.

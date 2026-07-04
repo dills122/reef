@@ -12,6 +12,8 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import java.math.BigDecimal
+import java.time.Instant
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
@@ -29,6 +31,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val trades = mutableListOf<TradeCreated>()
     private val events = mutableListOf<RuntimeEvent>()
     private val traceSequences = mutableMapOf<String, Long>()
+    private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         submitResults[commandId] = result
@@ -296,6 +299,50 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return commandOutcomes[commandId]
     }
 
+    override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }
+        val lastPartitionSequence = sourceWatermarks.maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        val updatedAt = sourceWatermarks.lastOrNull { it.updatedAt.isNotBlank() }?.updatedAt ?: Instant.now().toString()
+        marketDataSnapshots.keys
+            .filter { it.startsWith("$projectionName:") }
+            .toList()
+            .forEach { marketDataSnapshots.remove(it) }
+        orders.values
+            .filter {
+                it.orderType == "LIMIT" &&
+                    it.limitPrice.toBigDecimalOrNull() != null &&
+                    it.quantityUnits.toBigDecimalOrNull() != null
+            }
+            .groupBy { it.instrumentId }
+            .forEach { (instrumentId, instrumentOrders) ->
+                val bids = instrumentOrders.filter { it.side == "BUY" }
+                val asks = instrumentOrders.filter { it.side == "SELL" }
+                val bestBid = bids.maxByOrNull { it.limitPrice.toBigDecimalOrNull() ?: BigDecimal.ZERO }
+                val bestAsk = asks.minByOrNull { it.limitPrice.toBigDecimalOrNull() ?: BigDecimal.ZERO }
+                val bestBidPrice = bestBid?.limitPrice.orEmpty()
+                val bestAskPrice = bestAsk?.limitPrice.orEmpty()
+                marketDataSnapshots["$projectionName:$instrumentId"] = MarketDataSnapshot(
+                    projectionName = projectionName,
+                    sourceProjectionName = sourceProjectionName,
+                    instrumentId = instrumentId,
+                    bestBidPrice = bestBidPrice,
+                    bestBidQuantity = aggregateQuantity(bids, bestBidPrice),
+                    bestAskPrice = bestAskPrice,
+                    bestAskQuantity = aggregateQuantity(asks, bestAskPrice),
+                    currency = instrumentOrders.firstOrNull { it.currency.isNotBlank() }?.currency.orEmpty(),
+                    lastPartitionSequence = lastPartitionSequence,
+                    lag = sourceStatus.lag,
+                    updatedAt = updatedAt
+                )
+            }
+        return marketDataSnapshots.keys.count { it.startsWith("$projectionName:") }.toLong()
+    }
+
+    override fun marketDataSnapshot(instrumentId: String, projectionName: String): MarketDataSnapshot? {
+        return marketDataSnapshots["$projectionName:$instrumentId"]
+    }
+
     private fun CanonicalCommandOutcome.toSubmitOrderResult(): SubmitOrderResult {
         return if (resultStatus == "rejected") {
             SubmitOrderResult(
@@ -357,6 +404,16 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             "ModifyOrder" -> "OrderModified"
             else -> "OrderAccepted"
         }
+    }
+
+    private fun aggregateQuantity(orders: List<PersistedOrder>, price: String): String {
+        if (price.isBlank()) return ""
+        val total = orders
+            .filter { it.limitPrice == price }
+            .mapNotNull { it.quantityUnits.toBigDecimalOrNull() }
+            .fold(BigDecimal.ZERO, BigDecimal::add)
+        if (total == BigDecimal.ZERO) return ""
+        return total.stripTrailingZeros().toPlainString()
     }
 
     private companion object {

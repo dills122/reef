@@ -618,6 +618,16 @@ class OrderApplicationService(
 
     fun recentEvents(limit: Int) = runtimePersistence.recentEvents(limit)
 
+    fun refreshMarketDataSnapshots(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ) = runtimePersistence.refreshMarketDataSnapshots(projectionName, sourceProjectionName)
+
+    fun marketDataSnapshot(
+        instrumentId: String,
+        projectionName: String = "market-data-top-of-book"
+    ) = runtimePersistence.marketDataSnapshot(instrumentId, projectionName)
+
     fun createInstrument(instrument: Instrument) = runtimePersistence.saveInstrument(instrument)
 
     fun createParticipant(participant: Participant) = runtimePersistence.saveParticipant(participant)

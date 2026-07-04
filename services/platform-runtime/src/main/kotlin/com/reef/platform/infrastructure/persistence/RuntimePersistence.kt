@@ -62,6 +62,20 @@ data class ProjectionStatus(
     val watermarks: List<ProjectionWatermark>
 )
 
+data class MarketDataSnapshot(
+    val projectionName: String,
+    val sourceProjectionName: String,
+    val instrumentId: String,
+    val bestBidPrice: String,
+    val bestBidQuantity: String,
+    val bestAskPrice: String,
+    val bestAskQuantity: String,
+    val currency: String,
+    val lastPartitionSequence: Long,
+    val lag: Long,
+    val updatedAt: String
+)
+
 data class VenueCommandOutcomeFact(
     val commandId: String,
     val commandType: String,
@@ -187,6 +201,18 @@ interface RuntimePersistence {
         return 0
     }
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return null
+    }
+    fun refreshMarketDataSnapshots(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): Long {
+        return 0
+    }
+    fun marketDataSnapshot(
+        instrumentId: String,
+        projectionName: String = "market-data-top-of-book"
+    ): MarketDataSnapshot? {
         return null
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
