@@ -265,6 +265,14 @@ STREAM_ACK_LOG_PROVIDER=redpanda make dev-stress-stream-direct-nodb
 
 In this mode the API still returns `202` only after the Kafka-compatible producer receives an `acks=all` broker acknowledgment. The matching engine consumes assigned Kafka topic partitions directly, publishes `VenueEventBatch` records to the configured event topic, and commits Kafka offsets only after the event batch publish succeeds. A platform runtime can then run `PLATFORM_RUNTIME_ROLE=materializer` with `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack` and `STREAM_ACK_LOG_PROVIDER=redpanda` to read those event batches, commit compact canonical Postgres rows, and commit its Kafka event-topic offsets only after the Postgres materialization call returns. This is the apples-to-apples path for the durable command-log boundary plus async canonical materialization; the older `STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack` path still exercises the DB-backed stream workers.
 
+Run the local Redpanda direct-stream materializer smoke:
+
+```bash
+make dev-smoke-venue-event-materializer
+```
+
+This starts isolated Redpanda command/event topics, the direct matching-engine consumer, and `platform-materializer`. The smoke submits one stream-ack order, waits for `runtime.canonical_command_outcomes`, and verifies `/internal/venue-event-materializer/stats` advanced. It is a correctness smoke, not a throughput claim.
+
 For the higher-throughput front-door prototype, enable the long-lived stream transport:
 
 ```bash
@@ -693,6 +701,7 @@ Compose sets:
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 - stream-ack partition workers: `platform-worker-0` through `platform-worker-3` default to four explicit non-overlapping `16`-partition ranges over the default `STREAM_ACK_PARTITION_COUNT=64`.
 - venue event materializer: `PLATFORM_RUNTIME_ROLE=materializer`, `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`, and `STREAM_ACK_LOG_PROVIDER=redpanda` starts the Kafka-compatible event-batch materializer. `VENUE_EVENT_MATERIALIZER_ENABLED=true` can also start it in another background-capable role for local experiments.
+- venue event materializer compose service: `platform-materializer` is enabled by the `venue-event-materializer` compose profile and exposes diagnostics on `REEF_PLATFORM_MATERIALIZER_HOST_PORT` (default `8091`).
 - venue event materializer tuning: `VENUE_EVENT_MATERIALIZER_TOPIC` defaults to `MATCHING_ENGINE_EVENT_STREAM` or `REEF_VENUE_EVENTS`; `VENUE_EVENT_MATERIALIZER_GROUP_ID`, `VENUE_EVENT_MATERIALIZER_BATCH_SIZE`, `VENUE_EVENT_MATERIALIZER_POLL_MS`, `VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS`, and `VENUE_EVENT_MATERIALIZER_KAFKA_MAX_POLL_RECORDS` tune consumption.
 - venue event materializer stats: `GET /internal/venue-event-materializer/stats` reports enabled state, role, source, batch/poll config, and materialization counters.
 

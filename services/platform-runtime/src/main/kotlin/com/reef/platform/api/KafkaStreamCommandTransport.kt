@@ -353,7 +353,7 @@ class KafkaVenueEventBatchSource(
             }
             rewindOffsets.clear()
 
-            return consumer.poll(timeout).records(topic).map { record ->
+            return consumer.poll(timeout).records(topic).take(batchSize).map { record ->
                 val topicPartition = TopicPartition(record.topic(), record.partition())
                 ensureNextCommitOffset(topicPartition)
                 val subject = record.headers().lastHeader(STREAM_SUBJECT_HEADER)?.value()?.toString(Charsets.UTF_8)
