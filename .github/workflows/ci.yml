@@ -5,7 +5,6 @@ on:
     branches:
       - master
       - main
-      - 'codex/**'
   pull_request:
 
 jobs:
@@ -30,8 +29,17 @@ jobs:
           go-version-file: services/matching-engine/go.mod
       - name: Check gofmt
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
-      - name: Run Go tests
-        run: go test ./...
+      - name: Run Go tests with coverage
+        working-directory: .
+        run: ./scripts/ci/go-coverage.sh services/matching-engine matching-engine
+      - name: Add coverage summary
+        working-directory: .
+        run: cat coverage/matching-engine/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload matching-engine coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: matching-engine-coverage
+          path: coverage/matching-engine
       - name: Run matching-engine benchmark guardrail
         working-directory: .
         run: ./scripts/ci/check-matching-bench.sh
@@ -48,8 +56,17 @@ jobs:
           go-version-file: services/simulator/go.mod
       - name: Check gofmt
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
-      - name: Run simulator Go tests
-        run: go test ./...
+      - name: Run simulator Go tests with coverage
+        working-directory: .
+        run: ./scripts/ci/go-coverage.sh services/simulator simulator
+      - name: Add coverage summary
+        working-directory: .
+        run: cat coverage/simulator/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload simulator coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-coverage
+          path: coverage/simulator
 
   kotlin-platform-runtime:
     runs-on: ubuntu-latest
@@ -65,11 +82,156 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
-      - name: Run Kotlin tests
-        run: ./gradlew --no-daemon test
+      - name: Run Kotlin tests with coverage
+        run: ./gradlew --no-daemon test jacocoTestReport
+      - name: Add coverage summary
+        run: |
+          csv="build/reports/jacoco/test/jacocoTestReport.csv"
+          awk -F, '
+            NR > 1 { missed += $4; covered += $5 }
+            END {
+              total = missed + covered
+              pct = total == 0 ? 0 : covered * 100 / total
+              print "## platform-runtime coverage"
+              print ""
+              print "| Module | Instruction coverage |"
+              print "| --- | ---: |"
+              printf("| services/platform-runtime | %.1f%% |\n", pct)
+            }
+          ' "$csv" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload platform-runtime coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-runtime-coverage
+          path: |
+            services/platform-runtime/build/reports/jacoco/test
+            services/platform-runtime/build/test-results/test
       - name: Run platform-runtime performance guardrail
         working-directory: .
         run: ./scripts/ci/check-runtime-bench.sh
+
+  node-dev-tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run Node dev-tooling tests with coverage
+        env:
+          NODE_V8_COVERAGE: coverage/node-dev-tooling/v8
+        run: |
+          set -o pipefail
+          mkdir -p coverage/node-dev-tooling/v8
+          node --test --experimental-test-coverage \
+            scripts/dev/lib/dev-stack.test.mjs \
+            scripts/dev/db/migrate.test.mjs \
+            scripts/dev/command-log-pin.test.mjs \
+            scripts/dev/command-log-prune.test.mjs | tee coverage/node-dev-tooling/test-output.txt
+      - name: Add coverage summary
+        run: |
+          {
+            echo "## node dev-tooling coverage"
+            echo
+            echo '```text'
+            tail -n 40 coverage/node-dev-tooling/test-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload Node dev-tooling coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-dev-tooling-coverage
+          path: coverage/node-dev-tooling
+
+  scenario-replay:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    timeout-minutes: 25
+    env:
+      JS_RUNTIME: node
+      EXTERNAL_API_COMMAND_PROCESSING_MODE: sync-result
+      EXTERNAL_API_COMMAND_LOG_MODE: disabled
+      EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: 'false'
+      STREAM_ACK_WORKER_ENABLED: 'false'
+      STREAM_ACK_PROJECTOR_ENABLED: 'false'
+      DEV_REPLAY_ARTIFACT_DIR: replay-artifacts/persona-session
+      DEV_REPLAY_DURATION: 20s
+      DEV_REPLAY_WORKERS: '8'
+      DEV_REPLAY_RATE: '120'
+      DEV_REPLAY_TRACE_CHECK_LIMIT: '100'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/simulator/go.mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Start replay stack
+        run: JS_RUNTIME=node make dev-up
+      - name: Run deterministic replay pack
+        run: JS_RUNTIME=node make dev-replay
+      - name: Add replay summary
+        if: always()
+        run: |
+          echo "## deterministic replay" >> "$GITHUB_STEP_SUMMARY"
+          find replay-artifacts/persona-session -name '*.check.json' -print -exec cat {} \; >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Upload replay artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deterministic-replay-artifacts
+          path: replay-artifacts/persona-session
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs
+      - name: Stop stack
+        if: always()
+        run: docker compose -f docker-compose.yml down --volumes --remove-orphans
+
+  container-builds:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: matching-engine
+            context: services/matching-engine
+            dockerfile: services/matching-engine/Dockerfile
+          - name: platform-runtime
+            context: services/platform-runtime
+            dockerfile: services/platform-runtime/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.name }} image
+        run: docker build -f "${{ matrix.dockerfile }}" -t "reef/${{ matrix.name }}:ci" "${{ matrix.context }}"
+
+  go-vulnerability-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: matching-engine
+            go-version-file: services/matching-engine/go.mod
+            workdir: services/matching-engine
+          - name: simulator
+            go-version-file: services/simulator/go.mod
+            workdir: services/simulator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.go-version-file }}
+      - name: Run govulncheck for ${{ matrix.name }}
+        uses: golang/govulncheck-action@v1
+        with:
+          work-dir: ${{ matrix.workdir }}
 
   postgres-schema-placement:
     runs-on: ubuntu-latest

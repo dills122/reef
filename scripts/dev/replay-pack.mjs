@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, resolve } from "node:path";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
@@ -9,7 +9,7 @@ const baselinePath = env(
   "DEV_REPLAY_BASELINE",
   "services/simulator/replay/golden/persona-session.baseline.json",
 );
-const artifactDir = env("DEV_REPLAY_ARTIFACT_DIR", "/tmp/reef-replay-pack");
+const artifactDir = resolve(env("DEV_REPLAY_ARTIFACT_DIR", "/tmp/reef-replay-pack"));
 const duration = env("DEV_REPLAY_DURATION", "20s");
 const workers = env("DEV_REPLAY_WORKERS", "8");
 const rate = env("DEV_REPLAY_RATE", "120");
@@ -19,8 +19,9 @@ const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
 const sessionConfigPath = env("DEV_REPLAY_SESSION_CONFIG", baseline.sessionConfig);
 mkdirSync(artifactDir, { recursive: true });
 
-const reportOut = join(artifactDir, `${basename(sessionConfigPath).replace(/\.(yaml|yml|json)$/i, "")}.report.json`);
-const checkOut = join(artifactDir, `${basename(sessionConfigPath).replace(/\.(yaml|yml|json)$/i, "")}.check.json`);
+const artifactBaseName = basename(sessionConfigPath).replace(/\.(yaml|yml|json)$/i, "");
+const reportOut = resolve(artifactDir, `${artifactBaseName}.report.json`);
+const checkOut = resolve(artifactDir, `${artifactBaseName}.check.json`);
 
 console.log(`running replay pack for ${sessionConfigPath}`);
 await run(

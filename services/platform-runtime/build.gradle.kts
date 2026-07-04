@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.1.10"
     application
+    jacoco
 }
 
 repositories {
@@ -32,4 +33,25 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+
+    reports {
+        xml.required.set(true)
+        csv.required.set(true)
+        html.required.set(true)
+    }
+
+    classDirectories.setFrom(
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    exclude("reef/contracts/**")
+                }
+            },
+        ),
+    )
 }
