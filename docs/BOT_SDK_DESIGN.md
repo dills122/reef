@@ -1,0 +1,261 @@
+# Bot SDK Design
+
+## Purpose
+
+Define the first public Bot SDK contract for Reef bot authors.
+
+The SDK must let users build useful trading bots while preserving Reef's core constraints:
+
+- bots use the same venue command paths as manual users and simulator actors
+- hosted bot code is untrusted
+- bot decisions are replayable, inspectable, and rate limited
+- arena rules and limits are configuration-driven
+- public bot APIs are versioned so breaking changes can be isolated
+
+This document describes the initial `ReefBotV1` design. It does not add new runtime routes or storage contracts.
+
+## V1 Authoring Model
+
+Each bot starts as one TypeScript file. The file exports one default class that extends `ReefBotV1`.
+
+The filename must be unique across submitted bots. The metadata `name` does not need to match the filename.
+
+```ts
+import { ReefBotV1, type BotContextV1, type BotActionV1 } from "@reef/bot-sdk";
+
+export default class ExampleBot extends ReefBotV1 {
+  static override metadata = {
+    name: "example-bot",
+    publisher: "Example Publisher",
+    email: "bot-author@example.com",
+    version: "1.0.0",
+    sdkVersion: "1.0.0",
+    botApiVersion: "v1",
+  };
+
+  override async onTick(ctx: BotContextV1): Promise<BotActionV1[]> {
+    const snapshot = await ctx.marketData.snapshot("AAPL");
+    if (!snapshot.ok) {
+      return [];
+    }
+
+    return [
+      ctx.actions.submitLimit({
+        instrumentId: "AAPL",
+        side: "BUY",
+        quantity: 10,
+        limitPrice: snapshot.value.midPrice - 1,
+      }),
+    ];
+  }
+}
+```
+
+## Metadata
+
+Required metadata:
+
+- `name`
+- `publisher`
+- `email`
+- `version`
+- `sdkVersion`
+- `botApiVersion`
+
+Optional metadata:
+
+- `description`
+- `tags`
+- `repository`
+- `license`
+- `homepage`
+
+The registration harness performs basic email syntax validation. During PR-based publishing, the harness should also record the git author email as a secondary audit signal, but metadata remains the bot author's declared contact.
+
+Bot authors should bump their bot `version` whenever they change bot behavior. Existing bots only need code changes for SDK/API major-version breaks. Minor and patch SDK updates should preserve compatibility.
+
+## Lifecycle
+
+`ReefBotV1` uses a harness-owned tick lifecycle:
+
+- `onStart(ctx)` runs once after metadata, config, scanning, and preflight succeed.
+- `onTick(ctx)` runs on the configured schedule and returns proposed actions.
+- `onStop(ctx)` runs once during graceful shutdown.
+
+Hosted v1 bots must not create their own timers, background loops, or transport clients. Future HFT or event-driven bots should use a separate runtime mode or a future major bot API version rather than weakening the v1 tick contract.
+
+## Scheduling And Limits
+
+All limits are configuration-driven by arena/runtime policy.
+
+Initial default policy:
+
+- default tick interval: `500ms`
+- minimum allowed tick interval: `250ms`
+- max individual order actions per tick: `10`
+- all API clients have per-bot call-rate limits
+- batch order limits count each child order, not just the batch wrapper
+
+Bot metadata may later expose scheduling preferences, but the runtime owns the final schedule.
+
+## Action Model
+
+Hosted bots return proposed actions from `onTick`; they do not submit directly to Reef.
+
+The harness validates, rates, scores, and audits actions before translating them into normal venue commands.
+Bot authors use the order client to construct these actions:
+
+```ts
+return [
+  ctx.orders.placeLimit({
+    instrumentId: "AAPL",
+    side: "BUY",
+    quantity: 10,
+    limitPrice: 99.5,
+  }),
+];
+```
+
+`ctx.actions` remains a low-level factory, but examples should prefer `ctx.orders` because it is the single author-facing order API surface.
+
+Initial actions:
+
+- submit limit order
+- submit market order when the arena mode allows it
+- modify order
+- cancel order
+- cancel all own open orders
+- no-op
+
+Each accepted action must pass:
+
+```text
+schema validation -> arena permission/risk policy -> rate limit -> venue command gateway
+```
+
+Rejected actions are first-class bot outcomes and may affect qualification, freeze, ban, or scoring decisions.
+
+## Data Surface
+
+V1 is pull/call based with rate limits.
+
+Allowed read surfaces:
+
+- own current orders
+- own previous orders
+- own fills and executions where projected
+- tightly scoped public market snapshots
+- aggregate and intraday market indicators
+- historical data exposed by approved SDK clients
+- current runtime policy and limits visible to the bot
+
+Disallowed surfaces:
+
+- direct database access
+- direct network access
+- matching-engine internals
+- future scenario schedule
+- other bots' private state
+- raw event logs unless exposed through a versioned public policy
+
+Historical responses may be cached client-side because historical windows do not change after finalization. Live/current reads must respect freshness, TTL, and rate-limit policy.
+
+## SDK Clients
+
+`BotContextV1` exposes approved clients. Bot code must not create its own Reef HTTP, gRPC, WebSocket, or database clients.
+
+Initial order client:
+
+- `ctx.orders.current()`
+- `ctx.orders.history({ instrumentId, limit })`
+- `ctx.orders.placeLimit(order)`
+- `ctx.orders.placeMarket(order)`
+- `ctx.orders.modify(order)`
+- `ctx.orders.cancel(order)`
+- `ctx.orders.cancelAll(instrumentId?)`
+
+Initial market and historical clients:
+
+- `ctx.marketData.snapshot(instrumentId)`
+- `ctx.historical.intradayBars({ instrumentId, interval, start, end })`
+
+Read clients return structured `BotResultV1<T>` values. Rate limits, policy denials, stale data, and temporary unavailability should be returned as denials so bots can adapt without crashing.
+
+Order write methods return proposed `BotActionV1` values in hosted mode. A later local-development adapter may translate those actions to live `/api/v1` calls, but hosted qualification must keep the proposal/validation boundary.
+
+## Private Runtime Config
+
+Private bot config is loaded during preflight/start from OpenBao, validated by the platform, and then made available in memory through `ctx.config`.
+
+The SDK may expose config descriptors for author ergonomics and registration UI, but TypeScript types are not enforcement. Runtime validation and OpenBao storage are the enforcement boundary.
+
+Config values are immutable for a run.
+
+## Sandbox Policy
+
+Hosted v1 bots are untrusted.
+
+Minimum hosted restrictions:
+
+- no external network access
+- no direct filesystem access in v1
+- no `setTimeout` or `setInterval`
+- no child processes
+- no direct Node built-in imports
+- no native modules
+- no dynamic dependency installation
+- no arbitrary Reef HTTP/gRPC clients
+- deterministic clock through `ctx.clock`
+- deterministic randomness only through `ctx.random`
+- per-decision wall-time timeout
+- CPU and memory budgets enforced outside the JS runtime
+- bounded logs, state, API calls, and action counts
+
+SES compartments are a good JavaScript-level confinement layer, but hosted safety also requires process/container isolation, OS-level resource limits, blocked outbound network, restricted module loading, scanner gates, and operator kill switches.
+
+## Dependencies
+
+V1 starts with no third-party imports except `@reef/bot-sdk`.
+
+An allowlist can be added after built-in example bots prove which packages materially improve bot authoring. Any allowlisted package needs scanner coverage, lockfile tracking, runtime compatibility checks, and replay impact review.
+
+## Registration And Qualification
+
+The registration harness should:
+
+1. verify unique filename
+2. parse and validate metadata
+3. check basic email syntax and record git author email when available
+4. reject forbidden imports and hosted-mode APIs
+5. typecheck against the pinned SDK version
+6. instantiate the default bot class in a confined runtime
+7. run `onStart`, controlled ticks, and `onStop`
+8. enforce configured API/action/trade-per-second limits
+9. run a deterministic qualification simulation
+10. emit a registration report
+
+The sidecar implementation starts with:
+
+- `bun scripts/dev/bot-sdk-register.mjs <bot-file.ts>` for single-bot registration and mock qualification
+- `bun scripts/dev/bot-sdk-contract.test.mjs` for SDK examples and contract checks
+
+A bot that exceeds trade/sec limits during qualification must be marked `do_not_merge` until fixed. Repeated live violations can freeze the bot and then ban that bot version or submitter according to arena policy.
+
+## Persistence And Leaderboards
+
+Persistent arena storage is the source of truth for:
+
+- bot identity and public metadata
+- bot versions and artifact hashes
+- validation and qualification results
+- run metadata
+- public analytics exported from simulations
+- leaderboard source facts
+
+Repository README or GitHub Pages leaderboards should be generated read models from persistent facts, not the source of truth.
+
+## Future Runtime Modes
+
+`ReefBotV1` is deliberately conservative. It is designed for safe public authoring and deterministic arena qualification, not HFT.
+
+Future modes can add event-driven or lower-latency behavior after the platform has stronger sandboxing, throughput evidence, replay guarantees, and scoring controls.
