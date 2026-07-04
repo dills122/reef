@@ -137,6 +137,7 @@ Run local checks:
 ```bash
 bun scripts/dev/bot-sdk-contract.test.mjs
 bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-maker.ts
+bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
 ```
 
 Registration checks:

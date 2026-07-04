@@ -272,6 +272,7 @@ The registration harness should:
 The sidecar implementation starts with:
 
 - `bun scripts/dev/bot-sdk-register.mjs <bot-file.ts>` for single-bot registration and mock qualification
+- `bun scripts/dev/bot-sdk-run.mjs <bot-file.ts> [fixture.json]` for deterministic multi-tick scenario runs
 - `bun scripts/dev/bot-sdk-contract.test.mjs` for SDK examples and contract checks
 - `bun scripts/dev/bot-sdk-venue-adapter.test.mjs` for fixture-to-venue-command smoke checks
 - `packages/bot-sdk/bot-registry.example.json` as the first local registry fixture, with filename, bot ID, owner, publisher, approved version, status, and optional artifact hash
