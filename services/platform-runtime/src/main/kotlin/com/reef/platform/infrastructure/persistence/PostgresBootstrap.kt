@@ -173,6 +173,58 @@ object PostgresSchemaRequirements {
         )
     }
 
+    fun boundaryAccountRisk(
+        accountRiskControls: String,
+        accountRiskDecisions: String
+    ): PostgresSchemaRequirement {
+        val controls = PostgresSchemaObject.parse(accountRiskControls)
+        val decisions = PostgresSchemaObject.parse(accountRiskDecisions)
+        return PostgresSchemaRequirement(
+            tables = listOf(controls, decisions),
+            columns = listOf(
+                PostgresSchemaColumn(controls, "scope_type", "text"),
+                PostgresSchemaColumn(controls, "scope_id", "text"),
+                PostgresSchemaColumn(controls, "decision", "text"),
+                PostgresSchemaColumn(controls, "reason", "text"),
+                PostgresSchemaColumn(controls, "updated_at", "timestamp with time zone"),
+                PostgresSchemaColumn(decisions, "decision_id", "text"),
+                PostgresSchemaColumn(decisions, "decided_at", "timestamp with time zone"),
+                PostgresSchemaColumn(decisions, "decision", "text"),
+                PostgresSchemaColumn(decisions, "code", "text"),
+                PostgresSchemaColumn(decisions, "message", "text"),
+                PostgresSchemaColumn(decisions, "client_id", "text"),
+                PostgresSchemaColumn(decisions, "route", "text"),
+                PostgresSchemaColumn(decisions, "command_type", "text"),
+                PostgresSchemaColumn(decisions, "command_id", "text"),
+                PostgresSchemaColumn(decisions, "idempotency_key", "text"),
+                PostgresSchemaColumn(decisions, "correlation_id", "text"),
+                PostgresSchemaColumn(decisions, "actor_id", "text"),
+                PostgresSchemaColumn(decisions, "participant_id", "text"),
+                PostgresSchemaColumn(decisions, "account_id", "text"),
+                PostgresSchemaColumn(decisions, "bot_id", "text"),
+                PostgresSchemaColumn(decisions, "run_id", "text"),
+                PostgresSchemaColumn(decisions, "venue_session_id", "text"),
+                PostgresSchemaColumn(decisions, "instrument_id", "text"),
+                PostgresSchemaColumn(decisions, "order_id", "text"),
+                PostgresSchemaColumn(decisions, "payload_hash", "text")
+            )
+        )
+    }
+
+    fun boundaryCommandCircuitBreakers(commandCircuitBreakers: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(commandCircuitBreakers)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                PostgresSchemaColumn(table, "scope_type", "text"),
+                PostgresSchemaColumn(table, "scope_id", "text"),
+                PostgresSchemaColumn(table, "tripped", "boolean"),
+                PostgresSchemaColumn(table, "reason", "text"),
+                PostgresSchemaColumn(table, "updated_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun commandLog(
         commands: String,
         payloads: String = "command_log.command_payloads",

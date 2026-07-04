@@ -5,6 +5,9 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 internal class PlatformDiagnosticRoutes(
     private val healthJson: () -> String,
     private val abuseStatsJson: () -> String,
+    private val accountRiskControlsJson: () -> String,
+    private val accountRiskDecisionsJson: (Int) -> String,
+    private val commandCircuitBreakersJson: () -> String,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -17,6 +20,9 @@ internal class PlatformDiagnosticRoutes(
     val paths: List<String> = listOf(
         "/health",
         "/internal/boundary/abuse/stats",
+        "/internal/boundary/account-risk/controls",
+        "/internal/boundary/account-risk/decisions/recent",
+        "/internal/boundary/circuit-breakers",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
         "/internal/commands/async/stats",
@@ -32,6 +38,11 @@ internal class PlatformDiagnosticRoutes(
         return when (path) {
             "/health" -> getOnly(method) { healthJson() }
             "/internal/boundary/abuse/stats" -> getOnly(method) { abuseStatsJson() }
+            "/internal/boundary/account-risk/controls" -> getOnly(method) { accountRiskControlsJson() }
+            "/internal/boundary/account-risk/decisions/recent" -> getOnly(method) {
+                accountRiskDecisionsJson(queryValue(query, "limit").toIntOrNull() ?: 50)
+            }
+            "/internal/boundary/circuit-breakers" -> getOnly(method) { commandCircuitBreakersJson() }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }

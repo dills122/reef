@@ -178,6 +178,68 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
+    fun boundaryAccountRiskRequirementsCoverControlsAndDecisionAudit() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryAccountRisk(
+            names.accountRiskControls,
+            names.accountRiskDecisions
+        )
+
+        assertEquals(
+            setOf("boundary.account_risk_controls", "boundary.account_risk_decisions"),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertEquals(
+            setOf(
+                "boundary.account_risk_controls.scope_type:text",
+                "boundary.account_risk_controls.scope_id:text",
+                "boundary.account_risk_controls.decision:text",
+                "boundary.account_risk_controls.reason:text",
+                "boundary.account_risk_controls.updated_at:timestamp with time zone",
+                "boundary.account_risk_decisions.decision_id:text",
+                "boundary.account_risk_decisions.decided_at:timestamp with time zone",
+                "boundary.account_risk_decisions.decision:text",
+                "boundary.account_risk_decisions.code:text",
+                "boundary.account_risk_decisions.message:text",
+                "boundary.account_risk_decisions.client_id:text",
+                "boundary.account_risk_decisions.route:text",
+                "boundary.account_risk_decisions.command_type:text",
+                "boundary.account_risk_decisions.command_id:text",
+                "boundary.account_risk_decisions.idempotency_key:text",
+                "boundary.account_risk_decisions.correlation_id:text",
+                "boundary.account_risk_decisions.actor_id:text",
+                "boundary.account_risk_decisions.participant_id:text",
+                "boundary.account_risk_decisions.account_id:text",
+                "boundary.account_risk_decisions.bot_id:text",
+                "boundary.account_risk_decisions.run_id:text",
+                "boundary.account_risk_decisions.venue_session_id:text",
+                "boundary.account_risk_decisions.instrument_id:text",
+                "boundary.account_risk_decisions.order_id:text",
+                "boundary.account_risk_decisions.payload_hash:text"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
+    fun boundaryCommandCircuitBreakerRequirementsCoverBreakerTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryCommandCircuitBreakers(names.commandCircuitBreakers)
+
+        assertEquals(setOf("boundary.command_circuit_breakers"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "boundary.command_circuit_breakers.scope_type:text",
+                "boundary.command_circuit_breakers.scope_id:text",
+                "boundary.command_circuit_breakers.tripped:boolean",
+                "boundary.command_circuit_breakers.reason:text",
+                "boundary.command_circuit_breakers.updated_at:timestamp with time zone"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
     fun commandLogRequirementsCoverAppendOnlyCommandTable() {
         val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
 

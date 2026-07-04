@@ -5,9 +5,16 @@ import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.UpsertAccountCommand
 import com.reef.platform.application.admin.UpsertInstrumentCommand
 import com.reef.platform.application.admin.UpsertParticipantCommand
+import com.reef.platform.api.AccountRiskControlStore
+import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.api.CommandCircuitBreakerStore
+import com.reef.platform.api.defaultAccountRiskControlStore
+import com.reef.platform.api.defaultCommandCircuitBreakerStore
 
 class AdminCliAdapter(
     private val adminService: AdminApplicationService = AdminApplicationService(),
+    private val accountRiskControls: () -> AccountRiskControlStore = { defaultAccountRiskControlStore() },
+    private val commandCircuitBreakers: () -> CommandCircuitBreakerStore = { defaultCommandCircuitBreakerStore() },
     private val now: () -> java.time.Instant = { java.time.Instant.now() }
 ) {
     fun execute(args: List<String>): String {
@@ -57,6 +64,44 @@ class AdminCliAdapter(
                 if (args.size < 2) return "usage: actor-roles <actorId>"
                 val roles = adminService.listActorRoles(args[1])
                 """{"rolesCount":${roles.size},"actorId":"${args[1]}"}"""
+            }
+            "account-risk-set" -> {
+                if (args.size < 4) return "usage: account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]"
+                val scopeType = when (args[1].trim().lowercase()) {
+                    "account" -> "ACCOUNT"
+                    "bot" -> "BOT"
+                    else -> return "usage: account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]"
+                }
+                val decision = parseAccountRiskDecision(args[3])
+                    ?: return "usage: account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]"
+                val reason = args.drop(4).joinToString(" ")
+                accountRiskControls().upsertControl(scopeType, args[2], decision, reason)
+                """{"status":"ok","command":"account-risk-set","scopeType":"$scopeType","scopeId":"${escapeJson(args[2])}","decision":"${decision.name}"}"""
+            }
+            "account-risk-list" -> {
+                val controls = accountRiskControls().listControls()
+                """{"controlsCount":${controls.size}}"""
+            }
+            "breaker-set" -> {
+                if (args.size < 4) return "usage: breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]"
+                val scopeType = when (args[1].trim().lowercase()) {
+                    "global" -> "GLOBAL"
+                    "venue-session" -> "VENUE_SESSION"
+                    "instrument" -> "INSTRUMENT"
+                    else -> return "usage: breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]"
+                }
+                val tripped = when (args[3].trim().lowercase()) {
+                    "trip", "tripped", "on" -> true
+                    "reset", "clear", "off" -> false
+                    else -> return "usage: breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]"
+                }
+                val reason = args.drop(4).joinToString(" ")
+                commandCircuitBreakers().setBreaker(scopeType, args[2], tripped, reason)
+                """{"status":"ok","command":"breaker-set","scopeType":"$scopeType","scopeId":"${escapeJson(args[2])}","tripped":$tripped}"""
+            }
+            "breaker-list" -> {
+                val breakers = commandCircuitBreakers().listBreakers()
+                """{"breakersCount":${breakers.size}}"""
             }
             "calendar-upsert" -> {
                 if (args.size < 4) return "usage: calendar-upsert <profileId> <timezone> <settlementCycle>"
@@ -119,6 +164,10 @@ class AdminCliAdapter(
               role-assign <actorId> <roleId>
               roles-list
               actor-roles <actorId>
+              account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]
+              account-risk-list
+              breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]
+              breaker-list
               calendar-upsert <profileId> <timezone> <settlementCycle>
               calendar-list
               override-upsert <code> <description>
@@ -129,5 +178,30 @@ class AdminCliAdapter(
               sim-state
               trace-events <traceId>
         """.trimIndent()
+    }
+
+    private fun parseAccountRiskDecision(raw: String): AccountRiskDecision? {
+        return when (raw.trim().lowercase()) {
+            "allow" -> AccountRiskDecision.ALLOW
+            "reject" -> AccountRiskDecision.REJECT
+            "backpressure" -> AccountRiskDecision.BACKPRESSURE
+            "disabled-bot", "disabled_bot" -> AccountRiskDecision.DISABLED_BOT
+            else -> null
+        }
+    }
+
+    private fun escapeJson(value: String): String {
+        return buildString(value.length + 8) {
+            value.forEach { ch ->
+                when (ch) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(ch)
+                }
+            }
+        }
     }
 }

@@ -359,7 +359,31 @@ JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `syn
 
 The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
-Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish.
+Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish. Set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres` to read cached operator controls from `boundary.account_risk_controls` and audit non-allow decisions to `boundary.account_risk_decisions`; `EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS` controls the cache TTL.
+
+Local admin commands for the Postgres-backed mode:
+
+```bash
+make dev-admin CMD="account-risk-set bot bot-1 disabled-bot operator-disabled"
+make dev-admin CMD="account-risk-set account acct-1 backpressure settlement-hold"
+make dev-admin CMD="account-risk-set account acct-1 allow cleared"
+make dev-admin CMD="account-risk-list"
+curl -s http://127.0.0.1:8080/internal/boundary/account-risk/controls
+curl -s 'http://127.0.0.1:8080/internal/boundary/account-risk/decisions/recent?limit=50'
+```
+
+Command circuit breakers are separate hard pre-acceptance gates for venue-wide, venue-session, and instrument halts. Set `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres` to read cached breaker state from `boundary.command_circuit_breakers`; `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS` controls the cache TTL. A tripped breaker returns `503 COMMAND_CIRCUIT_BREAKER_TRIPPED` before command capture, stream-intake reservation, or durable publish.
+
+Local breaker commands:
+
+```bash
+make dev-admin CMD="breaker-set global '*' trip maintenance"
+make dev-admin CMD="breaker-set venue-session session-1 trip session-halted"
+make dev-admin CMD="breaker-set instrument AAPL trip instrument-halt"
+make dev-admin CMD="breaker-set instrument AAPL reset cleared"
+make dev-admin CMD="breaker-list"
+curl -s http://127.0.0.1:8080/internal/boundary/circuit-breakers
+```
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 

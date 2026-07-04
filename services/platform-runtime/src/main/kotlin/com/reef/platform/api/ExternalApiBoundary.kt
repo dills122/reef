@@ -6,6 +6,7 @@ import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
 import java.time.Instant
+import java.util.UUID
 import javax.sql.DataSource
 
 data class BoundaryError(
@@ -96,10 +97,78 @@ interface AccountRiskCheck {
     fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult
 }
 
+data class AccountRiskControl(
+    val scopeType: String,
+    val scopeId: String,
+    val decision: AccountRiskDecision,
+    val reason: String,
+    val updatedAt: String = ""
+)
+
+data class AccountRiskDecisionAudit(
+    val decisionId: String,
+    val decidedAt: String,
+    val decision: AccountRiskDecision,
+    val code: String,
+    val message: String,
+    val clientId: String,
+    val route: String,
+    val commandType: String,
+    val commandId: String,
+    val correlationId: String,
+    val actorId: String,
+    val participantId: String,
+    val accountId: String,
+    val botId: String,
+    val venueSessionId: String,
+    val instrumentId: String,
+    val orderId: String
+)
+
+interface AccountRiskControlStore {
+    fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String = "")
+    fun listControls(): List<AccountRiskControl>
+}
+
+interface AccountRiskDecisionLog {
+    fun recentDecisions(limit: Int = 50): List<AccountRiskDecisionAudit>
+}
+
+data class CommandCircuitBreakerRequest(
+    val clientId: String,
+    val route: String,
+    val commandType: String,
+    val commandId: String,
+    val correlationId: String,
+    val venueSessionId: String,
+    val instrumentId: String
+)
+
+data class CommandCircuitBreakerState(
+    val scopeType: String,
+    val scopeId: String,
+    val tripped: Boolean,
+    val reason: String,
+    val updatedAt: String = ""
+)
+
+interface CommandCircuitBreakerCheck {
+    fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError?
+}
+
+interface CommandCircuitBreakerStore : CommandCircuitBreakerCheck {
+    fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String = "")
+    fun listBreakers(): List<CommandCircuitBreakerState>
+}
+
 class AllowAllAccountRiskCheck : AccountRiskCheck {
     override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
         return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
     }
+}
+
+class AllowAllCommandCircuitBreakerCheck : CommandCircuitBreakerCheck {
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? = null
 }
 
 class StaticAccountRiskCheck(
@@ -118,6 +187,464 @@ class StaticAccountRiskCheck(
             else -> AccountRiskCheckResult(AccountRiskDecision.ALLOW)
         }
     }
+}
+
+class PostgresAccountRiskCheck(
+    private val dataSource: DataSource,
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
+    private val cacheTtlMillis: Long = 1_000L,
+    private val nowMillis: () -> Long = { System.currentTimeMillis() }
+) : AccountRiskCheck, AccountRiskControlStore, AccountRiskDecisionLog {
+    private data class CachedDecision(
+        val result: AccountRiskCheckResult?,
+        val expiresAtMillis: Long
+    )
+
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedDecision>()
+
+    init {
+        connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryAccountRisk(
+                        names.accountRiskControls,
+                        names.accountRiskDecisions
+                    )
+                )
+                return@use
+            }
+            conn.createStatement().use { stmt ->
+                stmt.execute("CREATE SCHEMA IF NOT EXISTS ${names.schemaName}")
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.accountRiskControls} (
+                      scope_type TEXT NOT NULL,
+                      scope_id TEXT NOT NULL,
+                      decision TEXT NOT NULL,
+                      reason TEXT NOT NULL DEFAULT '',
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      PRIMARY KEY (scope_type, scope_id),
+                      CHECK (scope_type IN ('ACCOUNT', 'BOT')),
+                      CHECK (decision IN ('ALLOW', 'REJECT', 'BACKPRESSURE', 'DISABLED_BOT'))
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.accountRiskDecisions} (
+                      decision_id TEXT NOT NULL PRIMARY KEY,
+                      decided_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      decision TEXT NOT NULL,
+                      code TEXT NOT NULL,
+                      message TEXT NOT NULL,
+                      client_id TEXT NOT NULL,
+                      route TEXT NOT NULL,
+                      command_type TEXT NOT NULL,
+                      command_id TEXT NOT NULL,
+                      idempotency_key TEXT NOT NULL,
+                      correlation_id TEXT NOT NULL,
+                      actor_id TEXT NOT NULL,
+                      participant_id TEXT NOT NULL,
+                      account_id TEXT NOT NULL,
+                      bot_id TEXT NOT NULL,
+                      run_id TEXT NOT NULL,
+                      venue_session_id TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      order_id TEXT NOT NULL,
+                      payload_hash TEXT NOT NULL,
+                      CHECK (decision IN ('REJECT', 'BACKPRESSURE', 'DISABLED_BOT'))
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_account_risk_decisions_scope_time
+                      ON ${names.accountRiskDecisions}(account_id, bot_id, decided_at DESC)
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        val decision = firstNonAllow(
+            if (request.botId.isBlank()) null else decisionFor("BOT", request.botId),
+            if (request.accountId.isBlank()) null else decisionFor("ACCOUNT", request.accountId)
+        ) ?: return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+
+        recordDecision(request, decision)
+        return decision
+    }
+
+    override fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String) {
+        require(scopeType == "ACCOUNT" || scopeType == "BOT") { "scopeType must be ACCOUNT or BOT" }
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.accountRiskControls}(scope_type, scope_id, decision, reason, updated_at)
+                VALUES (?, ?, ?, ?, NOW())
+                ON CONFLICT (scope_type, scope_id)
+                DO UPDATE SET decision = EXCLUDED.decision, reason = EXCLUDED.reason, updated_at = NOW()
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, scopeType)
+                ps.setString(2, scopeId)
+                ps.setString(3, decision.name)
+                ps.setString(4, reason)
+                ps.executeUpdate()
+            }
+        }
+        cache.remove("$scopeType|$scopeId")
+    }
+
+    override fun listControls(): List<AccountRiskControl> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT scope_type, scope_id, decision, reason, updated_at
+                FROM ${names.accountRiskControls}
+                ORDER BY scope_type, scope_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<AccountRiskControl>()
+                    while (rs.next()) {
+                        rows.add(
+                            AccountRiskControl(
+                                scopeType = rs.getString("scope_type"),
+                                scopeId = rs.getString("scope_id"),
+                                decision = AccountRiskDecision.valueOf(rs.getString("decision")),
+                                reason = rs.getString("reason").orEmpty(),
+                                updatedAt = rs.getString("updated_at").orEmpty()
+                            )
+                        )
+                    }
+                    return rows
+                }
+            }
+        }
+    }
+
+    override fun recentDecisions(limit: Int): List<AccountRiskDecisionAudit> {
+        val boundedLimit = limit.coerceIn(1, 500)
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT decision_id,
+                       decided_at,
+                       decision,
+                       code,
+                       message,
+                       client_id,
+                       route,
+                       command_type,
+                       command_id,
+                       correlation_id,
+                       actor_id,
+                       participant_id,
+                       account_id,
+                       bot_id,
+                       venue_session_id,
+                       instrument_id,
+                       order_id
+                FROM ${names.accountRiskDecisions}
+                ORDER BY decided_at DESC
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, boundedLimit)
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<AccountRiskDecisionAudit>()
+                    while (rs.next()) {
+                        rows.add(
+                            AccountRiskDecisionAudit(
+                                decisionId = rs.getString("decision_id"),
+                                decidedAt = rs.getString("decided_at"),
+                                decision = AccountRiskDecision.valueOf(rs.getString("decision")),
+                                code = rs.getString("code"),
+                                message = rs.getString("message"),
+                                clientId = rs.getString("client_id"),
+                                route = rs.getString("route"),
+                                commandType = rs.getString("command_type"),
+                                commandId = rs.getString("command_id"),
+                                correlationId = rs.getString("correlation_id"),
+                                actorId = rs.getString("actor_id"),
+                                participantId = rs.getString("participant_id"),
+                                accountId = rs.getString("account_id"),
+                                botId = rs.getString("bot_id"),
+                                venueSessionId = rs.getString("venue_session_id"),
+                                instrumentId = rs.getString("instrument_id"),
+                                orderId = rs.getString("order_id")
+                            )
+                        )
+                    }
+                    return rows
+                }
+            }
+        }
+    }
+
+    private fun firstNonAllow(vararg decisions: AccountRiskCheckResult?): AccountRiskCheckResult? {
+        return decisions.firstOrNull { it != null && it.decision != AccountRiskDecision.ALLOW }
+    }
+
+    private fun decisionFor(scopeType: String, scopeId: String): AccountRiskCheckResult? {
+        val key = "$scopeType|$scopeId"
+        val now = nowMillis()
+        cache[key]?.let { cached ->
+            if (cached.expiresAtMillis > now) return cached.result
+        }
+        val loaded = loadDecision(scopeType, scopeId)
+        if (cacheTtlMillis > 0) {
+            cache[key] = CachedDecision(loaded, now + cacheTtlMillis)
+        }
+        return loaded
+    }
+
+    private fun loadDecision(scopeType: String, scopeId: String): AccountRiskCheckResult? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT decision, reason
+                FROM ${names.accountRiskControls}
+                WHERE scope_type = ? AND scope_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, scopeType)
+                ps.setString(2, scopeId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    val decision = AccountRiskDecision.valueOf(rs.getString("decision"))
+                    val reason = rs.getString("reason").orEmpty()
+                    return AccountRiskCheckResult(
+                        decision = decision,
+                        message = reason.ifBlank { AccountRiskCheckResult(decision).message }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun recordDecision(request: AccountRiskCheckRequest, result: AccountRiskCheckResult) {
+        if (result.decision == AccountRiskDecision.ALLOW) return
+        try {
+            connection().use { conn ->
+                conn.prepareStatement(
+                    """
+                    INSERT INTO ${names.accountRiskDecisions}(
+                      decision_id,
+                      decision,
+                      code,
+                      message,
+                      client_id,
+                      route,
+                      command_type,
+                      command_id,
+                      idempotency_key,
+                      correlation_id,
+                      actor_id,
+                      participant_id,
+                      account_id,
+                      bot_id,
+                      run_id,
+                      venue_session_id,
+                      instrument_id,
+                      order_id,
+                      payload_hash
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, UUID.randomUUID().toString())
+                    ps.setString(2, result.decision.name)
+                    ps.setString(3, result.code)
+                    ps.setString(4, result.message)
+                    ps.setString(5, request.clientId)
+                    ps.setString(6, request.route)
+                    ps.setString(7, request.commandType)
+                    ps.setString(8, request.commandId)
+                    ps.setString(9, request.idempotencyKey)
+                    ps.setString(10, request.correlationId)
+                    ps.setString(11, request.actorId)
+                    ps.setString(12, request.participantId)
+                    ps.setString(13, request.accountId)
+                    ps.setString(14, request.botId)
+                    ps.setString(15, request.runId)
+                    ps.setString(16, request.venueSessionId)
+                    ps.setString(17, request.instrumentId)
+                    ps.setString(18, request.orderId)
+                    ps.setString(19, request.payloadHash)
+                    ps.executeUpdate()
+                }
+            }
+        } catch (ex: Exception) {
+            val message = ex.message ?: "unknown"
+            System.err.println(
+                "account_risk_audit_failed clientId=${request.clientId} route=${request.route} commandId=${request.commandId} decision=${result.decision} message=${JsonFields.escape(message)}"
+            )
+        }
+    }
+
+    private fun connection() = dataSource.connection
+}
+
+class PostgresCommandCircuitBreakerStore(
+    private val dataSource: DataSource,
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
+    private val cacheTtlMillis: Long = 1_000L,
+    private val nowMillis: () -> Long = { System.currentTimeMillis() }
+) : CommandCircuitBreakerStore {
+    private data class CachedState(
+        val state: CommandCircuitBreakerState?,
+        val expiresAtMillis: Long
+    )
+
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedState>()
+
+    init {
+        connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryCommandCircuitBreakers(names.commandCircuitBreakers)
+                )
+                return@use
+            }
+            conn.createStatement().use { stmt ->
+                stmt.execute("CREATE SCHEMA IF NOT EXISTS ${names.schemaName}")
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandCircuitBreakers} (
+                      scope_type TEXT NOT NULL,
+                      scope_id TEXT NOT NULL,
+                      tripped BOOLEAN NOT NULL,
+                      reason TEXT NOT NULL DEFAULT '',
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      PRIMARY KEY (scope_type, scope_id),
+                      CHECK (scope_type IN ('GLOBAL', 'VENUE_SESSION', 'INSTRUMENT'))
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        val tripped = firstTripped(
+            stateFor("GLOBAL", "*"),
+            if (request.venueSessionId.isBlank()) null else stateFor("VENUE_SESSION", request.venueSessionId),
+            if (request.instrumentId.isBlank()) null else stateFor("INSTRUMENT", request.instrumentId)
+        ) ?: return null
+        val suffix = if (tripped.reason.isBlank()) {
+            ""
+        } else {
+            ": ${tripped.reason}"
+        }
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for ${tripped.scopeType}:${tripped.scopeId}$suffix"
+        )
+    }
+
+    override fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String) {
+        require(scopeType == "GLOBAL" || scopeType == "VENUE_SESSION" || scopeType == "INSTRUMENT") {
+            "scopeType must be GLOBAL, VENUE_SESSION, or INSTRUMENT"
+        }
+        val normalizedScopeId = if (scopeType == "GLOBAL") "*" else scopeId
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.commandCircuitBreakers}(scope_type, scope_id, tripped, reason, updated_at)
+                VALUES (?, ?, ?, ?, NOW())
+                ON CONFLICT (scope_type, scope_id)
+                DO UPDATE SET tripped = EXCLUDED.tripped, reason = EXCLUDED.reason, updated_at = NOW()
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, scopeType)
+                ps.setString(2, normalizedScopeId)
+                ps.setBoolean(3, tripped)
+                ps.setString(4, reason)
+                ps.executeUpdate()
+            }
+        }
+        cache.remove("$scopeType|$normalizedScopeId")
+    }
+
+    override fun listBreakers(): List<CommandCircuitBreakerState> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT scope_type, scope_id, tripped, reason, updated_at
+                FROM ${names.commandCircuitBreakers}
+                ORDER BY scope_type, scope_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<CommandCircuitBreakerState>()
+                    while (rs.next()) {
+                        rows.add(
+                            CommandCircuitBreakerState(
+                                scopeType = rs.getString("scope_type"),
+                                scopeId = rs.getString("scope_id"),
+                                tripped = rs.getBoolean("tripped"),
+                                reason = rs.getString("reason").orEmpty(),
+                                updatedAt = rs.getString("updated_at").orEmpty()
+                            )
+                        )
+                    }
+                    return rows
+                }
+            }
+        }
+    }
+
+    private fun firstTripped(vararg states: CommandCircuitBreakerState?): CommandCircuitBreakerState? {
+        return states.firstOrNull { it?.tripped == true }
+    }
+
+    private fun stateFor(scopeType: String, scopeId: String): CommandCircuitBreakerState? {
+        val key = "$scopeType|$scopeId"
+        val now = nowMillis()
+        cache[key]?.let { cached ->
+            if (cached.expiresAtMillis > now) return cached.state
+        }
+        val loaded = loadState(scopeType, scopeId)
+        if (cacheTtlMillis > 0) {
+            cache[key] = CachedState(loaded, now + cacheTtlMillis)
+        }
+        return loaded
+    }
+
+    private fun loadState(scopeType: String, scopeId: String): CommandCircuitBreakerState? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT scope_type, scope_id, tripped, reason, updated_at
+                FROM ${names.commandCircuitBreakers}
+                WHERE scope_type = ? AND scope_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, scopeType)
+                ps.setString(2, scopeId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return CommandCircuitBreakerState(
+                        scopeType = rs.getString("scope_type"),
+                        scopeId = rs.getString("scope_id"),
+                        tripped = rs.getBoolean("tripped"),
+                        reason = rs.getString("reason").orEmpty(),
+                        updatedAt = rs.getString("updated_at").orEmpty()
+                    )
+                }
+            }
+        }
+    }
+
+    private fun connection() = dataSource.connection
 }
 
 data class AbuseProtectionStats(
@@ -620,6 +1147,7 @@ data class BoundaryHooks(
     val rateLimitHook: RateLimitHook,
     val abuseProtectionHook: AbuseProtectionHook,
     val accountRiskCheck: AccountRiskCheck,
+    val commandCircuitBreakerCheck: CommandCircuitBreakerCheck,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
@@ -680,7 +1208,32 @@ fun defaultBoundaryHooks(): BoundaryHooks {
             backpressuredAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS")),
             disabledBots = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS"))
         )
+        "postgres", "cached-postgres" -> {
+            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            val cacheTtlMillis = System.getenv("EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
+            PostgresAccountRiskCheck(
+                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "account-risk"),
+                cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
+            )
+        }
         else -> AllowAllAccountRiskCheck()
+    }
+
+    val circuitBreakerMode = (System.getenv("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()
+    val commandCircuitBreakerCheck = when (circuitBreakerMode) {
+        "postgres", "cached-postgres" -> {
+            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            val cacheTtlMillis = System.getenv("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
+            PostgresCommandCircuitBreakerStore(
+                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-circuit-breaker"),
+                cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
+            )
+        }
+        else -> AllowAllCommandCircuitBreakerCheck()
     }
 
     val idempotencyMode = (System.getenv("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
@@ -702,10 +1255,31 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         rateLimitHook = rateLimitHook,
         abuseProtectionHook = abuseProtectionHook,
         accountRiskCheck = accountRiskCheck,
+        commandCircuitBreakerCheck = commandCircuitBreakerCheck,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
         commandCaptureStore = defaultCommandCaptureStore(commandProcessingMode),
         commandProcessingMode = commandProcessingMode
+    )
+}
+
+fun defaultAccountRiskControlStore(): AccountRiskControlStore {
+    val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+    val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+    val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+    return PostgresAccountRiskCheck(
+        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "account-risk-admin"),
+        cacheTtlMillis = 0L
+    )
+}
+
+fun defaultCommandCircuitBreakerStore(): CommandCircuitBreakerStore {
+    val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+    val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+    val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+    return PostgresCommandCircuitBreakerStore(
+        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-circuit-breaker-admin"),
+        cacheTtlMillis = 0L
     )
 }
 

@@ -945,6 +945,211 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun capturedAckCircuitBreakerRejectsBeforeCommandLogAppend() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandCircuitBreakerCheck = StaticCircuitBreakerCheck("AAPL")
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-reject",
+                    "Idempotency-Key" to "idem-breaker-reject"
+                ),
+                body = validSubmitBody("cmd-breaker-reject", "trace-breaker-reject", "ord-breaker-reject")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-breaker-reject")
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun boundaryControlDiagnosticsExposeControlsDecisionsAndBreakers() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled")
+        accountRiskStore.decisions.add(
+            AccountRiskDecisionAudit(
+                decisionId = "risk-decision-1",
+                decidedAt = "2026-07-04T12:00:00Z",
+                decision = AccountRiskDecision.DISABLED_BOT,
+                code = "BOT_DISABLED",
+                message = "bot is disabled",
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-risk",
+                correlationId = "corr-risk",
+                actorId = "bot-1",
+                participantId = "participant-1",
+                accountId = "account-1",
+                botId = "bot-1",
+                venueSessionId = "session-1",
+                instrumentId = "AAPL",
+                orderId = "ord-risk"
+            )
+        )
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            accountRiskControlStore = accountRiskStore,
+            accountRiskDecisionLog = accountRiskStore,
+            commandCircuitBreakerCheck = breakerStore,
+            commandCircuitBreakerStore = breakerStore
+        )
+        try {
+            val controls = get(server.address.port, "/internal/boundary/account-risk/controls")
+            val decisions = get(server.address.port, "/internal/boundary/account-risk/decisions/recent?limit=10")
+            val breakers = get(server.address.port, "/internal/boundary/circuit-breakers")
+
+            assertEquals(200, controls.status)
+            assertContains(controls.body, "\"controlsCount\":1")
+            assertContains(controls.body, "\"scopeType\":\"BOT\"")
+            assertContains(controls.body, "\"decision\":\"DISABLED_BOT\"")
+            assertEquals(200, decisions.status)
+            assertContains(decisions.body, "\"decisionsCount\":1")
+            assertContains(decisions.body, "\"code\":\"BOT_DISABLED\"")
+            assertContains(decisions.body, "\"commandId\":\"cmd-risk\"")
+            assertEquals(200, breakers.status)
+            assertContains(breakers.body, "\"breakersCount\":1")
+            assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
+            assertContains(breakers.body, "\"tripped\":true")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun accountRiskControlRejectsThenClearAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled")
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            accountRiskCheck = accountRiskStore
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-smoke",
+                    "Idempotency-Key" to "idem-risk-smoke-reject"
+                ),
+                body = validSubmitBody(
+                    "cmd-risk-smoke-reject",
+                    "trace-risk-smoke-reject",
+                    "ord-risk-smoke-reject",
+                    extra = ",\"botId\":\"bot-1\""
+                )
+            )
+            assertEquals(403, rejected.status)
+            assertContains(rejected.body, "\"code\":\"BOT_DISABLED\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-reject").status)
+
+            accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.ALLOW, "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-smoke",
+                    "Idempotency-Key" to "idem-risk-smoke-accept"
+                ),
+                body = validSubmitBody(
+                    "cmd-risk-smoke-accept",
+                    "trace-risk-smoke-accept",
+                    "ord-risk-smoke-accept",
+                    extra = ",\"botId\":\"bot-1\""
+                )
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-risk-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun commandCircuitBreakerRejectsThenResetAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandCircuitBreakerCheck = breakerStore
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-smoke",
+                    "Idempotency-Key" to "idem-breaker-smoke-reject"
+                ),
+                body = validSubmitBody("cmd-breaker-smoke-reject", "trace-breaker-smoke-reject", "ord-breaker-smoke-reject")
+            )
+            assertEquals(503, rejected.status)
+            assertContains(rejected.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-reject").status)
+
+            breakerStore.setBreaker("INSTRUMENT", "AAPL", false, "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-smoke",
+                    "Idempotency-Key" to "idem-breaker-smoke-accept"
+                ),
+                body = validSubmitBody("cmd-breaker-smoke-accept", "trace-breaker-smoke-accept", "ord-breaker-smoke-accept")
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-breaker-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun asyncCommandStatsEndpointReturnsQueueDepths() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1903,6 +2108,10 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
+        commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+        commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
@@ -1942,6 +2151,10 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            accountRiskControlStore = accountRiskControlStore,
+            accountRiskDecisionLog = accountRiskDecisionLog,
+            commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+            commandCircuitBreakerStore = commandCircuitBreakerStore,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -1968,6 +2181,10 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
+        commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+        commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
@@ -1999,6 +2216,10 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            accountRiskControlStore = accountRiskControlStore,
+            accountRiskDecisionLog = accountRiskDecisionLog,
+            commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+            commandCircuitBreakerStore = commandCircuitBreakerStore,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -2437,6 +2658,76 @@ private class StaticRejectedEngineGateway(
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class StaticCircuitBreakerCheck(
+    private val trippedInstrumentId: String
+) : CommandCircuitBreakerCheck {
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        if (request.instrumentId != trippedInstrumentId) return null
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for INSTRUMENT:${request.instrumentId}"
+        )
+    }
+}
+
+private class RecordingAccountRiskStore : AccountRiskCheck, AccountRiskControlStore, AccountRiskDecisionLog {
+    private val controls = linkedMapOf<String, AccountRiskControl>()
+    val decisions = mutableListOf<AccountRiskDecisionAudit>()
+
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        val botDecision = controls["BOT|${request.botId}"]
+        if (botDecision != null && botDecision.decision != AccountRiskDecision.ALLOW) {
+            return AccountRiskCheckResult(botDecision.decision, message = botDecision.reason)
+        }
+        val accountDecision = controls["ACCOUNT|${request.accountId}"]
+        if (accountDecision != null && accountDecision.decision != AccountRiskDecision.ALLOW) {
+            return AccountRiskCheckResult(accountDecision.decision, message = accountDecision.reason)
+        }
+        return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+    }
+
+    override fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String) {
+        controls["$scopeType|$scopeId"] = AccountRiskControl(
+            scopeType = scopeType,
+            scopeId = scopeId,
+            decision = decision,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listControls(): List<AccountRiskControl> = controls.values.toList()
+
+    override fun recentDecisions(limit: Int): List<AccountRiskDecisionAudit> = decisions.take(limit)
+}
+
+private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
+    private val breakers = linkedMapOf<String, CommandCircuitBreakerState>()
+
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        val breaker = breakers["INSTRUMENT|${request.instrumentId}"] ?: breakers["VENUE_SESSION|${request.venueSessionId}"] ?: breakers["GLOBAL|*"]
+        if (breaker?.tripped != true) return null
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for ${breaker.scopeType}:${breaker.scopeId}"
+        )
+    }
+
+    override fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String) {
+        breakers["$scopeType|$scopeId"] = CommandCircuitBreakerState(
+            scopeType = scopeType,
+            scopeId = scopeId,
+            tripped = tripped,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
 }
 
 private class ThrowingEngineGateway : EngineGateway {
