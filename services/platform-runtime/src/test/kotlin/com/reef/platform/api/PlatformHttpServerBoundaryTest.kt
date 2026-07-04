@@ -1038,6 +1038,118 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun accountRiskControlRejectsThenClearAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled")
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            accountRiskCheck = accountRiskStore
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-smoke",
+                    "Idempotency-Key" to "idem-risk-smoke-reject"
+                ),
+                body = validSubmitBody(
+                    "cmd-risk-smoke-reject",
+                    "trace-risk-smoke-reject",
+                    "ord-risk-smoke-reject",
+                    extra = ",\"botId\":\"bot-1\""
+                )
+            )
+            assertEquals(403, rejected.status)
+            assertContains(rejected.body, "\"code\":\"BOT_DISABLED\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-reject").status)
+
+            accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.ALLOW, "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-smoke",
+                    "Idempotency-Key" to "idem-risk-smoke-accept"
+                ),
+                body = validSubmitBody(
+                    "cmd-risk-smoke-accept",
+                    "trace-risk-smoke-accept",
+                    "ord-risk-smoke-accept",
+                    extra = ",\"botId\":\"bot-1\""
+                )
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-risk-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun commandCircuitBreakerRejectsThenResetAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandCircuitBreakerCheck = breakerStore
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-smoke",
+                    "Idempotency-Key" to "idem-breaker-smoke-reject"
+                ),
+                body = validSubmitBody("cmd-breaker-smoke-reject", "trace-breaker-smoke-reject", "ord-breaker-smoke-reject")
+            )
+            assertEquals(503, rejected.status)
+            assertContains(rejected.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-reject").status)
+
+            breakerStore.setBreaker("INSTRUMENT", "AAPL", false, "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-smoke",
+                    "Idempotency-Key" to "idem-breaker-smoke-accept"
+                ),
+                body = validSubmitBody("cmd-breaker-smoke-accept", "trace-breaker-smoke-accept", "ord-breaker-smoke-accept")
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-breaker-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun asyncCommandStatsEndpointReturnsQueueDepths() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
