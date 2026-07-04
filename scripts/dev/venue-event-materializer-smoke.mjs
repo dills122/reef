@@ -18,6 +18,7 @@ const materializerUrl = env(
 const waitTimeoutSeconds = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
 const materializerTimeoutMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_TIMEOUT_MS", "60000"));
 const materializerPollMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_POLL_MS", "1000"));
+const projectionName = env("DEV_VENUE_EVENT_MATERIALIZER_PROJECTION_NAME", `runtime-normalized-venue-outcomes-${smokeId}`);
 
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
 setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_MATERIALIZER_SMOKE_COMMANDS");
@@ -76,6 +77,8 @@ assertAccepted(submit);
 
 console.log("waiting for canonical command outcome row...");
 const outcome = await waitForCanonicalOutcome(commandId);
+console.log("projecting canonical command outcome into compact lifecycle rows...");
+const projection = await projectCompactLifecycleRows(outcome);
 const afterStats = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
 const afterMaterialized = Number(afterStats.metrics?.materialized ?? 0);
 if (afterMaterialized <= beforeMaterialized) {
@@ -89,6 +92,9 @@ console.log(JSON.stringify({
   batchId: outcome.batch_id,
   resultStatus: outcome.result_status,
   materializedDelta: afterMaterialized - beforeMaterialized,
+  projectedDelta: projection.projected,
+  projectedReplayDelta: projection.replayed,
+  projectionName,
 }, null, 2));
 
 async function seedReferenceData() {
@@ -123,11 +129,11 @@ async function waitForCanonicalOutcome(id) {
   let last = "";
   while (Date.now() - started < materializerTimeoutMs) {
     const rows = await queryRuntimeRows(`
-      SELECT batch_id, command_id, result_status
+      SELECT batch_id, command_id, result_status, partition_id, stream_sequence
       FROM runtime.canonical_command_outcomes
       WHERE command_id = '${sqlLiteral(id)}'
       LIMIT 1
-    `);
+    `, ["batch_id", "command_id", "result_status", "partition_id", "stream_sequence"]);
     if (rows.length > 0) return rows[0];
     last = `no canonical outcome for ${id}`;
     await sleep(materializerPollMs);
@@ -135,7 +141,73 @@ async function waitForCanonicalOutcome(id) {
   throw new Error(`timeout waiting for canonical outcome (${last})`);
 }
 
-async function queryRuntimeRows(sql) {
+async function projectCompactLifecycleRows(outcome) {
+  const partition = Number(outcome.partition_id);
+  if (!Number.isFinite(partition)) {
+    throw new Error(`canonical outcome did not include a numeric partition_id: ${JSON.stringify(outcome)}`);
+  }
+  const projected = Number(await queryRuntimeValue(`
+    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 10, ARRAY[${partition}])
+  `));
+  const replayed = Number(await queryRuntimeValue(`
+    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 10, ARRAY[${partition}])
+  `));
+  if (projected !== 1 || replayed !== 0) {
+    throw new Error(`unexpected compact projection counts: projected=${projected} replayed=${replayed}`);
+  }
+
+  const submitRows = await queryRuntimeRows(`
+    SELECT command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at
+    FROM runtime.submit_results
+    WHERE command_id = '${sqlLiteral(outcome.command_id)}'
+  `, ["command_id", "result_type", "event_id", "order_id", "engine_order_id", "code", "reason", "occurred_at"]);
+  if (submitRows.length !== 1) {
+    throw new Error(`expected one projected submit_result row for ${outcome.command_id}, got ${submitRows.length}`);
+  }
+  if (submitRows[0].result_type !== outcome.result_status) {
+    throw new Error(`projected submit_result type mismatch: ${JSON.stringify(submitRows[0])}`);
+  }
+
+  const eventRows = await queryRuntimeRows(`
+    SELECT event_id, event_type, order_id, trace_id, producer
+    FROM runtime.runtime_events
+    WHERE trace_id = '${sqlLiteral(outcome.command_id)}'
+    ORDER BY sequence_number
+  `, ["event_id", "event_type", "order_id", "trace_id", "producer"]);
+  if (eventRows.length !== 1) {
+    throw new Error(`expected one projected runtime_event row for ${outcome.command_id}, got ${eventRows.length}`);
+  }
+  if (eventRows[0].producer !== "venue-event-batch-projector") {
+    throw new Error(`projected runtime_event producer mismatch: ${JSON.stringify(eventRows[0])}`);
+  }
+
+  const watermarkRows = await queryRuntimeRows(`
+    SELECT projection_name, partition_id, last_partition_seq, last_error
+    FROM runtime.projection_watermarks
+    WHERE projection_name = '${sqlLiteral(projectionName)}'
+      AND partition_id = ${partition}
+  `, ["projection_name", "partition_id", "last_partition_seq", "last_error"]);
+  if (watermarkRows.length !== 1 || watermarkRows[0].last_error) {
+    throw new Error(`projection watermark was not clean: ${JSON.stringify(watermarkRows)}`);
+  }
+
+  return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0] };
+}
+
+async function queryRuntimeValue(sql) {
+  return (await runRuntimePsql(sql)).trim();
+}
+
+async function queryRuntimeRows(sql, columns) {
+  const output = await runRuntimePsql(sql);
+  return output
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => Object.fromEntries(line.split("\t").map((value, index) => [columns[index], value ?? ""])));
+}
+
+async function runRuntimePsql(sql) {
   const output = await runCapture("docker", [
     "compose",
     "exec",
@@ -152,14 +224,7 @@ async function queryRuntimeRows(sql) {
     "-c",
     sql,
   ]);
-  return output
-    .trim()
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => {
-      const [batch_id, command_id, result_status] = line.split("\t");
-      return { batch_id, command_id, result_status };
-    });
+  return output;
 }
 
 async function getJson(url) {
