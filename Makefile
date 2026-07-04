@@ -39,6 +39,7 @@ test-bot-sdk:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal
