@@ -687,8 +687,8 @@ Summary:
 - the first runtime source is Kafka-compatible Redpanda consumption of the configured venue event topic through `PLATFORM_RUNTIME_ROLE=materializer`; JetStream event-batch materialization can be added behind the same `VenueEventBatchSource` contract later.
 - normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
 - the first downstream projection from event-batch materialization is compact lifecycle visibility: `runtime.canonical_command_outcomes` can project submit outcomes into `submit_results` and lifecycle `runtime_events` without placing Postgres back in the matching hot path.
-- full `orders` projection from the event-batch path requires either original submit command metadata in `VenueEventBatch` or an explicit durable command-payload join; until then, tests must not claim full order-table reconstruction from compact outcomes alone.
-- replay/checksum tests from durable event batch to Postgres rows are required before throughput claims for this slice.
+- full `orders` projection from the event-batch path uses the durable command-payload join first: accepted `SubmitOrder` outcomes can reconstruct order metadata from `command_log.command_payloads`, while `VenueEventBatch` remains compact and focused on canonical engine outcomes.
+- replay/checksum evidence from durable event batch to Postgres rows is required before throughput claims for this slice; the local `dev-venue-event-replay-check` path must show idempotent stored batch replay, clean command counts, payload checksums, command outcome payload hashes, stream sequence continuity, and projection watermarks where a projection name is supplied.
 
 Lifecycle boundary:
 ```text

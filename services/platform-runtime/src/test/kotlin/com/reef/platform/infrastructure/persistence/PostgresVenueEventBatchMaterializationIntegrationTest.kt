@@ -54,6 +54,7 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         val projectionName = "runtime-normalized-venue-outcomes-$suffix"
         val batch = submitVenueEventBatch(suffix)
 
+        insertCommandPayload(dataSource, "submit-cmd-$suffix", submitCommandPayload(suffix))
         assertEquals(1, persistence.materializeVenueEventBatch(batch))
         assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(5)))
         assertEquals(0, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(5)))
@@ -69,10 +70,55 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals(1, events.size)
         assertEquals("OrderAccepted", events.first().eventType)
         assertEquals("venue-event-batch-projector", events.first().producer)
+        val order = persistence.acceptedOrder("submit-order-$suffix")
+        assertNotNull(order)
+        assertEquals("AAPL", order.instrumentId)
+        assertEquals("participant-$suffix", order.participantId)
+        assertEquals("account-$suffix", order.accountId)
+        assertEquals("100", order.quantityUnits)
 
         val status = persistence.projectionStatus(projectionName, listOf(5), source = "venue-event-batch")
         assertEquals(0, status.lag)
         assertEquals(1002L, status.watermarks.single().lastPartitionSequence)
+    }
+
+    private fun insertCommandPayload(dataSource: javax.sql.DataSource, commandId: String, payloadJson: String) {
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO command_log.command_payloads(command_id, payload_json)
+                VALUES (?, ?::jsonb)
+                ON CONFLICT (command_id) DO UPDATE SET payload_json = EXCLUDED.payload_json
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.setString(2, payloadJson)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    private fun submitCommandPayload(suffix: String): String {
+        return """
+            {
+              "commandId":"submit-cmd-$suffix",
+              "traceId":"trace-$suffix",
+              "causationId":"submit-cmd-$suffix",
+              "correlationId":"corr-$suffix",
+              "actorId":"actor-$suffix",
+              "occurredAt":"2026-07-04T18:01:00Z",
+              "orderId":"submit-order-$suffix",
+              "instrumentId":"AAPL",
+              "participantId":"participant-$suffix",
+              "accountId":"account-$suffix",
+              "side":"BUY",
+              "orderType":"LIMIT",
+              "quantityUnits":"100",
+              "limitPrice":"150250000000",
+              "currency":"USD",
+              "timeInForce":"DAY"
+            }
+        """.trimIndent()
     }
 
     private fun venueEventBatch(suffix: String): VenueEventBatchFact {

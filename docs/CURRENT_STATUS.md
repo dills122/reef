@@ -40,7 +40,8 @@ Current decision anchors:
 - D-041 makes Kafka-compatible durable producer plus matching-engine direct consumer the active hot-ingress target, with JetStream retained as fallback/comparison.
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 - Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
-- The first persistence-layer test gate after materialization is compact lifecycle projection from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Full `orders` projection from event batches remains blocked on carrying submit command metadata or joining durable command payloads.
+- The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Accepted submit `orders` are reconstructed through the durable `command_log.command_payloads` join when the original command payload is available.
+- Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
 
 ## Current Forward Path
 

@@ -39,6 +39,7 @@ class PostgresRuntimePersistence(
         val partitionId: Int,
         val partitionSequence: Long,
         val outcome: CanonicalCommandOutcome,
+        val commandPayloadJson: String = "{}",
         val partitionRow: Int = 0
     )
 
@@ -1249,10 +1250,13 @@ class PostgresRuntimePersistence(
                     AS $$
                     DECLARE
                       projected_count BIGINT := 0;
+                      effective_batch_size INTEGER := 0;
                     BEGIN
                       IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
                         RETURN 0;
                       END IF;
+
+                      effective_batch_size := LEAST(p_batch_size, ${CanonicalCommandOutcomeProjectionMaxBatchSize});
 
                       WITH selected_partitions AS (
                         SELECT DISTINCT partition_id
@@ -1268,7 +1272,7 @@ class PostgresRuntimePersistence(
                       partition_budget AS (
                         SELECT GREATEST(
                           1,
-                          CEIL(p_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
+                          CEIL(effective_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
                         ) AS per_partition_limit
                       ),
                       ranked AS (
@@ -1276,6 +1280,7 @@ class PostgresRuntimePersistence(
                           canonical.partition_id,
                           canonical.stream_sequence,
                           canonical.command_id,
+                          canonical.command_type,
                           canonical.order_id,
                           canonical.result_status,
                           canonical.reject_code,
@@ -1290,7 +1295,7 @@ class PostgresRuntimePersistence(
                         LEFT JOIN ${names.projectionWatermarks} watermark
                           ON watermark.projection_name = p_projection_name
                          AND watermark.partition_id = canonical.partition_id
-                        WHERE canonical.command_type = 'SubmitOrder'
+                        WHERE canonical.command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                           AND canonical.stream_sequence > COALESCE(watermark.last_partition_seq, 0)
                       ),
                       eligible AS (
@@ -1320,7 +1325,12 @@ class PostgresRuntimePersistence(
                             'events', jsonb_build_array(
                               jsonb_build_object(
                                 'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
-                                'eventType', CASE WHEN result_status = 'rejected' THEN 'OrderRejected' ELSE 'OrderAccepted' END,
+                                'eventType', CASE
+                                  WHEN result_status = 'rejected' THEN 'OrderRejected'
+                                  WHEN command_type = 'CancelOrder' THEN 'OrderCancelled'
+                                  WHEN command_type = 'ModifyOrder' THEN 'OrderModified'
+                                  ELSE 'OrderAccepted'
+                                END,
                                 'orderId', order_id,
                                 'traceId', command_id,
                                 'causationId', command_id,
@@ -1803,12 +1813,14 @@ class PostgresRuntimePersistence(
         if (ownedPartitions.isEmpty()) return 0
         val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
         val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
+        val includeCommandPayload = commandPayloadSideTableAvailable()
         val candidates = ownedPartitions
             .flatMap { partitionId ->
                 canonicalCommandProjectionCandidates(
                     partitionId = partitionId,
                     afterPartitionSequence = watermarks[partitionId] ?: 0L,
-                    limit = perPartitionLimit
+                    limit = perPartitionLimit,
+                    includeCommandPayload = includeCommandPayload
                 ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
             }
             .sortedWith(
@@ -1823,7 +1835,7 @@ class PostgresRuntimePersistence(
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
-                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome().toJsonObject() }
+                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson).toJsonObject() }
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
                 updateProjectionWatermarks(
                     conn,
@@ -1875,7 +1887,7 @@ class PostgresRuntimePersistence(
                 """
                 SELECT DISTINCT partition_id
                 FROM ${names.canonicalCommandOutcomes}
-                WHERE command_type = 'SubmitOrder'
+                WHERE command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                 ORDER BY partition_id
                 """.trimIndent()
             ).use { ps ->
@@ -1949,9 +1961,23 @@ class PostgresRuntimePersistence(
     private fun canonicalCommandProjectionCandidates(
         partitionId: Int,
         afterPartitionSequence: Long,
-        limit: Int
+        limit: Int,
+        includeCommandPayload: Boolean
     ): List<CommandProjectionCandidate> {
         canonicalConnection().use { conn ->
+            val payloadSelect = if (includeCommandPayload) {
+                "COALESCE(payloads.payload_json::TEXT, '{}') AS command_payload"
+            } else {
+                "'{}' AS command_payload"
+            }
+            val payloadJoin = if (includeCommandPayload) {
+                """
+                LEFT JOIN command_log.command_payloads payloads
+                  ON payloads.command_id = canonical.command_id
+                """.trimIndent()
+            } else {
+                ""
+            }
             conn.prepareStatement(
                 """
                 SELECT
@@ -1969,11 +1995,13 @@ class PostgresRuntimePersistence(
                   order_id,
                   result_status,
                   reject_code,
-                  result_payload::TEXT AS result_payload
-                FROM ${names.canonicalCommandOutcomes}
-                WHERE partition_id = ?
-                  AND stream_sequence > ?
-                  AND command_type = 'SubmitOrder'
+                  result_payload::TEXT AS result_payload,
+                  $payloadSelect
+                FROM ${names.canonicalCommandOutcomes} canonical
+                $payloadJoin
+                WHERE canonical.partition_id = ?
+                  AND canonical.stream_sequence > ?
+                  AND canonical.command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                 ORDER BY stream_sequence
                 LIMIT ?
                 """.trimIndent()
@@ -2004,12 +2032,24 @@ class PostgresRuntimePersistence(
                         out.add(
                             CommandProjectionCandidate(
                                 partitionId = outcome.partition,
-                                partitionSequence = outcome.streamSequence,
-                                outcome = outcome
-                            )
+                            partitionSequence = outcome.streamSequence,
+                            outcome = outcome,
+                            commandPayloadJson = rs.getString("command_payload")
                         )
+                    )
                     }
                     return out
+                }
+            }
+        }
+    }
+
+    private fun commandPayloadSideTableAvailable(): Boolean {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement("SELECT to_regclass('command_log.command_payloads') IS NOT NULL").use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getBoolean(1)
                 }
             }
         }
@@ -2373,7 +2413,7 @@ class PostgresRuntimePersistence(
                 """
                 SELECT partition_id, stream_sequence AS partition_seq
                 FROM ${names.canonicalCommandOutcomes}
-                WHERE command_type = 'SubmitOrder'
+                WHERE command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                 """.trimIndent()
             else ->
                 """
@@ -2880,7 +2920,7 @@ class PostgresRuntimePersistence(
         return "{$stringFields,\"payloadJson\":${payloadJson.ifBlank { "{}" }}}"
     }
 
-    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(): PersistableSubmitOutcome {
+    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(commandPayloadJson: String = "{}"): PersistableSubmitOutcome {
         val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
         val occurredAt = jsonString(resultPayloadJson, "occurredAt")
         val rejected = resultStatus == "rejected"
@@ -2904,14 +2944,36 @@ class PostgresRuntimePersistence(
                 )
             )
         }
+        val acceptedOrder = if (commandType == "SubmitOrder" && !rejected && commandPayloadJson.isNotBlank()) {
+            PersistedOrder(
+                orderId = orderId,
+                engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
+                instrumentId = jsonString(commandPayloadJson, "instrumentId"),
+                participantId = jsonString(commandPayloadJson, "participantId"),
+                accountId = jsonString(commandPayloadJson, "accountId"),
+                side = jsonString(commandPayloadJson, "side"),
+                orderType = jsonString(commandPayloadJson, "orderType"),
+                quantityUnits = jsonString(commandPayloadJson, "quantityUnits"),
+                limitPrice = jsonString(commandPayloadJson, "limitPrice"),
+                currency = jsonString(commandPayloadJson, "currency"),
+                timeInForce = jsonString(commandPayloadJson, "timeInForce"),
+                acceptedAt = occurredAt
+            ).takeIf {
+                it.instrumentId.isNotBlank() &&
+                    it.participantId.isNotBlank() &&
+                    it.accountId.isNotBlank()
+            }
+        } else {
+            null
+        }
         return PersistableSubmitOutcome(
             commandId = commandId,
             result = result,
-            acceptedOrder = null,
+            acceptedOrder = acceptedOrder,
             lifecycleEvents = listOf(
                 RuntimeEvent(
                     eventId = eventId,
-                    eventType = if (rejected) "OrderRejected" else "OrderAccepted",
+                    eventType = lifecycleEventType(commandType, rejected),
                     orderId = orderId,
                     traceId = commandId,
                     causationId = commandId,
@@ -2924,6 +2986,15 @@ class PostgresRuntimePersistence(
                 )
             )
         )
+    }
+
+    private fun lifecycleEventType(commandType: String, rejected: Boolean): String {
+        if (rejected) return "OrderRejected"
+        return when (commandType) {
+            "CancelOrder" -> "OrderCancelled"
+            "ModifyOrder" -> "OrderModified"
+            else -> "OrderAccepted"
+        }
     }
 
     private fun PersistableSubmitOutcome.toJsonObject(): String {

@@ -196,6 +196,58 @@ class InMemoryRuntimePersistenceTest {
         assertEquals("OrderRejected", events.first().eventType)
     }
 
+    @Test
+    fun projectsCancelAndModifyOutcomesIntoLifecycleRowsWithWatermarkReplay() {
+        val persistence = InMemoryRuntimePersistence()
+        val batch = venueEventBatch().copy(
+            batchId = "batch-lifecycle",
+            payloadChecksum = "checksum-lifecycle",
+            firstSequence = 50,
+            lastSequence = 51,
+            commandCount = 2,
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-cancel-1",
+                    commandType = "CancelOrder",
+                    streamSequence = 50,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-cancel-1",
+                    instrumentId = "AAPL",
+                    orderId = "ord-1",
+                    resultStatus = "accepted",
+                    resultPayloadJson = """{"accepted":{"eventId":"evt-cancel-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:03Z"}}"""
+                ),
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-modify-1",
+                    commandType = "ModifyOrder",
+                    streamSequence = 51,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-modify-1",
+                    instrumentId = "AAPL",
+                    orderId = "ord-1",
+                    resultStatus = "rejected",
+                    rejectCode = "ORDER_NOT_OPEN",
+                    resultPayloadJson = """{"rejected":{"eventId":"evt-modify-1","code":"ORDER_NOT_OPEN","reason":"order closed","occurredAt":"2026-07-04T18:00:04Z"}}"""
+                )
+            )
+        )
+
+        assertEquals(2, persistence.materializeVenueEventBatch(batch))
+        assertEquals(2, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+
+        assertEquals("evt-cancel-1", persistence.submitResult("cmd-cancel-1")?.accepted?.eventId)
+        assertEquals("evt-modify-1", persistence.submitResult("cmd-modify-1")?.rejected?.eventId)
+        val events = persistence.eventsForOrder("ord-1")
+        assertEquals(listOf("OrderCancelled", "OrderRejected"), events.map { it.eventType })
+        assertEquals(listOf("cmd-cancel-1", "cmd-modify-1"), events.map { it.traceId })
+
+        val status = persistence.projectionStatus("runtime-normalized-venue-outcomes", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(51L, status.watermarks.single().lastPartitionSequence)
+        assertEquals(51L, status.watermarks.single().canonicalMaxPartitionSequence)
+    }
+
     private fun venueEventBatch(): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = "batch-1",

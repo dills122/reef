@@ -194,7 +194,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }
         val outcomes = commandOutcomes.values
-            .filter { outcome -> outcome.commandType == "SubmitOrder" }
+            .filter { outcome -> outcome.commandType in ProjectableCommandTypes }
             .filter { outcome -> partitionSet.isEmpty() || outcome.partition in partitionSet }
             .filter { outcome -> outcome.streamSequence > (watermarks[outcome.partition] ?: 0L) }
             .groupBy { it.partition }
@@ -224,7 +224,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         val watermarks = projectionWatermarks[projectionName].orEmpty()
         val sourceRows = if (source.isVenueEventBatchProjectionSource()) {
             commandOutcomes.values
-                .filter { outcome -> outcome.commandType == "SubmitOrder" }
+                .filter { outcome -> outcome.commandType in ProjectableCommandTypes }
                 .filter { outcome -> partitionSet.isEmpty() || outcome.partition in partitionSet }
                 .map { outcome -> outcome.partition to outcome.streamSequence }
         } else {
@@ -323,7 +323,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         val rejected = resultStatus == "rejected"
         return RuntimeEvent(
             eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
-            eventType = if (rejected) "OrderRejected" else "OrderAccepted",
+            eventType = lifecycleEventType(commandType, rejected),
             orderId = orderId,
             traceId = commandId,
             causationId = commandId,
@@ -348,5 +348,18 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             "venue-events",
             "canonical-command-outcomes"
         )
+    }
+
+    private fun lifecycleEventType(commandType: String, rejected: Boolean): String {
+        if (rejected) return "OrderRejected"
+        return when (commandType) {
+            "CancelOrder" -> "OrderCancelled"
+            "ModifyOrder" -> "OrderModified"
+            else -> "OrderAccepted"
+        }
+    }
+
+    private companion object {
+        val ProjectableCommandTypes = setOf("SubmitOrder", "ModifyOrder", "CancelOrder")
     }
 }
