@@ -15,6 +15,7 @@ The SDK must let users build useful trading bots while preserving Reef's core co
 This document describes the initial `ReefBotV1` design. It does not add new runtime routes or storage contracts.
 
 For bot-author-facing usage, see [`BOT_SDK_AUTHOR_GUIDE.md`](./BOT_SDK_AUTHOR_GUIDE.md).
+For hosted sandbox direction, see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md).
 
 ## V1 Authoring Model
 

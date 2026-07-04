@@ -168,6 +168,8 @@ Hosted v1 bots may not use:
 
 Use SDK clients only.
 
+For the hosted sandbox direction and the distinction between sidecar preflight checks and full isolation, see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md).
+
 ## Why Proposed Actions
 
 `ctx.orders.placeLimit()` returns an action object instead of submitting immediately.
