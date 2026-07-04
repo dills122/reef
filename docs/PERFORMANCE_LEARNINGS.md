@@ -142,11 +142,49 @@ Coroutine accepted-async drain follow-up:
 
 Immediate implications:
 
-1. Keep the heap-backed price-time book structure; sorted-slice resting-order insertion is not a safe base for growing-book stress.
+1. Keep the purpose-built price-time book direction. The original heap-backed structure was enough to avoid sorted-slice insertion collapse, and the current ordered price-level/FIFO queue structure preserves that benefit while making cancel/modify direct unlink operations explicit.
 2. Do not keep tuning JDK `HttpServer` thread count as the main path to `15k/sec`; the Netty hot-path adapter removed the previous local front-door ceiling for accepted-async no-DB runs.
 3. Accepted-async plus Netty proves the API hot path can accept submit commands at the `15k/sec` target on this workstation when DB writes are excluded. This is still not durable acceptance and must not be confused with the production ingress target.
 4. Keep accepted-async worker in-flight bounded. The Compose/runtime defaults now expose `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32`; tune from there with telemetry instead of using unbounded or very large stream windows.
 5. A flagged Netty hot-path adapter now exists behind `PLATFORM_HTTP_SERVER=netty` to isolate the JDK `HttpServer` boundary. Treat it as a benchmark adapter until the measured no-DB evidence justifies expanding its route surface.
+
+## Hot Book Sharding Checkpoint (July 4, 2026)
+
+After replacing the matching-engine heap side queues with a shard-ready in-memory book built from ordered price levels, FIFO queues per price, and direct order-id unlinking, local engine-only stress runs showed the matching hot book has materially more headroom than the current durable-ingress path.
+
+Implementation shape:
+
+- `services/matching-engine/internal/book` owns the in-memory book structure.
+- `github.com/tidwall/btree` is used only as an ordered price-level index.
+- matching semantics, order lifecycle, event IDs, and replay expectations remain Reef-owned.
+- one mutable book remains single-writer; scale comes from sharding by deterministic book/partition ownership.
+
+Single hot-book evidence:
+
+- `reports/matching-engine-load/matching-engine-load-20260704T165356Z`: `alternating-cross`, `1` worker, `1` instrument, `15000 rps`, `30s`, `450000` processed, `0` failures, `p95=5us`, `p99=11us`
+- `reports/matching-engine-load/matching-engine-load-20260704T165436Z`: `alternating-cross`, `1` worker, `1` instrument, `20000 rps`, `30s`, `600000` processed, `0` failures, `p95=5us`, `p99=10us`
+- `reports/matching-engine-load/matching-engine-load-20260704T165513Z`: `alternating-cross`, `1` worker, `1` instrument, `30000 rps`, `30s`, `900000` processed, `0` failures, `p95=5us`, `p99=10us`
+- `reports/matching-engine-load/matching-engine-load-20260704T165828Z`: `resting-book`, `1` worker, `1` instrument, `20000 rps`, `30s`, `600000` processed, `0` failures, `p95=4us`, `p99=8us`
+
+Partitionable multi-book evidence:
+
+- `reports/matching-engine-load/matching-engine-load-20260704T165555Z`: `alternating-cross`, `6` workers, `6` instruments, `60000 rps`, `30s`, `1800000` processed, `0` failures, `p95=4us`, `p99=10us`
+- `reports/matching-engine-load/matching-engine-load-20260704T165710Z`: `alternating-cross`, `8` workers, `8` instruments, `80000 rps`, `30s`, `2400000` processed, `0` failures, `p95=4us`, `p99=21us`
+- `reports/matching-engine-load/matching-engine-load-20260704T165748Z`: `alternating-cross`, `10` workers, `10` instruments, `100000 rps`, `30s`, `3000000` processed, `0` failures, `p95=4us`, `p99=15us`
+
+Additional guardrail checks:
+
+- `reports/matching-engine-load/matching-engine-load-20260704T164924Z`: documented `10000/sec` one-minute single-book gate passed with `600000` processed and `0` failures.
+- `reports/matching-engine-load/matching-engine-load-20260704T165031Z`: `10000/sec` single-book resting growth passed with `300000` processed and `0` failures.
+- `reports/matching-engine-load/matching-engine-load-20260704T165108Z`: `10000/sec` lifecycle submit/modify/cancel mix passed with `300000` processed and `0` failures.
+- `reports/matching-engine-load/matching-engine-load-20260704T165147Z`: `40000/sec`, `4` workers, `4` instruments partitionability check passed with `1200000` processed and `0` failures.
+
+Conclusion:
+
+1. The matching-engine book is not the active limiter for current durable-ingress and persistence work.
+2. The sharding model is validated at the engine-only layer: one hot book is clean through `30000/sec`, and multi-book partitionable throughput is clean through `100000/sec` locally.
+3. Capacity claims must still distinguish engine-only matching from durable end-to-end throughput. The next durable path work should focus on command-log/event-batch publication, snapshot/replay checksums, and compact canonical materialization.
+4. Longer soaks should still be run before treating these numbers as stable operating targets, especially for deep book depth, mixed cancel/modify, and event-batch publication.
 
 ## Stream-Ack Broker A/B And Engine Boundary Checkpoint (July 4, 2026)
 
