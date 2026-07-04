@@ -1,29 +1,48 @@
 # Reef
 
+[![CI](https://github.com/dills122/reef/actions/workflows/ci.yml/badge.svg)](https://github.com/dills122/reef/actions/workflows/ci.yml)
+[![Throughput Stress](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml/badge.svg)](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml)
+
 <p align="center">
-  <img src="./reef-logo-main.png" alt="Project Logo" width="300" height="300" />
+  <img src="./reef-logo-main.png" alt="Reef project logo" width="260" height="260" />
 </p>
 
-Reef is a simulation-first institutional trading venue and post-trade platform.
+Reef is a simulation-first institutional trading venue and post-trade platform. It is built to model market-infrastructure workflows locally, replay them deterministically, and measure command-intake and lifecycle behavior with evidence instead of assumptions.
 
-The project is being rebuilt from an early prototype into a production-shaped local platform for:
+The current system focuses on:
 
-- hidden-liquidity order flow and matching
-- trade lifecycle and post-trade workflow modeling
-- deterministic scenario execution and replay
-- audit-friendly event trails and operational views
+- hidden-liquidity order intake, matching, cancel, modify, fill, and reject behavior
+- deterministic scenario execution, replay, and audit-friendly command/event trails
+- high-throughput command ingress with explicit hot-path guardrails
+- partitionable processing lanes for matching-sensitive commands
+- async projections and rebuildable read models outside canonical write facts
+- local-first Docker workflows for development, smoke, stress, and diagnostics
 
-## Getting Started
+## System Shape
 
-For a full local setup and first-run path, start with:
+```text
+apps/
+  platform-ui/                 Angular operations and simulation-control surface
+  docs-site/                   Astro documentation surface
+services/
+  platform-runtime/            Kotlin API/runtime, command intake, persistence, projections, admin modules
+  matching-engine/             Go matching engine, HTTP/gRPC transports, direct stream ingestion
+  simulator/                   Go load, scenario, replay, and stress tooling
+contracts/
+  proto/                       Versionable inter-service contracts
+packages/
+  ui-models/                   Shared frontend-facing model definitions
+  scenario-definitions/        Reusable simulation inputs and scenario files
+scripts/
+  dev/                         Local stack, smoke, stress, replay, admin, and migration automation
+  ci/                          CI guardrails and coverage helpers
+docs/
+  steering/                    Architecture, repo, language, and boundary guidance
+```
 
-- [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
+The main runtime path is API-first: manual users and simulation actors go through the same command/API surfaces. Matching-engine behavior stays isolated in Go, while the Kotlin runtime owns orchestration, persistence adapters, read models, and administrative workflows.
 
-For local environment operations and troubleshooting details:
-
-- [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
-
-Quick start:
+## Quick Start
 
 ```bash
 cp .env.example .env
@@ -31,123 +50,113 @@ make dev-up
 make dev-smoke
 ```
 
-## Docs Map
-
-- current status and active execution ladder: [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md), [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
-- project pitch and product framing: [`docs/PROJECT_PITCH.md`](./docs/PROJECT_PITCH.md)
-- onboarding and local setup: [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
-- dev environment runbook: [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
-- delivery policy and test expectations: [`docs/ENGINEERING_DELIVERY_POLICY.md`](./docs/ENGINEERING_DELIVERY_POLICY.md)
-- roadmap and sequencing: [`docs/ROADMAP.md`](./docs/ROADMAP.md)
-- performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./docs/PERFORMANCE_LIBRARY_INVESTIGATION.md)
-- simulator persona/session plan: [`docs/SIMULATOR_PERSONA_CONFIG.md`](./docs/SIMULATOR_PERSONA_CONFIG.md)
-- simulator backlog and execution policy: [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./docs/SIMULATOR_UPGRADE_BACKLOG.md)
-- simulator control room sprint plan: [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
-
-## Current State
-
-The repository is in Phase 1 venue implementation with a working API-first slice, active hot-ingress scaling work, and an increasingly capable local/remote simulation and stress harness.
-
-What exists now:
-
-- project direction in [`REEF_PROJECT_OVERVIEW.md`](./REEF_PROJECT_OVERVIEW.md)
-- technical design in [`REEF_TECHNICAL_DESIGN.md`](./REEF_TECHNICAL_DESIGN.md)
-- implementation roadmap in [`docs/ROADMAP.md`](./docs/ROADMAP.md)
-- architecture and language steering in [`docs/steering/`](./docs/steering/)
-- Kotlin platform runtime with `/api/v1` submit/cancel/modify routes, idempotency hooks, query/read endpoints, reference data endpoints, abuse-protection telemetry, and admin CLI support
-- Go matching engine with hidden-book matching, partial-fill/multi-match behavior, cancel/modify support, HTTP, gRPC, and direct stream-ingestion paths
-- load/simulation CLI and replay/stress workflows in [`services/simulator/`](./services/simulator/)
-- Docker-first local stack and smoke/stress/replay automation through `make` targets
-
-Current planning:
-
-- [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md)
-- [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
-- [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./docs/PROJECT_GOAL_PLAN_REVIEW.md)
-
-## Planned Repository Shape
-
-```text
-apps/
-  platform-ui/
-  docs-site/
-services/
-  platform-runtime/
-  matching-engine/
-  simulator/
-contracts/
-  proto/
-packages/
-  ui-models/
-  scenario-definitions/
-docs/
-```
-
-## Near-Term Build Plan
-
-1. Validate the D-041 hot-ingress path: Kafka-compatible durable command log, explicit partitions, matching-engine direct consumption, durable venue event batches, and clean offset/ack accounting.
-2. Reintroduce canonical persistence deliberately after direct-ingestion ceilings are understood.
-3. Complete venue lifecycle projections for submit/cancel/modify/fill/reject and expose stable query/timeline views.
-4. Build the simulator control-room MVP over existing CLI scripts and report artifacts.
-5. Deliver the first deterministic lifecycle scenarios:
-   - `P1_GOLDEN_HIDDEN_CROSS_T1`
-   - `P2_SETTLEMENT_BREAK_REPAIR`
-6. Extend into post-trade workflows once replay/timeline assertions are stable.
-
-## Current Development Commands
-
-Go matching engine:
-
-```bash
-cd services/matching-engine
-GOCACHE=/tmp/reef-go-build-cache go test ./...
-GOCACHE=/tmp/reef-go-build-cache go run ./cmd/matching-engine
-```
-
-Kotlin platform runtime:
-
-```bash
-cd services/platform-runtime
-GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
-GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew run
-```
-
-Repository check:
+Common local commands:
 
 ```bash
 make test
+make test-go
+make test-simulator
+make test-platform-runtime
+make check-proto-additive
+make dev-reset
+make dev-stress
+make dev-stress-runtime-nodb
+make dev-throughput-campaign
+make dev-admin CMD="instrument-upsert AAPL AAPL"
 ```
 
-Local DB migrations:
+Use `JS_RUNTIME=node` when Bun is not installed:
 
 ```bash
-make dev-db-migrate
+JS_RUNTIME=node make dev-up
 ```
 
-`make dev-up` and `make dev-reset` run migrations automatically after Postgres is healthy. Use `make dev-db-migrate` for explicit repair/debug runs.
+For setup and troubleshooting details, start with [`docs/ONBOARDING.md`](./docs/ONBOARDING.md) and [`docs/DEV_ENV.md`](./docs/DEV_ENV.md).
 
-## Current Defaults
+## CI And Quality Gates
 
-- runtime-to-engine transport supports HTTP, unary gRPC, and gRPC-stream paths depending on profile
-- high-throughput experiments include JetStream stream-ack and Redpanda/Kafka-compatible direct engine ingestion profiles
-- user-facing API boundary direction is versioned `/api/v1` contracts
-- admin surface direction is CLI-first using reusable runtime admin application modules
+Pull requests and branch pushes run:
 
-Related docs:
+- proto additive compatibility checks for contract safety
+- Go formatting, tests, and coverage for `services/matching-engine`
+- Go formatting, tests, and coverage for `services/simulator`
+- Kotlin runtime tests with Jacoco coverage for `services/platform-runtime`
+- Node 22 coverage for repository dev-tooling tests under `scripts/dev`
+- deterministic replay validation for the golden persona session
+- container image build checks for `platform-runtime` and `matching-engine`
+- dependency review for pull requests
+- Go vulnerability scans for Go services
+- matching-engine benchmark guardrails
+- platform-runtime performance guardrails
+- Postgres schema placement and migration integration checks
 
-- [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)
-- [`docs/steering/external-api-boundary.md`](./docs/steering/external-api-boundary.md)
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./docs/SPRINT_COMMUNICATION_API_ADMIN.md)
-- [`docs/DECISIONS.md`](./docs/DECISIONS.md)
-- [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
+Coverage reports are uploaded as GitHub Actions artifacts and summarized in the workflow run. Current baseline coverage is intentionally measured before hard thresholds are introduced; once the first CI run records stable numbers, add per-module minimums for the production packages rather than applying one repository-wide percentage.
 
-## Steering
+## Throughput Stress
 
-Start here before adding code:
+The [`Throughput Stress`](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml) workflow can be run manually and also runs on Monday, Wednesday, and Friday. It performs two 90-second iterations for:
 
+- the no-persistence runtime hot path (`make dev-up-runtime-nodb` plus `make dev-stress-runtime-nodb`)
+- the default db-backed runtime path (`make dev-up` plus `make dev-stress`)
+
+Each run uploads the raw stress reports, telemetry, KPI markdown, recommendation JSON, and db diagnostics when enabled. The README badge reports whether the scheduled/manual throughput gate is healthy; the current measured throughput number lives in the latest workflow summary and artifacts so the repo does not churn commits three times per week just to update a badge value.
+
+Manual examples:
+
+```bash
+make dev-stress-runtime-nodb
+make dev-stress
+```
+
+To tune a manual GitHub Actions run, use the workflow inputs for duration, target rates, and whether to include the db-backed profile.
+
+## Canonical Docs
+
+Read these before changing architecture, behavior, contracts, or delivery policy:
+
+- [`REEF_PROJECT_OVERVIEW.md`](./REEF_PROJECT_OVERVIEW.md)
+- [`REEF_TECHNICAL_DESIGN.md`](./REEF_TECHNICAL_DESIGN.md)
+- [`docs/steering/README.md`](./docs/steering/README.md)
+- [`docs/steering/repository-scope-and-priorities.md`](./docs/steering/repository-scope-and-priorities.md)
 - [`docs/steering/architecture.md`](./docs/steering/architecture.md)
 - [`docs/steering/repository.md`](./docs/steering/repository.md)
-- [`docs/steering/kotlin.md`](./docs/steering/kotlin.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./docs/PERFORMANCE_LEARNINGS.md)
+- [`docs/ENGINEERING_DELIVERY_POLICY.md`](./docs/ENGINEERING_DELIVERY_POLICY.md)
+- [`docs/DECISIONS.md`](./docs/DECISIONS.md)
+
+Surface-specific steering:
+
 - [`docs/steering/go.md`](./docs/steering/go.md)
+- [`docs/steering/kotlin.md`](./docs/steering/kotlin.md)
 - [`docs/steering/angular.md`](./docs/steering/angular.md)
 - [`docs/steering/astro.md`](./docs/steering/astro.md)
+- [`docs/steering/data-platform.md`](./docs/steering/data-platform.md)
+- [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)
+- [`docs/steering/external-api-boundary.md`](./docs/steering/external-api-boundary.md)
+
+## Current Development Focus
+
+The near-term execution ladder is tracked in [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md) and [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md). At a high level:
+
+1. Keep validating hot-ingress paths with durable command-log, direct stream, and explicit partition semantics.
+2. Preserve deterministic lane assignment for matching-sensitive submit/cancel/modify commands.
+3. Expand lifecycle projections and query/timeline views without leaking projection concerns into canonical write logic.
+4. Build simulator control-room workflows over the existing CLI/report artifacts.
+5. Add post-trade workflows after replay and lifecycle assertions are stable.
+
+## Recommended Next Gates
+
+Good candidates for PR gates:
+
+- OpenAPI/API boundary contract diff once the external API spec is generated.
+- Broader deterministic scenario replay tests as more golden scenarios become executable.
+- License scans after dependency policy is written.
+
+Good candidates for scheduled gates:
+
+- Non-blocking migration compatibility audits for each schema family until release guarantees exist.
+- Longer throughput sweeps with warmed caches and persisted trend artifacts.
+- Replay determinism campaigns over seeded scenarios.
+- Soak tests that include stream workers, projectors, and materializers.
+- Database bloat/index/write-amplification diagnostics after stress runs.
+- Fuzz tests with extended duration for matching and simulator config parsing.
