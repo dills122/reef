@@ -140,6 +140,14 @@ bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-mak
 bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
 ```
 
+To submit generated commands through the adapter-owned client against a local Reef stack, pass a venue URL:
+
+```bash
+bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-multi-tick.json --venue-url=http://127.0.0.1:8080
+```
+
+Bot code still does not receive network access; only the runner/orchestrator owns the venue transport.
+
 Registration checks:
 
 - unique filename registry

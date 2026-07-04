@@ -18,6 +18,11 @@ import {
   type BotVenueAdapterContextV1,
   type VenueCommandRequestV1,
 } from "./venue-adapter";
+import {
+  sendVenueCommandRequestsV1,
+  type VenueCommandResponseV1,
+  type VenueCommandTransportV1,
+} from "./venue-client";
 
 export interface BotScenarioFixtureV1 {
   readonly scenarioId: string;
@@ -44,6 +49,7 @@ export interface BotScenarioTickV1 {
 export interface BotScenarioRunOptionsV1 {
   readonly BotClass: ReefBotV1Constructor;
   readonly fixture: BotScenarioFixtureV1;
+  readonly venueTransport?: VenueCommandTransportV1;
 }
 
 export interface BotScenarioRunReportV1 {
@@ -72,6 +78,7 @@ export interface BotScenarioTickReportV1 {
   readonly occurredAt: string;
   readonly actions: readonly BotActionV1[];
   readonly venueCommands: readonly VenueCommandRequestV1[];
+  readonly venueResponses: readonly VenueCommandResponseV1[];
   readonly denials: readonly BotDenialV1[];
   readonly dataCalls: number;
   readonly ordersAfterTick: readonly OwnOrderV1[];
@@ -149,6 +156,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
 
     const venueResult = toVenueCommandRequestsV1(actions, venueContext(options.fixture, fixtureTick.occurredAt, commandSequence));
     const venueCommands = venueResult.ok ? Array.from(venueResult.value) : [];
+    let venueResponses: readonly VenueCommandResponseV1[] = [];
     if (!venueResult.ok) {
       denials.push(venueResult.denial);
       issues.push({
@@ -156,6 +164,18 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
         message: venueResult.denial.message,
         tick,
       });
+    } else if (options.venueTransport !== undefined && venueCommands.length > 0) {
+      const sendResult = await sendVenueCommandRequestsV1(venueCommands, options.venueTransport);
+      if (sendResult.ok) {
+        venueResponses = sendResult.value;
+      } else {
+        denials.push(sendResult.denial);
+        issues.push({
+          code: "venue_send_denial",
+          message: sendResult.denial.message,
+          tick,
+        });
+      }
     }
 
     applyActionsToOrderState(actions, orderState, orderHistory, tick);
@@ -166,6 +186,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       occurredAt: fixtureTick.occurredAt,
       actions,
       venueCommands,
+      venueResponses,
       denials: denials.slice(tickDenialsStart),
       dataCalls: counters.dataCalls,
       ordersAfterTick: Array.from(orderState.values()),

@@ -6,6 +6,9 @@ import { pathToFileURL } from "node:url";
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const fixture = JSON.parse(readFileSync(join(repoRoot, "packages/bot-sdk/fixtures/aapl-multi-tick.json"), "utf8"));
 const { runBotScenarioV1 } = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/src/runner.ts")).href);
+const { createRecordingVenueTransportV1 } = await import(
+  pathToFileURL(join(repoRoot, "packages/bot-sdk/src/venue-client.ts")).href
+);
 
 await assertSimpleMarketMakerRun();
 await assertLifecycleSafeMarketMakerRun();
@@ -14,7 +17,8 @@ console.log("bot SDK scenario runner checks passed");
 
 async function assertSimpleMarketMakerRun() {
   const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/simple-market-maker.ts")).href);
-  const report = await runBotScenarioV1({ BotClass: module.default, fixture });
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({ BotClass: module.default, fixture, venueTransport: transport });
 
   assert.equal(report.status, "completed");
   assert.equal(report.ticksRun, 3);
@@ -23,11 +27,13 @@ async function assertSimpleMarketMakerRun() {
   assert.equal(report.dataCalls, 3);
   assert.equal(report.issues.length, 0);
   assert.equal(report.ticks[0].venueCommands.length, 2);
+  assert.equal(report.ticks[0].venueResponses.length, 2);
   assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");
   assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99.5");
   assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "100");
   assert.equal(report.ticks[2].venueCommands[1].body.limitPrice, "101.25");
   assert.equal(report.finalOrders.length, 6);
+  assert.equal(transport.requests.length, 6);
 }
 
 async function assertLifecycleSafeMarketMakerRun() {

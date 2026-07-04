@@ -208,6 +208,8 @@ The helper does not execute HTTP calls. Hosted bots still return proposed action
 
 `sendVenueCommandRequestsV1` is the adapter-owned send step. It accepts mapped command requests and a transport implementation. Bot code never receives the transport and never creates its own network client.
 
+The deterministic runner is dry-run by default. When passed a venue transport, it sends generated commands through the adapter-owned client and records venue responses on each tick report.
+
 Current mapping support:
 
 - `submit_limit` -> `/api/v1/orders/submit`
