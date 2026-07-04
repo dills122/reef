@@ -268,7 +268,9 @@ class PlatformHttpServerBoundaryTest {
     fun materializerRoleExposesOnlyInternalMaterializerStats() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),
-            runtimeRole = PlatformRuntimeRole.Materializer
+            runtimeRole = PlatformRuntimeRole.Materializer,
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            venueEventMaterializerEnabled = true
         )
         try {
             val internal = get(server.address.port, "/internal/venue-event-materializer/stats")
@@ -1797,6 +1799,7 @@ class PlatformHttpServerBoundaryTest {
         streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
         streamCommandMaxStorageUtilization: Double = 0.95,
         streamCommandBackpressureSampleMs: Long = 100L,
+        venueEventMaterializerEnabled: Boolean = false,
         runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence()
     ): com.sun.net.httpserver.HttpServer {
         val persistence = runtimePersistence
@@ -1831,6 +1834,7 @@ class PlatformHttpServerBoundaryTest {
             streamCommandConfig = streamCommandConfig,
             streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
             streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
+            venueEventMaterializerEnabled = venueEventMaterializerEnabled,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,

@@ -2028,7 +2028,8 @@ class PlatformHttpServer(
 
     private fun venueEventMaterializerShouldStart(): Boolean {
         return commandProcessingMode == CommandProcessingMode.StreamAck &&
-            (runtimeRole == PlatformRuntimeRole.Materializer || venueEventMaterializerEnabled)
+            runtimeRole == PlatformRuntimeRole.Materializer &&
+            venueEventMaterializerEnabled
     }
 
     private fun startVenueEventMaterializer() {
