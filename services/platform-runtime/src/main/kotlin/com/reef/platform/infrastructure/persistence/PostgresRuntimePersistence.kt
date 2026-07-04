@@ -317,7 +317,7 @@ class PostgresRuntimePersistence(
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEventBatches} (
-                      batch_id TEXT PRIMARY KEY,
+                      batch_id TEXT NOT NULL,
                       shard_id TEXT NOT NULL,
                       partition_id INTEGER NOT NULL,
                       command_stream TEXT NOT NULL,
@@ -331,6 +331,7 @@ class PostgresRuntimePersistence(
                       payload_json JSONB NOT NULL,
                       created_at TEXT NOT NULL,
                       materialized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE (event_stream, batch_id),
                       UNIQUE (event_stream, partition_id, first_sequence, last_sequence)
                     )
                     """.trimIndent()
@@ -360,14 +361,14 @@ class PostgresRuntimePersistence(
                       reject_code TEXT NOT NULL,
                       result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                       materialized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                      UNIQUE (batch_id, stream_sequence)
+                      UNIQUE (event_stream, batch_id, stream_sequence)
                     )
                     """.trimIndent()
                 )
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_batch_seq
-                    ON ${names.canonicalCommandOutcomes}(batch_id, stream_sequence)
+                    ON ${names.canonicalCommandOutcomes}(event_stream, batch_id, stream_sequence)
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -567,7 +568,8 @@ class PostgresRuntimePersistence(
                       SELECT payload_checksum
                         INTO v_existing_checksum
                         FROM ${names.canonicalVenueEventBatches}
-                       WHERE batch_id = v_batch_id;
+                       WHERE event_stream = COALESCE(p_batch->>'eventStream', '')
+                         AND batch_id = v_batch_id;
 
                       IF FOUND THEN
                         IF v_existing_checksum <> v_payload_checksum THEN

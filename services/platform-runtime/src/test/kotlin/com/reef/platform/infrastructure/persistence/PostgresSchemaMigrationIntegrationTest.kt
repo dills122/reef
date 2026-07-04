@@ -34,6 +34,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0010_venue_event_batch_materialization.sql',
                   'runtime/0011_canonical_command_outcome_projection.sql',
                   'runtime/0012_cap_command_outcome_projection_batch.sql',
+                  'runtime/0013_scope_venue_event_batch_identity.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -90,7 +91,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0009_runtime_canonical_event_row_toggle.sql",
                     "runtime/0010_venue_event_batch_materialization.sql",
                     "runtime/0011_canonical_command_outcome_projection.sql",
-                    "runtime/0012_cap_command_outcome_projection_batch.sql"
+                    "runtime/0012_cap_command_outcome_projection_batch.sql",
+                    "runtime/0013_scope_venue_event_batch_identity.sql"
                 ),
                 appliedMigrations
             )
