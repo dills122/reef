@@ -45,6 +45,9 @@ const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
 const captureHotPath = env("DEV_STRESS_CAPTURE_HOT_PATH", "1") !== "0";
 const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
+const streamAckDrainWaitMs = Number(env("DEV_STRESS_STREAM_ACK_DRAIN_WAIT_MS", "0"));
+const streamAckDrainPollMs = Number(env("DEV_STRESS_STREAM_ACK_DRAIN_POLL_MS", "1000"));
+const streamAckWorkerProbeTimeoutMs = Number(env("DEV_STRESS_STREAM_ACK_WORKER_PROBE_TIMEOUT_MS", "2000"));
 const streamAckWorkerUrls = parseCsvStrings(
   env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
 );
@@ -332,7 +335,12 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });
     }
     if (captureStreamAckWorkerStats) {
-      const afterStreamWorkers = await sampleStreamAckWorkers(runtimeUrl);
+      const afterStreamWorkers = await waitForStreamAckWorkerDrain({
+        reportOut,
+        beforeStreamWorkers,
+        timeoutMs: streamAckDrainWaitMs,
+        pollMs: streamAckDrainPollMs,
+      });
       attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
     }
     if (captureStreamAckProjectorStats) {
@@ -363,6 +371,7 @@ async function sampleStreamAckWorkers() {
         name: `streamAckWorker.${index}.stats`,
         url: `${baseUrl}/internal/stream-ack/worker/stats`,
         captureJson: true,
+        timeoutMs: streamAckWorkerProbeTimeoutMs,
       }),
     ),
   );
@@ -374,6 +383,42 @@ async function sampleStreamAckWorkers() {
     probes,
     json: aggregateStreamAckWorkerStats(probes),
   };
+}
+
+async function waitForStreamAckWorkerDrain({ reportOut, beforeStreamWorkers, timeoutMs, pollMs }) {
+  const started = Date.now();
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+  const interval = Math.max(100, Number(pollMs) || 1000);
+  const expectedTerminal = streamAckExpectedTerminalCommands(reportOut);
+  let latest = await sampleStreamAckWorkers();
+
+  while (timeout > 0 && !streamAckWorkerDrainSatisfied(beforeStreamWorkers?.json, latest?.json, expectedTerminal)) {
+    if (Date.now() - started >= timeout) break;
+    await sleep(Math.min(interval, Math.max(0, timeout - (Date.now() - started))));
+    latest = await sampleStreamAckWorkers();
+  }
+  return latest;
+}
+
+function streamAckExpectedTerminalCommands(reportOut) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    return Number(report.totalSuccess ?? report.totalAccepted ?? report.totalRequests ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+function streamAckWorkerDrainSatisfied(before, after, expectedTerminal) {
+  if (!after?.metrics) return true;
+  const delta = streamWorkerDelta(before, after, 1);
+  const terminalDelta = Number(delta?.completedDelta ?? 0) + Number(delta?.failedDelta ?? 0);
+  const streamLag = (after.consumerMetrics ?? []).reduce(
+    (sum, consumer) => sum + Number(consumer.streamLag ?? consumer.pending ?? 0),
+    0,
+  );
+  if (expectedTerminal > 0 && terminalDelta < expectedTerminal) return false;
+  return streamLag <= 0;
 }
 
 async function resetHotPath(runtimeUrl) {
@@ -1105,7 +1150,10 @@ async function requestAppProbe(probe) {
   return new Promise((resolve) => {
     const url = new URL(probe.url);
     const client = url.protocol === "https:" ? https : http;
-    const req = client.request(url, { method: probe.method ?? "GET", timeout: 2000 }, (response) => {
+    const req = client.request(
+      url,
+      { method: probe.method ?? "GET", timeout: Math.max(1, Number(probe.timeoutMs ?? 2000)) },
+      (response) => {
       const chunks = [];
       let bytes = 0;
       response.on("data", (chunk) => {
