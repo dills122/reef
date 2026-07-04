@@ -145,6 +145,7 @@ jobs:
 
   scenario-replay:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     timeout-minutes: 25
     env:
       JS_RUNTIME: node
