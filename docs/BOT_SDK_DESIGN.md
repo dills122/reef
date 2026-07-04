@@ -275,6 +275,7 @@ The sidecar implementation starts with:
 - `bun scripts/dev/bot-sdk-run.mjs <bot-file.ts> [fixture.json]` for deterministic multi-tick scenario runs
 - `bun scripts/dev/bot-sdk-contract.test.mjs` for SDK examples and contract checks
 - `bun scripts/dev/bot-sdk-venue-adapter.test.mjs` for fixture-to-venue-command smoke checks
+- `bun scripts/dev/bot-sdk-runner.test.mjs` for deterministic multi-tick scenario runner checks
 - `packages/bot-sdk/bot-registry.example.json` as the first local registry fixture, with filename, bot ID, owner, publisher, approved version, status, and optional artifact hash
 - `packages/bot-sdk/test-fixtures/bad-bots/` for rejected-bot fixtures covering metadata, hosted API, and action-limit failures
 

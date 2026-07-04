@@ -40,6 +40,7 @@ test-bot-sdk:
 	tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal
