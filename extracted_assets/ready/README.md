@@ -1,34 +1,24 @@
 # Reef Brand Assets (Ready)
 
-This folder contains cleaned logo/app-icon crops and a theming-ready SVG icon set.
+This folder contains the current theming-ready SVG icon set and Reef design tokens.
 
 ## Paths
 
-- PNG assets: `/Users/dsteele/repos/reef/extracted_assets/ready/png`
-- SVG icons: `/Users/dsteele/repos/reef/extracted_assets/ready/svg`
-- Theme tokens (CSS): `/Users/dsteele/repos/reef/extracted_assets/ready/theme.tokens.css`
-- Theme tokens (JSON): `/Users/dsteele/repos/reef/extracted_assets/ready/theme.tokens.json`
+- SVG icons: `extracted_assets/ready/svg`
+- Theme tokens (CSS): `extracted_assets/ready/theme.tokens.css`
+- Theme tokens (JSON): `extracted_assets/ready/theme.tokens.json`
 
-## Cleaned Logo + App Assets
+## SVG Icons
 
-Logos (transparent variants included):
-- `logo_primary_full_transparent.png`
-- `logo_variant_square_transparent.png`
-- `logo_variant_mark_transparent.png`
-- `logo_variant_wordmark_horizontal_transparent.png`
-- `logo_social_og_square_transparent.png`
+Current icons:
 
-Banners:
-- `logo_github_banner.png`
-
-App icons:
-- `app_icon_round_dark.png`
-- `app_icon_round_alt.png`
-- `app_icon_light.png`
-- `app_icon_gradient.png`
-- `app_icon_square_dark.png`
-
-## SVG Icon Theming
+- `icon_actors.svg`
+- `icon_analytics.svg`
+- `icon_execute.svg`
+- `icon_reliability.svg`
+- `icon_replay.svg`
+- `icon_settle.svg`
+- `icon_simulate.svg`
 
 All SVG icons are authored with:
 - `viewBox="0 0 24 24"`
