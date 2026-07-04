@@ -57,8 +57,8 @@ The current gaps are:
    - Commit command offsets after durable venue event-batch publication.
    - Commit materializer offsets only after compact canonical Postgres batch rows commit.
    - Compact canonical batch storage and command/outcome lookup rows now exist for status, idempotent replay, audit, and projection inputs.
-   - Wire Kafka-compatible venue event batch materializer runtime role and diagnostics before promoting throughput claims.
-   - Gate with event-batch replay/checksum tests before throughput claims.
+   - Kafka-compatible venue event batch materializer runtime role, diagnostics, and local smoke target now exist.
+   - Event-batch replay/checksum tests now gate the materializer contract before throughput claims.
 
 3. Complete venue lifecycle projection.
    - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.

@@ -1,0 +1,31 @@
+{
+  "batchId": "batch-replay-gate-1",
+  "shardId": "engine-0",
+  "partition": 3,
+  "commandStream": "REEF_REPLAY_GATE_COMMANDS",
+  "eventStream": "REEF_REPLAY_GATE_VENUE_EVENTS",
+  "firstSequence": 3001,
+  "lastSequence": 3001,
+  "commandCount": 1,
+  "createdAt": "2026-07-04T18:30:00Z",
+  "payloadChecksum": "checksum-replay-gate-1",
+  "payloadFormat": "venue-event-batch-json",
+  "payloadVersion": "v1",
+  "outcomes": [
+    {
+      "commandId": "cmd-replay-gate-1",
+      "commandType": "SubmitOrder",
+      "streamSequence": 3001,
+      "deliveredCount": 1,
+      "payloadHash": "payload-hash-replay-gate-1",
+      "instrumentId": "AAPL",
+      "orderId": "ord-replay-gate-1",
+      "status": "accepted",
+      "result": {
+        "accepted": {
+          "eventId": "evt-replay-gate-1"
+        }
+      }
+    }
+  ]
+}

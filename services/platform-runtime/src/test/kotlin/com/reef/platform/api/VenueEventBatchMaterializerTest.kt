@@ -4,6 +4,7 @@ import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
+import java.nio.charset.StandardCharsets
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -97,6 +98,46 @@ class VenueEventBatchMaterializerTest {
         assertEquals(1, stats.failed)
     }
 
+    @Test
+    fun replayGateAcceptsDuplicateBatchAndRejectsChecksumDrift() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        val originalPayload = resourceText("venue-event-batches/submit-accepted-v1.json")
+        val replay = RecordingVenueEventBatchDelivery(
+            payloadJson = originalPayload,
+            streamSequence = 3001
+        )
+        val duplicateReplay = RecordingVenueEventBatchDelivery(
+            payloadJson = originalPayload,
+            streamSequence = 3001
+        )
+        val checksumConflict = RecordingVenueEventBatchDelivery(
+            payloadJson = originalPayload.replace("checksum-replay-gate-1", "checksum-replay-gate-conflict"),
+            streamSequence = 3001
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(replay, duplicateReplay, checksumConflict),
+            api = api
+        )
+
+        val processed = materializer.processOnce()
+
+        assertEquals(3, processed)
+        assertEquals(1, replay.ackCalls)
+        assertEquals(1, duplicateReplay.ackCalls)
+        assertEquals(0, replay.nakCalls + duplicateReplay.nakCalls)
+        assertEquals(0, checksumConflict.ackCalls)
+        assertEquals(1, checksumConflict.nakCalls)
+        val outcome = persistence.canonicalCommandOutcome("cmd-replay-gate-1")
+        assertNotNull(outcome)
+        assertEquals("batch-replay-gate-1", outcome.batchId)
+        assertEquals("accepted", outcome.resultStatus)
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(2, stats.materialized)
+        assertEquals(1, stats.failed)
+    }
+
     private fun venueEventBatch(batchId: String, checksum: String): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = batchId,
@@ -151,6 +192,12 @@ class VenueEventBatchMaterializerTest {
                 )
             )
         )
+    }
+
+    private fun resourceText(path: String): String {
+        val stream = javaClass.classLoader.getResourceAsStream(path)
+        requireNotNull(stream) { "missing test resource: $path" }
+        return stream.use { String(it.readBytes(), StandardCharsets.UTF_8) }
     }
 }
 
