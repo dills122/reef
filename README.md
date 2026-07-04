@@ -84,7 +84,6 @@ Pull requests and branch pushes run:
 - Node 22 coverage for repository dev-tooling tests under `scripts/dev`
 - deterministic replay validation for the golden persona session
 - container image build checks for `platform-runtime` and `matching-engine`
-- dependency review for pull requests
 - Go vulnerability scans for Go services
 - matching-engine benchmark guardrails
 - platform-runtime performance guardrails
@@ -150,6 +149,7 @@ Good candidates for PR gates:
 
 - OpenAPI/API boundary contract diff once the external API spec is generated.
 - Broader deterministic scenario replay tests as more golden scenarios become executable.
+- Dependency review after GitHub dependency graph and Advanced Security support are available for the repository.
 - License scans after dependency policy is written.
 
 Good candidates for scheduled gates:

@@ -211,14 +211,6 @@ jobs:
       - name: Build ${{ matrix.name }} image
         run: docker build -f "${{ matrix.dockerfile }}" -t "reef/${{ matrix.name }}:ci" "${{ matrix.context }}"
 
-  dependency-review:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Review dependency changes
-        uses: actions/dependency-review-action@v4
-
   go-vulnerability-scan:
     runs-on: ubuntu-latest
     strategy:
