@@ -239,6 +239,7 @@ The sidecar implementation starts with:
 - `bun scripts/dev/bot-sdk-register.mjs <bot-file.ts>` for single-bot registration and mock qualification
 - `bun scripts/dev/bot-sdk-contract.test.mjs` for SDK examples and contract checks
 - `packages/bot-sdk/bot-registry.example.json` as the first local filename registry fixture
+- `packages/bot-sdk/test-fixtures/bad-bots/` for rejected-bot fixtures covering metadata, hosted API, and action-limit failures
 
 A bot that exceeds trade/sec limits during qualification must be marked `do_not_merge` until fixed. Repeated live violations can freeze the bot and then ban that bot version or submitter according to arena policy.
 
