@@ -13,3 +13,5 @@ Run the local contract and qualification checks:
 bun scripts/dev/bot-sdk-contract.test.mjs
 bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-maker.ts
 ```
+
+The fixture scenario runner uses `packages/bot-sdk/fixtures/aapl-multi-tick.json` as the first deterministic multi-tick market-data fixture.
