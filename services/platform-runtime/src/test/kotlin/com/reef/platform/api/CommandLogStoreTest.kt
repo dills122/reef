@@ -171,6 +171,25 @@ class CommandLogStoreTest {
         assertEquals(0L, accounting.active)
         assertEquals(0L, accounting.accountingGap)
     }
+
+    @Test
+    fun inMemoryStoreAllowsRepeatedTerminalUpdates() {
+        val store = InMemoryCommandLogStore()
+        val record = commandLogRecord(commandId = "cmd-repeat-terminal", idempotencyKey = "idem-repeat-terminal")
+
+        store.append(record)
+        store.markProcessing(record.commandId)
+        store.markCompleted(record.commandId, 200, """{"accepted":true}""")
+        store.markCompleted(record.commandId, 200, """{"accepted":true,"replayed":true}""")
+
+        val stored = store.findByCommandId(record.commandId)
+        val accounting = store.accountingSnapshot()
+
+        assertEquals(CommandLogStatus.COMPLETED, stored?.status)
+        assertEquals("""{"accepted":true,"replayed":true}""", stored?.responsePayloadJson)
+        assertEquals(1L, accounting.terminal)
+        assertEquals(0L, accounting.accountingGap)
+    }
 }
 
 private fun commandLogRecord(
@@ -328,6 +347,47 @@ class PostgresCommandLogStoreIntegrationTest {
         assertEquals(1, completed?.attemptCount)
         assertEquals(200, completed?.responseStatus)
         assertTrue(completed?.responsePayloadJson?.contains("accepted") == true)
+    }
+
+    @Test
+    fun postgresStoreKeepsRepeatedTerminalUpdatesIdempotentWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(commandId = "cmd-repeat-terminal-$suffix", idempotencyKey = "idem-repeat-terminal-$suffix")
+            .copy(runId = "run-repeat-terminal-$suffix")
+
+        assertTrue(store.append(record).appended)
+        store.markProcessing(record.commandId)
+        store.markCompleted(record.commandId, 200, """{"accepted":true}""")
+        store.markCompleted(record.commandId, 200, """{"accepted":true,"replayed":true}""")
+
+        val stored = store.findByCommandId(record.commandId)
+        val accounting = store.accountingSnapshot(record.runId)
+
+        assertEquals(CommandLogStatus.COMPLETED, stored?.status)
+        assertTrue(stored?.responsePayloadJson?.contains("replayed") == true)
+        assertEquals(1L, accounting.terminal)
+        assertEquals(0L, accounting.accountingGap)
+    }
+
+    @Test
+    fun postgresStoreCanMarkKnownCommandTerminalWithoutQueueRowWhenConfigured() {
+        val store = postgresStoreOrNull() ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(commandId = "cmd-terminal-no-queue-$suffix", idempotencyKey = "idem-terminal-no-queue-$suffix")
+            .copy(runId = "run-terminal-no-queue-$suffix")
+
+        assertTrue(store.append(record).appended)
+        deleteQueueRow(record.commandId) ?: return
+        store.markFailed(record.commandId, 503, "worker unavailable")
+
+        val stored = store.findByCommandId(record.commandId)
+        val accounting = store.accountingSnapshot(record.runId)
+
+        assertEquals(CommandLogStatus.FAILED, stored?.status)
+        assertEquals("worker unavailable", stored?.lastError)
+        assertEquals(1L, accounting.terminal)
+        assertEquals(0L, accounting.accountingGap)
     }
 
     @Test

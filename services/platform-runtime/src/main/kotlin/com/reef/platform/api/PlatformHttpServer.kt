@@ -32,19 +32,18 @@ private data class CachedStreamCommandDrainBackpressureSnapshot(
     val snapshot: StreamCommandDrainBackpressureSnapshot
 )
 
-internal data class PlatformHotPathRequest(
-    val method: String,
-    val path: String,
-    val query: String?,
-    val headers: Headers,
-    val body: String = ""
+private data class PreparedApiV1Mutation(
+    val route: String,
+    val clientId: String,
+    val idempotencyKey: String,
+    val correlationId: String,
+    val body: String
 )
 
-internal data class PlatformHotPathResponse(
-    val status: Int,
-    val body: String = "",
-    val contentType: String? = "application/json"
-)
+private sealed class PreparedApiV1MutationResult {
+    data class Prepared(val request: PreparedApiV1Mutation) : PreparedApiV1MutationResult()
+    data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
+}
 
 private fun streamCommandPublicationMarker(
     store: StreamCommandIntakeStore?,
@@ -57,28 +56,6 @@ private fun streamCommandPublicationMarker(
         "worker", "defer-to-worker", "worker-only" -> if (runtimeRole == PlatformRuntimeRole.Api) null else marker
         "none", "disabled" -> null
         else -> marker
-    }
-}
-
-enum class PlatformRuntimeRole(
-    val configValue: String,
-    val publicHttpEnabled: Boolean,
-    val backgroundWorkersEnabled: Boolean
-) {
-    Api("api", publicHttpEnabled = true, backgroundWorkersEnabled = false),
-    Worker("worker", publicHttpEnabled = false, backgroundWorkersEnabled = true),
-    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = true);
-
-    companion object {
-        fun from(raw: String): PlatformRuntimeRole {
-            val normalized = raw.trim().lowercase()
-            return entries.firstOrNull { it.configValue == normalized }
-                ?: throw IllegalArgumentException("Unsupported PLATFORM_RUNTIME_ROLE: $raw")
-        }
-
-        fun fromEnv(): PlatformRuntimeRole {
-            return from(RuntimeEnv.string("PLATFORM_RUNTIME_ROLE", "api"))
-        }
     }
 }
 
@@ -164,6 +141,42 @@ class PlatformHttpServer(
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
         buildStreamCommandDrainBackpressureSampler()
     }
+    private val streamIngressSubmitHandler: StreamIngressSubmitHandler by lazy {
+        StreamIngressSubmitHandler(
+            maxRequestBodyBytes = maxRequestBodyBytes,
+            commandProcessingMode = commandProcessingMode
+        ) { route, clientId, idempotencyKey, correlationId, body ->
+            handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+        }
+    }
+    private val legacySetupRoutes: PlatformLegacySetupRoutes by lazy {
+        PlatformLegacySetupRoutes(
+            maxRequestBodyBytes = maxRequestBodyBytes,
+            legacyMutationRoutesEnabled = legacyMutationRoutesEnabled,
+            createInstrument = { body -> api.createInstrument(body) },
+            instruments = { api.instruments() },
+            createParticipant = { body -> api.createParticipant(body) },
+            participants = { api.participants() },
+            createAccount = { body -> api.createAccount(body) },
+            accounts = { api.accounts() },
+            createRole = { body -> api.createRole(body) },
+            roles = { api.roles() },
+            assignRole = { body -> api.assignRole(body) },
+            actorRoles = { actorId -> api.actorRoles(actorId) }
+        )
+    }
+    private val diagnosticRoutes: PlatformDiagnosticRoutes by lazy {
+        PlatformDiagnosticRoutes(
+            healthJson = { api.health() },
+            abuseStatsJson = { abuseStatsJson(abuseProtectionHook.stats()) },
+            dbPoolStatsJson = { dbPoolStatsJson() },
+            asyncCommandStatsJson = { asyncCommandStatsJson() },
+            commandAccountingJson = { runId -> commandAccountingJson(runId) },
+            streamCommandHealthJson = { streamCommandHealthJson() },
+            streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
+            projectorStatusJson = { projectorStatusJson() }
+        )
+    }
 
     constructor(
         port: Int = RuntimeEnv.int("PLATFORM_RUNTIME_PORT", 8080),
@@ -200,76 +213,7 @@ class PlatformHttpServer(
         val workerThreads = RuntimeEnv.int("PLATFORM_HTTP_THREADS", 32, min = 4)
         server.executor = Executors.newFixedThreadPool(workerThreads)
 
-        server.createContext("/health") { exchange ->
-            writeJson(exchange, 200, api.health())
-        }
-
-        server.createContext("/internal/boundary/abuse/stats") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, abuseStatsJson(abuseProtectionHook.stats()))
-        }
-
-        server.createContext("/internal/perf/hot-path") { exchange ->
-            when (exchange.requestMethod) {
-                "GET" -> writeJson(exchange, 200, JsonCodec.writeObject("metrics" to HotPathMetrics.snapshot()))
-                "POST" -> {
-                    HotPathMetrics.reset()
-                    writeJson(exchange, 200, JsonCodec.writeObject("status" to "reset"))
-                }
-                else -> methodNotAllowed(exchange)
-            }
-        }
-
-        server.createContext("/internal/perf/db-pools") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, dbPoolStatsJson())
-        }
-
-        server.createContext("/internal/commands/async/stats") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, asyncCommandStatsJson())
-        }
-
-        server.createContext("/internal/commands/accounting") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, commandAccountingJson(queryValue(exchange, "runId")))
-        }
-
-        server.createContext("/internal/stream-ack/health") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, streamCommandHealthJson())
-        }
-
-        server.createContext("/internal/stream-ack/worker/stats") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, streamCommandWorkerStatsJson())
-        }
-
-        server.createContext("/internal/projector/status") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            writeJson(exchange, 200, projectorStatusJson())
-        }
+        registerDiagnosticRoutes(server)
 
         if (runtimeRole.publicHttpEnabled) {
         server.createContext("/api/v1/commands/") { exchange ->
@@ -539,77 +483,52 @@ class PlatformHttpServer(
         }
     }
 
+    private fun writeHotPathResponse(exchange: HttpExchange, response: PlatformHotPathResponse) {
+        if (response.body.isEmpty() && response.contentType == null) {
+            exchange.sendResponseHeaders(response.status, -1)
+            exchange.close()
+            return
+        }
+        val bytes = response.body.toByteArray()
+        response.contentType?.let { exchange.responseHeaders.add("Content-Type", it) }
+        exchange.sendResponseHeaders(response.status, bytes.size.toLong())
+        exchange.responseBody.use { output ->
+            output.write(bytes)
+        }
+    }
+
     private fun methodNotAllowed(exchange: HttpExchange) {
         exchange.sendResponseHeaders(405, -1)
         exchange.close()
     }
 
-    internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
-        return when {
-            request.path == "/health" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, api.health())
-            }
-            request.path == "/internal/boundary/abuse/stats" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, abuseStatsJson(abuseProtectionHook.stats()))
-            }
-            request.path == "/internal/perf/hot-path" -> {
-                when (request.method) {
-                    "GET" -> PlatformHotPathResponse(200, JsonCodec.writeObject("metrics" to HotPathMetrics.snapshot()))
-                    "POST" -> {
-                        HotPathMetrics.reset()
-                        PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "reset"))
-                    }
-                    else -> methodNotAllowedResponse()
-                }
-            }
-            request.path == "/internal/perf/db-pools" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, dbPoolStatsJson())
-            }
-            request.path == "/internal/commands/async/stats" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, asyncCommandStatsJson())
-            }
-            request.path == "/internal/commands/accounting" -> {
-                if (request.method != "GET") {
-                    methodNotAllowedResponse()
+    private fun registerDiagnosticRoutes(server: HttpServer) {
+        diagnosticRoutes.paths.forEach { path ->
+            server.createContext(path) { exchange ->
+                val response = diagnosticRoutes.handle(
+                    method = exchange.requestMethod,
+                    path = exchange.requestURI.path,
+                    query = exchange.requestURI.query
+                )
+                if (response == null) {
+                    exchange.sendResponseHeaders(404, -1)
+                    exchange.close()
                 } else {
-                    PlatformHotPathResponse(200, commandAccountingJson(queryValue(request.query, "runId")))
+                    writeHotPathResponse(exchange, response)
                 }
             }
-            request.path == "/internal/stream-ack/health" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, streamCommandHealthJson())
-            }
-            request.path == "/internal/stream-ack/worker/stats" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, streamCommandWorkerStatsJson())
-            }
-            request.path == "/internal/projector/status" -> {
-                if (request.method != "GET") methodNotAllowedResponse() else PlatformHotPathResponse(200, projectorStatusJson())
-            }
+        }
+    }
+
+    internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
+        return diagnosticRoutes.handle(request.method, request.path, request.query) ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
             request.path == "/api/v1/orders/submit" -> {
                 handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body ->
                     api.submitOrder(body)
                 }
             }
-            request.path == "/reference/instruments" -> {
-                handleLegacySetupRequest(request, postOperation = { body -> api.createInstrument(body) }, getOperation = { api.instruments() })
-            }
-            request.path == "/reference/participants" -> {
-                handleLegacySetupRequest(request, postOperation = { body -> api.createParticipant(body) }, getOperation = { api.participants() })
-            }
-            request.path == "/reference/accounts" -> {
-                handleLegacySetupRequest(request, postOperation = { body -> api.createAccount(body) }, getOperation = { api.accounts() })
-            }
-            request.path == "/auth/roles" -> {
-                handleLegacySetupRequest(request, postOperation = { body -> api.createRole(body) }, getOperation = { api.roles() })
-            }
-            request.path == "/auth/actor-roles" -> {
-                handleLegacySetupRequest(
-                    request,
-                    postOperation = { body -> api.assignRole(body) },
-                    getOperation = { api.actorRoles(queryValue(request.query, "actorId")) }
-                )
-            }
-            else -> null
+            else -> legacySetupRoutes.handle(request)
         }
     }
 
@@ -626,51 +545,7 @@ class PlatformHttpServer(
     }
 
     internal fun handleStreamIngressSubmitAsync(body: String): CompletableFuture<PlatformHotPathResponse> {
-        if (body.length > maxRequestBodyBytes) {
-            return CompletableFuture.completedFuture(
-                PlatformHotPathResponse(
-                    413,
-                    JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
-                )
-            )
-        }
-        if (commandProcessingMode != CommandProcessingMode.StreamAck) {
-            return CompletableFuture.completedFuture(
-                PlatformHotPathResponse(503, simpleErrorJson("stream command intake unavailable"))
-            )
-        }
-
-        val route = "/api/v1/orders/submit"
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val commandId = json.string("commandId")
-        val traceId = json.string("traceId")
-        val correlationId = json.string("correlationId").ifBlank { traceId }
-        val clientId = json.string("clientId").ifBlank { RuntimeEnv.string("STREAM_INGRESS_DEFAULT_CLIENT_ID", "stream-ingress") }
-        val idempotencyKey = json.string("idempotencyKey").ifBlank { commandId }
-        if (clientId.isBlank() || idempotencyKey.isBlank()) {
-            return CompletableFuture.completedFuture(
-                PlatformHotPathResponse(
-                    400,
-                    JsonCodec.writeObject("error" to "STREAM_INGRESS_METADATA_REQUIRED")
-                )
-            )
-        }
-        val validationError = HotPathMetrics.time("streamIngress.command.validate") {
-            PlatformCommandParsers.validateApiV1Command(route, body)
-        }
-        if (validationError != null) {
-            return CompletableFuture.completedFuture(
-                PlatformHotPathResponse(
-                    400,
-                    JsonCodec.writeObject("error" to "VALIDATION_ERROR", "message" to validationError)
-                )
-            )
-        }
-        return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
-    }
-
-    private fun methodNotAllowedResponse(): PlatformHotPathResponse {
-        return PlatformHotPathResponse(status = 405, body = "", contentType = null)
+        return streamIngressSubmitHandler.handle(body)
     }
 
     private fun simpleErrorJson(error: String, message: String? = null): String {
@@ -746,18 +621,6 @@ class PlatformHttpServer(
         return queryValue(query, key)
     }
 
-    private fun queryValue(query: String?, key: String): String {
-        if (query.isNullOrBlank()) return ""
-        val values = query.split("&")
-        for (value in values) {
-            val parts = value.split("=", limit = 2)
-            if (parts.size == 2 && parts[0] == key) {
-                return parts[1]
-            }
-        }
-        return ""
-    }
-
     private fun correlationId(exchange: HttpExchange): String {
         return exchange.requestHeaders["X-Correlation-Id"]?.firstOrNull() ?: ""
     }
@@ -784,56 +647,6 @@ class PlatformHttpServer(
             return false
         }
         return true
-    }
-
-    private fun allowLegacyMutationRouteResponse(headers: Headers): PlatformHotPathResponse? {
-        if (!legacyMutationRoutesEnabled) {
-            return PlatformHotPathResponse(403, simpleErrorJson("legacy mutation route disabled"))
-        }
-        val internalMarker = headers[LEGACY_INTERNAL_ROUTE_HEADER]?.firstOrNull()
-        if (internalMarker != "true") {
-            return PlatformHotPathResponse(
-                403,
-                JsonCodec.writeObject(
-                    "error" to "legacy mutation route requires internal marker",
-                    "header" to LEGACY_INTERNAL_ROUTE_HEADER
-                )
-            )
-        }
-        return null
-    }
-
-    private fun handleLegacySetupRequest(
-        request: PlatformHotPathRequest,
-        postOperation: (String) -> String,
-        getOperation: (() -> String)? = null
-    ): PlatformHotPathResponse {
-        return when (request.method) {
-            "POST" -> {
-                allowLegacyMutationRouteResponse(request.headers)?.let { return it }
-                if (request.body.toByteArray().size > maxRequestBodyBytes) {
-                    return PlatformHotPathResponse(
-                        413,
-                        JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
-                    )
-                }
-                try {
-                    PlatformHotPathResponse(200, postOperation(request.body))
-                } catch (ex: Exception) {
-                    PlatformHotPathResponse(503, runtimeUnavailableJson(ex))
-                }
-            }
-            "GET" -> {
-                val operation = getOperation ?: return methodNotAllowedResponse()
-                allowLegacyMutationRouteResponse(request.headers)?.let { return it }
-                try {
-                    PlatformHotPathResponse(200, operation())
-                } catch (ex: Exception) {
-                    PlatformHotPathResponse(503, runtimeUnavailableJson(ex))
-                }
-            }
-            else -> methodNotAllowedResponse()
-        }
     }
 
     private fun handleApiV1Mutation(
@@ -1040,36 +853,14 @@ class PlatformHttpServer(
         route: String,
         operation: (String) -> String
     ): PlatformHotPathResponse {
-        if (request.method != "POST") {
-            return methodNotAllowedResponse()
+        val prepared = when (val result = prepareApiV1MutationRequest(request, route)) {
+            is PreparedApiV1MutationResult.Prepared -> result.request
+            is PreparedApiV1MutationResult.Rejected -> return result.response
         }
-        if (request.body.toByteArray().size > maxRequestBodyBytes) {
-            return PlatformHotPathResponse(
-                413,
-                JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
-            )
-        }
-
-        val violation = HotPathMetrics.time("api.boundary.checkWrite") {
-            boundary.checkWrite(request.headers, route)
-        }
-        val correlationId = correlationId(request.headers)
-        if (violation != null) {
-            return PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId))
-        }
-
-        val clientId = boundary.clientId(request.headers).orEmpty()
-        val idempotencyKey = boundary.idempotencyKey(request.headers).orEmpty()
-        val body = request.body
-        val validationError = HotPathMetrics.time("api.command.validate") {
-            PlatformCommandParsers.validateApiV1Command(route, body)
-        }
-        if (validationError != null) {
-            return PlatformHotPathResponse(
-                400,
-                boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
-            )
-        }
+        val clientId = prepared.clientId
+        val idempotencyKey = prepared.idempotencyKey
+        val correlationId = prepared.correlationId
+        val body = prepared.body
 
         if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
             return handleAcceptedAsyncMutationResponse(route, clientId, idempotencyKey, correlationId, body)
@@ -1217,11 +1008,28 @@ class PlatformHttpServer(
         request: PlatformHotPathRequest,
         route: String
     ): CompletableFuture<PlatformHotPathResponse> {
+        val prepared = when (val result = prepareApiV1MutationRequest(request, route)) {
+            is PreparedApiV1MutationResult.Prepared -> result.request
+            is PreparedApiV1MutationResult.Rejected -> return CompletableFuture.completedFuture(result.response)
+        }
+        return handleStreamAckMutationResponse(
+            prepared.route,
+            prepared.clientId,
+            prepared.idempotencyKey,
+            prepared.correlationId,
+            prepared.body
+        )
+    }
+
+    private fun prepareApiV1MutationRequest(
+        request: PlatformHotPathRequest,
+        route: String
+    ): PreparedApiV1MutationResult {
         if (request.method != "POST") {
-            return CompletableFuture.completedFuture(methodNotAllowedResponse())
+            return PreparedApiV1MutationResult.Rejected(methodNotAllowedResponse())
         }
         if (request.body.toByteArray().size > maxRequestBodyBytes) {
-            return CompletableFuture.completedFuture(
+            return PreparedApiV1MutationResult.Rejected(
                 PlatformHotPathResponse(
                     413,
                     JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
@@ -1234,7 +1042,9 @@ class PlatformHttpServer(
         }
         val correlationId = correlationId(request.headers)
         if (violation != null) {
-            return CompletableFuture.completedFuture(PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId)))
+            return PreparedApiV1MutationResult.Rejected(
+                PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId))
+            )
         }
 
         val clientId = boundary.clientId(request.headers).orEmpty()
@@ -1244,7 +1054,7 @@ class PlatformHttpServer(
             PlatformCommandParsers.validateApiV1Command(route, body)
         }
         if (validationError != null) {
-            return CompletableFuture.completedFuture(
+            return PreparedApiV1MutationResult.Rejected(
                 PlatformHotPathResponse(
                     400,
                     boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
@@ -1252,7 +1062,15 @@ class PlatformHttpServer(
             )
         }
 
-        return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+        return PreparedApiV1MutationResult.Prepared(
+            PreparedApiV1Mutation(
+                route = route,
+                clientId = clientId,
+                idempotencyKey = idempotencyKey,
+                correlationId = correlationId,
+                body = body
+            )
+        )
     }
 
     private fun handleStreamAckMutation(
@@ -2210,7 +2028,6 @@ class PlatformHttpServer(
 }
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
-private const val LEGACY_INTERNAL_ROUTE_HEADER = "X-Reef-Internal-Route"
 
 private fun rootCause(failure: Throwable): Throwable {
     var current = failure

@@ -48,22 +48,38 @@ class StreamCommandWorker(
     private val workerName: String = "reef-stream-command-worker"
 ) {
     private val running = AtomicBoolean(false)
+    @Volatile
+    private var workerThread: Thread? = null
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
-        thread(name = workerName, isDaemon = true) {
-            while (running.get()) {
-                val processed = processOnce()
-                if (processed == 0) {
-                    StreamCommandWorkerMetrics.recordEmptyPoll()
-                    Thread.sleep(pollIntervalMs)
+        workerThread = thread(name = workerName, isDaemon = true) {
+            try {
+                while (running.get()) {
+                    val processed = processOnce()
+                    if (processed == 0) {
+                        StreamCommandWorkerMetrics.recordEmptyPoll()
+                        Thread.sleep(pollIntervalMs)
+                    }
                 }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } finally {
+                running.set(false)
+                workerThread = null
             }
         }
     }
 
     fun stop() {
         running.set(false)
+        workerThread?.interrupt()
+    }
+
+    fun awaitStopped(timeout: Duration = Duration.ofSeconds(5)): Boolean {
+        val thread = workerThread ?: return true
+        thread.join(timeout.toMillis())
+        return !thread.isAlive
     }
 
     fun processOnce(): Int {

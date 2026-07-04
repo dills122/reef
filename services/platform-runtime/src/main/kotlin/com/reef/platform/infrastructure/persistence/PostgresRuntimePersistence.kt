@@ -1393,6 +1393,7 @@ class PostgresRuntimePersistence(
         if (candidates.isEmpty()) return 0
 
         projectionConnection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
@@ -1406,7 +1407,7 @@ class PostgresRuntimePersistence(
                 conn.commit()
                 throw ex
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }
@@ -1927,6 +1928,7 @@ class PostgresRuntimePersistence(
     override fun saveEvents(events: List<RuntimeEvent>) {
         if (events.isEmpty()) return
         projectionConnection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
                 val startByTrace = mutableMapOf<String, Long>()
@@ -1981,7 +1983,7 @@ class PostgresRuntimePersistence(
                 conn.rollback()
                 throw ex
             } finally {
-                conn.autoCommit = true
+                conn.autoCommit = previousAutoCommit
             }
         }
     }
