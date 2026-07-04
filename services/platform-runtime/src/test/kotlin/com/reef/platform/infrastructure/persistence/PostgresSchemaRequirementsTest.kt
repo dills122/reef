@@ -38,6 +38,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_persist_submit_outcomes",
                 "runtime.runtime_append_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_submit_outcomes",
+                "runtime.runtime_project_canonical_command_outcomes",
                 "runtime.runtime_materialize_venue_event_batch"
             ),
             requirements.functions.map { it.qualifiedName }.toSet()

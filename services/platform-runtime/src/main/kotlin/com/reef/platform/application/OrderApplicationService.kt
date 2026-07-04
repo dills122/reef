@@ -269,8 +269,19 @@ class OrderApplicationService(
         }
     }
 
-    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
-        return runtimePersistence.projectionStatus(projectionName, partitions)
+    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+        if (batchSize <= 0) return 0
+        return HotPathMetrics.time("runtime.persistence.projectCanonicalCommandOutcomes") {
+            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+        }
+    }
+
+    fun projectionStatus(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus {
+        return runtimePersistence.projectionStatus(projectionName, partitions, source)
     }
 
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {

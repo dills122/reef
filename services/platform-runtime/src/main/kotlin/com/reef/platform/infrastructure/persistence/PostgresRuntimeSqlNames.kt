@@ -26,6 +26,7 @@ data class PostgresRuntimeSqlNames(
     val persistSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_persist_submit_outcomes")
     val appendCanonicalSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_append_canonical_submit_outcomes")
     val projectCanonicalSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_project_canonical_submit_outcomes")
+    val projectCanonicalCommandOutcomesFunction = qualify(runtimeSchemaName, "runtime_project_canonical_command_outcomes")
     val materializeVenueEventBatchFunction = qualify(runtimeSchemaName, "runtime_materialize_venue_event_batch")
 
     val authRoles = qualify(authSchemaName, "auth_roles")

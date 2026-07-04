@@ -173,7 +173,14 @@ interface RuntimePersistence {
     fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
         return 0
     }
-    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
+    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+        return 0
+    }
+    fun projectionStatus(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus {
         return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
     }
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {

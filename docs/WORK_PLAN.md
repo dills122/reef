@@ -62,6 +62,9 @@ The current gaps are:
    - `/api/v1/commands/{commandId}` now prefers materialized canonical command outcomes and falls back to existing status surfaces while materialization catches up.
 
 3. Complete venue lifecycle projection.
+   - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
+   - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
+   - Full `orders` projection from the event-batch path still needs either submit command metadata in `VenueEventBatch` or a durable command-payload join.
    - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
@@ -113,7 +116,8 @@ Exit criteria:
 - runtime persistence uses migration-owned schema objects
 - hot-path matching does not block on Postgres materialization
 - venue event batches materialize into compact, batch-oriented canonical rows with measured rows/command, WAL/command, commits/command, lag, and drain behavior
-- projection writes are downstream and rebuildable
+- compact command-outcome projections write downstream `submit_results` and `runtime_events` idempotently from canonical event-batch materialization
+- full order/execution/trade projection from event batches is added only after the event batch carries enough command metadata, or after a deliberate command-payload join is introduced
 - local startup validates schema placement instead of silently bootstrapping drift
 
 ### C. Venue Lifecycle Completion

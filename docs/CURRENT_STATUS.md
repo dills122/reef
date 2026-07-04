@@ -38,6 +38,7 @@ Current decision anchors:
 - D-040 supersedes generic unary worker-to-engine calls for the hot matching path.
 - D-041 makes Kafka-compatible durable producer plus matching-engine direct consumer the active hot-ingress target, with JetStream retained as fallback/comparison.
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
+- The first persistence-layer test gate after materialization is compact lifecycle projection from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Full `orders` projection from event batches remains blocked on carrying submit command metadata or joining durable command payloads.
 
 ## Current Forward Path
 
@@ -46,10 +47,11 @@ Work should follow this order unless a new decision supersedes it:
 1. Keep the current durable-acceptance contracts stable while promoting the D-041 Redpanda/Kafka-compatible hot-ingress path from local proof to longer remote evidence.
 2. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
 3. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
-4. Complete persisted venue lifecycle projections for submit/cancel/modify so query APIs match engine lifecycle state.
-5. Build the simulator control-room MVP on top of existing scripts and artifacts.
-6. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
-7. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
+4. Prove compact persistence projection end to end: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
+5. Complete persisted venue lifecycle projections for submit/cancel/modify so query APIs match engine lifecycle state.
+6. Build the simulator control-room MVP on top of existing scripts and artifacts.
+7. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+8. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 
 ## Documentation Map
 

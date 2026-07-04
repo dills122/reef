@@ -124,11 +124,76 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(42L, outcome.streamSequence)
         assertEquals("SubmitOrder", outcome.commandType)
         assertEquals("accepted", outcome.resultStatus)
-        assertEquals("""{"accepted":{"eventId":"evt-1"}}""", outcome.resultPayloadJson)
+        assertEquals("""{"accepted":{"eventId":"evt-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:01Z"}}""", outcome.resultPayloadJson)
 
         assertFailsWith<IllegalStateException> {
             persistence.materializeVenueEventBatch(batch.copy(payloadChecksum = "different"))
         }
+    }
+
+    @Test
+    fun projectsMaterializedVenueEventBatchOutcomesIntoCompactLifecycleRows() {
+        val persistence = InMemoryRuntimePersistence()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(venueEventBatch()))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+
+        val result = persistence.submitResult("cmd-1")
+        assertNotNull(result)
+        assertEquals("evt-1", result.accepted?.eventId)
+        assertEquals("ord-1", result.accepted?.orderId)
+        assertEquals("eng-ord-1", result.accepted?.engineOrderId)
+        assertEquals("2026-07-04T18:00:01Z", result.accepted?.occurredAt)
+        assertEquals(null, persistence.acceptedOrder("ord-1"))
+
+        val events = persistence.eventsForOrder("ord-1")
+        assertEquals(1, events.size)
+        assertEquals("OrderAccepted", events.first().eventType)
+        assertEquals("venue-event-batch-projector", events.first().producer)
+        assertEquals("""{"accepted":{"eventId":"evt-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:01Z"}}""", events.first().payloadJson)
+
+        val status = persistence.projectionStatus("runtime-normalized-venue-outcomes", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(42L, status.watermarks.single().lastPartitionSequence)
+        assertEquals(42L, status.watermarks.single().canonicalMaxPartitionSequence)
+    }
+
+    @Test
+    fun projectsRejectedVenueEventBatchOutcomesIntoCompactLifecycleRows() {
+        val persistence = InMemoryRuntimePersistence()
+        val batch = venueEventBatch().copy(
+            batchId = "batch-rejected",
+            payloadChecksum = "checksum-rejected",
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-rejected",
+                    commandType = "SubmitOrder",
+                    streamSequence = 43,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-rejected",
+                    instrumentId = "AAPL",
+                    orderId = "ord-rejected",
+                    resultStatus = "rejected",
+                    rejectCode = "UNKNOWN_INSTRUMENT",
+                    resultPayloadJson = """{"rejected":{"eventId":"evt-rejected","code":"UNKNOWN_INSTRUMENT","reason":"instrument missing","occurredAt":"2026-07-04T18:00:02Z"}}"""
+                )
+            )
+        )
+
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+
+        val result = persistence.submitResult("cmd-rejected")
+        assertNotNull(result)
+        assertEquals("evt-rejected", result.rejected?.eventId)
+        assertEquals("UNKNOWN_INSTRUMENT", result.rejected?.code)
+        assertEquals("instrument missing", result.rejected?.reason)
+        assertEquals("2026-07-04T18:00:02Z", result.rejected?.occurredAt)
+
+        val events = persistence.eventsForOrder("ord-rejected")
+        assertEquals(1, events.size)
+        assertEquals("OrderRejected", events.first().eventType)
     }
 
     private fun venueEventBatch(): VenueEventBatchFact {
@@ -153,7 +218,7 @@ class InMemoryRuntimePersistenceTest {
                     instrumentId = "AAPL",
                     orderId = "ord-1",
                     resultStatus = "accepted",
-                    resultPayloadJson = """{"accepted":{"eventId":"evt-1"}}"""
+                    resultPayloadJson = """{"accepted":{"eventId":"evt-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:01Z"}}"""
                 )
             )
         )

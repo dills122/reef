@@ -84,6 +84,7 @@ object PostgresSchemaRequirements {
                 names.persistSubmitOutcomesFunction,
                 names.appendCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalSubmitOutcomesFunction,
+                names.projectCanonicalCommandOutcomesFunction,
                 names.materializeVenueEventBatchFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(

@@ -55,6 +55,7 @@ flowchart LR
     CanonBatches["runtime.canonical_venue_event_batches"]
     CanonOutcomes["runtime.canonical_command_outcomes"]
     BoundaryDB["boundary Postgres\nidempotency and intake metadata"]
+    CompactProj["compact projection\nsubmit_results / runtime_events"]
     ProjectionDB["projection Postgres\nnormalized read tables"]
   end
 
@@ -90,7 +91,9 @@ flowchart LR
 
   CanonBatches --> RuntimeDB
   CanonOutcomes --> RuntimeDB
-  ProjectionDB -. existing downstream projections .-> UI
+  CanonOutcomes --> CompactProj
+  CompactProj --> ProjectionDB
+  ProjectionDB -. downstream projections .-> UI
 
   MatLoop --> MatStats
   ReplayGate --> MatLoop
@@ -131,11 +134,13 @@ Current important implementation pieces:
 - `runtime.canonical_venue_event_batches` preserves replay-safe batch facts and checksums.
 - `runtime.canonical_command_outcomes` gives command-to-batch linkage and compact engine outcome lookup.
 - `/api/v1/commands/{commandId}` prefers canonical command outcomes when present and falls back to ingress/status surfaces while materialization catches up.
+- Compact command-outcome projection can materialize submit results and lifecycle runtime events from event-batch outcomes without returning Postgres to the matching-engine hot path.
 - Normalized orders, executions, trades, runtime events, UI views, metrics, and leaderboards remain downstream projections.
+- Full order-table projection from this path needs original submit command metadata in the event batch or a deliberate durable command-payload join.
 
 ## Target Direction
 
-The next target is to project lifecycle state from compact canonical rows and make that state visible through persisted read APIs.
+The next target is to expand lifecycle projection from compact canonical rows while keeping projection writes downstream and rebuildable. The first persistence test gate is compact visibility: durable event batch, canonical rows, projected submit result/runtime event, and idempotent projector replay.
 
 ```mermaid
 flowchart LR
@@ -240,12 +245,15 @@ Target operating principles:
 ## Near-Term Slice Map
 
 1. Venue lifecycle projection.
-   - Project submit/cancel/modify/fill/reject outcomes from canonical rows into normalized read tables.
+   - Project compact submit outcomes from canonical command outcomes into `submit_results` and `runtime_events`.
+   - Add full `orders` projection after event batches carry submit command metadata or the projector joins durable command payloads.
+   - Expand cancel/modify/fill/reject outcomes from canonical rows into normalized read tables.
    - Keep projections downstream and rebuildable.
    - Add deterministic tests that event batch, canonical rows, projection rows, and query APIs agree.
 
 2. Evidence promotion.
-   - Run `make dev-smoke-venue-event-materializer` against Docker as the local end-to-end gate.
+   - Run `make dev-smoke-venue-event-materializer` against Docker as the local materializer gate.
+   - Extend the live gate to assert projected `submit_results` and `runtime_events` once the projector is enabled with `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch`.
    - Promote the Redpanda/Kafka-compatible path to longer remote evidence only after replay/checksum and materialization smoke are clean.
    - Measure accepted, engine-published, materialized, projected, drain lag, and replay/checksum results together.
 

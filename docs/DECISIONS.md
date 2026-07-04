@@ -684,6 +684,8 @@ Summary:
 - command outcome lookup rows must support status lookup, idempotent materializer replay, command-to-batch linkage, command type, result status, reject code, instrument/order identifiers, stream sequence/offset, and payload hash.
 - the first runtime source is Kafka-compatible Redpanda consumption of the configured venue event topic through `PLATFORM_RUNTIME_ROLE=materializer`; JetStream event-batch materialization can be added behind the same `VenueEventBatchSource` contract later.
 - normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
+- the first downstream projection from event-batch materialization is compact lifecycle visibility: `runtime.canonical_command_outcomes` can project submit outcomes into `submit_results` and lifecycle `runtime_events` without placing Postgres back in the matching hot path.
+- full `orders` projection from the event-batch path requires either original submit command metadata in `VenueEventBatch` or an explicit durable command-payload join; until then, tests must not claim full order-table reconstruction from compact outcomes alone.
 - replay/checksum tests from durable event batch to Postgres rows are required before throughput claims for this slice.
 
 Lifecycle boundary:

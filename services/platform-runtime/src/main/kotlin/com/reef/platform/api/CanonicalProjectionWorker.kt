@@ -10,6 +10,8 @@ import kotlin.concurrent.thread
 class CanonicalProjectionWorker(
     private val api: PlatformApi,
     private val projectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
+    private val projectionSource: CanonicalProjectionSource =
+        CanonicalProjectionSource.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_SOURCE", CanonicalProjectionSource.CanonicalSubmit.configValue)),
     private val partitions: List<Int> = emptyList(),
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
@@ -36,8 +38,11 @@ class CanonicalProjectionWorker(
 
     fun processOnce(): Long {
         return try {
-            HotPathMetrics.time("projector.projectCanonicalSubmitOutcomes") {
-                api.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
+            HotPathMetrics.time("projector.${projectionSource.metricName}") {
+                when (projectionSource) {
+                    CanonicalProjectionSource.CanonicalSubmit -> api.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
+                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+                }
             }.also { projected ->
                 if (projected > 0) {
                     CanonicalProjectionMetrics.recordProjected(projected)
@@ -46,6 +51,23 @@ class CanonicalProjectionWorker(
         } catch (ex: Exception) {
             CanonicalProjectionMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
             0
+        }
+    }
+}
+
+enum class CanonicalProjectionSource(val configValue: String, val metricName: String) {
+    CanonicalSubmit("canonical-submit", "projectCanonicalSubmitOutcomes"),
+    VenueEventBatch("venue-event-batch", "projectCanonicalCommandOutcomes");
+
+    companion object {
+        fun fromConfig(raw: String): CanonicalProjectionSource {
+            val normalized = raw.trim().lowercase()
+            return entries.firstOrNull { it.configValue == normalized }
+                ?: when (normalized) {
+                    "event-batch", "venue-events", "canonical-command-outcomes" -> VenueEventBatch
+                    "submit", "canonical-submit-outcomes" -> CanonicalSubmit
+                    else -> throw IllegalArgumentException("Unsupported STREAM_ACK_PROJECTION_SOURCE: $raw")
+                }
         }
     }
 }

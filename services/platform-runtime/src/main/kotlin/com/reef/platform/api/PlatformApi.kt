@@ -63,8 +63,16 @@ class PlatformApi(
         return orderService.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
     }
 
-    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
-        return orderService.projectionStatus(projectionName, partitions)
+    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+    }
+
+    fun projectionStatus(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus {
+        return orderService.projectionStatus(projectionName, partitions, source)
     }
 
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
