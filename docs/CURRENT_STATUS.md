@@ -29,7 +29,7 @@ Keep these distinctions explicit:
 - `sync-result` remains the deterministic correctness and compatibility mode.
 - Postgres `captured-ack` remains a local fallback and A/B baseline.
 - JetStream `stream-ack` proved the durable-acceptance shape, but July 2026 evidence showed the generic worker-to-engine path and write-heavy projection path are not the final high-throughput base.
-- The active high-throughput venue-core path is moving toward a Kafka-compatible durable command log, explicit command partitions, matching-engine direct consumption, durable venue event batches, and offset commit only after durable event publication.
+- The active high-throughput venue-core path is moving toward a Kafka-compatible durable command log, explicit command partitions, matching-engine direct consumption, durable venue event batches, command offset commit after durable event-batch publication, and asynchronous Postgres materialization from those event batches.
 - `202 Accepted` still means the configured durable ingress/log producer has acknowledged the command. Do not weaken that contract.
 
 Current decision anchors:
@@ -37,14 +37,15 @@ Current decision anchors:
 - D-036 and D-037 define durable stream-backed acceptance and completion semantics.
 - D-040 supersedes generic unary worker-to-engine calls for the hot matching path.
 - D-041 makes Kafka-compatible durable producer plus matching-engine direct consumer the active hot-ingress target, with JetStream retained as fallback/comparison.
+- D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 
 ## Current Forward Path
 
 Work should follow this order unless a new decision supersedes it:
 
-1. Keep the current durable-acceptance contracts stable while validating the D-041 Redpanda/Kafka-compatible hot-ingress path.
-2. Prove no-DB direct engine ingestion at materially better durable publish-ack latency, bounded queue/in-flight depth, clean accepted/acked accounting, and replay/audit metadata.
-3. Reintroduce canonical persistence deliberately after the direct-ingestion ceiling is understood, preserving deterministic command ordering and canonical event facts.
+1. Keep the current durable-acceptance contracts stable while promoting the D-041 Redpanda/Kafka-compatible hot-ingress path from local proof to longer remote evidence.
+2. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
+3. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
 4. Complete persisted venue lifecycle projections for submit/cancel/modify so query APIs match engine lifecycle state.
 5. Build the simulator control-room MVP on top of existing scripts and artifacts.
 6. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.

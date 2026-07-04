@@ -670,6 +670,49 @@ Primary references:
 - [`docs/steering/go.md`](./steering/go.md)
 - [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
 
+### D-043: Venue Event Batch Materialization Boundary
+
+Status: accepted
+
+Summary:
+- the next persistence slice is venue event batch materialization, not more generic runtime workers calling the engine and writing normalized rows.
+- matching-engine shards may commit command offsets after they consume ordered command partitions, mutate shard-local books, and durably publish `VenueEventBatch` records.
+- Postgres materialization is asynchronous from the durable venue event stream/topic. The materializer commits its own consumed event-batch offset only after compact canonical Postgres rows commit.
+- durable venue event batches are the matching-engine recovery handoff and canonical matching ledger for engine completion. Postgres remains the compact materialized canonical/query store for command outcome lookup, replay, audit, and downstream projection.
+- initial materialization tables should include `runtime.canonical_venue_event_batches` and `runtime.canonical_command_outcomes`.
+- canonical batch rows must preserve batch id, shard id, partition id, command stream/topic, event stream/topic, first/last command sequence or offset, command count, payload checksum, payload format/version, creation time, and original batch payload or equivalent replay-safe fact payload.
+- command outcome lookup rows must support status lookup, idempotent materializer replay, command-to-batch linkage, command type, result status, reject code, instrument/order identifiers, stream sequence/offset, and payload hash.
+- normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
+- replay/checksum tests from durable event batch to Postgres rows are required before throughput claims for this slice.
+
+Lifecycle boundary:
+```text
+API 202:
+  after durable command-log ack
+
+engine processed:
+  after command consumed, book mutated, and venue event batch durably published
+
+command offset commit:
+  after durable venue event-batch publication
+
+Postgres canonical materialized:
+  after async materializer reads event batches and commits compact canonical rows
+
+Postgres materializer offset commit:
+  after compact canonical Postgres batch commit
+
+projection visible:
+  after async projections catch up from canonical rows/events
+```
+
+Primary references:
+- [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted

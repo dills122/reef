@@ -247,7 +247,7 @@ Relevant matching-engine knobs:
 - `MATCHING_ENGINE_EVENT_STREAM=REEF_VENUE_EVENTS`
 - `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.venue.events.v1`
 
-In this mode the matching engine consumes assigned command partitions directly, processes submit-command batches, publishes `VenueEventBatch` records to JetStream, and acks command messages only after the event batch publish succeeds. The first slice supports submit-only stress runs; cancel/modify direct consumption and Postgres materialization from venue event batches are follow-up work.
+In this mode the matching engine consumes assigned command partitions directly, processes ordered command batches, publishes `VenueEventBatch` records to JetStream, and acks command messages only after the event batch publish succeeds. Submit, cancel, and modify branches exist in the direct processor; the current stress/profile coverage is still submit-focused. Postgres materialization from venue event batches is the next persistence slice.
 
 Run the engine-direct no-DB stress profile:
 

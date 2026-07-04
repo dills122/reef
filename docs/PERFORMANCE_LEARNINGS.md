@@ -309,7 +309,7 @@ Local stream-ingress prototype:
 - first 5-minute failure cause: event batches exceeded Sarama's default `Producer.MaxMessageBytes` (`1048576` bytes), e.g. `Attempt to produce message larger than configured Producer.MaxMessageBytes`
 - corrected 5-minute soak: `/tmp/reef-stream-ingress-10500-5min-batch500-local`, `10500 rps`, `256` workers, `300s`, direct-engine batch size `500`
 - corrected 5-minute result: `3145900` accepted/direct-acked, `10467.14/sec`, `0` failures, `0` NAKs, `p95=26.61ms`, `p99=53.17ms`; publish pipeline `queueWaitAvg=0.28ms`, `delegateAckAvg=3.34ms`, `totalAvg=3.62ms`
-- conclusion: removing per-command HTTP request overhead with a long-lived stream ingress gets the no-DB Redpanda direct-engine path over the `10k/sec` single-instance target locally, including a clean 5-minute soak when direct-engine event batches are capped at `500` commands. The next promotion gate is a longer DO soak and then protobuf/framed command payloads or additional producer/front-door tuning if we need more headroom.
+- conclusion: removing per-command HTTP request overhead with a long-lived stream ingress gets the no-DB Redpanda direct-engine path over the `10k/sec` single-instance target locally, including a clean 5-minute soak when direct-engine event batches are capped at `500` commands. The next promotion gate is a longer DO soak, followed by venue event batch materialization into compact Postgres canonical rows rather than a return to runtime workers calling the engine. Protobuf/framed command payloads or additional producer/front-door tuning remain follow-up headroom options if needed.
 
 ## Stream-Ack Post-Soak Optimization Priorities
 
