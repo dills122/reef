@@ -154,8 +154,16 @@ flowchart LR
   subgraph APIPlane["API And Ingress Plane"]
     API["platform-api"]
     Boundary["Boundary contracts\nAuth, idempotency, abuse gates"]
+    RiskCheck["Account/risk pre-check\ncredit, holds, bot enabled"]
     Backpressure["Drain-aware backpressure\nstream, engine, materializer lag"]
     DurableCommands["Durable command log\nKafka-compatible primary"]
+  end
+
+  subgraph BoundaryAndAccountStores["Boundary And Account Stores"]
+    BoundaryStore["boundary DB\nidempotency / intake metadata"]
+    AuthStore["auth/admin DB\nroles / credentials / policy"]
+    AccountLedger["account/bot ledger DB\ncredits, holds, bot state"]
+    RiskProjection["account risk projection\navailable buying power"]
   end
 
   subgraph EnginePlane["Matching Engine Plane"]
@@ -181,7 +189,23 @@ flowchart LR
     Orders["orders read model"]
     Executions["executions / trades read model"]
     RuntimeEvents["runtime_events / audit timeline"]
-    Analytics["metrics / leaderboards / reports"]
+  end
+
+  subgraph MarketDataPlane["Market Data Plane"]
+    MarketDataProj["market-data projectors\nsnapshots, depth, trades, bars"]
+    MarketDataStore["market_data DB/store\nbook snapshots, depth, bars"]
+    HistoricalStore["historical/archive store\nintraday and retained history"]
+  end
+
+  subgraph SettlementPlane["Settlement And Fulfillment Plane"]
+    SettlementSvc["settlement workflow\nobligations, allocation, confirmation"]
+    SettlementDB["settlement DB\nobligations, breaks, repairs"]
+    Enforcement["final account enforcement\nblock, repair, disable bot"]
+  end
+
+  subgraph AnalyticsPlane["Analytics Plane"]
+    AnalyticsProj["analytics projectors\nmirrored facts"]
+    AnalyticsDB["analytics DB/warehouse\nPnL, bot performance, reports"]
   end
 
   subgraph Evidence["Evidence And Operations"]
@@ -197,6 +221,11 @@ flowchart LR
   Admin --> API
 
   API --> Boundary
+  Boundary --> BoundaryStore
+  Boundary --> AuthStore
+  Boundary --> RiskCheck
+  RiskCheck --> RiskProjection
+  RiskProjection --> AccountLedger
   Boundary --> Backpressure
   Backpressure --> DurableCommands
 
@@ -220,12 +249,37 @@ flowchart LR
   LifecycleProj --> Orders
   LifecycleProj --> Executions
   LifecycleProj --> RuntimeEvents
-  LifecycleProj --> Analytics
 
   Orders --> UI
   Executions --> UI
   RuntimeEvents --> UI
-  Analytics --> UI
+
+  CanonBatchStore --> MarketDataProj
+  CanonOutcomeStore --> MarketDataProj
+  Executions --> MarketDataProj
+  MarketDataProj --> MarketDataStore
+  MarketDataProj --> HistoricalStore
+  MarketDataStore --> Bots
+  MarketDataStore --> UI
+  HistoricalStore --> UI
+
+  CanonOutcomeStore --> SettlementSvc
+  Executions --> SettlementSvc
+  SettlementSvc --> SettlementDB
+  SettlementSvc --> Enforcement
+  Enforcement --> AccountLedger
+  Enforcement --> RiskProjection
+
+  CanonBatchStore --> AnalyticsProj
+  CanonOutcomeStore --> AnalyticsProj
+  Orders --> AnalyticsProj
+  Executions --> AnalyticsProj
+  RuntimeEvents --> AnalyticsProj
+  MarketDataStore --> AnalyticsProj
+  SettlementDB --> AnalyticsProj
+  AccountLedger --> AnalyticsProj
+  AnalyticsProj --> AnalyticsDB
+  AnalyticsDB --> UI
 
   Smoke --> Accounting
   Stress --> Accounting
