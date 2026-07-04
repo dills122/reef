@@ -57,6 +57,7 @@ Use these docs for active work:
 
 - Project framing: [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md)
 - Technical design: [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
+- Current and target architecture diagrams: [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./ROADMAP.md)
 - Decisions: [`DECISIONS.md`](./DECISIONS.md)
