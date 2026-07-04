@@ -160,6 +160,7 @@ export interface BotHistoricalDataClientV1 {
 }
 
 export interface BotOrdersClientV1 {
+  readonly safe: BotSafeOrdersClientV1;
   current(): Promise<BotResultV1<readonly OwnOrderV1[]>>;
   history(request?: { readonly instrumentId?: string; readonly limit?: number }): Promise<BotResultV1<readonly OwnOrderV1[]>>;
   placeLimit(order: SubmitLimitOrderV1): BotActionV1;
@@ -167,6 +168,11 @@ export interface BotOrdersClientV1 {
   modify(order: ModifyOrderV1): BotActionV1;
   cancel(order: CancelOrderV1): BotActionV1;
   cancelAll(instrumentId?: string): BotActionV1;
+}
+
+export interface BotSafeOrdersClientV1 {
+  modify(order: ModifyOrderV1): Promise<BotResultV1<BotActionV1>>;
+  cancel(order: CancelOrderV1): Promise<BotResultV1<BotActionV1>>;
 }
 
 export interface BotConfigV1 {

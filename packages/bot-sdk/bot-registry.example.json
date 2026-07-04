@@ -1,6 +1,7 @@
 {
   "botFiles": [
     "hello-bot.ts",
+    "lifecycle-safe-market-maker.ts",
     "simple-market-maker.ts"
   ]
 }

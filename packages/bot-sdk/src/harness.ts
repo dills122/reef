@@ -317,6 +317,14 @@ export function createFixtureBotContextV1(options?: {
     marketData,
     historical,
     orders: {
+      safe: {
+        async modify(order) {
+          return safeModifyOrder(order, fixtureData.currentOrders ?? [], actions);
+        },
+        async cancel(order) {
+          return safeCancelOrder(order, fixtureData.currentOrders ?? [], actions);
+        },
+      },
       async current() {
         return dataGate(() => ({ ok: true, value: fixtureData.currentOrders ?? [] }));
       },
@@ -392,6 +400,52 @@ function readMetadata(BotClass: ReefBotV1Constructor, issues: BotRegistrationIss
 
 function isOrderAction(action: BotActionV1): boolean {
   return action.type !== "noop";
+}
+
+function safeModifyOrder(
+  order: Parameters<BotActionFactoryV1["modify"]>[0],
+  currentOrders: readonly OwnOrderV1[],
+  actions: BotActionFactoryV1,
+): BotResultV1<BotActionV1> {
+  const existingOrder = currentOrders.find((currentOrder) => currentOrder.orderId === order.orderId);
+  const denial = validateOwnOrderAction(existingOrder, order.instrumentId, "modify");
+  if (denial !== undefined) {
+    return { ok: false, denial };
+  }
+  return { ok: true, value: actions.modify(order) };
+}
+
+function safeCancelOrder(
+  order: Parameters<BotActionFactoryV1["cancel"]>[0],
+  currentOrders: readonly OwnOrderV1[],
+  actions: BotActionFactoryV1,
+): BotResultV1<BotActionV1> {
+  const existingOrder = currentOrders.find((currentOrder) => currentOrder.orderId === order.orderId);
+  const denial = validateOwnOrderAction(existingOrder, order.instrumentId, "cancel");
+  if (denial !== undefined) {
+    return { ok: false, denial };
+  }
+  return { ok: true, value: actions.cancel(order) };
+}
+
+function validateOwnOrderAction(
+  order: OwnOrderV1 | undefined,
+  instrumentId: string,
+  action: "modify" | "cancel",
+): BotDenialV1 | undefined {
+  if (order === undefined) {
+    return { code: "NOT_FOUND", message: `Cannot ${action} unknown order.` };
+  }
+  if (order.instrumentId !== instrumentId) {
+    return { code: "NOT_ALLOWED", message: `Cannot ${action} order on a different instrument.` };
+  }
+  if (order.status !== "OPEN" && order.status !== "PARTIALLY_FILLED") {
+    return { code: "NOT_ALLOWED", message: `Cannot ${action} order in ${order.status} state.` };
+  }
+  if (order.remainingQuantity <= 0) {
+    return { code: "NOT_ALLOWED", message: `Cannot ${action} order with no remaining quantity.` };
+  }
+  return undefined;
 }
 
 function createConfig(values: Record<string, string | number | boolean>): BotConfigV1 {

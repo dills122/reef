@@ -173,6 +173,8 @@ Initial order client:
 - `ctx.orders.modify(order)`
 - `ctx.orders.cancel(order)`
 - `ctx.orders.cancelAll(instrumentId?)`
+- `ctx.orders.safe.modify(order)`
+- `ctx.orders.safe.cancel(order)`
 
 Initial market and historical clients:
 
@@ -182,6 +184,8 @@ Initial market and historical clients:
 Read clients return structured `BotResultV1<T>` values. Rate limits, policy denials, stale data, and temporary unavailability should be returned as denials so bots can adapt without crashing.
 
 Order write methods return proposed `BotActionV1` values in hosted mode. A later local-development adapter may translate those actions to live `/api/v1` calls, but hosted qualification must keep the proposal/validation boundary.
+
+Safe order helpers read the bot's own projected orders before proposing cancel/modify actions. They reject unknown, terminal, mismatched-instrument, or fully filled orders locally so stale lifecycle actions do not waste venue capacity or harm bot scoring.
 
 ## Private Runtime Config
 
