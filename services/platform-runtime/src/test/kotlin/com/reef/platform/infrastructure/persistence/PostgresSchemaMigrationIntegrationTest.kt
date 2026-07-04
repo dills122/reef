@@ -2,9 +2,11 @@ package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.AccountRiskCheckRequest
 import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.api.CommandCircuitBreakerRequest
 import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
 import com.reef.platform.api.PostgresAccountRiskCheck
 import com.reef.platform.api.PostgresCommandCaptureStore
+import com.reef.platform.api.PostgresCommandCircuitBreakerStore
 import com.reef.platform.api.PostgresCommandLogStore
 import com.reef.platform.api.PostgresIdempotencyStore
 import com.reef.platform.domain.RuntimeEvent
@@ -46,6 +48,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'boundary/0003_command_capture_live_shape.sql',
                   'boundary/0004_command_capture_legacy_defaults.sql',
                   'boundary/0006_account_risk_controls.sql',
+                  'boundary/0007_command_circuit_breakers.sql',
                   'command_log/0001_commands.sql',
                   'command_log/0002_command_results.sql',
                   'command_log/0003_queue_result_split.sql',
@@ -77,6 +80,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0003_command_capture_live_shape.sql",
                     "boundary/0004_command_capture_legacy_defaults.sql",
                     "boundary/0006_account_risk_controls.sql",
+                    "boundary/0007_command_circuit_breakers.sql",
                     "command_log/0001_commands.sql",
                     "command_log/0002_command_results.sql",
                     "command_log/0003_queue_result_split.sql",
@@ -115,6 +119,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "boundary.api_idempotency_records",
                 "boundary.account_risk_controls",
                 "boundary.account_risk_decisions",
+                "boundary.command_circuit_breakers",
                 "command_log.command_payloads",
                 "command_log.command_results",
                 "command_log.command_work_queue",
@@ -160,6 +165,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     'api_command_captures',
                     'account_risk_controls',
                     'account_risk_decisions',
+                    'command_circuit_breakers',
                     'commands',
                     'command_payloads',
                     'command_work_queue',
@@ -389,6 +395,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     'api_command_captures',
                     'account_risk_controls',
                     'account_risk_decisions',
+                    'command_circuit_breakers',
                     'commands'
                   )
                 """.trimIndent()
@@ -447,6 +454,10 @@ class PostgresSchemaMigrationIntegrationTest {
             bootstrapMode = PostgresBootstrapMode.Validate
         )
         PostgresAccountRiskCheck(
+            dataSource = boundaryDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresCommandCircuitBreakerStore(
             dataSource = boundaryDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )
@@ -593,5 +604,36 @@ class PostgresSchemaMigrationIntegrationTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun postgresCommandCircuitBreakerRejectsTrippedInstrument() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val breakers = PostgresCommandCircuitBreakerStore(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            cacheTtlMillis = 0L
+        )
+        val instrumentId = "HALT-${UUID.randomUUID()}"
+
+        breakers.setBreaker("INSTRUMENT", instrumentId, true, "operator halt")
+        val error = breakers.evaluate(
+            CommandCircuitBreakerRequest(
+                clientId = "client-breaker",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-breaker",
+                correlationId = "corr-breaker",
+                venueSessionId = "session-breaker",
+                instrumentId = instrumentId
+            )
+        )
+
+        assertEquals(503, error?.status)
+        assertEquals("COMMAND_CIRCUIT_BREAKER_TRIPPED", error?.code)
+        assertTrue(error?.message?.contains("operator halt") == true)
     }
 }

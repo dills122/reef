@@ -7,11 +7,14 @@ import com.reef.platform.application.admin.UpsertInstrumentCommand
 import com.reef.platform.application.admin.UpsertParticipantCommand
 import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.api.CommandCircuitBreakerStore
 import com.reef.platform.api.defaultAccountRiskControlStore
+import com.reef.platform.api.defaultCommandCircuitBreakerStore
 
 class AdminCliAdapter(
     private val adminService: AdminApplicationService = AdminApplicationService(),
     private val accountRiskControls: () -> AccountRiskControlStore = { defaultAccountRiskControlStore() },
+    private val commandCircuitBreakers: () -> CommandCircuitBreakerStore = { defaultCommandCircuitBreakerStore() },
     private val now: () -> java.time.Instant = { java.time.Instant.now() }
 ) {
     fun execute(args: List<String>): String {
@@ -79,6 +82,27 @@ class AdminCliAdapter(
                 val controls = accountRiskControls().listControls()
                 """{"controlsCount":${controls.size}}"""
             }
+            "breaker-set" -> {
+                if (args.size < 4) return "usage: breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]"
+                val scopeType = when (args[1].trim().lowercase()) {
+                    "global" -> "GLOBAL"
+                    "venue-session" -> "VENUE_SESSION"
+                    "instrument" -> "INSTRUMENT"
+                    else -> return "usage: breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]"
+                }
+                val tripped = when (args[3].trim().lowercase()) {
+                    "trip", "tripped", "on" -> true
+                    "reset", "clear", "off" -> false
+                    else -> return "usage: breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]"
+                }
+                val reason = args.drop(4).joinToString(" ")
+                commandCircuitBreakers().setBreaker(scopeType, args[2], tripped, reason)
+                """{"status":"ok","command":"breaker-set","scopeType":"$scopeType","scopeId":"${escapeJson(args[2])}","tripped":$tripped}"""
+            }
+            "breaker-list" -> {
+                val breakers = commandCircuitBreakers().listBreakers()
+                """{"breakersCount":${breakers.size}}"""
+            }
             "calendar-upsert" -> {
                 if (args.size < 4) return "usage: calendar-upsert <profileId> <timezone> <settlementCycle>"
                 adminService.upsertCalendarProfile(
@@ -142,6 +166,8 @@ class AdminCliAdapter(
               actor-roles <actorId>
               account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]
               account-risk-list
+              breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]
+              breaker-list
               calendar-upsert <profileId> <timezone> <settlementCycle>
               calendar-list
               override-upsert <code> <description>

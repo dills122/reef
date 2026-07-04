@@ -222,6 +222,24 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
+    fun boundaryCommandCircuitBreakerRequirementsCoverBreakerTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryCommandCircuitBreakers(names.commandCircuitBreakers)
+
+        assertEquals(setOf("boundary.command_circuit_breakers"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "boundary.command_circuit_breakers.scope_type:text",
+                "boundary.command_circuit_breakers.scope_id:text",
+                "boundary.command_circuit_breakers.tripped:boolean",
+                "boundary.command_circuit_breakers.reason:text",
+                "boundary.command_circuit_breakers.updated_at:timestamp with time zone"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
     fun commandLogRequirementsCoverAppendOnlyCommandTable() {
         val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
 

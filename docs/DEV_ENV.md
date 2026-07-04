@@ -370,6 +370,18 @@ make dev-admin CMD="account-risk-set account acct-1 allow cleared"
 make dev-admin CMD="account-risk-list"
 ```
 
+Command circuit breakers are separate hard pre-acceptance gates for venue-wide, venue-session, and instrument halts. Set `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres` to read cached breaker state from `boundary.command_circuit_breakers`; `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS` controls the cache TTL. A tripped breaker returns `503 COMMAND_CIRCUIT_BREAKER_TRIPPED` before command capture, stream-intake reservation, or durable publish.
+
+Local breaker commands:
+
+```bash
+make dev-admin CMD="breaker-set global '*' trip maintenance"
+make dev-admin CMD="breaker-set venue-session session-1 trip session-halted"
+make dev-admin CMD="breaker-set instrument AAPL trip instrument-halt"
+make dev-admin CMD="breaker-set instrument AAPL reset cleared"
+make dev-admin CMD="breaker-list"
+```
+
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
 Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. The default `STREAM_ACK_PROJECTION_SOURCE=canonical-submit` reads canonical submit outcomes from the runtime Postgres service and updates normalized order/execution/trade/runtime-event read tables in the projection Postgres service. `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch` reads materialized `runtime.canonical_command_outcomes`, projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` accepted/rejected lifecycle rows into `submit_results` and `runtime_events`, and reconstructs accepted submit `orders` through the durable `command_log.command_payloads` join when that payload is available. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.

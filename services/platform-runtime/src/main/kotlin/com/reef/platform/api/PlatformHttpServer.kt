@@ -73,6 +73,7 @@ class PlatformHttpServer(
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
     private val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+    private val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
@@ -212,6 +213,7 @@ class PlatformHttpServer(
         boundary = deps.boundary,
         abuseProtectionHook = deps.abuseProtectionHook,
         accountRiskCheck = deps.accountRiskCheck,
+        commandCircuitBreakerCheck = deps.commandCircuitBreakerCheck,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
@@ -828,6 +830,14 @@ class PlatformHttpServer(
             }
         }
 
+        val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            return
+        }
+
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
             accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
         }
@@ -999,6 +1009,13 @@ class PlatformHttpServer(
             if (backpressure != null) {
                 return PlatformHotPathResponse(backpressure.status, boundary.toErrorJson(backpressure, correlationId))
             }
+        }
+
+        val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
@@ -1250,6 +1267,16 @@ class PlatformHttpServer(
             is EitherBoundaryError.Envelope -> envelopeResult.envelope
         }
 
+        val breakerViolation = HotPathMetrics.time("api.streamAck.commandCircuitBreaker") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+        }
+        if (breakerViolation != null) {
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            )
+        }
+
         val riskViolation = HotPathMetrics.time("api.streamAck.accountRisk") {
             accountRiskViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
         }
@@ -1383,6 +1410,28 @@ class PlatformHttpServer(
         return accountRiskCheck.evaluate(request).toBoundaryError()
     }
 
+    private fun commandCircuitBreakerViolation(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope? = null
+    ): BoundaryError? {
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+        return commandCircuitBreakerCheck.evaluate(
+            CommandCircuitBreakerRequest(
+                clientId = clientId,
+                route = route,
+                commandType = riskRequest.commandType,
+                commandId = riskRequest.commandId,
+                correlationId = correlationId,
+                venueSessionId = riskRequest.venueSessionId,
+                instrumentId = riskRequest.instrumentId
+            )
+        )
+    }
+
     private fun accountRiskRequest(
         clientId: String,
         route: String,
@@ -1443,6 +1492,14 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existing, correlationId)
+            return
+        }
+
+        val breakerViolation = HotPathMetrics.time("api.acceptedAsync.commandCircuitBreaker") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
             return
         }
 
@@ -1514,6 +1571,13 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existing, correlationId)
+        }
+
+        val breakerViolation = HotPathMetrics.time("api.acceptedAsync.commandCircuitBreaker") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
@@ -2350,6 +2414,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         ),
         abuseProtectionHook = hooks.abuseProtectionHook,
         accountRiskCheck = hooks.accountRiskCheck,
+        commandCircuitBreakerCheck = hooks.commandCircuitBreakerCheck,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
@@ -2371,6 +2436,7 @@ data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
     val abuseProtectionHook: AbuseProtectionHook,
     val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+    val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,

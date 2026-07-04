@@ -28,6 +28,7 @@ Summary:
 - User-facing APIs are versioned under `/api/v1`.
 - Boundary concerns (auth hook, idempotency, rate limits, validation, account/bot risk pre-check, error envelope) are explicit architecture requirements.
 - Account/bot risk pre-checks run before durable command acceptance. Non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages; supported implementations include allow-all, static env controls, and cached Postgres operator controls with non-allow decision audit rows. These checks must not perform projection reads or heavy synchronous exposure scans on the hot path.
+- Command circuit breakers for global, venue-session, and instrument scopes are hard pre-acceptance gates. Tripped breakers reject before command-log rows, stream intake rows, or command messages are created.
 - Internal runtime/engine service contracts are not treated as public client contracts.
 
 Primary references:

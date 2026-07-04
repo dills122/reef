@@ -83,12 +83,18 @@ Rationale:
 - supported implementations are allow-all, static env controls, and cached Postgres operator controls with non-allow audit rows
 - do not add projection reads, exposure scans, or synchronous heavy storage work to the hot path
 
-### 7. Correlation metadata propagation
+### 7. Command circuit breakers
+
+- run command circuit-breaker checks after request validation and before durable command acceptance
+- tripped global, venue-session, or instrument breakers must not append command-log rows, reserve stream intake rows, or publish command messages
+- account and bot moderation belongs to account/bot risk pre-checks unless a later design explicitly broadens breaker scopes
+
+### 8. Correlation metadata propagation
 
 - generate/accept correlation and trace IDs
 - pass through to internal command metadata
 
-### 8. Audit-safe logging
+### 9. Audit-safe logging
 
 - structured logs with client ID, operation, command ID, trace ID
 - avoid logging sensitive token material

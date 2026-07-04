@@ -94,3 +94,25 @@ Rationale:
 2. Add `RedisRateLimitStore` and wire it to `FixedWindowRateLimitHook`.
 3. Add idempotency TTL policy classes (`short|standard|long`) and scheduled cleanup for Postgres records.
 4. Extend the account-risk store toward ledger-backed exposure and limit snapshots without adding projection scans to the order-entry hot path.
+
+### 5. Command circuit breakers
+
+- Interfaces:
+  - `CommandCircuitBreakerCheck`
+  - `CommandCircuitBreakerStore`
+- Current backends:
+  - `AllowAllCommandCircuitBreakerCheck`
+  - `PostgresCommandCircuitBreakerStore`
+- Current scopes:
+  - `GLOBAL`
+  - `VENUE_SESSION`
+  - `INSTRUMENT`
+
+Decision:
+- circuit breakers are hard pre-acceptance gates for operator halts and venue control.
+- tripped breakers reject before command-log append, stream-intake reservation, or durable publish.
+- account/bot moderation remains in account-risk controls; breaker scopes should stay focused on venue/session/instrument control unless a later design explicitly merges them.
+
+Configuration:
+- `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=allow-all|postgres`
+- `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS=<milliseconds>`

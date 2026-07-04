@@ -945,6 +945,42 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun capturedAckCircuitBreakerRejectsBeforeCommandLogAppend() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandCircuitBreakerCheck = StaticCircuitBreakerCheck("AAPL")
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-reject",
+                    "Idempotency-Key" to "idem-breaker-reject"
+                ),
+                body = validSubmitBody("cmd-breaker-reject", "trace-breaker-reject", "ord-breaker-reject")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-breaker-reject")
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun asyncCommandStatsEndpointReturnsQueueDepths() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1903,6 +1939,7 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
@@ -1942,6 +1979,7 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            commandCircuitBreakerCheck = commandCircuitBreakerCheck,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -1968,6 +2006,7 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
@@ -1999,6 +2038,7 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            commandCircuitBreakerCheck = commandCircuitBreakerCheck,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -2437,6 +2477,19 @@ private class StaticRejectedEngineGateway(
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class StaticCircuitBreakerCheck(
+    private val trippedInstrumentId: String
+) : CommandCircuitBreakerCheck {
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        if (request.instrumentId != trippedInstrumentId) return null
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for INSTRUMENT:${request.instrumentId}"
+        )
+    }
 }
 
 private class ThrowingEngineGateway : EngineGateway {

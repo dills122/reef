@@ -3,6 +3,9 @@ package com.reef.platform.admin
 import com.reef.platform.api.AccountRiskControl
 import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.api.CommandCircuitBreakerState
+import com.reef.platform.api.CommandCircuitBreakerStore
+import com.reef.platform.api.CommandCircuitBreakerRequest
 import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
@@ -13,7 +16,12 @@ class AdminCliAdapterTest {
     fun executesReferenceDataUpsertCommands() {
         val service = AdminApplicationService(InMemoryRuntimePersistence())
         val accountRiskControls = RecordingAccountRiskControlStore()
-        val cli = AdminCliAdapter(service, accountRiskControls = { accountRiskControls })
+        val commandCircuitBreakers = RecordingCommandCircuitBreakerStore()
+        val cli = AdminCliAdapter(
+            service,
+            accountRiskControls = { accountRiskControls },
+            commandCircuitBreakers = { commandCircuitBreakers }
+        )
 
         assertContains(cli.execute(listOf("instrument-upsert", "AAPL", "AAPL")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("participant-upsert", "participant-1", "Participant 1")), "\"status\":\"ok\"")
@@ -27,6 +35,11 @@ class AdminCliAdapterTest {
             "\"decision\":\"DISABLED_BOT\""
         )
         assertContains(cli.execute(listOf("account-risk-list")), "\"controlsCount\":1")
+        assertContains(
+            cli.execute(listOf("breaker-set", "instrument", "AAPL", "trip", "halted")),
+            "\"tripped\":true"
+        )
+        assertContains(cli.execute(listOf("breaker-list")), "\"breakersCount\":1")
         assertContains(cli.execute(listOf("calendar-upsert", "us-default", "America/New_York", "T+1")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("calendar-list")), "\"profilesCount\":")
         assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
@@ -54,4 +67,16 @@ private class RecordingAccountRiskControlStore : AccountRiskControlStore {
     }
 
     override fun listControls(): List<AccountRiskControl> = controls.values.toList()
+}
+
+private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
+    private val breakers = linkedMapOf<String, CommandCircuitBreakerState>()
+
+    override fun evaluate(request: CommandCircuitBreakerRequest) = null
+
+    override fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String) {
+        breakers["$scopeType|$scopeId"] = CommandCircuitBreakerState(scopeType, scopeId, tripped, reason)
+    }
+
+    override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
 }

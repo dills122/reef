@@ -211,6 +211,20 @@ object PostgresSchemaRequirements {
         )
     }
 
+    fun boundaryCommandCircuitBreakers(commandCircuitBreakers: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(commandCircuitBreakers)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                PostgresSchemaColumn(table, "scope_type", "text"),
+                PostgresSchemaColumn(table, "scope_id", "text"),
+                PostgresSchemaColumn(table, "tripped", "boolean"),
+                PostgresSchemaColumn(table, "reason", "text"),
+                PostgresSchemaColumn(table, "updated_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun commandLog(
         commands: String,
         payloads: String = "command_log.command_payloads",
