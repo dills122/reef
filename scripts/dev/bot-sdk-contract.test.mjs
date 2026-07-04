@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const examplesDir = join(repoRoot, "packages/bot-sdk/examples");
@@ -47,6 +48,7 @@ for (const fileName of readdirSync(examplesDir).filter((name) => name.endsWith("
 
   const report = JSON.parse(registration.stdout);
   assert.equal(report.status, "accepted", `${fileName} must pass registration`);
+  assert.match(report.sourceHash, /^sha256:[a-f0-9]{64}$/, `${fileName} must report source hash`);
   assert.equal(report.ticksRun, 5, `${fileName} must complete qualification ticks`);
 }
 
@@ -66,10 +68,12 @@ console.log("bot SDK contract checks passed");
 async function assertBadBot(fileName, expectedIssueCodes) {
   const filePath = join(badBotsDir, fileName);
   const source = readFileSync(filePath, "utf8");
+  const sourceHash = `sha256:${createHash("sha256").update(source, "utf8").digest("hex")}`;
   const module = await import(pathToFileURL(filePath).href);
   const report = await qualifyBotV1({
     fileName,
     source,
+    sourceHash,
     BotClass: module.default,
     registryEntries: [
       {

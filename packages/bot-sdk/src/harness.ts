@@ -47,6 +47,7 @@ export interface BotRegistrationIssueV1 {
 export interface BotRegistrationReportV1 {
   readonly status: BotRegistrationStatusV1;
   readonly fileName: string;
+  readonly sourceHash: string;
   readonly metadata?: ReefBotMetadataV1;
   readonly registryEntry?: BotRegistryEntryV1;
   readonly gitAuthorEmail?: string;
@@ -77,6 +78,7 @@ export interface BotQualificationOptionsV1 {
   readonly existingFileNames?: readonly string[];
   readonly registryEntries?: readonly BotRegistryEntryV1[];
   readonly gitAuthorEmail?: string;
+  readonly sourceHash?: string;
   readonly tickCount?: number;
   readonly policy?: Partial<BotRuntimePolicyV1>;
   readonly fixtureData?: BotFixtureDataV1;
@@ -130,9 +132,11 @@ export function validateBotRegistrationV1(options: {
   readonly existingFileNames?: readonly string[];
   readonly registryEntries?: readonly BotRegistryEntryV1[];
   readonly gitAuthorEmail?: string;
+  readonly sourceHash?: string;
 }): BotRegistrationReportV1 {
   const issues: BotRegistrationIssueV1[] = [];
   const metadata = readMetadata(options.BotClass, issues);
+  const sourceHash = options.sourceHash ?? "";
 
   if (!options.fileName.endsWith(".ts")) {
     issues.push(errorIssue("invalid_file_extension", "Bot entry file must be a TypeScript .ts file."));
@@ -154,7 +158,7 @@ export function validateBotRegistrationV1(options: {
   }
 
   const registryEntry = registryEntries.find((entry) => entry.fileName === options.fileName);
-  validateRegistryEntry(registryEntry, metadata, issues);
+  validateRegistryEntry(registryEntry, metadata, sourceHash, issues);
 
   if (options.gitAuthorEmail !== undefined && !isBasicEmail(options.gitAuthorEmail)) {
     issues.push(errorIssue("invalid_git_author_email", "Git author email must pass basic email syntax validation."));
@@ -173,6 +177,7 @@ export function validateBotRegistrationV1(options: {
   return {
     status: hasError(issues) ? "do_not_merge" : "accepted",
     fileName: options.fileName,
+    sourceHash,
     ...(metadata === undefined ? {} : { metadata }),
     ...(registryEntry === undefined ? {} : { registryEntry }),
     ...(options.gitAuthorEmail === undefined ? {} : { gitAuthorEmail: options.gitAuthorEmail }),
@@ -419,6 +424,7 @@ function readMetadata(BotClass: ReefBotV1Constructor, issues: BotRegistrationIss
 function validateRegistryEntry(
   entry: BotRegistryEntryV1 | undefined,
   metadata: ReefBotMetadataV1 | undefined,
+  sourceHash: string,
   issues: BotRegistrationIssueV1[],
 ): void {
   if (entry === undefined) {
@@ -436,6 +442,9 @@ function validateRegistryEntry(
   }
   if (entry.artifactHash !== undefined && !/^sha256:[a-f0-9]{64}$/.test(entry.artifactHash)) {
     issues.push(errorIssue("invalid_registry_artifact_hash", "Registry artifactHash must be a sha256:<hex> value."));
+  }
+  if (entry.artifactHash !== undefined && sourceHash.length > 0 && entry.artifactHash !== sourceHash) {
+    issues.push(errorIssue("registry_artifact_hash_mismatch", "Registry artifactHash must match the bot source hash."));
   }
   if (metadata !== undefined && entry.publisher !== metadata.publisher) {
     issues.push(errorIssue("registry_publisher_mismatch", "Registry publisher must match bot metadata publisher."));

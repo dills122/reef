@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -15,6 +16,7 @@ if (!botPathArg) {
 
 const botPath = isAbsolute(botPathArg) ? botPathArg : resolve(repoRoot, botPathArg);
 const source = readFileSync(botPath, "utf8");
+const sourceHash = `sha256:${createHash("sha256").update(source, "utf8").digest("hex")}`;
 const botModule = await import(pathToFileURL(botPath).href);
 const BotClass = botModule.default;
 const botDir = dirname(botPath);
@@ -32,6 +34,7 @@ const report = await qualifyBotV1({
   existingFileNames,
   registryEntries,
   gitAuthorEmail,
+  sourceHash,
   tickCount: 5,
   policy: defaultBotRuntimePolicyV1,
   fixtureData: {

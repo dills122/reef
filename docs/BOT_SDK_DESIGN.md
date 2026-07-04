@@ -265,7 +265,8 @@ The registration harness should:
 7. run `onStart`, controlled ticks, and `onStop`
 8. enforce configured API/action/trade-per-second limits
 9. run a deterministic qualification simulation
-10. emit a registration report
+10. compute a deterministic `sha256:<hex>` source hash
+11. emit a registration report
 
 The sidecar implementation starts with:
 
@@ -275,6 +276,8 @@ The sidecar implementation starts with:
 - `packages/bot-sdk/test-fixtures/bad-bots/` for rejected-bot fixtures covering metadata, hosted API, and action-limit failures
 
 A bot that exceeds trade/sec limits during qualification must be marked `do_not_merge` until fixed. Repeated live violations can freeze the bot and then ban that bot version or submitter according to arena policy.
+
+When a registry entry has `artifactHash`, it must match the computed source hash. Draft entries may omit `artifactHash` until the publish/approval flow records the immutable artifact.
 
 ## Persistence And Leaderboards
 

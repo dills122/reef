@@ -145,6 +145,7 @@ Registration checks:
 - required metadata
 - basic email syntax
 - semver-like versions
+- deterministic source hash
 - forbidden hosted APIs
 - lifecycle shape
 - deterministic fixture qualification
@@ -172,4 +173,3 @@ Use SDK clients only.
 `ctx.orders.placeLimit()` returns an action object instead of submitting immediately.
 
 That lets Reef validate, rate limit, risk check, audit, score, and replay bot decisions before they touch the venue. It also keeps local qualification and hosted execution aligned.
-
