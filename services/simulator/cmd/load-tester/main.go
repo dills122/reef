@@ -193,9 +193,14 @@ type traceEventsResponse struct {
 }
 
 type workerState struct {
-	orders          []string
+	orders          []trackedOrder
 	rejectStreak    int
 	submitOnlyTicks int
+}
+
+type trackedOrder struct {
+	OrderID      string
+	InstrumentID string
 }
 
 const (
@@ -732,7 +737,7 @@ func runWorker(
 		}
 		defer stream.close()
 	}
-	state := workerState{orders: make([]string, 0, 128)}
+	state := workerState{orders: make([]trackedOrder, 0, 128)}
 	for {
 		select {
 		case <-ctx.Done():
@@ -814,7 +819,7 @@ func runWorker(
 			status, body, err := submitCommand(client, stream, cfg, workerID, commandID, traceID, payload, ActionSubmit)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
-				state.orders = append(state.orders, orderID)
+				state.orders = append(state.orders, trackedOrder{OrderID: orderID, InstrumentID: instrumentID})
 				state.orders = compactTrackedOrders(state.orders, cfg)
 				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
@@ -825,9 +830,9 @@ func runWorker(
 			if len(state.orders) == 0 {
 				continue
 			}
-			orderID := pickOrderID(rng, state.orders, cfg.Mode)
-			result.OrderID = orderID
-			if shouldInjectFault(rng, cfg, "reject_modify", cfg.InstrumentID) {
+			order := pickOrder(rng, state.orders, cfg.Mode)
+			result.OrderID = order.OrderID
+			if shouldInjectFault(rng, cfg, "reject_modify", order.InstrumentID) {
 				result.StatusCode = 200
 				result.ErrorText = "rejected:INJECTED_FAULT"
 				result.RejectCode = "INJECTED_FAULT"
@@ -836,7 +841,8 @@ func runWorker(
 				continue
 			}
 			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
-			payload["orderId"] = orderID
+			payload["orderId"] = order.OrderID
+			payload["instrumentId"] = order.InstrumentID
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, nil))
 			status, body, err := doPOST(
@@ -850,7 +856,7 @@ func runWorker(
 				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
-				state.orders = removeOrder(state.orders, orderID)
+				state.orders = removeOrder(state.orders, order.OrderID)
 				state.orders = compactTrackedOrders(state.orders, cfg)
 				updateRecoveryState(&state, cfg)
 			}
@@ -859,9 +865,9 @@ func runWorker(
 				continue
 			}
 			idx := pickOrderIndex(rng, state.orders, cfg.Mode)
-			orderID := state.orders[idx]
-			result.OrderID = orderID
-			if shouldInjectFault(rng, cfg, "reject_cancel", cfg.InstrumentID) {
+			order := state.orders[idx]
+			result.OrderID = order.OrderID
+			if shouldInjectFault(rng, cfg, "reject_cancel", order.InstrumentID) {
 				result.StatusCode = 200
 				result.ErrorText = "rejected:INJECTED_FAULT"
 				result.RejectCode = "INJECTED_FAULT"
@@ -870,7 +876,8 @@ func runWorker(
 				continue
 			}
 			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
-			payload["orderId"] = orderID
+			payload["orderId"] = order.OrderID
+			payload["instrumentId"] = order.InstrumentID
 			payload["reason"] = "load test"
 			status, body, err := doPOST(
 				client,
@@ -884,7 +891,7 @@ func runWorker(
 				state.rejectStreak = 0
 				traceSeen.Store(traceID, struct{}{})
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
-				state.orders = removeOrder(state.orders, orderID)
+				state.orders = removeOrder(state.orders, order.OrderID)
 				state.orders = compactTrackedOrders(state.orders, cfg)
 				updateRecoveryState(&state, cfg)
 			}

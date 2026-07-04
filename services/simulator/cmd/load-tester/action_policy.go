@@ -84,9 +84,9 @@ func weightedAction(rng *rand.Rand, submitPct, modifyPct int) Action {
 	return ActionCancel
 }
 
-func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
+func pickOrder(rng *rand.Rand, orders []trackedOrder, mode string) trackedOrder {
 	if len(orders) == 0 {
-		return ""
+		return trackedOrder{}
 	}
 	if mode == "capacity-baseline" || mode == "strict-lifecycle" {
 		start := recentOrderWindowStart(len(orders), lifecycleOrderWindow(mode))
@@ -95,7 +95,7 @@ func pickOrderID(rng *rand.Rand, orders []string, mode string) string {
 	return orders[rng.Intn(len(orders))]
 }
 
-func pickOrderIndex(rng *rand.Rand, orders []string, mode string) int {
+func pickOrderIndex(rng *rand.Rand, orders []trackedOrder, mode string) int {
 	if len(orders) == 0 {
 		return 0
 	}
@@ -184,7 +184,7 @@ func lifecycleRecoveryTicks(mode string) int {
 	return 8
 }
 
-func compactTrackedOrders(orders []string, cfg Config) []string {
+func compactTrackedOrders(orders []trackedOrder, cfg Config) []trackedOrder {
 	if !isLifecycleManagedMode(cfg.Mode) {
 		return orders
 	}
@@ -195,7 +195,7 @@ func compactTrackedOrders(orders []string, cfg Config) []string {
 	if len(orders) <= maxTracked {
 		return orders
 	}
-	return append([]string(nil), orders[len(orders)-maxTracked:]...)
+	return append([]trackedOrder(nil), orders[len(orders)-maxTracked:]...)
 }
 
 func isTerminalOrderRejection(code string) bool {
@@ -210,9 +210,9 @@ func shouldPruneTerminalOrder(mode string) bool {
 	return isLifecycleManagedMode(mode)
 }
 
-func removeOrder(orders []string, orderID string) []string {
+func removeOrder(orders []trackedOrder, orderID string) []trackedOrder {
 	for i, existing := range orders {
-		if existing == orderID {
+		if existing.OrderID == orderID {
 			return append(orders[:i], orders[i+1:]...)
 		}
 	}

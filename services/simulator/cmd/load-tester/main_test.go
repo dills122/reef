@@ -374,15 +374,23 @@ func TestShouldPruneTerminalOrder(t *testing.T) {
 	}
 }
 
+func trackedOrders(orderIDs ...string) []trackedOrder {
+	orders := make([]trackedOrder, 0, len(orderIDs))
+	for index, orderID := range orderIDs {
+		orders = append(orders, trackedOrder{OrderID: orderID, InstrumentID: fmt.Sprintf("STK%03d", index+1)})
+	}
+	return orders
+}
+
 func TestHasActionableOrders(t *testing.T) {
 	cfg := Config{Mode: "strict-lifecycle", StrictMinLiveOrders: 2}
-	if hasActionableOrders(cfg, workerState{orders: []string{"o1"}}) {
+	if hasActionableOrders(cfg, workerState{orders: trackedOrders("o1")}) {
 		t.Fatal("expected strict mode to require min live orders")
 	}
-	if !hasActionableOrders(cfg, workerState{orders: []string{"o1", "o2"}}) {
+	if !hasActionableOrders(cfg, workerState{orders: trackedOrders("o1", "o2")}) {
 		t.Fatal("expected strict mode with sufficient orders to be actionable")
 	}
-	if !hasActionableOrders(Config{Mode: "chaos", StrictMinLiveOrders: 2}, workerState{orders: []string{"o1"}}) {
+	if !hasActionableOrders(Config{Mode: "chaos", StrictMinLiveOrders: 2}, workerState{orders: trackedOrders("o1")}) {
 		t.Fatal("expected non-strict mode to allow any non-empty order set")
 	}
 }
@@ -427,33 +435,47 @@ func TestLifecycleRecoveryTicks(t *testing.T) {
 
 func TestShouldAllowLifecycleAction(t *testing.T) {
 	cfg := Config{Mode: "strict-lifecycle", StrictMinLiveOrders: 4}
-	if shouldAllowLifecycleAction(rand.New(rand.NewSource(12)), cfg, workerState{orders: []string{"o1", "o2", "o3"}}) {
+	if shouldAllowLifecycleAction(rand.New(rand.NewSource(12)), cfg, workerState{orders: trackedOrders("o1", "o2", "o3")}) {
 		t.Fatal("expected lifecycle action to be blocked when live-order depth is below strict minimum")
 	}
-	if !shouldAllowLifecycleAction(rand.New(rand.NewSource(1)), Config{Mode: "chaos", StrictMinLiveOrders: 4}, workerState{orders: []string{"o1"}}) {
+	if !shouldAllowLifecycleAction(rand.New(rand.NewSource(1)), Config{Mode: "chaos", StrictMinLiveOrders: 4}, workerState{orders: trackedOrders("o1")}) {
 		t.Fatal("expected non-strict mode to allow lifecycle action")
 	}
 }
 
 func TestCompactTrackedOrders(t *testing.T) {
 	cfg := Config{Mode: "strict-lifecycle", StrictMinLiveOrders: 4}
-	orders := make([]string, 0, 40)
+	orders := make([]trackedOrder, 0, 40)
 	for i := 0; i < 40; i++ {
-		orders = append(orders, fmt.Sprintf("o-%d", i))
+		orders = append(orders, trackedOrder{OrderID: fmt.Sprintf("o-%d", i), InstrumentID: fmt.Sprintf("STK%03d", i)})
 	}
 	compacted := compactTrackedOrders(orders, cfg)
 	if len(compacted) != 32 {
 		t.Fatalf("expected compacted length 32, got %d", len(compacted))
 	}
-	if compacted[0] != "o-8" || compacted[len(compacted)-1] != "o-39" {
-		t.Fatalf("unexpected compacted order slice: first=%s last=%s", compacted[0], compacted[len(compacted)-1])
+	if compacted[0].OrderID != "o-8" || compacted[len(compacted)-1].OrderID != "o-39" {
+		t.Fatalf("unexpected compacted order slice: first=%s last=%s", compacted[0].OrderID, compacted[len(compacted)-1].OrderID)
+	}
+	if compacted[0].InstrumentID != "STK008" || compacted[len(compacted)-1].InstrumentID != "STK039" {
+		t.Fatalf("unexpected compacted instrument slice: first=%s last=%s", compacted[0].InstrumentID, compacted[len(compacted)-1].InstrumentID)
 	}
 	compactedCapacity := compactTrackedOrders(orders, Config{Mode: "capacity-baseline", StrictMinLiveOrders: 4})
 	if len(compactedCapacity) != 16 {
 		t.Fatalf("expected capacity mode compaction length 16, got %d", len(compactedCapacity))
 	}
-	if compactedCapacity[0] != "o-24" || compactedCapacity[len(compactedCapacity)-1] != "o-39" {
-		t.Fatalf("unexpected capacity compacted order slice: first=%s last=%s", compactedCapacity[0], compactedCapacity[len(compactedCapacity)-1])
+	if compactedCapacity[0].OrderID != "o-24" || compactedCapacity[len(compactedCapacity)-1].OrderID != "o-39" {
+		t.Fatalf("unexpected capacity compacted order slice: first=%s last=%s", compactedCapacity[0].OrderID, compactedCapacity[len(compactedCapacity)-1].OrderID)
+	}
+}
+
+func TestPickOrderPreservesInstrument(t *testing.T) {
+	orders := []trackedOrder{
+		{OrderID: "o-1", InstrumentID: "STK001"},
+		{OrderID: "o-2", InstrumentID: "STK002"},
+	}
+	picked := pickOrder(rand.New(rand.NewSource(1)), orders, "strict-lifecycle")
+	if picked.OrderID == "" || picked.InstrumentID == "" {
+		t.Fatalf("expected tracked order with instrument, got %+v", picked)
 	}
 }
 
