@@ -13,6 +13,7 @@
     "dev:venue-event-replay-check": "bun scripts/dev/venue-event-replay-check.mjs",
     "dev:stress": "bun scripts/dev/stress.mjs",
     "bot-sdk:test": "bun scripts/dev/bot-sdk-contract.test.mjs",
+    "bot-sdk:typecheck": "tsc -p packages/bot-sdk/tsconfig.json --noEmit",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs"

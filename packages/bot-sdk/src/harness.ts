@@ -15,8 +15,18 @@ import {
   type MarketSnapshotV1,
   type OwnOrderV1,
   type ReefBotMetadataV1,
-  type ReefBotV1,
 } from "./index";
+
+export interface ReefBotV1Instance {
+  onStart(ctx: BotContextV1): Promise<void>;
+  onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]>;
+  onStop(ctx: BotContextV1): Promise<void>;
+}
+
+export interface ReefBotV1Constructor {
+  readonly metadata?: ReefBotMetadataV1;
+  new (): ReefBotV1Instance;
+}
 
 export const defaultBotRuntimePolicyV1: BotRuntimePolicyV1 = {
   tickIntervalMs: 500,
@@ -61,7 +71,7 @@ export interface BotFixtureDataV1 {
 export interface BotQualificationOptionsV1 {
   readonly fileName: string;
   readonly source: string;
-  readonly BotClass: typeof ReefBotV1;
+  readonly BotClass: ReefBotV1Constructor;
   readonly existingFileNames?: readonly string[];
   readonly tickCount?: number;
   readonly policy?: Partial<BotRuntimePolicyV1>;
@@ -100,7 +110,7 @@ const forbiddenHostedPatterns: readonly RegExp[] = [
 export function validateBotRegistrationV1(options: {
   readonly fileName: string;
   readonly source: string;
-  readonly BotClass: typeof ReefBotV1;
+  readonly BotClass: ReefBotV1Constructor;
   readonly existingFileNames?: readonly string[];
 }): BotRegistrationReportV1 {
   const issues: BotRegistrationIssueV1[] = [];
@@ -110,7 +120,7 @@ export function validateBotRegistrationV1(options: {
     issues.push(errorIssue("invalid_file_extension", "Bot entry file must be a TypeScript .ts file."));
   }
 
-  if (options.existingFileNames?.filter((name) => name === options.fileName).length > 1) {
+  if ((options.existingFileNames ?? []).filter((name) => name === options.fileName).length > 1) {
     issues.push(errorIssue("duplicate_file_name", `Bot filename ${options.fileName} is not unique.`));
   }
 
@@ -127,7 +137,7 @@ export function validateBotRegistrationV1(options: {
   return {
     status: hasError(issues) ? "do_not_merge" : "accepted",
     fileName: options.fileName,
-    metadata,
+    ...(metadata === undefined ? {} : { metadata }),
     issues,
   };
 }
@@ -155,7 +165,7 @@ export async function qualifyBotV1(options: BotQualificationOptionsV1): Promise<
     } else {
       const ctx = createFixtureBotContextV1({
         policy,
-        fixtureData: options.fixtureData,
+        ...(options.fixtureData === undefined ? {} : { fixtureData: options.fixtureData }),
         logs,
         denials,
         counters,
@@ -168,7 +178,7 @@ export async function qualifyBotV1(options: BotQualificationOptionsV1): Promise<
         counters.dataCallsThisTick = 0;
         const tickActions = await bot.onTick(ctx);
         ticksRun += 1;
-        const actions = Array.from(tickActions ?? []);
+        const actions: BotActionV1[] = Array.from(tickActions ?? []);
         counters.actionsProposed += actions.length;
 
         const orderActionCount = actions.filter(isOrderAction).length;
@@ -314,12 +324,12 @@ export function createBotActionFactoryV1(): BotActionFactoryV1 {
     submitMarket: (order) => ({ type: "submit_market", order }),
     modify: (order) => ({ type: "modify_order", order }),
     cancel: (order) => ({ type: "cancel_order", order }),
-    cancelAll: (instrumentId) => ({ type: "cancel_all", instrumentId }),
-    noop: (reason) => ({ type: "noop", reason }),
+    cancelAll: (instrumentId) => (instrumentId === undefined ? { type: "cancel_all" } : { type: "cancel_all", instrumentId }),
+    noop: (reason) => (reason === undefined ? { type: "noop" } : { type: "noop", reason }),
   };
 }
 
-function readMetadata(BotClass: typeof ReefBotV1, issues: BotRegistrationIssueV1[]): ReefBotMetadataV1 | undefined {
+function readMetadata(BotClass: ReefBotV1Constructor, issues: BotRegistrationIssueV1[]): ReefBotMetadataV1 | undefined {
   const metadata = BotClass.metadata;
   if (!metadata || typeof metadata !== "object") {
     issues.push(errorIssue("missing_metadata", "Bot class must define static metadata."));
@@ -401,10 +411,18 @@ function createSeededRandom(seed: number): BotRandomV1 {
 
 function createLogger(logs: BotLogEntryV1[]): BotLoggerV1 {
   return {
-    info: (message, fields) => logs.push({ level: "info", message, fields }),
-    warn: (message, fields) => logs.push({ level: "warn", message, fields }),
-    error: (message, fields) => logs.push({ level: "error", message, fields }),
+    info: (message, fields) => logs.push(logEntry("info", message, fields)),
+    warn: (message, fields) => logs.push(logEntry("warn", message, fields)),
+    error: (message, fields) => logs.push(logEntry("error", message, fields)),
   };
+}
+
+function logEntry(
+  level: BotLogEntryV1["level"],
+  message: string,
+  fields: Record<string, unknown> | undefined,
+): BotLogEntryV1 {
+  return fields === undefined ? { level, message } : { level, message, fields };
 }
 
 function hasError(issues: readonly BotRegistrationIssueV1[]): boolean {
