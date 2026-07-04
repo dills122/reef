@@ -15,6 +15,7 @@
     "bot-sdk:test": "bun scripts/dev/bot-sdk-contract.test.mjs",
     "bot-sdk:typecheck": "tsc -p packages/bot-sdk/tsconfig.json --noEmit",
     "bot-sdk:test:venue-adapter": "bun scripts/dev/bot-sdk-venue-adapter.test.mjs",
+    "bot-sdk:test:venue-client": "bun scripts/dev/bot-sdk-venue-client.test.mjs",
     "bot-sdk:test:runner": "bun scripts/dev/bot-sdk-runner.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
     "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",

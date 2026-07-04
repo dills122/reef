@@ -206,6 +206,8 @@ The SDK sidecar includes a pure mapping helper, `toVenueCommandRequestsV1`, for 
 
 The helper does not execute HTTP calls. Hosted bots still return proposed actions; adapter/orchestrator code decides whether approved actions become platform commands.
 
+`sendVenueCommandRequestsV1` is the adapter-owned send step. It accepts mapped command requests and a transport implementation. Bot code never receives the transport and never creates its own network client.
+
 Current mapping support:
 
 - `submit_limit` -> `/api/v1/orders/submit`
