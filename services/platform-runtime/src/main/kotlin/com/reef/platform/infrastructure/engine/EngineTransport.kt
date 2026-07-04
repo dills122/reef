@@ -9,15 +9,26 @@ import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.config.RuntimeEnv
+import com.reef.platform.infrastructure.partition.PartitionLaneHash
 import io.grpc.CallOptions
 import io.grpc.ManagedChannel
 import io.grpc.ManagedChannelBuilder
 import io.grpc.MethodDescriptor
 import io.grpc.StatusRuntimeException
 import io.grpc.protobuf.ProtoUtils
+import io.grpc.stub.ClientCallStreamObserver
 import io.grpc.stub.ClientCalls
+import io.grpc.stub.ClientResponseObserver
+import io.grpc.stub.StreamObserver
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import reef.contracts.orderexecution.v1.CancelOrder
 import reef.contracts.orderexecution.v1.CommandMetadata
 import reef.contracts.orderexecution.v1.ModifyOrder
@@ -40,6 +51,7 @@ fun defaultEngineGateway(): EngineGateway {
 
     return when (transport) {
         "grpc" -> GrpcEngineClient(grpcTarget, grpcDeadline)
+        "grpc-stream", "grpcstream", "stream" -> GrpcStreamEngineClient(grpcTarget, grpcDeadline)
         else -> EngineClient(httpBaseUrl)
     }
 }
@@ -51,20 +63,7 @@ class GrpcEngineClient(
     private val channel: ManagedChannel = ManagedChannelBuilder.forTarget(grpcTarget).usePlaintext().build()
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
-        val req = SubmitOrder.newBuilder()
-            .setMetadata(command.toMetadata())
-            .setOrderId(command.orderId)
-            .setInstrumentId(command.instrumentId)
-            .setParticipantId(command.participantId)
-            .setAccountId(command.accountId)
-            .setSide(command.side.toProtoSide())
-            .setOrderType(command.orderType.toProtoOrderType())
-            .setQuantity(OrderQuantity.newBuilder().setUnits(command.quantityUnits).build())
-            .setLimitPrice(Price.newBuilder().setNanos(command.limitPrice).setCurrency(command.currency).build())
-            .setTimeInForce(command.timeInForce.toProtoTimeInForce())
-            .build()
-
-        val response = blockingEngineCall("SubmitOrder", submitMethod, req)
+        val response = blockingEngineCall("SubmitOrder", submitMethod, command.toProtoSubmitOrder())
         return response.toDomainResult()
     }
 
@@ -150,6 +149,250 @@ class GrpcEngineClient(
                 .build()
     }
 }
+
+class GrpcStreamEngineClient(
+    private val grpcTarget: String,
+    private val requestDeadline: Duration = Duration.ofMillis(RuntimeEnv.long("ENGINE_GRPC_DEADLINE_MS", 2_000, min = 1)),
+    laneCount: Int = RuntimeEnv.int("ENGINE_GRPC_STREAM_LANES", 16, min = 1),
+    queueCapacity: Int = RuntimeEnv.int("ENGINE_GRPC_STREAM_QUEUE_CAPACITY", 100_000, min = 1)
+) : EngineGateway, AsyncSubmitEngineGateway, AutoCloseable {
+    private val channel: ManagedChannel = ManagedChannelBuilder.forTarget(grpcTarget).usePlaintext().build()
+    private val unaryFallback = GrpcEngineClient(grpcTarget, requestDeadline)
+    private val lanes = Array(laneCount) {
+        SubmitStreamLane(
+            channel = channel,
+            requestDeadline = requestDeadline,
+            queueCapacity = queueCapacity
+        )
+    }
+
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        return lane(command).submit(command)
+    }
+
+    override fun submitOrderAsync(command: SubmitOrderCommand): CompletableFuture<SubmitOrderResult> {
+        return lane(command).submitAsync(command).thenApply { it.toDomainResult() }
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        return unaryFallback.cancelOrder(command)
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        return unaryFallback.modifyOrder(command)
+    }
+
+    fun target(): String = grpcTarget
+
+    override fun close() {
+        lanes.forEach { it.close() }
+        unaryFallback.close()
+        channel.shutdown()
+    }
+
+    internal fun isShutdown(): Boolean = channel.isShutdown
+
+    private fun lane(command: SubmitOrderCommand): SubmitStreamLane {
+        val key = command.instrumentId
+        return lanes[PartitionLaneHash.laneFor(key, lanes.size)]
+    }
+}
+
+private data class StreamSubmit(
+    val request: SubmitOrder,
+    val response: CompletableFuture<ProtoSubmitOrderResult>
+)
+
+private class SubmitStreamLane(
+    private val channel: ManagedChannel,
+    private val requestDeadline: Duration,
+    queueCapacity: Int
+) : AutoCloseable {
+    private val inFlight = Semaphore(queueCapacity)
+    private val outbound = ConcurrentLinkedQueue<StreamSubmit>()
+    private val pending = ConcurrentLinkedQueue<CompletableFuture<ProtoSubmitOrderResult>>()
+    private val closed = AtomicBoolean(false)
+    private val streamFailure = AtomicReference<Throwable?>()
+    private val streamLock = Any()
+    @Volatile
+    private var readyObserver: ClientCallStreamObserver<SubmitOrder>? = null
+    @Volatile
+    private var requestObserver: StreamObserver<SubmitOrder> = openStream()
+
+    fun submit(command: SubmitOrderCommand): SubmitOrderResult {
+        val deadlineMs = requestDeadline.toMillis().coerceAtLeast(1)
+        val response = submitAsync(command)
+        return try {
+            response.get(deadlineMs, TimeUnit.MILLISECONDS).toDomainResult()
+        } catch (ex: InterruptedException) {
+            Thread.currentThread().interrupt()
+            response.cancel(true)
+            throw EngineTransportException("engine gRPC SubmitOrders interrupted", ex)
+        } catch (ex: TimeoutException) {
+            response.cancel(true)
+            throw EngineTransportException("engine gRPC SubmitOrders deadline exceeded", ex)
+        } catch (ex: ExecutionException) {
+            val cause = ex.cause ?: ex
+            throw EngineTransportException("engine gRPC SubmitOrders failed: ${cause.message ?: "unknown"}", cause)
+        }
+    }
+
+    fun submitAsync(command: SubmitOrderCommand): CompletableFuture<ProtoSubmitOrderResult> {
+        val deadlineMs = requestDeadline.toMillis().coerceAtLeast(1)
+        val response = CompletableFuture<ProtoSubmitOrderResult>()
+        val item = StreamSubmit(command.toProtoSubmitOrder(), response)
+        var acquired = false
+        try {
+            if (!inFlight.tryAcquire(deadlineMs, TimeUnit.MILLISECONDS)) {
+                throw EngineTransportException("engine gRPC SubmitOrders lane in-flight limit reached")
+            }
+            acquired = true
+            enqueue(item)
+            return response
+        } catch (ex: InterruptedException) {
+            Thread.currentThread().interrupt()
+            if (acquired) inFlight.release()
+            throw EngineTransportException("engine gRPC SubmitOrders interrupted", ex)
+        } catch (ex: RuntimeException) {
+            if (acquired) inFlight.release()
+            throw ex
+        }
+    }
+
+    override fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        synchronized(streamLock) {
+            requestObserver.onCompleted()
+            failOutbound(EngineTransportException("engine gRPC SubmitOrders lane closed"))
+        }
+        failPending(EngineTransportException("engine gRPC SubmitOrders lane closed"))
+    }
+
+    private fun enqueue(item: StreamSubmit) {
+        synchronized(streamLock) {
+            if (closed.get()) {
+                throw EngineTransportException("engine gRPC SubmitOrders lane closed")
+            }
+            outbound.add(item)
+            pumpLocked()
+        }
+    }
+
+    private fun pumpLocked() {
+        streamFailure.getAndSet(null)?.let {
+            requestObserver = reopenStream(requestObserver)
+        }
+        while (true) {
+            val observer = readyObserver
+            if (observer != null && !observer.isReady) {
+                return
+            }
+            val item = outbound.poll() ?: return
+            if (item.response.isCancelled) {
+                inFlight.release()
+                continue
+            }
+            pending.add(item.response)
+            try {
+                requestObserver.onNext(item.request)
+            } catch (ex: RuntimeException) {
+                pending.remove(item.response)
+                item.response.completeExceptionally(ex)
+                inFlight.release()
+                requestObserver = reopenStream(requestObserver)
+            }
+        }
+    }
+
+    private fun failOutbound(error: Throwable) {
+        while (true) {
+            val item = outbound.poll() ?: return
+            item.response.completeExceptionally(error)
+            inFlight.release()
+        }
+    }
+
+    private fun reopenStream(current: StreamObserver<SubmitOrder>): StreamObserver<SubmitOrder> {
+        try {
+            current.onCompleted()
+        } catch (_: RuntimeException) {
+        }
+        return openStream()
+    }
+
+    private fun openStream(): StreamObserver<SubmitOrder> {
+        val responseObserver = object : ClientResponseObserver<SubmitOrder, ProtoSubmitOrderResult> {
+            override fun beforeStart(requestStream: ClientCallStreamObserver<SubmitOrder>) {
+                readyObserver = requestStream
+                requestStream.setOnReadyHandler {
+                    synchronized(streamLock) {
+                        pumpLocked()
+                    }
+                }
+            }
+
+            override fun onNext(value: ProtoSubmitOrderResult) {
+                pending.poll()?.complete(value)
+                inFlight.release()
+            }
+
+            override fun onError(t: Throwable) {
+                synchronized(streamLock) {
+                    streamFailure.set(t)
+                    failPending(t)
+                    pumpLocked()
+                }
+            }
+
+            override fun onCompleted() {
+                val error = EngineTransportException("engine gRPC SubmitOrders stream completed")
+                synchronized(streamLock) {
+                    streamFailure.set(error)
+                    failPending(error)
+                    pumpLocked()
+                }
+            }
+        }
+        return ClientCalls.asyncBidiStreamingCall(
+            channel.newCall(submitOrdersMethod, CallOptions.DEFAULT),
+            responseObserver
+        )
+    }
+
+    private fun failPending(error: Throwable) {
+        while (true) {
+            val pendingResponse = pending.poll() ?: return
+            pendingResponse.completeExceptionally(error)
+            inFlight.release()
+        }
+    }
+
+    companion object {
+        private const val SERVICE_NAME = "reef.contracts.orderexecution.v1.OrderExecutionService"
+
+        private val submitOrdersMethod: MethodDescriptor<SubmitOrder, ProtoSubmitOrderResult> =
+            MethodDescriptor.newBuilder<SubmitOrder, ProtoSubmitOrderResult>()
+                .setType(MethodDescriptor.MethodType.BIDI_STREAMING)
+                .setFullMethodName(MethodDescriptor.generateFullMethodName(SERVICE_NAME, "SubmitOrders"))
+                .setRequestMarshaller(ProtoUtils.marshaller(SubmitOrder.getDefaultInstance()))
+                .setResponseMarshaller(ProtoUtils.marshaller(ProtoSubmitOrderResult.getDefaultInstance()))
+                .build()
+    }
+}
+
+private fun SubmitOrderCommand.toProtoSubmitOrder(): SubmitOrder =
+    SubmitOrder.newBuilder()
+        .setMetadata(toMetadata())
+        .setOrderId(orderId)
+        .setInstrumentId(instrumentId)
+        .setParticipantId(participantId)
+        .setAccountId(accountId)
+        .setSide(side.toProtoSide())
+        .setOrderType(orderType.toProtoOrderType())
+        .setQuantity(OrderQuantity.newBuilder().setUnits(quantityUnits).build())
+        .setLimitPrice(Price.newBuilder().setNanos(limitPrice).setCurrency(currency).build())
+        .setTimeInForce(timeInForce.toProtoTimeInForce())
+        .build()
 
 private fun SubmitOrderCommand.toMetadata(): CommandMetadata =
     CommandMetadata.newBuilder()

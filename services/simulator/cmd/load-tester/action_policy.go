@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
@@ -437,64 +438,75 @@ func isValidRateSchedule(schedule string) bool {
 }
 
 func rateChannelDepth(cfg Config) int {
+	if cfg.RateQueueDepth > 0 {
+		return cfg.RateQueueDepth
+	}
 	if strings.EqualFold(strings.TrimSpace(cfg.RateSchedule), rateSchedulePrecise) {
-		return maxInt(cfg.Workers*2, 1)
+		return maxInt(maxInt(cfg.Workers*4, cfg.RatePerSecond), 1)
 	}
 	return 1
 }
 
-func tokenFeeder(ctx context.Context, rate int, schedule string, out chan<- struct{}) {
+func tokenFeeder(ctx context.Context, rate int, schedule string, out chan<- struct{}, counters *loadScheduleCounters) {
 	if strings.EqualFold(strings.TrimSpace(schedule), rateSchedulePrecise) {
-		preciseTokenFeeder(ctx, rate, out)
+		batchedTokenFeeder(ctx, rate, out, counters, true)
 		return
 	}
-	dropTokenFeeder(ctx, rate, out)
+	batchedTokenFeeder(ctx, rate, out, counters, false)
 }
 
-func dropTokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
-	period := time.Second / time.Duration(rate)
-	if period <= 0 {
-		period = time.Microsecond
+func batchedTokenFeeder(ctx context.Context, rate int, out chan<- struct{}, counters *loadScheduleCounters, blockWhenFull bool) {
+	if rate <= 0 {
+		return
 	}
-	ticker := time.NewTicker(period)
+	started := time.Now()
+	ticker := time.NewTicker(rateSchedulerQuantum(rate))
 	defer ticker.Stop()
+	var scheduled int64
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			select {
-			case out <- struct{}{}:
-			default:
+			target := int64(time.Since(started).Seconds() * float64(rate))
+			for scheduled < target {
+				scheduled++
+				if counters != nil {
+					atomic.AddInt64(&counters.scheduled, 1)
+				}
+				if blockWhenFull {
+					select {
+					case <-ctx.Done():
+						return
+					case out <- struct{}{}:
+						if counters != nil {
+							atomic.AddInt64(&counters.enqueued, 1)
+						}
+					}
+					continue
+				}
+				select {
+				case out <- struct{}{}:
+					if counters != nil {
+						atomic.AddInt64(&counters.enqueued, 1)
+					}
+				default:
+					if counters != nil {
+						atomic.AddInt64(&counters.dropped, 1)
+					}
+				}
 			}
 		}
 	}
 }
 
-func preciseTokenFeeder(ctx context.Context, rate int, out chan<- struct{}) {
-	period := time.Second / time.Duration(rate)
-	if period <= 0 {
-		period = time.Microsecond
-	}
-	next := time.Now()
-	for {
-		next = next.Add(period)
-		if delay := time.Until(next); delay > 0 {
-			timer := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return
-			case <-timer.C:
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case out <- struct{}{}:
-		}
-		if time.Since(next) > period {
-			next = time.Now()
-		}
+func rateSchedulerQuantum(rate int) time.Duration {
+	switch {
+	case rate >= 10_000:
+		return 5 * time.Millisecond
+	case rate >= 1_000:
+		return 10 * time.Millisecond
+	default:
+		return 20 * time.Millisecond
 	}
 }

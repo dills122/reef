@@ -72,6 +72,15 @@ func TestLoadSessionFileJSON(t *testing.T) {
 	}
 }
 
+func TestLoadSessionFileAllowsDisabledTraceChecks(t *testing.T) {
+	input := strings.Replace(validYAML, "traceCheckLimit: 100", "traceCheckLimit: 0", 1)
+	path := writeFile(t, "trace-disabled.yaml", input)
+	_, err := LoadSessionFile(path)
+	if err != nil {
+		t.Fatalf("LoadSessionFile error: %v", err)
+	}
+}
+
 func TestValidateSessionFileRejectsBadMix(t *testing.T) {
 	broken := strings.Replace(validYAML, "submitPct: 82", "submitPct: 70", 1)
 	path := writeFile(t, "bad.yaml", broken)

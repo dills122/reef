@@ -1,0 +1,97 @@
+{
+  "runId": "smoke-10k",
+  "startedAt": "2026-07-03T20:23:41.845042Z",
+  "finishedAt": "2026-07-03T20:23:46.844973Z",
+  "durationSeconds": 4.999931,
+  "config": {
+    "scenario": "alternating-cross",
+    "ratePerSecond": 10000,
+    "duration": "5s",
+    "workers": 1,
+    "instruments": 1,
+    "recordResults": false,
+    "maxRecordedResults": 0,
+    "minProcessedRate": 9500
+  },
+  "attempted": 50000,
+  "processed": 50000,
+  "accepted": 50000,
+  "rejected": 0,
+  "systemFailures": 0,
+  "executions": 50000,
+  "trades": 25000,
+  "attemptedPerSecond": 10000.138001904426,
+  "processedPerSecond": 10000.138001904426,
+  "acceptedPerSecond": 10000.138001904426,
+  "rejectedPerSecond": 0,
+  "latencyMicros": {
+    "count": 50000,
+    "min": 0,
+    "p50": 2,
+    "p95": 5,
+    "p99": 12,
+    "max": 2284
+  },
+  "intervals": [
+    {
+      "second": 0,
+      "attempted": 10000,
+      "processed": 10000,
+      "accepted": 10000,
+      "rejected": 0,
+      "systemFailures": 0,
+      "executions": 10000,
+      "trades": 5000,
+      "processedRate": 10000
+    },
+    {
+      "second": 1,
+      "attempted": 10000,
+      "processed": 10000,
+      "accepted": 10000,
+      "rejected": 0,
+      "systemFailures": 0,
+      "executions": 10000,
+      "trades": 5000,
+      "processedRate": 10000
+    },
+    {
+      "second": 2,
+      "attempted": 10000,
+      "processed": 10000,
+      "accepted": 10000,
+      "rejected": 0,
+      "systemFailures": 0,
+      "executions": 10000,
+      "trades": 5000,
+      "processedRate": 10000
+    },
+    {
+      "second": 3,
+      "attempted": 10000,
+      "processed": 10000,
+      "accepted": 10000,
+      "rejected": 0,
+      "systemFailures": 0,
+      "executions": 10000,
+      "trades": 5000,
+      "processedRate": 10000
+    },
+    {
+      "second": 4,
+      "attempted": 10000,
+      "processed": 10000,
+      "accepted": 10000,
+      "rejected": 0,
+      "systemFailures": 0,
+      "executions": 10000,
+      "trades": 5000,
+      "processedRate": 10000
+    }
+  ],
+  "artifacts": {
+    "intervals": "../../reports/matching-engine-load/smoke-10k/intervals.csv",
+    "summary": "../../reports/matching-engine-load/smoke-10k/summary.json"
+  },
+  "passedMinRate": true
+}

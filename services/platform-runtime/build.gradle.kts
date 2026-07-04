@@ -9,6 +9,7 @@ repositories {
 
 dependencies {
     implementation(kotlin("stdlib"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
     implementation("org.postgresql:postgresql:42.7.4")
     implementation("com.zaxxer:HikariCP:5.1.0")
@@ -16,6 +17,7 @@ dependencies {
     implementation("io.grpc:grpc-protobuf:1.73.0")
     implementation("io.grpc:grpc-stub:1.73.0")
     implementation("io.nats:jnats:2.25.3")
+    implementation("org.apache.kafka:kafka-clients:3.9.0")
     implementation("com.google.protobuf:protobuf-java:4.33.2")
     testImplementation(kotlin("test"))
 }

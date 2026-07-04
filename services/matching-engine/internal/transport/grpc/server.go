@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"io"
 	"net"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
@@ -20,6 +21,20 @@ type orderExecutionRPCServer struct {
 	service *app.Service
 }
 
+type orderExecutionServiceServer interface {
+	SubmitOrder(context.Context, *orderv1.SubmitOrder) (*orderv1.SubmitOrderResult, error)
+	SubmitOrders(orderExecutionServiceSubmitOrdersServer) error
+	CancelOrder(context.Context, *orderv1.CancelOrder) (*orderv1.SubmitOrderResult, error)
+	ModifyOrder(context.Context, *orderv1.ModifyOrder) (*orderv1.SubmitOrderResult, error)
+	HealthCheck(context.Context, *orderv1.HealthCheckRequest) (*orderv1.HealthCheckResponse, error)
+}
+
+type orderExecutionServiceSubmitOrdersServer interface {
+	Send(*orderv1.SubmitOrderResult) error
+	Recv() (*orderv1.SubmitOrder, error)
+	grpc.ServerStream
+}
+
 func NewServer(addr string, service *app.Service) (*Server, error) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -27,7 +42,7 @@ func NewServer(addr string, service *app.Service) (*Server, error) {
 	}
 
 	grpcServer := grpc.NewServer()
-	orderv1.RegisterOrderExecutionServiceServer(grpcServer, &orderExecutionRPCServer{
+	grpcServer.RegisterService(&orderExecutionServiceDesc, &orderExecutionRPCServer{
 		service: service,
 	})
 
@@ -52,6 +67,23 @@ func (s *Server) Addr() string {
 func (s *orderExecutionRPCServer) SubmitOrder(_ context.Context, req *orderv1.SubmitOrder) (*orderv1.SubmitOrderResult, error) {
 	result := s.service.SubmitOrder(submitOrderFromProto(req))
 	return toProtoResult(result), nil
+}
+
+func (s *orderExecutionRPCServer) SubmitOrders(stream orderExecutionServiceSubmitOrdersServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		result := s.service.SubmitOrder(submitOrderFromProto(req))
+		if err := stream.Send(toProtoResult(result)); err != nil {
+			return err
+		}
+	}
 }
 
 func (s *orderExecutionRPCServer) CancelOrder(_ context.Context, req *orderv1.CancelOrder) (*orderv1.SubmitOrderResult, error) {
@@ -190,4 +222,128 @@ func toProtoResult(result domain.SubmitOrderResult) *orderv1.SubmitOrderResult {
 		})
 	}
 	return out
+}
+
+func orderExecutionServiceSubmitOrderHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(orderv1.SubmitOrder)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(orderExecutionServiceServer).SubmitOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reef.contracts.orderexecution.v1.OrderExecutionService/SubmitOrder",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(orderExecutionServiceServer).SubmitOrder(ctx, req.(*orderv1.SubmitOrder))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func orderExecutionServiceCancelOrderHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(orderv1.CancelOrder)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(orderExecutionServiceServer).CancelOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reef.contracts.orderexecution.v1.OrderExecutionService/CancelOrder",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(orderExecutionServiceServer).CancelOrder(ctx, req.(*orderv1.CancelOrder))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func orderExecutionServiceModifyOrderHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(orderv1.ModifyOrder)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(orderExecutionServiceServer).ModifyOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reef.contracts.orderexecution.v1.OrderExecutionService/ModifyOrder",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(orderExecutionServiceServer).ModifyOrder(ctx, req.(*orderv1.ModifyOrder))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func orderExecutionServiceHealthCheckHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(orderv1.HealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(orderExecutionServiceServer).HealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/reef.contracts.orderexecution.v1.OrderExecutionService/HealthCheck",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(orderExecutionServiceServer).HealthCheck(ctx, req.(*orderv1.HealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func orderExecutionServiceSubmitOrdersHandler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(orderExecutionServiceServer).SubmitOrders(&submitOrdersServer{ServerStream: stream})
+}
+
+type submitOrdersServer struct {
+	grpc.ServerStream
+}
+
+func (s *submitOrdersServer) Send(result *orderv1.SubmitOrderResult) error {
+	return s.ServerStream.SendMsg(result)
+}
+
+func (s *submitOrdersServer) Recv() (*orderv1.SubmitOrder, error) {
+	req := new(orderv1.SubmitOrder)
+	if err := s.ServerStream.RecvMsg(req); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+var orderExecutionServiceDesc = grpc.ServiceDesc{
+	ServiceName: "reef.contracts.orderexecution.v1.OrderExecutionService",
+	HandlerType: (*orderExecutionServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SubmitOrder",
+			Handler:    orderExecutionServiceSubmitOrderHandler,
+		},
+		{
+			MethodName: "CancelOrder",
+			Handler:    orderExecutionServiceCancelOrderHandler,
+		},
+		{
+			MethodName: "ModifyOrder",
+			Handler:    orderExecutionServiceModifyOrderHandler,
+		},
+		{
+			MethodName: "HealthCheck",
+			Handler:    orderExecutionServiceHealthCheckHandler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubmitOrders",
+			Handler:       orderExecutionServiceSubmitOrdersHandler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "contracts/proto/order_execution.proto",
 }

@@ -1,11 +1,14 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
+import com.reef.platform.domain.Participant
 import com.reef.platform.domain.Permission
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
@@ -78,6 +81,9 @@ class PlatformHttpServerBoundaryTest {
     fun apiV1SubmitReplaysFirstResponseForSameIdempotencyKey() {
         val server = testServerWithGateway(EchoOrderEngineGateway())
         try {
+            val reset = post(server.address.port, "/internal/perf/hot-path", emptyMap(), "")
+            assertEquals(200, reset.status)
+
             val headers = mapOf(
                 "X-Client-Id" to "client-1",
                 "Idempotency-Key" to "idem-1"
@@ -136,6 +142,13 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, second.status)
             assertEquals(first.body, second.body)
             assertContains(second.body, "\"orderId\":\"ord-first\"")
+
+            val hotPath = get(server.address.port, "/internal/perf/hot-path")
+            assertEquals(200, hotPath.status)
+            assertContains(hotPath.body, "\"api.mutation.total\"")
+            assertContains(hotPath.body, "\"api.parse.submitOrder\"")
+            assertContains(hotPath.body, "\"runtime.submitOrder.total\"")
+            assertContains(hotPath.body, "\"api.writeResponse\"")
         } finally {
             server.stop(0)
         }
@@ -819,6 +832,149 @@ class PlatformHttpServerBoundaryTest {
             assertContains(stats.body, "\"FAILED\":0")
         } finally {
             server.stop(0)
+        }
+    }
+
+    @Test
+    fun acceptedAsyncSubmitReturnsReceiptBeforeEngineCompletes() {
+        val gateway = BlockingFirstSubmitGateway()
+        val server = testServerWithGateway(
+            gateway = gateway,
+            commandProcessingMode = CommandProcessingMode.AcceptedAsync
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-accepted-async",
+                    "Idempotency-Key" to "idem-accepted-async"
+                ),
+                body = validSubmitBody("cmd-accepted-async", "trace-accepted-async", "ord-accepted-async")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-accepted-async")
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-accepted-async\"")
+            assertContains(response.body, "\"processingMode\":\"accepted-async\"")
+            assertTrue(gateway.awaitFirstSubmit())
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"processingMode\":\"accepted-async\"")
+            assertTrue(status.body.contains("\"status\":\"RECEIVED\"") || status.body.contains("\"status\":\"PROCESSING\""))
+
+            gateway.release()
+            val completed = waitForCommandStatus(server.address.port, "cmd-accepted-async", "COMPLETED")
+            assertContains(completed.body, "\"status\":\"COMPLETED\"")
+            assertContains(completed.body, "\"responseStatus\":200")
+        } finally {
+            gateway.release()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun acceptedAsyncStatsEndpointReportsLaneDrain() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.AcceptedAsync
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-accepted-async-stats",
+                    "Idempotency-Key" to "idem-accepted-async-stats"
+                ),
+                body = validSubmitBody("cmd-accepted-async-stats", "trace-accepted-async-stats", "ord-accepted-async-stats")
+            )
+            waitForCommandStatus(server.address.port, "cmd-accepted-async-stats", "COMPLETED")
+            val stats = get(server.address.port, "/internal/commands/async/stats")
+
+            assertEquals(202, response.status)
+            assertEquals(200, stats.status)
+            assertContains(stats.body, "\"processingMode\":\"accepted-async\"")
+            assertContains(stats.body, "\"acceptedAsync\"")
+            assertContains(stats.body, "\"enabled\":true")
+            assertContains(stats.body, "\"activeLaneCount\"")
+            assertContains(stats.body, "\"lanes\"")
+            assertContains(stats.body, "\"received\":1")
+            assertContains(stats.body, "\"completed\":1")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun nettyHotPathAcceptedAsyncSubmitStatusAndStats() {
+        val server = testNettyHotPathServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.AcceptedAsync
+        )
+        try {
+            val health = get(server.port, "/health")
+            val response = post(
+                port = server.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-accepted-async",
+                    "Idempotency-Key" to "idem-netty-accepted-async"
+                ),
+                body = validSubmitBody("cmd-netty-accepted-async", "trace-netty-accepted-async", "ord-netty-accepted-async")
+            )
+            val completed = waitForCommandStatus(server.port, "cmd-netty-accepted-async", "COMPLETED")
+            val stats = get(server.port, "/internal/commands/async/stats")
+
+            assertEquals(200, health.status)
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"commandId\":\"cmd-netty-accepted-async\"")
+            assertEquals(200, completed.status)
+            assertContains(completed.body, "\"status\":\"COMPLETED\"")
+            assertEquals(200, stats.status)
+            assertContains(stats.body, "\"processingMode\":\"accepted-async\"")
+            assertContains(stats.body, "\"inFlightPerLane\"")
+            assertContains(stats.body, "\"completed\":1")
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun nettyHotPathStreamAckPublishesThroughPartitionedPipeline() {
+        val publisher = RecordingStreamCommandPublisher()
+        val streamPublisher = PartitionedStreamCommandPublisher(
+            delegate = publisher,
+            queueCapacityPerLane = 10,
+            maxInFlightPerLane = 1
+        )
+        val server = testNettyHotPathServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = streamPublisher
+        )
+        try {
+            val response = post(
+                port = server.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-stream",
+                    "Idempotency-Key" to "idem-netty-stream"
+                ),
+                body = validSubmitBody("cmd-netty-stream", "trace-netty-stream", "ord-netty-stream", extra = streamRoutingExtra())
+            )
+            val health = get(server.port, "/internal/stream-ack/health")
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(response.body, "\"streamSequence\":1")
+            assertEquals(1, publisher.published.size)
+            assertEquals(200, health.status)
+            assertContains(health.body, "\"publishMode\":\"partitioned-blocking-delegate:sync\"")
+            assertContains(health.body, "\"publishLaneCount\":16")
+            assertContains(health.body, "\"publishCompleted\":1")
+        } finally {
+            server.stop()
         }
     }
 
@@ -1533,6 +1689,7 @@ class PlatformHttpServerBoundaryTest {
         streamCommandBackpressureSampleMs: Long = 100L
     ): com.sun.net.httpserver.HttpServer {
         val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
         if (seedOrderAuthorization) {
             seedOrderAuthorization(
                 persistence,
@@ -1571,6 +1728,63 @@ class PlatformHttpServerBoundaryTest {
         ).start()
     }
 
+    private fun testNettyHotPathServerWithGateway(
+        gateway: EngineGateway,
+        runtimeRole: PlatformRuntimeRole = PlatformRuntimeRole.Api,
+        boundary: ExternalApiBoundary = ExternalApiBoundary(),
+        captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
+        abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+        commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
+        commandIntakeMaxActive: Long = 0L,
+        commandIntakeMaxStaleProcessing: Long = 0L,
+        commandIntakeBackpressureSampleMs: Long = 100L,
+        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore(),
+        streamCommandIntakeStore: StreamCommandIntakeStore? = null,
+        streamCommandPublisher: StreamCommandPublisher? = null,
+        streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
+        streamCommandConfig: StreamCommandConfig = StreamCommandConfig()
+    ): RunningPlatformNettyServer {
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        seedOrderAuthorization(
+            persistence,
+            "bot-capture-1",
+            "bot-1",
+            "bot-2"
+        )
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val delegate = PlatformHttpServer(
+            port = 0,
+            runtimeRole = runtimeRole,
+            api = api,
+            boundary = boundary,
+            abuseProtectionHook = abuseProtectionHook,
+            idempotencyStore = idempotencyStore,
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            commandCaptureStore = captureStore,
+            commandStatusLookup = captureStore as? CommandStatusLookup,
+            streamCommandIntakeStore = streamCommandIntakeStore,
+            streamCommandPublisher = streamCommandPublisher,
+            streamCommandHealthCheck = streamCommandHealthCheck,
+            streamCommandConfig = streamCommandConfig,
+            commandProcessingMode = commandProcessingMode,
+            commandIntakeMaxActive = commandIntakeMaxActive,
+            commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
+            commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
+            legacyMutationRoutesEnabled = true
+        )
+        return PlatformNettyHotPathServer(
+            delegate = delegate,
+            port = 0,
+            applicationThreads = 4
+        ).start()
+    }
+
     private fun post(port: Int, path: String, headers: Map<String, String>, body: String): HttpResponse {
         val connection = java.net.URI.create("http://localhost:$port$path").toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
@@ -1588,6 +1802,18 @@ class PlatformHttpServerBoundaryTest {
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream.bufferedReader().readText()
         return HttpResponse(connection.responseCode, text)
+    }
+
+    private fun waitForCommandStatus(port: Int, commandId: String, status: String): HttpResponse {
+        var last = get(port, "/api/v1/commands/$commandId")
+        repeat(50) {
+            if (last.status == 200 && last.body.contains("\"status\":\"$status\"")) {
+                return last
+            }
+            Thread.sleep(20)
+            last = get(port, "/api/v1/commands/$commandId")
+        }
+        return last
     }
 
     private fun validSubmitBody(commandId: String, traceId: String, orderId: String, extra: String = ""): String {
@@ -1694,6 +1920,12 @@ class PlatformHttpServerBoundaryTest {
                 body = """{"actorId":"$actorId","roleId":"order_trader"}"""
             )
         }
+    }
+
+    private fun seedOrderReferenceData(persistence: InMemoryRuntimePersistence) {
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
     }
 
     private fun seedOrderAuthorization(persistence: InMemoryRuntimePersistence, vararg actorIds: String) {

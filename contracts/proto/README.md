@@ -7,6 +7,7 @@ Current scope:
 - `SubmitOrder`
 - `CancelOrder`
 - `ModifyOrder`
+- `SubmitOrders` bidirectional submit stream
 - `OrderAccepted`
 - `OrderRejected`
 - `ExecutionCreated`
@@ -20,6 +21,7 @@ Current usage model:
 - HTTP JSON remains as a compatibility/fallback transport with equivalent command metadata
 - generated Java sources are checked in under `services/platform-runtime/src/main/java/reef/contracts/orderexecution/v1/`
 - generated Go sources are checked in under `services/matching-engine/internal/transport/grpc/pb/contracts/proto/`
+- the current submit stream uses existing generated message types and a manually registered Go service descriptor until protoc Go plugins are available locally
 
 Regenerate checked-in sources from the repository root:
 

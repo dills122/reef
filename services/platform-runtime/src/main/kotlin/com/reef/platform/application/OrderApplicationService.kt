@@ -14,16 +14,19 @@ import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
+import com.reef.platform.infrastructure.engine.AsyncSubmitEngineGateway
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
+import java.util.concurrent.CompletableFuture
 
 class OrderApplicationService(
     private val engineGateway: EngineGateway = defaultEngineGateway(),
@@ -33,23 +36,61 @@ class OrderApplicationService(
     private val eventSchemaVersion = "v1"
 
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
-        val outcome = prepareSubmitOrder(command)
-        HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
-            runtimePersistence.persistSubmitOutcome(outcome)
+        return HotPathMetrics.time("runtime.submitOrder.total") {
+            val outcome = prepareSubmitOrder(command)
+            HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+                runtimePersistence.persistSubmitOutcome(outcome)
+            }
+            outcome.result
         }
-        return outcome.result
     }
 
     fun prepareSubmitOrder(command: SubmitOrderCommand): PersistableSubmitOutcome {
+        val context = validatedSubmitContext(command)
+        if (context.outcome != null) {
+            return context.outcome
+        }
+
+        val result = HotPathMetrics.time("runtime.engine.submit") {
+            engineGateway.submitOrder(command)
+        }
+        return submitOutcomeFromResult(command, context.traceId, result)
+    }
+
+    fun prepareSubmitOrderAsync(command: SubmitOrderCommand): CompletableFuture<PersistableSubmitOutcome> {
+        val context = validatedSubmitContext(command)
+        if (context.outcome != null) {
+            return CompletableFuture.completedFuture(context.outcome)
+        }
+
+        val asyncGateway = engineGateway as? AsyncSubmitEngineGateway
+        if (asyncGateway == null) {
+            val result = HotPathMetrics.time("runtime.engine.submit") {
+                engineGateway.submitOrder(command)
+            }
+            return CompletableFuture.completedFuture(submitOutcomeFromResult(command, context.traceId, result))
+        }
+
+        val started = System.nanoTime()
+        return asyncGateway.submitOrderAsync(command).thenApply { result ->
+            HotPathMetrics.record("runtime.engine.submit", System.nanoTime() - started)
+            submitOutcomeFromResult(command, context.traceId, result)
+        }
+    }
+
+    private fun validatedSubmitContext(command: SubmitOrderCommand): ValidatedSubmitContext {
         val existingResult = HotPathMetrics.time("runtime.submitResult.lookup") {
             runtimePersistence.submitResult(command.commandId)
         }
         if (existingResult != null) {
-            return PersistableSubmitOutcome(
-                commandId = command.commandId,
-                result = existingResult,
-                acceptedOrder = null,
-                lifecycleEvents = emptyList()
+            return ValidatedSubmitContext(
+                traceId = traceId(command.traceId, command.orderId),
+                outcome = PersistableSubmitOutcome(
+                    commandId = command.commandId,
+                    result = existingResult,
+                    acceptedOrder = null,
+                    lifecycleEvents = emptyList()
+                )
             )
         }
         val traceId = traceId(command.traceId, command.orderId)
@@ -67,7 +108,7 @@ class OrderApplicationService(
             )
         }
         if (authorizationError != null) {
-            return authorizationError
+            return ValidatedSubmitContext(traceId = traceId, outcome = authorizationError)
         }
 
         val validationError = HotPathMetrics.time("runtime.referenceData.validate") {
@@ -92,17 +133,25 @@ class OrderApplicationService(
             } else {
                 emptyList()
             }
-            return PersistableSubmitOutcome(
-                commandId = command.commandId,
-                result = validationError,
-                acceptedOrder = null,
-                lifecycleEvents = lifecycleEvents
+            return ValidatedSubmitContext(
+                traceId = traceId,
+                outcome = PersistableSubmitOutcome(
+                    commandId = command.commandId,
+                    result = validationError,
+                    acceptedOrder = null,
+                    lifecycleEvents = lifecycleEvents
+                )
             )
         }
 
-        val result = HotPathMetrics.time("runtime.engine.submit") {
-            engineGateway.submitOrder(command)
-        }
+        return ValidatedSubmitContext(traceId = traceId)
+    }
+
+    private fun submitOutcomeFromResult(
+        command: SubmitOrderCommand,
+        traceId: String,
+        result: SubmitOrderResult
+    ): PersistableSubmitOutcome {
         val accepted = result.accepted
         var acceptedOrder: PersistedOrder? = null
         val lifecycleEvents = mutableListOf<RuntimeEvent>()
@@ -623,10 +672,18 @@ class OrderApplicationService(
     }
 }
 
+private data class ValidatedSubmitContext(
+    val traceId: String,
+    val outcome: PersistableSubmitOutcome? = null
+)
+
 internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePersistence {
-    val persistence = System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory"
-    if (persistence != "postgres") {
-        return InMemoryRuntimePersistence()
+    val persistence = (System.getenv("RUNTIME_PERSISTENCE") ?: "inmemory").trim().lowercase()
+    when (persistence) {
+        "inmemory", "memory" -> return InMemoryRuntimePersistence()
+        "noop", "no-op", "benchmark-noop" -> return NoopRuntimePersistence()
+        "postgres" -> {}
+        else -> throw IllegalArgumentException("Unsupported RUNTIME_PERSISTENCE: $persistence")
     }
 
     val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL") ?: "jdbc:postgresql://localhost:5432/reef"

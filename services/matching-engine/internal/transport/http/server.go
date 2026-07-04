@@ -13,16 +13,22 @@ import (
 const maxRequestBodyBytes int64 = 1 << 20
 
 type Server struct {
-	service *app.Service
+	service           *app.Service
+	streamDirectStats func() any
 }
 
 func NewServer(service *app.Service) *Server {
 	return &Server{service: service}
 }
 
+func (s *Server) SetStreamDirectStatsProvider(provider func() any) {
+	s.streamDirectStats = provider
+}
+
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/internal/stream-direct/stats", s.handleStreamDirectStats)
 	mux.HandleFunc("/orders/submit", s.handleSubmitOrder)
 	mux.HandleFunc("/orders/cancel", s.handleCancelOrder)
 	mux.HandleFunc("/orders/modify", s.handleModifyOrder)
@@ -33,6 +39,24 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"service": "matching-engine",
 		"status":  "ok",
+	})
+}
+
+func (s *Server) handleStreamDirectStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if s.streamDirectStats == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"enabled":    false,
+			"partitions": []any{},
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":    true,
+		"partitions": s.streamDirectStats(),
 	})
 }
 

@@ -6,11 +6,27 @@ loadDotEnv();
 setValue("EXTERNAL_API_COMMAND_PROCESSING_MODE", "stream-ack");
 setDefault("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setDefault("EXTERNAL_API_COMMAND_LOG_MODE", "disabled");
+setDefault("STREAM_ACK_LOG_PROVIDER", "jetstream");
 setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS");
 setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1");
 setDefault("STREAM_ACK_PARTITION_COUNT", "64");
+if (streamAckLogProvider() === "redpanda") {
+  setDefault("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092");
+  setDefault("STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT", "16384");
+  setDefault("STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION", "5");
+  setDefault("STREAM_ACK_KAFKA_LINGER_MS", "1");
+  setDefault("STREAM_ACK_KAFKA_BATCH_SIZE", "65536");
+  setDefault("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4");
+  setDefault("STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES", "67108864");
+  setDefault("STREAM_ACK_KAFKA_MAX_BLOCK_MS", "250");
+  setDefault("STREAM_ACK_KAFKA_REQUEST_TIMEOUT_MS", "1000");
+  setDefault("STREAM_ACK_KAFKA_DELIVERY_TIMEOUT_MS", "30000");
+}
 setDefault("STREAM_ACK_INTAKE_STORE", "postgres");
 setDefault("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", "2000");
+setDefault("STREAM_ACK_PUBLISH_PIPELINE_ENABLED", "false");
+setDefault("STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY", "4096");
+setDefault("STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE", "256");
 setDefault("STREAM_ACK_BACKPRESSURE_SAMPLE_MS", "100");
 setDefault("STREAM_ACK_MARK_PUBLISHED_MODE", "worker");
 setDefault("STREAM_ACK_MARK_PUBLISHED_WORKERS", "4");
@@ -48,15 +64,28 @@ setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MAX", "24");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE", "8");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX", "24");
 setDefault("RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE", "8");
-setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["stream-ack"]));
+setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), streamAckComposeProfiles()));
 
 console.log("stream-ack runtime settings:");
 console.log(`  processingMode=${env("EXTERNAL_API_COMMAND_PROCESSING_MODE")}`);
-console.log(`  natsUrl=${env("STREAM_ACK_NATS_URL", "nats://nats:4222")}`);
+console.log(`  logProvider=${streamAckLogProvider()}`);
+if (streamAckLogProvider() === "redpanda") {
+  console.log(`  kafkaBootstrapServers=${env("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092")}`);
+  console.log(`  kafkaPublishMaxInFlight=${env("STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT")}`);
+  console.log(`  kafkaMaxInFlightRequestsPerConnection=${env("STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION")}`);
+  console.log(`  kafkaLingerMs=${env("STREAM_ACK_KAFKA_LINGER_MS")}`);
+  console.log(`  kafkaBatchSize=${env("STREAM_ACK_KAFKA_BATCH_SIZE")}`);
+  console.log(`  kafkaCompression=${env("STREAM_ACK_KAFKA_COMPRESSION_TYPE")}`);
+} else {
+  console.log(`  natsUrl=${env("STREAM_ACK_NATS_URL", "nats://nats:4222")}`);
+}
 console.log(`  stream=${env("STREAM_ACK_COMMAND_STREAM")}`);
 console.log(`  subjectPrefix=${env("STREAM_ACK_SUBJECT_PREFIX")}`);
 console.log(`  partitions=${env("STREAM_ACK_PARTITION_COUNT")}`);
 console.log(`  intakeStore=${env("STREAM_ACK_INTAKE_STORE")}`);
+console.log(`  publishPipeline=${env("STREAM_ACK_PUBLISH_PIPELINE_ENABLED")}`);
+console.log(`  publishPipelineQueueCapacity=${env("STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY")}`);
+console.log(`  publishPipelineInFlightPerLane=${env("STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE")}`);
 console.log(`  workerEnabled=${env("STREAM_ACK_WORKER_ENABLED")}`);
 console.log(`  worker0Partitions=${env("STREAM_ACK_WORKER_0_PARTITIONS")}`);
 console.log(`  worker1Partitions=${env("STREAM_ACK_WORKER_1_PARTITIONS")}`);
@@ -88,6 +117,10 @@ await devUp();
 await bootstrapCommandStream();
 
 async function bootstrapCommandStream() {
+  if (streamAckLogProvider() === "redpanda") {
+    console.log(`Redpanda/Kafka stream ${env("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS")} will be created by the runtime producer if needed.`);
+    return;
+  }
   const stream = env("STREAM_ACK_COMMAND_STREAM", "REEF_COMMANDS");
   const subjectPrefix = env("STREAM_ACK_SUBJECT_PREFIX", "reef.cmd.v1");
   const subjects = `${subjectPrefix}.>`;
@@ -132,6 +165,20 @@ async function bootstrapCommandStream() {
     }
     throw error;
   }
+}
+
+function streamAckLogProvider() {
+  const raw = env("STREAM_ACK_LOG_PROVIDER", "jetstream").trim().toLowerCase();
+  if (raw === "redpanda" || raw === "kafka") return "redpanda";
+  return "jetstream";
+}
+
+function streamAckComposeProfiles() {
+  const profiles = ["stream-ack"];
+  if (streamAckLogProvider() === "redpanda") {
+    profiles.push("redpanda");
+  }
+  return profiles;
 }
 
 async function streamExists(stream) {

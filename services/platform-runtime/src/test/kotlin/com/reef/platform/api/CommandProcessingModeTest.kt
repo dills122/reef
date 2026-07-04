@@ -18,6 +18,7 @@ class CommandProcessingModeTest {
         assertEquals(CommandProcessingMode.CapturedSyncEngine, CommandProcessingMode.from("captured-sync-engine"))
         assertEquals(CommandProcessingMode.CapturedAck, CommandProcessingMode.from("captured-ack"))
         assertEquals(CommandProcessingMode.StreamAck, CommandProcessingMode.from("stream-ack"))
+        assertEquals(CommandProcessingMode.AcceptedAsync, CommandProcessingMode.from("accepted-async"))
     }
 
     @Test

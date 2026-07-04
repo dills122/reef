@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
+	"github.com/dills122/reef/services/matching-engine/internal/streamdirect"
 	grpcTransport "github.com/dills122/reef/services/matching-engine/internal/transport/grpc"
 	transport "github.com/dills122/reef/services/matching-engine/internal/transport/http"
 )
@@ -23,6 +27,8 @@ func main() {
 
 	service := app.NewService()
 	server := transport.NewServer(service)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	if enableGRPC {
 		grpcServer, err := grpcTransport.NewServer(grpcAddr, service)
@@ -37,8 +43,33 @@ func main() {
 		}()
 	}
 
+	streamConfig := streamdirect.RuntimeConfigFromEnv()
+	if streamConfig.Enabled {
+		runner, err := streamdirect.StartRunner(ctx, service, streamConfig)
+		if err != nil {
+			log.Fatalf("failed to start matching-engine direct stream runner: %v", err)
+		}
+		defer runner.Stop()
+		server.SetStreamDirectStatsProvider(func() any {
+			return runner.Snapshots()
+		})
+		log.Printf(
+			"matching-engine direct stream enabled shard=%s commandStream=%s eventStream=%s partitions=%v batchSize=%d",
+			streamConfig.ShardID,
+			streamConfig.CommandStream,
+			streamConfig.EventStream,
+			streamConfig.Partitions,
+			streamConfig.BatchSize,
+		)
+	}
+
 	log.Printf("matching-engine listening on %s", addr)
-	if err := http.ListenAndServe(addr, server.Routes()); err != nil {
+	httpServer := &http.Server{Addr: addr, Handler: server.Routes()}
+	go func() {
+		<-ctx.Done()
+		_ = httpServer.Shutdown(context.Background())
+	}()
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

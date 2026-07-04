@@ -179,6 +179,7 @@ make dev-up-stream-ack
 
 `dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0` through `platform-worker-3`, `platform-projector-0` through `platform-projector-3`, `matching-engine`, `nats`, and Postgres services), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`
+- `STREAM_ACK_LOG_PROVIDER=jetstream`
 - `STREAM_ACK_NATS_URL=nats://nats:4222`
 - `STREAM_ACK_COMMAND_STREAM=REEF_COMMANDS`
 - `STREAM_ACK_SUBJECT_PREFIX=reef.cmd.v1`
@@ -223,23 +224,113 @@ make dev-up-stream-ack
 
 In this mode `platform-api` returns `202` only after JetStream publish acknowledgment. The worker containers expose health and internal metrics endpoints, but public command intake routes are not mounted in worker or projector roles. Commands must include stream routing metadata (`runId`, `venueSessionId`, `instrumentId`, `orderId`, and `commandId`); duplicate idempotency keys replay the accepted stream reference only when the payload hash matches, and return `409 IDEMPOTENCY_PAYLOAD_CONFLICT` for a different payload.
 
+Engine-direct stream ingestion is the higher-headroom replacement path for the current generic worker -> engine RPC bridge. It is opt-in while it is being built:
+
+```bash
+MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true \
+STREAM_ACK_WORKER_ENABLED=false \
+make dev-up-stream-ack
+```
+
+Relevant matching-engine knobs:
+
+- `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=false|true`
+- `MATCHING_ENGINE_SHARD_ID=engine-0`
+- `MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0..63`
+- `MATCHING_ENGINE_DIRECT_STREAM_DURABLE_PREFIX=reef-engine-direct`
+- `MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE=500`
+- `MATCHING_ENGINE_DIRECT_STREAM_CONNECT_TIMEOUT_MS=60000`
+- `MATCHING_ENGINE_DIRECT_STREAM_FETCH_TIMEOUT_MS=200`
+- `MATCHING_ENGINE_DIRECT_STREAM_POLL_MS=5`
+- `MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS=60000`
+- `MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING=4000`
+- `MATCHING_ENGINE_EVENT_STREAM=REEF_VENUE_EVENTS`
+- `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.venue.events.v1`
+
+In this mode the matching engine consumes assigned command partitions directly, processes submit-command batches, publishes `VenueEventBatch` records to JetStream, and acks command messages only after the event batch publish succeeds. The first slice supports submit-only stress runs; cancel/modify direct consumption and Postgres materialization from venue event batches are follow-up work.
+
+Run the engine-direct no-DB stress profile:
+
+```bash
+make dev-stress-stream-direct-nodb
+```
+
+This starts the stream-ack command intake profile with DB-backed hot-path persistence disabled, disables stream workers/projectors, enables `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`, uses the Netty hot-path adapter, enables the bounded partitioned command-publish pipeline, and runs submit-only stress steps at `5000,10000,15000,20000` rps for `90s` by default. Reports are written under `/tmp/reef-stream-direct-nodb-stress`. The profile uses isolated high-capacity JetStream defaults, `STREAM_ACK_COMMAND_STREAM=REEF_DIRECT_NODB_COMMANDS_V2`, `STREAM_ACK_SUBJECT_PREFIX=reef.direct.nodb.v2.cmd.v1`, `STREAM_ACK_COMMAND_STREAM_MAX_BYTES=34359738368`, `MATCHING_ENGINE_EVENT_STREAM=REEF_DIRECT_NODB_VENUE_EVENTS_V2`, and `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.direct.nodb.v2.venue.events.v1`, so retained local streams from older profiles do not overlap subjects or hit the older 1 GiB command-stream cap. Trace validation is disabled with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test.
+
+Run the same no-DB direct profile against Redpanda/Kafka-compatible command and event topics:
+
+```bash
+STREAM_ACK_LOG_PROVIDER=redpanda make dev-stress-stream-direct-nodb
+```
+
+In this mode the API still returns `202` only after the Kafka-compatible producer receives an `acks=all` broker acknowledgment. The matching engine consumes assigned Kafka topic partitions directly, publishes `VenueEventBatch` records to the configured event topic, and commits Kafka offsets only after the event batch publish succeeds. This is the apples-to-apples no-DB comparison path for the durable command-log boundary; the older `STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack` path still exercises the DB-backed stream workers.
+
+For the higher-throughput front-door prototype, enable the long-lived stream transport:
+
+```bash
+STREAM_ACK_LOG_PROVIDER=redpanda \
+STREAM_INGRESS_ENABLED=1 \
+DEV_STRESS_TRANSPORT=stream \
+DEV_STRESS_STREAM_ADDRESS=127.0.0.1:8090 \
+make dev-stress-stream-direct-nodb
+```
+
+The stream ingress listener is mounted on `REEF_STREAM_INGRESS_HOST_PORT`/`STREAM_INGRESS_PORT` (`8090` by default). Frames are newline-delimited submit-command JSON payloads; the runtime validates the same command body as `/api/v1/orders/submit` and returns a newline-delimited status code after the durable command-log ack. Error frames include `status<TAB>jsonBody` for diagnostics.
+
+When `STREAM_ACK_LOG_PROVIDER=redpanda`, the direct no-DB helper defaults local runs to `STREAM_ACK_PARTITION_COUNT=16` and `MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0..15` so a retained single-node Redpanda broker does not exhaust its partition memory reservation. Override those values explicitly for provisioned DO or multi-broker tests. If local startup fails with `Can not increase partition count due to memory limit`, delete stale benchmark topics with `docker compose -f docker-compose.yml exec -T redpanda rpk topic delete ...` or reset the Redpanda volume before rerunning.
+
+Each direct no-DB report includes:
+
+- `streamDirect.delta.fetchedDelta`: commands fetched by the matching-engine direct consumers
+- `streamDirect.delta.processedDelta`: submit commands applied to the matching engine
+- `streamDirect.delta.publishedDelta`: command outcomes durably published in venue event batches
+- `streamDirect.delta.ackedDelta`: commands acked after venue event batch publication
+- `unitMetrics.directAckedCommandsPerSecond`: direct engine completion throughput
+- `streamDirectPartitionSkew`: per-partition direct-engine drain distribution
+
+Direct no-DB stress fails by default if the direct runner records failures, NAKs, unsupported/termed commands, or a post-drain accepted/acked gap.
+
+An opt-in Redpanda/Kafka-compatible DB-backed stream-ack comparison path is available without changing the public command contract:
+
+```bash
+STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack
+```
+
+This enables the Compose `redpanda` profile and sets `STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092` by default. The runtime creates or expands the Kafka topic named by `STREAM_ACK_COMMAND_STREAM` if needed, publishes with explicit partition routing, `acks=all`, idempotent producer mode, async send callbacks, bounded application in-flight work, batching, and compression. Kafka `(partition, offset)` is encoded into the canonical `stream_seq`, and workers commit Kafka offsets only after canonical submit outcomes are durable.
+
+Kafka-compatible producer tuning is exposed with:
+
+- `STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT`
+- `STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION`
+- `STREAM_ACK_KAFKA_LINGER_MS`
+- `STREAM_ACK_KAFKA_BATCH_SIZE`
+- `STREAM_ACK_KAFKA_COMPRESSION_TYPE`
+- `STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES`
+- `STREAM_ACK_KAFKA_MAX_BLOCK_MS`
+- `STREAM_ACK_KAFKA_REQUEST_TIMEOUT_MS`
+- `STREAM_ACK_KAFKA_DELIVERY_TIMEOUT_MS`
+
 The API container owns the larger `stream-intake` boundary DB pool because it is the only role that accepts public stream commands. Worker and projector roles keep tiny `stream-intake` pools for startup/internal compatibility while using their dedicated canonical/projection pools for drain and read-model work.
 
 In stream-ack mode, `STREAM_ACK_MARK_PUBLISHED_MODE=worker` removes the post-publish boundary metadata update from the synchronous response path after JetStream durable publish acknowledgement. Stream workers repair the same metadata by `commandId` in batches after canonical commit and before JetStream ack, so an API crash after publish still has a durable-message repair path. Set `STREAM_ACK_MARK_PUBLISHED_MODE=sync` to force the API to update boundary metadata before returning.
 
 The stream bootstrap is repeat-safe: if `REEF_COMMANDS` already exists, the script leaves the existing stream configuration in place.
 
-Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or when JetStream stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling JetStream management on every accepted command.
+Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpressure gate rejects before publish when the command stream is unavailable or, for JetStream, when stream byte utilization meets or exceeds `STREAM_ACK_MAX_STORAGE_UTILIZATION`. API request-path backpressure checks reuse the latest stream health snapshot for `STREAM_ACK_BACKPRESSURE_SAMPLE_MS` milliseconds to avoid calling stream management on every accepted command.
 
-The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured JetStream worker durable consumers from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`; when the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
+JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `sync` uses one synchronous durable publish call per accepted command. `async` uses JNATS async publish futures with a bounded in-flight limit from `STREAM_ACK_PUBLISH_MAX_IN_FLIGHT`, then waits for the specific command's publish ack before returning `202`.
 
-Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` subjects partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges JetStream deliveries only after the canonical DB commit path returns. Unsupported stream command types are terminated until cancel/modify processing is added.
+`STREAM_ACK_PUBLISH_PIPELINE_ENABLED=true` wraps the configured stream publisher in a bounded partitioned publish pipeline. Each command partition gets a lane with queue capacity `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY` and in-flight durable publish cap `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE`. Netty stream-ack intake waits asynchronously for the durable publish future, so request threads no longer own JetStream concurrency. The stream-ack health response includes `publishMode`, `publishInFlight`, `publishMaxInFlight`, `publishQueueDepth`, `publishMaxQueueDepth`, `publishLaneCount`, publish accepted/completed/failed/rejected counters, phase timings for queue wait, slot wait, delegate ack, and per-lane snapshots for benchmark interpretation.
+
+The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
+
+Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
 Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes from the runtime Postgres service, update the normalized order/execution/trade/runtime-event read tables in the projection Postgres service, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
-The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and JetStream consumer snapshots (`consumerMetrics`) with pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. `streamLag` is the actionable durable-consumer backlog for that partition (`pending + ackPending`), not the whole stream sequence gap. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
+The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and durable-log consumer snapshots (`consumerMetrics`). JetStream snapshots include pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. Redpanda snapshots report committed offset, end offset, and lag for the assigned partition. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 
 Run the submit-only stream-ack stress profile:
 
@@ -247,9 +338,18 @@ Run the submit-only stream-ack stress profile:
 make dev-stress-stream-ack
 ```
 
-This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after global and per-partition deltas to each report. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
+This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after global and per-partition deltas to each report. Because stream-ack completion is asynchronous after `202`, the stream-ack wrapper waits up to `DEV_STRESS_STREAM_ACK_DRAIN_WAIT_MS` before final worker sampling so `completedDelta` reflects durable worker drain instead of only commands finished during the load-generator window. `DEV_STRESS_STREAM_ACK_WORKER_PROBE_TIMEOUT_MS` controls the worker stats HTTP timeout for partitioned durable-log snapshots. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
 The stream-ack stress target generates a 64-instrument session config under `/tmp/reef-stream-ack-stress` by default so submit traffic has enough independent routing keys to exercise deterministic stream partitions. Set `DEV_STRESS_STREAM_ACK_INSTRUMENTS` to change the generated instrument count, or set `DEV_STRESS_SESSION_CONFIG` to run a fixed session file instead. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
+
+When `DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS=1`, stress runs fail by default if stream workers report command-processing failures, ack failures, or a post-drain accepted/completed gap. Override only for diagnostic sweeps:
+
+- `DEV_STRESS_FAIL_ON_STREAM_ACK_WORKER_FAILURES=0|1` toggles the guardrail; default is `1` when worker capture is enabled.
+- `DEV_STRESS_MAX_STREAM_ACK_WORKER_FAILED_DELTA=0` sets the allowed worker failure delta.
+- `DEV_STRESS_MAX_STREAM_ACK_WORKER_ACK_FAILED_DELTA=0` sets the allowed ack-failure delta.
+- `DEV_STRESS_MAX_STREAM_ACK_COMPLETION_GAP=0` sets the allowed gap between accepted API commands and worker-completed commands after the configured drain wait.
+
+Recommendations and KPI quality caps prefer stream-ack-clean samples, so a high-accepted run with async worker failures is not treated as the capacity setting to promote.
 
 Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1`
@@ -264,6 +364,9 @@ Tune diagnostics capture knobs (optional):
 - `DEV_STRESS_DB_SCHEMAS=runtime,boundary,command_log`
 - `DEV_STRESS_DB_LOG_SINCE=30m`
 - `DEV_STRESS_RATE_SCHEDULE=drop|precise` controls load-tester rate scheduling (`drop` is the default; `precise` is useful for capacity sweeps with larger worker counts)
+- `DEV_STRESS_RATE_QUEUE_DEPTH=<tokens>` sets the rate-token queue depth passed to the load tester; use this with `precise` to make target/scheduled/enqueued/completed gaps explicit.
+
+Stress reports distinguish configured rate from generated and completed load. The load tester reports `loadSchedule.targetRequests`, `scheduled`, `enqueued`, `dropped`, `completed`, `scheduleDeficit`, and `completionDeficit`. Check those fields before treating throughput as a server-side capacity number.
 
 Raw intake benchmarks accept matching run metadata:
 - `DEV_INTAKE_RUN_ID=<stable-run-id>`
@@ -284,6 +387,71 @@ Run matching-engine benchmark baseline:
 
 ```bash
 make bench-matching-engine
+```
+
+Run matching-engine sustained load harness:
+
+```bash
+make bench-matching-engine-load
+```
+
+The sustained harness runs in-process against the Go engine only, so it isolates matching behavior from HTTP, runtime, queue, and database costs. Defaults target `10k/s` for `30s` and write `summary.json` plus `intervals.csv` under `reports/matching-engine-load/<run-id>/`. Pass `ARGS` to vary the load shape, for example:
+
+```bash
+make bench-matching-engine-load ARGS="--rate 10000 --duration 60s --scenario alternating-cross --workers 1 --instruments 1 --min-processed-rate 10000"
+```
+
+Run the runtime + engine no-DB benchmark profile:
+
+```bash
+make dev-stress-runtime-nodb
+```
+
+This profile is for bottleneck isolation only. It starts the normal local runtime and matching-engine path, but configures the platform request path with:
+
+- `RUNTIME_PERSISTENCE=noop`
+- `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory`
+- `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
+- `EXTERNAL_API_COMMAND_LOG_MODE=disabled`
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result`
+- `STREAM_ACK_INTAKE_STORE=inmemory`
+- `STREAM_ACK_WORKER_ENABLED=false`
+- `STREAM_ACK_PROJECTOR_ENABLED=false`
+
+`noop` runtime persistence keeps reference/auth setup data so validation and authorization still run, but it drops submit outcomes, orders, executions, trades, lifecycle events, canonical rows, and projections. The default no-DB stress wrapper disables trace checks with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test. It also defaults to `DEV_STRESS_RATE_SCHEDULE=precise` and `DEV_STRESS_RATE_QUEUE_DEPTH=200000` so generated-load accounting is visible during ceiling tests.
+
+Transport comparison knobs:
+
+- `ENGINE_TRANSPORT=grpc` uses unary gRPC for runtime-to-engine calls.
+- `ENGINE_TRANSPORT=grpc-stream` uses experimental submit-order lanes with persistent bidirectional gRPC streams. The current proof path streams submit commands and keeps cancel/modify on unary gRPC.
+- `ENGINE_GRPC_STREAM_LANES=16` sets the number of runtime submit lanes. Commands currently route by deterministic `instrumentId` lane scoring; this should evolve to `venueSessionId + instrumentId` when the runtime command model carries venue session directly.
+- `ENGINE_GRPC_STREAM_QUEUE_CAPACITY=100000` sets each lane in-flight capacity.
+
+HTTP boundary comparison knobs:
+
+- `PLATFORM_HTTP_SERVER=jdk` keeps the default JDK `HttpServer` adapter and full local route surface.
+- `PLATFORM_HTTP_SERVER=netty` enables the measured Netty hot-path adapter. This adapter intentionally covers the no-DB ceiling-test surface first: setup POSTs for reference/auth seeding, `/health`, `/api/v1/orders/submit`, `/api/v1/commands/{commandId}`, `/internal/perf/hot-path`, `/internal/perf/db-pools`, `/internal/commands/async/stats`, stream-ack/projector status probes, and abuse stats.
+- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, and `PLATFORM_NETTY_APPLICATION_THREADS=64` tune the Netty adapter. A worker count of `0` uses Netty's default event-loop sizing, while application threads run the hot-path command handler off the IO event loop.
+
+Accepted-async no-DB isolation knobs:
+
+- `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async` makes submit-order intake return a `202` command receipt after validation, idempotency reservation, and in-memory lane enqueue. It does not provide durable acceptance and is benchmark-only unless paired with a durable ingress design.
+- `EXTERNAL_API_ACCEPTED_ASYNC_LANES=16` sets in-memory worker lanes. Submit commands route by deterministic `instrumentId` lane scoring to preserve per-instrument order while avoiding obvious small-symbol-set modulo skew.
+- `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000` sets per-lane queued command capacity.
+- `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32` bounds concurrent engine submissions per lane. Raising it can inflate engine wait time by flooding the gRPC stream.
+- `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`.
+- `GET /internal/commands/async/stats` includes an `acceptedAsync` block with aggregate queued, processing, completed, failed, duplicate, and backpressure counters plus per-lane queue/drain counters for accepted-async no-DB diagnostics.
+
+Each stress report includes `hotPathPhases.phases` from `/internal/perf/hot-path`. For no-DB sync-result runs, start with `api.mutation.total`, `api.operation`, `api.parse.submitOrder`, `runtime.submitOrder.total`, `runtime.engine.submit`, `runtime.persistence.persistSubmitOutcome`, `api.response.serializeSubmitOrder`, and `api.writeResponse`. `runtime.engine.submit` measures the platform runtime gateway call to the engine, including transport and response parsing; compare it against the matching-engine-only harness before attributing that time to matching logic itself.
+
+Use this comparison ladder when isolating throughput collapse:
+
+```text
+matching-engine only
+runtime + engine + HTTP, no DB/write-model persistence
+runtime + engine + boundary DB only
+runtime + engine + canonical DB only
+full platform with projections
 ```
 
 Run matching-engine benchmark guardrail check (CI-equivalent):
@@ -511,12 +679,14 @@ Compose sets:
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, durable request payloads in `command_log.command_payloads`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
 - command-log payload mode: `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table|inline` (default `side-table`). `side-table` keeps hot command metadata rows narrow while retaining the full durable request payload for worker replay.
 - runtime role: `PLATFORM_RUNTIME_ROLE=api|worker|projector`. Compose sets this per service; there is no all-in-one runtime role.
-- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack` (default `sync-result`; captured modes require command-log capture, and `stream-ack` requires JetStream)
+- HTTP server adapter: `PLATFORM_HTTP_SERVER=jdk|netty` (default `jdk`). `netty` is currently a hot-path benchmark adapter for submit/status/internal stats, not a full replacement for every local route.
+- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
 - async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`
 - async command worker runtime pool: `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true` makes captured-ack workers execute through a separate `async-runtime` persistence pool. The dev default is `false` because captured-ack intake no longer uses runtime persistence on the hot accept path; turn it on for isolation A/B runs.
 - async command worker lease: claimed `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`; this prevents runtime restarts from permanently stranding in-flight commands.
 - async command worker stats: `GET /internal/commands/async/stats` returns worker settings, active queue status counts from `command_log.command_work_queue`, and async claim/complete/fail counters. Postgres mode does not count historical terminal results on this hot probe.
+- accepted-async tuning: `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, and `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` tune the in-memory no-DB accepted-async isolation path.
 - DB pool stats: `GET /internal/perf/db-pools` returns Hikari pool name plus active/idle/total/waiter counts for runtime-managed pools.
 - DB pool sizing: `RUNTIME_DB_POOL_MAX` and `RUNTIME_DB_POOL_MIN_IDLE` are global defaults. Named hot-path pools apply conservative role defaults so those values do not multiply directly across every pool. Override individual pools with `RUNTIME_DB_POOL_<POOL>_MAX` and `RUNTIME_DB_POOL_<POOL>_MIN_IDLE`, where `<POOL>` is the uppercase pool id with punctuation converted to underscores, such as `COMMAND_LOG` or `ASYNC_RUNTIME`.
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`

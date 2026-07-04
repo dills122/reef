@@ -8,11 +8,12 @@ Track major architectural directions in one place so implementation changes can 
 
 ### D-001: Inter-Service Communication Direction
 
-Status: accepted
+Status: accepted, amended by D-040
 
 Summary:
 - Protobuf is the canonical contract schema for inter-service boundaries.
-- gRPC is the preferred runtime-to-engine synchronous transport.
+- gRPC is the preferred runtime-to-engine synchronous transport for compatibility, admin/control, health, and direct benchmark paths.
+- per-command unary gRPC is not the target high-throughput matching hot path.
 - HTTP/JSON remains as migration fallback until parity is validated.
 
 Primary references:
@@ -593,6 +594,63 @@ Primary references:
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+
+### D-039: Redpanda Stream-Ack Provider Comparison
+
+Status: provisional
+
+Summary:
+- D-036 remains the accepted high-throughput direction: JetStream is the default durable accepted-command ingress log, and Postgres remains the canonical venue outcome store.
+- Redpanda/Kafka-compatible ingress is added as an opt-in comparison provider behind `STREAM_ACK_LOG_PROVIDER=redpanda`.
+- The public command contract, partition key, scoped idempotency guard, and worker completion boundary are unchanged.
+- In Redpanda mode, the command stream name maps to a Kafka topic, the runtime publishes with explicit partition routing and `acks=all`, and workers manually commit offsets only after canonical submit outcomes are durable.
+- Redpanda should not be promoted over JetStream without comparable 5m soak evidence for accepted/sec, completed/sec, bounded lag, p95/p99, CPU/memory, restart/redelivery behavior, and replay/audit accounting.
+- This comparison is meant to test durable-log mechanics, not to move canonical venue facts out of Postgres.
+
+Primary references:
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+
+### D-040: JetStream Command Stream And Engine Ingestion Direction
+
+Status: superseded by D-041 for the hot ingress producer
+
+Summary:
+- JetStream remains the preferred durable command stream for the next venue-core throughput phase.
+- Redpanda/Kafka provider work remains useful for comparison, but current evidence does not show the broker as the active blocker.
+- the July 2026 90-second stream-ack A/B showed JetStream clean at about `2488` accepted and worker-completed commands/sec, while the 5k target exposed worker-to-engine failures:
+  - `engine gRPC SubmitOrder failed with UNAVAILABLE: io exception`
+- stress evidence must treat async worker failure, ack failure, unresolved redelivery, and accepted/completed drain gaps as failed runs even when API responses are all `202`.
+- generic workers calling unary engine `SubmitOrder` per command are transitional scaffolding, not the final high-throughput matching architecture.
+- the target venue-core path is:
+  - boundary/API durably publishes command to JetStream
+  - matching-engine shard consumes assigned command partitions
+  - engine processes ordered command batches
+  - engine publishes canonical venue event batches
+  - engine acks command messages only after durable event publication
+- until direct engine consumption exists, the interim path should prefer batch RPC or bidirectional streaming per deterministic partition lane, stable channels, bounded in-flight work, explicit deadlines, idempotent retries, and engine-health backpressure.
+
+Primary references:
+- [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+
+### D-041: Kafka-Compatible Durable Producer For Hot Command Ingress
+
+Status: accepted
+
+Summary:
+- The July 4 direct no-DB publish-pipeline telemetry showed the matching engine and direct engine consumer are not the current limiter; the API path is dominated by durable publish ack time.
+- The hot-ingress implementation target is a Kafka-compatible command-log producer and matching-engine direct consumer, first tested against Redpanda, while keeping JetStream available as fallback and comparison.
+- The runtime must still return `202 Accepted` only after the configured durable command-log producer acknowledges the command.
+- The Kafka-compatible producer uses explicit command partitions, `acks=all`, idempotent producer mode, bounded application in-flight work, async send callbacks, batching, and compression.
+- The matching engine consumes assigned Kafka topic partitions directly in the no-DB path, publishes venue event batches to a Kafka-compatible event topic, and commits command offsets only after durable event-batch publication succeeds.
+- Redpanda/Kafka adoption is limited to the durable ingress/log mechanics at this stage. It does not move canonical venue facts out of the matching/post-match completion boundary.
+- The next promotion gate is evidence from no-DB and stream-ack stress runs showing materially lower durable publish ack time, bounded queue/in-flight depth, no accepted/acked gap, and clean replay/audit metadata.
+
+Primary references:
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
 ### D-032: Command Log Queue And Result Split
 
