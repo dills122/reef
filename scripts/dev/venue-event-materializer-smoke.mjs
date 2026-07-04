@@ -146,6 +146,12 @@ async function projectCompactLifecycleRows(outcome) {
   if (!Number.isFinite(partition)) {
     throw new Error(`canonical outcome did not include a numeric partition_id: ${JSON.stringify(outcome)}`);
   }
+  const streamSequence = Number(outcome.stream_sequence);
+  if (!Number.isFinite(streamSequence)) {
+    throw new Error(`canonical outcome did not include a numeric stream_sequence: ${JSON.stringify(outcome)}`);
+  }
+  await seedProjectionWatermark(partition, Math.max(0, streamSequence - 1));
+
   const projected = Number(await queryRuntimeValue(`
     SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 10, ARRAY[${partition}])
   `));
@@ -192,6 +198,35 @@ async function projectCompactLifecycleRows(outcome) {
   }
 
   return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0] };
+}
+
+async function seedProjectionWatermark(partition, lastPartitionSequence) {
+  await runRuntimePsql(`
+    INSERT INTO runtime.projection_watermarks(
+      projection_name,
+      partition_id,
+      last_partition_seq,
+      last_projected_at,
+      updated_at,
+      last_error
+    )
+    VALUES (
+      '${sqlLiteral(projectionName)}',
+      ${partition},
+      ${lastPartitionSequence},
+      now(),
+      now(),
+      ''
+    )
+    ON CONFLICT (projection_name, partition_id) DO UPDATE SET
+      last_partition_seq = GREATEST(
+        runtime.projection_watermarks.last_partition_seq,
+        EXCLUDED.last_partition_seq
+      ),
+      last_projected_at = EXCLUDED.last_projected_at,
+      updated_at = EXCLUDED.updated_at,
+      last_error = ''
+  `);
 }
 
 async function queryRuntimeValue(sql) {

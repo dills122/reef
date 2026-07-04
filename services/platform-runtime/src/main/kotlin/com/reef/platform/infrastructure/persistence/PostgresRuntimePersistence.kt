@@ -42,6 +42,10 @@ class PostgresRuntimePersistence(
         val partitionRow: Int = 0
     )
 
+    private companion object {
+        const val CanonicalCommandOutcomeProjectionMaxBatchSize = 5000
+    }
+
     init {
         canonicalConnection().use { conn ->
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
@@ -1119,11 +1123,13 @@ class PostgresRuntimePersistence(
                     LANGUAGE plpgsql
                     AS $$
                     DECLARE
+                      effective_batch_size INTEGER := 0;
                       projected_count BIGINT := 0;
                     BEGIN
                       IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
                         RETURN 0;
                       END IF;
+                      effective_batch_size := LEAST(p_batch_size, ${CanonicalCommandOutcomeProjectionMaxBatchSize});
 
                       WITH selected_partitions AS (
                         SELECT DISTINCT partition_id
@@ -1139,7 +1145,7 @@ class PostgresRuntimePersistence(
                       partition_budget AS (
                         SELECT GREATEST(
                           1,
-                          CEIL(p_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
+                          CEIL(effective_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
                         ) AS per_partition_limit
                       ),
                       ranked AS (
@@ -1291,7 +1297,7 @@ class PostgresRuntimePersistence(
                         CROSS JOIN partition_budget
                         WHERE partition_row <= partition_budget.per_partition_limit
                         ORDER BY partition_row, partition_id, stream_sequence
-                        LIMIT p_batch_size
+                        LIMIT effective_batch_size
                       ),
                       shaped AS (
                         SELECT
@@ -1790,10 +1796,11 @@ class PostgresRuntimePersistence(
         batchSize: Int,
         partitions: List<Int>
     ): Long {
+        val effectiveBatchSize = batchSize.coerceAtMost(CanonicalCommandOutcomeProjectionMaxBatchSize)
         val ownedPartitions = ownedCommandProjectionPartitions(partitions)
         if (ownedPartitions.isEmpty()) return 0
         val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
-        val perPartitionLimit = ((batchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
+        val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
         val candidates = ownedPartitions
             .flatMap { partitionId ->
                 canonicalCommandProjectionCandidates(
@@ -1807,7 +1814,7 @@ class PostgresRuntimePersistence(
                     .thenBy { it.partitionId }
                     .thenBy { it.partitionSequence }
             )
-            .take(batchSize)
+            .take(effectiveBatchSize)
         if (candidates.isEmpty()) return 0
 
         projectionConnection().use { conn ->
