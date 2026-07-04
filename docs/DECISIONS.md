@@ -660,6 +660,8 @@ Summary:
 - matching hot-book state remains in Go memory inside the matching-engine shard that owns the relevant command partition.
 - book ownership follows the durable command partition key: `runId + venueSessionId + instrumentId`, with submit/cancel/modify for the same book routed to the same ordered lane.
 - engine sharding scales across owned partition ranges; it does not split one mutable book across multiple concurrent writers.
+- logical lanes do not need to map one-to-one to ticker symbols, worker processes, or engine deployables; cold instruments may share deterministic lanes.
+- hot books should be isolated with explicit static routing overrides first; runtime routing changes and live book migration are deferred until routing epochs, drain/fencing, snapshot/replay handoff, and checksum verification are implemented.
 - the matching engine should use a Reef-owned book implementation with ordered price levels, FIFO queues per price, and an order-id index for direct cancel/modify unlinking.
 - `github.com/tidwall/btree` is acceptable as a narrow ordered price-level index dependency; matching semantics, replay, event generation, and checksums remain Reef-owned.
 - snapshots are recovery accelerators for shard-local book state, not the source of truth. Recovery must remain snapshot plus durable command/event replay plus checksum verification.
