@@ -19,6 +19,7 @@ Implemented now:
 - fixture-backed lifecycle qualification
 - action and data-call limit checks
 - proposed-action to venue-command mapping tests
+- typed hosted sandbox policy and source scanner
 
 This is enough to reject obvious bad submissions and prove SDK shape. It is not enough to safely run arbitrary public code by itself.
 
@@ -63,6 +64,8 @@ Hosted v1 may expose:
 - approved `ctx.orders`, `ctx.marketData`, and `ctx.historical` clients
 - immutable in-memory `ctx.config`
 
+The sidecar policy is represented by `reefBotHostedSandboxPolicyV1` and checked by `scanBotSourceForSandboxViolationsV1`. That policy is the source-level preflight contract. The future SES/container runtime still needs to enforce the same decisions at execution time.
+
 ## Dependency Policy
 
 V1 starts with only the SDK import. Future allowlisted packages need:
@@ -97,4 +100,3 @@ All limits should be configuration-driven by arena/runtime policy.
 Local development may run with a lighter harness, but it should still use proposed actions and the same SDK clients. A future local adapter can submit approved actions to `/api/v1`, but bot code should not create its own Reef client.
 
 Keeping local and hosted execution aligned prevents bots from passing local tests while relying on capabilities that hosted mode denies.
-

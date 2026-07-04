@@ -16,6 +16,7 @@ import {
   type OwnOrderV1,
   type ReefBotMetadataV1,
 } from "./index";
+import { scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
 
 export interface ReefBotV1Instance {
   onStart(ctx: BotContextV1): Promise<void>;
@@ -111,20 +112,6 @@ const requiredMetadataFields: readonly (keyof ReefBotMetadataV1)[] = [
   "botApiVersion",
 ];
 
-const forbiddenHostedPatterns: readonly RegExp[] = [
-  /\bsetTimeout\s*\(/,
-  /\bsetInterval\s*\(/,
-  /\bfetch\s*\(/,
-  /from\s+["']node:/,
-  /from\s+["']fs["']/,
-  /from\s+["']net["']/,
-  /from\s+["']http["']/,
-  /from\s+["']https["']/,
-  /child_process/,
-  /worker_threads/,
-  /new\s+WebSocket\s*\(/,
-];
-
 export function validateBotRegistrationV1(options: {
   readonly fileName: string;
   readonly source: string;
@@ -164,10 +151,8 @@ export function validateBotRegistrationV1(options: {
     issues.push(errorIssue("invalid_git_author_email", "Git author email must pass basic email syntax validation."));
   }
 
-  for (const pattern of forbiddenHostedPatterns) {
-    if (pattern.test(options.source)) {
-      issues.push(errorIssue("hosted_api_forbidden", `Bot source uses forbidden hosted-mode API pattern ${pattern}.`));
-    }
+  for (const violation of scanBotSourceForSandboxViolationsV1(options.source)) {
+    issues.push(errorIssue(violation.code, violation.message));
   }
 
   if (typeof options.BotClass !== "function") {

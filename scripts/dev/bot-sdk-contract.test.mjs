@@ -52,7 +52,7 @@ for (const fileName of readdirSync(examplesDir).filter((name) => name.endsWith("
   assert.equal(report.ticksRun, 5, `${fileName} must complete qualification ticks`);
 }
 
-await assertBadBot("forbidden-api-bot.ts", ["hosted_api_forbidden"]);
+await assertBadBot("forbidden-api-bot.ts", ["sandbox_denied_global"]);
 await assertBadBot("invalid-metadata-bot.ts", ["invalid_bot_name", "invalid_bot_version", "invalid_email"]);
 await assertBadBot("too-many-orders-bot.ts", ["max_order_actions_per_tick_exceeded"]);
 assertVenueAdapter();
