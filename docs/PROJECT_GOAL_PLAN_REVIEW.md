@@ -4,11 +4,29 @@
 
 2026-06-04
 
-Latest checkpoint addendum: 2026-07-03
+Latest checkpoint addendum: 2026-07-04
 
 ## Purpose
 
 This review reconciles Reef's stated vision, roadmap, steering documents, and current implementation state. It is intended to prevent planning drift as the project grows from an API-first venue slice into a simulation-first market-infrastructure platform.
+
+For the current operational summary, use [`CURRENT_STATUS.md`](./CURRENT_STATUS.md). This review is retained as planning analysis and historical critique.
+
+## 2026-07-04 Checkpoint Addendum
+
+The July 3 stream-ack checkpoint has been superseded for the hot-ingress implementation target by D-041. JetStream remains a valid fallback and comparison provider, but the active high-throughput path is now:
+
+```text
+Boundary/API
+  -> Kafka-compatible durable command log
+  -> matching-engine direct partition consumer
+  -> durable venue event batch publication
+  -> command offset commit/ack
+```
+
+The durable acceptance rule is unchanged: the runtime must return `202 Accepted` only after the configured durable command-log producer acknowledges the command.
+
+Near-term work should therefore not restart broad schema, UI, or post-trade expansion as the primary path. The next work is to prove the D-041 hot-ingress path with bounded queue/in-flight depth, materially better durable publish-ack behavior, no accepted/acked accounting gaps, and sufficient replay/audit metadata. Canonical persistence and projections should be reintroduced after that ceiling is understood.
 
 ## 2026-07-03 Checkpoint Addendum
 
