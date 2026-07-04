@@ -73,7 +73,10 @@ class PlatformHttpServer(
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
     private val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+    private val accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+    private val accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
     private val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+    private val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
@@ -192,6 +195,9 @@ class PlatformHttpServer(
         PlatformDiagnosticRoutes(
             healthJson = { api.health() },
             abuseStatsJson = { abuseStatsJson(abuseProtectionHook.stats()) },
+            accountRiskControlsJson = { accountRiskControlsJson() },
+            accountRiskDecisionsJson = { limit -> accountRiskDecisionsJson(limit) },
+            commandCircuitBreakersJson = { commandCircuitBreakersJson() },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -213,7 +219,10 @@ class PlatformHttpServer(
         boundary = deps.boundary,
         abuseProtectionHook = deps.abuseProtectionHook,
         accountRiskCheck = deps.accountRiskCheck,
+        accountRiskControlStore = deps.accountRiskControlStore,
+        accountRiskDecisionLog = deps.accountRiskDecisionLog,
         commandCircuitBreakerCheck = deps.commandCircuitBreakerCheck,
+        commandCircuitBreakerStore = deps.commandCircuitBreakerStore,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
@@ -1799,6 +1808,68 @@ class PlatformHttpServer(
         )
     }
 
+    private fun accountRiskControlsJson(): String {
+        val controls = accountRiskControlStore?.listControls().orEmpty()
+        return JsonCodec.writeObject(
+            "controls" to controls.map { control ->
+                mapOf(
+                    "scopeType" to control.scopeType,
+                    "scopeId" to control.scopeId,
+                    "decision" to control.decision.name,
+                    "reason" to control.reason,
+                    "updatedAt" to control.updatedAt
+                )
+            },
+            "controlsCount" to controls.size
+        )
+    }
+
+    private fun accountRiskDecisionsJson(limit: Int): String {
+        val boundedLimit = limit.coerceIn(1, 500)
+        val decisions = accountRiskDecisionLog?.recentDecisions(boundedLimit).orEmpty()
+        return JsonCodec.writeObject(
+            "decisions" to decisions.map { decision ->
+                mapOf(
+                    "decisionId" to decision.decisionId,
+                    "decidedAt" to decision.decidedAt,
+                    "decision" to decision.decision.name,
+                    "code" to decision.code,
+                    "message" to decision.message,
+                    "clientId" to decision.clientId,
+                    "route" to decision.route,
+                    "commandType" to decision.commandType,
+                    "commandId" to decision.commandId,
+                    "correlationId" to decision.correlationId,
+                    "actorId" to decision.actorId,
+                    "participantId" to decision.participantId,
+                    "accountId" to decision.accountId,
+                    "botId" to decision.botId,
+                    "venueSessionId" to decision.venueSessionId,
+                    "instrumentId" to decision.instrumentId,
+                    "orderId" to decision.orderId
+                )
+            },
+            "decisionsCount" to decisions.size,
+            "limit" to boundedLimit
+        )
+    }
+
+    private fun commandCircuitBreakersJson(): String {
+        val breakers = commandCircuitBreakerStore?.listBreakers().orEmpty()
+        return JsonCodec.writeObject(
+            "breakers" to breakers.map { breaker ->
+                mapOf(
+                    "scopeType" to breaker.scopeType,
+                    "scopeId" to breaker.scopeId,
+                    "tripped" to breaker.tripped,
+                    "reason" to breaker.reason,
+                    "updatedAt" to breaker.updatedAt
+                )
+            },
+            "breakersCount" to breakers.size
+        )
+    }
+
     private fun asyncCommandStatsJson(): String {
         val acceptedAsyncStats = acceptedAsyncCommandIntake?.stats()
         val queueCounts = capturedCommandQueue
@@ -2414,7 +2485,10 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         ),
         abuseProtectionHook = hooks.abuseProtectionHook,
         accountRiskCheck = hooks.accountRiskCheck,
+        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog = hooks.accountRiskCheck as? AccountRiskDecisionLog,
         commandCircuitBreakerCheck = hooks.commandCircuitBreakerCheck,
+        commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
@@ -2436,7 +2510,10 @@ data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
     val abuseProtectionHook: AbuseProtectionHook,
     val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+    val accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+    val accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
     val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+    val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,

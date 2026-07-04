@@ -981,6 +981,63 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun boundaryControlDiagnosticsExposeControlsDecisionsAndBreakers() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled")
+        accountRiskStore.decisions.add(
+            AccountRiskDecisionAudit(
+                decisionId = "risk-decision-1",
+                decidedAt = "2026-07-04T12:00:00Z",
+                decision = AccountRiskDecision.DISABLED_BOT,
+                code = "BOT_DISABLED",
+                message = "bot is disabled",
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-risk",
+                correlationId = "corr-risk",
+                actorId = "bot-1",
+                participantId = "participant-1",
+                accountId = "account-1",
+                botId = "bot-1",
+                venueSessionId = "session-1",
+                instrumentId = "AAPL",
+                orderId = "ord-risk"
+            )
+        )
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            accountRiskControlStore = accountRiskStore,
+            accountRiskDecisionLog = accountRiskStore,
+            commandCircuitBreakerCheck = breakerStore,
+            commandCircuitBreakerStore = breakerStore
+        )
+        try {
+            val controls = get(server.address.port, "/internal/boundary/account-risk/controls")
+            val decisions = get(server.address.port, "/internal/boundary/account-risk/decisions/recent?limit=10")
+            val breakers = get(server.address.port, "/internal/boundary/circuit-breakers")
+
+            assertEquals(200, controls.status)
+            assertContains(controls.body, "\"controlsCount\":1")
+            assertContains(controls.body, "\"scopeType\":\"BOT\"")
+            assertContains(controls.body, "\"decision\":\"DISABLED_BOT\"")
+            assertEquals(200, decisions.status)
+            assertContains(decisions.body, "\"decisionsCount\":1")
+            assertContains(decisions.body, "\"code\":\"BOT_DISABLED\"")
+            assertContains(decisions.body, "\"commandId\":\"cmd-risk\"")
+            assertEquals(200, breakers.status)
+            assertContains(breakers.body, "\"breakersCount\":1")
+            assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
+            assertContains(breakers.body, "\"tripped\":true")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun asyncCommandStatsEndpointReturnsQueueDepths() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1939,7 +1996,10 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
         commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+        commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
@@ -1979,7 +2039,10 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            accountRiskControlStore = accountRiskControlStore,
+            accountRiskDecisionLog = accountRiskDecisionLog,
             commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+            commandCircuitBreakerStore = commandCircuitBreakerStore,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -2006,7 +2069,10 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
         commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+        commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
@@ -2038,7 +2104,10 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            accountRiskControlStore = accountRiskControlStore,
+            accountRiskDecisionLog = accountRiskDecisionLog,
             commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+            commandCircuitBreakerStore = commandCircuitBreakerStore,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -2490,6 +2559,63 @@ private class StaticCircuitBreakerCheck(
             "command circuit breaker tripped for INSTRUMENT:${request.instrumentId}"
         )
     }
+}
+
+private class RecordingAccountRiskStore : AccountRiskCheck, AccountRiskControlStore, AccountRiskDecisionLog {
+    private val controls = linkedMapOf<String, AccountRiskControl>()
+    val decisions = mutableListOf<AccountRiskDecisionAudit>()
+
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        val botDecision = controls["BOT|${request.botId}"]
+        if (botDecision != null && botDecision.decision != AccountRiskDecision.ALLOW) {
+            return AccountRiskCheckResult(botDecision.decision, message = botDecision.reason)
+        }
+        val accountDecision = controls["ACCOUNT|${request.accountId}"]
+        if (accountDecision != null && accountDecision.decision != AccountRiskDecision.ALLOW) {
+            return AccountRiskCheckResult(accountDecision.decision, message = accountDecision.reason)
+        }
+        return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+    }
+
+    override fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String) {
+        controls["$scopeType|$scopeId"] = AccountRiskControl(
+            scopeType = scopeType,
+            scopeId = scopeId,
+            decision = decision,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listControls(): List<AccountRiskControl> = controls.values.toList()
+
+    override fun recentDecisions(limit: Int): List<AccountRiskDecisionAudit> = decisions.take(limit)
+}
+
+private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
+    private val breakers = linkedMapOf<String, CommandCircuitBreakerState>()
+
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        val breaker = breakers["INSTRUMENT|${request.instrumentId}"] ?: breakers["VENUE_SESSION|${request.venueSessionId}"] ?: breakers["GLOBAL|*"]
+        if (breaker?.tripped != true) return null
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for ${breaker.scopeType}:${breaker.scopeId}"
+        )
+    }
+
+    override fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String) {
+        breakers["$scopeType|$scopeId"] = CommandCircuitBreakerState(
+            scopeType = scopeType,
+            scopeId = scopeId,
+            tripped = tripped,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
 }
 
 private class ThrowingEngineGateway : EngineGateway {

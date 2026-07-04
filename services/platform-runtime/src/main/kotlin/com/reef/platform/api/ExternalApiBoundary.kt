@@ -101,12 +101,37 @@ data class AccountRiskControl(
     val scopeType: String,
     val scopeId: String,
     val decision: AccountRiskDecision,
-    val reason: String
+    val reason: String,
+    val updatedAt: String = ""
+)
+
+data class AccountRiskDecisionAudit(
+    val decisionId: String,
+    val decidedAt: String,
+    val decision: AccountRiskDecision,
+    val code: String,
+    val message: String,
+    val clientId: String,
+    val route: String,
+    val commandType: String,
+    val commandId: String,
+    val correlationId: String,
+    val actorId: String,
+    val participantId: String,
+    val accountId: String,
+    val botId: String,
+    val venueSessionId: String,
+    val instrumentId: String,
+    val orderId: String
 )
 
 interface AccountRiskControlStore {
     fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String = "")
     fun listControls(): List<AccountRiskControl>
+}
+
+interface AccountRiskDecisionLog {
+    fun recentDecisions(limit: Int = 50): List<AccountRiskDecisionAudit>
 }
 
 data class CommandCircuitBreakerRequest(
@@ -123,7 +148,8 @@ data class CommandCircuitBreakerState(
     val scopeType: String,
     val scopeId: String,
     val tripped: Boolean,
-    val reason: String
+    val reason: String,
+    val updatedAt: String = ""
 )
 
 interface CommandCircuitBreakerCheck {
@@ -169,7 +195,7 @@ class PostgresAccountRiskCheck(
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
     private val cacheTtlMillis: Long = 1_000L,
     private val nowMillis: () -> Long = { System.currentTimeMillis() }
-) : AccountRiskCheck, AccountRiskControlStore {
+) : AccountRiskCheck, AccountRiskControlStore, AccountRiskDecisionLog {
     private data class CachedDecision(
         val result: AccountRiskCheckResult?,
         val expiresAtMillis: Long
@@ -277,7 +303,7 @@ class PostgresAccountRiskCheck(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT scope_type, scope_id, decision, reason
+                SELECT scope_type, scope_id, decision, reason, updated_at
                 FROM ${names.accountRiskControls}
                 ORDER BY scope_type, scope_id
                 """.trimIndent()
@@ -290,7 +316,67 @@ class PostgresAccountRiskCheck(
                                 scopeType = rs.getString("scope_type"),
                                 scopeId = rs.getString("scope_id"),
                                 decision = AccountRiskDecision.valueOf(rs.getString("decision")),
-                                reason = rs.getString("reason").orEmpty()
+                                reason = rs.getString("reason").orEmpty(),
+                                updatedAt = rs.getString("updated_at").orEmpty()
+                            )
+                        )
+                    }
+                    return rows
+                }
+            }
+        }
+    }
+
+    override fun recentDecisions(limit: Int): List<AccountRiskDecisionAudit> {
+        val boundedLimit = limit.coerceIn(1, 500)
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT decision_id,
+                       decided_at,
+                       decision,
+                       code,
+                       message,
+                       client_id,
+                       route,
+                       command_type,
+                       command_id,
+                       correlation_id,
+                       actor_id,
+                       participant_id,
+                       account_id,
+                       bot_id,
+                       venue_session_id,
+                       instrument_id,
+                       order_id
+                FROM ${names.accountRiskDecisions}
+                ORDER BY decided_at DESC
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, boundedLimit)
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<AccountRiskDecisionAudit>()
+                    while (rs.next()) {
+                        rows.add(
+                            AccountRiskDecisionAudit(
+                                decisionId = rs.getString("decision_id"),
+                                decidedAt = rs.getString("decided_at"),
+                                decision = AccountRiskDecision.valueOf(rs.getString("decision")),
+                                code = rs.getString("code"),
+                                message = rs.getString("message"),
+                                clientId = rs.getString("client_id"),
+                                route = rs.getString("route"),
+                                commandType = rs.getString("command_type"),
+                                commandId = rs.getString("command_id"),
+                                correlationId = rs.getString("correlation_id"),
+                                actorId = rs.getString("actor_id"),
+                                participantId = rs.getString("participant_id"),
+                                accountId = rs.getString("account_id"),
+                                botId = rs.getString("bot_id"),
+                                venueSessionId = rs.getString("venue_session_id"),
+                                instrumentId = rs.getString("instrument_id"),
+                                orderId = rs.getString("order_id")
                             )
                         )
                     }
@@ -492,7 +578,7 @@ class PostgresCommandCircuitBreakerStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT scope_type, scope_id, tripped, reason
+                SELECT scope_type, scope_id, tripped, reason, updated_at
                 FROM ${names.commandCircuitBreakers}
                 ORDER BY scope_type, scope_id
                 """.trimIndent()
@@ -505,7 +591,8 @@ class PostgresCommandCircuitBreakerStore(
                                 scopeType = rs.getString("scope_type"),
                                 scopeId = rs.getString("scope_id"),
                                 tripped = rs.getBoolean("tripped"),
-                                reason = rs.getString("reason").orEmpty()
+                                reason = rs.getString("reason").orEmpty(),
+                                updatedAt = rs.getString("updated_at").orEmpty()
                             )
                         )
                     }
@@ -536,7 +623,7 @@ class PostgresCommandCircuitBreakerStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT scope_type, scope_id, tripped, reason
+                SELECT scope_type, scope_id, tripped, reason, updated_at
                 FROM ${names.commandCircuitBreakers}
                 WHERE scope_type = ? AND scope_id = ?
                 """.trimIndent()
@@ -549,7 +636,8 @@ class PostgresCommandCircuitBreakerStore(
                         scopeType = rs.getString("scope_type"),
                         scopeId = rs.getString("scope_id"),
                         tripped = rs.getBoolean("tripped"),
-                        reason = rs.getString("reason").orEmpty()
+                        reason = rs.getString("reason").orEmpty(),
+                        updatedAt = rs.getString("updated_at").orEmpty()
                     )
                 }
             }
