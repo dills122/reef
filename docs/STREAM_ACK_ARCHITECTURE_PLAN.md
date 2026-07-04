@@ -6,7 +6,7 @@ Define the high-throughput command path Reef should move toward for bot-arena an
 
 The current Postgres `captured-ack` path is useful as a correctness baseline and fallback, but the measured local ceiling is still below the required `7500-10000` completed commands/sec per runtime + engine instance. More small tuning on the same command-log hot path is unlikely to close the gap.
 
-The accepted target architecture uses JetStream as a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. Redpanda/Kafka-compatible ingress is now available as an opt-in comparison provider so Reef can test whether Kafka partition mechanics improve the same command-log shape before changing the accepted architecture decision.
+The accepted target architecture uses a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. JetStream remains the stream-ack baseline. Redpanda/Kafka-compatible ingress is available as an opt-in comparison provider, and D-041 moves the next hot-ingress experiment toward a Kafka-compatible producer plus matching-engine direct partition consumption while keeping JetStream available as fallback/comparison.
 
 ## Product Framing
 
@@ -26,11 +26,14 @@ bot / simulator / manual client
   -> API command boundary
   -> durable accepted-command stream
   -> deterministic partition lane
-  -> matching / lifecycle decision
-  -> canonical append-only facts
+  -> matching-engine shard / lifecycle decision
+  -> durable venue event batch
+  -> compact canonical append-only facts or materialization
   -> async projections
   -> UI, run state, reports, leaderboards, replay indexes
 ```
+
+The matching hot book is shard-local Go memory, not Redis/Postgres/shared mutable storage. See [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md) and D-042 for the current hot-book and sharding decision.
 
 Avoid designing the throughput path as:
 

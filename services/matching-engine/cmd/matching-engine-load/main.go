@@ -20,7 +20,7 @@ func main() {
 	var duration string
 
 	flag.StringVar(&cfg.RunID, "run-id", "", "run identifier used for artifact directory naming")
-	flag.StringVar(&cfg.Scenario, "scenario", loadtest.ScenarioAlternatingCross, "load scenario: alternating-cross, resting-book, lifecycle")
+	flag.StringVar(&cfg.Scenario, "scenario", loadtest.ScenarioAlternatingCross, "load scenario: alternating-cross, resting-book, lifecycle, deep-lifecycle")
 	flag.IntVar(&cfg.RatePerSecond, "rate", 10000, "target attempted commands per second")
 	flag.StringVar(&duration, "duration", "30s", "sustained load duration, for example 30s, 5m, 1h")
 	flag.IntVar(&cfg.Workers, "workers", 1, "engine client workers; use 1 for deterministic single-lane runs")

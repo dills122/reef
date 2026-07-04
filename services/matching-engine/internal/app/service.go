@@ -1,13 +1,13 @@
 package app
 
 import (
-	"container/heap"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	hotbook "github.com/dills122/reef/services/matching-engine/internal/book"
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
 
@@ -17,17 +17,11 @@ type Service struct {
 	now    func() time.Time
 }
 
-type restingOrder struct {
-	OrderID    string
-	LimitPrice int64
-	Sequence   int64
-}
+type restingOrder = hotbook.RestingOrder
 
 type orderBook struct {
-	mu           sync.Mutex
-	nextSequence int64
-	buys         orderQueue
-	sells        orderQueue
+	mu   sync.Mutex
+	book *hotbook.Book
 }
 
 type orderRecord struct {
@@ -40,11 +34,6 @@ type orderRecord struct {
 	Currency          string
 	Status            domain.OrderStatus
 	LastUpdatedAt     string
-}
-
-type orderQueue struct {
-	orders []*restingOrder
-	side   domain.Side
 }
 
 type Option func(*Service)
@@ -121,17 +110,17 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if !s.reserveOrder(record) {
 		return rejectedResult("evt-reject-duplicate-order-id", cmd.OrderID, "DUPLICATE_ORDER_ID", "orderId already exists", now)
 	}
-	incoming := book.newRestingOrder(cmd.OrderID, record.LimitPrice)
+	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 
 	if record.Side == domain.SideBuy {
 		s.matchBuy(book, incoming, &result, now)
 		if record.RemainingQuantity > 0 {
-			book.buys.push(incoming)
+			book.book.Add(record.Side, incoming)
 		}
 	} else {
 		s.matchSell(book, incoming, &result, now)
 		if record.RemainingQuantity > 0 {
-			book.sells.push(incoming)
+			book.book.Add(record.Side, incoming)
 		}
 	}
 
@@ -218,12 +207,8 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	s.refreshOrderStatus(record)
 
 	if record.RemainingQuantity > 0 {
-		incoming := book.newRestingOrder(cmd.OrderID, record.LimitPrice)
-		if record.Side == domain.SideBuy {
-			book.buys.push(incoming)
-		} else {
-			book.sells.push(incoming)
-		}
+		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
+		book.book.Add(record.Side, incoming)
 	}
 
 	return domain.SubmitOrderResult{
@@ -252,10 +237,10 @@ func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
 	defer book.mu.Unlock()
 
 	if side == domain.SideBuy {
-		return book.buys.len()
+		return book.book.Len(domain.SideBuy)
 	}
 
-	return book.sells.len()
+	return book.book.Len(domain.SideSell)
 }
 
 func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
@@ -289,17 +274,20 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 	return actual.(*orderBook)
 }
 
-func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
+func (s *Service) matchBuy(book *orderBook, incoming restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
 	incomingRecord, ok := s.loadOrder(incoming.OrderID)
 	if !ok {
 		return
 	}
 
-	for incomingRecord.RemainingQuantity > 0 && book.sells.len() > 0 {
-		resting := book.sells.peek()
+	for incomingRecord.RemainingQuantity > 0 && book.book.Len(domain.SideSell) > 0 {
+		resting, ok := book.book.Best(domain.SideSell)
+		if !ok {
+			return
+		}
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok {
-			book.sells.pop()
+			book.book.PopBest(domain.SideSell)
 			continue
 		}
 		if incomingRecord.LimitPrice < restingRecord.LimitPrice {
@@ -317,22 +305,25 @@ func (s *Service) matchBuy(book *orderBook, incoming *restingOrder, result *doma
 		s.refreshOrderStatus(incomingRecord)
 		s.refreshOrderStatus(restingRecord)
 		if restingRecord.RemainingQuantity == 0 {
-			book.sells.pop()
+			book.book.PopBest(domain.SideSell)
 		}
 	}
 }
 
-func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
+func (s *Service) matchSell(book *orderBook, incoming restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
 	incomingRecord, ok := s.loadOrder(incoming.OrderID)
 	if !ok {
 		return
 	}
 
-	for incomingRecord.RemainingQuantity > 0 && book.buys.len() > 0 {
-		resting := book.buys.peek()
+	for incomingRecord.RemainingQuantity > 0 && book.book.Len(domain.SideBuy) > 0 {
+		resting, ok := book.book.Best(domain.SideBuy)
+		if !ok {
+			return
+		}
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok {
-			book.buys.pop()
+			book.book.PopBest(domain.SideBuy)
 			continue
 		}
 		if incomingRecord.LimitPrice > restingRecord.LimitPrice {
@@ -350,7 +341,7 @@ func (s *Service) matchSell(book *orderBook, incoming *restingOrder, result *dom
 		s.refreshOrderStatus(incomingRecord)
 		s.refreshOrderStatus(restingRecord)
 		if restingRecord.RemainingQuantity == 0 {
-			book.buys.pop()
+			book.book.PopBest(domain.SideBuy)
 		}
 	}
 }
@@ -418,90 +409,7 @@ func minInt64(a int64, b int64) int64 {
 
 func newOrderBook() *orderBook {
 	return &orderBook{
-		buys:  newOrderQueue(domain.SideBuy),
-		sells: newOrderQueue(domain.SideSell),
-	}
-}
-
-func (book *orderBook) newRestingOrder(orderID string, limitPrice int64) *restingOrder {
-	sequence := book.nextSequence
-	book.nextSequence++
-	return &restingOrder{
-		OrderID:    orderID,
-		LimitPrice: limitPrice,
-		Sequence:   sequence,
-	}
-}
-
-func newOrderQueue(side domain.Side) orderQueue {
-	queue := orderQueue{
-		orders: make([]*restingOrder, 0),
-		side:   side,
-	}
-	heap.Init(&queue)
-	return queue
-}
-
-func (q orderQueue) Len() int {
-	return len(q.orders)
-}
-
-func (q orderQueue) Less(i int, j int) bool {
-	left := q.orders[i]
-	right := q.orders[j]
-	if left.LimitPrice == right.LimitPrice {
-		return left.Sequence < right.Sequence
-	}
-	if q.side == domain.SideBuy {
-		return left.LimitPrice > right.LimitPrice
-	}
-	return left.LimitPrice < right.LimitPrice
-}
-
-func (q orderQueue) Swap(i int, j int) {
-	q.orders[i], q.orders[j] = q.orders[j], q.orders[i]
-}
-
-func (q *orderQueue) Push(value any) {
-	q.orders = append(q.orders, value.(*restingOrder))
-}
-
-func (q *orderQueue) Pop() any {
-	n := len(q.orders)
-	item := q.orders[n-1]
-	q.orders[n-1] = nil
-	q.orders = q.orders[:n-1]
-	return item
-}
-
-func (q *orderQueue) push(order *restingOrder) {
-	heap.Push(q, order)
-}
-
-func (q *orderQueue) pop() *restingOrder {
-	if len(q.orders) == 0 {
-		return nil
-	}
-	return heap.Pop(q).(*restingOrder)
-}
-
-func (q *orderQueue) peek() *restingOrder {
-	if len(q.orders) == 0 {
-		return nil
-	}
-	return q.orders[0]
-}
-
-func (q *orderQueue) len() int {
-	return len(q.orders)
-}
-
-func (q *orderQueue) removeOrderByID(orderID string) {
-	for idx, order := range q.orders {
-		if order.OrderID == orderID {
-			heap.Remove(q, idx)
-			return
-		}
+		book: hotbook.New(),
 	}
 }
 
@@ -526,11 +434,7 @@ func rejectedResult(eventID string, orderID string, code string, reason string, 
 }
 
 func (s *Service) removeRestingOrder(book *orderBook, record *orderRecord) {
-	if record.Side == domain.SideBuy {
-		book.buys.removeOrderByID(record.OrderID)
-		return
-	}
-	book.sells.removeOrderByID(record.OrderID)
+	book.book.Remove(record.OrderID)
 }
 
 func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {

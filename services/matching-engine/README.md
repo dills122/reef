@@ -12,6 +12,7 @@ Current state:
 - gRPC server scaffold behind env flag (`MATCHING_ENGINE_ENABLE_GRPC=1`)
 - opt-in engine-direct JetStream or Redpanda/Kafka-compatible command consumer behind env flag (`MATCHING_ENGINE_DIRECT_STREAM_ENABLED=1`)
 - hidden-book matching behavior with price-time ordering
+- shard-local in-memory hot book using ordered price levels, FIFO queues per price, and direct order-id unlinking
 - partial-fill and multi-match behavior
 - engine-side order state for rest/fill/cancel/modify paths
 - tested with `go test ./...`
@@ -55,6 +56,8 @@ API -> durable command stream/topic -> matching engine shard -> durable venue ev
 
 The implementation consumes `SubmitOrder` commands from assigned stream/topic partitions, processes them in ordered batches, publishes a `VenueEventBatch` JSON fact to the event stream/topic, then acknowledges or commits the command messages only after the event batch publish succeeds. Unsupported command types are terminated for now; cancel/modify direct-stream support and Postgres materialization are follow-up slices.
 
+Hot book ownership is shard-local. The command router must send all submit/cancel/modify commands for a `runId + venueSessionId + instrumentId` book key to the same durable partition and matching-engine shard owner. The book itself is in-memory Go state; recovery is planned as snapshot plus durable command/event replay with checksum verification. See [`../../docs/HOT_BOOK_SHARDING_PLAN.md`](../../docs/HOT_BOOK_SHARDING_PLAN.md).
+
 Run the engine-only sustained load harness:
 
 ```bash
@@ -78,6 +81,9 @@ make bench-matching-engine-load ARGS="--rate 10000 --duration 30s --scenario res
 
 # Exercise submit/modify/cancel lifecycle behavior. Keep workers=1 for deterministic command order.
 make bench-matching-engine-load ARGS="--rate 10000 --duration 30s --scenario lifecycle --workers 1 --instruments 1"
+
+# Exercise cancel/modify direct unlinking after a deeper resting-book warmup.
+make bench-matching-engine-load ARGS="--rate 20000 --duration 30s --scenario deep-lifecycle --workers 1 --instruments 1"
 
 # Spread load across multiple books to estimate partitionable capacity.
 make bench-matching-engine-load ARGS="--rate 40000 --duration 30s --scenario alternating-cross --workers 4 --instruments 4"

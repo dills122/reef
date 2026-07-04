@@ -652,6 +652,24 @@ Primary references:
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 - [`docs/DEV_ENV.md`](./DEV_ENV.md)
 
+### D-042: Shard-Local In-Memory Hot Book
+
+Status: accepted
+
+Summary:
+- matching hot-book state remains in Go memory inside the matching-engine shard that owns the relevant command partition.
+- book ownership follows the durable command partition key: `runId + venueSessionId + instrumentId`, with submit/cancel/modify for the same book routed to the same ordered lane.
+- engine sharding scales across owned partition ranges; it does not split one mutable book across multiple concurrent writers.
+- the matching engine should use a Reef-owned book implementation with ordered price levels, FIFO queues per price, and an order-id index for direct cancel/modify unlinking.
+- `github.com/tidwall/btree` is acceptable as a narrow ordered price-level index dependency; matching semantics, replay, event generation, and checksums remain Reef-owned.
+- snapshots are recovery accelerators for shard-local book state, not the source of truth. Recovery must remain snapshot plus durable command/event replay plus checksum verification.
+- Redis, Postgres, RocksDB/Pebble, and embedded C++ engines are not accepted hot-book stores for this phase.
+
+Primary references:
+- [`docs/HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
+- [`docs/steering/go.md`](./steering/go.md)
+- [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
+
 ### D-032: Command Log Queue And Result Split
 
 Status: accepted

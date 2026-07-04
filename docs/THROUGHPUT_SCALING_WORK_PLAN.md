@@ -50,6 +50,7 @@ These targets apply to the durable `stream-ack` venue path, not the stripped-dow
 | `captured-sync-engine` | transitional capture plus synchronous execution shape | contract comparison |
 | `captured-ack` | Postgres-backed durable accepted response with async command processing | local fallback and A/B baseline |
 | `stream-ack` | JetStream-backed durable accepted response with partition workers | primary high-throughput gate |
+| `stream-direct` / engine-direct | durable command log/topic consumed directly by matching-engine shards, followed by durable venue event batches | next venue-core hot path gate |
 | capacity baseline | isolate simulator/client/runtime overhead | diagnostic only |
 | raw intake benchmark | isolate durable append and API intake | diagnostic only |
 
@@ -75,6 +76,7 @@ Interpretation:
 - The API can accept near the minimum target in narrow intake tests, but the full accepted-to-terminal lifecycle cannot yet drain at the required rate.
 - The Postgres `captured-ack` path remains valuable for local fallback and measurement, but more small command-log tuning is unlikely to reach the target alone.
 - The next major work should introduce stream-ack ingress, deterministic partition workers, canonical DB commit before stream ack, and projection isolation before relying on more workers or pods.
+- Later July 2026 evidence moved the venue-core hot path toward direct matching-engine partition consumption and durable event-batch publication. Generic runtime workers and per-command unary engine calls remain transitional scaffolding.
 
 ## Work Plan
 
@@ -170,6 +172,25 @@ Exit criteria:
 - command hot path writes canonical command/runtime state only.
 - projection lag is observable and does not affect command correctness.
 
+### P5.5: Engine Shards And Hot Book Structure
+
+Objective: make matching-engine partition ownership and shard-local book state explicit before adding deeper persistence and replay work.
+
+Deliverables:
+- keep the hot book in Go memory inside the matching-engine shard that owns the command partition.
+- route `runId + venueSessionId + instrumentId` to one deterministic partition and one shard owner.
+- add a Reef-owned book abstraction with ordered price levels, FIFO queues per price, and an order-id index for direct cancel/modify unlinking.
+- use `github.com/tidwall/btree` only as an ordered price-level index where benchmark evidence supports it.
+- preserve single-writer command processing per book; parallelism comes from many books/partitions, not concurrent mutation inside one book.
+- define snapshot metadata for shard-local recovery: partition, shard, stream/topic offsets, book sequence, open orders, price levels, checksum, engine version, and contract version.
+- add hot-book benchmarks for deep resting books, cancel-heavy, modify-heavy, alternating-cross, hot single-instrument, and many-instrument workloads.
+
+Exit criteria:
+- existing matching behavior remains test-compatible.
+- cancel/modify no longer require heap/queue scans by order ID.
+- reports distinguish hot single-book capacity from multi-book partitionable capacity.
+- snapshot plus replay checksum work is scoped before any production-shaped recovery claim.
+
 ### P6: Partitioning And Retention
 
 Objective: prevent long stress runs and arena runs from degrading the hot path.
@@ -220,11 +241,12 @@ Exit criteria:
 
 The next implementation slice should be:
 
-1. Define stream-ack command envelope, routing metadata, subject shape, and partition key.
-2. Add local NATS/JetStream profile and command stream bootstrap.
-3. Add stream health, publish-ack latency, partition lag, and oldest-age metrics to stress reports.
-4. Implement `stream-ack` API publish behind a flag while keeping `sync-result` and Postgres `captured-ack`.
-5. Add scoped idempotency guard tests for same-body replay and payload-hash conflict.
-6. Add the first partition worker and crash/redelivery tests for DB-commit-before-ack.
+1. Document the persistence pivot: durable command log/topic, engine-owned ordered partitions, durable venue event batches, compact canonical append/materialization, and async projections.
+2. Replace the heap-backed hot book internals with the shard-ready `internal/book` abstraction.
+3. Preserve the existing service API and stream-direct processor behavior while changing only the book storage internals.
+4. Add focused tests for price-time priority, direct remove/unlink, and existing submit/cancel/modify behavior.
+5. Run `go test ./...` in `services/matching-engine`.
+6. Add or run benchmarks for deep resting-book growth, cancel-heavy, modify-heavy, alternating-cross, hot single-instrument, and many-instrument workloads.
+7. Scope snapshot plus replay checksum as the next recovery slice.
 
-Only after that slice should Reef treat more async workers, Kubernetes replicas, or bot traffic as capacity improvements.
+Only after this slice should Reef treat deeper engine sharding, snapshot recovery, or canonical event-log promotion as capacity improvements.

@@ -72,6 +72,29 @@ func TestRunCanRecordResultSamples(t *testing.T) {
 	}
 }
 
+func TestRunDeepLifecycleScenario(t *testing.T) {
+	outputDir := t.TempDir()
+	report, err := Run(context.Background(), app.NewService(), Config{
+		RunID:         "test-deep-lifecycle",
+		Scenario:      ScenarioDeepLifecycle,
+		RatePerSecond: 1000,
+		Duration:      100 * time.Millisecond,
+		Workers:       1,
+		Instruments:   1,
+		OutputDir:     outputDir,
+	})
+	if err != nil {
+		t.Fatalf("run deep lifecycle load harness: %v", err)
+	}
+
+	if report.Attempted != 100 || report.Processed != 100 {
+		t.Fatalf("expected 100 attempted and processed, got attempted=%d processed=%d", report.Attempted, report.Processed)
+	}
+	if report.Accepted != 100 || report.Rejected != 0 || report.SystemFailures != 0 {
+		t.Fatalf("unexpected deep lifecycle counts: accepted=%d rejected=%d failures=%d", report.Accepted, report.Rejected, report.SystemFailures)
+	}
+}
+
 func TestRunFailsWhenMinimumProcessedRateMisses(t *testing.T) {
 	_, err := Run(context.Background(), app.NewService(), Config{
 		RunID:            "test-min-rate",

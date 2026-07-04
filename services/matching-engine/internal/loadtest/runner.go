@@ -22,6 +22,12 @@ const (
 	ScenarioAlternatingCross = "alternating-cross"
 	ScenarioRestingBook      = "resting-book"
 	ScenarioLifecycle        = "lifecycle"
+	ScenarioDeepLifecycle    = "deep-lifecycle"
+)
+
+const (
+	deepLifecycleModifyLag = int64(30001)
+	deepLifecycleCancelLag = int64(60002)
 )
 
 type Config struct {
@@ -291,7 +297,7 @@ func validateConfig(cfg Config) error {
 		return errors.New("instruments must be positive")
 	}
 	switch cfg.Scenario {
-	case ScenarioAlternatingCross, ScenarioRestingBook, ScenarioLifecycle:
+	case ScenarioAlternatingCross, ScenarioRestingBook, ScenarioLifecycle, ScenarioDeepLifecycle:
 		return nil
 	default:
 		return fmt.Errorf("unsupported scenario %q", cfg.Scenario)
@@ -395,6 +401,77 @@ func buildCommand(cfg Config, seq int64, started time.Time) commandEnvelope {
 				},
 			}
 		}
+	case ScenarioDeepLifecycle:
+		switch seq % 3 {
+		case 0:
+			orderID := deepLifecycleOrderID(seq)
+			return commandEnvelope{
+				Seq:          seq,
+				Kind:         commandSubmit,
+				OrderID:      orderID,
+				InstrumentID: instrumentID,
+				Submit:       submitOrder(seq, orderID, instrumentID, domain.SideBuy, "200", "150000000000", occurredAt),
+			}
+		case 1:
+			targetSeq := seq - deepLifecycleModifyLag
+			if targetSeq < 0 {
+				orderID := deepLifecycleOrderID(seq)
+				return commandEnvelope{
+					Seq:          seq,
+					Kind:         commandSubmit,
+					OrderID:      orderID,
+					InstrumentID: instrumentID,
+					Submit:       submitOrder(seq, orderID, instrumentID, domain.SideBuy, "200", "150000000000", occurredAt),
+				}
+			}
+			orderID := deepLifecycleOrderID(targetSeq)
+			return commandEnvelope{
+				Seq:          seq,
+				Kind:         commandModify,
+				OrderID:      orderID,
+				InstrumentID: instrumentID,
+				Modify: domain.ModifyOrder{
+					CommandID:     fmt.Sprintf("cmd-%d", seq),
+					TraceID:       fmt.Sprintf("trace-%s", cfg.RunID),
+					CausationID:   fmt.Sprintf("cause-%d", seq),
+					CorrelationID: fmt.Sprintf("corr-%d", targetSeq),
+					ActorID:       "matching-load-harness",
+					OccurredAt:    occurredAt,
+					OrderID:       orderID,
+					QuantityUnits: "210",
+					LimitPrice:    "150100000000",
+				},
+			}
+		default:
+			targetSeq := seq - deepLifecycleCancelLag
+			if targetSeq < 0 {
+				orderID := deepLifecycleOrderID(seq)
+				return commandEnvelope{
+					Seq:          seq,
+					Kind:         commandSubmit,
+					OrderID:      orderID,
+					InstrumentID: instrumentID,
+					Submit:       submitOrder(seq, orderID, instrumentID, domain.SideBuy, "200", "150000000000", occurredAt),
+				}
+			}
+			orderID := deepLifecycleOrderID(targetSeq)
+			return commandEnvelope{
+				Seq:          seq,
+				Kind:         commandCancel,
+				OrderID:      orderID,
+				InstrumentID: instrumentID,
+				Cancel: domain.CancelOrder{
+					CommandID:     fmt.Sprintf("cmd-%d", seq),
+					TraceID:       fmt.Sprintf("trace-%s", cfg.RunID),
+					CausationID:   fmt.Sprintf("cause-%d", seq),
+					CorrelationID: fmt.Sprintf("corr-%d", targetSeq),
+					ActorID:       "matching-load-harness",
+					OccurredAt:    occurredAt,
+					OrderID:       orderID,
+					Reason:        "load-test-deep-cycle",
+				},
+			}
+		}
 	default:
 		orderID := fmt.Sprintf("ord-cross-%d", seq)
 		side := domain.SideBuy
@@ -411,6 +488,10 @@ func buildCommand(cfg Config, seq int64, started time.Time) commandEnvelope {
 			Submit:       submitOrder(seq, orderID, instrumentID, side, "100", price, occurredAt),
 		}
 	}
+}
+
+func deepLifecycleOrderID(seq int64) string {
+	return fmt.Sprintf("ord-deep-%d", seq)
 }
 
 func submitOrder(seq int64, orderID string, instrumentID string, side domain.Side, quantity string, price string, occurredAt string) domain.SubmitOrder {

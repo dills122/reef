@@ -219,23 +219,21 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 
 	for _, delivery := range deliveries {
 		commandType := commandTypeFromSubject(delivery.Subject())
-		if commandType != "SubmitOrder" {
+		outcome, supported := p.processDelivery(delivery, commandType)
+		if !supported {
 			terminal = append(terminal, delivery)
 			p.stats.Unsupported.Add(1)
 			continue
 		}
-
-		var command domain.SubmitOrder
-		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+		if outcome.DecodeError != "" {
 			terminal = append(terminal, delivery)
 			p.stats.Failed.Add(1)
-			p.stats.LastError.Store(fmt.Sprintf("decode command: %v", err))
+			p.stats.LastError.Store(outcome.DecodeError)
 			continue
 		}
 
-		result := p.service.SubmitOrder(command)
 		status := "rejected"
-		if result.Accepted != nil {
+		if outcome.Result.Accepted != nil {
 			status = "accepted"
 		}
 		seq := delivery.StreamSequence()
@@ -246,17 +244,17 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 			lastSeq = seq
 		}
 		payloadHash := sha256Hex(delivery.Data())
-		checksumInput.WriteString(fmt.Sprintf("%d:%s:%s;", seq, command.CommandID, payloadHash))
+		checksumInput.WriteString(fmt.Sprintf("%d:%s:%s;", seq, outcome.CommandID, payloadHash))
 		outcomes = append(outcomes, CommandOutcomeFact{
-			CommandID:      command.CommandID,
+			CommandID:      outcome.CommandID,
 			CommandType:    commandType,
 			StreamSequence: seq,
 			DeliveredCount: delivery.DeliveredCount(),
 			PayloadHash:    payloadHash,
-			InstrumentID:   command.InstrumentID,
-			OrderID:        command.OrderID,
+			InstrumentID:   outcome.InstrumentID,
+			OrderID:        outcome.OrderID,
 			Status:         status,
-			Result:         result,
+			Result:         outcome.Result,
 		})
 		ackable = append(ackable, delivery)
 	}
@@ -279,6 +277,54 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	}
 	p.stats.Processed.Add(uint64(len(outcomes)))
 	return batch, ackable, terminal, nil
+}
+
+type processedOutcome struct {
+	CommandID    string
+	InstrumentID string
+	OrderID      string
+	Result       domain.SubmitOrderResult
+	DecodeError  string
+}
+
+func (p *Processor) processDelivery(delivery CommandDelivery, commandType string) (processedOutcome, bool) {
+	switch commandType {
+	case "SubmitOrder":
+		var command domain.SubmitOrder
+		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+			return processedOutcome{DecodeError: fmt.Sprintf("decode submit command: %v", err)}, true
+		}
+		return processedOutcome{
+			CommandID:    command.CommandID,
+			InstrumentID: command.InstrumentID,
+			OrderID:      command.OrderID,
+			Result:       p.service.SubmitOrder(command),
+		}, true
+	case "ModifyOrder":
+		var command domain.ModifyOrder
+		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+			return processedOutcome{DecodeError: fmt.Sprintf("decode modify command: %v", err)}, true
+		}
+		return processedOutcome{
+			CommandID:    command.CommandID,
+			InstrumentID: instrumentIDFromSubject(delivery.Subject()),
+			OrderID:      command.OrderID,
+			Result:       p.service.ModifyOrder(command),
+		}, true
+	case "CancelOrder":
+		var command domain.CancelOrder
+		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
+			return processedOutcome{DecodeError: fmt.Sprintf("decode cancel command: %v", err)}, true
+		}
+		return processedOutcome{
+			CommandID:    command.CommandID,
+			InstrumentID: instrumentIDFromSubject(delivery.Subject()),
+			OrderID:      command.OrderID,
+			Result:       p.service.CancelOrder(command),
+		}, true
+	default:
+		return processedOutcome{}, false
+	}
 }
 
 func (p *Processor) nakAll(deliveries []CommandDelivery) {
@@ -335,6 +381,14 @@ func commandTypeFromSubject(subject string) string {
 		return subject[index+1:]
 	}
 	return subject
+}
+
+func instrumentIDFromSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[len(parts)-2]
 }
 
 func sha256Hex(data []byte) string {

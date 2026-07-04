@@ -407,6 +407,33 @@ func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	}
 }
 
+func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-2", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-3", "100", "150250000000")
+
+	cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-2"})
+	if cancel.Accepted == nil {
+		t.Fatalf("expected accepted cancel result, got %#v", cancel)
+	}
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-sweep",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "250",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 2 {
+		t.Fatalf("expected two trades after middle cancel, got %#v", match.Trades)
+	}
+	if match.Trades[0].BuyOrderID != "ord-buy-1" || match.Trades[1].BuyOrderID != "ord-buy-3" {
+		t.Fatalf("cancelled order should not match and FIFO should remain, got %#v", match.Trades)
+	}
+}
+
 func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{
@@ -436,35 +463,33 @@ func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 	}
 }
 
-func TestInsertBuyPriceTimePriority(t *testing.T) {
-	orders := newOrderQueue(domain.SideBuy)
-	orders.push(&restingOrder{OrderID: "b1", LimitPrice: 101, Sequence: 0})
-	orders.push(&restingOrder{OrderID: "b2", LimitPrice: 100, Sequence: 1})
-	orders.push(&restingOrder{OrderID: "b3", LimitPrice: 102, Sequence: 2})
-	orders.push(&restingOrder{OrderID: "b4", LimitPrice: 100, Sequence: 3})
+func TestModifyOrderResetsPriorityAtSamePrice(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-2", "100", "150250000000")
 
-	ids := []string{orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID}
-	expected := []string{"b3", "b1", "b2", "b4"}
-	for i := range expected {
-		if ids[i] != expected[i] {
-			t.Fatalf("unexpected buy book ordering: got %#v want %#v", ids, expected)
-		}
+	modified := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+	})
+	if modified.Accepted == nil {
+		t.Fatalf("expected accepted modify result, got %#v", modified)
 	}
-}
 
-func TestInsertSellPriceTimePriority(t *testing.T) {
-	orders := newOrderQueue(domain.SideSell)
-	orders.push(&restingOrder{OrderID: "s1", LimitPrice: 100, Sequence: 0})
-	orders.push(&restingOrder{OrderID: "s2", LimitPrice: 101, Sequence: 1})
-	orders.push(&restingOrder{OrderID: "s3", LimitPrice: 99, Sequence: 2})
-	orders.push(&restingOrder{OrderID: "s4", LimitPrice: 101, Sequence: 3})
-
-	ids := []string{orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID, orders.pop().OrderID}
-	expected := []string{"s3", "s1", "s2", "s4"}
-	for i := range expected {
-		if ids[i] != expected[i] {
-			t.Fatalf("unexpected sell book ordering: got %#v want %#v", ids, expected)
-		}
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 1 {
+		t.Fatalf("expected one trade, got %#v", match.Trades)
+	}
+	if match.Trades[0].BuyOrderID != "ord-buy-2" {
+		t.Fatalf("modify should reset same-price priority behind existing order, got %#v", match.Trades[0])
 	}
 }
 
@@ -478,5 +503,23 @@ func TestParsePositiveInt(t *testing.T) {
 	value, ok := parsePositiveInt("42")
 	if !ok || value != 42 {
 		t.Fatalf("expected parsed value 42, got value=%d ok=%v", value, ok)
+	}
+}
+
+func submitRestingBuy(t *testing.T, service *Service, orderID string, quantity string, limitPrice string) {
+	t.Helper()
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       orderID,
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: quantity,
+		LimitPrice:    limitPrice,
+		Currency:      "USD",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted resting buy %s, got %#v", orderID, result)
+	}
+	if len(result.Trades) != 0 {
+		t.Fatalf("expected resting buy %s to avoid immediate trades, got %#v", orderID, result.Trades)
 	}
 }

@@ -5,6 +5,7 @@ go 1.23.4
 require (
 	github.com/IBM/sarama v1.43.2
 	github.com/nats-io/nats.go v1.19.1
+	github.com/tidwall/btree v1.8.1
 	google.golang.org/grpc v1.66.2
 )
 

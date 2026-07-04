@@ -107,11 +107,78 @@ func TestProcessorNaksWhenEventPublishFails(t *testing.T) {
 	}
 }
 
+func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
+	submit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 20, map[string]string{
+		"commandId":     "cmd-submit",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-life-1",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	modify := newFakeDelivery("reef.cmd.v1.p00.session.STK001.ModifyOrder", 21, map[string]string{
+		"commandId":     "cmd-modify",
+		"occurredAt":    "2026-07-04T00:00:01Z",
+		"orderId":       "ord-life-1",
+		"quantityUnits": "120",
+		"limitPrice":    "100100000000",
+	})
+	cancel := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 22, map[string]string{
+		"commandId":  "cmd-cancel",
+		"occurredAt": "2026-07-04T00:00:02Z",
+		"orderId":    "ord-life-1",
+		"reason":     "test",
+	})
+	source := &fakeSource{deliveries: []CommandDelivery{submit, modify, cancel}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	processed, err := processor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	if processed != 3 {
+		t.Fatalf("expected three processed deliveries, got %d", processed)
+	}
+	if len(publisher.batches) != 1 {
+		t.Fatalf("expected one published batch, got %d", len(publisher.batches))
+	}
+	batch := publisher.batches[0]
+	if batch.CommandCount != 3 || len(batch.Outcomes) != 3 {
+		t.Fatalf("expected three outcomes, got commandCount=%d outcomes=%d", batch.CommandCount, len(batch.Outcomes))
+	}
+	expectedTypes := []string{"SubmitOrder", "ModifyOrder", "CancelOrder"}
+	for idx, expectedType := range expectedTypes {
+		outcome := batch.Outcomes[idx]
+		if outcome.CommandType != expectedType || outcome.Status != "accepted" {
+			t.Fatalf("unexpected outcome %d: %#v", idx, outcome)
+		}
+		if outcome.InstrumentID != "STK001" || outcome.OrderID != "ord-life-1" {
+			t.Fatalf("unexpected routing fields on outcome %d: %#v", idx, outcome)
+		}
+	}
+	if submit.acked != 1 || modify.acked != 1 || cancel.acked != 1 {
+		t.Fatalf("expected all deliveries acked after publish, got submit=%d modify=%d cancel=%d", submit.acked, modify.acked, cancel.acked)
+	}
+}
+
 func TestProcessorTermsUnsupportedCommands(t *testing.T) {
 	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 12, map[string]string{
 		"commandId": "cmd-cancel-1",
 		"orderId":   "ord-1",
 	})
+	delivery.subject = "reef.cmd.v1.p00.session.STK001.ReplaceOrder"
 	source := &fakeSource{deliveries: []CommandDelivery{delivery}}
 	publisher := &fakePublisher{}
 	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{
