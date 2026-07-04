@@ -6,6 +6,7 @@ import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -331,6 +332,98 @@ class KafkaStreamCommandSource(
     }
 }
 
+class KafkaVenueEventBatchSource(
+    private val bootstrapServers: String = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+    private val topic: String = RuntimeEnv.string(
+        "VENUE_EVENT_MATERIALIZER_TOPIC",
+        RuntimeEnv.string("MATCHING_ENGINE_EVENT_STREAM", "REEF_VENUE_EVENTS")
+    ),
+    private val groupId: String = RuntimeEnv.string("VENUE_EVENT_MATERIALIZER_GROUP_ID", "reef-venue-event-batch-materializer"),
+    private val clientId: String = RuntimeEnv.string("VENUE_EVENT_MATERIALIZER_KAFKA_CLIENT_ID", "reef-platform-runtime-venue-event-materializer")
+) : VenueEventBatchSource {
+    private val ackedOffsets = mutableMapOf<TopicPartition, java.util.TreeSet<Long>>()
+    private val nextCommitOffsets = mutableMapOf<TopicPartition, Long>()
+    private val rewindOffsets = mutableMapOf<TopicPartition, Long>()
+    private val consumer by lazy { openConsumer() }
+
+    override fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery> {
+        synchronized(this) {
+            rewindOffsets.forEach { (topicPartition, offset) ->
+                consumer.seek(topicPartition, offset)
+            }
+            rewindOffsets.clear()
+
+            return consumer.poll(timeout).records(topic).take(batchSize).map { record ->
+                val topicPartition = TopicPartition(record.topic(), record.partition())
+                ensureNextCommitOffset(topicPartition)
+                val subject = record.headers().lastHeader(STREAM_SUBJECT_HEADER)?.value()?.toString(Charsets.UTF_8)
+                    ?: defaultVenueEventSubject(record.partition())
+                KafkaVenueEventBatchDelivery(
+                    subject = subject,
+                    payloadJson = record.value(),
+                    streamSequence = kafkaStreamSequence(record.partition(), record.offset()),
+                    deliveredCount = 1L,
+                    onAck = { recordAck(topicPartition, record.offset()) },
+                    onNak = { recordNak(topicPartition, record.offset()) }
+                )
+            }
+        }
+    }
+
+    private fun openConsumer(): KafkaConsumer<String, String> {
+        val consumer = KafkaConsumer<String, String>(
+            Properties().apply {
+                put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+                put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+                put(ConsumerConfig.CLIENT_ID_CONFIG, clientId)
+                put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+                put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer::class.java.name)
+                put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+                put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+                put(
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
+                    RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_KAFKA_MAX_POLL_RECORDS", RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1), min = 1).toString()
+                )
+            }
+        )
+        consumer.subscribe(listOf(topic))
+        return consumer
+    }
+
+    private fun recordAck(topicPartition: TopicPartition, offset: Long) {
+        synchronized(this) {
+            val acked = ackedOffsets.getOrPut(topicPartition) { sortedSetOf<Long>() }
+            acked.add(offset)
+            var next = ensureNextCommitOffset(topicPartition)
+            while (acked.remove(next)) {
+                next += 1
+            }
+            if (next != nextCommitOffsets[topicPartition]) {
+                consumer.commitSync(mapOf(topicPartition to OffsetAndMetadata(next)))
+                nextCommitOffsets[topicPartition] = next
+            }
+        }
+    }
+
+    private fun recordNak(topicPartition: TopicPartition, offset: Long) {
+        synchronized(this) {
+            rewindOffsets[topicPartition] = minOf(rewindOffsets[topicPartition] ?: offset, offset)
+        }
+    }
+
+    private fun ensureNextCommitOffset(topicPartition: TopicPartition): Long {
+        return nextCommitOffsets.getOrPut(topicPartition) {
+            consumer.committed(setOf(topicPartition))[topicPartition]?.offset()
+                ?: consumer.beginningOffsets(listOf(topicPartition)).getValue(topicPartition)
+        }
+    }
+
+    private fun defaultVenueEventSubject(partition: Int): String {
+        val prefix = RuntimeEnv.string("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.venue.events.v1").trim('.')
+        return "$prefix.${partitionToken(partition)}.VenueEventBatch"
+    }
+}
+
 private class KafkaStreamCommandDelivery(
     override val subject: String,
     override val payloadJson: String,
@@ -353,6 +446,27 @@ private class KafkaStreamCommandDelivery(
     }
 }
 
+private class KafkaVenueEventBatchDelivery(
+    override val subject: String,
+    override val payloadJson: String,
+    override val streamSequence: Long,
+    override val deliveredCount: Long,
+    private val onAck: () -> Unit,
+    private val onNak: () -> Unit
+) : VenueEventBatchDelivery {
+    override fun ack() {
+        onAck()
+    }
+
+    override fun nak() {
+        onNak()
+    }
+
+    override fun term() {
+        onAck()
+    }
+}
+
 private fun kafkaStreamSequence(partition: Int, offset: Long): Long {
     val logicalOffset = offset + 1L
     require(partition >= 0) { "Kafka partition must be non-negative: $partition" }
@@ -360,4 +474,8 @@ private fun kafkaStreamSequence(partition: Int, offset: Long): Long {
         "Kafka offset $offset is too large to encode in $KAFKA_OFFSET_SEQUENCE_BITS bits"
     }
     return (partition.toLong() shl KAFKA_OFFSET_SEQUENCE_BITS) or logicalOffset
+}
+
+private fun partitionToken(partition: Int): String {
+    return "p" + partition.toString().padStart(2, '0')
 }

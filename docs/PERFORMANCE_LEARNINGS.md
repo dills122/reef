@@ -17,6 +17,24 @@ Capture practical speed and impact lessons so performance stays a design constra
    - `strict-lifecycle` mode to stress correctness and state-machine behavior
 8. Always compare clean-reset and aged-state runs. Short tests can look healthy while persistence pressure is building.
 
+## Venue Event Batch Materializer Checkpoint (July 4, 2026)
+
+Local mixed submit/modify/cancel runs validated the first compact canonical persistence slice without putting Postgres back in the matching-engine hot path.
+
+Evidence:
+
+- `5k rps`, `3m`, `256` workers: `899950` requests, `899950` HTTP `202`, `0` failures, `4999.68 rps`, p95 `14.88ms`, p99 `43.61ms`.
+- `10k rps`, `3m`, `384` workers: `1799951` requests, `1799951` HTTP `202`, `0` failures, `9999.22 rps`, p95 `48.65ms`, p99 `92.99ms`.
+- In both runs, Redpanda materializer lag reached `0`, materializer `failed`, `ackFailed`, and `unsupported` stayed `0`, and `runtime.canonical_command_outcomes` exactly matched accepted command count.
+
+Immediate implications:
+
+1. The current local persistence slice is viable as compact canonical materialization from durable `VenueEventBatch` output.
+2. Matching/business rejections for lifecycle modify/cancel commands must be counted as durable outcomes, not infrastructure failures.
+3. The next persistence risk is no longer synchronous hot-path Postgres writes; it is downstream projection completeness, freshness, replay/checksum coverage, and longer bounded soaks.
+
+Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
+
 ## Aged-State Soak Learnings (May 26, 2026)
 
 From a 30-minute fixed-load soak (`capacity-baseline`, `capacity-heavy`, `2500 rps`, `workers=128`):
@@ -309,7 +327,7 @@ Local stream-ingress prototype:
 - first 5-minute failure cause: event batches exceeded Sarama's default `Producer.MaxMessageBytes` (`1048576` bytes), e.g. `Attempt to produce message larger than configured Producer.MaxMessageBytes`
 - corrected 5-minute soak: `/tmp/reef-stream-ingress-10500-5min-batch500-local`, `10500 rps`, `256` workers, `300s`, direct-engine batch size `500`
 - corrected 5-minute result: `3145900` accepted/direct-acked, `10467.14/sec`, `0` failures, `0` NAKs, `p95=26.61ms`, `p99=53.17ms`; publish pipeline `queueWaitAvg=0.28ms`, `delegateAckAvg=3.34ms`, `totalAvg=3.62ms`
-- conclusion: removing per-command HTTP request overhead with a long-lived stream ingress gets the no-DB Redpanda direct-engine path over the `10k/sec` single-instance target locally, including a clean 5-minute soak when direct-engine event batches are capped at `500` commands. The next promotion gate is a longer DO soak and then protobuf/framed command payloads or additional producer/front-door tuning if we need more headroom.
+- conclusion: removing per-command HTTP request overhead with a long-lived stream ingress gets the no-DB Redpanda direct-engine path over the `10k/sec` single-instance target locally, including a clean 5-minute soak when direct-engine event batches are capped at `500` commands. The next promotion gate is a longer DO soak, followed by venue event batch materialization into compact Postgres canonical rows rather than a return to runtime workers calling the engine. Protobuf/framed command payloads or additional producer/front-door tuning remain follow-up headroom options if needed.
 
 ## Stream-Ack Post-Soak Optimization Priorities
 

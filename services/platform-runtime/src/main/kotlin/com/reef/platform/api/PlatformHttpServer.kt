@@ -45,6 +45,12 @@ private sealed class PreparedApiV1MutationResult {
     data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
 }
 
+private val apiV1OrderMutationRoutes = setOf(
+    "/api/v1/orders/submit",
+    "/api/v1/orders/modify",
+    "/api/v1/orders/cancel"
+)
+
 private fun streamCommandPublicationMarker(
     store: StreamCommandIntakeStore?,
     mode: String,
@@ -103,9 +109,16 @@ class PlatformHttpServer(
         RuntimeEnv.bool("STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED", false),
     private val streamAckProjectorEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_ENABLED", true),
     private val streamAckProjectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
+    private val streamAckProjectionSource: CanonicalProjectionSource =
+        CanonicalProjectionSource.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_SOURCE", CanonicalProjectionSource.CanonicalSubmit.configValue)),
     private val streamAckProjectorPartitions: String = RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", "all"),
     private val streamAckProjectorBatchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val streamAckProjectorPollMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
+    private val venueEventMaterializerEnabled: Boolean = RuntimeEnv.bool("VENUE_EVENT_MATERIALIZER_ENABLED", false),
+    private val venueEventMaterializerBatchSize: Int = RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1),
+    private val venueEventMaterializerPollMs: Long = RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_POLL_MS", 25L, min = 1L),
+    private val venueEventMaterializerFetchTimeoutMs: Long =
+        RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", 200L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -174,6 +187,7 @@ class PlatformHttpServer(
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
             streamCommandHealthJson = { streamCommandHealthJson() },
             streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
+            venueEventMaterializerStatsJson = { venueEventMaterializerStatsJson() },
             projectorStatusJson = { projectorStatusJson() }
         )
     }
@@ -448,6 +462,9 @@ class PlatformHttpServer(
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startCanonicalProjector()
         }
+        if (venueEventMaterializerShouldStart()) {
+            startVenueEventMaterializer()
+        }
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
         }
@@ -523,22 +540,23 @@ class PlatformHttpServer(
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
         return diagnosticRoutes.handle(request.method, request.path, request.query) ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
-            request.path == "/api/v1/orders/submit" -> {
-                handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body ->
-                    api.submitOrder(body)
-                }
-            }
+            request.path == "/api/v1/orders/submit" ->
+                handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }
+            request.path == "/api/v1/orders/modify" ->
+                handleApiV1MutationResponse(request, "/api/v1/orders/modify") { body -> api.modifyOrder(body) }
+            request.path == "/api/v1/orders/cancel" ->
+                handleApiV1MutationResponse(request, "/api/v1/orders/cancel") { body -> api.cancelOrder(body) }
             else -> legacySetupRoutes.handle(request)
         }
     }
 
     internal fun handleHotPathRequestAsync(request: PlatformHotPathRequest): CompletableFuture<PlatformHotPathResponse?> {
         if (
-            request.path == "/api/v1/orders/submit" &&
+            request.path in apiV1OrderMutationRoutes &&
             request.method == "POST" &&
             commandProcessingMode == CommandProcessingMode.StreamAck
         ) {
-            return handleApiV1MutationResponseAsync(request, "/api/v1/orders/submit")
+            return handleApiV1MutationResponseAsync(request, request.path)
                 .thenApply { it as PlatformHotPathResponse? }
         }
         return CompletableFuture.completedFuture(handleHotPathRequest(request))
@@ -558,12 +576,13 @@ class PlatformHttpServer(
 
     private fun projectorStatusJson(): String {
         val partitions = projectorPartitions()
-        val status = api.projectionStatus(streamAckProjectionName, partitions)
+        val status = api.projectionStatus(streamAckProjectionName, partitions, streamAckProjectionSource.configValue)
         val metrics = CanonicalProjectionMetrics.snapshot()
         return JsonCodec.writeObject(
             "role" to runtimeRole.configValue,
             "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
             "implementation" to "canonical-submit-projector",
+            "source" to streamAckProjectionSource.configValue,
             "projectionName" to status.projectionName,
             "partitions" to partitions,
             "projectedCount" to status.projectedCount,
@@ -1456,17 +1475,12 @@ class PlatformHttpServer(
             methodNotAllowed(exchange)
             return
         }
-        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-        if (lookup == null) {
-            writeJson(exchange, 503, simpleErrorJson("command status unavailable"))
-            return
-        }
         val commandId = exchange.requestURI.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
             writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
         }
-        val status = lookup.findCommandStatus(commandId)
+        val status = commandStatus(commandId)
         if (status == null) {
             writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
@@ -1478,15 +1492,25 @@ class PlatformHttpServer(
         if (request.method != "GET") {
             return methodNotAllowedResponse()
         }
-        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-            ?: return PlatformHotPathResponse(503, simpleErrorJson("command status unavailable"))
         val commandId = request.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
             return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
         }
-        val status = lookup.findCommandStatus(commandId)
+        val status = commandStatus(commandId)
             ?: return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
         return PlatformHotPathResponse(200, CommandStatusResponse.statusJson(status))
+    }
+
+    private fun commandStatus(commandId: String): CommandStatusView? {
+        try {
+            api.canonicalCommandOutcome(commandId)?.let { outcome ->
+                return outcome.toStatusView()
+            }
+        } catch (ex: Exception) {
+            System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
+        }
+        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
+        return lookup?.findCommandStatus(commandId)
     }
 
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
@@ -1698,7 +1722,7 @@ class PlatformHttpServer(
             emptyList()
         }
         val projectionStatusProvider: (() -> ProjectionStatus?)? = if (projectorLagCanGate && streamCommandMaxProjectorLag > 0L) {
-            { api.projectionStatus(streamAckProjectionName, emptyList()) }
+            { api.projectionStatus(streamAckProjectionName, emptyList(), streamAckProjectionSource.configValue) }
         } else {
             null
         }
@@ -1942,6 +1966,31 @@ class PlatformHttpServer(
         )
     }
 
+    private fun venueEventMaterializerStatsJson(): String {
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to venueEventMaterializerShouldStart(),
+            "role" to runtimeRole.configValue,
+            "processingMode" to commandProcessingMode.configValue,
+            "batchSize" to venueEventMaterializerBatchSize,
+            "pollIntervalMs" to venueEventMaterializerPollMs,
+            "fetchTimeoutMs" to venueEventMaterializerFetchTimeoutMs,
+            "source" to "kafka",
+            "metrics" to mapOf(
+                "fetched" to stats.fetched,
+                "materialized" to stats.materialized,
+                "failed" to stats.failed,
+                "ackFailed" to stats.ackFailed,
+                "unsupported" to stats.unsupported,
+                "emptyPolls" to stats.emptyPolls,
+                "lastMaterializedStreamSequence" to stats.lastMaterializedStreamSequence,
+                "lastMaterializedAt" to stats.lastMaterializedAt,
+                "lastFailedAt" to stats.lastFailedAt,
+                "lastError" to stats.lastError
+            )
+        )
+    }
+
     private fun startStreamCommandWorkers() {
         val partitions = streamWorkerPartitions()
         if (partitions.isEmpty()) {
@@ -1976,10 +2025,33 @@ class PlatformHttpServer(
         CanonicalProjectionWorker(
             api = api,
             projectionName = streamAckProjectionName,
+            projectionSource = streamAckProjectionSource,
             partitions = partitions,
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,
             workerName = "reef-canonical-projector-$streamAckProjectionName"
+        ).start()
+    }
+
+    private fun venueEventMaterializerShouldStart(): Boolean {
+        return commandProcessingMode == CommandProcessingMode.StreamAck &&
+            runtimeRole == PlatformRuntimeRole.Materializer &&
+            venueEventMaterializerEnabled
+    }
+
+    private fun startVenueEventMaterializer() {
+        val provider = StreamCommandLogProvider.fromEnv()
+        if (provider != StreamCommandLogProvider.Redpanda) {
+            System.err.println("venue_event_materializer_unavailable reason=unsupported_log_provider provider=${provider.configValue}")
+            return
+        }
+        VenueEventBatchMaterializer(
+            source = KafkaVenueEventBatchSource(),
+            api = api,
+            batchSize = venueEventMaterializerBatchSize,
+            pollIntervalMs = venueEventMaterializerPollMs,
+            fetchTimeout = java.time.Duration.ofMillis(venueEventMaterializerFetchTimeoutMs),
+            workerName = "reef-venue-event-batch-materializer"
         ).start()
     }
 

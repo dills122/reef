@@ -15,16 +15,41 @@ This is a design baseline, not locked DDL.
 
 ## Schema Overview
 
-- `runtime`: command handling write models, lifecycle events, outbox
+- `runtime`: canonical venue facts, command outcomes, operational projections, lifecycle events, outbox
 - `boundary`: API idempotency and boundary concerns
 - `auth`: roles and actor-role bindings
+- `account` (planned): users, bots, accounts, immutable ledger entries, holds, derived balances, risk limits
 - `admin`: policy/config/audit operations
+- `settlement` (planned): obligations, allocations, confirmations, fulfillment, breaks, repairs
+- `market_data` (planned): top-of-book/depth snapshots, recent trades, intraday bars, historical query surfaces
 - `orchestration` (planned): scheduler definitions and run-state
 - `analytics` (planned): transformed reporting/query surfaces
 
-## Runtime Schema (Hot Path)
+Reference boundary:
+- [`docs/TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 
-### Core command and order lifecycle
+## Runtime Schema
+
+`runtime` now has two separate responsibilities:
+
+1. compact canonical venue persistence from durable `VenueEventBatch` output.
+2. rebuildable operational projections for order/status/query surfaces.
+
+Do not put synchronous normalized order, trade, execution, or UI table writes back into the matching-engine hot path.
+
+### Canonical venue facts
+
+1. `runtime.canonical_venue_event_batches`
+- compact durable materialization of matching-engine `VenueEventBatch` output.
+- preserves batch identity, command/event stream identity, partition/offset or sequence, payload checksum, payload format/version, command count, and replay-safe payload facts.
+
+2. `runtime.canonical_command_outcomes`
+- command-level lookup and replay rows projected from canonical event batches.
+- preserves command id, command type, result status, reject code, order/instrument identifiers, stream sequence/offset, result payload, and payload hash.
+
+### Operational order lifecycle projections
+
+These tables are query/read projections unless a later decision explicitly promotes a field into compact canonical persistence.
 
 1. `runtime.orders`
 - `order_id uuid pk`
@@ -161,6 +186,52 @@ Indexes:
 
 Reference contract:
 - [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
+
+## Account Schema (Planned)
+
+The account domain owns users, bots, accounts, credits, holds, and risk controls. Current balances should be derived from immutable ledger entries plus open holds/reservations.
+
+Candidate tables:
+
+1. `account.accounts`
+2. `account.bots`
+3. `account.bot_configs`
+4. `account.ledger_entries`
+5. `account.balance_snapshots`
+6. `account.order_holds`
+7. `account.risk_limits`
+8. `account.bot_state_changes`
+
+Intake risk checks should use a hot, bounded account/risk view before durable order acceptance. Settlement performs final enforcement from matched facts and can block fulfillment, create exceptions, or disable bots.
+
+## Settlement Schema (Planned)
+
+Settlement consumes canonical venue facts and creates post-trade facts. It must not mutate matching history.
+
+Candidate tables:
+
+1. `settlement.obligations`
+2. `settlement.allocations`
+3. `settlement.confirmations`
+4. `settlement.fulfillment_steps`
+5. `settlement.breaks`
+6. `settlement.repairs`
+7. `settlement.exception_cases`
+
+## Market Data Schema (Planned)
+
+Market data is a separate query/read domain from order entry.
+
+Candidate tables:
+
+1. `market_data.book_snapshots`
+2. `market_data.depth_snapshots`
+3. `market_data.recent_trades`
+4. `market_data.intraday_bars`
+5. `market_data.historical_bars`
+6. `market_data.feed_watermarks`
+
+The first market-data slice should favor snapshots and bounded-refresh projections over matching-engine-coupled live reads.
 
 ## Analytics Schema (Planned)
 

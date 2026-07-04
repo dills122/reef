@@ -10,9 +10,13 @@ import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.EngineOrderAccepted
+import com.reef.platform.domain.EngineOrderRejected
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
+    private val venueEventBatches = linkedMapOf<String, VenueEventBatchFact>()
+    private val commandOutcomes = linkedMapOf<String, CanonicalCommandOutcome>()
     private val projectionWatermarks = mutableMapOf<String, MutableMap<Int, Long>>()
     private val submitResults = linkedMapOf<String, SubmitOrderResult>()
     private val instruments = linkedMapOf<String, Instrument>()
@@ -185,16 +189,55 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return outcomes.size.toLong()
     }
 
-    override fun projectionStatus(projectionName: String, partitions: List<Int>): ProjectionStatus {
+    override fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
+        if (batchSize <= 0) return 0
+        val partitionSet = partitions.toSet()
+        val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }
+        val outcomes = commandOutcomes.values
+            .filter { outcome -> outcome.commandType == "SubmitOrder" }
+            .filter { outcome -> partitionSet.isEmpty() || outcome.partition in partitionSet }
+            .filter { outcome -> outcome.streamSequence > (watermarks[outcome.partition] ?: 0L) }
+            .groupBy { it.partition }
+            .flatMap { (_, partitionOutcomes) ->
+                partitionOutcomes.sortedBy { it.streamSequence }.take(batchSize)
+            }
+            .sortedWith(compareBy<CanonicalCommandOutcome> { it.streamSequence }.thenBy { it.partition })
+            .take(batchSize)
+        if (outcomes.isEmpty()) return 0
+        outcomes.forEach { outcome ->
+            saveSubmitResult(outcome.commandId, outcome.toSubmitOrderResult())
+            saveEvent(outcome.toRuntimeEvent())
+        }
+        outcomes
+            .groupBy { it.partition }
+            .forEach { (partitionId, partitionOutcomes) ->
+                watermarks[partitionId] = maxOf(
+                    watermarks[partitionId] ?: 0L,
+                    partitionOutcomes.maxOf { it.streamSequence }
+                )
+            }
+        return outcomes.size.toLong()
+    }
+
+    override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus {
         val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks[projectionName].orEmpty()
-        val watermarkRows = canonicalSubmitOutcomes.values
-            .filter { outcome -> partitionSet.isEmpty() || outcome.partitionId in partitionSet }
-            .groupBy { it.partitionId }
-            .map { (partitionId, outcomes) ->
+        val sourceRows = if (source.isVenueEventBatchProjectionSource()) {
+            commandOutcomes.values
+                .filter { outcome -> outcome.commandType == "SubmitOrder" }
+                .filter { outcome -> partitionSet.isEmpty() || outcome.partition in partitionSet }
+                .map { outcome -> outcome.partition to outcome.streamSequence }
+        } else {
+            canonicalSubmitOutcomes.values
+                .filter { outcome -> partitionSet.isEmpty() || outcome.partitionId in partitionSet }
+                .map { outcome -> outcome.partitionId to outcome.partitionSequence }
+        }
+        val watermarkRows = sourceRows
+            .groupBy({ it.first }, { it.second })
+            .map { (partitionId, sequences) ->
                 val projected = watermarks[partitionId] ?: 0L
-                val canonicalMax = outcomes.maxOf { it.partitionSequence }
-                val backlogCount = outcomes.count { it.partitionSequence > projected }.toLong()
+                val canonicalMax = sequences.max()
+                val backlogCount = sequences.count { it > projected }.toLong()
                 ProjectionWatermark(
                     projectionName = projectionName,
                     partitionId = partitionId,
@@ -211,6 +254,99 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             projectedCount = submitResults.size.toLong(),
             lag = watermarkRows.sumOf { it.lag },
             watermarks = watermarkRows
+        )
+    }
+
+    override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        val existing = venueEventBatches[batch.batchId]
+        if (existing != null) {
+            check(existing.payloadChecksum == batch.payloadChecksum) {
+                "venue event batch checksum conflict for batchId ${batch.batchId}"
+            }
+            return 0
+        }
+        venueEventBatches[batch.batchId] = batch
+        var inserted = 0L
+        batch.outcomes.forEach { outcome ->
+            val canonical = CanonicalCommandOutcome(
+                commandId = outcome.commandId,
+                batchId = batch.batchId,
+                shardId = batch.shardId,
+                partition = batch.partition,
+                commandStream = batch.commandStream,
+                eventStream = batch.eventStream,
+                streamSequence = outcome.streamSequence,
+                deliveredCount = outcome.deliveredCount,
+                commandType = outcome.commandType,
+                payloadHash = outcome.payloadHash,
+                instrumentId = outcome.instrumentId,
+                orderId = outcome.orderId,
+                resultStatus = outcome.resultStatus,
+                rejectCode = outcome.rejectCode,
+                resultPayloadJson = outcome.resultPayloadJson
+            )
+            if (commandOutcomes.putIfAbsent(outcome.commandId, canonical) == null) {
+                inserted++
+            }
+        }
+        return inserted
+    }
+
+    override fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return commandOutcomes[commandId]
+    }
+
+    private fun CanonicalCommandOutcome.toSubmitOrderResult(): SubmitOrderResult {
+        return if (resultStatus == "rejected") {
+            SubmitOrderResult(
+                rejected = EngineOrderRejected(
+                    eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
+                    orderId = orderId,
+                    code = rejectCode,
+                    reason = jsonString(resultPayloadJson, "reason"),
+                    occurredAt = jsonString(resultPayloadJson, "occurredAt")
+                )
+            )
+        } else {
+            SubmitOrderResult(
+                accepted = EngineOrderAccepted(
+                    eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
+                    orderId = orderId,
+                    engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
+                    occurredAt = jsonString(resultPayloadJson, "occurredAt")
+                )
+            )
+        }
+    }
+
+    private fun CanonicalCommandOutcome.toRuntimeEvent(): RuntimeEvent {
+        val rejected = resultStatus == "rejected"
+        return RuntimeEvent(
+            eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
+            eventType = if (rejected) "OrderRejected" else "OrderAccepted",
+            orderId = orderId,
+            traceId = commandId,
+            causationId = commandId,
+            correlationId = commandId,
+            producer = "venue-event-batch-projector",
+            schemaVersion = "v1",
+            occurredAt = jsonString(resultPayloadJson, "occurredAt"),
+            actorId = "",
+            payloadJson = resultPayloadJson.ifBlank { "{}" }
+        )
+    }
+
+    private fun jsonString(json: String, key: String): String {
+        val pattern = Regex(""""$key"\s*:\s*"([^"]*)"""")
+        return pattern.find(json)?.groupValues?.get(1).orEmpty()
+    }
+
+    private fun String.isVenueEventBatchProjectionSource(): Boolean {
+        return trim().lowercase() in setOf(
+            "venue-event-batch",
+            "event-batch",
+            "venue-events",
+            "canonical-command-outcomes"
         )
     }
 }

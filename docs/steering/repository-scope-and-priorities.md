@@ -202,6 +202,8 @@ Do not introduce worker concurrency that allows multiple workers to mutate the s
 
 Cancels and modifies must carry enough routing metadata to reach the same partition as the original order. Avoid adding synchronous hot-path lookups merely to recover missing routing information.
 
+Logical partition lanes do not need to map one-to-one to instruments or worker processes. Prefer a fixed configured lane count, group cold instruments by deterministic hash, and isolate only proven hot books through explicit routing overrides. If a hot instrument shares a lane with cold instruments, first move the cold instruments away; live migration of the hot book itself requires drain, sequence fencing, audited routing epochs, snapshot/replay handoff, and checksum verification.
+
 ## Canonical Facts And Projections
 
 Reef distinguishes between canonical lifecycle facts and rebuildable projections.

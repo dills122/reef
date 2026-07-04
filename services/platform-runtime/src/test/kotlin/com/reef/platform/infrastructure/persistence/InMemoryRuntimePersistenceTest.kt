@@ -10,6 +10,7 @@ import com.reef.platform.domain.Participant
 import com.reef.platform.domain.Account
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class InMemoryRuntimePersistenceTest {
@@ -105,5 +106,121 @@ class InMemoryRuntimePersistenceTest {
         assertEquals(1L, event.sequenceNumber)
         assertEquals("trader-1", event.actorId)
         assertEquals("""{"source":"unit-test"}""", event.payloadJson)
+    }
+
+    @Test
+    fun materializesVenueEventBatchIdempotently() {
+        val persistence = InMemoryRuntimePersistence()
+        val batch = venueEventBatch()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(0, persistence.materializeVenueEventBatch(batch))
+
+        val outcome = persistence.canonicalCommandOutcome("cmd-1")
+        assertNotNull(outcome)
+        assertEquals("batch-1", outcome.batchId)
+        assertEquals("engine-0", outcome.shardId)
+        assertEquals(3, outcome.partition)
+        assertEquals(42L, outcome.streamSequence)
+        assertEquals("SubmitOrder", outcome.commandType)
+        assertEquals("accepted", outcome.resultStatus)
+        assertEquals("""{"accepted":{"eventId":"evt-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:01Z"}}""", outcome.resultPayloadJson)
+
+        assertFailsWith<IllegalStateException> {
+            persistence.materializeVenueEventBatch(batch.copy(payloadChecksum = "different"))
+        }
+    }
+
+    @Test
+    fun projectsMaterializedVenueEventBatchOutcomesIntoCompactLifecycleRows() {
+        val persistence = InMemoryRuntimePersistence()
+
+        assertEquals(1, persistence.materializeVenueEventBatch(venueEventBatch()))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+
+        val result = persistence.submitResult("cmd-1")
+        assertNotNull(result)
+        assertEquals("evt-1", result.accepted?.eventId)
+        assertEquals("ord-1", result.accepted?.orderId)
+        assertEquals("eng-ord-1", result.accepted?.engineOrderId)
+        assertEquals("2026-07-04T18:00:01Z", result.accepted?.occurredAt)
+        assertEquals(null, persistence.acceptedOrder("ord-1"))
+
+        val events = persistence.eventsForOrder("ord-1")
+        assertEquals(1, events.size)
+        assertEquals("OrderAccepted", events.first().eventType)
+        assertEquals("venue-event-batch-projector", events.first().producer)
+        assertEquals("""{"accepted":{"eventId":"evt-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:01Z"}}""", events.first().payloadJson)
+
+        val status = persistence.projectionStatus("runtime-normalized-venue-outcomes", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(42L, status.watermarks.single().lastPartitionSequence)
+        assertEquals(42L, status.watermarks.single().canonicalMaxPartitionSequence)
+    }
+
+    @Test
+    fun projectsRejectedVenueEventBatchOutcomesIntoCompactLifecycleRows() {
+        val persistence = InMemoryRuntimePersistence()
+        val batch = venueEventBatch().copy(
+            batchId = "batch-rejected",
+            payloadChecksum = "checksum-rejected",
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-rejected",
+                    commandType = "SubmitOrder",
+                    streamSequence = 43,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-rejected",
+                    instrumentId = "AAPL",
+                    orderId = "ord-rejected",
+                    resultStatus = "rejected",
+                    rejectCode = "UNKNOWN_INSTRUMENT",
+                    resultPayloadJson = """{"rejected":{"eventId":"evt-rejected","code":"UNKNOWN_INSTRUMENT","reason":"instrument missing","occurredAt":"2026-07-04T18:00:02Z"}}"""
+                )
+            )
+        )
+
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+
+        val result = persistence.submitResult("cmd-rejected")
+        assertNotNull(result)
+        assertEquals("evt-rejected", result.rejected?.eventId)
+        assertEquals("UNKNOWN_INSTRUMENT", result.rejected?.code)
+        assertEquals("instrument missing", result.rejected?.reason)
+        assertEquals("2026-07-04T18:00:02Z", result.rejected?.occurredAt)
+
+        val events = persistence.eventsForOrder("ord-rejected")
+        assertEquals(1, events.size)
+        assertEquals("OrderRejected", events.first().eventType)
+    }
+
+    private fun venueEventBatch(): VenueEventBatchFact {
+        return VenueEventBatchFact(
+            batchId = "batch-1",
+            shardId = "engine-0",
+            partition = 3,
+            commandStream = "REEF_COMMANDS",
+            eventStream = "REEF_VENUE_EVENTS",
+            firstSequence = 42,
+            lastSequence = 42,
+            commandCount = 1,
+            createdAt = "2026-07-04T18:00:00Z",
+            payloadChecksum = "checksum-1",
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-1",
+                    commandType = "SubmitOrder",
+                    streamSequence = 42,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-1",
+                    instrumentId = "AAPL",
+                    orderId = "ord-1",
+                    resultStatus = "accepted",
+                    resultPayloadJson = """{"accepted":{"eventId":"evt-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:01Z"}}"""
+                )
+            )
+        )
     }
 }

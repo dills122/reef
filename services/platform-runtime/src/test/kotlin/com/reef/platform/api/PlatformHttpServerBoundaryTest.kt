@@ -15,6 +15,8 @@ import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
+import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.net.HttpURLConnection
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -256,6 +258,35 @@ class PlatformHttpServerBoundaryTest {
             )
 
             assertEquals(200, internal.status)
+            assertEquals(404, publicSubmit.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun materializerRoleExposesOnlyInternalMaterializerStats() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            runtimeRole = PlatformRuntimeRole.Materializer,
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            venueEventMaterializerEnabled = true
+        )
+        try {
+            val internal = get(server.address.port, "/internal/venue-event-materializer/stats")
+            val publicSubmit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-materializer-role"
+                ),
+                body = validSubmitBody("cmd-materializer-role", "trace-materializer-role", "ord-materializer-role", extra = streamRoutingExtra())
+            )
+
+            assertEquals(200, internal.status)
+            assertContains(internal.body, "\"role\":\"materializer\"")
+            assertContains(internal.body, "\"source\":\"kafka\"")
             assertEquals(404, publicSubmit.status)
         } finally {
             server.stop(0)
@@ -556,6 +587,87 @@ class PlatformHttpServerBoundaryTest {
             assertContains(status.body, "\"status\":\"COMPLETED\"")
             assertContains(status.body, "\"processingMode\":\"captured-sync-engine\"")
             assertContains(status.body, "\"responseStatus\":200")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusEndpointPrefersCanonicalCommandOutcome() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.materializeVenueEventBatch(
+            venueEventBatch(
+                batchId = "batch-status-canonical",
+                commandId = "cmd-status-canonical",
+                resultStatus = "accepted"
+            )
+        )
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine,
+            runtimePersistence = persistence
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-canonical"
+                ),
+                body = validSubmitBody("cmd-status-canonical", "trace-status-canonical", "ord-cmd-status-canonical")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-canonical")
+
+            assertEquals(200, submit.status)
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-status-canonical\"")
+            assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(status.body, "\"canonicalMaterialized\":true")
+            assertContains(status.body, "\"batchId\":\"batch-status-canonical\"")
+            assertContains(status.body, "\"resultStatus\":\"accepted\"")
+            assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
+            assertContains(status.body, "\"instrumentId\":\"AAPL\"")
+            assertContains(status.body, "\"orderId\":\"ord-cmd-status-canonical\"")
+            assertFalse(status.body.contains("\"clientId\":\"client-1\""))
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusEndpointExposesCanonicalRejectMetadata() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.materializeVenueEventBatch(
+            venueEventBatch(
+                batchId = "batch-status-rejected",
+                commandId = "cmd-status-rejected",
+                resultStatus = "rejected",
+                rejectCode = "ORDER_NOT_FOUND"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = NoopCommandCaptureStore(),
+            runtimePersistence = persistence
+        )
+        try {
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-rejected")
+
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"canonicalMaterialized\":true")
+            assertContains(status.body, "\"resultStatus\":\"rejected\"")
+            assertContains(status.body, "\"rejectCode\":\"ORDER_NOT_FOUND\"")
+            assertContains(status.body, "\"responseStatus\":422")
+            assertContains(status.body, "\"resultPayloadJson\":\"{\\\"rejected\\\":{\\\"code\\\":\\\"ORDER_NOT_FOUND\\\"}}\"")
         } finally {
             server.stop(0)
         }
@@ -973,6 +1085,55 @@ class PlatformHttpServerBoundaryTest {
             assertContains(health.body, "\"publishMode\":\"partitioned-blocking-delegate:sync\"")
             assertContains(health.body, "\"publishLaneCount\":16")
             assertContains(health.body, "\"publishCompleted\":1")
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun nettyHotPathStreamAckPublishesModifyAndCancelRoutes() {
+        val publisher = RecordingStreamCommandPublisher()
+        val streamPublisher = PartitionedStreamCommandPublisher(
+            delegate = publisher,
+            queueCapacityPerLane = 10,
+            maxInFlightPerLane = 1
+        )
+        val server = testNettyHotPathServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = streamPublisher
+        )
+        try {
+            val modifyCancelRoutingExtra = ""","instrumentId":"AAPL"${streamRoutingExtra()}"""
+            val modify = post(
+                port = server.port,
+                path = "/api/v1/orders/modify",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-stream",
+                    "Idempotency-Key" to "idem-netty-stream-modify"
+                ),
+                body = validModifyBody("cmd-netty-stream-modify", "trace-netty-stream-modify", "ord-netty-stream", extra = modifyCancelRoutingExtra)
+            )
+            val cancel = post(
+                port = server.port,
+                path = "/api/v1/orders/cancel",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-stream",
+                    "Idempotency-Key" to "idem-netty-stream-cancel"
+                ),
+                body = validCancelBody("cmd-netty-stream-cancel", "trace-netty-stream-cancel", "ord-netty-stream", extra = modifyCancelRoutingExtra)
+            )
+
+            assertEquals(202, modify.status, modify.body)
+            assertEquals(202, cancel.status, cancel.body)
+            assertContains(modify.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(cancel.body, "\"processingMode\":\"stream-ack\"")
+            assertEquals(
+                listOf("/api/v1/orders/modify", "/api/v1/orders/cancel"),
+                publisher.published.map { it.route }
+            )
+            assertEquals(listOf("ModifyOrder", "CancelOrder"), publisher.published.map { it.commandType })
         } finally {
             server.stop()
         }
@@ -1686,9 +1847,11 @@ class PlatformHttpServerBoundaryTest {
         streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
         streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
         streamCommandMaxStorageUtilization: Double = 0.95,
-        streamCommandBackpressureSampleMs: Long = 100L
+        streamCommandBackpressureSampleMs: Long = 100L,
+        venueEventMaterializerEnabled: Boolean = false,
+        runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence()
     ): com.sun.net.httpserver.HttpServer {
-        val persistence = InMemoryRuntimePersistence()
+        val persistence = runtimePersistence
         seedOrderReferenceData(persistence)
         if (seedOrderAuthorization) {
             seedOrderAuthorization(
@@ -1720,6 +1883,7 @@ class PlatformHttpServerBoundaryTest {
             streamCommandConfig = streamCommandConfig,
             streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
             streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
+            venueEventMaterializerEnabled = venueEventMaterializerEnabled,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
@@ -1872,6 +2036,45 @@ class PlatformHttpServerBoundaryTest {
 
     private fun streamRoutingExtra(): String {
         return ",\"runId\":\"run-1\",\"venueSessionId\":\"session-1\",\"clientOrderId\":\"clord-1\",\"botId\":\"bot-1\",\"botVersion\":\"v1\""
+    }
+
+    private fun venueEventBatch(
+        batchId: String,
+        commandId: String,
+        resultStatus: String,
+        rejectCode: String = ""
+    ): VenueEventBatchFact {
+        val resultPayload = if (resultStatus == "rejected") {
+            """{"rejected":{"code":"$rejectCode"}}"""
+        } else {
+            """{"accepted":{"eventId":"evt-$commandId"}}"""
+        }
+        return VenueEventBatchFact(
+            batchId = batchId,
+            shardId = "engine-0",
+            partition = 7,
+            commandStream = "REEF_COMMANDS",
+            eventStream = "REEF_VENUE_EVENTS",
+            firstSequence = 7001,
+            lastSequence = 7001,
+            commandCount = 1,
+            createdAt = "2026-07-04T18:00:00Z",
+            payloadChecksum = "checksum-$batchId",
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = commandId,
+                    commandType = "SubmitOrder",
+                    streamSequence = 7001,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-$commandId",
+                    instrumentId = "AAPL",
+                    orderId = "ord-$commandId",
+                    resultStatus = resultStatus,
+                    rejectCode = rejectCode,
+                    resultPayloadJson = resultPayload
+                )
+            )
+        )
     }
 
     private fun bodyWithoutField(body: String, field: String): String {

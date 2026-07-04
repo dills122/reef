@@ -24,6 +24,10 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0007_projection_watermarks.sql",
       "runtime/0008_partitioned_projection_batching.sql",
       "runtime/0009_runtime_canonical_event_row_toggle.sql",
+      "runtime/0010_venue_event_batch_materialization.sql",
+      "runtime/0011_canonical_command_outcome_projection.sql",
+      "runtime/0012_cap_command_outcome_projection_batch.sql",
+      "runtime/0013_scope_venue_event_batch_identity.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));

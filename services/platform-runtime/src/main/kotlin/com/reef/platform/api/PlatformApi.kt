@@ -7,9 +7,11 @@ import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
+import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.util.concurrent.CompletableFuture
 
 class PlatformApi(
@@ -61,8 +63,24 @@ class PlatformApi(
         return orderService.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
     }
 
-    fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
-        return orderService.projectionStatus(projectionName, partitions)
+    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+    }
+
+    fun projectionStatus(
+        projectionName: String,
+        partitions: List<Int> = emptyList(),
+        source: String = "canonical-submit"
+    ): ProjectionStatus {
+        return orderService.projectionStatus(projectionName, partitions, source)
+    }
+
+    fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        return orderService.materializeVenueEventBatch(batch)
+    }
+
+    fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return orderService.canonicalCommandOutcome(commandId)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {

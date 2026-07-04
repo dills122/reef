@@ -39,7 +39,7 @@ The current gaps are:
 
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
-- direct matching-engine command consumption exists but still needs promotion evidence, cancel/modify support, and persistence reintroduction
+- direct matching-engine command consumption exists and has local no-DB proof; it still needs longer remote promotion evidence and persistence reintroduction from durable venue event batches
 - persisted order lifecycle projections do not yet fully mirror submit/cancel/modify/fill engine state
 - simulator control-room UI is still planned rather than implemented
 - first deterministic lifecycle scenarios are not locked end to end
@@ -48,16 +48,23 @@ The current gaps are:
 ## Active Execution Ladder
 
 1. Validate D-041 hot ingress.
-   - Prove Redpanda/Kafka-compatible durable producer plus matching-engine direct consumer against no-DB stress targets.
+   - Promote Redpanda/Kafka-compatible durable producer plus matching-engine direct consumer beyond local no-DB proof with longer remote stress evidence.
    - Require durable ack-before-`202`, bounded queue/in-flight depth, clean accepted/acked accounting, and replay/audit metadata.
    - Keep JetStream as fallback and comparison until evidence says otherwise.
 
-2. Reintroduce persistence deliberately.
-   - Preserve deterministic partition ordering and no-complete-before-durable-fact semantics.
-   - Keep canonical event facts separate from rebuildable projections.
-   - Measure rows/command, WAL/command, commits/command, publish ack latency, worker lag, projection lag, and drain behavior.
+2. Implement venue event batch materialization.
+   - Start from the matching engine's durable `VenueEventBatch` output, not runtime workers calling the engine.
+   - Commit command offsets after durable venue event-batch publication.
+   - Commit materializer offsets only after compact canonical Postgres batch rows commit.
+   - Compact canonical batch storage and command/outcome lookup rows now exist for status, idempotent replay, audit, and projection inputs.
+   - Kafka-compatible venue event batch materializer runtime role, diagnostics, and local smoke target now exist.
+   - Event-batch replay/checksum tests now gate the materializer contract before throughput claims.
+   - `/api/v1/commands/{commandId}` now prefers materialized canonical command outcomes and falls back to existing status surfaces while materialization catches up.
 
 3. Complete venue lifecycle projection.
+   - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
+   - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
+   - Full `orders` projection from the event-batch path still needs either submit command metadata in `VenueEventBatch` or a durable command-payload join.
    - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
@@ -80,6 +87,7 @@ The current gaps are:
 
 Primary references:
 
+- [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
 - [`DECISIONS.md`](./DECISIONS.md), especially D-036 through D-041
 - [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 - [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
@@ -106,8 +114,10 @@ Primary references:
 Exit criteria:
 
 - runtime persistence uses migration-owned schema objects
-- hot-path writes are compact, batched where useful, and measured
-- projection writes are downstream and rebuildable
+- hot-path matching does not block on Postgres materialization
+- venue event batches materialize into compact, batch-oriented canonical rows with measured rows/command, WAL/command, commits/command, lag, and drain behavior
+- compact command-outcome projections write downstream `submit_results` and `runtime_events` idempotently from canonical event-batch materialization
+- full order/execution/trade projection from event batches is added only after the event batch carries enough command metadata, or after a deliberate command-payload join is introduced
 - local startup validates schema placement instead of silently bootstrapping drift
 
 ### C. Venue Lifecycle Completion

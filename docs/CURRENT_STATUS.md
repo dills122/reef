@@ -29,26 +29,31 @@ Keep these distinctions explicit:
 - `sync-result` remains the deterministic correctness and compatibility mode.
 - Postgres `captured-ack` remains a local fallback and A/B baseline.
 - JetStream `stream-ack` proved the durable-acceptance shape, but July 2026 evidence showed the generic worker-to-engine path and write-heavy projection path are not the final high-throughput base.
-- The active high-throughput venue-core path is moving toward a Kafka-compatible durable command log, explicit command partitions, matching-engine direct consumption, durable venue event batches, and offset commit only after durable event publication.
+- The active high-throughput venue-core path is moving toward a Kafka-compatible durable command log, explicit command partitions, matching-engine direct consumption, durable venue event batches, command offset commit after durable event-batch publication, and asynchronous Postgres materialization from those event batches.
 - `202 Accepted` still means the configured durable ingress/log producer has acknowledged the command. Do not weaken that contract.
+- Order-entry APIs, market-data/history APIs, account/bot ledgers, settlement, and analytics are separate planes. See [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
 
 Current decision anchors:
 
 - D-036 and D-037 define durable stream-backed acceptance and completion semantics.
 - D-040 supersedes generic unary worker-to-engine calls for the hot matching path.
 - D-041 makes Kafka-compatible durable producer plus matching-engine direct consumer the active hot-ingress target, with JetStream retained as fallback/comparison.
+- D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
+- Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
+- The first persistence-layer test gate after materialization is compact lifecycle projection from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Full `orders` projection from event batches remains blocked on carrying submit command metadata or joining durable command payloads.
 
 ## Current Forward Path
 
 Work should follow this order unless a new decision supersedes it:
 
-1. Keep the current durable-acceptance contracts stable while validating the D-041 Redpanda/Kafka-compatible hot-ingress path.
-2. Prove no-DB direct engine ingestion at materially better durable publish-ack latency, bounded queue/in-flight depth, clean accepted/acked accounting, and replay/audit metadata.
-3. Reintroduce canonical persistence deliberately after the direct-ingestion ceiling is understood, preserving deterministic command ordering and canonical event facts.
-4. Complete persisted venue lifecycle projections for submit/cancel/modify so query APIs match engine lifecycle state.
-5. Build the simulator control-room MVP on top of existing scripts and artifacts.
-6. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
-7. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
+1. Keep the current durable-acceptance contracts stable while promoting the D-041 Redpanda/Kafka-compatible hot-ingress path from local proof to longer remote evidence.
+2. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
+3. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
+4. Prove compact persistence projection end to end: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
+5. Complete persisted venue lifecycle projections for submit/cancel/modify so query APIs match engine lifecycle state.
+6. Build the simulator control-room MVP on top of existing scripts and artifacts.
+7. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+8. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 
 ## Documentation Map
 
@@ -56,10 +61,13 @@ Use these docs for active work:
 
 - Project framing: [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md)
 - Technical design: [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
+- Current and target architecture diagrams: [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
+- Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./ROADMAP.md)
 - Decisions: [`DECISIONS.md`](./DECISIONS.md)
 - Performance evidence and next implications: [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- Persistence materializer evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md)
 - Stream/direct throughput context: [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - Local setup and commands: [`ONBOARDING.md`](./ONBOARDING.md), [`DEV_ENV.md`](./DEV_ENV.md)
 - Steering index: [`steering/README.md`](./steering/README.md)

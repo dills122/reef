@@ -24,8 +24,8 @@ Reef is expected to grow into these primary surfaces:
 - Astro documentation/marketing site
 - Kotlin platform runtime for APIs, workflow orchestration, persistence, and read models
 - Go matching engine for order book and matching behavior
-- Postgres as canonical state storage
-- NATS JetStream as the preferred async backbone and durable accepted-command ingress path for stream-backed high-throughput modes
+- Postgres for compact canonical materialization, operational projections, account/settlement state, and analytics stores, with domain split readiness
+- Kafka-compatible durable command/event streams for high-throughput venue ingress and matching event batches, with NATS JetStream retained where it fits workflow or comparison use cases
 - Protobuf as the preferred inter-service contract format once contracts stabilize
 
 ## Architectural Rules
@@ -74,7 +74,9 @@ Submit, cancel, and modify commands that affect the same venue session and instr
 The initial domain breakdown should follow these contexts:
 
 - reference-data
+- account-and-bot-ledger
 - orders-and-execution
+- market-data
 - trade-processing
 - post-trade-workflow
 - clearing-and-netting
@@ -106,9 +108,10 @@ For venue ingress and matching-heavy paths, the preferred direction is:
 ```text
 Boundary/API
   -> durable command ingress
-  -> partitioned command workers
-  -> matching engine
-  -> canonical lifecycle/event persistence
+  -> matching-engine direct partition consumer
+  -> shard-local hot book
+  -> durable venue event batch
+  -> compact canonical materialization
   -> async projections/read models/control-room views
 ```
 
@@ -186,18 +189,24 @@ Examples of early events:
 
 ## Persistence Guidance
 
-- Postgres is the source of truth for current state
-- maintain append-only event storage alongside current-state tables
+- durable venue event batches are the canonical matching ledger for engine completion
+- Postgres stores compact canonical materializations and domain state, not synchronous per-command hot-path write fan-out
+- maintain append-only fact storage alongside current-state tables
 - read models may be rebuilt from persisted events and state transitions where useful
 - do not let UI-specific projections leak back into core write-model logic
 - keep hot-path database writes minimal, explicit, and measured
 - prefer batched canonical persistence over per-command persistence on throughput-sensitive paths
 - prefer async projections for query-heavy UI/control-room state
+- keep order-entry APIs separate from market-data/history APIs
+- keep settlement and account ledgers downstream from matching facts, except for bounded intake risk pre-checks
 
 At minimum, plan for:
 
 - reference data tables
-- order and execution tables
+- canonical venue event batch and command outcome tables
+- operational order, execution, and trade projections
+- account/bot ledger tables
+- market-data snapshot, depth, trade, and bar projections
 - trade and allocation tables
 - workflow state tables
 - settlement obligation tables

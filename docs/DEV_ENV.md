@@ -247,7 +247,7 @@ Relevant matching-engine knobs:
 - `MATCHING_ENGINE_EVENT_STREAM=REEF_VENUE_EVENTS`
 - `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.venue.events.v1`
 
-In this mode the matching engine consumes assigned command partitions directly, processes submit-command batches, publishes `VenueEventBatch` records to JetStream, and acks command messages only after the event batch publish succeeds. The first slice supports submit-only stress runs; cancel/modify direct consumption and Postgres materialization from venue event batches are follow-up work.
+In this mode the matching engine consumes assigned command partitions directly, processes ordered command batches, publishes `VenueEventBatch` records to JetStream, and acks command messages only after the event batch publish succeeds. Submit, cancel, and modify branches exist in the direct processor; the current stress/profile coverage is still submit-focused. Postgres materialization from venue event batches is the next persistence slice.
 
 Run the engine-direct no-DB stress profile:
 
@@ -263,7 +263,15 @@ Run the same no-DB direct profile against Redpanda/Kafka-compatible command and 
 STREAM_ACK_LOG_PROVIDER=redpanda make dev-stress-stream-direct-nodb
 ```
 
-In this mode the API still returns `202` only after the Kafka-compatible producer receives an `acks=all` broker acknowledgment. The matching engine consumes assigned Kafka topic partitions directly, publishes `VenueEventBatch` records to the configured event topic, and commits Kafka offsets only after the event batch publish succeeds. This is the apples-to-apples no-DB comparison path for the durable command-log boundary; the older `STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack` path still exercises the DB-backed stream workers.
+In this mode the API still returns `202` only after the Kafka-compatible producer receives an `acks=all` broker acknowledgment. The matching engine consumes assigned Kafka topic partitions directly, publishes `VenueEventBatch` records to the configured event topic, and commits Kafka offsets only after the event batch publish succeeds. A platform runtime can then run `PLATFORM_RUNTIME_ROLE=materializer` with `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack` and `STREAM_ACK_LOG_PROVIDER=redpanda` to read those event batches, commit compact canonical Postgres rows, and commit its Kafka event-topic offsets only after the Postgres materialization call returns. This is the apples-to-apples path for the durable command-log boundary plus async canonical materialization; the older `STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack` path still exercises the DB-backed stream workers.
+
+Run the local Redpanda direct-stream materializer smoke:
+
+```bash
+make dev-smoke-venue-event-materializer
+```
+
+This starts isolated Redpanda command/event topics, the direct matching-engine consumer, and `platform-materializer`. The smoke submits one stream-ack order, waits for `runtime.canonical_command_outcomes`, and verifies `/internal/venue-event-materializer/stats` advanced. It is a correctness smoke, not a throughput claim.
 
 For the higher-throughput front-door prototype, enable the long-lived stream transport:
 
@@ -326,7 +334,7 @@ The deploy-shaped stream-ack profile enables venue-core drain-side backpressure 
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
-Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, read canonical submit outcomes from the runtime Postgres service, update the normalized order/execution/trade/runtime-event read tables in the projection Postgres service, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
+Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. The default `STREAM_ACK_PROJECTION_SOURCE=canonical-submit` reads canonical submit outcomes from the runtime Postgres service and updates normalized order/execution/trade/runtime-event read tables in the projection Postgres service. `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch` reads materialized `runtime.canonical_command_outcomes` and projects compact submit result/runtime-event visibility; full order-table reconstruction from this source waits for submit command metadata in the event batch or a durable command-payload join. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
@@ -678,9 +686,9 @@ Compose sets:
 - boundary command capture persistence: `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres`
 - optional append-only command-log capture: `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`). Postgres command-log mode stores immutable intake rows in `command_log.commands`, durable request payloads in `command_log.command_payloads`, active worker state in `command_log.command_work_queue`, and terminal status/responses in `command_log.command_results`.
 - command-log payload mode: `EXTERNAL_API_COMMAND_LOG_PAYLOAD_MODE=side-table|inline` (default `side-table`). `side-table` keeps hot command metadata rows narrow while retaining the full durable request payload for worker replay.
-- runtime role: `PLATFORM_RUNTIME_ROLE=api|worker|projector`. Compose sets this per service; there is no all-in-one runtime role.
+- runtime role: `PLATFORM_RUNTIME_ROLE=api|worker|projector|materializer`. Compose sets this per service; there is no all-in-one runtime role.
 - HTTP server adapter: `PLATFORM_HTTP_SERVER=jdk|netty` (default `jdk`). `netty` is currently a hot-path benchmark adapter for submit/status/internal stats, not a full replacement for every local route.
-- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
+- command processing mode: `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires a configured durable stream provider, and `accepted-async` is an in-memory no-DB isolation mode)
 - async command worker: `EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false|true` (default `false`; when `true` with `captured-ack`, queued command-log records are processed in the background)
 - async command worker tuning: `EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_BATCH_SIZE`, `EXTERNAL_API_COMMAND_ASYNC_WORKER_POLL_MS`, and `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`
 - async command worker runtime pool: `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true` makes captured-ack workers execute through a separate `async-runtime` persistence pool. The dev default is `false` because captured-ack intake no longer uses runtime persistence on the hot accept path; turn it on for isolation A/B runs.
@@ -692,6 +700,10 @@ Compose sets:
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`
 - boundary DB JDBC: `RUNTIME_DB_URL` (`currentSchema=boundary` remains configured, but boundary storage uses explicit `boundary.*` names)
 - stream-ack partition workers: `platform-worker-0` through `platform-worker-3` default to four explicit non-overlapping `16`-partition ranges over the default `STREAM_ACK_PARTITION_COUNT=64`.
+- venue event materializer: `PLATFORM_RUNTIME_ROLE=materializer`, `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`, and `STREAM_ACK_LOG_PROVIDER=redpanda` starts the Kafka-compatible event-batch materializer. `VENUE_EVENT_MATERIALIZER_ENABLED=true` can also start it in another background-capable role for local experiments.
+- venue event materializer compose service: `platform-materializer` is enabled by the `venue-event-materializer` compose profile and exposes diagnostics on `REEF_PLATFORM_MATERIALIZER_HOST_PORT` (default `8091`).
+- venue event materializer tuning: `VENUE_EVENT_MATERIALIZER_TOPIC` defaults to `MATCHING_ENGINE_EVENT_STREAM` or `REEF_VENUE_EVENTS`; `VENUE_EVENT_MATERIALIZER_GROUP_ID`, `VENUE_EVENT_MATERIALIZER_BATCH_SIZE`, `VENUE_EVENT_MATERIALIZER_POLL_MS`, `VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS`, and `VENUE_EVENT_MATERIALIZER_KAFKA_MAX_POLL_RECORDS` tune consumption.
+- venue event materializer stats: `GET /internal/venue-event-materializer/stats` reports enabled state, role, source, batch/poll config, and materialization counters.
 
 Postgres init creates domain schemas:
 - `runtime`

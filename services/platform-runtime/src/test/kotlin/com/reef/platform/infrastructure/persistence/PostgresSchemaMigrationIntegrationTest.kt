@@ -31,6 +31,10 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0007_projection_watermarks.sql',
                   'runtime/0008_partitioned_projection_batching.sql',
                   'runtime/0009_runtime_canonical_event_row_toggle.sql',
+                  'runtime/0010_venue_event_batch_materialization.sql',
+                  'runtime/0011_canonical_command_outcome_projection.sql',
+                  'runtime/0012_cap_command_outcome_projection_batch.sql',
+                  'runtime/0013_scope_venue_event_batch_identity.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -84,7 +88,11 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0006_canonical_append_store.sql",
                     "runtime/0007_projection_watermarks.sql",
                     "runtime/0008_partitioned_projection_batching.sql",
-                    "runtime/0009_runtime_canonical_event_row_toggle.sql"
+                    "runtime/0009_runtime_canonical_event_row_toggle.sql",
+                    "runtime/0010_venue_event_batch_materialization.sql",
+                    "runtime/0011_canonical_command_outcome_projection.sql",
+                    "runtime/0012_cap_command_outcome_projection_batch.sql",
+                    "runtime/0013_scope_venue_event_batch_identity.sql"
                 ),
                 appliedMigrations
             )
@@ -106,6 +114,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.submit_results",
                 "runtime.canonical_command_results",
                 "runtime.canonical_venue_events",
+                "runtime.canonical_venue_event_batches",
+                "runtime.canonical_command_outcomes",
                 "runtime.projection_watermarks",
                 "runtime.trades"
             )
@@ -123,6 +133,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'submit_results',
                     'canonical_command_results',
                     'canonical_venue_events',
+                    'canonical_venue_event_batches',
+                    'canonical_command_outcomes',
                     'projection_watermarks',
                     'reference_instruments',
                     'auth_roles',
@@ -307,7 +319,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     'runtime_persist_submit_outcome',
                     'runtime_persist_submit_outcomes',
                     'runtime_append_canonical_submit_outcomes',
-                    'runtime_project_canonical_submit_outcomes'
+                    'runtime_project_canonical_submit_outcomes',
+                    'runtime_project_canonical_command_outcomes',
+                    'runtime_materialize_venue_event_batch'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -324,7 +338,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime.runtime_persist_submit_outcome",
                     "runtime.runtime_persist_submit_outcomes",
                     "runtime.runtime_append_canonical_submit_outcomes",
-                    "runtime.runtime_project_canonical_submit_outcomes"
+                    "runtime.runtime_project_canonical_submit_outcomes",
+                    "runtime.runtime_project_canonical_command_outcomes",
+                    "runtime.runtime_materialize_venue_event_batch"
                 ),
                 runtimeFunctions
             )
@@ -342,6 +358,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'submit_results',
                     'canonical_command_results',
                     'canonical_venue_events',
+                    'canonical_venue_event_batches',
+                    'canonical_command_outcomes',
                     'projection_watermarks',
                     'reference_instruments',
                     'auth_roles',

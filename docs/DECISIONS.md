@@ -660,6 +660,8 @@ Summary:
 - matching hot-book state remains in Go memory inside the matching-engine shard that owns the relevant command partition.
 - book ownership follows the durable command partition key: `runId + venueSessionId + instrumentId`, with submit/cancel/modify for the same book routed to the same ordered lane.
 - engine sharding scales across owned partition ranges; it does not split one mutable book across multiple concurrent writers.
+- logical lanes do not need to map one-to-one to ticker symbols, worker processes, or engine deployables; cold instruments may share deterministic lanes.
+- hot books should be isolated with explicit static routing overrides first; runtime routing changes and live book migration are deferred until routing epochs, drain/fencing, snapshot/replay handoff, and checksum verification are implemented.
 - the matching engine should use a Reef-owned book implementation with ordered price levels, FIFO queues per price, and an order-id index for direct cancel/modify unlinking.
 - `github.com/tidwall/btree` is acceptable as a narrow ordered price-level index dependency; matching semantics, replay, event generation, and checksums remain Reef-owned.
 - snapshots are recovery accelerators for shard-local book state, not the source of truth. Recovery must remain snapshot plus durable command/event replay plus checksum verification.
@@ -669,6 +671,52 @@ Primary references:
 - [`docs/HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
 - [`docs/steering/go.md`](./steering/go.md)
 - [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
+
+### D-043: Venue Event Batch Materialization Boundary
+
+Status: accepted
+
+Summary:
+- the next persistence slice is venue event batch materialization, not more generic runtime workers calling the engine and writing normalized rows.
+- matching-engine shards may commit command offsets after they consume ordered command partitions, mutate shard-local books, and durably publish `VenueEventBatch` records.
+- Postgres materialization is asynchronous from the durable venue event stream/topic. The materializer commits its own consumed event-batch offset only after compact canonical Postgres rows commit.
+- durable venue event batches are the matching-engine recovery handoff and canonical matching ledger for engine completion. Postgres remains the compact materialized canonical/query store for command outcome lookup, replay, audit, and downstream projection.
+- initial materialization tables should include `runtime.canonical_venue_event_batches` and `runtime.canonical_command_outcomes`.
+- canonical batch rows must preserve batch id, shard id, partition id, command stream/topic, event stream/topic, first/last command sequence or offset, command count, payload checksum, payload format/version, creation time, and original batch payload or equivalent replay-safe fact payload.
+- command outcome lookup rows must support status lookup, idempotent materializer replay, command-to-batch linkage, command type, result status, reject code, instrument/order identifiers, stream sequence/offset, and payload hash.
+- the first runtime source is Kafka-compatible Redpanda consumption of the configured venue event topic through `PLATFORM_RUNTIME_ROLE=materializer`; JetStream event-batch materialization can be added behind the same `VenueEventBatchSource` contract later.
+- normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
+- the first downstream projection from event-batch materialization is compact lifecycle visibility: `runtime.canonical_command_outcomes` can project submit outcomes into `submit_results` and lifecycle `runtime_events` without placing Postgres back in the matching hot path.
+- full `orders` projection from the event-batch path requires either original submit command metadata in `VenueEventBatch` or an explicit durable command-payload join; until then, tests must not claim full order-table reconstruction from compact outcomes alone.
+- replay/checksum tests from durable event batch to Postgres rows are required before throughput claims for this slice.
+
+Lifecycle boundary:
+```text
+API 202:
+  after durable command-log ack
+
+engine processed:
+  after command consumed, book mutated, and venue event batch durably published
+
+command offset commit:
+  after durable venue event-batch publication
+
+Postgres canonical materialized:
+  after async materializer reads event batches and commits compact canonical rows
+
+Postgres materializer offset commit:
+  after compact canonical Postgres batch commit
+
+projection visible:
+  after async projections catch up from canonical rows/events
+```
+
+Primary references:
+- [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`docs/PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
 
 ### D-032: Command Log Queue And Result Split
 

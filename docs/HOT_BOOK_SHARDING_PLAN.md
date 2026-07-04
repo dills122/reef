@@ -39,6 +39,54 @@ Rules:
 - a hot single instrument/session has a legitimate single-lane ceiling unless the domain model changes.
 - shard reassignment requires a drain/stop, snapshot/replay handoff, and explicit ownership transition.
 
+## Operational Routing Model
+
+Logical partition lanes are the unit of deterministic serialization. They do not need to map one-to-one to ticker symbols, worker processes, or matching-engine deployables.
+
+For early and medium-scale markets, prefer a fixed configured lane count with deterministic routing:
+
+```text
+BookKey = runId + venueSessionId + instrumentId
+partition = hash(BookKey) % partitionCount
+```
+
+One worker or engine shard may own many logical partitions. This lets Reef run `10`, `40`, or hundreds of instruments without creating one mostly idle process or consumer per instrument. Cold instruments can share lanes safely as long as each individual `BookKey` remains single-lane ordered.
+
+When real traffic shows skew, use explicit routing overrides for hot books instead of making every symbol dedicated by default:
+
+```text
+(runId, venueSessionId, AAPL) -> partition 3
+(runId, venueSessionId, TSLA) -> partition 4
+other instruments              -> hash pool partitions 8..31
+```
+
+The first implementation should keep these overrides static configuration loaded at startup. Runtime routing changes are a later operational feature and must be versioned and replayable before they are used in production-shaped runs.
+
+## Hot-Symbol Handling
+
+Do not split one mutable instrument/session book across multiple concurrent writers as a quick scaling response. Price-level partitioning or cross-worker matching would change fairness, ordering, cancel/modify ownership, replay, and execution determinism; it is a separate market-model design, not a small sharding optimization.
+
+Preferred responses when one symbol becomes hot:
+
+1. Pin the hot `BookKey` to its own logical lane.
+2. Move cold neighboring instruments away from the hot lane.
+3. Increase physical workers only when logical lanes are already cleanly separable and telemetry shows CPU or drain capacity pressure.
+
+Moving cold symbols away is the lowest-risk runtime posture because the hot book can stay on its current owner while other books drain and resume elsewhere.
+
+True live migration of the hot book itself is deferred. If implemented later, it must be a pause-and-drain ownership transfer:
+
+```text
+stop or durably buffer new commands for BookKey
+drain old lane through sequence N
+snapshot or reconstruct book state at N
+publish an audited routing-epoch transition
+resume commands from N+1 on the new lane
+verify replay checksum
+```
+
+Routing epochs must be recorded as durable operational facts. Replay must use the recorded routing decision and effective sequence; it must not rediscover hot symbols from current metrics.
+
 ## In-Memory Book Structure
 
 The current implementation is moving from heap-backed side queues to a purpose-built book package:

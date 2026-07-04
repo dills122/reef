@@ -117,4 +117,9 @@ class JsonDocument internal constructor(
         if (value !is ArrayNode) return emptyList()
         return value.filterIsInstance<ObjectNode>().map { JsonDocument(it) }
     }
+
+    fun raw(key: String): String {
+        val value = root.get(key) ?: return ""
+        return JsonCodec.writeNode(value)
+    }
 }
