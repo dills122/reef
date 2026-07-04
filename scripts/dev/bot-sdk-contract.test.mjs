@@ -10,6 +10,9 @@ const badBotsDir = join(repoRoot, "packages/bot-sdk/test-fixtures/bad-bots");
 const { qualifyBotV1, defaultBotRuntimePolicyV1 } = await import(
   pathToFileURL(join(repoRoot, "packages/bot-sdk/src/harness.ts")).href
 );
+const { toVenueCommandRequestsV1 } = await import(
+  pathToFileURL(join(repoRoot, "packages/bot-sdk/src/venue-adapter.ts")).href
+);
 const requiredMetadataFields = ["name", "publisher", "email", "version", "sdkVersion", "botApiVersion"];
 const forbiddenHostedApis = ["setTimeout", "setInterval", "fetch(", "http.", "https.", "child_process", "node:fs", "node:net"];
 
@@ -50,6 +53,7 @@ for (const fileName of readdirSync(examplesDir).filter((name) => name.endsWith("
 await assertBadBot("forbidden-api-bot.ts", ["hosted_api_forbidden"]);
 await assertBadBot("invalid-metadata-bot.ts", ["invalid_bot_name", "invalid_bot_version", "invalid_email"]);
 await assertBadBot("too-many-orders-bot.ts", ["max_order_actions_per_tick_exceeded"]);
+assertVenueAdapter();
 
 const designDoc = readFileSync(join(repoRoot, "docs/BOT_SDK_DESIGN.md"), "utf8");
 assert.match(designDoc, /minimum allowed tick interval: `250ms`/);
@@ -92,4 +96,66 @@ async function assertBadBot(fileName, expectedIssueCodes) {
       `${fileName} missing expected issue ${expectedIssueCode}; got ${issueCodes.join(", ")}`,
     );
   }
+}
+
+function assertVenueAdapter() {
+  const submit = toVenueCommandRequestsV1(
+    [
+      {
+        type: "submit_limit",
+        order: {
+          instrumentId: "AAPL",
+          side: "BUY",
+          quantity: 10,
+          limitPrice: 99.5,
+          clientOrderId: "bot-order-1",
+        },
+      },
+    ],
+    venueAdapterContext(),
+  );
+
+  assert.equal(submit.ok, true);
+  assert.equal(submit.value.length, 1);
+  assert.equal(submit.value[0].route, "/api/v1/orders/submit");
+  assert.equal(submit.value[0].headers["Idempotency-Key"], "idem-bot-1");
+  assert.equal(submit.value[0].body.commandId, "cmd-bot-1");
+  assert.equal(submit.value[0].body.orderType, "LIMIT");
+  assert.equal(submit.value[0].body.quantityUnits, "10");
+  assert.equal(submit.value[0].body.botId, "bot-1");
+  assert.equal(submit.value[0].body.venueSessionId, "session-1");
+
+  const market = toVenueCommandRequestsV1(
+    [
+      {
+        type: "submit_market",
+        order: {
+          instrumentId: "AAPL",
+          side: "BUY",
+          quantity: 10,
+        },
+      },
+    ],
+    venueAdapterContext(),
+  );
+
+  assert.equal(market.ok, false);
+  assert.equal(market.denial.code, "NOT_ALLOWED");
+}
+
+function venueAdapterContext() {
+  return {
+    runId: "run-1",
+    venueSessionId: "session-1",
+    actorId: "actor-bot-1",
+    participantId: "participant-bot-1",
+    accountId: "account-bot-1",
+    botId: "bot-1",
+    botVersion: "1.0.0",
+    correlationId: "corr-bot",
+    occurredAt: "2026-07-04T14:30:00.000Z",
+    commandIdPrefix: "cmd-bot",
+    traceIdPrefix: "trace-bot",
+    idempotencyKeyPrefix: "idem-bot",
+  };
 }

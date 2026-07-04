@@ -227,3 +227,4 @@ export abstract class ReefBotV1 {
 }
 
 export * from "./harness";
+export * from "./venue-adapter";

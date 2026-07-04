@@ -187,6 +187,33 @@ Order write methods return proposed `BotActionV1` values in hosted mode. A later
 
 Safe order helpers read the bot's own projected orders before proposing cancel/modify actions. They reject unknown, terminal, mismatched-instrument, or fully filled orders locally so stale lifecycle actions do not waste venue capacity or harm bot scoring.
 
+## Venue Adapter
+
+The SDK sidecar includes a pure mapping helper, `toVenueCommandRequestsV1`, for adapter/orchestrator code. It converts proposed bot actions into normal `/api/v1` command request objects with:
+
+- command ID
+- trace ID
+- idempotency key
+- actor ID
+- run ID
+- venue session ID
+- bot ID and bot version
+- participant/account context
+- instrument routing metadata where available
+
+The helper does not execute HTTP calls. Hosted bots still return proposed actions; adapter/orchestrator code decides whether approved actions become platform commands.
+
+Current mapping support:
+
+- `submit_limit` -> `/api/v1/orders/submit`
+- `modify_order` -> `/api/v1/orders/modify`
+- `cancel_order` -> `/api/v1/orders/cancel`
+
+Current structured denials:
+
+- `submit_market`, because current `/api/v1` validation only accepts `LIMIT`
+- `cancel_all`, because the orchestrator must expand it into individual own-order cancels before venue submission
+
 ## Private Runtime Config
 
 Private bot config is loaded during preflight/start from OpenBao, validated by the platform, and then made available in memory through `ctx.config`.
