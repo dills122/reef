@@ -165,6 +165,7 @@ Single hot-book evidence:
 - `reports/matching-engine-load/matching-engine-load-20260704T165436Z`: `alternating-cross`, `1` worker, `1` instrument, `20000 rps`, `30s`, `600000` processed, `0` failures, `p95=5us`, `p99=10us`
 - `reports/matching-engine-load/matching-engine-load-20260704T165513Z`: `alternating-cross`, `1` worker, `1` instrument, `30000 rps`, `30s`, `900000` processed, `0` failures, `p95=5us`, `p99=10us`
 - `reports/matching-engine-load/matching-engine-load-20260704T165828Z`: `resting-book`, `1` worker, `1` instrument, `20000 rps`, `30s`, `600000` processed, `0` failures, `p95=4us`, `p99=8us`
+- `reports/matching-engine-load/matching-engine-load-20260704T171126Z`: `deep-lifecycle`, `1` worker, `1` instrument, `20000 rps`, `30s`, `600000` processed, `0` failures, `p95=3us`, `p99=6us`
 
 Partitionable multi-book evidence:
 

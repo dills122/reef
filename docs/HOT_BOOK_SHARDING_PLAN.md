@@ -134,6 +134,8 @@ The first ordered price-level implementation passed the current hot-book gate an
   - `30000/sec` for `30s`, `900000` processed, `0` failures
 - deep resting-book growth:
   - `20000/sec` for `30s`, `600000` processed, `0` failures
+- deep lifecycle cancel/modify:
+  - `20000/sec` for `30s`, `600000` processed, `0` failures
 - partitionable multi-book:
   - `60000/sec` with `6` instruments/workers, `1800000` processed, `0` failures
   - `80000/sec` with `8` instruments/workers, `2400000` processed, `0` failures

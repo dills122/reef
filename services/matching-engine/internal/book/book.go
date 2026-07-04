@@ -1,6 +1,11 @@
 package book
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"strings"
+
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 	"github.com/tidwall/btree"
 )
@@ -16,6 +21,20 @@ type Book struct {
 	buys         sideBook
 	sells        sideBook
 	orders       map[string]*orderNode
+}
+
+type Snapshot struct {
+	NextSequence int64           `json:"nextSequence"`
+	Buys         []SnapshotOrder `json:"buys"`
+	Sells        []SnapshotOrder `json:"sells"`
+	Checksum     string          `json:"checksum"`
+}
+
+type SnapshotOrder struct {
+	OrderID    string      `json:"orderId"`
+	Side       domain.Side `json:"side"`
+	LimitPrice int64       `json:"limitPrice"`
+	Sequence   int64       `json:"sequence"`
 }
 
 type sideBook struct {
@@ -109,6 +128,48 @@ func (b *Book) Len(side domain.Side) int {
 	return b.side(side).total
 }
 
+func (b *Book) Snapshot() Snapshot {
+	snapshot := Snapshot{
+		NextSequence: b.nextSequence,
+		Buys:         b.buys.snapshotOrders(),
+		Sells:        b.sells.snapshotOrders(),
+	}
+	snapshot.Checksum = checksum(snapshot)
+	return snapshot
+}
+
+func Restore(snapshot Snapshot) (*Book, bool) {
+	if snapshot.Checksum != "" && snapshot.Checksum != checksum(snapshot.withoutChecksum()) {
+		return nil, false
+	}
+	restored := New()
+	restored.nextSequence = snapshot.NextSequence
+	for _, order := range snapshot.Buys {
+		if order.Side != domain.SideBuy {
+			return nil, false
+		}
+		restored.Add(order.Side, RestingOrder{
+			OrderID:    order.OrderID,
+			LimitPrice: order.LimitPrice,
+			Sequence:   order.Sequence,
+		})
+	}
+	for _, order := range snapshot.Sells {
+		if order.Side != domain.SideSell {
+			return nil, false
+		}
+		restored.Add(order.Side, RestingOrder{
+			OrderID:    order.OrderID,
+			LimitPrice: order.LimitPrice,
+			Sequence:   order.Sequence,
+		})
+	}
+	if restored.Snapshot().Checksum != checksum(snapshot.withoutChecksum()) {
+		return nil, false
+	}
+	return restored, true
+}
+
 func (b *Book) side(side domain.Side) *sideBook {
 	if side == domain.SideBuy {
 		return &b.buys
@@ -164,4 +225,43 @@ func (s *sideBook) bestLevel() (*priceLevel, bool) {
 	}
 	_, level, ok := s.levels.Min()
 	return level, ok
+}
+
+func (s *sideBook) snapshotOrders() []SnapshotOrder {
+	orders := make([]SnapshotOrder, 0, s.total)
+	appendLevel := func(_ int64, level *priceLevel) bool {
+		for node := level.head; node != nil; node = node.next {
+			orders = append(orders, SnapshotOrder{
+				OrderID:    node.order.OrderID,
+				Side:       node.side,
+				LimitPrice: node.order.LimitPrice,
+				Sequence:   node.order.Sequence,
+			})
+		}
+		return true
+	}
+	if s.side == domain.SideBuy {
+		s.levels.Reverse(appendLevel)
+	} else {
+		s.levels.Scan(appendLevel)
+	}
+	return orders
+}
+
+func (s Snapshot) withoutChecksum() Snapshot {
+	s.Checksum = ""
+	return s
+}
+
+func checksum(snapshot Snapshot) string {
+	input := strings.Builder{}
+	input.WriteString(fmt.Sprintf("next=%d;", snapshot.NextSequence))
+	for _, order := range snapshot.Buys {
+		input.WriteString(fmt.Sprintf("B:%s:%d:%d;", order.OrderID, order.LimitPrice, order.Sequence))
+	}
+	for _, order := range snapshot.Sells {
+		input.WriteString(fmt.Sprintf("S:%s:%d:%d;", order.OrderID, order.LimitPrice, order.Sequence))
+	}
+	sum := sha256.Sum256([]byte(input.String()))
+	return hex.EncodeToString(sum[:])
 }

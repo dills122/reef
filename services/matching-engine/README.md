@@ -82,6 +82,9 @@ make bench-matching-engine-load ARGS="--rate 10000 --duration 30s --scenario res
 # Exercise submit/modify/cancel lifecycle behavior. Keep workers=1 for deterministic command order.
 make bench-matching-engine-load ARGS="--rate 10000 --duration 30s --scenario lifecycle --workers 1 --instruments 1"
 
+# Exercise cancel/modify direct unlinking after a deeper resting-book warmup.
+make bench-matching-engine-load ARGS="--rate 20000 --duration 30s --scenario deep-lifecycle --workers 1 --instruments 1"
+
 # Spread load across multiple books to estimate partitionable capacity.
 make bench-matching-engine-load ARGS="--rate 40000 --duration 30s --scenario alternating-cross --workers 4 --instruments 4"
 

@@ -69,6 +69,43 @@ func TestBookDeletesEmptyPriceLevelAndExposesNextBest(t *testing.T) {
 	}
 }
 
+func TestBookSnapshotRestorePreservesPriorityAndChecksum(t *testing.T) {
+	book := New()
+	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b2", 100))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b3", 101))
+	book.Add(domain.SideSell, book.NewRestingOrder("s1", 103))
+	book.Add(domain.SideSell, book.NewRestingOrder("s2", 102))
+
+	snapshot := book.Snapshot()
+	if snapshot.Checksum == "" {
+		t.Fatal("expected snapshot checksum")
+	}
+
+	restored, ok := Restore(snapshot)
+	if !ok {
+		t.Fatalf("expected snapshot restore to succeed")
+	}
+	if restored.Snapshot().Checksum != snapshot.Checksum {
+		t.Fatalf("expected restored checksum %s, got %s", snapshot.Checksum, restored.Snapshot().Checksum)
+	}
+
+	assertIDs(t, popIDs(t, restored, domain.SideBuy, 3), []string{"b1", "b3", "b2"})
+	assertIDs(t, popIDs(t, restored, domain.SideSell, 2), []string{"s2", "s1"})
+}
+
+func TestBookRestoreRejectsChecksumMismatch(t *testing.T) {
+	book := New()
+	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))
+
+	snapshot := book.Snapshot()
+	snapshot.Buys[0].LimitPrice = 102
+
+	if _, ok := Restore(snapshot); ok {
+		t.Fatal("expected tampered snapshot restore to fail")
+	}
+}
+
 func popIDs(t *testing.T, book *Book, side domain.Side, count int) []string {
 	t.Helper()
 	ids := make([]string, 0, count)
