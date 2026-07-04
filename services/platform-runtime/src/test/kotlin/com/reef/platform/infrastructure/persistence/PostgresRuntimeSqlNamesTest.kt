@@ -15,6 +15,8 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.trades", names.trades)
         assertEquals("runtime.runtime_events", names.runtimeEvents)
         assertEquals("runtime.submit_results", names.submitResults)
+        assertEquals("runtime.order_lifecycle_state", names.orderLifecycleState)
+        assertEquals("runtime.market_data_snapshots", names.marketDataSnapshots)
         assertEquals("runtime.canonical_command_results", names.canonicalCommandResults)
         assertEquals("runtime.canonical_venue_events", names.canonicalVenueEvents)
         assertEquals("runtime.canonical_venue_event_batches", names.canonicalVenueEventBatches)

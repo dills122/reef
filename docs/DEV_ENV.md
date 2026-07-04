@@ -62,6 +62,33 @@ Forward-only DB migrations run automatically during `make dev-up` and `make dev-
 make dev-db-migrate
 ```
 
+The first projection-backed market-data snapshot can be refreshed and read through the platform API:
+
+```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/orders/lifecycle-state"
+curl -X POST "http://127.0.0.1:8080/api/v1/market-data/snapshots"
+curl "http://127.0.0.1:8080/api/v1/market-data/snapshots/AAPL"
+curl "http://127.0.0.1:8080/api/v1/market-data/depth/AAPL?levels=5"
+```
+
+The snapshot refresh path rebuilds `runtime.order_lifecycle_state` before updating `runtime.market_data_snapshots`; the explicit lifecycle-state endpoint is useful for inspection and repair. Bounded depth reads aggregate remaining open lifecycle quantity by price at request time.
+
+An opt-in background market-data projector can refresh top-of-book snapshots on background-capable runtime roles:
+
+```bash
+MARKET_DATA_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_POLL_MS=250 \
+MARKET_DATA_PROJECTOR_PROJECTION_NAME=market-data-top-of-book \
+MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME=runtime-normalized-venue-outcomes \
+make dev-up
+```
+
+Projector status is exposed at:
+
+```bash
+curl "http://127.0.0.1:8084/internal/market-data/projector/status"
+```
+
 Stack startup passes `--remove-orphans` so renamed local services, such as the retired all-in-one runtime container, do not keep stale ports or process roles alive.
 
 Optional inline smoke during reset:
@@ -332,9 +359,13 @@ JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `syn
 
 The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
+Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish.
+
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
-Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. The default `STREAM_ACK_PROJECTION_SOURCE=canonical-submit` reads canonical submit outcomes from the runtime Postgres service and updates normalized order/execution/trade/runtime-event read tables in the projection Postgres service. `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch` reads materialized `runtime.canonical_command_outcomes` and projects compact submit result/runtime-event visibility; full order-table reconstruction from this source waits for submit command metadata in the event batch or a durable command-payload join. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
+Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. The default `STREAM_ACK_PROJECTION_SOURCE=canonical-submit` reads canonical submit outcomes from the runtime Postgres service and updates normalized order/execution/trade/runtime-event read tables in the projection Postgres service. `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch` reads materialized `runtime.canonical_command_outcomes`, projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` accepted/rejected lifecycle rows into `submit_results` and `runtime_events`, and reconstructs accepted submit `orders` through the durable `command_log.command_payloads` join when that payload is available. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
+
+Venue event replay/check evidence is exposed through `make dev-venue-event-replay-check`. The check replays stored `runtime.canonical_venue_event_batches.payload_json` through `runtime.runtime_materialize_venue_event_batch`, expects idempotent `0` inserts, compares batch command counts, payload checksums, command outcome payload hashes, missing/extra canonical rows, stream gaps/overlaps, and optionally projection watermarks. Set `DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME=<projection>` to fail on lag for a specific venue-event-batch projector watermark, or `DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY=true` for empty local databases.
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 

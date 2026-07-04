@@ -32,6 +32,94 @@ interface AbuseProtectionHook {
     fun stats(): AbuseProtectionStats
 }
 
+data class AccountRiskCheckRequest(
+    val clientId: String,
+    val route: String,
+    val commandType: String,
+    val commandId: String,
+    val idempotencyKey: String,
+    val correlationId: String,
+    val actorId: String,
+    val participantId: String,
+    val accountId: String,
+    val botId: String,
+    val runId: String,
+    val venueSessionId: String,
+    val instrumentId: String,
+    val orderId: String,
+    val payloadHash: String
+)
+
+enum class AccountRiskDecision {
+    ALLOW,
+    REJECT,
+    BACKPRESSURE,
+    DISABLED_BOT
+}
+
+data class AccountRiskCheckResult(
+    val decision: AccountRiskDecision,
+    val code: String = decision.defaultCode(),
+    val message: String = decision.defaultMessage()
+) {
+    fun toBoundaryError(): BoundaryError? {
+        return when (decision) {
+            AccountRiskDecision.ALLOW -> null
+            AccountRiskDecision.REJECT -> BoundaryError(403, code, message)
+            AccountRiskDecision.BACKPRESSURE -> BoundaryError(429, code, message)
+            AccountRiskDecision.DISABLED_BOT -> BoundaryError(403, code, message)
+        }
+    }
+
+    private companion object {
+        fun AccountRiskDecision.defaultCode(): String {
+            return when (this) {
+                AccountRiskDecision.ALLOW -> "ACCOUNT_RISK_ALLOWED"
+                AccountRiskDecision.REJECT -> "ACCOUNT_RISK_REJECTED"
+                AccountRiskDecision.BACKPRESSURE -> "ACCOUNT_RISK_BACKPRESSURE"
+                AccountRiskDecision.DISABLED_BOT -> "BOT_DISABLED"
+            }
+        }
+
+        fun AccountRiskDecision.defaultMessage(): String {
+            return when (this) {
+                AccountRiskDecision.ALLOW -> "account risk check allowed command"
+                AccountRiskDecision.REJECT -> "account risk check rejected command"
+                AccountRiskDecision.BACKPRESSURE -> "account risk check requested backpressure"
+                AccountRiskDecision.DISABLED_BOT -> "bot is disabled"
+            }
+        }
+    }
+}
+
+interface AccountRiskCheck {
+    fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult
+}
+
+class AllowAllAccountRiskCheck : AccountRiskCheck {
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+    }
+}
+
+class StaticAccountRiskCheck(
+    private val rejectedAccounts: Set<String> = emptySet(),
+    private val backpressuredAccounts: Set<String> = emptySet(),
+    private val disabledBots: Set<String> = emptySet()
+) : AccountRiskCheck {
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        return when {
+            request.botId.isNotBlank() && request.botId in disabledBots ->
+                AccountRiskCheckResult(AccountRiskDecision.DISABLED_BOT)
+            request.accountId.isNotBlank() && request.accountId in backpressuredAccounts ->
+                AccountRiskCheckResult(AccountRiskDecision.BACKPRESSURE)
+            request.accountId.isNotBlank() && request.accountId in rejectedAccounts ->
+                AccountRiskCheckResult(AccountRiskDecision.REJECT)
+            else -> AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+        }
+    }
+}
+
 data class AbuseProtectionStats(
     val mode: String,
     val enabled: Boolean,
@@ -531,6 +619,7 @@ data class BoundaryHooks(
     val authHook: AuthHook,
     val rateLimitHook: RateLimitHook,
     val abuseProtectionHook: AbuseProtectionHook,
+    val accountRiskCheck: AccountRiskCheck,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
@@ -584,6 +673,16 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllAbuseProtectionHook()
     }
 
+    val accountRiskMode = (System.getenv("EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE") ?: "allow-all").lowercase()
+    val accountRiskCheck = when (accountRiskMode) {
+        "static", "cached-static" -> StaticAccountRiskCheck(
+            rejectedAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS")),
+            backpressuredAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS")),
+            disabledBots = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS"))
+        )
+        else -> AllowAllAccountRiskCheck()
+    }
+
     val idempotencyMode = (System.getenv("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
     val retentionPolicy = DefaultIdempotencyRetentionPolicy()
     val idempotencyStore = if (idempotencyMode == "postgres") {
@@ -602,6 +701,7 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         authHook = authHook,
         rateLimitHook = rateLimitHook,
         abuseProtectionHook = abuseProtectionHook,
+        accountRiskCheck = accountRiskCheck,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
         commandCaptureStore = defaultCommandCaptureStore(commandProcessingMode),
@@ -621,6 +721,14 @@ private fun parseStaticTokens(raw: String?): Map<String, String> {
             clientId to token
         }
         .toMap()
+}
+
+private fun parseCsvSet(raw: String?): Set<String> {
+    if (raw.isNullOrBlank()) return emptySet()
+    return raw.split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toSet()
 }
 
 private fun parseRejectCodes(raw: String?): Set<String> {

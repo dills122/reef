@@ -85,6 +85,30 @@ class ExternalApiBoundaryTest {
     }
 
     @Test
+    fun staticAccountRiskCheckReturnsConfiguredDecisions() {
+        val hook = StaticAccountRiskCheck(
+            rejectedAccounts = setOf("reject-account"),
+            backpressuredAccounts = setOf("slow-account"),
+            disabledBots = setOf("disabled-bot")
+        )
+
+        assertEquals(AccountRiskDecision.ALLOW, hook.evaluate(accountRiskRequest()).decision)
+        assertEquals(
+            AccountRiskDecision.REJECT,
+            hook.evaluate(accountRiskRequest(accountId = "reject-account")).decision
+        )
+        assertEquals(
+            AccountRiskDecision.BACKPRESSURE,
+            hook.evaluate(accountRiskRequest(accountId = "slow-account")).decision
+        )
+        assertEquals(
+            AccountRiskDecision.DISABLED_BOT,
+            hook.evaluate(accountRiskRequest(botId = "disabled-bot")).decision
+        )
+        assertEquals(429, AccountRiskCheckResult(AccountRiskDecision.BACKPRESSURE).toBoundaryError()?.status)
+    }
+
+    @Test
     fun fixedWindowRateLimitHookRejectsAfterThreshold() {
         val store = InMemoryRateLimitStore()
         val hook = FixedWindowRateLimitHook(
@@ -224,5 +248,28 @@ class ExternalApiBoundaryTest {
         hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
         hook.observe("client-1", "/api/v1/orders/modify", 200, "INVALID_STATE")
         assertEquals("ABUSE_BLOCKED", hook.allow("client-1", "/api/v1/orders/modify")?.code)
+    }
+
+    private fun accountRiskRequest(
+        accountId: String = "account-1",
+        botId: String = "bot-1"
+    ): AccountRiskCheckRequest {
+        return AccountRiskCheckRequest(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            commandType = "SubmitOrder",
+            commandId = "cmd-1",
+            idempotencyKey = "idem-1",
+            correlationId = "corr-1",
+            actorId = "actor-1",
+            participantId = "participant-1",
+            accountId = accountId,
+            botId = botId,
+            runId = "run-1",
+            venueSessionId = "session-1",
+            instrumentId = "AAPL",
+            orderId = "ord-1",
+            payloadHash = "hash-1"
+        )
     }
 }

@@ -62,6 +62,58 @@ data class ProjectionStatus(
     val watermarks: List<ProjectionWatermark>
 )
 
+data class MarketDataSnapshot(
+    val projectionName: String,
+    val sourceProjectionName: String,
+    val instrumentId: String,
+    val bestBidPrice: String,
+    val bestBidQuantity: String,
+    val bestAskPrice: String,
+    val bestAskQuantity: String,
+    val currency: String,
+    val lastPartitionSequence: Long,
+    val lag: Long,
+    val updatedAt: String
+)
+
+data class MarketDataDepthLevel(
+    val price: String,
+    val quantity: String
+)
+
+data class MarketDataDepthSnapshot(
+    val projectionName: String,
+    val sourceProjectionName: String,
+    val instrumentId: String,
+    val bidLevels: List<MarketDataDepthLevel>,
+    val askLevels: List<MarketDataDepthLevel>,
+    val currency: String,
+    val levels: Int,
+    val lastPartitionSequence: Long,
+    val lag: Long,
+    val updatedAt: String
+)
+
+data class OrderLifecycleState(
+    val orderId: String,
+    val engineOrderId: String,
+    val instrumentId: String,
+    val participantId: String,
+    val accountId: String,
+    val side: String,
+    val orderType: String,
+    val originalQuantityUnits: String,
+    val remainingQuantityUnits: String,
+    val filledQuantityUnits: String,
+    val limitPrice: String,
+    val currency: String,
+    val timeInForce: String,
+    val status: String,
+    val acceptedAt: String,
+    val lastEventAt: String,
+    val updatedAt: String
+)
+
 data class VenueCommandOutcomeFact(
     val commandId: String,
     val commandType: String,
@@ -187,6 +239,32 @@ interface RuntimePersistence {
         return 0
     }
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return null
+    }
+    fun rebuildOrderLifecycleState(): Long {
+        return 0
+    }
+    fun orderLifecycleState(orderId: String): OrderLifecycleState? {
+        return null
+    }
+    fun refreshMarketDataSnapshots(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): Long {
+        return 0
+    }
+    fun marketDataSnapshot(
+        instrumentId: String,
+        projectionName: String = "market-data-top-of-book"
+    ): MarketDataSnapshot? {
+        return null
+    }
+    fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int = 5,
+        projectionName: String = "market-data-depth",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): MarketDataDepthSnapshot? {
         return null
     }
     fun acceptedOrder(orderId: String): PersistedOrder?

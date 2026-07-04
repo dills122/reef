@@ -31,7 +31,7 @@ For the current project phase:
 Current implementation checkpoint:
 - `/api/v1/orders/submit`, `/api/v1/orders/cancel`, and `/api/v1/orders/modify` exist
 - writes require `X-Client-Id` and `Idempotency-Key`
-- auth, rate-limit, idempotency, abuse-protection, and command-capture hooks exist in the runtime boundary layer
+- auth, rate-limit, idempotency, account-risk, abuse-protection, and command-capture hooks exist in the runtime boundary layer
 - durable boundary storage uses explicit migration-owned `boundary.*` table names in Docker/local startup
 
 Target deployable shape (later):
@@ -75,12 +75,19 @@ Rationale:
 - validate schema and semantic rules at boundary
 - return structured error responses
 
-### 6. Correlation metadata propagation
+### 6. Account and bot risk pre-check
+
+- run account/bot risk checks after request validation and before durable command acceptance
+- non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages
+- supported boundary decisions are `allow`, `reject`, `backpressure`, and `disabled_bot`
+- keep the first implementation allow-all/static and cached; do not add projection reads, exposure scans, or synchronous heavy storage work to the hot path
+
+### 7. Correlation metadata propagation
 
 - generate/accept correlation and trace IDs
 - pass through to internal command metadata
 
-### 7. Audit-safe logging
+### 8. Audit-safe logging
 
 - structured logs with client ID, operation, command ID, trace ID
 - avoid logging sensitive token material

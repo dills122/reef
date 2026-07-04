@@ -109,6 +109,148 @@ class InMemoryRuntimePersistenceTest {
     }
 
     @Test
+    fun refreshesMarketDataSnapshotsFromOpenLifecycleState() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-1",
+                engineOrderId = "eng-bid-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:00Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-2",
+                engineOrderId = "eng-bid-2",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "50",
+                limitPrice = "150250000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:01Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ask-1",
+                engineOrderId = "eng-ask-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "75",
+                limitPrice = "150260000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:02Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ask-2",
+                engineOrderId = "eng-ask-2",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "80",
+                limitPrice = "150270000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:03Z"
+            )
+        )
+        persistence.saveExecutions(
+            listOf(
+                ExecutionCreated(
+                    eventId = "exec-bid-1",
+                    executionId = "exec-bid-1",
+                    orderId = "bid-1",
+                    instrumentId = "AAPL",
+                    quantityUnits = "40",
+                    executionPrice = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:04Z"
+                )
+            )
+        )
+        persistence.saveEvent(
+            RuntimeEvent(
+                eventId = "evt-ask-cancelled-1",
+                eventType = "OrderCancelled",
+                orderId = "ask-1",
+                traceId = "trace-ask-1",
+                causationId = "cmd-cancel-ask-1",
+                correlationId = "corr-ask-1",
+                actorId = "trader-1",
+                producer = "unit-test",
+                schemaVersion = "v1",
+                payloadJson = "{}",
+                occurredAt = "2026-03-14T18:00:05Z"
+            )
+        )
+
+        assertEquals(4, persistence.rebuildOrderLifecycleState())
+        val filledBid = persistence.orderLifecycleState("bid-1")
+        assertNotNull(filledBid)
+        assertEquals("PARTIALLY_FILLED", filledBid.status)
+        assertEquals("60", filledBid.remainingQuantityUnits)
+        val cancelledAsk = persistence.orderLifecycleState("ask-1")
+        assertNotNull(cancelledAsk)
+        assertEquals("CANCELLED", cancelledAsk.status)
+        assertEquals("0", cancelledAsk.remainingQuantityUnits)
+        assertEquals(1, persistence.refreshMarketDataSnapshots())
+        val snapshot = persistence.marketDataSnapshot("AAPL")
+        assertNotNull(snapshot)
+        assertEquals("market-data-top-of-book", snapshot.projectionName)
+        assertEquals("runtime-normalized-venue-outcomes", snapshot.sourceProjectionName)
+        assertEquals("150250000000", snapshot.bestBidPrice)
+        assertEquals("110", snapshot.bestBidQuantity)
+        assertEquals("150270000000", snapshot.bestAskPrice)
+        assertEquals("80", snapshot.bestAskQuantity)
+        assertEquals("USD", snapshot.currency)
+
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-3",
+                engineOrderId = "eng-bid-3",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "25",
+                limitPrice = "150240000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:06Z"
+            )
+        )
+
+        val depth = persistence.marketDataDepthSnapshot("AAPL", levels = 2)
+        assertNotNull(depth)
+        assertEquals(listOf("150250000000", "150240000000"), depth.bidLevels.map { it.price })
+        assertEquals(listOf("110", "25"), depth.bidLevels.map { it.quantity })
+        assertEquals(listOf("150270000000"), depth.askLevels.map { it.price })
+        assertEquals(listOf("80"), depth.askLevels.map { it.quantity })
+    }
+
+    @Test
     fun materializesVenueEventBatchIdempotently() {
         val persistence = InMemoryRuntimePersistence()
         val batch = venueEventBatch()
@@ -194,6 +336,58 @@ class InMemoryRuntimePersistenceTest {
         val events = persistence.eventsForOrder("ord-rejected")
         assertEquals(1, events.size)
         assertEquals("OrderRejected", events.first().eventType)
+    }
+
+    @Test
+    fun projectsCancelAndModifyOutcomesIntoLifecycleRowsWithWatermarkReplay() {
+        val persistence = InMemoryRuntimePersistence()
+        val batch = venueEventBatch().copy(
+            batchId = "batch-lifecycle",
+            payloadChecksum = "checksum-lifecycle",
+            firstSequence = 50,
+            lastSequence = 51,
+            commandCount = 2,
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-cancel-1",
+                    commandType = "CancelOrder",
+                    streamSequence = 50,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-cancel-1",
+                    instrumentId = "AAPL",
+                    orderId = "ord-1",
+                    resultStatus = "accepted",
+                    resultPayloadJson = """{"accepted":{"eventId":"evt-cancel-1","engineOrderId":"eng-ord-1","occurredAt":"2026-07-04T18:00:03Z"}}"""
+                ),
+                VenueCommandOutcomeFact(
+                    commandId = "cmd-modify-1",
+                    commandType = "ModifyOrder",
+                    streamSequence = 51,
+                    deliveredCount = 1,
+                    payloadHash = "payload-hash-modify-1",
+                    instrumentId = "AAPL",
+                    orderId = "ord-1",
+                    resultStatus = "rejected",
+                    rejectCode = "ORDER_NOT_OPEN",
+                    resultPayloadJson = """{"rejected":{"eventId":"evt-modify-1","code":"ORDER_NOT_OPEN","reason":"order closed","occurredAt":"2026-07-04T18:00:04Z"}}"""
+                )
+            )
+        )
+
+        assertEquals(2, persistence.materializeVenueEventBatch(batch))
+        assertEquals(2, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+        assertEquals(0, persistence.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10))
+
+        assertEquals("evt-cancel-1", persistence.submitResult("cmd-cancel-1")?.accepted?.eventId)
+        assertEquals("evt-modify-1", persistence.submitResult("cmd-modify-1")?.rejected?.eventId)
+        val events = persistence.eventsForOrder("ord-1")
+        assertEquals(listOf("OrderCancelled", "OrderRejected"), events.map { it.eventType })
+        assertEquals(listOf("cmd-cancel-1", "cmd-modify-1"), events.map { it.traceId })
+
+        val status = persistence.projectionStatus("runtime-normalized-venue-outcomes", source = "venue-event-batch")
+        assertEquals(0, status.lag)
+        assertEquals(51L, status.watermarks.single().lastPartitionSequence)
+        assertEquals(51L, status.watermarks.single().canonicalMaxPartitionSequence)
     }
 
     private fun venueEventBatch(): VenueEventBatchFact {

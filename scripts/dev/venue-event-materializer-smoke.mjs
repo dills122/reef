@@ -187,6 +187,11 @@ async function projectCompactLifecycleRows(outcome) {
     throw new Error(`projected runtime_event producer mismatch: ${JSON.stringify(eventRows[0])}`);
   }
 
+  const orderResponse = JSON.parse(await getText(`${runtimeUrl}/orders/${encodeURIComponent(orderId)}`));
+  if (orderResponse.orderId !== orderId || orderResponse.instrumentId !== "AAPL") {
+    throw new Error(`projected order read API did not expose expected order state: ${JSON.stringify(orderResponse)}`);
+  }
+
   const watermarkRows = await queryRuntimeRows(`
     SELECT projection_name, partition_id, last_partition_seq, last_error
     FROM runtime.projection_watermarks
@@ -263,11 +268,16 @@ async function runRuntimePsql(sql) {
 }
 
 async function getJson(url) {
+  const body = await getText(url);
+  return JSON.parse(body || "{}");
+}
+
+async function getText(url) {
   const response = await request("GET", url, null, {}, 5000);
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new Error(`GET ${url} failed (${response.statusCode}): ${response.body}`);
   }
-  return JSON.parse(response.body || "{}");
+  return response.body;
 }
 
 async function postJson(url, payload, headers = {}) {

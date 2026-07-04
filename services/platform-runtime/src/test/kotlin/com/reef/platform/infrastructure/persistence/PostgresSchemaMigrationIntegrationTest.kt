@@ -35,6 +35,9 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0011_canonical_command_outcome_projection.sql',
                   'runtime/0012_cap_command_outcome_projection_batch.sql',
                   'runtime/0013_scope_venue_event_batch_identity.sql',
+                  'runtime/0014_lifecycle_command_outcome_projection.sql',
+                  'runtime/0015_market_data_snapshots.sql',
+                  'runtime/0016_order_lifecycle_state.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -92,7 +95,10 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0010_venue_event_batch_materialization.sql",
                     "runtime/0011_canonical_command_outcome_projection.sql",
                     "runtime/0012_cap_command_outcome_projection_batch.sql",
-                    "runtime/0013_scope_venue_event_batch_identity.sql"
+                    "runtime/0013_scope_venue_event_batch_identity.sql",
+                    "runtime/0014_lifecycle_command_outcome_projection.sql",
+                    "runtime/0015_market_data_snapshots.sql",
+                    "runtime/0016_order_lifecycle_state.sql"
                 ),
                 appliedMigrations
             )
@@ -116,6 +122,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.canonical_venue_events",
                 "runtime.canonical_venue_event_batches",
                 "runtime.canonical_command_outcomes",
+                "runtime.market_data_snapshots",
+                "runtime.order_lifecycle_state",
                 "runtime.projection_watermarks",
                 "runtime.trades"
             )
@@ -135,6 +143,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'canonical_venue_events',
                     'canonical_venue_event_batches',
                     'canonical_command_outcomes',
+                    'market_data_snapshots',
+                    'order_lifecycle_state',
                     'projection_watermarks',
                     'reference_instruments',
                     'auth_roles',
@@ -360,6 +370,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'canonical_venue_events',
                     'canonical_venue_event_batches',
                     'canonical_command_outcomes',
+                    'market_data_snapshots',
+                    'order_lifecycle_state',
                     'projection_watermarks',
                     'reference_instruments',
                     'auth_roles',

@@ -10,6 +10,7 @@
     "dev:db:migrate": "bun scripts/dev/db/migrate.mjs",
     "dev:smoke": "bun scripts/dev/smoke.mjs",
     "dev:smoke:venue-event-materializer": "bun scripts/dev/venue-event-materializer-smoke.mjs",
+    "dev:venue-event-replay-check": "bun scripts/dev/venue-event-replay-check.mjs",
     "dev:stress": "bun scripts/dev/stress.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs"

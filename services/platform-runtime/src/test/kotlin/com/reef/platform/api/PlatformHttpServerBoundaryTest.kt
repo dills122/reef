@@ -909,6 +909,42 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun capturedAckRiskRejectsBeforeCommandLogAppend() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            accountRiskCheck = StaticAccountRiskCheck(rejectedAccounts = setOf("account-1"))
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-reject",
+                    "Idempotency-Key" to "idem-risk-reject"
+                ),
+                body = validSubmitBody("cmd-risk-reject", "trace-risk-reject", "ord-risk-reject")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-risk-reject")
+
+            assertEquals(403, response.status)
+            assertContains(response.body, "\"code\":\"ACCOUNT_RISK_REJECTED\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun asyncCommandStatsEndpointReturnsQueueDepths() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1359,6 +1395,37 @@ class PlatformHttpServerBoundaryTest {
             assertContains(hotPath.body, "\"api.streamAck.publishAck\"")
             assertContains(hotPath.body, "\"api.streamAck.markPublished\"")
             assertContains(hotPath.body, "\"api.streamAck.total\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun streamAckRiskDisabledBotRejectsBeforeReserveOrPublish() {
+        val publisher = RecordingStreamCommandPublisher()
+        val intakeStore = InMemoryStreamCommandIntakeStore()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = intakeStore,
+            streamCommandPublisher = publisher,
+            accountRiskCheck = StaticAccountRiskCheck(disabledBots = setOf("bot-1"))
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-risk-disabled-bot"
+                ),
+                body = validSubmitBody("cmd-stream-risk-disabled-bot", "trace-stream-risk-disabled-bot", "ord-stream-risk-disabled-bot", extra = streamRoutingExtra())
+            )
+
+            assertEquals(403, response.status)
+            assertContains(response.body, "\"code\":\"BOT_DISABLED\"")
+            assertEquals(0, publisher.published.size)
+            assertEquals(null, intakeStore.findByCommandId("cmd-stream-risk-disabled-bot"))
         } finally {
             server.stop(0)
         }
@@ -1835,6 +1902,7 @@ class PlatformHttpServerBoundaryTest {
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+        accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
@@ -1873,6 +1941,7 @@ class PlatformHttpServerBoundaryTest {
             api = api,
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
+            accountRiskCheck = accountRiskCheck,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -1898,6 +1967,7 @@ class PlatformHttpServerBoundaryTest {
         boundary: ExternalApiBoundary = ExternalApiBoundary(),
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+        accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
@@ -1928,6 +1998,7 @@ class PlatformHttpServerBoundaryTest {
             api = api,
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
+            accountRiskCheck = accountRiskCheck,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,

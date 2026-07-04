@@ -16,6 +16,8 @@ data class PostgresRuntimeSqlNames(
     val runtimeEvents = qualify(runtimeSchemaName, "runtime_events")
     val runtimeTraceSequences = qualify(runtimeSchemaName, "runtime_trace_sequences")
     val submitResults = qualify(runtimeSchemaName, "submit_results")
+    val orderLifecycleState = qualify(runtimeSchemaName, "order_lifecycle_state")
+    val marketDataSnapshots = qualify(runtimeSchemaName, "market_data_snapshots")
     val canonicalCommandResults = qualify(runtimeSchemaName, "canonical_command_results")
     val canonicalVenueEvents = qualify(runtimeSchemaName, "canonical_venue_events")
     val canonicalVenueEventBatches = qualify(runtimeSchemaName, "canonical_venue_event_batches")

@@ -11,6 +11,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
+import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -71,6 +72,7 @@ class PlatformHttpServer(
     private val api: PlatformApi = PlatformApi(),
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
+    private val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
@@ -119,6 +121,13 @@ class PlatformHttpServer(
     private val venueEventMaterializerPollMs: Long = RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_POLL_MS", 25L, min = 1L),
     private val venueEventMaterializerFetchTimeoutMs: Long =
         RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", 200L, min = 1L),
+    private val marketDataProjectorEnabled: Boolean = RuntimeEnv.bool("MARKET_DATA_PROJECTOR_ENABLED", false),
+    private val marketDataProjectorProjectionName: String =
+        RuntimeEnv.string("MARKET_DATA_PROJECTOR_PROJECTION_NAME", "market-data-top-of-book"),
+    private val marketDataProjectorSourceProjectionName: String =
+        RuntimeEnv.string("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", "runtime-normalized-venue-outcomes"),
+    private val marketDataProjectorPollMs: Long =
+        RuntimeEnv.long("MARKET_DATA_PROJECTOR_POLL_MS", 250L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -188,7 +197,8 @@ class PlatformHttpServer(
             streamCommandHealthJson = { streamCommandHealthJson() },
             streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
             venueEventMaterializerStatsJson = { venueEventMaterializerStatsJson() },
-            projectorStatusJson = { projectorStatusJson() }
+            projectorStatusJson = { projectorStatusJson() },
+            marketDataProjectorStatsJson = { marketDataProjectorStatusJson() }
         )
     }
 
@@ -201,6 +211,7 @@ class PlatformHttpServer(
         api = api,
         boundary = deps.boundary,
         abuseProtectionHook = deps.abuseProtectionHook,
+        accountRiskCheck = deps.accountRiskCheck,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
@@ -388,6 +399,50 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.orders())
         }
 
+        server.createContext("/api/v1/orders/lifecycle-state") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, api.rebuildOrderLifecycleState())
+        }
+
+        server.createContext("/api/v1/market-data/snapshots/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
+            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
+            val response = api.marketDataSnapshot(instrumentId, projectionName)
+            val status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200
+            writeJson(exchange, status, response)
+        }
+
+        server.createContext("/api/v1/market-data/snapshots") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
+            val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
+        }
+
+        server.createContext("/api/v1/market-data/depth/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
+            val levels = queryValue(exchange, "levels").toIntOrNull() ?: 5
+            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-depth" }
+            val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            val response = api.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
+            val status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200
+            writeJson(exchange, status, response)
+        }
+
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -464,6 +519,9 @@ class PlatformHttpServer(
         }
         if (venueEventMaterializerShouldStart()) {
             startVenueEventMaterializer()
+        }
+        if (marketDataProjectorShouldStart()) {
+            startMarketDataProjector()
         }
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
@@ -546,6 +604,40 @@ class PlatformHttpServer(
                 handleApiV1MutationResponse(request, "/api/v1/orders/modify") { body -> api.modifyOrder(body) }
             request.path == "/api/v1/orders/cancel" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/cancel") { body -> api.cancelOrder(body) }
+            request.path == "/api/v1/orders/lifecycle-state" && request.method == "POST" ->
+                PlatformHotPathResponse(status = 200, body = api.rebuildOrderLifecycleState())
+            request.path == "/api/v1/market-data/snapshots" && request.method == "POST" ->
+                PlatformHotPathResponse(
+                    status = 200,
+                    body = api.refreshMarketDataSnapshots(
+                        queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" },
+                        queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+                    )
+                )
+            request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {
+                val instrumentId = request.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
+                val response = api.marketDataSnapshot(
+                    instrumentId,
+                    queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" }
+                )
+                PlatformHotPathResponse(
+                    status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200,
+                    body = response
+                )
+            }
+            request.path.startsWith("/api/v1/market-data/depth/") && request.method == "GET" -> {
+                val instrumentId = request.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
+                val response = api.marketDataDepthSnapshot(
+                    instrumentId = instrumentId,
+                    levels = queryValue(request.query, "levels").toIntOrNull() ?: 5,
+                    projectionName = queryValue(request.query, "projectionName").ifBlank { "market-data-depth" },
+                    sourceProjectionName = queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+                )
+                PlatformHotPathResponse(
+                    status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200,
+                    body = response
+                )
+            }
             else -> legacySetupRoutes.handle(request)
         }
     }
@@ -736,6 +828,14 @@ class PlatformHttpServer(
             }
         }
 
+        val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
+            return
+        }
+
         val reservation = try {
             HotPathMetrics.time("api.commandCapture.reserve") {
                 commandCaptureStore.reserveReceived(clientId, route, idempotencyKey, correlationId, body)
@@ -899,6 +999,13 @@ class PlatformHttpServer(
             if (backpressure != null) {
                 return PlatformHotPathResponse(backpressure.status, boundary.toErrorJson(backpressure, correlationId))
             }
+        }
+
+        val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            return PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
         }
 
         val reservation = try {
@@ -1143,6 +1250,16 @@ class PlatformHttpServer(
             is EitherBoundaryError.Envelope -> envelopeResult.envelope
         }
 
+        val riskViolation = HotPathMetrics.time("api.streamAck.accountRisk") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+        }
+        if (riskViolation != null) {
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
+            )
+        }
+
         val abuseViolation = HotPathMetrics.time("api.streamAck.abuse") {
             abuseProtectionHook.allow(clientId, route)
         }
@@ -1254,6 +1371,61 @@ class PlatformHttpServer(
         return CompletableFuture.completedFuture(response)
     }
 
+    private fun accountRiskViolation(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope? = null
+    ): BoundaryError? {
+        val request = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+        return accountRiskCheck.evaluate(request).toBoundaryError()
+    }
+
+    private fun accountRiskRequest(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope?
+    ): AccountRiskCheckRequest {
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val commandType = envelope?.commandType ?: commandType(route)
+        return AccountRiskCheckRequest(
+            clientId = clientId,
+            route = route,
+            commandType = commandType,
+            commandId = envelope?.commandId ?: json.string("commandId"),
+            idempotencyKey = idempotencyKey,
+            correlationId = correlationId,
+            actorId = envelope?.actorId ?: json.string("actorId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId"),
+            botId = envelope?.botId ?: json.string("botId"),
+            runId = envelope?.runId ?: json.string("runId").ifBlank { json.string("scenarioRunId") },
+            venueSessionId = envelope?.venueSessionId ?: json.string("venueSessionId"),
+            instrumentId = envelope?.instrumentId ?: json.string("instrumentId"),
+            orderId = envelope?.orderId ?: json.string("orderId"),
+            payloadHash = envelope?.payloadHash ?: sha256Hex(body)
+        )
+    }
+
+    private fun commandType(route: String): String {
+        return when {
+            route.endsWith("/orders/submit") -> "SubmitOrder"
+            route.endsWith("/orders/cancel") -> "CancelOrder"
+            route.endsWith("/orders/modify") -> "ModifyOrder"
+            else -> "UnknownCommand"
+        }
+    }
+
+    private fun sha256Hex(value: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
     private fun handleAcceptedAsyncMutation(
         exchange: HttpExchange,
         route: String,
@@ -1271,6 +1443,14 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existing, correlationId)
+            return
+        }
+
+        val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
             return
         }
 
@@ -1334,6 +1514,13 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existing, correlationId)
+        }
+
+        val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
+            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (riskViolation != null) {
+            return PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
         }
 
         val abuseViolation = HotPathMetrics.time("api.abuse.allow") {
@@ -1991,6 +2178,25 @@ class PlatformHttpServer(
         )
     }
 
+    private fun marketDataProjectorStatusJson(): String {
+        val stats = MarketDataProjectionMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to marketDataProjectorShouldStart(),
+            "role" to runtimeRole.configValue,
+            "projectionName" to marketDataProjectorProjectionName,
+            "sourceProjectionName" to marketDataProjectorSourceProjectionName,
+            "pollIntervalMs" to marketDataProjectorPollMs,
+            "metrics" to mapOf(
+                "refreshes" to stats.refreshes,
+                "refreshedRows" to stats.refreshedRows,
+                "failed" to stats.failed,
+                "lastRefreshedAt" to stats.lastRefreshedAt,
+                "lastFailedAt" to stats.lastFailedAt,
+                "lastError" to stats.lastError
+            )
+        )
+    }
+
     private fun startStreamCommandWorkers() {
         val partitions = streamWorkerPartitions()
         if (partitions.isEmpty()) {
@@ -2030,6 +2236,20 @@ class PlatformHttpServer(
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,
             workerName = "reef-canonical-projector-$streamAckProjectionName"
+        ).start()
+    }
+
+    private fun marketDataProjectorShouldStart(): Boolean {
+        return runtimeRole.backgroundWorkersEnabled && marketDataProjectorEnabled
+    }
+
+    private fun startMarketDataProjector() {
+        MarketDataProjectionWorker(
+            api = api,
+            projectionName = marketDataProjectorProjectionName,
+            sourceProjectionName = marketDataProjectorSourceProjectionName,
+            pollIntervalMs = marketDataProjectorPollMs,
+            workerName = "reef-market-data-projector-$marketDataProjectorProjectionName"
         ).start()
     }
 
@@ -2129,6 +2349,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
             rateLimitHook = hooks.rateLimitHook
         ),
         abuseProtectionHook = hooks.abuseProtectionHook,
+        accountRiskCheck = hooks.accountRiskCheck,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
@@ -2149,6 +2370,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
 data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
     val abuseProtectionHook: AbuseProtectionHook,
+    val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,

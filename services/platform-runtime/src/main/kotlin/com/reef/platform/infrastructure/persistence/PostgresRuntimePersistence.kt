@@ -39,6 +39,7 @@ class PostgresRuntimePersistence(
         val partitionId: Int,
         val partitionSequence: Long,
         val outcome: CanonicalCommandOutcome,
+        val commandPayloadJson: String = "{}",
         val partitionRow: Int = 0
     )
 
@@ -237,6 +238,47 @@ class PostgresRuntimePersistence(
                       code TEXT NOT NULL,
                       reason TEXT NOT NULL,
                       occurred_at TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.orderLifecycleState} (
+                      order_id TEXT PRIMARY KEY,
+                      engine_order_id TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      participant_id TEXT NOT NULL,
+                      account_id TEXT NOT NULL,
+                      side TEXT NOT NULL,
+                      order_type TEXT NOT NULL,
+                      original_quantity_units TEXT NOT NULL,
+                      remaining_quantity_units TEXT NOT NULL,
+                      filled_quantity_units TEXT NOT NULL,
+                      limit_price TEXT NOT NULL,
+                      currency TEXT NOT NULL,
+                      time_in_force TEXT NOT NULL,
+                      status TEXT NOT NULL,
+                      accepted_at TEXT NOT NULL,
+                      last_event_at TEXT NOT NULL,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.marketDataSnapshots} (
+                      projection_name TEXT NOT NULL,
+                      source_projection_name TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      best_bid_price TEXT NOT NULL DEFAULT '',
+                      best_bid_quantity TEXT NOT NULL DEFAULT '',
+                      best_ask_price TEXT NOT NULL DEFAULT '',
+                      best_ask_quantity TEXT NOT NULL DEFAULT '',
+                      currency TEXT NOT NULL DEFAULT '',
+                      last_partition_seq BIGINT NOT NULL DEFAULT 0,
+                      lag BIGINT NOT NULL DEFAULT 0,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (projection_name, instrument_id)
                     )
                     """.trimIndent()
                 )
@@ -1249,10 +1291,13 @@ class PostgresRuntimePersistence(
                     AS $$
                     DECLARE
                       projected_count BIGINT := 0;
+                      effective_batch_size INTEGER := 0;
                     BEGIN
                       IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
                         RETURN 0;
                       END IF;
+
+                      effective_batch_size := LEAST(p_batch_size, ${CanonicalCommandOutcomeProjectionMaxBatchSize});
 
                       WITH selected_partitions AS (
                         SELECT DISTINCT partition_id
@@ -1268,7 +1313,7 @@ class PostgresRuntimePersistence(
                       partition_budget AS (
                         SELECT GREATEST(
                           1,
-                          CEIL(p_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
+                          CEIL(effective_batch_size::NUMERIC / GREATEST((SELECT COUNT(*) FROM selected_partitions), 1))::INTEGER
                         ) AS per_partition_limit
                       ),
                       ranked AS (
@@ -1276,6 +1321,7 @@ class PostgresRuntimePersistence(
                           canonical.partition_id,
                           canonical.stream_sequence,
                           canonical.command_id,
+                          canonical.command_type,
                           canonical.order_id,
                           canonical.result_status,
                           canonical.reject_code,
@@ -1290,7 +1336,7 @@ class PostgresRuntimePersistence(
                         LEFT JOIN ${names.projectionWatermarks} watermark
                           ON watermark.projection_name = p_projection_name
                          AND watermark.partition_id = canonical.partition_id
-                        WHERE canonical.command_type = 'SubmitOrder'
+                        WHERE canonical.command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                           AND canonical.stream_sequence > COALESCE(watermark.last_partition_seq, 0)
                       ),
                       eligible AS (
@@ -1320,7 +1366,12 @@ class PostgresRuntimePersistence(
                             'events', jsonb_build_array(
                               jsonb_build_object(
                                 'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
-                                'eventType', CASE WHEN result_status = 'rejected' THEN 'OrderRejected' ELSE 'OrderAccepted' END,
+                                'eventType', CASE
+                                  WHEN result_status = 'rejected' THEN 'OrderRejected'
+                                  WHEN command_type = 'CancelOrder' THEN 'OrderCancelled'
+                                  WHEN command_type = 'ModifyOrder' THEN 'OrderModified'
+                                  ELSE 'OrderAccepted'
+                                END,
                                 'orderId', order_id,
                                 'traceId', command_id,
                                 'causationId', command_id,
@@ -1803,12 +1854,14 @@ class PostgresRuntimePersistence(
         if (ownedPartitions.isEmpty()) return 0
         val watermarks = projectionWatermarkMap(projectionName, ownedPartitions)
         val perPartitionLimit = ((effectiveBatchSize + ownedPartitions.size - 1) / ownedPartitions.size).coerceAtLeast(1)
+        val includeCommandPayload = commandPayloadSideTableAvailable()
         val candidates = ownedPartitions
             .flatMap { partitionId ->
                 canonicalCommandProjectionCandidates(
                     partitionId = partitionId,
                     afterPartitionSequence = watermarks[partitionId] ?: 0L,
-                    limit = perPartitionLimit
+                    limit = perPartitionLimit,
+                    includeCommandPayload = includeCommandPayload
                 ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
             }
             .sortedWith(
@@ -1823,7 +1876,7 @@ class PostgresRuntimePersistence(
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
-                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome().toJsonObject() }
+                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson).toJsonObject() }
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
                 updateProjectionWatermarks(
                     conn,
@@ -1875,7 +1928,7 @@ class PostgresRuntimePersistence(
                 """
                 SELECT DISTINCT partition_id
                 FROM ${names.canonicalCommandOutcomes}
-                WHERE command_type = 'SubmitOrder'
+                WHERE command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                 ORDER BY partition_id
                 """.trimIndent()
             ).use { ps ->
@@ -1949,9 +2002,23 @@ class PostgresRuntimePersistence(
     private fun canonicalCommandProjectionCandidates(
         partitionId: Int,
         afterPartitionSequence: Long,
-        limit: Int
+        limit: Int,
+        includeCommandPayload: Boolean
     ): List<CommandProjectionCandidate> {
         canonicalConnection().use { conn ->
+            val payloadSelect = if (includeCommandPayload) {
+                "COALESCE(payloads.payload_json::TEXT, '{}') AS command_payload"
+            } else {
+                "'{}' AS command_payload"
+            }
+            val payloadJoin = if (includeCommandPayload) {
+                """
+                LEFT JOIN command_log.command_payloads payloads
+                  ON payloads.command_id = canonical.command_id
+                """.trimIndent()
+            } else {
+                ""
+            }
             conn.prepareStatement(
                 """
                 SELECT
@@ -1969,11 +2036,13 @@ class PostgresRuntimePersistence(
                   order_id,
                   result_status,
                   reject_code,
-                  result_payload::TEXT AS result_payload
-                FROM ${names.canonicalCommandOutcomes}
-                WHERE partition_id = ?
-                  AND stream_sequence > ?
-                  AND command_type = 'SubmitOrder'
+                  result_payload::TEXT AS result_payload,
+                  $payloadSelect
+                FROM ${names.canonicalCommandOutcomes} canonical
+                $payloadJoin
+                WHERE canonical.partition_id = ?
+                  AND canonical.stream_sequence > ?
+                  AND canonical.command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                 ORDER BY stream_sequence
                 LIMIT ?
                 """.trimIndent()
@@ -2004,12 +2073,24 @@ class PostgresRuntimePersistence(
                         out.add(
                             CommandProjectionCandidate(
                                 partitionId = outcome.partition,
-                                partitionSequence = outcome.streamSequence,
-                                outcome = outcome
-                            )
+                            partitionSequence = outcome.streamSequence,
+                            outcome = outcome,
+                            commandPayloadJson = rs.getString("command_payload")
                         )
+                    )
                     }
                     return out
+                }
+            }
+        }
+    }
+
+    private fun commandPayloadSideTableAvailable(): Boolean {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement("SELECT to_regclass('command_log.command_payloads') IS NOT NULL").use { ps ->
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getBoolean(1)
                 }
             }
         }
@@ -2315,6 +2396,418 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun rebuildOrderLifecycleState(): Long {
+        projectionConnection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement("DELETE FROM ${names.orderLifecycleState}").use { ps ->
+                    ps.executeUpdate()
+                }
+                val inserted = conn.prepareStatement(
+                    """
+                    WITH execution_totals AS (
+                      SELECT
+                        order_id,
+                        SUM(quantity_units::NUMERIC) AS filled_quantity_units
+                      FROM ${names.executions}
+                      WHERE quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                      GROUP BY order_id
+                    ),
+                    latest_modify AS (
+                      SELECT DISTINCT ON (order_id)
+                        order_id,
+                        COALESCE(NULLIF(payload_json->>'quantityUnits', ''), '') AS modified_quantity_units,
+                        COALESCE(NULLIF(payload_json->>'limitPrice', ''), '') AS modified_limit_price,
+                        occurred_at
+                      FROM ${names.runtimeEvents}
+                      WHERE event_type = 'OrderModified'
+                      ORDER BY order_id, occurred_at DESC, sequence_number DESC, event_id DESC
+                    ),
+                    order_event_state AS (
+                      SELECT
+                        order_id,
+                        BOOL_OR(event_type = 'OrderCancelled') AS cancelled,
+                        COALESCE(MAX(NULLIF(occurred_at, '')), '') AS last_event_at
+                      FROM ${names.runtimeEvents}
+                      GROUP BY order_id
+                    ),
+                    shaped AS (
+                      SELECT
+                        orders.order_id,
+                        orders.engine_order_id,
+                        orders.instrument_id,
+                        orders.participant_id,
+                        orders.account_id,
+                        orders.side,
+                        orders.order_type,
+                        orders.quantity_units AS original_quantity_units,
+                        COALESCE(NULLIF(latest_modify.modified_quantity_units, ''), orders.quantity_units) AS current_quantity_units,
+                        COALESCE(NULLIF(latest_modify.modified_limit_price, ''), orders.limit_price) AS current_limit_price,
+                        orders.currency,
+                        orders.time_in_force,
+                        orders.accepted_at,
+                        COALESCE(execution_totals.filled_quantity_units, 0) AS filled_quantity_units,
+                        COALESCE(order_event_state.cancelled, FALSE) AS cancelled,
+                        COALESCE(NULLIF(order_event_state.last_event_at, ''), orders.accepted_at) AS last_event_at
+                      FROM ${names.orders} orders
+                      LEFT JOIN execution_totals ON execution_totals.order_id = orders.order_id
+                      LEFT JOIN latest_modify ON latest_modify.order_id = orders.order_id
+                      LEFT JOIN order_event_state ON order_event_state.order_id = orders.order_id
+                      WHERE COALESCE(NULLIF(latest_modify.modified_quantity_units, ''), orders.quantity_units) ~ '^[0-9]+(\.[0-9]+)?$'
+                    ),
+                    calculated AS (
+                      SELECT
+                        *,
+                        GREATEST(current_quantity_units::NUMERIC - filled_quantity_units, 0) AS remaining_quantity_units
+                      FROM shaped
+                    )
+                    INSERT INTO ${names.orderLifecycleState}(
+                      order_id,
+                      engine_order_id,
+                      instrument_id,
+                      participant_id,
+                      account_id,
+                      side,
+                      order_type,
+                      original_quantity_units,
+                      remaining_quantity_units,
+                      filled_quantity_units,
+                      limit_price,
+                      currency,
+                      time_in_force,
+                      status,
+                      accepted_at,
+                      last_event_at,
+                      updated_at
+                    )
+                    SELECT
+                      order_id,
+                      engine_order_id,
+                      instrument_id,
+                      participant_id,
+                      account_id,
+                      side,
+                      order_type,
+                      original_quantity_units,
+                      CASE WHEN cancelled THEN '0' ELSE remaining_quantity_units::TEXT END,
+                      filled_quantity_units::TEXT,
+                      current_limit_price,
+                      currency,
+                      time_in_force,
+                      CASE
+                        WHEN cancelled THEN 'CANCELLED'
+                        WHEN current_quantity_units::NUMERIC > 0 AND remaining_quantity_units = 0 THEN 'FILLED'
+                        WHEN filled_quantity_units > 0 THEN 'PARTIALLY_FILLED'
+                        ELSE 'OPEN'
+                      END,
+                      accepted_at,
+                      last_event_at,
+                      now()
+                    FROM calculated
+                    ORDER BY order_id
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.executeUpdate().toLong()
+                }
+                conn.commit()
+                return inserted
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
+        return projectionQueryList(
+            """
+            SELECT
+              order_id,
+              engine_order_id,
+              instrument_id,
+              participant_id,
+              account_id,
+              side,
+              order_type,
+              original_quantity_units,
+              remaining_quantity_units,
+              filled_quantity_units,
+              limit_price,
+              currency,
+              time_in_force,
+              status,
+              accepted_at,
+              last_event_at,
+              updated_at::TEXT AS updated_at
+            FROM ${names.orderLifecycleState}
+            WHERE order_id = ?
+            """.trimIndent(),
+            orderId
+        ) {
+            OrderLifecycleState(
+                orderId = getString("order_id"),
+                engineOrderId = getString("engine_order_id"),
+                instrumentId = getString("instrument_id"),
+                participantId = getString("participant_id"),
+                accountId = getString("account_id"),
+                side = getString("side"),
+                orderType = getString("order_type"),
+                originalQuantityUnits = getString("original_quantity_units"),
+                remainingQuantityUnits = getString("remaining_quantity_units"),
+                filledQuantityUnits = getString("filled_quantity_units"),
+                limitPrice = getString("limit_price"),
+                currency = getString("currency"),
+                timeInForce = getString("time_in_force"),
+                status = getString("status"),
+                acceptedAt = getString("accepted_at"),
+                lastEventAt = getString("last_event_at"),
+                updatedAt = getString("updated_at")
+            )
+        }.firstOrNull()
+    }
+
+    override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
+        rebuildOrderLifecycleState()
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val lastPartitionSequence = sourceStatus.watermarks
+            .filter { it.partitionId >= 0 }
+            .maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        projectionConnection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement("DELETE FROM ${names.marketDataSnapshots} WHERE projection_name = ?").use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.executeUpdate()
+                }
+                val inserted = conn.prepareStatement(
+                    """
+                    WITH priced_orders AS (
+                      SELECT
+                        instrument_id,
+                        side,
+                        currency,
+                        limit_price::NUMERIC AS price_num,
+                        remaining_quantity_units::NUMERIC AS quantity_num
+                      FROM ${names.orderLifecycleState}
+                      WHERE order_type = 'LIMIT'
+                        AND status IN ('OPEN', 'PARTIALLY_FILLED')
+                        AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
+                        AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                        AND remaining_quantity_units::NUMERIC > 0
+                    ),
+                    bid_prices AS (
+                      SELECT instrument_id, MAX(price_num) AS best_bid_price
+                      FROM priced_orders
+                      WHERE side = 'BUY'
+                      GROUP BY instrument_id
+                    ),
+                    ask_prices AS (
+                      SELECT instrument_id, MIN(price_num) AS best_ask_price
+                      FROM priced_orders
+                      WHERE side = 'SELL'
+                      GROUP BY instrument_id
+                    ),
+                    bid_totals AS (
+                      SELECT priced.instrument_id, SUM(priced.quantity_num) AS best_bid_quantity
+                      FROM priced_orders priced
+                      JOIN bid_prices best
+                        ON best.instrument_id = priced.instrument_id
+                       AND best.best_bid_price = priced.price_num
+                      WHERE priced.side = 'BUY'
+                      GROUP BY priced.instrument_id
+                    ),
+                    ask_totals AS (
+                      SELECT priced.instrument_id, SUM(priced.quantity_num) AS best_ask_quantity
+                      FROM priced_orders priced
+                      JOIN ask_prices best
+                        ON best.instrument_id = priced.instrument_id
+                       AND best.best_ask_price = priced.price_num
+                      WHERE priced.side = 'SELL'
+                      GROUP BY priced.instrument_id
+                    ),
+                    instruments AS (
+                      SELECT instrument_id, MAX(currency) AS currency
+                      FROM priced_orders
+                      GROUP BY instrument_id
+                    )
+                    INSERT INTO ${names.marketDataSnapshots}(
+                      projection_name,
+                      source_projection_name,
+                      instrument_id,
+                      best_bid_price,
+                      best_bid_quantity,
+                      best_ask_price,
+                      best_ask_quantity,
+                      currency,
+                      last_partition_seq,
+                      lag,
+                      updated_at
+                    )
+                    SELECT
+                      ?,
+                      ?,
+                      instruments.instrument_id,
+                      COALESCE(bid_prices.best_bid_price::TEXT, ''),
+                      COALESCE(bid_totals.best_bid_quantity::TEXT, ''),
+                      COALESCE(ask_prices.best_ask_price::TEXT, ''),
+                      COALESCE(ask_totals.best_ask_quantity::TEXT, ''),
+                      COALESCE(instruments.currency, ''),
+                      ?,
+                      ?,
+                      now()
+                    FROM instruments
+                    LEFT JOIN bid_prices ON bid_prices.instrument_id = instruments.instrument_id
+                    LEFT JOIN bid_totals ON bid_totals.instrument_id = instruments.instrument_id
+                    LEFT JOIN ask_prices ON ask_prices.instrument_id = instruments.instrument_id
+                    LEFT JOIN ask_totals ON ask_totals.instrument_id = instruments.instrument_id
+                    ORDER BY instruments.instrument_id
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, projectionName)
+                    ps.setString(2, sourceProjectionName)
+                    ps.setLong(3, lastPartitionSequence)
+                    ps.setLong(4, sourceStatus.lag)
+                    ps.executeUpdate().toLong()
+                }
+                conn.commit()
+                return inserted
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override fun marketDataSnapshot(instrumentId: String, projectionName: String): MarketDataSnapshot? {
+        return projectionQueryList(
+            """
+            SELECT
+              projection_name,
+              source_projection_name,
+              instrument_id,
+              best_bid_price,
+              best_bid_quantity,
+              best_ask_price,
+              best_ask_quantity,
+              currency,
+              last_partition_seq,
+              lag,
+              updated_at::TEXT AS updated_at
+            FROM ${names.marketDataSnapshots}
+            WHERE projection_name = ? AND instrument_id = ?
+            """.trimIndent(),
+            projectionName,
+            instrumentId
+        ) {
+            MarketDataSnapshot(
+                projectionName = getString("projection_name"),
+                sourceProjectionName = getString("source_projection_name"),
+                instrumentId = getString("instrument_id"),
+                bestBidPrice = getString("best_bid_price"),
+                bestBidQuantity = getString("best_bid_quantity"),
+                bestAskPrice = getString("best_ask_price"),
+                bestAskQuantity = getString("best_ask_quantity"),
+                currency = getString("currency"),
+                lastPartitionSequence = getLong("last_partition_seq"),
+                lag = getLong("lag"),
+                updatedAt = getString("updated_at")
+            )
+        }.firstOrNull()
+    }
+
+    override fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int,
+        projectionName: String,
+        sourceProjectionName: String
+    ): MarketDataDepthSnapshot? {
+        val boundedLevels = levels.coerceIn(1, 50)
+        rebuildOrderLifecycleState()
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val lastPartitionSequence = sourceStatus.watermarks
+            .filter { it.partitionId >= 0 }
+            .maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        val bidLevels = depthLevels(instrumentId, "BUY", "DESC", boundedLevels)
+        val askLevels = depthLevels(instrumentId, "SELL", "ASC", boundedLevels)
+        if (bidLevels.isEmpty() && askLevels.isEmpty()) return null
+        val currency = projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT COALESCE(MAX(currency), '') AS currency
+                FROM ${names.orderLifecycleState}
+                WHERE instrument_id = ?
+                  AND status IN ('OPEN', 'PARTIALLY_FILLED')
+                  AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                  AND remaining_quantity_units::NUMERIC > 0
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, instrumentId)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getString("currency")
+                }
+            }
+        }
+        return MarketDataDepthSnapshot(
+            projectionName = projectionName,
+            sourceProjectionName = sourceProjectionName,
+            instrumentId = instrumentId,
+            bidLevels = bidLevels,
+            askLevels = askLevels,
+            currency = currency,
+            levels = boundedLevels,
+            lastPartitionSequence = lastPartitionSequence,
+            lag = sourceStatus.lag,
+            updatedAt = java.time.Instant.now().toString()
+        )
+    }
+
+    private fun depthLevels(
+        instrumentId: String,
+        side: String,
+        direction: String,
+        levels: Int
+    ): List<MarketDataDepthLevel> {
+        require(direction == "ASC" || direction == "DESC") { "unsupported depth sort direction" }
+        return projectionQueryList(
+            """
+            SELECT
+              price_num::TEXT AS price,
+              SUM(remaining_quantity_units::NUMERIC)::TEXT AS quantity
+            FROM (
+              SELECT
+                limit_price::NUMERIC AS price_num,
+                remaining_quantity_units
+              FROM ${names.orderLifecycleState}
+              WHERE instrument_id = ?
+                AND side = ?
+                AND order_type = 'LIMIT'
+                AND status IN ('OPEN', 'PARTIALLY_FILLED')
+                AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
+                AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                AND remaining_quantity_units::NUMERIC > 0
+            ) priced
+            GROUP BY price_num
+            ORDER BY price_num $direction
+            LIMIT ?::INTEGER
+            """.trimIndent(),
+            instrumentId,
+            side,
+            levels.toString()
+        ) {
+            MarketDataDepthLevel(
+                price = getString("price"),
+                quantity = getString("quantity")
+            )
+        }
+    }
+
     private data class CanonicalPartitionStats(val maxPartitionSequence: Long, val backlogCount: Long)
 
     private fun canonicalPartitionStats(
@@ -2373,7 +2866,7 @@ class PostgresRuntimePersistence(
                 """
                 SELECT partition_id, stream_sequence AS partition_seq
                 FROM ${names.canonicalCommandOutcomes}
-                WHERE command_type = 'SubmitOrder'
+                WHERE command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
                 """.trimIndent()
             else ->
                 """
@@ -2880,7 +3373,7 @@ class PostgresRuntimePersistence(
         return "{$stringFields,\"payloadJson\":${payloadJson.ifBlank { "{}" }}}"
     }
 
-    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(): PersistableSubmitOutcome {
+    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(commandPayloadJson: String = "{}"): PersistableSubmitOutcome {
         val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
         val occurredAt = jsonString(resultPayloadJson, "occurredAt")
         val rejected = resultStatus == "rejected"
@@ -2904,14 +3397,36 @@ class PostgresRuntimePersistence(
                 )
             )
         }
+        val acceptedOrder = if (commandType == "SubmitOrder" && !rejected && commandPayloadJson.isNotBlank()) {
+            PersistedOrder(
+                orderId = orderId,
+                engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
+                instrumentId = jsonString(commandPayloadJson, "instrumentId"),
+                participantId = jsonString(commandPayloadJson, "participantId"),
+                accountId = jsonString(commandPayloadJson, "accountId"),
+                side = jsonString(commandPayloadJson, "side"),
+                orderType = jsonString(commandPayloadJson, "orderType"),
+                quantityUnits = jsonString(commandPayloadJson, "quantityUnits"),
+                limitPrice = jsonString(commandPayloadJson, "limitPrice"),
+                currency = jsonString(commandPayloadJson, "currency"),
+                timeInForce = jsonString(commandPayloadJson, "timeInForce"),
+                acceptedAt = occurredAt
+            ).takeIf {
+                it.instrumentId.isNotBlank() &&
+                    it.participantId.isNotBlank() &&
+                    it.accountId.isNotBlank()
+            }
+        } else {
+            null
+        }
         return PersistableSubmitOutcome(
             commandId = commandId,
             result = result,
-            acceptedOrder = null,
+            acceptedOrder = acceptedOrder,
             lifecycleEvents = listOf(
                 RuntimeEvent(
                     eventId = eventId,
-                    eventType = if (rejected) "OrderRejected" else "OrderAccepted",
+                    eventType = lifecycleEventType(commandType, rejected),
                     orderId = orderId,
                     traceId = commandId,
                     causationId = commandId,
@@ -2924,6 +3439,15 @@ class PostgresRuntimePersistence(
                 )
             )
         )
+    }
+
+    private fun lifecycleEventType(commandType: String, rejected: Boolean): String {
+        if (rejected) return "OrderRejected"
+        return when (commandType) {
+            "CancelOrder" -> "OrderCancelled"
+            "ModifyOrder" -> "OrderModified"
+            else -> "OrderAccepted"
+        }
     }
 
     private fun PersistableSubmitOutcome.toJsonObject(): String {

@@ -26,7 +26,8 @@ Status: accepted
 
 Summary:
 - User-facing APIs are versioned under `/api/v1`.
-- Boundary concerns (auth hook, idempotency, rate limits, validation, error envelope) are explicit architecture requirements.
+- Boundary concerns (auth hook, idempotency, rate limits, validation, account/bot risk pre-check, error envelope) are explicit architecture requirements.
+- Account/bot risk pre-checks run before durable command acceptance. Non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages; the first implementation is allow-all/static and must not perform projection reads or heavy synchronous exposure scans on the hot path.
 - Internal runtime/engine service contracts are not treated as public client contracts.
 
 Primary references:
@@ -672,6 +673,22 @@ Primary references:
 - [`docs/steering/go.md`](./steering/go.md)
 - [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
 
+### D-044: Projection-Backed Market Data Snapshot Boundary
+
+Status: accepted
+
+Summary:
+- market-data reads must remain separate from order-entry writes and must not query matching-engine mutable book internals for normal bot/user traffic.
+- the first implemented market-data surface is projection-backed and conservative: `runtime.order_lifecycle_state` rebuilds open/filled/cancelled order state from projected runtime facts, `runtime.market_data_snapshots` stores top-of-book snapshots, and bounded depth reads aggregate remaining open lifecycle quantity by price.
+- `POST /api/v1/market-data/snapshots` rebuilds lifecycle state before refreshing top-of-book snapshots. `GET /api/v1/market-data/snapshots/{instrumentId}` and `GET /api/v1/market-data/depth/{instrumentId}` expose source projection and lag/freshness metadata.
+- `MARKET_DATA_PROJECTOR_ENABLED=true` enables an opt-in background loop for top-of-book refreshes on background-capable runtime roles. It is disabled by default until workload evidence justifies always-on refresh behavior.
+- bounded depth remains read-time aggregation over lifecycle state for now. A fully incremental market-data projector and venue-session-specific depth are follow-on work.
+
+Primary references:
+- [`docs/TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
+- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+
 ### D-043: Venue Event Batch Materialization Boundary
 
 Status: accepted
@@ -687,8 +704,8 @@ Summary:
 - the first runtime source is Kafka-compatible Redpanda consumption of the configured venue event topic through `PLATFORM_RUNTIME_ROLE=materializer`; JetStream event-batch materialization can be added behind the same `VenueEventBatchSource` contract later.
 - normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
 - the first downstream projection from event-batch materialization is compact lifecycle visibility: `runtime.canonical_command_outcomes` can project submit outcomes into `submit_results` and lifecycle `runtime_events` without placing Postgres back in the matching hot path.
-- full `orders` projection from the event-batch path requires either original submit command metadata in `VenueEventBatch` or an explicit durable command-payload join; until then, tests must not claim full order-table reconstruction from compact outcomes alone.
-- replay/checksum tests from durable event batch to Postgres rows are required before throughput claims for this slice.
+- full `orders` projection from the event-batch path uses the durable command-payload join first: accepted `SubmitOrder` outcomes can reconstruct order metadata from `command_log.command_payloads`, while `VenueEventBatch` remains compact and focused on canonical engine outcomes.
+- replay/checksum evidence from durable event batch to Postgres rows is required before throughput claims for this slice; the local `dev-venue-event-replay-check` path must show idempotent stored batch replay, clean command counts, payload checksums, command outcome payload hashes, stream sequence continuity, and projection watermarks where a projection name is supplied.
 
 Lifecycle boundary:
 ```text
