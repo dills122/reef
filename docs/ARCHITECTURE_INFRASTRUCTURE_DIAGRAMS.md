@@ -242,6 +242,171 @@ Target operating principles:
 - Normalized read tables should be rebuildable projections, not canonical hot-path dependencies.
 - Throughput claims require accounting across accepted, engine-published, materialized, projected, and replay-clean counts.
 
+## End-To-End Target System
+
+This diagram expands the target shape beyond venue-core persistence. It shows the intended separation between order entry, matching, canonical venue facts, operational projections, market data, settlement, account ledgers, and analytics.
+
+```mermaid
+flowchart LR
+  subgraph ClientPlane["Users, Bots, Operators, And Simulators"]
+    User["Manual user"]
+    Bot["Trading bot"]
+    Sim["Simulator / load tester"]
+    Ops["Ops / admin UI"]
+  end
+
+  subgraph TradingAPI["Trading / Order Interface"]
+    OrderAPI["Order API\nsubmit / modify / cancel / status"]
+    Boundary["Boundary checks\nauth, idempotency, validation"]
+    RiskPrecheck["Account/risk pre-check\ncredit, holds, limits, bot enabled"]
+    OrderReads["Open order / recent order reads\nprojection-backed"]
+  end
+
+  subgraph BoundaryStores["Boundary Stores"]
+    BoundaryDB[("boundary Postgres\nidempotency, intake metadata")]
+    AuthDB[("auth/admin Postgres\nroles, credentials, policy")]
+    RiskView[("account risk view\ncached or ledger-backed")]
+  end
+
+  subgraph DurableIngress["Durable Venue Ingress"]
+    CommandTopic[("Redpanda / Kafka command topic\naccepted command log")]
+    CommandArchive[("command payload store\nplanned replay join source")]
+  end
+
+  subgraph EnginePlane["Matching Engine Plane"]
+    EngineConsumer["matching-engine direct consumer\npartition-owned lanes"]
+    HotBook["engine-private hot book\nprice-time priority, open resting orders"]
+    BatchPublisher["VenueEventBatch publisher"]
+  end
+
+  subgraph DurableVenueLedger["Durable Venue Ledger"]
+    EventTopic[("Redpanda / Kafka event topic\nVenueEventBatch log")]
+    BatchArchive[("event-batch archive\nplanned retention / replay packs")]
+  end
+
+  subgraph CanonicalPersistence["Canonical Venue Persistence"]
+    Materializer["venue event materializer\ncommit DB before event offset ack"]
+    CanonBatchDB[("runtime.canonical_venue_event_batches")]
+    CanonOutcomeDB[("runtime.canonical_command_outcomes")]
+    ReplayVerifier["replay / checksum verifier"]
+  end
+
+  subgraph OperationalProjection["Operational Projection Family"]
+    LifecycleProjector["lifecycle projector\nsubmit, modify, cancel, fill, reject"]
+    RuntimeDB[("runtime/projection Postgres\norders, executions, trades, runtime_events")]
+    CommandStatus["command status API\ncanonical outcome preferred"]
+  end
+
+  subgraph MarketDataPlane["Market Data / History Interface"]
+    MarketAPI["Market Data API\nsnapshots, depth, trades, bars, history"]
+    SnapshotProjector["snapshot/depth projector\nbounded refresh first"]
+    BarProjector["trade/bar projector\nintraday and historical"]
+    MarketDB[("market_data store\nbook snapshots, depth, trades, bars")]
+    HistoricalStore[("historical/archive store\npartitioned files or analytics DB")]
+  end
+
+  subgraph AccountPlane["Account / Bot Ledger"]
+    AccountSvc["account and bot service\ncredits, holds, risk state"]
+    LedgerDB[("account ledger DB\nimmutable entries, holds, bot state")]
+    BalanceProjection[("account projections\nbalances, buying power, bot enabled")]
+  end
+
+  subgraph SettlementPlane["Settlement / Fulfillment"]
+    SettlementSvc["settlement workflow\nobligations, allocation, confirmation"]
+    Enforcement["final enforcement\nblock fulfillment, raise break, disable bot"]
+    SettlementDB[("settlement DB\nobligations, breaks, repairs, workflow state")]
+  end
+
+  subgraph AnalyticsPlane["Analytics And Reporting"]
+    AnalyticsProjector["analytics projectors\nmirrors and denormalized facts"]
+    AnalyticsDB[("analytics DB / warehouse\nPnL, bot performance, leaderboards, audit")]
+    Reports["reports, dashboards, compliance extracts"]
+  end
+
+  User --> OrderAPI
+  Bot --> OrderAPI
+  Sim --> OrderAPI
+  Ops --> OrderAPI
+  Ops --> MarketAPI
+  Bot --> MarketAPI
+  User --> MarketAPI
+
+  OrderAPI --> Boundary
+  Boundary --> BoundaryDB
+  Boundary --> AuthDB
+  Boundary --> RiskPrecheck
+  RiskPrecheck --> RiskView
+  RiskView --> LedgerDB
+
+  Boundary --> CommandTopic
+  Boundary -. optional durable payload join .-> CommandArchive
+
+  CommandTopic --> EngineConsumer
+  EngineConsumer --> HotBook
+  HotBook --> BatchPublisher
+  BatchPublisher --> EventTopic
+  EventTopic -. retention/export .-> BatchArchive
+
+  EventTopic --> Materializer
+  Materializer --> CanonBatchDB
+  Materializer --> CanonOutcomeDB
+  ReplayVerifier --> EventTopic
+  ReplayVerifier --> CanonBatchDB
+  ReplayVerifier --> CanonOutcomeDB
+
+  CanonOutcomeDB --> LifecycleProjector
+  CanonBatchDB --> LifecycleProjector
+  CommandArchive -. submit metadata join when needed .-> LifecycleProjector
+  LifecycleProjector --> RuntimeDB
+  CanonOutcomeDB --> CommandStatus
+  RuntimeDB --> OrderReads
+  CommandStatus --> OrderAPI
+  OrderReads --> OrderAPI
+
+  CanonBatchDB --> SnapshotProjector
+  RuntimeDB --> SnapshotProjector
+  RuntimeDB --> BarProjector
+  SnapshotProjector --> MarketDB
+  BarProjector --> MarketDB
+  BarProjector --> HistoricalStore
+  MarketDB --> MarketAPI
+  HistoricalStore --> MarketAPI
+
+  CanonOutcomeDB --> SettlementSvc
+  RuntimeDB --> SettlementSvc
+  SettlementSvc --> SettlementDB
+  SettlementSvc --> Enforcement
+  Enforcement --> LedgerDB
+  Enforcement --> BalanceProjection
+  Enforcement -. bot shutdown / admin audit .-> AuthDB
+
+  LedgerDB --> AccountSvc
+  BalanceProjection --> AccountSvc
+  AccountSvc --> RiskView
+  AccountSvc --> OrderAPI
+
+  CanonBatchDB --> AnalyticsProjector
+  CanonOutcomeDB --> AnalyticsProjector
+  RuntimeDB --> AnalyticsProjector
+  SettlementDB --> AnalyticsProjector
+  LedgerDB --> AnalyticsProjector
+  MarketDB --> AnalyticsProjector
+  AnalyticsProjector --> AnalyticsDB
+  AnalyticsDB --> Reports
+  Reports --> Ops
+```
+
+End-to-end ownership rules:
+
+- Order entry is the only public write path for trading intent. Bots and users do not write directly to runtime, market-data, settlement, account, or analytics tables.
+- The matching engine owns the hot book, but the hot book is not a user-facing query store.
+- Canonical venue facts are the bridge from matching to every downstream system.
+- Operational order reads come from projections, with canonical command outcomes preferred for command status.
+- Market data starts as projection-backed snapshots, depth, recent trades, and bars so bot reads do not load the matching engine.
+- Account/risk does a bounded pre-check before durable command acceptance; settlement does final enforcement after matching facts exist.
+- Settlement creates post-trade obligations, breaks, repairs, and enforcement facts without mutating matching history.
+- Analytics consumes mirrored facts from canonical venue, operational, market-data, settlement, and account stores; it can lag and must be rebuildable.
+
 ## Near-Term Slice Map
 
 1. Venue lifecycle projection.
