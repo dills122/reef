@@ -68,6 +68,25 @@ The first projection-backed market-data snapshot can be refreshed and read throu
 curl -X POST "http://127.0.0.1:8080/api/v1/orders/lifecycle-state"
 curl -X POST "http://127.0.0.1:8080/api/v1/market-data/snapshots"
 curl "http://127.0.0.1:8080/api/v1/market-data/snapshots/AAPL"
+curl "http://127.0.0.1:8080/api/v1/market-data/depth/AAPL?levels=5"
+```
+
+The snapshot refresh path rebuilds `runtime.order_lifecycle_state` before updating `runtime.market_data_snapshots`; the explicit lifecycle-state endpoint is useful for inspection and repair. Bounded depth reads aggregate remaining open lifecycle quantity by price at request time.
+
+An opt-in background market-data projector can refresh top-of-book snapshots on background-capable runtime roles:
+
+```bash
+MARKET_DATA_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_POLL_MS=250 \
+MARKET_DATA_PROJECTOR_PROJECTION_NAME=market-data-top-of-book \
+MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME=runtime-normalized-venue-outcomes \
+make dev-up
+```
+
+Projector status is exposed at:
+
+```bash
+curl "http://127.0.0.1:8084/internal/market-data/projector/status"
 ```
 
 Stack startup passes `--remove-orphans` so renamed local services, such as the retired all-in-one runtime container, do not keep stale ports or process roles alive.

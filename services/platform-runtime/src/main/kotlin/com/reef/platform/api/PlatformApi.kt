@@ -218,12 +218,19 @@ class PlatformApi(
         projectionName: String = "market-data-top-of-book",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes"
     ): String {
-        val refreshed = orderService.refreshMarketDataSnapshots(projectionName, sourceProjectionName)
+        val refreshed = refreshMarketDataSnapshotsCount(projectionName, sourceProjectionName)
         return JsonCodec.writeObject(
             "projectionName" to projectionName,
             "sourceProjectionName" to sourceProjectionName,
             "refreshed" to refreshed
         )
+    }
+
+    fun refreshMarketDataSnapshotsCount(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): Long {
+        return orderService.refreshMarketDataSnapshots(projectionName, sourceProjectionName)
     }
 
     fun rebuildOrderLifecycleState(): String {

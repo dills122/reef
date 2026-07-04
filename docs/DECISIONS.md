@@ -673,6 +673,22 @@ Primary references:
 - [`docs/steering/go.md`](./steering/go.md)
 - [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
 
+### D-044: Projection-Backed Market Data Snapshot Boundary
+
+Status: accepted
+
+Summary:
+- market-data reads must remain separate from order-entry writes and must not query matching-engine mutable book internals for normal bot/user traffic.
+- the first implemented market-data surface is projection-backed and conservative: `runtime.order_lifecycle_state` rebuilds open/filled/cancelled order state from projected runtime facts, `runtime.market_data_snapshots` stores top-of-book snapshots, and bounded depth reads aggregate remaining open lifecycle quantity by price.
+- `POST /api/v1/market-data/snapshots` rebuilds lifecycle state before refreshing top-of-book snapshots. `GET /api/v1/market-data/snapshots/{instrumentId}` and `GET /api/v1/market-data/depth/{instrumentId}` expose source projection and lag/freshness metadata.
+- `MARKET_DATA_PROJECTOR_ENABLED=true` enables an opt-in background loop for top-of-book refreshes on background-capable runtime roles. It is disabled by default until workload evidence justifies always-on refresh behavior.
+- bounded depth remains read-time aggregation over lifecycle state for now. A fully incremental market-data projector and venue-session-specific depth are follow-on work.
+
+Primary references:
+- [`docs/TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
+- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`docs/DEV_ENV.md`](./DEV_ENV.md)
+
 ### D-043: Venue Event Batch Materialization Boundary
 
 Status: accepted

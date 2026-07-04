@@ -121,6 +121,13 @@ class PlatformHttpServer(
     private val venueEventMaterializerPollMs: Long = RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_POLL_MS", 25L, min = 1L),
     private val venueEventMaterializerFetchTimeoutMs: Long =
         RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", 200L, min = 1L),
+    private val marketDataProjectorEnabled: Boolean = RuntimeEnv.bool("MARKET_DATA_PROJECTOR_ENABLED", false),
+    private val marketDataProjectorProjectionName: String =
+        RuntimeEnv.string("MARKET_DATA_PROJECTOR_PROJECTION_NAME", "market-data-top-of-book"),
+    private val marketDataProjectorSourceProjectionName: String =
+        RuntimeEnv.string("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", "runtime-normalized-venue-outcomes"),
+    private val marketDataProjectorPollMs: Long =
+        RuntimeEnv.long("MARKET_DATA_PROJECTOR_POLL_MS", 250L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -190,7 +197,8 @@ class PlatformHttpServer(
             streamCommandHealthJson = { streamCommandHealthJson() },
             streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
             venueEventMaterializerStatsJson = { venueEventMaterializerStatsJson() },
-            projectorStatusJson = { projectorStatusJson() }
+            projectorStatusJson = { projectorStatusJson() },
+            marketDataProjectorStatsJson = { marketDataProjectorStatusJson() }
         )
     }
 
@@ -511,6 +519,9 @@ class PlatformHttpServer(
         }
         if (venueEventMaterializerShouldStart()) {
             startVenueEventMaterializer()
+        }
+        if (marketDataProjectorShouldStart()) {
+            startMarketDataProjector()
         }
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
@@ -2167,6 +2178,25 @@ class PlatformHttpServer(
         )
     }
 
+    private fun marketDataProjectorStatusJson(): String {
+        val stats = MarketDataProjectionMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to marketDataProjectorShouldStart(),
+            "role" to runtimeRole.configValue,
+            "projectionName" to marketDataProjectorProjectionName,
+            "sourceProjectionName" to marketDataProjectorSourceProjectionName,
+            "pollIntervalMs" to marketDataProjectorPollMs,
+            "metrics" to mapOf(
+                "refreshes" to stats.refreshes,
+                "refreshedRows" to stats.refreshedRows,
+                "failed" to stats.failed,
+                "lastRefreshedAt" to stats.lastRefreshedAt,
+                "lastFailedAt" to stats.lastFailedAt,
+                "lastError" to stats.lastError
+            )
+        )
+    }
+
     private fun startStreamCommandWorkers() {
         val partitions = streamWorkerPartitions()
         if (partitions.isEmpty()) {
@@ -2206,6 +2236,20 @@ class PlatformHttpServer(
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,
             workerName = "reef-canonical-projector-$streamAckProjectionName"
+        ).start()
+    }
+
+    private fun marketDataProjectorShouldStart(): Boolean {
+        return runtimeRole.backgroundWorkersEnabled && marketDataProjectorEnabled
+    }
+
+    private fun startMarketDataProjector() {
+        MarketDataProjectionWorker(
+            api = api,
+            projectionName = marketDataProjectorProjectionName,
+            sourceProjectionName = marketDataProjectorSourceProjectionName,
+            pollIntervalMs = marketDataProjectorPollMs,
+            workerName = "reef-market-data-projector-$marketDataProjectorProjectionName"
         ).start()
     }
 

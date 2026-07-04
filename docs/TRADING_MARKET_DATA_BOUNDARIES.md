@@ -135,7 +135,7 @@ It owns:
 
 For the first slice, market-data reads should be conservative and projection-based. Prefer snapshots and bounded refresh intervals over engine-coupled real-time reads. This gives bots useful data without adding load to the matching-engine hot path.
 
-The initial implemented snapshot is `runtime.market_data_snapshots`, refreshed from rebuildable `runtime.order_lifecycle_state` rows and exposed through `/api/v1/market-data/snapshots/{instrumentId}`. Bounded depth reads are exposed through `/api/v1/market-data/depth/{instrumentId}` and aggregate remaining open lifecycle quantity by price. Both surfaces carry source projection, lag, and refresh metadata. Venue-session-specific depth and fully incremental market-data projection remain follow-on work.
+The initial implemented snapshot is `runtime.market_data_snapshots`, refreshed from rebuildable `runtime.order_lifecycle_state` rows and exposed through `/api/v1/market-data/snapshots/{instrumentId}`. Bounded depth reads are exposed through `/api/v1/market-data/depth/{instrumentId}` and aggregate remaining open lifecycle quantity by price. Both surfaces carry source projection, lag, and refresh metadata. The optional `MARKET_DATA_PROJECTOR_ENABLED` background loop refreshes top-of-book snapshots only; depth remains bounded read-time aggregation until an incremental market-data projector is justified. Venue-session-specific depth and fully incremental market-data projection remain follow-on work.
 
 Later, real-time feeds can be added from event streams or specialized market-data publishers. They should still consume canonical or event-stream facts, not the engine's mutable book internals directly.
 

@@ -13,6 +13,8 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
+import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -360,6 +362,68 @@ class PlatformApiTest {
         assertContains(depthResponse, "\"bidLevels\":[{\"price\":\"150250000000\",\"quantity\":\"75\"}]")
         assertContains(depthResponse, "\"askLevels\":[]")
         assertContains(depthResponse, "\"levels\":2")
+    }
+
+    @Test
+    fun operationalProjectionSmokeReachesOrderAndMarketDataReads() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = FakeEngineGateway(
+                    SubmitOrderResult(
+                        accepted = EngineOrderAccepted(
+                            eventId = "evt-smoke-accepted",
+                            orderId = "ord-1",
+                            engineOrderId = "eng-ord-1",
+                            occurredAt = "2026-03-14T18:00:00Z"
+                        )
+                    )
+                ),
+                runtimePersistence = persistence
+            )
+        )
+        seedReferenceData(api)
+        seedOrderAuthorization(api, "trader-1")
+
+        val submitResponse = api.submitOrder(validRequestBody())
+        val materialized = api.materializeVenueEventBatch(
+            VenueEventBatchFact(
+                batchId = "batch-smoke-1",
+                shardId = "engine-0",
+                partition = 0,
+                commandStream = "REEF_COMMANDS",
+                eventStream = "REEF_VENUE_EVENTS",
+                firstSequence = 10,
+                lastSequence = 10,
+                commandCount = 1,
+                createdAt = "2026-03-14T18:00:01Z",
+                payloadChecksum = "checksum-smoke-1",
+                outcomes = listOf(
+                    VenueCommandOutcomeFact(
+                        commandId = "cmd-smoke-batch-1",
+                        commandType = "SubmitOrder",
+                        streamSequence = 10,
+                        deliveredCount = 1,
+                        payloadHash = "payload-hash-smoke-1",
+                        instrumentId = "AAPL",
+                        orderId = "ord-1",
+                        resultStatus = "accepted",
+                        resultPayloadJson = """{"accepted":{"eventId":"evt-smoke-batch","engineOrderId":"eng-ord-1","occurredAt":"2026-03-14T18:00:01Z"}}"""
+                    )
+                )
+            )
+        )
+        val projected = api.projectCanonicalCommandOutcomes("runtime-normalized-venue-outcomes", 10)
+        val refreshed = api.refreshMarketDataSnapshotsCount()
+
+        assertContains(submitResponse, "\"accepted\"")
+        assertEquals(1, materialized)
+        assertEquals(1, projected)
+        assertEquals(1, refreshed)
+        assertContains(api.order("ord-1"), "\"lifecycleState\"")
+        assertContains(api.order("ord-1"), "\"status\":\"OPEN\"")
+        assertContains(api.marketDataSnapshot("AAPL"), "\"bestBidPrice\":\"150250000000\"")
+        assertContains(api.marketDataDepthSnapshot("AAPL"), "\"bidLevels\":[{\"price\":\"150250000000\",\"quantity\":\"100\"}]")
     }
 
     private fun validRequestBody(): String {
