@@ -18,8 +18,11 @@ import org.apache.kafka.common.serialization.StringSerializer
 import java.time.Duration
 import java.time.Instant
 import java.util.Properties
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 
@@ -30,12 +33,15 @@ private const val KAFKA_OFFSET_SEQUENCE_MASK = (1L shl KAFKA_OFFSET_SEQUENCE_BIT
 class KafkaStreamCommandPublisher(
     private val bootstrapServers: String = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
     private val ackTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", 2_000L, min = 1L)),
-    private val config: StreamCommandConfig = StreamCommandConfig()
-) : StreamCommandPublisher, StreamCommandHealthCheck {
+    private val config: StreamCommandConfig = StreamCommandConfig(),
+    private val maxInFlight: Int = RuntimeEnv.int("STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT", 16_384, min = 1)
+) : StreamCommandPublisher, AsyncStreamCommandPublisher, BatchAsyncStreamCommandPublisher, StreamCommandHealthCheck {
     private val topic = config.streamName
     private val topicReady = AtomicBoolean(false)
     private val lastPublishAckMs = AtomicLong(0L)
     private val maxPublishAckMs = AtomicLong(0L)
+    private val inFlightSlots = Semaphore(maxInFlight)
+    private val inFlight = AtomicInteger(0)
     private val producer by lazy {
         val publishAckTimeoutMs = ackTimeout.toMillis().coerceAtLeast(1L)
         val lingerMs = RuntimeEnv.long("STREAM_ACK_KAFKA_LINGER_MS", 1L, min = 0L)
@@ -56,16 +62,39 @@ class KafkaStreamCommandPublisher(
                 put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
                 put(ProducerConfig.ACKS_CONFIG, "all")
                 put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+                put(ProducerConfig.RETRIES_CONFIG, Int.MAX_VALUE.toString())
+                put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, RuntimeEnv.int("STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION", 5, min = 1).coerceAtMost(5).toString())
                 put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString())
                 put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString())
                 put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString())
                 put(ProducerConfig.BATCH_SIZE_CONFIG, RuntimeEnv.int("STREAM_ACK_KAFKA_BATCH_SIZE", 65_536, min = 1).toString())
+                put(ProducerConfig.COMPRESSION_TYPE_CONFIG, RuntimeEnv.string("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4"))
+                put(ProducerConfig.BUFFER_MEMORY_CONFIG, RuntimeEnv.long("STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES", 67_108_864L, min = 1L).toString())
+                put(ProducerConfig.MAX_BLOCK_MS_CONFIG, RuntimeEnv.long("STREAM_ACK_KAFKA_MAX_BLOCK_MS", 250L, min = 1L).toString())
+                put(ProducerConfig.CLIENT_ID_CONFIG, RuntimeEnv.string("STREAM_ACK_KAFKA_CLIENT_ID", "reef-platform-runtime-command-producer"))
             }
         )
     }
 
     override fun publish(envelope: StreamCommandEnvelope): StreamPublishAck {
+        return publishAsync(envelope).get(ackTimeout.toMillis().coerceAtLeast(1L), TimeUnit.MILLISECONDS)
+    }
+
+    override fun publishAsync(envelope: StreamCommandEnvelope): CompletableFuture<StreamPublishAck> {
         ensureTopic()
+        return publishAsyncReady(envelope)
+    }
+
+    override fun publishAsyncBatch(envelopes: List<StreamCommandEnvelope>): List<CompletableFuture<StreamPublishAck>> {
+        if (envelopes.isEmpty()) return emptyList()
+        ensureTopic()
+        return envelopes.map { envelope -> publishAsyncReady(envelope) }
+    }
+
+    private fun publishAsyncReady(envelope: StreamCommandEnvelope): CompletableFuture<StreamPublishAck> {
+        if (!inFlightSlots.tryAcquire()) {
+            return CompletableFuture.failedFuture(StreamCommandPublishBackpressureException("Kafka publish in-flight window is full"))
+        }
         val record = ProducerRecord(
             topic,
             envelope.partition,
@@ -74,14 +103,31 @@ class KafkaStreamCommandPublisher(
             listOf(RecordHeader(STREAM_SUBJECT_HEADER, envelope.subject.toByteArray(Charsets.UTF_8)))
         )
         val started = System.nanoTime()
-        val metadata = producer.send(record).get(ackTimeout.toMillis().coerceAtLeast(1L), TimeUnit.MILLISECONDS)
-        val elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
-        lastPublishAckMs.set(elapsedMs)
-        maxPublishAckMs.accumulateAndGet(elapsedMs, ::maxOf)
-        return StreamPublishAck(
-            streamName = topic,
-            streamSequence = kafkaStreamSequence(metadata.partition(), metadata.offset())
-        )
+        inFlight.incrementAndGet()
+        val result = CompletableFuture<StreamPublishAck>()
+        try {
+            producer.send(record) { metadata, exception ->
+                inFlight.decrementAndGet()
+                inFlightSlots.release()
+                recordPublishAckElapsed(started)
+                if (exception != null) {
+                    result.completeExceptionally(exception)
+                } else {
+                    result.complete(
+                        StreamPublishAck(
+                            streamName = topic,
+                            streamSequence = kafkaStreamSequence(metadata.partition(), metadata.offset())
+                        )
+                    )
+                }
+            }
+        } catch (ex: Exception) {
+            inFlight.decrementAndGet()
+            inFlightSlots.release()
+            recordPublishAckElapsed(started)
+            result.completeExceptionally(ex)
+        }
+        return result
     }
 
     override fun snapshot(): StreamCommandHealthSnapshot {
@@ -106,6 +152,9 @@ class KafkaStreamCommandPublisher(
                     available = true,
                     streamName = topic,
                     messageCount = messageCount,
+                    publishMode = "kafka-async",
+                    publishInFlight = inFlight.get(),
+                    publishMaxInFlight = maxInFlight,
                     publishAckLastMs = lastPublishAckMs.get(),
                     publishAckMaxMs = maxPublishAckMs.get()
                 )
@@ -114,6 +163,9 @@ class KafkaStreamCommandPublisher(
             StreamCommandHealthSnapshot(
                 available = false,
                 streamName = topic,
+                publishMode = "kafka-async",
+                publishInFlight = inFlight.get(),
+                publishMaxInFlight = maxInFlight,
                 publishAckLastMs = lastPublishAckMs.get(),
                 publishAckMaxMs = maxPublishAckMs.get(),
                 error = ex.message ?: "unknown"
@@ -166,6 +218,12 @@ class KafkaStreamCommandPublisher(
         return AdminClient.create(Properties().apply {
             put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
         })
+    }
+
+    private fun recordPublishAckElapsed(started: Long) {
+        val elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
+        lastPublishAckMs.set(elapsedMs)
+        maxPublishAckMs.accumulateAndGet(elapsedMs, ::maxOf)
     }
 }
 

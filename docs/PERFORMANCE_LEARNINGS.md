@@ -148,6 +148,130 @@ Immediate implications:
 4. Keep accepted-async worker in-flight bounded. The Compose/runtime defaults now expose `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32`; tune from there with telemetry instead of using unbounded or very large stream windows.
 5. A flagged Netty hot-path adapter now exists behind `PLATFORM_HTTP_SERVER=netty` to isolate the JDK `HttpServer` boundary. Treat it as a benchmark adapter until the measured no-DB evidence justifies expanding its route surface.
 
+## Stream-Ack Broker A/B And Engine Boundary Checkpoint (July 4, 2026)
+
+Local 90-second stream-ack sweeps compared Redpanda and JetStream with `64` partitions, `4` workers, `4` projectors, submit-only traffic, and worker drain telemetry enabled.
+
+Redpanda evidence:
+
+- artifact: `/tmp/reef-stream-ack-redpanda-stress-90s-20260704T011000Z`
+- `1000 rps` target: `993.13` accepted/sec, `100%` success, `p95=69.95ms`, worker drain clean
+- `2500 rps` target: `2301.89` accepted/sec, `100%` success, `p95=147.08ms`, `failedDelta=20`, no ack failures, drained
+- `5000 rps` target: `2292.43` accepted/sec, `100%` success, `p95=175.21ms`, worker drain clean
+
+JetStream evidence:
+
+- artifact: `/tmp/reef-stream-ack-jetstream-stress-90s-20260704T011700Z`
+- `1000 rps` target: `999.46` accepted/sec, `100%` success, `p95=50.93ms`, worker drain clean
+- `2500 rps` target: `2488.00` accepted/sec, `100%` success, `p95=67.89ms`, worker drain clean
+- `5000 rps` target: `3496.86` accepted/sec, `100%` API success, `p95=111.70ms`, but worker drain was not clean:
+  - `failedDelta=8200`
+  - `completedDelta=279662` versus `314942` accepted
+  - last worker error: `engine gRPC SubmitOrder failed with UNAVAILABLE: io exception`
+
+Conclusion:
+
+1. JetStream is reasonable to keep for the next phase; the current evidence does not justify broker churn.
+2. The active failure point is the worker-to-matching-engine hot boundary under sustained stream pressure.
+3. `202` response success is insufficient benchmark evidence for stream-backed modes. Reports must fail on async worker failures, ack failures, unresolved redelivery, accepted/completed drain gaps, and meaningful partition lag.
+4. Per-command unary gRPC from generic workers to the engine should not be treated as the final high-throughput matching architecture.
+5. The target path is engine-shard command consumption by assigned partition, ordered batch processing, canonical event-batch publish, then command ack.
+
+## Direct No-DB Command Stream Publish Ceiling (July 4, 2026)
+
+The first DO direct no-DB stream run (`reports/do-benchmark/do-stream-direct-nodb-20260704T021237Z`) kept the matching-engine direct consumer clean but flattened above the 5k target:
+
+- `5000` target: `4997.28/sec` accepted and direct-acked, zero failures
+- `10000` target: `5769.90/sec` accepted and direct-acked, zero failures
+- `15000` target: `5569.42/sec` accepted and direct-acked, zero failures
+- `20000` target: `5430.75/sec` accepted and direct-acked, zero failures
+
+The direct engine path matched every accepted command (`ackedDelta == totalSuccess`) with no NAKs, terms, unsupported commands, or direct failures. The hot phase was API durable publish acknowledgement (`api.streamAck.publishAck` about `5.5ms-5.9ms` average at the higher target rates), with API CPU hotter than matching-engine CPU.
+
+Raw JetStream publish checks on the same DO host showed the broker was not the inherent ceiling for this payload shape:
+
+- synchronous single-client JetStream publish, `768 B` messages: about `8627 msg/sec`
+- async publish batch `500`, one client: about `131782 msg/sec`
+- async publish batch `500`, eight clients: about `177480 msg/sec`
+
+This points to Reef's API publisher/front-door call pattern rather than JetStream capacity. Follow-up DO probes did not show a simple configuration fix:
+
+- per-request JNATS async publish futures (`STREAM_ACK_PUBLISH_MODE=async`) stayed in the same band: best `5950.53/sec` with `256` load workers
+- raising load workers to `1024` moved only to `6165.87/sec` and increased client p50 latency to `163ms-171ms`
+- raising JDK HTTP worker threads to `256` reached `6205.04/sec`, but server-side `api.streamAck.totalAvg` jumped to `35.21ms` and `api.streamAck.publishAck` to `17.57ms`
+
+The next implementation should not be more thread-count tuning. Build a dedicated bounded publish pipeline/front-door path that preserves `202` only after durable ack, exposes per-lane queue depth/in-flight/ack latency, and prevents request threads from becoming the concurrency-control mechanism.
+
+The follow-up implementation moved stream-ack submit intake onto the Netty hot path and added `STREAM_ACK_PUBLISH_PIPELINE_ENABLED=true`, which wraps the configured durable publisher in one bounded lane per command partition. The no-DB direct profile now enables this by default with `PLATFORM_HTTP_SERVER=netty`, `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY=8192`, and `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE=256`. The next benchmark should compare this path against the July 4 ceiling above and watch `/internal/stream-ack/health` for `publishQueueDepth`, `publishInFlight`, and `publishLaneCount` to distinguish load-generator limits, publish-lane saturation, and matching-engine drain limits.
+
+The first DO confirmation after enabling the publish pipeline held the same clean direct-engine behavior for a 3-minute `10000 rps` no-DB run, but throughput stayed near `7884/sec` with zero failures. Stream health samples showed low queue depth and no direct-engine drain problem, while `api.streamAck.publishAck` averaged about `19ms`. Follow-up telemetry now splits the publish pipeline into queue wait, in-flight slot wait, delegate durable ack, total pipeline time, and per-lane counters so the next run can distinguish JetStream ack latency, lane skew, and load-generator scheduling pressure without broad architecture churn.
+
+Focused telemetry run: `reports/do-benchmark/do-stream-direct-nodb-pipeline-telemetry-10k-90s-20260704T031924Z`
+
+- target: `10000 rps`, `256` workers, `90s`
+- result: `704182` accepted/direct-acked, `7822.54/sec`, `0` failures, all `202`
+- latency: `p50=26.71ms`, `p95=71.69ms`, `p99=122.42ms`
+- direct engine: fetched/processed/published/acked all `704182`; no nacks, terms, unsupported commands, or direct failures during the run
+- publish pipeline: `queueWaitAvg=0.61ms`, `slotWaitAvg=0.003ms`, `delegateAckAvg=18.54ms`, `totalAvg=19.15ms`
+- last health sample: queue depth `5`, in-flight `104` of `16384`, `0` publish failures/rejections
+- conclusion: the current 10k no-DB ceiling is not the matching engine, publish queue capacity, or per-lane in-flight cap. It is dominated by the JetStream durable publish ack path plus API-side publish overhead.
+
+Redpanda async-producer check through the DB-backed stream-ack path: `reports/do-benchmark/do-stream-ack-redpanda-async-producer-2500-5000-10000-90s-20260704T033618Z`
+
+- targets: `2500`, `5000`, and `10000 rps`, `256` workers, `90s` each
+- accepted throughput flattened at about `789/sec`, `1390/sec`, and `1422/sec`
+- failures: `0`; worker completed and projector projected exactly matched accepted commands with ending lag `0`
+- Kafka publish ack averaged about `8ms-10ms`, materially lower than the direct JetStream run's `18.54ms` delegate ack average
+- API stream-ack total still averaged about `42ms-78ms`, with DB reserve/backpressure dominating once publish ack improved
+- runtime Postgres still wrote about `2304` WAL bytes per accepted command and about `5.87` commits per accepted/worker-completed command
+- conclusion: Redpanda/Kafka publish ack improved, but the DB-backed path remains dominated by command-reserve/canonical-write overhead. The useful next benchmark is an apples-to-apples direct no-DB Redpanda path where the matching engine consumes Kafka-compatible command partitions directly.
+
+Implementation response:
+
+- promote the Kafka-compatible producer path from synchronous `send().get(...)` to async `send(record, callback)` completion
+- keep `202` gated on the broker ack callback
+- preserve explicit command partition routing and Kafka `(partition, offset)` sequence encoding
+- enable `acks=all`, idempotence, bounded application in-flight work, batching, and compression through documented runtime knobs
+- add matching-engine direct Kafka-compatible consumption for the no-DB path: assigned command topic partitions -> ordered submit batches -> durable venue event topic batches -> offset commit after event publication
+- test Redpanda/Kafka direct no-DB as the next durable ingress candidate before spending more time on JetStream thread/queue tuning
+
+Final pause checkpoint: `reports/do-benchmark/do-stream-direct-redpanda-nodb-10k-90s-20260704T040907Z`
+
+- target: `10000 rps`, `256` workers, `90s`
+- result: `689900` accepted/direct-acked, `7664.39/sec`, `0` failures, all `202`
+- latency: `p50=24.95ms`, `p95=82.29ms`, `p99=126.94ms`
+- direct engine: fetched/processed/published/acked all `689900`; no nacks, terms, unsupported commands, or direct failures
+- publish pipeline: `queueWaitAvg=0.74ms`, `slotWaitAvg=0.00ms`, `delegateAckAvg=14.66ms`, `totalAvg=15.41ms`
+- comparison: Redpanda direct no-DB is functionally clean but did not materially beat the previous JetStream direct no-DB `10k` telemetry point (`7822.54/sec`, delegate ack `18.54ms`)
+- conclusion: with DB removed and the engine consuming the durable log directly, the remaining ceiling is still the API/durable-log publish-ack boundary plus front-door scheduling overhead, not matching-engine compute or downstream drain
+
+Local app-side publish batch probe:
+
+- implementation: optional partition-lane batching behind `STREAM_ACK_PUBLISH_PIPELINE_BATCH_SIZE` and `STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS`; `202` remains gated on each durable broker ack
+- batch run: `/tmp/reef-stream-direct-redpanda-batch-quick`, `10000 rps`, `256` workers, `30s`, batch size `32`, linger `2ms`
+- batch result: `259651` accepted/direct-acked, `8642.55/sec`, `0` failures, `p95=63.04ms`, `p99=92.45ms`; publish pipeline `queueWaitAvg=3.06ms`, `delegateAckAvg=10.39ms`, `totalAvg=13.45ms`
+- no-batch control: `/tmp/reef-stream-direct-redpanda-nobatch-control`, same target/workers/duration, batch size `1`, linger `0ms`
+- no-batch result: `300001` accepted/direct-acked, `9995.62/sec`, `0` failures, `p95=32.29ms`, `p99=55.08ms`; publish pipeline `queueWaitAvg=0.29ms`, `delegateAckAvg=4.73ms`, `totalAvg=5.03ms`
+- conclusion: shallow app-side lane batching with linger is not the next bottleneck fix. It adds queue wait and reduces local throughput versus the current no-batch async pipeline. Keep the batch knobs experimental/default-off; future headroom work should focus on producer/front-door configuration and longer soak behavior, or on a deeper ingestion protocol change rather than adding linger to the current request path.
+
+Local stream-ingress prototype:
+
+- implementation: opt-in long-lived TCP line ingress behind `STREAM_INGRESS_ENABLED=1` and `DEV_STRESS_TRANSPORT=stream`; each frame carries the existing submit JSON payload and the server reuses the stream-ack validation and durable publish path, so `202` is still gated on the broker ack
+- local Redpanda direct no-DB profile now defaults to `STREAM_ACK_PARTITION_COUNT=16` and `MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS=0..15` to fit a single retained local broker; higher partition counts remain explicit overrides for provisioned environments
+- setup lesson: stale benchmark topics filled Redpanda's local partition memory cap (`1060` existing replicas vs `1048` cap), causing matching-engine startup to fail while creating event topics. Delete old benchmark topics or reset the Redpanda volume before fresh high-partition sweeps.
+- smoke run: `/tmp/reef-stream-ingress-smoke5`, `1000 rps`, `128` workers, `10s`, Redpanda direct no-DB, stream transport
+- smoke result: `9990` accepted/direct-acked, `998.77/sec`, `0` failures, `p95=10.96ms`, `p99=37.29ms`
+- 10k run: `/tmp/reef-stream-ingress-10k-local`, `10000 rps`, `256` workers, `30s`
+- 10k result: `299950` accepted/direct-acked, `9996.01/sec`, `0` failures, `p95=20.02ms`, `p99=36.98ms`; publish pipeline `queueWaitAvg=0.25ms`, `delegateAckAvg=3.06ms`, `totalAvg=3.31ms`
+- above-floor run: `/tmp/reef-stream-ingress-10500-local`, `10500 rps`, `256` workers, `30s`
+- above-floor result: `314951` accepted/direct-acked, `10495.92/sec`, `0` failures, `p95=19.77ms`, `p99=34.90ms`; publish pipeline `queueWaitAvg=0.23ms`, `delegateAckAvg=3.36ms`, `totalAvg=3.60ms`
+- first 5-minute soak: `/tmp/reef-stream-ingress-10500-5min-local`, `10500 rps`, `256` workers, `300s`, direct-engine batch size `1000`
+- first 5-minute result: `3145952` accepted, `10462.32/sec`, `0` API failures, but failed the direct-engine guardrail with `failedDelta=48` and `nackedDelta=43276`
+- first 5-minute failure cause: event batches exceeded Sarama's default `Producer.MaxMessageBytes` (`1048576` bytes), e.g. `Attempt to produce message larger than configured Producer.MaxMessageBytes`
+- corrected 5-minute soak: `/tmp/reef-stream-ingress-10500-5min-batch500-local`, `10500 rps`, `256` workers, `300s`, direct-engine batch size `500`
+- corrected 5-minute result: `3145900` accepted/direct-acked, `10467.14/sec`, `0` failures, `0` NAKs, `p95=26.61ms`, `p99=53.17ms`; publish pipeline `queueWaitAvg=0.28ms`, `delegateAckAvg=3.34ms`, `totalAvg=3.62ms`
+- conclusion: removing per-command HTTP request overhead with a long-lived stream ingress gets the no-DB Redpanda direct-engine path over the `10k/sec` single-instance target locally, including a clean 5-minute soak when direct-engine event batches are capped at `500` commands. The next promotion gate is a longer DO soak and then protobuf/framed command payloads or additional producer/front-door tuning if we need more headroom.
+
 ## Stream-Ack Post-Soak Optimization Priorities
 
 This section is retained as historical context from before the sunset checkpoint above. Do not treat it as the active delivery path.

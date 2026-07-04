@@ -940,6 +940,45 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun nettyHotPathStreamAckPublishesThroughPartitionedPipeline() {
+        val publisher = RecordingStreamCommandPublisher()
+        val streamPublisher = PartitionedStreamCommandPublisher(
+            delegate = publisher,
+            queueCapacityPerLane = 10,
+            maxInFlightPerLane = 1
+        )
+        val server = testNettyHotPathServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = streamPublisher
+        )
+        try {
+            val response = post(
+                port = server.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-netty-stream",
+                    "Idempotency-Key" to "idem-netty-stream"
+                ),
+                body = validSubmitBody("cmd-netty-stream", "trace-netty-stream", "ord-netty-stream", extra = streamRoutingExtra())
+            )
+            val health = get(server.port, "/internal/stream-ack/health")
+
+            assertEquals(202, response.status)
+            assertContains(response.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(response.body, "\"streamSequence\":1")
+            assertEquals(1, publisher.published.size)
+            assertEquals(200, health.status)
+            assertContains(health.body, "\"publishMode\":\"partitioned-blocking-delegate:sync\"")
+            assertContains(health.body, "\"publishLaneCount\":16")
+            assertContains(health.body, "\"publishCompleted\":1")
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun commandAccountingEndpointReturnsRunScopedCounts() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1699,7 +1738,11 @@ class PlatformHttpServerBoundaryTest {
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
         commandIntakeBackpressureSampleMs: Long = 100L,
-        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore()
+        idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore(),
+        streamCommandIntakeStore: StreamCommandIntakeStore? = null,
+        streamCommandPublisher: StreamCommandPublisher? = null,
+        streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
+        streamCommandConfig: StreamCommandConfig = StreamCommandConfig()
     ): RunningPlatformNettyServer {
         val persistence = InMemoryRuntimePersistence()
         seedOrderReferenceData(persistence)
@@ -1725,6 +1768,10 @@ class PlatformHttpServerBoundaryTest {
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
             commandStatusLookup = captureStore as? CommandStatusLookup,
+            streamCommandIntakeStore = streamCommandIntakeStore,
+            streamCommandPublisher = streamCommandPublisher,
+            streamCommandHealthCheck = streamCommandHealthCheck,
+            streamCommandConfig = streamCommandConfig,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,

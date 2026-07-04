@@ -23,6 +23,44 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestStreamDirectStatsDisabled(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/stream-direct/stats", nil)
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"enabled":false`)) {
+		t.Fatalf("expected disabled stats payload, got %s", rec.Body.String())
+	}
+}
+
+func TestStreamDirectStatsEnabled(t *testing.T) {
+	server := NewServer(app.NewService())
+	server.SetStreamDirectStatsProvider(func() any {
+		return []map[string]any{{"partition": 0, "acked": 10}}
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/stream-direct/stats", nil)
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"enabled":true`)) {
+		t.Fatalf("expected enabled stats payload, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"partition":0`)) {
+		t.Fatalf("expected partition stats payload, got %s", rec.Body.String())
+	}
+}
+
 func TestSubmitOrder(t *testing.T) {
 	server := NewServer(app.NewService())
 

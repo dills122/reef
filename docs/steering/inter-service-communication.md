@@ -16,10 +16,12 @@ Transport adapters must implement those contracts, not redefine them.
 For service-to-service boundaries, use Protobuf message contracts in `contracts/proto/`.
 Do not allow ad hoc JSON payloads to become the long-term source of truth.
 
-### 3. gRPC is the default synchronous service transport
+### 3. gRPC is the default synchronous service transport, not the final matching hot path
 
-Use gRPC unary calls for command-style interactions between backend services.
-HTTP/JSON adapters may exist during migration, but gRPC is the intended steady state.
+Use gRPC for synchronous backend service interactions, admin/control surfaces, health checks, parity tests, and fallback paths.
+HTTP/JSON adapters may exist during migration.
+
+For high-throughput matching ingestion, do not treat per-command unary gRPC calls as the steady-state architecture. Prefer partition-owned batch/stream processing, and where durable stream/topic ingress is active, prefer matching-engine shards that consume assigned command partitions, publish canonical venue event batches, and ack or commit consumed commands after durable event publication.
 
 ### 4. Compatibility by feature flag during migration
 
@@ -47,10 +49,13 @@ Current state:
 - runtime and engine support HTTP/JSON and gRPC adapter paths behind transport configuration
 - protobuf contracts cover submit, cancel, modify, and health-check paths
 - HTTP remains useful for local fallback and parity comparisons
+- stream-backed command intake can durably accept commands before asynchronous downstream processing
 
 Target state:
-- runtime and engine communicate via gRPC + Protobuf contracts
+- synchronous compatibility, admin, and direct benchmark paths communicate via gRPC + Protobuf contracts
 - HTTP/JSON path remains optional fallback until parity is verified
+- high-throughput matching paths avoid generic workers issuing one unary engine request per command
+- the preferred venue-core shape is command stream/topic -> partition-owning engine shard -> canonical venue event batch -> command ack or offset commit
 
 ## Contract Standards
 
@@ -76,10 +81,16 @@ Target state:
 
 ### Runtime to engine
 
-- gRPC unary methods for:
-  - submit order
-  - modify order
-  - cancel order
+- gRPC unary methods may remain for:
+  - submit order compatibility and direct benchmarks
+  - modify order compatibility and direct benchmarks
+  - cancel order compatibility and direct benchmarks
+  - health, admin, snapshots, debugging, and partition ownership control
+- high-throughput matching paths should use one of these shapes:
+  - matching-engine shard directly consumes assigned durable command stream/topic partitions
+  - batch RPC per deterministic partition lane
+  - bidirectional stream per deterministic partition lane
+- generic workers issuing one unary `SubmitOrder` call per command are transitional scaffolding, not the target hot path.
 
 ### Health and readiness
 
@@ -90,6 +101,8 @@ Target state:
 
 - all inter-service calls must have explicit deadlines
 - retries must be bounded and idempotency-safe
+- transient transport retries must be protected by deterministic `commandId`, partition sequence, and event IDs so duplicate delivery cannot create duplicate executions or trades
+- engine-health and per-partition lag must feed intake backpressure before durable acceptance outruns safe downstream drain
 
 ## Observability Standards
 

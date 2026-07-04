@@ -11,6 +11,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -612,6 +613,62 @@ class PlatformHttpServer(
         }
     }
 
+    internal fun handleHotPathRequestAsync(request: PlatformHotPathRequest): CompletableFuture<PlatformHotPathResponse?> {
+        if (
+            request.path == "/api/v1/orders/submit" &&
+            request.method == "POST" &&
+            commandProcessingMode == CommandProcessingMode.StreamAck
+        ) {
+            return handleApiV1MutationResponseAsync(request, "/api/v1/orders/submit")
+                .thenApply { it as PlatformHotPathResponse? }
+        }
+        return CompletableFuture.completedFuture(handleHotPathRequest(request))
+    }
+
+    internal fun handleStreamIngressSubmitAsync(body: String): CompletableFuture<PlatformHotPathResponse> {
+        if (body.length > maxRequestBodyBytes) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(
+                    413,
+                    JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
+                )
+            )
+        }
+        if (commandProcessingMode != CommandProcessingMode.StreamAck) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(503, simpleErrorJson("stream command intake unavailable"))
+            )
+        }
+
+        val route = "/api/v1/orders/submit"
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val commandId = json.string("commandId")
+        val traceId = json.string("traceId")
+        val correlationId = json.string("correlationId").ifBlank { traceId }
+        val clientId = json.string("clientId").ifBlank { RuntimeEnv.string("STREAM_INGRESS_DEFAULT_CLIENT_ID", "stream-ingress") }
+        val idempotencyKey = json.string("idempotencyKey").ifBlank { commandId }
+        if (clientId.isBlank() || idempotencyKey.isBlank()) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(
+                    400,
+                    JsonCodec.writeObject("error" to "STREAM_INGRESS_METADATA_REQUIRED")
+                )
+            )
+        }
+        val validationError = HotPathMetrics.time("streamIngress.command.validate") {
+            PlatformCommandParsers.validateApiV1Command(route, body)
+        }
+        if (validationError != null) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(
+                    400,
+                    JsonCodec.writeObject("error" to "VALIDATION_ERROR", "message" to validationError)
+                )
+            )
+        }
+        return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+    }
+
     private fun methodNotAllowedResponse(): PlatformHotPathResponse {
         return PlatformHotPathResponse(status = 405, body = "", contentType = null)
     }
@@ -1019,7 +1076,8 @@ class PlatformHttpServer(
         }
 
         if (commandProcessingMode == CommandProcessingMode.StreamAck) {
-            return PlatformHotPathResponse(503, simpleErrorJson("netty hot path does not support stream-ack intake"))
+            return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+                .get()
         }
 
         if (commandProcessingMode == CommandProcessingMode.CapturedAck) {
@@ -1141,6 +1199,62 @@ class PlatformHttpServer(
         }
     }
 
+    private fun handleApiV1MutationResponseAsync(
+        request: PlatformHotPathRequest,
+        route: String
+    ): CompletableFuture<PlatformHotPathResponse> {
+        val started = System.nanoTime()
+        return try {
+            handleApiV1MutationMeasuredResponseAsync(request, route)
+                .whenComplete { _, _ -> HotPathMetrics.record("api.mutation.total", System.nanoTime() - started) }
+        } catch (ex: Exception) {
+            HotPathMetrics.record("api.mutation.total", System.nanoTime() - started)
+            CompletableFuture.failedFuture(ex)
+        }
+    }
+
+    private fun handleApiV1MutationMeasuredResponseAsync(
+        request: PlatformHotPathRequest,
+        route: String
+    ): CompletableFuture<PlatformHotPathResponse> {
+        if (request.method != "POST") {
+            return CompletableFuture.completedFuture(methodNotAllowedResponse())
+        }
+        if (request.body.toByteArray().size > maxRequestBodyBytes) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(
+                    413,
+                    JsonCodec.writeObject("error" to "request body too large", "maxBytes" to maxRequestBodyBytes)
+                )
+            )
+        }
+
+        val violation = HotPathMetrics.time("api.boundary.checkWrite") {
+            boundary.checkWrite(request.headers, route)
+        }
+        val correlationId = correlationId(request.headers)
+        if (violation != null) {
+            return CompletableFuture.completedFuture(PlatformHotPathResponse(violation.status, boundary.toErrorJson(violation, correlationId)))
+        }
+
+        val clientId = boundary.clientId(request.headers).orEmpty()
+        val idempotencyKey = boundary.idempotencyKey(request.headers).orEmpty()
+        val body = request.body
+        val validationError = HotPathMetrics.time("api.command.validate") {
+            PlatformCommandParsers.validateApiV1Command(route, body)
+        }
+        if (validationError != null) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(
+                    400,
+                    boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
+                )
+            )
+        }
+
+        return handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body)
+    }
+
     private fun handleStreamAckMutation(
         exchange: HttpExchange,
         route: String,
@@ -1149,66 +1263,90 @@ class PlatformHttpServer(
         correlationId: String,
         body: String
     ) {
-        val started = System.nanoTime()
         try {
-            val intakeStore = streamCommandIntakeStore
-            val publisher = streamCommandPublisher
-            if (intakeStore == null || publisher == null) {
-                writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable"))
-                return
+            val response = handleStreamAckMutationResponse(route, clientId, idempotencyKey, correlationId, body).get()
+            HotPathMetrics.time("api.streamAck.writeResponse") {
+                writeJson(exchange, response.status, response.body)
             }
+        } catch (ex: Exception) {
+            writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", rootMessage(ex)))
+        }
+    }
 
-            val envelopeResult = HotPathMetrics.time("api.streamAck.envelope") {
-                StreamCommandEnvelopeBuilder.fromRequest(
-                    clientId = clientId,
-                    route = route,
-                    idempotencyKey = idempotencyKey,
-                    body = body,
-                    config = streamCommandConfig
+    private fun handleStreamAckMutationResponse(
+        route: String,
+        clientId: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String
+    ): CompletableFuture<PlatformHotPathResponse> {
+        val started = System.nanoTime()
+        val intakeStore = streamCommandIntakeStore
+        val publisher = streamCommandPublisher
+        if (intakeStore == null || publisher == null) {
+            return completedStreamAckResponse(started, PlatformHotPathResponse(503, simpleErrorJson("stream command intake unavailable")))
+        }
+
+        val envelopeResult = HotPathMetrics.time("api.streamAck.envelope") {
+            StreamCommandEnvelopeBuilder.fromRequest(
+                clientId = clientId,
+                route = route,
+                idempotencyKey = idempotencyKey,
+                body = body,
+                config = streamCommandConfig
+            )
+        }
+        val envelope = when (envelopeResult) {
+            is EitherBoundaryError.Error -> {
+                return completedStreamAckResponse(
+                    started,
+                    PlatformHotPathResponse(envelopeResult.error.status, boundary.toErrorJson(envelopeResult.error, correlationId))
                 )
             }
-            val envelope = when (envelopeResult) {
-                is EitherBoundaryError.Error -> {
-                    writeJson(exchange, envelopeResult.error.status, boundary.toErrorJson(envelopeResult.error, correlationId))
-                    return
-                }
-                is EitherBoundaryError.Envelope -> envelopeResult.envelope
-            }
+            is EitherBoundaryError.Envelope -> envelopeResult.envelope
+        }
 
-            val abuseViolation = HotPathMetrics.time("api.streamAck.abuse") {
-                abuseProtectionHook.allow(clientId, route)
-            }
-            if (abuseViolation != null) {
-                writeJson(exchange, abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
-                return
-            }
+        val abuseViolation = HotPathMetrics.time("api.streamAck.abuse") {
+            abuseProtectionHook.allow(clientId, route)
+        }
+        if (abuseViolation != null) {
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(abuseViolation.status, boundary.toErrorJson(abuseViolation, correlationId))
+            )
+        }
 
-            val streamBackpressure = HotPathMetrics.time("api.streamAck.backpressure") {
-                streamCommandBackpressure()
-            }
-            if (streamBackpressure != null) {
-                writeJson(exchange, streamBackpressure.status, boundary.toErrorJson(streamBackpressure, correlationId))
-                return
-            }
+        val streamBackpressure = HotPathMetrics.time("api.streamAck.backpressure") {
+            streamCommandBackpressure()
+        }
+        if (streamBackpressure != null) {
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(streamBackpressure.status, boundary.toErrorJson(streamBackpressure, correlationId))
+            )
+        }
 
-            val initialReference = envelope.reference(streamCommandConfig.streamName)
-            val reservation = try {
-                HotPathMetrics.time("api.streamAck.reserve") {
-                    intakeStore.reserve(envelope, initialReference)
-                }
-            } catch (ex: Exception) {
-                val errorMessage = ex.message ?: "unknown"
-                System.err.println(
-                    "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonFields.escape(errorMessage)}"
-                )
-                writeJson(exchange, 503, simpleErrorJson("stream command intake unavailable", errorMessage))
-                return
+        val initialReference = envelope.reference(streamCommandConfig.streamName)
+        val reservation = try {
+            HotPathMetrics.time("api.streamAck.reserve") {
+                intakeStore.reserve(envelope, initialReference)
             }
+        } catch (ex: Exception) {
+            val errorMessage = ex.message ?: "unknown"
+            System.err.println(
+                "stream_command_intake_unavailable route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId message=${JsonFields.escape(errorMessage)}"
+            )
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(503, simpleErrorJson("stream command intake unavailable", errorMessage))
+            )
+        }
 
-            when (reservation) {
-                is StreamCommandReservation.Conflict -> {
-                    writeJson(
-                        exchange,
+        when (reservation) {
+            is StreamCommandReservation.Conflict -> {
+                return completedStreamAckResponse(
+                    started,
+                    PlatformHotPathResponse(
                         409,
                         boundary.toErrorJson(
                             BoundaryError(
@@ -1219,40 +1357,64 @@ class PlatformHttpServer(
                             correlationId
                         )
                     )
-                    return
-                }
-                is StreamCommandReservation.Replay -> {
-                    if (reservation.reference.streamSequence > 0L) {
-                        HotPathMetrics.time("api.streamAck.writeResponse") {
-                            writeJson(exchange, 202, StreamCommandResponse.acceptedJson(reservation.reference))
-                        }
-                        return
-                    }
-                }
-                is StreamCommandReservation.Reserved -> {
+                )
+            }
+            is StreamCommandReservation.Replay -> {
+                if (reservation.reference.streamSequence > 0L) {
+                    return completedStreamAckResponse(
+                        started,
+                        PlatformHotPathResponse(202, StreamCommandResponse.acceptedJson(reservation.reference))
+                    )
                 }
             }
+            is StreamCommandReservation.Reserved -> {
+            }
+        }
 
-            val ack = try {
-                HotPathMetrics.time("api.streamAck.publishAck") {
-                    publisher.publish(envelope)
-                }
-            } catch (ex: Exception) {
-                val errorMessage = ex.message ?: "unknown"
+        val publishStarted = System.nanoTime()
+        val publishFuture = publishStreamCommand(publisher, envelope)
+        return publishFuture.handle { ack, failure ->
+            HotPathMetrics.record("api.streamAck.publishAck", System.nanoTime() - publishStarted)
+            if (failure != null) {
+                val cause = rootCause(failure)
+                val errorMessage = cause.message ?: "unknown"
                 System.err.println(
                     "stream_command_publish_failed route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=${envelope.subject} message=${JsonFields.escape(errorMessage)}"
                 )
-                writeJson(exchange, 503, simpleErrorJson("stream command publish unavailable", errorMessage))
-                return
+                val status = if (cause is StreamCommandPublishBackpressureException) 429 else 503
+                val error = if (status == 429) "stream command publish backpressure" else "stream command publish unavailable"
+                PlatformHotPathResponse(status, simpleErrorJson(error, errorMessage))
+            } else {
+                markStreamCommandPublished(envelope.commandId, ack.streamSequence)
+                val publishedReference = envelope.reference(ack.streamName, ack.streamSequence)
+                PlatformHotPathResponse(202, StreamCommandResponse.acceptedJson(publishedReference))
             }
-            markStreamCommandPublished(envelope.commandId, ack.streamSequence)
-            val publishedReference = envelope.reference(ack.streamName, ack.streamSequence)
-            HotPathMetrics.time("api.streamAck.writeResponse") {
-                writeJson(exchange, 202, StreamCommandResponse.acceptedJson(publishedReference))
-            }
-        } finally {
+        }.whenComplete { _, _ ->
             HotPathMetrics.record("api.streamAck.total", System.nanoTime() - started)
         }
+    }
+
+    private fun publishStreamCommand(
+        publisher: StreamCommandPublisher,
+        envelope: StreamCommandEnvelope
+    ): CompletableFuture<StreamPublishAck> {
+        return if (publisher is AsyncStreamCommandPublisher) {
+            publisher.publishAsync(envelope)
+        } else {
+            try {
+                CompletableFuture.completedFuture(publisher.publish(envelope))
+            } catch (ex: Exception) {
+                CompletableFuture.failedFuture(ex)
+            }
+        }
+    }
+
+    private fun completedStreamAckResponse(
+        started: Long,
+        response: PlatformHotPathResponse
+    ): CompletableFuture<PlatformHotPathResponse> {
+        HotPathMetrics.record("api.streamAck.total", System.nanoTime() - started)
+        return CompletableFuture.completedFuture(response)
     }
 
     private fun handleAcceptedAsyncMutation(
@@ -1849,6 +2011,45 @@ class PlatformHttpServer(
                 "workerDurables" to streamCommandBackpressureWorkerDurableNames()
             ),
             "markPublishedMode" to streamCommandMarkPublishedMode,
+            "publishMode" to snapshot.publishMode,
+            "publishInFlight" to snapshot.publishInFlight,
+            "publishMaxInFlight" to snapshot.publishMaxInFlight,
+            "publishQueueDepth" to snapshot.publishQueueDepth,
+            "publishMaxQueueDepth" to snapshot.publishMaxQueueDepth,
+            "publishLaneCount" to snapshot.publishLaneCount,
+            "publishAccepted" to snapshot.publishAccepted,
+            "publishCompleted" to snapshot.publishCompleted,
+            "publishFailed" to snapshot.publishFailed,
+            "publishRejected" to snapshot.publishRejected,
+            "publishQueueWaitLastMs" to snapshot.publishQueueWaitLastMs,
+            "publishQueueWaitMaxMs" to snapshot.publishQueueWaitMaxMs,
+            "publishSlotWaitLastMs" to snapshot.publishSlotWaitLastMs,
+            "publishSlotWaitMaxMs" to snapshot.publishSlotWaitMaxMs,
+            "publishDelegateAckLastMs" to snapshot.publishDelegateAckLastMs,
+            "publishDelegateAckMaxMs" to snapshot.publishDelegateAckMaxMs,
+            "publishPipelineTotalLastMs" to snapshot.publishPipelineTotalLastMs,
+            "publishPipelineTotalMaxMs" to snapshot.publishPipelineTotalMaxMs,
+            "publishLanes" to snapshot.publishLaneSnapshots.map {
+                mapOf(
+                    "partition" to it.partition,
+                    "accepted" to it.accepted,
+                    "completed" to it.completed,
+                    "failed" to it.failed,
+                    "rejected" to it.rejected,
+                    "queueDepth" to it.queueDepth,
+                    "maxQueueDepthObserved" to it.maxQueueDepthObserved,
+                    "inFlight" to it.inFlight,
+                    "maxInFlightObserved" to it.maxInFlightObserved,
+                    "queueWaitLastMs" to it.queueWaitLastMs,
+                    "queueWaitMaxMs" to it.queueWaitMaxMs,
+                    "slotWaitLastMs" to it.slotWaitLastMs,
+                    "slotWaitMaxMs" to it.slotWaitMaxMs,
+                    "delegateAckLastMs" to it.delegateAckLastMs,
+                    "delegateAckMaxMs" to it.delegateAckMaxMs,
+                    "totalLastMs" to it.totalLastMs,
+                    "totalMaxMs" to it.totalMaxMs
+                )
+            },
             "publishAckLastMs" to snapshot.publishAckLastMs,
             "publishAckMaxMs" to snapshot.publishAckMaxMs,
             "checkedAt" to snapshot.checkedAt.toString(),
@@ -2010,6 +2211,21 @@ class PlatformHttpServer(
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
 private const val LEGACY_INTERNAL_ROUTE_HEADER = "X-Reef-Internal-Route"
+
+private fun rootCause(failure: Throwable): Throwable {
+    var current = failure
+    while (
+        current.cause != null &&
+        (current is java.util.concurrent.CompletionException || current is java.util.concurrent.ExecutionException)
+    ) {
+        current = current.cause ?: return current
+    }
+    return current
+}
+
+private fun rootMessage(failure: Throwable): String {
+    return rootCause(failure).message ?: "unknown"
+}
 
 private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()

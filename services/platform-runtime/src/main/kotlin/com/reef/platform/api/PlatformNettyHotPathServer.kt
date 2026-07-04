@@ -36,7 +36,8 @@ class PlatformNettyHotPathServer(
     private val bossThreads: Int = RuntimeEnv.int("PLATFORM_NETTY_BOSS_THREADS", 1, min = 1),
     private val workerThreads: Int = RuntimeEnv.int("PLATFORM_NETTY_WORKER_THREADS", 0, min = 0),
     private val applicationThreads: Int =
-        RuntimeEnv.int("PLATFORM_NETTY_APPLICATION_THREADS", RuntimeEnv.int("PLATFORM_HTTP_THREADS", 64, min = 4), min = 1)
+        RuntimeEnv.int("PLATFORM_NETTY_APPLICATION_THREADS", RuntimeEnv.int("PLATFORM_HTTP_THREADS", 64, min = 4), min = 1),
+    private val streamIngressEnabled: Boolean = RuntimeEnv.bool("STREAM_INGRESS_ENABLED", false)
 ) {
     fun start(): RunningPlatformNettyServer {
         val bossGroup = NioEventLoopGroup(bossThreads)
@@ -62,9 +63,14 @@ class PlatformNettyHotPathServer(
                 .channel()
             channelStarted = true
             delegate.startRuntimeLoops()
+            val streamIngress = if (streamIngressEnabled) {
+                PlatformStreamIngressServer(delegate).start()
+            } else {
+                null
+            }
             val boundPort = (channel.localAddress() as InetSocketAddress).port
             println("platform-runtime adapter=netty-hot-path listening on :$boundPort")
-            return RunningPlatformNettyServer(channel, bossGroup, workerGroup, applicationGroup, boundPort)
+            return RunningPlatformNettyServer(channel, bossGroup, workerGroup, applicationGroup, streamIngress, boundPort)
         } catch (ex: Exception) {
             applicationGroup.shutdownGracefully()
             workerGroup.shutdownGracefully()
@@ -80,7 +86,8 @@ class PlatformNettyHotPathServer(
         private val delegate: PlatformHttpServer
     ) : SimpleChannelInboundHandler<FullHttpRequest>() {
         override fun channelRead0(ctx: ChannelHandlerContext, request: FullHttpRequest) {
-            val response = try {
+            val keepAlive = HttpUtil.isKeepAlive(request)
+            val future = try {
                 val decoded = QueryStringDecoder(request.uri())
                 val hotPathRequest = PlatformHotPathRequest(
                     method = request.method().name(),
@@ -89,12 +96,25 @@ class PlatformNettyHotPathServer(
                     headers = request.headers().toSunHeaders(),
                     body = request.content().toString(StandardCharsets.UTF_8)
                 )
-                delegate.handleHotPathRequest(hotPathRequest)
-                    ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "not found"))
+                delegate.handleHotPathRequestAsync(hotPathRequest)
             } catch (ex: Exception) {
-                PlatformHotPathResponse(500, JsonCodec.writeObject("error" to "runtime unavailable", "message" to (ex.message ?: "unknown")))
+                java.util.concurrent.CompletableFuture.completedFuture(
+                    PlatformHotPathResponse(500, JsonCodec.writeObject("error" to "runtime unavailable", "message" to (ex.message ?: "unknown")))
+                )
             }
-            writeResponse(ctx, request, response)
+            future.whenComplete { response, failure ->
+                val finalResponse = when {
+                    failure != null -> PlatformHotPathResponse(
+                        500,
+                        JsonCodec.writeObject("error" to "runtime unavailable", "message" to (failure.message ?: "unknown"))
+                    )
+                    response != null -> response
+                    else -> PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "not found"))
+                }
+                ctx.executor().execute {
+                    writeResponse(ctx, keepAlive, finalResponse)
+                }
+            }
         }
 
         override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
@@ -116,7 +136,7 @@ class PlatformNettyHotPathServer(
 
         private fun writeResponse(
             ctx: ChannelHandlerContext,
-            request: FullHttpRequest,
+            keepAlive: Boolean,
             response: PlatformHotPathResponse
         ) {
             val bytes = response.body.toByteArray(StandardCharsets.UTF_8)
@@ -127,7 +147,6 @@ class PlatformNettyHotPathServer(
             )
             response.contentType?.let { nettyResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, it) }
             nettyResponse.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, bytes.size)
-            val keepAlive = HttpUtil.isKeepAlive(request)
             if (keepAlive) {
                 nettyResponse.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE)
                 ctx.writeAndFlush(nettyResponse)
@@ -149,9 +168,11 @@ class RunningPlatformNettyServer internal constructor(
     private val bossGroup: EventLoopGroup,
     private val workerGroup: EventLoopGroup,
     private val applicationGroup: DefaultEventExecutorGroup,
+    private val streamIngress: RunningPlatformStreamIngressServer?,
     val port: Int
 ) {
     fun stop() {
+        streamIngress?.stop()
         channel.close().syncUninterruptibly()
         applicationGroup.shutdownGracefully().syncUninterruptibly()
         workerGroup.shutdownGracefully().syncUninterruptibly()

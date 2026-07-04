@@ -25,6 +25,8 @@ const profile = env("DEV_STRESS_PROFILE", "default");
 const runKind = env("DEV_STRESS_RUN_KIND", "stress");
 const scenarioId = env("DEV_STRESS_SCENARIO_ID", `${mode}:${profile}`);
 const sessionConfig = env("DEV_STRESS_SESSION_CONFIG", "");
+const commandTransport = env("DEV_STRESS_TRANSPORT", env("REEF_TRANSPORT", "http"));
+const streamAddress = env("DEV_STRESS_STREAM_ADDRESS", env("REEF_STREAM_ADDRESS", "127.0.0.1:8090"));
 const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "drop"));
 const rateQueueDepth = env("DEV_STRESS_RATE_QUEUE_DEPTH", env("REEF_RATE_QUEUE_DEPTH", ""));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
@@ -45,6 +47,11 @@ const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
 const captureHotPath = env("DEV_STRESS_CAPTURE_HOT_PATH", "1") !== "0";
 const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
+const failOnStreamAckWorkerFailures =
+  env("DEV_STRESS_FAIL_ON_STREAM_ACK_WORKER_FAILURES", captureStreamAckWorkerStats ? "1" : "0") === "1";
+const maxStreamAckWorkerFailedDelta = Number(env("DEV_STRESS_MAX_STREAM_ACK_WORKER_FAILED_DELTA", "0"));
+const maxStreamAckWorkerAckFailedDelta = Number(env("DEV_STRESS_MAX_STREAM_ACK_WORKER_ACK_FAILED_DELTA", "0"));
+const maxStreamAckCompletionGap = Number(env("DEV_STRESS_MAX_STREAM_ACK_COMPLETION_GAP", "0"));
 const streamAckDrainWaitMs = Number(env("DEV_STRESS_STREAM_ACK_DRAIN_WAIT_MS", "0"));
 const streamAckDrainPollMs = Number(env("DEV_STRESS_STREAM_ACK_DRAIN_POLL_MS", "1000"));
 const streamAckWorkerProbeTimeoutMs = Number(env("DEV_STRESS_STREAM_ACK_WORKER_PROBE_TIMEOUT_MS", "2000"));
@@ -57,6 +64,20 @@ const streamAckProjectorUrls = parseCsvStrings(
     "DEV_STRESS_STREAM_ACK_PROJECTOR_URLS",
     env("DEV_STRESS_STREAM_ACK_PROJECTOR_URL", defaultStreamAckProjectorUrls(runtimeUrl).join(",")),
   ),
+);
+const captureStreamDirectStats = env("DEV_STRESS_CAPTURE_STREAM_DIRECT", "0") === "1";
+const failOnStreamDirectFailures =
+  env("DEV_STRESS_FAIL_ON_STREAM_DIRECT_FAILURES", captureStreamDirectStats ? "1" : "0") === "1";
+const maxStreamDirectFailedDelta = Number(env("DEV_STRESS_MAX_STREAM_DIRECT_FAILED_DELTA", "0"));
+const maxStreamDirectNackedDelta = Number(env("DEV_STRESS_MAX_STREAM_DIRECT_NACKED_DELTA", "0"));
+const maxStreamDirectTermedDelta = Number(env("DEV_STRESS_MAX_STREAM_DIRECT_TERMED_DELTA", "0"));
+const maxStreamDirectUnsupportedDelta = Number(env("DEV_STRESS_MAX_STREAM_DIRECT_UNSUPPORTED_DELTA", "0"));
+const maxStreamDirectCompletionGap = Number(env("DEV_STRESS_MAX_STREAM_DIRECT_COMPLETION_GAP", "0"));
+const streamDirectDrainWaitMs = Number(env("DEV_STRESS_STREAM_DIRECT_DRAIN_WAIT_MS", "0"));
+const streamDirectDrainPollMs = Number(env("DEV_STRESS_STREAM_DIRECT_DRAIN_POLL_MS", "1000"));
+const streamDirectProbeTimeoutMs = Number(env("DEV_STRESS_STREAM_DIRECT_PROBE_TIMEOUT_MS", "2000"));
+const streamDirectUrls = parseCsvStrings(
+  env("DEV_STRESS_STREAM_DIRECT_URLS", env("DEV_STRESS_STREAM_DIRECT_URL", engineUrl)),
 );
 
 const baseOut = out.replace(/\.json$/, "");
@@ -198,6 +219,24 @@ if (!guardrail.pass) {
   process.exitCode = 1;
 }
 
+const streamAckGuardrail = evaluateStreamAckWorkerGuardrail(reportFiles);
+if (!streamAckGuardrail.pass) {
+  console.error("stream-ack worker guardrail failed");
+  for (const failure of streamAckGuardrail.failures) {
+    console.error(`  - ${failure}`);
+  }
+  process.exitCode = 1;
+}
+
+const streamDirectGuardrail = evaluateStreamDirectGuardrail(reportFiles);
+if (!streamDirectGuardrail.pass) {
+  console.error("stream-direct guardrail failed");
+  for (const failure of streamDirectGuardrail.failures) {
+    console.error(`  - ${failure}`);
+  }
+  process.exitCode = 1;
+}
+
 function parseCsvInts(raw) {
   return raw
     .split(",")
@@ -278,6 +317,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
   const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
+  const beforeStreamDirect = captureStreamDirectStats ? await sampleStreamDirect() : null;
   if (captureHotPath) {
     await resetHotPath(runtimeUrl);
   }
@@ -290,6 +330,9 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
         ...(sessionConfig ? ["--session-config", sessionConfig] : []),
         "--base-url",
         runtimeUrl,
+        "--transport",
+        commandTransport,
+        ...(commandTransport === "stream" ? ["--stream-address", streamAddress] : []),
         "--duration",
         duration,
         "--workers",
@@ -346,6 +389,15 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
     if (captureStreamAckProjectorStats) {
       const afterProjector = await sampleStreamAckProjectors();
       attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
+    }
+    if (captureStreamDirectStats) {
+      const afterStreamDirect = await waitForStreamDirectDrain({
+        reportOut,
+        beforeStreamDirect,
+        timeoutMs: streamDirectDrainWaitMs,
+        pollMs: streamDirectDrainPollMs,
+      });
+      attachStreamDirectStats({ reportOut, duration, beforeStreamDirect, afterStreamDirect });
     }
     if (captureHotPath) {
       const afterHotPath = await sampleHotPath(runtimeUrl);
@@ -421,6 +473,54 @@ function streamAckWorkerDrainSatisfied(before, after, expectedTerminal) {
   return streamLag <= 0;
 }
 
+async function sampleStreamDirect() {
+  const probes = await Promise.all(
+    streamDirectUrls.map((baseUrl, index) =>
+      requestAppProbe({
+        name: `streamDirect.${index}.stats`,
+        url: `${baseUrl}/internal/stream-direct/stats`,
+        captureJson: true,
+        timeoutMs: streamDirectProbeTimeoutMs,
+      }),
+    ),
+  );
+  return {
+    ok: probes.every((probe) => probe.ok),
+    status: probes.find((probe) => !probe.ok)?.status ?? 200,
+    latencyMs: Math.max(0, ...probes.map((probe) => Number(probe.latencyMs ?? 0))),
+    error: probes.find((probe) => probe.error)?.error ?? "",
+    probes,
+    json: aggregateStreamDirectStats(probes),
+  };
+}
+
+async function waitForStreamDirectDrain({ reportOut, beforeStreamDirect, timeoutMs, pollMs }) {
+  const started = Date.now();
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+  const interval = Math.max(100, Number(pollMs) || 1000);
+  const expectedTerminal = streamAckExpectedTerminalCommands(reportOut);
+  let latest = await sampleStreamDirect();
+
+  while (timeout > 0 && !streamDirectDrainSatisfied(beforeStreamDirect?.json, latest?.json, expectedTerminal)) {
+    if (Date.now() - started >= timeout) break;
+    await sleep(Math.min(interval, Math.max(0, timeout - (Date.now() - started))));
+    latest = await sampleStreamDirect();
+  }
+  return latest;
+}
+
+function streamDirectDrainSatisfied(before, after, expectedTerminal) {
+  if (!after?.metrics) return expectedTerminal <= 0;
+  const delta = streamDirectDelta(before, after, 1);
+  const terminalDelta =
+    Number(delta?.ackedDelta ?? 0) +
+    Number(delta?.failedDelta ?? 0) +
+    Number(delta?.nackedDelta ?? 0) +
+    Number(delta?.termedDelta ?? 0);
+  if (expectedTerminal > 0 && terminalDelta < expectedTerminal) return false;
+  return true;
+}
+
 async function resetHotPath(runtimeUrl) {
   return requestAppProbe({
     name: "runtime.hotPath.reset",
@@ -467,9 +567,18 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     const markPublishedBatch = streamAckPhases["streamWorker.markPublishedBatch"];
     const enqueuePublished = streamAckPhases["api.streamAck.enqueuePublished"];
     const asyncFlush = streamAckPhases["api.streamAck.markPublished.asyncFlush"];
+    const pipelineQueueWait = streamAckPhases["api.streamAck.publishPipeline.queueWait"];
+    const pipelineSlotWait = streamAckPhases["api.streamAck.publishPipeline.slotWait"];
+    const pipelineDelegateAck = streamAckPhases["api.streamAck.publishPipeline.delegateAck"];
+    const pipelineTotal = streamAckPhases["api.streamAck.publishPipeline.total"];
     if (total || reserve || publishAck || markPublished || markPublishedBatch || enqueuePublished) {
       console.log(
         `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} workerMarkPublishedBatchAvg=${formatPhaseAvg(markPublishedBatch)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
+      );
+    }
+    if (pipelineQueueWait || pipelineSlotWait || pipelineDelegateAck || pipelineTotal) {
+      console.log(
+        `  stream-ack-publish-pipeline queueWaitAvg=${formatPhaseAvg(pipelineQueueWait)} slotWaitAvg=${formatPhaseAvg(pipelineSlotWait)} delegateAckAvg=${formatPhaseAvg(pipelineDelegateAck)} totalAvg=${formatPhaseAvg(pipelineTotal)}`,
       );
     }
     const mutationTotal = phases["api.mutation.total"];
@@ -616,6 +725,102 @@ function aggregateStreamAckWorkerStats(probes) {
   };
 }
 
+function aggregateStreamDirectStats(probes) {
+  const engineStats = probes
+    .map((probe, index) => ({ index, url: streamDirectUrls[index], stats: probe.json }))
+    .filter((engine) => engine.stats);
+  const partitionMetrics = mergeStreamDirectPartitions(
+    engineStats.flatMap((engine) =>
+      (engine.stats.partitions ?? []).map((partition) => ({
+        ...partition,
+        engineIndex: engine.index,
+        engineUrl: engine.url,
+      })),
+    ),
+  );
+  const metrics = sumStreamDirectMetrics(partitionMetrics);
+  return {
+    enabled: engineStats.some((engine) => engine.stats.enabled === true),
+    engines: engineStats.map((engine) => ({
+      index: engine.index,
+      url: engine.url,
+      enabled: engine.stats.enabled,
+      partitionCount: Array.isArray(engine.stats.partitions) ? engine.stats.partitions.length : 0,
+    })),
+    partitions: partitionMetrics.map((partition) => Number(partition.partition)).sort((a, b) => a - b),
+    metrics,
+    partitionMetrics,
+  };
+}
+
+function mergeStreamDirectPartitions(partitions) {
+  const byPartition = new Map();
+  for (const raw of partitions) {
+    const partition = Number(raw.partition);
+    if (!Number.isFinite(partition)) continue;
+    const current = byPartition.get(partition) ?? {
+      partition,
+      shardId: raw.shardId ?? "",
+      engineIndex: raw.engineIndex,
+      engineUrl: raw.engineUrl,
+      fetched: 0,
+      processed: 0,
+      published: 0,
+      acked: 0,
+      nacked: 0,
+      termed: 0,
+      failed: 0,
+      unsupported: 0,
+      lastFetchedAt: "",
+      lastAckedAt: "",
+      lastError: "",
+    };
+    current.fetched += Number(raw.fetched ?? 0);
+    current.processed += Number(raw.processed ?? 0);
+    current.published += Number(raw.published ?? 0);
+    current.acked += Number(raw.acked ?? 0);
+    current.nacked += Number(raw.nacked ?? 0);
+    current.termed += Number(raw.termed ?? 0);
+    current.failed += Number(raw.failed ?? 0);
+    current.unsupported += Number(raw.unsupported ?? 0);
+    current.lastFetchedAt = maxIso(current.lastFetchedAt, raw.lastFetchedAt ?? "");
+    current.lastAckedAt = maxIso(current.lastAckedAt, raw.lastAckedAt ?? "");
+    current.lastError = raw.lastError || current.lastError;
+    byPartition.set(partition, current);
+  }
+  return [...byPartition.values()].sort((a, b) => a.partition - b.partition);
+}
+
+function sumStreamDirectMetrics(partitions) {
+  const totals = {
+    fetched: 0,
+    processed: 0,
+    published: 0,
+    acked: 0,
+    nacked: 0,
+    termed: 0,
+    failed: 0,
+    unsupported: 0,
+    lastFetchedAt: "",
+    lastAckedAt: "",
+    lastError: "",
+  };
+  for (const partition of partitions) {
+    totals.fetched += Number(partition.fetched ?? 0);
+    totals.processed += Number(partition.processed ?? 0);
+    totals.published += Number(partition.published ?? 0);
+    totals.acked += Number(partition.acked ?? 0);
+    totals.nacked += Number(partition.nacked ?? 0);
+    totals.termed += Number(partition.termed ?? 0);
+    totals.failed += Number(partition.failed ?? 0);
+    totals.unsupported += Number(partition.unsupported ?? 0);
+    totals.lastFetchedAt = maxIso(totals.lastFetchedAt, partition.lastFetchedAt ?? "");
+    totals.lastAckedAt = maxIso(totals.lastAckedAt, partition.lastAckedAt ?? "");
+    totals.lastError = partition.lastError || totals.lastError;
+  }
+  return totals;
+}
+
 function sumStreamWorkerMetrics(metricsList) {
   const totals = {
     fetched: 0,
@@ -741,6 +946,39 @@ function attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, 
   }
 }
 
+function attachStreamDirectStats({ reportOut, duration, beforeStreamDirect, afterStreamDirect }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeStreamDirect?.json ?? null;
+    const after = afterStreamDirect?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const delta = streamDirectDelta(before, after, durationSeconds);
+    report.streamDirect = {
+      before,
+      after,
+      delta,
+      probes: {
+        before: accountingProbeSummary(beforeStreamDirect),
+        after: accountingProbeSummary(afterStreamDirect),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    if (delta) {
+      const hotPartitions = delta.partitionDeltas
+        .slice()
+        .sort((a, b) => b.ackedDelta - a.ackedDelta)
+        .slice(0, 4)
+        .map((partition) => `p${partition.partition}:${partition.ackedDelta}`)
+        .join(" ");
+      console.log(
+        `  stream-direct fetchedDelta=${delta.fetchedDelta} processedDelta=${delta.processedDelta} publishedDelta=${delta.publishedDelta} ackedDelta=${delta.ackedDelta} failedDelta=${delta.failedDelta} nackedDelta=${delta.nackedDelta} ackedRps=${delta.ackedRps.toFixed(2)} hotPartitions=${hotPartitions}`,
+      );
+    }
+  } catch (error) {
+    console.warn(`  stream-direct stats unavailable: ${error?.message ?? error}`);
+  }
+}
+
 function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector }) {
   try {
     const report = JSON.parse(readFileSync(reportOut, "utf8"));
@@ -780,12 +1018,16 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
     const attemptedCommands = Number(report.totalRequests ?? 0);
     const acceptedCommands = Number(report.totalSuccess ?? 0);
     const workerCompletedCommands = Number(report.streamAckWorkers?.delta?.completedDelta ?? 0);
+    const directAckedCommands = Number(report.streamDirect?.delta?.ackedDelta ?? 0);
+    const directPublishedOutcomes = Number(report.streamDirect?.delta?.publishedDelta ?? 0);
     const projectedWorkItems = Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
     report.unitMetrics = {
       units: {
         attemptedCommands: "commands submitted by the load generator",
         acceptedCommands: "commands durably accepted by the API with 202",
         workerCompletedCommands: "commands completed by stream-ack workers after canonical persistence",
+        directAckedCommands: "commands consumed by matching-engine direct stream workers and acked after venue event batch publish",
+        directPublishedOutcomes: "command outcomes published by matching-engine direct stream workers to the venue event stream",
         projectedWorkItems: "projection work items applied by stream-ack projectors",
         projectionLag: "projector backlog in projection work items / partition sequence units",
       },
@@ -793,20 +1035,76 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
       attemptedCommands,
       acceptedCommands,
       workerCompletedCommands,
+      directAckedCommands,
+      directPublishedOutcomes,
       projectedWorkItems,
       attemptedCommandsPerSecond: perSecond(attemptedCommands, durationSeconds),
       acceptedCommandsPerSecond: perSecond(acceptedCommands, durationSeconds),
       workerCompletedCommandsPerSecond: perSecond(workerCompletedCommands, durationSeconds),
+      directAckedCommandsPerSecond: perSecond(directAckedCommands, durationSeconds),
+      directPublishedOutcomesPerSecond: perSecond(directPublishedOutcomes, durationSeconds),
       projectedWorkItemsPerSecond: perSecond(projectedWorkItems, durationSeconds),
       completedToAcceptedRatio: ratio(workerCompletedCommands, acceptedCommands),
+      directAckedToAcceptedRatio: ratio(directAckedCommands, acceptedCommands),
+      directPublishedToAcceptedRatio: ratio(directPublishedOutcomes, acceptedCommands),
       projectedToCompletedRatio: ratio(projectedWorkItems, workerCompletedCommands),
       projectionLagAfter: Number(report.streamAckProjector?.delta?.afterLag ?? 0),
     };
     report.partitionSkew = buildPartitionSkew(report.streamAckWorkers?.delta);
+    report.streamDirectPartitionSkew = buildStreamDirectPartitionSkew(report.streamDirect?.delta);
     writeFileSync(reportOut, JSON.stringify(report, null, 2));
   } catch (error) {
     console.warn(`  derived stress metrics unavailable: ${error?.message ?? error}`);
   }
+}
+
+function buildStreamDirectPartitionSkew(directDelta) {
+  const partitionDeltas = directDelta?.partitionDeltas ?? [];
+  const partitions = partitionDeltas.map((partitionDelta) => ({
+    partition: Number(partitionDelta.partition),
+    fetchedCommands: Number(partitionDelta.fetchedDelta ?? 0),
+    processedCommands: Number(partitionDelta.processedDelta ?? 0),
+    publishedOutcomes: Number(partitionDelta.publishedDelta ?? 0),
+    ackedCommands: Number(partitionDelta.ackedDelta ?? 0),
+    nackedCommands: Number(partitionDelta.nackedDelta ?? 0),
+    failedCommands: Number(partitionDelta.failedDelta ?? 0),
+    unsupportedCommands: Number(partitionDelta.unsupportedDelta ?? 0),
+  }));
+  const ackedValues = partitions.map((partition) => partition.ackedCommands);
+  const positiveAcked = ackedValues.filter((value) => value > 0);
+  const maxAcked = ackedValues.length ? Math.max(...ackedValues) : 0;
+  const minPositiveAcked = positiveAcked.length ? Math.min(...positiveAcked) : 0;
+  const totalAcked = ackedValues.reduce((sum, value) => sum + value, 0);
+  return {
+    units: {
+      fetchedCommands: "commands fetched by matching-engine direct partition consumer",
+      processedCommands: "commands applied to the matching-engine service",
+      publishedOutcomes: "command outcomes published in venue event batches",
+      ackedCommands: "commands acked after venue event batch publication",
+    },
+    partitionCount: partitions.length,
+    activePartitions: positiveAcked.length,
+    ackedCommands: {
+      total: totalAcked,
+      average: partitions.length > 0 ? totalAcked / partitions.length : 0,
+      max: maxAcked,
+      minPositive: minPositiveAcked,
+      skewRatio: minPositiveAcked > 0 ? maxAcked / minPositiveAcked : null,
+    },
+    topByAckedCommands: partitions
+      .slice()
+      .sort((a, b) => b.ackedCommands - a.ackedCommands)
+      .slice(0, 8),
+    topByFailures: partitions
+      .slice()
+      .sort(
+        (a, b) =>
+          b.failedCommands + b.nackedCommands + b.unsupportedCommands -
+          (a.failedCommands + a.nackedCommands + a.unsupportedCommands),
+      )
+      .slice(0, 8),
+    partitions,
+  };
 }
 
 function buildPartitionSkew(workerDelta) {
@@ -885,6 +1183,72 @@ function streamWorkerDelta(before, after, durationSeconds) {
     partitionDeltas,
     consumerMetrics: after?.consumerMetrics ?? [],
   };
+}
+
+function streamDirectDelta(before, after, durationSeconds) {
+  const beforeMetrics = before?.metrics;
+  const afterMetrics = after?.metrics;
+  if (!beforeMetrics || !afterMetrics) return null;
+  const fetchedDelta = Number(afterMetrics.fetched ?? 0) - Number(beforeMetrics.fetched ?? 0);
+  const processedDelta = Number(afterMetrics.processed ?? 0) - Number(beforeMetrics.processed ?? 0);
+  const publishedDelta = Number(afterMetrics.published ?? 0) - Number(beforeMetrics.published ?? 0);
+  const ackedDelta = Number(afterMetrics.acked ?? 0) - Number(beforeMetrics.acked ?? 0);
+  const nackedDelta = Number(afterMetrics.nacked ?? 0) - Number(beforeMetrics.nacked ?? 0);
+  const termedDelta = Number(afterMetrics.termed ?? 0) - Number(beforeMetrics.termed ?? 0);
+  const failedDelta = Number(afterMetrics.failed ?? 0) - Number(beforeMetrics.failed ?? 0);
+  const unsupportedDelta = Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0);
+  const partitionDeltas = streamDirectPartitionDeltas(before, after, durationSeconds);
+  return {
+    fetchedDelta,
+    processedDelta,
+    publishedDelta,
+    ackedDelta,
+    nackedDelta,
+    termedDelta,
+    failedDelta,
+    unsupportedDelta,
+    fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
+    processedRps: durationSeconds > 0 ? processedDelta / durationSeconds : 0,
+    publishedRps: durationSeconds > 0 ? publishedDelta / durationSeconds : 0,
+    ackedRps: durationSeconds > 0 ? ackedDelta / durationSeconds : 0,
+    partitionDeltas,
+  };
+}
+
+function streamDirectPartitionDeltas(before, after, durationSeconds) {
+  const beforeByPartition = new Map(
+    (before?.partitionMetrics ?? []).map((partition) => [Number(partition.partition), partition]),
+  );
+  return (after?.partitionMetrics ?? [])
+    .map((afterPartition) => {
+      const partition = Number(afterPartition.partition);
+      const beforePartition = beforeByPartition.get(partition) ?? {};
+      const fetchedDelta = Number(afterPartition.fetched ?? 0) - Number(beforePartition.fetched ?? 0);
+      const processedDelta = Number(afterPartition.processed ?? 0) - Number(beforePartition.processed ?? 0);
+      const publishedDelta = Number(afterPartition.published ?? 0) - Number(beforePartition.published ?? 0);
+      const ackedDelta = Number(afterPartition.acked ?? 0) - Number(beforePartition.acked ?? 0);
+      const nackedDelta = Number(afterPartition.nacked ?? 0) - Number(beforePartition.nacked ?? 0);
+      const termedDelta = Number(afterPartition.termed ?? 0) - Number(beforePartition.termed ?? 0);
+      const failedDelta = Number(afterPartition.failed ?? 0) - Number(beforePartition.failed ?? 0);
+      const unsupportedDelta = Number(afterPartition.unsupported ?? 0) - Number(beforePartition.unsupported ?? 0);
+      return {
+        partition,
+        shardId: afterPartition.shardId ?? "",
+        fetchedDelta,
+        processedDelta,
+        publishedDelta,
+        ackedDelta,
+        nackedDelta,
+        termedDelta,
+        failedDelta,
+        unsupportedDelta,
+        fetchedRps: durationSeconds > 0 ? fetchedDelta / durationSeconds : 0,
+        processedRps: durationSeconds > 0 ? processedDelta / durationSeconds : 0,
+        publishedRps: durationSeconds > 0 ? publishedDelta / durationSeconds : 0,
+        ackedRps: durationSeconds > 0 ? ackedDelta / durationSeconds : 0,
+      };
+    })
+    .sort((a, b) => a.partition - b.partition);
 }
 
 function streamWorkerPartitionDeltas(before, after, durationSeconds) {
@@ -1072,6 +1436,8 @@ function readReportTotals(reportFiles) {
     attemptedCommands: 0,
     acceptedCommands: 0,
     workerCompletedCommands: 0,
+    directAckedCommands: 0,
+    directPublishedOutcomes: 0,
     projectedWorkItems: 0,
   };
   for (const path of reportFiles) {
@@ -1081,6 +1447,8 @@ function readReportTotals(reportFiles) {
       totals.attemptedCommands += Number(report.totalRequests ?? 0);
       totals.acceptedCommands += Number(report.totalSuccess ?? 0);
       totals.workerCompletedCommands += Number(report.streamAckWorkers?.delta?.completedDelta ?? 0);
+      totals.directAckedCommands += Number(report.streamDirect?.delta?.ackedDelta ?? 0);
+      totals.directPublishedOutcomes += Number(report.streamDirect?.delta?.publishedDelta ?? 0);
       totals.projectedWorkItems += Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
     } catch {
       // skip unreadable report
@@ -1136,6 +1504,7 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
       captureJson: true,
     })),
     { name: "engine.health", url: `${engineUrl}/health` },
+    { name: "engine.streamDirect", url: `${engineUrl}/internal/stream-direct/stats`, captureJson: true },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
   ];
   const results = [];
@@ -1234,6 +1603,9 @@ function buildRecommendation(reportFiles) {
       const filename = basename(path);
       const workerMatch = filename.match(/workers-(\d+)\.json$/);
       const rateMatch = filename.match(/rate-(\d+)/);
+      const streamAckIssues = streamAckWorkerIssues(report);
+      const directIssues = streamDirectIssues(report);
+      const streamIssueCount = streamAckIssues.totalIssueCount + directIssues.totalIssueCount;
       rows.push({
         path,
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
@@ -1246,6 +1618,10 @@ function buildRecommendation(reportFiles) {
           Number(report.totalRequests ?? 0) > 0
             ? (Number(report.totalSuccess ?? 0) / Number(report.totalRequests)) * 100
             : 0,
+        streamAckClean: streamIssueCount === 0,
+        streamAckIssueCount: streamIssueCount,
+        streamDirectClean: directIssues.totalIssueCount === 0,
+        streamDirectIssueCount: directIssues.totalIssueCount,
       });
     } catch {
       // skip unreadable report
@@ -1253,14 +1629,17 @@ function buildRecommendation(reportFiles) {
   }
   if (rows.length === 0) return null;
   const latencyTargetMs = 100;
+  const clean = rows.filter((row) => row.streamAckClean);
+  const acceptableClean = clean.filter((row) => row.p95Ms <= latencyTargetMs && row.p99Ms <= latencyTargetMs * 1.5);
   const acceptable = rows.filter((row) => row.p95Ms <= latencyTargetMs && row.p99Ms <= latencyTargetMs * 1.5);
-  const candidates = acceptable.length > 0 ? acceptable : rows;
+  const candidates = acceptableClean.length > 0 ? acceptableClean : clean.length > 0 ? clean : acceptable.length > 0 ? acceptable : rows;
   const scored = candidates.map((row) => ({
     ...row,
     score:
       row.acceptedRps -
       Math.max(0, row.p95Ms-latencyTargetMs)*0.75 -
-      Math.max(0, row.p99Ms-latencyTargetMs*1.5)*0.5,
+      Math.max(0, row.p99Ms-latencyTargetMs*1.5)*0.5 -
+      row.streamAckIssueCount * 1000,
   }));
   scored.sort((a, b) => {
     if (a.score === b.score) return a.p95Ms - b.p95Ms;
@@ -1276,6 +1655,8 @@ function buildRecommendation(reportFiles) {
     acceptedRps: scored[0].acceptedRps,
     p95Ms: scored[0].p95Ms,
     p99Ms: scored[0].p99Ms,
+    streamAckClean: scored[0].streamAckClean,
+    streamAckIssueCount: scored[0].streamAckIssueCount,
     score: scored[0].score,
     topSamples: scored.slice(0, 5),
   };
@@ -1303,6 +1684,72 @@ function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct) {
   return { pass: failures.length === 0, failures };
 }
 
+function evaluateStreamAckWorkerGuardrail(reportFiles) {
+  if (!failOnStreamAckWorkerFailures) {
+    return { pass: true, failures: [] };
+  }
+  const failures = [];
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      if (!report.streamAckWorkers?.delta) {
+        continue;
+      }
+      const issues = streamAckWorkerIssues(report);
+      if (issues.failedDelta > maxStreamAckWorkerFailedDelta) {
+        failures.push(`${path}: stream-ack failedDelta ${issues.failedDelta} > ${maxStreamAckWorkerFailedDelta}`);
+      }
+      if (issues.ackFailedDelta > maxStreamAckWorkerAckFailedDelta) {
+        failures.push(`${path}: stream-ack ackFailedDelta ${issues.ackFailedDelta} > ${maxStreamAckWorkerAckFailedDelta}`);
+      }
+      if (issues.completionGap > maxStreamAckCompletionGap) {
+        failures.push(`${path}: stream-ack accepted/completed gap ${issues.completionGap} > ${maxStreamAckCompletionGap}`);
+      }
+    } catch {
+      failures.push(`${path}: unable to parse report for stream-ack worker guardrail check`);
+    }
+  }
+  return { pass: failures.length === 0, failures };
+}
+
+function evaluateStreamDirectGuardrail(reportFiles) {
+  if (!failOnStreamDirectFailures) {
+    return { pass: true, failures: [] };
+  }
+  const failures = [];
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      if (!report.streamDirect?.delta) {
+        failures.push(`${path}: missing stream-direct delta`);
+        continue;
+      }
+      if (report.streamDirect?.probes?.after?.ok === false) {
+        failures.push(`${path}: stream-direct after probe failed: ${report.streamDirect.probes.after.error ?? report.streamDirect.probes.after.status ?? "unknown"}`);
+      }
+      const issues = streamDirectIssues(report);
+      if (issues.failedDelta > maxStreamDirectFailedDelta) {
+        failures.push(`${path}: stream-direct failedDelta ${issues.failedDelta} > ${maxStreamDirectFailedDelta}`);
+      }
+      if (issues.nackedDelta > maxStreamDirectNackedDelta) {
+        failures.push(`${path}: stream-direct nackedDelta ${issues.nackedDelta} > ${maxStreamDirectNackedDelta}`);
+      }
+      if (issues.termedDelta > maxStreamDirectTermedDelta) {
+        failures.push(`${path}: stream-direct termedDelta ${issues.termedDelta} > ${maxStreamDirectTermedDelta}`);
+      }
+      if (issues.unsupportedDelta > maxStreamDirectUnsupportedDelta) {
+        failures.push(`${path}: stream-direct unsupportedDelta ${issues.unsupportedDelta} > ${maxStreamDirectUnsupportedDelta}`);
+      }
+      if (issues.completionGap > maxStreamDirectCompletionGap) {
+        failures.push(`${path}: stream-direct accepted/acked gap ${issues.completionGap} > ${maxStreamDirectCompletionGap}`);
+      }
+    } catch {
+      failures.push(`${path}: unable to parse report for stream-direct guardrail check`);
+    }
+  }
+  return { pass: failures.length === 0, failures };
+}
+
 function buildKpiSummary(reportFiles, invalidCodes) {
   const samples = [];
   for (const path of reportFiles) {
@@ -1312,6 +1759,9 @@ function buildKpiSummary(reportFiles, invalidCodes) {
       const workerMatch = filename.match(/workers-(\d+)\.json$/);
       const rateMatch = filename.match(/rate-(\d+)/);
       const quality = qualityFromReport(report, invalidCodes);
+      const streamAckIssues = streamAckWorkerIssues(report);
+      const directIssues = streamDirectIssues(report);
+      const streamIssueCount = streamAckIssues.totalIssueCount + directIssues.totalIssueCount;
       const traceChecked = Number(report.traceChecks?.checked ?? 0);
       const tracePass = Number(report.traceChecks?.pass ?? 0);
       samples.push({
@@ -1324,6 +1774,14 @@ function buildKpiSummary(reportFiles, invalidCodes) {
         validIntentSuccessRatePct: quality.validIntentSuccessRatePct,
         invalidIntentRatePct: quality.invalidIntentRatePct,
         systemFailureRateProxyPct: quality.systemFailureRatePct,
+        streamAckClean: streamIssueCount === 0,
+        streamAckWorkerFailedDelta: streamAckIssues.failedDelta,
+        streamAckWorkerAckFailedDelta: streamAckIssues.ackFailedDelta,
+        streamAckCompletionGap: streamAckIssues.completionGap,
+        streamDirectClean: directIssues.totalIssueCount === 0,
+        streamDirectFailedDelta: directIssues.failedDelta,
+        streamDirectNackedDelta: directIssues.nackedDelta,
+        streamDirectCompletionGap: directIssues.completionGap,
         tracePassRatePct: traceChecked > 0 ? (tracePass / traceChecked) * 100 : 100,
         p95LatencyMs: Number(report.latencyMs?.p95 ?? 0),
         p99LatencyMs: Number(report.latencyMs?.p99 ?? 0),
@@ -1338,10 +1796,10 @@ function buildKpiSummary(reportFiles, invalidCodes) {
   const bestByThroughput = [...samples].sort((a, b) => b.throughputRps - a.throughputRps)[0];
   const bestByAccepted = [...samples].sort((a, b) => b.acceptedBusinessOpsRps - a.acceptedBusinessOpsRps)[0];
   const quality90 = [...samples]
-    .filter((sample) => sample.endToEndSuccessRatePct >= 90)
+    .filter((sample) => sample.endToEndSuccessRatePct >= 90 && sample.streamAckClean)
     .sort((a, b) => b.throughputRps - a.throughputRps)[0] ?? null;
   const quality95 = [...samples]
-    .filter((sample) => sample.endToEndSuccessRatePct >= 95)
+    .filter((sample) => sample.endToEndSuccessRatePct >= 95 && sample.streamAckClean)
     .sort((a, b) => b.throughputRps - a.throughputRps)[0] ?? null;
 
   const averages = {
@@ -1370,15 +1828,28 @@ function buildKpiSummary(reportFiles, invalidCodes) {
 }
 
 function qualityFromReport(report, invalidCodes) {
+  const streamAckIssues = streamAckWorkerIssues(report);
+  const directIssues = streamDirectIssues(report);
+  const streamAckSystemFailureCount = streamAckIssues.failedDelta + streamAckIssues.ackFailedDelta + streamAckIssues.completionGap;
+  const streamDirectSystemFailureCount =
+    directIssues.failedDelta +
+    directIssues.nackedDelta +
+    directIssues.termedDelta +
+    directIssues.unsupportedDelta +
+    directIssues.completionGap;
+  const streamSystemFailureCount = streamAckSystemFailureCount + streamDirectSystemFailureCount;
+  const totalRequests = Number(report.totalRequests ?? 0);
   if (report.quality && typeof report.quality === "object") {
+    const baseSystemFailureRatePct = Number(report.quality.systemFailureRatePct ?? 0);
+    const streamSystemFailureRatePct =
+      totalRequests > 0 ? (streamSystemFailureCount / totalRequests) * 100 : 0;
     return {
       endToEndSuccessRatePct: Number(report.quality.endToEndSuccessRatePct ?? 0),
       validIntentSuccessRatePct: Number(report.quality.validIntentSuccessRatePct ?? 0),
       invalidIntentRatePct: Number(report.quality.invalidIntentRatePct ?? 0),
-      systemFailureRatePct: Number(report.quality.systemFailureRatePct ?? 0),
+      systemFailureRatePct: Math.max(baseSystemFailureRatePct, streamSystemFailureRatePct),
     };
   }
-  const totalRequests = Number(report.totalRequests ?? 0);
   const totalSuccess = Number(report.totalSuccess ?? 0);
   const totalFailures = Number(report.totalFailures ?? 0);
   const invalidIntentRejectCount = invalidCodes.reduce(
@@ -1386,13 +1857,65 @@ function qualityFromReport(report, invalidCodes) {
     0,
   );
   const validIntentRequestCount = Math.max(totalRequests - invalidIntentRejectCount, 0);
-  const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0);
+  const systemFailureProxyCount = Math.max(totalFailures - invalidIntentRejectCount, 0) + streamSystemFailureCount;
   return {
     endToEndSuccessRatePct: totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0,
     validIntentSuccessRatePct:
       validIntentRequestCount > 0 ? (totalSuccess / validIntentRequestCount) * 100 : 0,
     invalidIntentRatePct: totalRequests > 0 ? (invalidIntentRejectCount / totalRequests) * 100 : 0,
     systemFailureRatePct: totalRequests > 0 ? (systemFailureProxyCount / totalRequests) * 100 : 0,
+  };
+}
+
+function streamAckWorkerIssues(report) {
+  const delta = report.streamAckWorkers?.delta;
+  if (!delta) {
+    return {
+      failedDelta: 0,
+      ackFailedDelta: 0,
+      completionGap: 0,
+      totalIssueCount: 0,
+    };
+  }
+  const acceptedCommands = Number(report.totalSuccess ?? 0);
+  const completedDelta = Number(delta.completedDelta ?? 0);
+  const failedDelta = Number(delta.failedDelta ?? 0);
+  const ackFailedDelta = Number(delta.ackFailedDelta ?? 0);
+  const completionGap = Math.max(acceptedCommands - completedDelta, 0);
+  return {
+    failedDelta,
+    ackFailedDelta,
+    completionGap,
+    totalIssueCount: failedDelta + ackFailedDelta + completionGap,
+  };
+}
+
+function streamDirectIssues(report) {
+  const delta = report.streamDirect?.delta;
+  if (!delta) {
+    return {
+      failedDelta: 0,
+      nackedDelta: 0,
+      termedDelta: 0,
+      unsupportedDelta: 0,
+      completionGap: 0,
+      totalIssueCount: 0,
+    };
+  }
+  const acceptedCommands = Number(report.totalSuccess ?? 0);
+  const ackedDelta = Number(delta.ackedDelta ?? 0);
+  const failedDelta = Number(delta.failedDelta ?? 0);
+  const nackedDelta = Number(delta.nackedDelta ?? 0);
+  const termedDelta = Number(delta.termedDelta ?? 0);
+  const unsupportedDelta = Number(delta.unsupportedDelta ?? 0);
+  const completionGap = Math.max(acceptedCommands - ackedDelta, 0);
+  return {
+    failedDelta,
+    nackedDelta,
+    termedDelta,
+    unsupportedDelta,
+    completionGap,
+    totalIssueCount: failedDelta + nackedDelta + termedDelta + unsupportedDelta + completionGap,
   };
 }
 
@@ -1449,11 +1972,11 @@ function toKpiMarkdown(kpiSummary) {
   );
   lines.push("");
   lines.push("## Per Sample");
-  lines.push("| Rate | Workers | Throughput RPS | Accepted RPS | E2E Success % | Valid-Intent Success % | Invalid-Intent % | System-Failure % (proxy) | p95 ms | p99 ms |");
-  lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+  lines.push("| Rate | Workers | Throughput RPS | Accepted RPS | E2E Success % | Valid-Intent Success % | Invalid-Intent % | System-Failure % (proxy) | Stream Clean | p95 ms | p99 ms |");
+  lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|:---:|---:|---:|");
   for (const sample of kpiSummary.samples) {
     lines.push(
-      `| ${sample.rate} | ${sample.workers} | ${sample.throughputRps.toFixed(2)} | ${sample.acceptedBusinessOpsRps.toFixed(2)} | ${sample.endToEndSuccessRatePct.toFixed(2)} | ${sample.validIntentSuccessRatePct.toFixed(2)} | ${sample.invalidIntentRatePct.toFixed(2)} | ${sample.systemFailureRateProxyPct.toFixed(2)} | ${sample.p95LatencyMs.toFixed(2)} | ${sample.p99LatencyMs.toFixed(2)} |`,
+      `| ${sample.rate} | ${sample.workers} | ${sample.throughputRps.toFixed(2)} | ${sample.acceptedBusinessOpsRps.toFixed(2)} | ${sample.endToEndSuccessRatePct.toFixed(2)} | ${sample.validIntentSuccessRatePct.toFixed(2)} | ${sample.invalidIntentRatePct.toFixed(2)} | ${sample.systemFailureRateProxyPct.toFixed(2)} | ${sample.streamAckClean ? "yes" : "no"} | ${sample.p95LatencyMs.toFixed(2)} | ${sample.p99LatencyMs.toFixed(2)} |`,
     );
   }
   lines.push("");

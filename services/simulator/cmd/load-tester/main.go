@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -38,6 +39,8 @@ type Config struct {
 	StrategyProfiles    map[string]sessionconfig.StrategyProfile
 	Faults              []sessionconfig.FaultRule
 	BaseURL             string
+	Transport           string
+	StreamAddress       string
 	Duration            time.Duration
 	Workers             int
 	RatePerSecond       int
@@ -202,6 +205,20 @@ const (
 	profileNoise         = "noise"
 )
 
+const (
+	transportHTTP   = "http"
+	transportStream = "stream"
+)
+
+func validTransport(transport string) bool {
+	switch strings.ToLower(strings.TrimSpace(transport)) {
+	case transportHTTP, transportStream:
+		return true
+	default:
+		return false
+	}
+}
+
 var defaultInvalidIntentRejectCodes = []string{"INVALID_STATE", "NOT_FOUND", "VALIDATION_ERROR"}
 
 type trade struct {
@@ -319,6 +336,8 @@ func parseConfig() (Config, error) {
 
 	flag.StringVar(&cfg.SessionConfigPath, "session-config", envOr("REEF_SESSION_CONFIG", ""), "path to persona session config (yaml/json)")
 	flag.StringVar(&cfg.BaseURL, "base-url", cfg.BaseURL, "platform runtime base url")
+	flag.StringVar(&cfg.Transport, "transport", cfg.Transport, "command submit transport: http or stream")
+	flag.StringVar(&cfg.StreamAddress, "stream-address", cfg.StreamAddress, "stream ingress host:port when transport=stream")
 	flag.DurationVar(&cfg.Duration, "duration", cfg.Duration, "test duration")
 	flag.IntVar(&cfg.Workers, "workers", cfg.Workers, "concurrent workers")
 	flag.IntVar(&cfg.RatePerSecond, "rate", cfg.RatePerSecond, "global request rate per second (0 = unthrottled)")
@@ -387,6 +406,12 @@ func parseConfig() (Config, error) {
 	if cfg.Duration <= 0 || cfg.Workers <= 0 {
 		return cfg, errors.New("duration and workers must be > 0")
 	}
+	if !validTransport(cfg.Transport) {
+		return cfg, errors.New("transport must be http or stream")
+	}
+	if cfg.Transport == transportStream && strings.TrimSpace(cfg.StreamAddress) == "" {
+		return cfg, errors.New("stream-address must be non-empty when transport=stream")
+	}
 	if cfg.QuantityMin <= 0 || cfg.QuantityMax < cfg.QuantityMin {
 		return cfg, errors.New("invalid quantity range")
 	}
@@ -446,6 +471,8 @@ func parseConfig() (Config, error) {
 func defaultConfigFromEnv() Config {
 	return Config{
 		BaseURL:             envOr("REEF_BASE_URL", "http://localhost:8080"),
+		Transport:           envOr("REEF_TRANSPORT", transportHTTP),
+		StreamAddress:       envOr("REEF_STREAM_ADDRESS", "127.0.0.1:8090"),
 		Duration:            envDuration("REEF_DURATION", 30*time.Second),
 		Workers:             envInt("REEF_WORKERS", 8),
 		RatePerSecond:       envInt("REEF_RATE", 0),
@@ -530,6 +557,12 @@ func mergeSessionConfig(defaults Config, session sessionconfig.RuntimeConfig) Co
 func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	if explicit["base-url"] {
 		cfg.BaseURL = parsed.BaseURL
+	}
+	if explicit["transport"] {
+		cfg.Transport = parsed.Transport
+	}
+	if explicit["stream-address"] {
+		cfg.StreamAddress = parsed.StreamAddress
 	}
 	if explicit["duration"] {
 		cfg.Duration = parsed.Duration
@@ -691,6 +724,14 @@ func runWorker(
 	if cfg.HasSessionConfig && cfg.Seed != 0 {
 		rng = rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
 	}
+	var stream *streamSubmitter
+	if cfg.Transport == transportStream {
+		stream = &streamSubmitter{
+			address: cfg.StreamAddress,
+			timeout: cfg.RequestTimeout,
+		}
+		defer stream.close()
+	}
 	state := workerState{orders: make([]string, 0, 128)}
 	for {
 		select {
@@ -770,12 +811,7 @@ func runWorker(
 			payload["limitPrice"] = fmt.Sprintf("%d", profilePrice(rng, cfg, effectiveProfile, instrument))
 			payload["currency"] = "USD"
 			payload["timeInForce"] = "DAY"
-			status, body, err := doPOST(
-				client,
-				cfg.BaseURL+commandRoute(cfg, ActionSubmit),
-				payload,
-				commandHeaders(cfg, workerID, commandID, traceID),
-			)
+			status, body, err := submitCommand(client, stream, cfg, workerID, commandID, traceID, payload, ActionSubmit)
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.orders = append(state.orders, orderID)
@@ -855,6 +891,99 @@ func runWorker(
 		}
 		results <- result
 	}
+}
+
+func submitCommand(
+	client *http.Client,
+	stream *streamSubmitter,
+	cfg Config,
+	workerID int,
+	commandID string,
+	traceID string,
+	payload map[string]string,
+	action Action,
+) (int, []byte, error) {
+	if cfg.Transport == transportStream && action == ActionSubmit {
+		return stream.submit(payload)
+	}
+	return doPOST(
+		client,
+		cfg.BaseURL+commandRoute(cfg, action),
+		payload,
+		commandHeaders(cfg, workerID, commandID, traceID),
+	)
+}
+
+type streamSubmitter struct {
+	address string
+	timeout time.Duration
+	conn    net.Conn
+	reader  *bufio.Reader
+	writer  *bufio.Writer
+}
+
+func (s *streamSubmitter) submit(payload map[string]string) (int, []byte, error) {
+	if err := s.ensureConnected(); err != nil {
+		return 0, nil, err
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := s.conn.SetDeadline(time.Now().Add(s.timeout)); err != nil {
+		s.close()
+		return 0, nil, err
+	}
+	if _, err := s.writer.Write(body); err != nil {
+		s.close()
+		return 0, nil, err
+	}
+	if err := s.writer.WriteByte('\n'); err != nil {
+		s.close()
+		return 0, nil, err
+	}
+	if err := s.writer.Flush(); err != nil {
+		s.close()
+		return 0, nil, err
+	}
+	line, err := s.reader.ReadString('\n')
+	if err != nil {
+		s.close()
+		return 0, nil, err
+	}
+	line = strings.TrimSpace(line)
+	statusText, bodyText, hasBody := strings.Cut(line, "\t")
+	status, err := strconv.Atoi(statusText)
+	if err != nil {
+		return 0, nil, err
+	}
+	if hasBody {
+		return status, []byte(bodyText), nil
+	}
+	return status, nil, nil
+}
+
+func (s *streamSubmitter) ensureConnected() error {
+	if s.conn != nil {
+		return nil
+	}
+	conn, err := net.DialTimeout("tcp", s.address, s.timeout)
+	if err != nil {
+		return err
+	}
+	s.conn = conn
+	s.reader = bufio.NewReaderSize(conn, 64*1024)
+	s.writer = bufio.NewWriterSize(conn, 64*1024)
+	return nil
+}
+
+func (s *streamSubmitter) close() {
+	if s.conn != nil {
+		_ = s.conn.Close()
+	}
+	s.conn = nil
+	s.reader = nil
+	s.writer = nil
 }
 
 func fillResult(result *requestResult, status int, body []byte, err error, start time.Time) {

@@ -185,8 +185,8 @@ func ValidateSessionFile(cfg SessionFile) error {
 	if cfg.Runtime.RatePerSecond < 0 {
 		return errors.New("runtime.ratePerSecond must be >= 0")
 	}
-	if cfg.Runtime.TraceCheckLimit <= 0 {
-		return errors.New("runtime.traceCheckLimit must be > 0")
+	if cfg.Runtime.TraceCheckLimit < 0 {
+		return errors.New("runtime.traceCheckLimit must be >= 0")
 	}
 	if len(cfg.Market.Equities) == 0 {
 		return errors.New("market.equities must include at least one symbol")
