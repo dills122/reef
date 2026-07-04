@@ -13,25 +13,29 @@ It is intentionally biased toward:
 
 ## Current Execution Checkpoint
 
-As of 2026-06-04, Reef is no longer just a repository skeleton. The current implementation has:
+For the shortest current snapshot, read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) before using this roadmap.
+
+As of 2026-07-04, Reef is no longer just a repository skeleton. The current implementation has:
 
 - Kotlin runtime submit/cancel/modify command paths
 - `/api/v1` boundary routes with idempotency, auth/rate-limit hooks, abuse protection, and command capture
 - reference data endpoints and admin CLI scaffolding
 - runtime order/trade/event/trace query endpoints
-- Go matching engine hidden-book behavior with partial-fill, multi-match, cancel, modify, HTTP, and gRPC scaffold paths
+- Go matching engine hidden-book behavior with partial-fill, multi-match, cancel, modify, HTTP, gRPC, and direct stream-consumer paths
 - Docker-first dev stack, smoke, stress, replay, and throughput campaign automation
 - Go simulator/load tester with persona/session configuration and trace validation
 
-The main execution gap is not service startup. It is completing the move from schema-qualified compatibility bootstrap to migration-owned, split-ready, procedure-first persistence.
+The main execution gap is not service startup. It is proving the current durable hot-ingress path without weakening accepted-command semantics, then reintroducing persistence and projections deliberately.
 
 Current priority order:
 
-1. align runtime, boundary, auth, and admin durable persistence with domain schemas and migrations
-2. deliver the local simulator control-room MVP over existing CLI/report artifacts
-3. complete venue lifecycle projections for submit/cancel/modify state
-4. lock deterministic replay for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
-5. start broader post-trade modules only after the timeline/replay path proves causation end to end
+1. validate the D-041 Kafka-compatible durable producer plus matching-engine direct consumer path
+2. preserve durable ack-before-`202`, deterministic partitioning, and clean accepted/acked accounting
+3. reintroduce canonical persistence and async projections with measured write amplification and lag
+4. complete venue lifecycle projections for submit/cancel/modify/fill/reject state
+5. deliver the local simulator control-room MVP over existing CLI/report artifacts
+6. lock deterministic replay for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`
+7. start broader post-trade modules only after the timeline/replay path proves causation end to end
 
 ## Phase 0: Foundation Reset
 
@@ -83,13 +87,15 @@ Current status:
 - API-first command and query paths are substantially implemented.
 - UI delivery is not complete.
 - persisted order lifecycle projection still needs to represent cancel/modify/current engine state consistently.
-- durable persistence now uses explicit runtime/boundary/auth schemas, migration files represent the live table shapes, local startup applies migrations, and Docker/local runtime validates migrated objects; compatibility-bootstrap code can be narrowed after CI covers migration execution order.
+- durable persistence now uses explicit runtime/boundary/auth schemas, migration files represent the live table shapes, local startup applies migrations, and Docker/local runtime validates migrated objects.
+- stream-backed and Kafka-compatible hot-ingress profiles are active throughput work; benchmark claims must distinguish attempted, durably accepted, completed/acked, persisted, projected, and visible throughput.
 
 Recommended remaining sequence:
-1. CI-backed schema-placement validation and runtime compatibility-bootstrap cleanup
-2. venue lifecycle projection completion
-3. simulator control room around existing scripts/artifacts
-4. first scenario-locked lifecycle tests
+1. D-041 hot-ingress validation and promotion evidence
+2. canonical persistence/projection reintroduction on the proven command path
+3. venue lifecycle projection completion
+4. simulator control room around existing scripts/artifacts
+5. first scenario-locked lifecycle tests
 
 ## Phase 2: Post-Trade Slice
 
@@ -252,11 +258,11 @@ Implementation detail reference:
 
 If starting fresh from the current repository state, the recommended order is:
 
-1. establish repo structure and steering
-2. replace the old prototype README
-3. stand up the Kotlin runtime shell
-4. stand up the Go engine shell
-5. define the first order/execution contract
-6. implement the v1 end-to-end venue slice
-7. layer in post-trade workflows
-8. add simulation control
+1. read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) and [`WORK_PLAN.md`](./WORK_PLAN.md)
+2. preserve durable command acceptance semantics before changing ingress paths
+3. validate the direct engine ingestion path and benchmark evidence gates
+4. complete persistence/projection and lifecycle-query gaps
+5. build simulator control-room and first deterministic lifecycle scenarios
+6. layer in post-trade workflows after replay/timeline assertions are stable
+
+The original Phase 0/Phase 1 setup tasks above are retained as history; they are not the active near-term work.

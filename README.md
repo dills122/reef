@@ -33,11 +33,12 @@ make dev-smoke
 
 ## Docs Map
 
+- current status and active execution ladder: [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md), [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
 - project pitch and product framing: [`docs/PROJECT_PITCH.md`](./docs/PROJECT_PITCH.md)
 - onboarding and local setup: [`docs/ONBOARDING.md`](./docs/ONBOARDING.md)
 - dev environment runbook: [`docs/DEV_ENV.md`](./docs/DEV_ENV.md)
 - delivery policy and test expectations: [`docs/ENGINEERING_DELIVERY_POLICY.md`](./docs/ENGINEERING_DELIVERY_POLICY.md)
-- roadmap and sequencing: [`docs/ROADMAP.md`](./docs/ROADMAP.md), [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
+- roadmap and sequencing: [`docs/ROADMAP.md`](./docs/ROADMAP.md)
 - performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./docs/PERFORMANCE_LIBRARY_INVESTIGATION.md)
 - simulator persona/session plan: [`docs/SIMULATOR_PERSONA_CONFIG.md`](./docs/SIMULATOR_PERSONA_CONFIG.md)
 - simulator backlog and execution policy: [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./docs/SIMULATOR_UPGRADE_BACKLOG.md)
@@ -45,7 +46,7 @@ make dev-smoke
 
 ## Current State
 
-The repository is in Phase 1 implementation with a working API-first venue slice and an increasingly capable local simulation/stress harness.
+The repository is in Phase 1 venue implementation with a working API-first slice, active hot-ingress scaling work, and an increasingly capable local/remote simulation and stress harness.
 
 What exists now:
 
@@ -54,12 +55,14 @@ What exists now:
 - implementation roadmap in [`docs/ROADMAP.md`](./docs/ROADMAP.md)
 - architecture and language steering in [`docs/steering/`](./docs/steering/)
 - Kotlin platform runtime with `/api/v1` submit/cancel/modify routes, idempotency hooks, query/read endpoints, reference data endpoints, abuse-protection telemetry, and admin CLI support
-- Go matching engine with hidden-book matching, partial-fill/multi-match behavior, cancel/modify support, HTTP transport, and gRPC scaffold
+- Go matching engine with hidden-book matching, partial-fill/multi-match behavior, cancel/modify support, HTTP, gRPC, and direct stream-ingestion paths
 - load/simulation CLI and replay/stress workflows in [`services/simulator/`](./services/simulator/)
 - Docker-first local stack and smoke/stress/replay automation through `make` targets
 
-Current planning review:
+Current planning:
 
+- [`docs/CURRENT_STATUS.md`](./docs/CURRENT_STATUS.md)
+- [`docs/WORK_PLAN.md`](./docs/WORK_PLAN.md)
 - [`docs/PROJECT_GOAL_PLAN_REVIEW.md`](./docs/PROJECT_GOAL_PLAN_REVIEW.md)
 
 ## Planned Repository Shape
@@ -82,13 +85,14 @@ docs/
 
 ## Near-Term Build Plan
 
-1. Align durable runtime/boundary/auth/admin persistence with the split-ready schema and migration plan.
-2. Build the simulator control-room MVP over existing CLI scripts and report artifacts.
-3. Complete venue lifecycle projections for submit/cancel/modify and expose stable query/timeline views.
-4. Deliver the first deterministic lifecycle scenarios:
+1. Validate the D-041 hot-ingress path: Kafka-compatible durable command log, explicit partitions, matching-engine direct consumption, durable venue event batches, and clean offset/ack accounting.
+2. Reintroduce canonical persistence deliberately after direct-ingestion ceilings are understood.
+3. Complete venue lifecycle projections for submit/cancel/modify/fill/reject and expose stable query/timeline views.
+4. Build the simulator control-room MVP over existing CLI scripts and report artifacts.
+5. Deliver the first deterministic lifecycle scenarios:
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
-5. Extend into post-trade workflows once replay/timeline assertions are stable.
+6. Extend into post-trade workflows once replay/timeline assertions are stable.
 
 ## Current Development Commands
 
@@ -124,7 +128,8 @@ make dev-db-migrate
 
 ## Current Defaults
 
-- runtime-to-engine transport currently defaults to HTTP adapter, with gRPC direction documented for migration
+- runtime-to-engine transport supports HTTP, unary gRPC, and gRPC-stream paths depending on profile
+- high-throughput experiments include JetStream stream-ack and Redpanda/Kafka-compatible direct engine ingestion profiles
 - user-facing API boundary direction is versioned `/api/v1` contracts
 - admin surface direction is CLI-first using reusable runtime admin application modules
 

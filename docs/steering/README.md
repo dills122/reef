@@ -5,6 +5,7 @@ These documents define how Reef should be built as the repository grows into the
 ## Documents
 
 - [Onboarding](../ONBOARDING.md): contributor ramp-up path, prerequisites, first-run, and troubleshooting
+- [Current Status](../CURRENT_STATUS.md): short current implementation snapshot, active forward path, and documentation cleanup policy
 - [Engineering Delivery Policy](../ENGINEERING_DELIVERY_POLICY.md): delivery mode matrix, refactor triggers, and non-negotiable feature-test requirements
 - [Repository Scope And Priorities](./repository-scope-and-priorities.md): repo-level correctness, throughput, audit, replay, and safe-change priorities
 - [Architecture](./architecture.md): service boundaries, repo shape, contracts, persistence, and cross-cutting rules

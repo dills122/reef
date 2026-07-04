@@ -149,6 +149,12 @@ class StreamCommandIntakeTest {
         publisher.publishAsync(validEnvelope(commandId = "cmd-pipeline-1", idempotencyKey = "idem-pipeline-1"))
         eventually { assertEquals(1, delegate.received.get()) }
         publisher.publishAsync(validEnvelope(commandId = "cmd-pipeline-2", idempotencyKey = "idem-pipeline-2"))
+        eventually {
+            val snapshot = publisher.snapshot()
+            assertEquals(2, snapshot.publishAccepted)
+            assertEquals(0, snapshot.publishQueueDepth)
+            assertEquals(1, snapshot.publishInFlight)
+        }
         publisher.publishAsync(validEnvelope(commandId = "cmd-pipeline-3", idempotencyKey = "idem-pipeline-3"))
         eventually { assertEquals(1, publisher.snapshot().publishQueueDepth) }
 
