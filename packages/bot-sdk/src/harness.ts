@@ -48,6 +48,7 @@ export interface BotRegistrationReportV1 {
   readonly status: BotRegistrationStatusV1;
   readonly fileName: string;
   readonly metadata?: ReefBotMetadataV1;
+  readonly registryEntry?: BotRegistryEntryV1;
   readonly gitAuthorEmail?: string;
   readonly issues: readonly BotRegistrationIssueV1[];
 }
@@ -74,7 +75,7 @@ export interface BotQualificationOptionsV1 {
   readonly source: string;
   readonly BotClass: ReefBotV1Constructor;
   readonly existingFileNames?: readonly string[];
-  readonly registryFileNames?: readonly string[];
+  readonly registryEntries?: readonly BotRegistryEntryV1[];
   readonly gitAuthorEmail?: string;
   readonly tickCount?: number;
   readonly policy?: Partial<BotRuntimePolicyV1>;
@@ -85,6 +86,18 @@ export interface BotLogEntryV1 {
   readonly level: "info" | "warn" | "error";
   readonly message: string;
   readonly fields?: Record<string, unknown>;
+}
+
+export type BotRegistryStatusV1 = "draft" | "approved" | "quarantined" | "banned";
+
+export interface BotRegistryEntryV1 {
+  readonly fileName: string;
+  readonly botId: string;
+  readonly owner: string;
+  readonly publisher: string;
+  readonly approvedVersion: string;
+  readonly status: BotRegistryStatusV1;
+  readonly artifactHash?: string;
 }
 
 const requiredMetadataFields: readonly (keyof ReefBotMetadataV1)[] = [
@@ -115,7 +128,7 @@ export function validateBotRegistrationV1(options: {
   readonly source: string;
   readonly BotClass: ReefBotV1Constructor;
   readonly existingFileNames?: readonly string[];
-  readonly registryFileNames?: readonly string[];
+  readonly registryEntries?: readonly BotRegistryEntryV1[];
   readonly gitAuthorEmail?: string;
 }): BotRegistrationReportV1 {
   const issues: BotRegistrationIssueV1[] = [];
@@ -129,7 +142,8 @@ export function validateBotRegistrationV1(options: {
     issues.push(errorIssue("duplicate_file_name", `Bot filename ${options.fileName} is not unique.`));
   }
 
-  const registryFileNames = options.registryFileNames ?? [];
+  const registryEntries = options.registryEntries ?? [];
+  const registryFileNames = registryEntries.map((entry) => entry.fileName);
   const registryDuplicates = duplicateValues(registryFileNames);
   for (const duplicateFileName of registryDuplicates) {
     issues.push(errorIssue("duplicate_registry_file_name", `Bot registry contains duplicate filename ${duplicateFileName}.`));
@@ -138,6 +152,9 @@ export function validateBotRegistrationV1(options: {
   if (registryFileNames.length > 0 && !registryFileNames.includes(options.fileName)) {
     issues.push(errorIssue("unregistered_file_name", `Bot filename ${options.fileName} is not present in the registry.`));
   }
+
+  const registryEntry = registryEntries.find((entry) => entry.fileName === options.fileName);
+  validateRegistryEntry(registryEntry, metadata, issues);
 
   if (options.gitAuthorEmail !== undefined && !isBasicEmail(options.gitAuthorEmail)) {
     issues.push(errorIssue("invalid_git_author_email", "Git author email must pass basic email syntax validation."));
@@ -157,6 +174,7 @@ export function validateBotRegistrationV1(options: {
     status: hasError(issues) ? "do_not_merge" : "accepted",
     fileName: options.fileName,
     ...(metadata === undefined ? {} : { metadata }),
+    ...(registryEntry === undefined ? {} : { registryEntry }),
     ...(options.gitAuthorEmail === undefined ? {} : { gitAuthorEmail: options.gitAuthorEmail }),
     issues,
   };
@@ -396,6 +414,35 @@ function readMetadata(BotClass: ReefBotV1Constructor, issues: BotRegistrationIss
   }
 
   return metadata;
+}
+
+function validateRegistryEntry(
+  entry: BotRegistryEntryV1 | undefined,
+  metadata: ReefBotMetadataV1 | undefined,
+  issues: BotRegistrationIssueV1[],
+): void {
+  if (entry === undefined) {
+    return;
+  }
+
+  if (!/^[a-z0-9][a-z0-9._-]{2,63}$/.test(entry.botId)) {
+    issues.push(errorIssue("invalid_registry_bot_id", "Registry botId must be 3-64 lowercase identifier characters."));
+  }
+  if (!isSemverLike(entry.approvedVersion)) {
+    issues.push(errorIssue("invalid_registry_version", "Registry approvedVersion must be semver-like."));
+  }
+  if (!["draft", "approved", "quarantined", "banned"].includes(entry.status)) {
+    issues.push(errorIssue("invalid_registry_status", `Unsupported registry status ${entry.status}.`));
+  }
+  if (entry.artifactHash !== undefined && !/^sha256:[a-f0-9]{64}$/.test(entry.artifactHash)) {
+    issues.push(errorIssue("invalid_registry_artifact_hash", "Registry artifactHash must be a sha256:<hex> value."));
+  }
+  if (metadata !== undefined && entry.publisher !== metadata.publisher) {
+    issues.push(errorIssue("registry_publisher_mismatch", "Registry publisher must match bot metadata publisher."));
+  }
+  if (metadata !== undefined && entry.approvedVersion !== metadata.version) {
+    issues.push(errorIssue("registry_version_mismatch", "Registry approvedVersion must match bot metadata version."));
+  }
 }
 
 function isOrderAction(action: BotActionV1): boolean {

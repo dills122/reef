@@ -71,7 +71,16 @@ async function assertBadBot(fileName, expectedIssueCodes) {
     fileName,
     source,
     BotClass: module.default,
-    registryFileNames: [fileName],
+    registryEntries: [
+      {
+        fileName,
+        botId: fileName.replace(/\.ts$/, ""),
+        owner: "reef-test",
+        publisher: "Reef Test Fixtures",
+        approvedVersion: "1.0.0",
+        status: "draft",
+      },
+    ],
     tickCount: 1,
     policy: defaultBotRuntimePolicyV1,
     fixtureData: {

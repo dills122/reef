@@ -20,8 +20,8 @@ const BotClass = botModule.default;
 const botDir = dirname(botPath);
 const existingFileNames = readdirSync(botDir).filter((name) => name.endsWith(".ts"));
 const registryPath = resolve(repoRoot, "packages/bot-sdk/bot-registry.example.json");
-const registryFileNames = existsSync(registryPath)
-  ? JSON.parse(readFileSync(registryPath, "utf8")).botFiles ?? []
+const registryEntries = existsSync(registryPath)
+  ? JSON.parse(readFileSync(registryPath, "utf8")).bots ?? []
   : [];
 const gitAuthorEmail = readGitAuthorEmail(botPath);
 
@@ -30,7 +30,7 @@ const report = await qualifyBotV1({
   source,
   BotClass,
   existingFileNames,
-  registryFileNames,
+  registryEntries,
   gitAuthorEmail,
   tickCount: 5,
   policy: defaultBotRuntimePolicyV1,
