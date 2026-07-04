@@ -10,6 +10,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
+import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
@@ -179,6 +180,7 @@ class PlatformApi(
 
         return JsonCodec.writeObject(
             "order" to toOrderMap(order),
+            "lifecycleState" to orderService.orderLifecycleState(orderId)?.toMap(),
             "executions" to orderService.persistedExecutions(orderId).map { it.toMap() },
             "trades" to orderService.persistedTrades(orderId).map { it.toMap() }
         )
@@ -220,6 +222,10 @@ class PlatformApi(
             "sourceProjectionName" to sourceProjectionName,
             "refreshed" to refreshed
         )
+    }
+
+    fun rebuildOrderLifecycleState(): String {
+        return JsonCodec.writeObject("rebuilt" to orderService.rebuildOrderLifecycleState())
     }
 
     fun marketDataSnapshot(
@@ -309,6 +315,26 @@ class PlatformApi(
         "currency" to currency,
         "lastPartitionSequence" to lastPartitionSequence,
         "lag" to lag,
+        "updatedAt" to updatedAt
+    )
+
+    private fun OrderLifecycleState.toMap(): Map<String, Any> = mapOf(
+        "orderId" to orderId,
+        "engineOrderId" to engineOrderId,
+        "instrumentId" to instrumentId,
+        "participantId" to participantId,
+        "accountId" to accountId,
+        "side" to side,
+        "orderType" to orderType,
+        "originalQuantityUnits" to originalQuantityUnits,
+        "remainingQuantityUnits" to remainingQuantityUnits,
+        "filledQuantityUnits" to filledQuantityUnits,
+        "limitPrice" to limitPrice,
+        "currency" to currency,
+        "timeInForce" to timeInForce,
+        "status" to status,
+        "acceptedAt" to acceptedAt,
+        "lastEventAt" to lastEventAt,
         "updatedAt" to updatedAt
     )
 

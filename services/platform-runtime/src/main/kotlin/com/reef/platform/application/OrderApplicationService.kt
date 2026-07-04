@@ -618,6 +618,10 @@ class OrderApplicationService(
 
     fun recentEvents(limit: Int) = runtimePersistence.recentEvents(limit)
 
+    fun rebuildOrderLifecycleState() = runtimePersistence.rebuildOrderLifecycleState()
+
+    fun orderLifecycleState(orderId: String) = runtimePersistence.orderLifecycleState(orderId)
+
     fun refreshMarketDataSnapshots(
         projectionName: String = "market-data-top-of-book",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes"

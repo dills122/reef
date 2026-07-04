@@ -391,6 +391,14 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.orders())
         }
 
+        server.createContext("/api/v1/orders/lifecycle-state") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            writeJson(exchange, 200, api.rebuildOrderLifecycleState())
+        }
+
         server.createContext("/api/v1/market-data/snapshots/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -571,6 +579,8 @@ class PlatformHttpServer(
                 handleApiV1MutationResponse(request, "/api/v1/orders/modify") { body -> api.modifyOrder(body) }
             request.path == "/api/v1/orders/cancel" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/cancel") { body -> api.cancelOrder(body) }
+            request.path == "/api/v1/orders/lifecycle-state" && request.method == "POST" ->
+                PlatformHotPathResponse(status = 200, body = api.rebuildOrderLifecycleState())
             request.path == "/api/v1/market-data/snapshots" && request.method == "POST" ->
                 PlatformHotPathResponse(
                     status = 200,

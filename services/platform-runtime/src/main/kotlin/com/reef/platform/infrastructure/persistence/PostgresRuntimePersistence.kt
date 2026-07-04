@@ -243,6 +243,29 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.orderLifecycleState} (
+                      order_id TEXT PRIMARY KEY,
+                      engine_order_id TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      participant_id TEXT NOT NULL,
+                      account_id TEXT NOT NULL,
+                      side TEXT NOT NULL,
+                      order_type TEXT NOT NULL,
+                      original_quantity_units TEXT NOT NULL,
+                      remaining_quantity_units TEXT NOT NULL,
+                      filled_quantity_units TEXT NOT NULL,
+                      limit_price TEXT NOT NULL,
+                      currency TEXT NOT NULL,
+                      time_in_force TEXT NOT NULL,
+                      status TEXT NOT NULL,
+                      accepted_at TEXT NOT NULL,
+                      last_event_at TEXT NOT NULL,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.marketDataSnapshots} (
                       projection_name TEXT NOT NULL,
                       source_projection_name TEXT NOT NULL,
@@ -2373,7 +2396,181 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun rebuildOrderLifecycleState(): Long {
+        projectionConnection().use { conn ->
+            val previousAutoCommit = conn.autoCommit
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement("DELETE FROM ${names.orderLifecycleState}").use { ps ->
+                    ps.executeUpdate()
+                }
+                val inserted = conn.prepareStatement(
+                    """
+                    WITH execution_totals AS (
+                      SELECT
+                        order_id,
+                        SUM(quantity_units::NUMERIC) AS filled_quantity_units
+                      FROM ${names.executions}
+                      WHERE quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                      GROUP BY order_id
+                    ),
+                    latest_modify AS (
+                      SELECT DISTINCT ON (order_id)
+                        order_id,
+                        COALESCE(NULLIF(payload_json->>'quantityUnits', ''), '') AS modified_quantity_units,
+                        COALESCE(NULLIF(payload_json->>'limitPrice', ''), '') AS modified_limit_price,
+                        occurred_at
+                      FROM ${names.runtimeEvents}
+                      WHERE event_type = 'OrderModified'
+                      ORDER BY order_id, occurred_at DESC, sequence_number DESC, event_id DESC
+                    ),
+                    order_event_state AS (
+                      SELECT
+                        order_id,
+                        BOOL_OR(event_type = 'OrderCancelled') AS cancelled,
+                        COALESCE(MAX(NULLIF(occurred_at, '')), '') AS last_event_at
+                      FROM ${names.runtimeEvents}
+                      GROUP BY order_id
+                    ),
+                    shaped AS (
+                      SELECT
+                        orders.order_id,
+                        orders.engine_order_id,
+                        orders.instrument_id,
+                        orders.participant_id,
+                        orders.account_id,
+                        orders.side,
+                        orders.order_type,
+                        orders.quantity_units AS original_quantity_units,
+                        COALESCE(NULLIF(latest_modify.modified_quantity_units, ''), orders.quantity_units) AS current_quantity_units,
+                        COALESCE(NULLIF(latest_modify.modified_limit_price, ''), orders.limit_price) AS current_limit_price,
+                        orders.currency,
+                        orders.time_in_force,
+                        orders.accepted_at,
+                        COALESCE(execution_totals.filled_quantity_units, 0) AS filled_quantity_units,
+                        COALESCE(order_event_state.cancelled, FALSE) AS cancelled,
+                        COALESCE(NULLIF(order_event_state.last_event_at, ''), orders.accepted_at) AS last_event_at
+                      FROM ${names.orders} orders
+                      LEFT JOIN execution_totals ON execution_totals.order_id = orders.order_id
+                      LEFT JOIN latest_modify ON latest_modify.order_id = orders.order_id
+                      LEFT JOIN order_event_state ON order_event_state.order_id = orders.order_id
+                      WHERE COALESCE(NULLIF(latest_modify.modified_quantity_units, ''), orders.quantity_units) ~ '^[0-9]+(\.[0-9]+)?$'
+                    ),
+                    calculated AS (
+                      SELECT
+                        *,
+                        GREATEST(current_quantity_units::NUMERIC - filled_quantity_units, 0) AS remaining_quantity_units
+                      FROM shaped
+                    )
+                    INSERT INTO ${names.orderLifecycleState}(
+                      order_id,
+                      engine_order_id,
+                      instrument_id,
+                      participant_id,
+                      account_id,
+                      side,
+                      order_type,
+                      original_quantity_units,
+                      remaining_quantity_units,
+                      filled_quantity_units,
+                      limit_price,
+                      currency,
+                      time_in_force,
+                      status,
+                      accepted_at,
+                      last_event_at,
+                      updated_at
+                    )
+                    SELECT
+                      order_id,
+                      engine_order_id,
+                      instrument_id,
+                      participant_id,
+                      account_id,
+                      side,
+                      order_type,
+                      original_quantity_units,
+                      CASE WHEN cancelled THEN '0' ELSE remaining_quantity_units::TEXT END,
+                      filled_quantity_units::TEXT,
+                      current_limit_price,
+                      currency,
+                      time_in_force,
+                      CASE
+                        WHEN cancelled THEN 'CANCELLED'
+                        WHEN current_quantity_units::NUMERIC > 0 AND remaining_quantity_units = 0 THEN 'FILLED'
+                        WHEN filled_quantity_units > 0 THEN 'PARTIALLY_FILLED'
+                        ELSE 'OPEN'
+                      END,
+                      accepted_at,
+                      last_event_at,
+                      now()
+                    FROM calculated
+                    ORDER BY order_id
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.executeUpdate().toLong()
+                }
+                conn.commit()
+                return inserted
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = previousAutoCommit
+            }
+        }
+    }
+
+    override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
+        return projectionQueryList(
+            """
+            SELECT
+              order_id,
+              engine_order_id,
+              instrument_id,
+              participant_id,
+              account_id,
+              side,
+              order_type,
+              original_quantity_units,
+              remaining_quantity_units,
+              filled_quantity_units,
+              limit_price,
+              currency,
+              time_in_force,
+              status,
+              accepted_at,
+              last_event_at,
+              updated_at::TEXT AS updated_at
+            FROM ${names.orderLifecycleState}
+            WHERE order_id = ?
+            """.trimIndent(),
+            orderId
+        ) {
+            OrderLifecycleState(
+                orderId = getString("order_id"),
+                engineOrderId = getString("engine_order_id"),
+                instrumentId = getString("instrument_id"),
+                participantId = getString("participant_id"),
+                accountId = getString("account_id"),
+                side = getString("side"),
+                orderType = getString("order_type"),
+                originalQuantityUnits = getString("original_quantity_units"),
+                remainingQuantityUnits = getString("remaining_quantity_units"),
+                filledQuantityUnits = getString("filled_quantity_units"),
+                limitPrice = getString("limit_price"),
+                currency = getString("currency"),
+                timeInForce = getString("time_in_force"),
+                status = getString("status"),
+                acceptedAt = getString("accepted_at"),
+                lastEventAt = getString("last_event_at"),
+                updatedAt = getString("updated_at")
+            )
+        }.firstOrNull()
+    }
+
     override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
+        rebuildOrderLifecycleState()
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }
@@ -2394,11 +2591,13 @@ class PostgresRuntimePersistence(
                         side,
                         currency,
                         limit_price::NUMERIC AS price_num,
-                        quantity_units::NUMERIC AS quantity_num
-                      FROM ${names.orders}
+                        remaining_quantity_units::NUMERIC AS quantity_num
+                      FROM ${names.orderLifecycleState}
                       WHERE order_type = 'LIMIT'
+                        AND status IN ('OPEN', 'PARTIALLY_FILLED')
                         AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
-                        AND quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                        AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                        AND remaining_quantity_units::NUMERIC > 0
                     ),
                     bid_prices AS (
                       SELECT instrument_id, MAX(price_num) AS best_bid_price

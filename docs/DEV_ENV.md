@@ -65,6 +65,7 @@ make dev-db-migrate
 The first projection-backed market-data snapshot can be refreshed and read through the platform API:
 
 ```bash
+curl -X POST "http://127.0.0.1:8080/api/v1/orders/lifecycle-state"
 curl -X POST "http://127.0.0.1:8080/api/v1/market-data/snapshots"
 curl "http://127.0.0.1:8080/api/v1/market-data/snapshots/AAPL"
 ```

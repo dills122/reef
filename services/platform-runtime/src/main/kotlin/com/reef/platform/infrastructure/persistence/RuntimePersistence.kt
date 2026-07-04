@@ -76,6 +76,26 @@ data class MarketDataSnapshot(
     val updatedAt: String
 )
 
+data class OrderLifecycleState(
+    val orderId: String,
+    val engineOrderId: String,
+    val instrumentId: String,
+    val participantId: String,
+    val accountId: String,
+    val side: String,
+    val orderType: String,
+    val originalQuantityUnits: String,
+    val remainingQuantityUnits: String,
+    val filledQuantityUnits: String,
+    val limitPrice: String,
+    val currency: String,
+    val timeInForce: String,
+    val status: String,
+    val acceptedAt: String,
+    val lastEventAt: String,
+    val updatedAt: String
+)
+
 data class VenueCommandOutcomeFact(
     val commandId: String,
     val commandType: String,
@@ -201,6 +221,12 @@ interface RuntimePersistence {
         return 0
     }
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return null
+    }
+    fun rebuildOrderLifecycleState(): Long {
+        return 0
+    }
+    fun orderLifecycleState(orderId: String): OrderLifecycleState? {
         return null
     }
     fun refreshMarketDataSnapshots(

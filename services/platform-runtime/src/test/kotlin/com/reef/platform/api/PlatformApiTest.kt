@@ -7,6 +7,7 @@ import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -289,6 +290,20 @@ class PlatformApiTest {
                 acceptedAt = "2026-03-14T18:00:00Z"
             )
         )
+        persistence.saveExecutions(
+            listOf(
+                ExecutionCreated(
+                    eventId = "exec-bid-1",
+                    executionId = "exec-bid-1",
+                    orderId = "bid-1",
+                    instrumentId = "AAPL",
+                    quantityUnits = "25",
+                    executionPrice = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:02Z"
+                )
+            )
+        )
         persistence.saveAcceptedOrder(
             PersistedOrder(
                 orderId = "ask-1",
@@ -305,6 +320,21 @@ class PlatformApiTest {
                 acceptedAt = "2026-03-14T18:00:01Z"
             )
         )
+        persistence.saveEvent(
+            RuntimeEvent(
+                eventId = "evt-ask-cancelled-1",
+                eventType = "OrderCancelled",
+                orderId = "ask-1",
+                traceId = "trace-ask-1",
+                causationId = "cmd-cancel-ask-1",
+                correlationId = "corr-ask-1",
+                actorId = "trader-1",
+                producer = "unit-test",
+                schemaVersion = "v1",
+                payloadJson = "{}",
+                occurredAt = "2026-03-14T18:00:03Z"
+            )
+        )
 
         assertContains(api.marketDataSnapshot("AAPL"), "\"error\":\"market data snapshot not found\"")
         assertContains(api.refreshMarketDataSnapshots(), "\"refreshed\":1")
@@ -314,10 +344,15 @@ class PlatformApiTest {
         assertContains(response, "\"projectionName\":\"market-data-top-of-book\"")
         assertContains(response, "\"sourceProjectionName\":\"runtime-normalized-venue-outcomes\"")
         assertContains(response, "\"bestBidPrice\":\"150250000000\"")
-        assertContains(response, "\"bestBidQuantity\":\"100\"")
-        assertContains(response, "\"bestAskPrice\":\"150260000000\"")
-        assertContains(response, "\"bestAskQuantity\":\"75\"")
+        assertContains(response, "\"bestBidQuantity\":\"75\"")
+        assertContains(response, "\"bestAskPrice\":\"\"")
+        assertContains(response, "\"bestAskQuantity\":\"\"")
         assertContains(response, "\"lag\":0")
+
+        val orderResponse = api.order("bid-1")
+        assertContains(orderResponse, "\"lifecycleState\"")
+        assertContains(orderResponse, "\"status\":\"PARTIALLY_FILLED\"")
+        assertContains(orderResponse, "\"remainingQuantityUnits\":\"75\"")
     }
 
     private fun validRequestBody(): String {

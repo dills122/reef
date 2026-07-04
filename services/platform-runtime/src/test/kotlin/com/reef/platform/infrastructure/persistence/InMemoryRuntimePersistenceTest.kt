@@ -109,7 +109,7 @@ class InMemoryRuntimePersistenceTest {
     }
 
     @Test
-    fun refreshesMarketDataSnapshotsFromAcceptedOrders() {
+    fun refreshesMarketDataSnapshotsFromOpenLifecycleState() {
         val persistence = InMemoryRuntimePersistence()
         persistence.saveAcceptedOrder(
             PersistedOrder(
@@ -175,16 +175,54 @@ class InMemoryRuntimePersistenceTest {
                 acceptedAt = "2026-03-14T18:00:03Z"
             )
         )
+        persistence.saveExecutions(
+            listOf(
+                ExecutionCreated(
+                    eventId = "exec-bid-1",
+                    executionId = "exec-bid-1",
+                    orderId = "bid-1",
+                    instrumentId = "AAPL",
+                    quantityUnits = "40",
+                    executionPrice = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:04Z"
+                )
+            )
+        )
+        persistence.saveEvent(
+            RuntimeEvent(
+                eventId = "evt-ask-cancelled-1",
+                eventType = "OrderCancelled",
+                orderId = "ask-1",
+                traceId = "trace-ask-1",
+                causationId = "cmd-cancel-ask-1",
+                correlationId = "corr-ask-1",
+                actorId = "trader-1",
+                producer = "unit-test",
+                schemaVersion = "v1",
+                payloadJson = "{}",
+                occurredAt = "2026-03-14T18:00:05Z"
+            )
+        )
 
+        assertEquals(4, persistence.rebuildOrderLifecycleState())
+        val filledBid = persistence.orderLifecycleState("bid-1")
+        assertNotNull(filledBid)
+        assertEquals("PARTIALLY_FILLED", filledBid.status)
+        assertEquals("60", filledBid.remainingQuantityUnits)
+        val cancelledAsk = persistence.orderLifecycleState("ask-1")
+        assertNotNull(cancelledAsk)
+        assertEquals("CANCELLED", cancelledAsk.status)
+        assertEquals("0", cancelledAsk.remainingQuantityUnits)
         assertEquals(1, persistence.refreshMarketDataSnapshots())
         val snapshot = persistence.marketDataSnapshot("AAPL")
         assertNotNull(snapshot)
         assertEquals("market-data-top-of-book", snapshot.projectionName)
         assertEquals("runtime-normalized-venue-outcomes", snapshot.sourceProjectionName)
         assertEquals("150250000000", snapshot.bestBidPrice)
-        assertEquals("150", snapshot.bestBidQuantity)
-        assertEquals("150260000000", snapshot.bestAskPrice)
-        assertEquals("75", snapshot.bestAskQuantity)
+        assertEquals("110", snapshot.bestBidQuantity)
+        assertEquals("150270000000", snapshot.bestAskPrice)
+        assertEquals("80", snapshot.bestAskQuantity)
         assertEquals("USD", snapshot.currency)
     }
 

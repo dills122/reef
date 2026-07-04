@@ -26,6 +26,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.canonical_venue_event_batches",
                 "runtime.canonical_command_outcomes",
                 "runtime.projection_watermarks",
+                "runtime.order_lifecycle_state",
                 "runtime.market_data_snapshots",
                 "auth.auth_roles",
                 "auth.auth_actor_roles"
@@ -111,6 +112,18 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.projection_watermarks" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.order_lifecycle_state.order_id:text",
+                "runtime.order_lifecycle_state.remaining_quantity_units:text",
+                "runtime.order_lifecycle_state.filled_quantity_units:text",
+                "runtime.order_lifecycle_state.status:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.order_lifecycle_state" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

@@ -60,6 +60,7 @@ object PostgresSchemaRequirements {
         val canonicalCommandOutcomes = PostgresSchemaObject.parse(names.canonicalCommandOutcomes)
         val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
+        val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -76,6 +77,7 @@ object PostgresSchemaRequirements {
                 names.canonicalVenueEventBatches,
                 names.canonicalCommandOutcomes,
                 names.projectionWatermarks,
+                names.orderLifecycleState,
                 names.marketDataSnapshots,
                 names.authRoles,
                 names.authActorRoles
@@ -112,6 +114,10 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
                 PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),
                 PostgresSchemaColumn(projectionWatermarks, "last_error", "text"),
+                PostgresSchemaColumn(orderLifecycleState, "order_id", "text"),
+                PostgresSchemaColumn(orderLifecycleState, "remaining_quantity_units", "text"),
+                PostgresSchemaColumn(orderLifecycleState, "filled_quantity_units", "text"),
+                PostgresSchemaColumn(orderLifecycleState, "status", "text"),
                 PostgresSchemaColumn(marketDataSnapshots, "projection_name", "text"),
                 PostgresSchemaColumn(marketDataSnapshots, "source_projection_name", "text"),
                 PostgresSchemaColumn(marketDataSnapshots, "instrument_id", "text"),

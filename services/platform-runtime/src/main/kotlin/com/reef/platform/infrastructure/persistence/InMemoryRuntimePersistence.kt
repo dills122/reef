@@ -32,6 +32,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val events = mutableListOf<RuntimeEvent>()
     private val traceSequences = mutableMapOf<String, Long>()
     private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
+    private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         submitResults[commandId] = result
@@ -299,7 +300,59 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return commandOutcomes[commandId]
     }
 
+    override fun rebuildOrderLifecycleState(): Long {
+        orderLifecycleStates.clear()
+        orders.values.forEach { order ->
+            val orderExecutions = executions.filter { it.orderId == order.orderId }
+            val filledQuantity = orderExecutions
+                .mapNotNull { it.quantityUnits.toBigDecimalOrNull() }
+                .fold(BigDecimal.ZERO, BigDecimal::add)
+            val orderEvents = events
+                .filter { it.orderId == order.orderId }
+                .sortedWith(compareBy<RuntimeEvent> { it.occurredAt }.thenBy { it.sequenceNumber }.thenBy { it.eventId })
+            val latestModify = orderEvents.lastOrNull { it.eventType == "OrderModified" }
+            val currentQuantity = jsonString(latestModify?.payloadJson.orEmpty(), "quantityUnits")
+                .ifBlank { order.quantityUnits }
+            val currentLimitPrice = jsonString(latestModify?.payloadJson.orEmpty(), "limitPrice")
+                .ifBlank { order.limitPrice }
+            val quantity = currentQuantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val remainingQuantity = (quantity - filledQuantity).coerceAtLeast(BigDecimal.ZERO)
+            val cancelled = orderEvents.any { it.eventType == "OrderCancelled" }
+            val status = when {
+                cancelled -> "CANCELLED"
+                quantity > BigDecimal.ZERO && remainingQuantity == BigDecimal.ZERO -> "FILLED"
+                filledQuantity > BigDecimal.ZERO -> "PARTIALLY_FILLED"
+                else -> "OPEN"
+            }
+            orderLifecycleStates[order.orderId] = OrderLifecycleState(
+                orderId = order.orderId,
+                engineOrderId = order.engineOrderId,
+                instrumentId = order.instrumentId,
+                participantId = order.participantId,
+                accountId = order.accountId,
+                side = order.side,
+                orderType = order.orderType,
+                originalQuantityUnits = order.quantityUnits,
+                remainingQuantityUnits = if (cancelled) "0" else decimalString(remainingQuantity),
+                filledQuantityUnits = decimalString(filledQuantity),
+                limitPrice = currentLimitPrice,
+                currency = order.currency,
+                timeInForce = order.timeInForce,
+                status = status,
+                acceptedAt = order.acceptedAt,
+                lastEventAt = orderEvents.lastOrNull()?.occurredAt ?: order.acceptedAt,
+                updatedAt = Instant.now().toString()
+            )
+        }
+        return orderLifecycleStates.size.toLong()
+    }
+
+    override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
+        return orderLifecycleStates[orderId]
+    }
+
     override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
+        rebuildOrderLifecycleState()
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }
         val lastPartitionSequence = sourceWatermarks.maxOfOrNull { it.lastPartitionSequence } ?: 0L
@@ -308,11 +361,13 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .filter { it.startsWith("$projectionName:") }
             .toList()
             .forEach { marketDataSnapshots.remove(it) }
-        orders.values
+        orderLifecycleStates.values
             .filter {
                 it.orderType == "LIMIT" &&
                     it.limitPrice.toBigDecimalOrNull() != null &&
-                    it.quantityUnits.toBigDecimalOrNull() != null
+                    it.remainingQuantityUnits.toBigDecimalOrNull() != null &&
+                    it.remainingQuantityUnits.toBigDecimalOrNull()!! > BigDecimal.ZERO &&
+                    it.status in OpenLifecycleStatuses
             }
             .groupBy { it.instrumentId }
             .forEach { (instrumentId, instrumentOrders) ->
@@ -327,9 +382,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     sourceProjectionName = sourceProjectionName,
                     instrumentId = instrumentId,
                     bestBidPrice = bestBidPrice,
-                    bestBidQuantity = aggregateQuantity(bids, bestBidPrice),
+                    bestBidQuantity = aggregateLifecycleQuantity(bids, bestBidPrice),
                     bestAskPrice = bestAskPrice,
-                    bestAskQuantity = aggregateQuantity(asks, bestAskPrice),
+                    bestAskQuantity = aggregateLifecycleQuantity(asks, bestAskPrice),
                     currency = instrumentOrders.firstOrNull { it.currency.isNotBlank() }?.currency.orEmpty(),
                     lastPartitionSequence = lastPartitionSequence,
                     lag = sourceStatus.lag,
@@ -406,17 +461,22 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         }
     }
 
-    private fun aggregateQuantity(orders: List<PersistedOrder>, price: String): String {
+    private fun aggregateLifecycleQuantity(orders: List<OrderLifecycleState>, price: String): String {
         if (price.isBlank()) return ""
         val total = orders
             .filter { it.limitPrice == price }
-            .mapNotNull { it.quantityUnits.toBigDecimalOrNull() }
+            .mapNotNull { it.remainingQuantityUnits.toBigDecimalOrNull() }
             .fold(BigDecimal.ZERO, BigDecimal::add)
         if (total == BigDecimal.ZERO) return ""
-        return total.stripTrailingZeros().toPlainString()
+        return decimalString(total)
+    }
+
+    private fun decimalString(value: BigDecimal): String {
+        return value.stripTrailingZeros().toPlainString()
     }
 
     private companion object {
         val ProjectableCommandTypes = setOf("SubmitOrder", "ModifyOrder", "CancelOrder")
+        val OpenLifecycleStatuses = setOf("OPEN", "PARTIALLY_FILLED")
     }
 }
