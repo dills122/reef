@@ -305,6 +305,68 @@ class PostgresRuntimePersistence(
                 }
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEventBatches} (
+                      batch_id TEXT PRIMARY KEY,
+                      shard_id TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      command_stream TEXT NOT NULL,
+                      event_stream TEXT NOT NULL,
+                      first_sequence BIGINT NOT NULL,
+                      last_sequence BIGINT NOT NULL,
+                      command_count INTEGER NOT NULL,
+                      payload_checksum TEXT NOT NULL,
+                      payload_format TEXT NOT NULL DEFAULT 'venue-event-batch-json',
+                      payload_version TEXT NOT NULL DEFAULT 'v1',
+                      payload_json JSONB NOT NULL,
+                      created_at TEXT NOT NULL,
+                      materialized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE (event_stream, partition_id, first_sequence, last_sequence)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_partition_seq
+                    ON ${names.canonicalVenueEventBatches}(partition_id, first_sequence, last_sequence)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalCommandOutcomes} (
+                      command_id TEXT PRIMARY KEY,
+                      batch_id TEXT NOT NULL,
+                      shard_id TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      command_stream TEXT NOT NULL,
+                      event_stream TEXT NOT NULL,
+                      stream_sequence BIGINT NOT NULL,
+                      delivered_count BIGINT NOT NULL,
+                      command_type TEXT NOT NULL,
+                      payload_hash TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      order_id TEXT NOT NULL,
+                      result_status TEXT NOT NULL,
+                      reject_code TEXT NOT NULL,
+                      result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      materialized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      UNIQUE (batch_id, stream_sequence)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_batch_seq
+                    ON ${names.canonicalCommandOutcomes}(batch_id, stream_sequence)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_partition_seq
+                    ON ${names.canonicalCommandOutcomes}(partition_id, stream_sequence)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.projectionWatermarks} (
                       projection_name TEXT NOT NULL,
                       partition_id INTEGER NOT NULL,
@@ -462,6 +524,128 @@ class PostgresRuntimePersistence(
                       SELECT COUNT(*) INTO appended_count FROM outcomes;
 
                       RETURN appended_count;
+                    END;
+                    $$;
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE OR REPLACE FUNCTION ${names.materializeVenueEventBatchFunction}(
+                      p_batch JSONB
+                    )
+                    RETURNS BIGINT
+                    LANGUAGE plpgsql
+                    AS $$
+                    DECLARE
+                      v_batch_id TEXT;
+                      v_payload_checksum TEXT;
+                      v_existing_checksum TEXT;
+                      inserted_count BIGINT := 0;
+                    BEGIN
+                      IF p_batch IS NULL OR jsonb_typeof(p_batch) <> 'object' THEN
+                        RAISE EXCEPTION 'venue event batch payload must be a JSON object';
+                      END IF;
+
+                      v_batch_id := COALESCE(p_batch->>'batchId', '');
+                      v_payload_checksum := COALESCE(p_batch->>'payloadChecksum', '');
+
+                      IF v_batch_id = '' THEN
+                        RAISE EXCEPTION 'venue event batch payload missing batchId';
+                      END IF;
+
+                      SELECT payload_checksum
+                        INTO v_existing_checksum
+                        FROM ${names.canonicalVenueEventBatches}
+                       WHERE batch_id = v_batch_id;
+
+                      IF FOUND THEN
+                        IF v_existing_checksum <> v_payload_checksum THEN
+                          RAISE EXCEPTION 'venue event batch checksum conflict for batchId %', v_batch_id;
+                        END IF;
+                        RETURN 0;
+                      END IF;
+
+                      INSERT INTO ${names.canonicalVenueEventBatches}(
+                        batch_id,
+                        shard_id,
+                        partition_id,
+                        command_stream,
+                        event_stream,
+                        first_sequence,
+                        last_sequence,
+                        command_count,
+                        payload_checksum,
+                        payload_format,
+                        payload_version,
+                        payload_json,
+                        created_at
+                      )
+                      VALUES (
+                        v_batch_id,
+                        COALESCE(p_batch->>'shardId', ''),
+                        COALESCE((p_batch->>'partition')::INTEGER, -1),
+                        COALESCE(p_batch->>'commandStream', ''),
+                        COALESCE(p_batch->>'eventStream', ''),
+                        COALESCE((p_batch->>'firstSequence')::BIGINT, 0),
+                        COALESCE((p_batch->>'lastSequence')::BIGINT, 0),
+                        COALESCE((p_batch->>'commandCount')::INTEGER, 0),
+                        v_payload_checksum,
+                        COALESCE(NULLIF(p_batch->>'payloadFormat', ''), 'venue-event-batch-json'),
+                        COALESCE(NULLIF(p_batch->>'payloadVersion', ''), 'v1'),
+                        p_batch,
+                        COALESCE(p_batch->>'createdAt', '')
+                      );
+
+                      WITH outcomes AS (
+                        SELECT outcome
+                        FROM jsonb_array_elements(
+                          CASE
+                            WHEN jsonb_typeof(p_batch->'outcomes') = 'array' THEN p_batch->'outcomes'
+                            ELSE '[]'::jsonb
+                          END
+                        ) AS outcome
+                      ),
+                      inserted AS (
+                        INSERT INTO ${names.canonicalCommandOutcomes}(
+                          command_id,
+                          batch_id,
+                          shard_id,
+                          partition_id,
+                          command_stream,
+                          event_stream,
+                          stream_sequence,
+                          delivered_count,
+                          command_type,
+                          payload_hash,
+                          instrument_id,
+                          order_id,
+                          result_status,
+                          reject_code,
+                          result_payload
+                        )
+                        SELECT
+                          outcome->>'commandId',
+                          v_batch_id,
+                          COALESCE(p_batch->>'shardId', ''),
+                          COALESCE((p_batch->>'partition')::INTEGER, -1),
+                          COALESCE(p_batch->>'commandStream', ''),
+                          COALESCE(p_batch->>'eventStream', ''),
+                          COALESCE((outcome->>'streamSequence')::BIGINT, 0),
+                          COALESCE((outcome->>'deliveredCount')::BIGINT, 0),
+                          COALESCE(outcome->>'commandType', ''),
+                          COALESCE(outcome->>'payloadHash', ''),
+                          COALESCE(outcome->>'instrumentId', ''),
+                          COALESCE(outcome->>'orderId', ''),
+                          COALESCE(outcome->>'status', ''),
+                          COALESCE(outcome->>'rejectCode', outcome#>>'{result,rejected,code}', ''),
+                          COALESCE(outcome->'result', '{}'::jsonb)
+                        FROM outcomes
+                        ON CONFLICT (command_id) DO NOTHING
+                        RETURNING 1
+                      )
+                      SELECT COUNT(*) INTO inserted_count FROM inserted;
+
+                      RETURN inserted_count;
                     END;
                     $$;
                     """.trimIndent()
@@ -1716,6 +1900,71 @@ class PostgresRuntimePersistence(
         )
     }
 
+    override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT ${names.materializeVenueEventBatchFunction}(?::jsonb)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, batch.toJsonObject())
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getLong(1)
+                }
+            }
+        }
+    }
+
+    override fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  command_id,
+                  batch_id,
+                  shard_id,
+                  partition_id,
+                  command_stream,
+                  event_stream,
+                  stream_sequence,
+                  delivered_count,
+                  command_type,
+                  payload_hash,
+                  instrument_id,
+                  order_id,
+                  result_status,
+                  reject_code,
+                  result_payload::TEXT AS result_payload
+                FROM ${names.canonicalCommandOutcomes}
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return CanonicalCommandOutcome(
+                        commandId = rs.getString("command_id"),
+                        batchId = rs.getString("batch_id"),
+                        shardId = rs.getString("shard_id"),
+                        partition = rs.getInt("partition_id"),
+                        commandStream = rs.getString("command_stream"),
+                        eventStream = rs.getString("event_stream"),
+                        streamSequence = rs.getLong("stream_sequence"),
+                        deliveredCount = rs.getLong("delivered_count"),
+                        commandType = rs.getString("command_type"),
+                        payloadHash = rs.getString("payload_hash"),
+                        instrumentId = rs.getString("instrument_id"),
+                        orderId = rs.getString("order_id"),
+                        resultStatus = rs.getString("result_status"),
+                        rejectCode = rs.getString("reject_code"),
+                        resultPayloadJson = rs.getString("result_payload")
+                    )
+                }
+            }
+        }
+    }
+
     private data class CanonicalPartitionStats(val maxPartitionSequence: Long, val backlogCount: Long)
 
     private fun canonicalPartitionStats(
@@ -2307,6 +2556,43 @@ class PostgresRuntimePersistence(
         return "{$fields," +
             "\"resultPayload\":${outcome.toJsonObject()}," +
             "\"events\":${outcome.lifecycleEvents.toJsonArray { it.toJsonObject() }}}"
+    }
+
+    private fun VenueEventBatchFact.toJsonObject(): String {
+        val fields = listOf(
+            "batchId" to batchId,
+            "shardId" to shardId,
+            "partition" to partition.toString(),
+            "commandStream" to commandStream,
+            "eventStream" to eventStream,
+            "firstSequence" to firstSequence.toString(),
+            "lastSequence" to lastSequence.toString(),
+            "commandCount" to commandCount.toString(),
+            "createdAt" to createdAt,
+            "payloadChecksum" to payloadChecksum,
+            "payloadFormat" to payloadFormat,
+            "payloadVersion" to payloadVersion
+        ).joinToString(",") { (key, value) ->
+            "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+        return "{$fields,\"outcomes\":${outcomes.toJsonArray { it.toJsonObject() }}}"
+    }
+
+    private fun VenueCommandOutcomeFact.toJsonObject(): String {
+        val fields = listOf(
+            "commandId" to commandId,
+            "commandType" to commandType,
+            "streamSequence" to streamSequence.toString(),
+            "deliveredCount" to deliveredCount.toString(),
+            "payloadHash" to payloadHash,
+            "instrumentId" to instrumentId,
+            "orderId" to orderId,
+            "status" to resultStatus,
+            "rejectCode" to rejectCode
+        ).joinToString(",") { (key, value) ->
+            "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+        return "{$fields,\"result\":${resultPayloadJson.ifBlank { "{}" }}}"
     }
 
     private fun <T> List<T>.toJsonArray(toObject: (T) -> String): String {

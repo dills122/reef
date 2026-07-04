@@ -62,6 +62,53 @@ data class ProjectionStatus(
     val watermarks: List<ProjectionWatermark>
 )
 
+data class VenueCommandOutcomeFact(
+    val commandId: String,
+    val commandType: String,
+    val streamSequence: Long,
+    val deliveredCount: Long,
+    val payloadHash: String,
+    val instrumentId: String,
+    val orderId: String,
+    val resultStatus: String,
+    val rejectCode: String = "",
+    val resultPayloadJson: String = "{}"
+)
+
+data class VenueEventBatchFact(
+    val batchId: String,
+    val shardId: String,
+    val partition: Int,
+    val commandStream: String,
+    val eventStream: String,
+    val firstSequence: Long,
+    val lastSequence: Long,
+    val commandCount: Int,
+    val createdAt: String,
+    val payloadChecksum: String,
+    val payloadFormat: String = "venue-event-batch-json",
+    val payloadVersion: String = "v1",
+    val outcomes: List<VenueCommandOutcomeFact>
+)
+
+data class CanonicalCommandOutcome(
+    val commandId: String,
+    val batchId: String,
+    val shardId: String,
+    val partition: Int,
+    val commandStream: String,
+    val eventStream: String,
+    val streamSequence: Long,
+    val deliveredCount: Long,
+    val commandType: String,
+    val payloadHash: String,
+    val instrumentId: String,
+    val orderId: String,
+    val resultStatus: String,
+    val rejectCode: String,
+    val resultPayloadJson: String
+)
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -128,6 +175,12 @@ interface RuntimePersistence {
     }
     fun projectionStatus(projectionName: String, partitions: List<Int> = emptyList()): ProjectionStatus {
         return ProjectionStatus(projectionName, projectedCount = 0, lag = 0, watermarks = emptyList())
+    }
+    fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        return 0
+    }
+    fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return null
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
     fun acceptedOrders(): List<PersistedOrder>

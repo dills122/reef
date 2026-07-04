@@ -56,6 +56,8 @@ object PostgresSchemaRequirements {
         val runtimeEvents = PostgresSchemaObject.parse(names.runtimeEvents)
         val canonicalCommandResults = PostgresSchemaObject.parse(names.canonicalCommandResults)
         val canonicalVenueEvents = PostgresSchemaObject.parse(names.canonicalVenueEvents)
+        val canonicalVenueEventBatches = PostgresSchemaObject.parse(names.canonicalVenueEventBatches)
+        val canonicalCommandOutcomes = PostgresSchemaObject.parse(names.canonicalCommandOutcomes)
         val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         return PostgresSchemaRequirement(
             tables = listOf(
@@ -70,6 +72,8 @@ object PostgresSchemaRequirements {
                 names.submitResults,
                 names.canonicalCommandResults,
                 names.canonicalVenueEvents,
+                names.canonicalVenueEventBatches,
+                names.canonicalCommandOutcomes,
                 names.projectionWatermarks,
                 names.authRoles,
                 names.authActorRoles
@@ -79,7 +83,8 @@ object PostgresSchemaRequirements {
                 names.persistSubmitOutcomeFunction,
                 names.persistSubmitOutcomesFunction,
                 names.appendCanonicalSubmitOutcomesFunction,
-                names.projectCanonicalSubmitOutcomesFunction
+                names.projectCanonicalSubmitOutcomesFunction,
+                names.materializeVenueEventBatchFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
@@ -94,6 +99,12 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(canonicalVenueEvents, "event_id", "text"),
                 PostgresSchemaColumn(canonicalVenueEvents, "event_seq", "bigint"),
                 PostgresSchemaColumn(canonicalVenueEvents, "payload", "jsonb"),
+                PostgresSchemaColumn(canonicalVenueEventBatches, "batch_id", "text"),
+                PostgresSchemaColumn(canonicalVenueEventBatches, "payload_checksum", "text"),
+                PostgresSchemaColumn(canonicalVenueEventBatches, "payload_json", "jsonb"),
+                PostgresSchemaColumn(canonicalCommandOutcomes, "command_id", "text"),
+                PostgresSchemaColumn(canonicalCommandOutcomes, "stream_sequence", "bigint"),
+                PostgresSchemaColumn(canonicalCommandOutcomes, "result_payload", "jsonb"),
                 PostgresSchemaColumn(projectionWatermarks, "projection_name", "text"),
                 PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
                 PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),

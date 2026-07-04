@@ -13,6 +13,8 @@ import com.reef.platform.domain.TradeCreated
 
 class InMemoryRuntimePersistence : RuntimePersistence {
     private val canonicalSubmitOutcomes = linkedMapOf<String, CanonicalSubmitOutcome>()
+    private val venueEventBatches = linkedMapOf<String, VenueEventBatchFact>()
+    private val commandOutcomes = linkedMapOf<String, CanonicalCommandOutcome>()
     private val projectionWatermarks = mutableMapOf<String, MutableMap<Int, Long>>()
     private val submitResults = linkedMapOf<String, SubmitOrderResult>()
     private val instruments = linkedMapOf<String, Instrument>()
@@ -212,5 +214,44 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             lag = watermarkRows.sumOf { it.lag },
             watermarks = watermarkRows
         )
+    }
+
+    override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
+        val existing = venueEventBatches[batch.batchId]
+        if (existing != null) {
+            check(existing.payloadChecksum == batch.payloadChecksum) {
+                "venue event batch checksum conflict for batchId ${batch.batchId}"
+            }
+            return 0
+        }
+        venueEventBatches[batch.batchId] = batch
+        var inserted = 0L
+        batch.outcomes.forEach { outcome ->
+            val canonical = CanonicalCommandOutcome(
+                commandId = outcome.commandId,
+                batchId = batch.batchId,
+                shardId = batch.shardId,
+                partition = batch.partition,
+                commandStream = batch.commandStream,
+                eventStream = batch.eventStream,
+                streamSequence = outcome.streamSequence,
+                deliveredCount = outcome.deliveredCount,
+                commandType = outcome.commandType,
+                payloadHash = outcome.payloadHash,
+                instrumentId = outcome.instrumentId,
+                orderId = outcome.orderId,
+                resultStatus = outcome.resultStatus,
+                rejectCode = outcome.rejectCode,
+                resultPayloadJson = outcome.resultPayloadJson
+            )
+            if (commandOutcomes.putIfAbsent(outcome.commandId, canonical) == null) {
+                inserted++
+            }
+        }
+        return inserted
+    }
+
+    override fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return commandOutcomes[commandId]
     }
 }
