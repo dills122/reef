@@ -2721,6 +2721,93 @@ class PostgresRuntimePersistence(
         }.firstOrNull()
     }
 
+    override fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int,
+        projectionName: String,
+        sourceProjectionName: String
+    ): MarketDataDepthSnapshot? {
+        val boundedLevels = levels.coerceIn(1, 50)
+        rebuildOrderLifecycleState()
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val lastPartitionSequence = sourceStatus.watermarks
+            .filter { it.partitionId >= 0 }
+            .maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        val bidLevels = depthLevels(instrumentId, "BUY", "DESC", boundedLevels)
+        val askLevels = depthLevels(instrumentId, "SELL", "ASC", boundedLevels)
+        if (bidLevels.isEmpty() && askLevels.isEmpty()) return null
+        val currency = projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT COALESCE(MAX(currency), '') AS currency
+                FROM ${names.orderLifecycleState}
+                WHERE instrument_id = ?
+                  AND status IN ('OPEN', 'PARTIALLY_FILLED')
+                  AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                  AND remaining_quantity_units::NUMERIC > 0
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, instrumentId)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getString("currency")
+                }
+            }
+        }
+        return MarketDataDepthSnapshot(
+            projectionName = projectionName,
+            sourceProjectionName = sourceProjectionName,
+            instrumentId = instrumentId,
+            bidLevels = bidLevels,
+            askLevels = askLevels,
+            currency = currency,
+            levels = boundedLevels,
+            lastPartitionSequence = lastPartitionSequence,
+            lag = sourceStatus.lag,
+            updatedAt = java.time.Instant.now().toString()
+        )
+    }
+
+    private fun depthLevels(
+        instrumentId: String,
+        side: String,
+        direction: String,
+        levels: Int
+    ): List<MarketDataDepthLevel> {
+        require(direction == "ASC" || direction == "DESC") { "unsupported depth sort direction" }
+        return projectionQueryList(
+            """
+            SELECT
+              price_num::TEXT AS price,
+              SUM(remaining_quantity_units::NUMERIC)::TEXT AS quantity
+            FROM (
+              SELECT
+                limit_price::NUMERIC AS price_num,
+                remaining_quantity_units
+              FROM ${names.orderLifecycleState}
+              WHERE instrument_id = ?
+                AND side = ?
+                AND order_type = 'LIMIT'
+                AND status IN ('OPEN', 'PARTIALLY_FILLED')
+                AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
+                AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
+                AND remaining_quantity_units::NUMERIC > 0
+            ) priced
+            GROUP BY price_num
+            ORDER BY price_num $direction
+            LIMIT ?::INTEGER
+            """.trimIndent(),
+            instrumentId,
+            side,
+            levels.toString()
+        ) {
+            MarketDataDepthLevel(
+                price = getString("price"),
+                quantity = getString("quantity")
+            )
+        }
+    }
+
     private data class CanonicalPartitionStats(val maxPartitionSequence: Long, val backlogCount: Long)
 
     private fun canonicalPartitionStats(

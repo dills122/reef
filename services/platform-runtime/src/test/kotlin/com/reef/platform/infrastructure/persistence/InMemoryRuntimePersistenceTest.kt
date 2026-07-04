@@ -224,6 +224,30 @@ class InMemoryRuntimePersistenceTest {
         assertEquals("150270000000", snapshot.bestAskPrice)
         assertEquals("80", snapshot.bestAskQuantity)
         assertEquals("USD", snapshot.currency)
+
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "bid-3",
+                engineOrderId = "eng-bid-3",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "25",
+                limitPrice = "150240000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:06Z"
+            )
+        )
+
+        val depth = persistence.marketDataDepthSnapshot("AAPL", levels = 2)
+        assertNotNull(depth)
+        assertEquals(listOf("150250000000", "150240000000"), depth.bidLevels.map { it.price })
+        assertEquals(listOf("110", "25"), depth.bidLevels.map { it.quantity })
+        assertEquals(listOf("150270000000"), depth.askLevels.map { it.price })
+        assertEquals(listOf("80"), depth.askLevels.map { it.quantity })
     }
 
     @Test

@@ -76,6 +76,24 @@ data class MarketDataSnapshot(
     val updatedAt: String
 )
 
+data class MarketDataDepthLevel(
+    val price: String,
+    val quantity: String
+)
+
+data class MarketDataDepthSnapshot(
+    val projectionName: String,
+    val sourceProjectionName: String,
+    val instrumentId: String,
+    val bidLevels: List<MarketDataDepthLevel>,
+    val askLevels: List<MarketDataDepthLevel>,
+    val currency: String,
+    val levels: Int,
+    val lastPartitionSequence: Long,
+    val lag: Long,
+    val updatedAt: String
+)
+
 data class OrderLifecycleState(
     val orderId: String,
     val engineOrderId: String,
@@ -239,6 +257,14 @@ interface RuntimePersistence {
         instrumentId: String,
         projectionName: String = "market-data-top-of-book"
     ): MarketDataSnapshot? {
+        return null
+    }
+    fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int = 5,
+        projectionName: String = "market-data-depth",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): MarketDataDepthSnapshot? {
         return null
     }
     fun acceptedOrder(orderId: String): PersistedOrder?

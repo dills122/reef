@@ -421,6 +421,20 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
         }
 
+        server.createContext("/api/v1/market-data/depth/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
+            val levels = queryValue(exchange, "levels").toIntOrNull() ?: 5
+            val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-depth" }
+            val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            val response = api.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
+            val status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200
+            writeJson(exchange, status, response)
+        }
+
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -597,6 +611,19 @@ class PlatformHttpServer(
                 )
                 PlatformHotPathResponse(
                     status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200,
+                    body = response
+                )
+            }
+            request.path.startsWith("/api/v1/market-data/depth/") && request.method == "GET" -> {
+                val instrumentId = request.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
+                val response = api.marketDataDepthSnapshot(
+                    instrumentId = instrumentId,
+                    levels = queryValue(request.query, "levels").toIntOrNull() ?: 5,
+                    projectionName = queryValue(request.query, "projectionName").ifBlank { "market-data-depth" },
+                    sourceProjectionName = queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+                )
+                PlatformHotPathResponse(
+                    status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200,
                     body = response
                 )
             }

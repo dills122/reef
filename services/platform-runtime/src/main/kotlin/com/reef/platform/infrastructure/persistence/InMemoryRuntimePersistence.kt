@@ -398,6 +398,44 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return marketDataSnapshots["$projectionName:$instrumentId"]
     }
 
+    override fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int,
+        projectionName: String,
+        sourceProjectionName: String
+    ): MarketDataDepthSnapshot? {
+        val boundedLevels = levels.coerceIn(1, 50)
+        rebuildOrderLifecycleState()
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }
+        val lastPartitionSequence = sourceWatermarks.maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        val updatedAt = sourceWatermarks.lastOrNull { it.updatedAt.isNotBlank() }?.updatedAt ?: Instant.now().toString()
+        val openOrders = orderLifecycleStates.values
+            .filter { it.instrumentId == instrumentId }
+            .filter {
+                it.orderType == "LIMIT" &&
+                    it.limitPrice.toBigDecimalOrNull() != null &&
+                    it.remainingQuantityUnits.toBigDecimalOrNull() != null &&
+                    it.remainingQuantityUnits.toBigDecimalOrNull()!! > BigDecimal.ZERO &&
+                    it.status in OpenLifecycleStatuses
+            }
+        if (openOrders.isEmpty()) return null
+        val bids = depthLevels(openOrders.filter { it.side == "BUY" }, descending = true, boundedLevels)
+        val asks = depthLevels(openOrders.filter { it.side == "SELL" }, descending = false, boundedLevels)
+        return MarketDataDepthSnapshot(
+            projectionName = projectionName,
+            sourceProjectionName = sourceProjectionName,
+            instrumentId = instrumentId,
+            bidLevels = bids,
+            askLevels = asks,
+            currency = openOrders.firstOrNull { it.currency.isNotBlank() }?.currency.orEmpty(),
+            levels = boundedLevels,
+            lastPartitionSequence = lastPartitionSequence,
+            lag = sourceStatus.lag,
+            updatedAt = updatedAt
+        )
+    }
+
     private fun CanonicalCommandOutcome.toSubmitOrderResult(): SubmitOrderResult {
         return if (resultStatus == "rejected") {
             SubmitOrderResult(
@@ -469,6 +507,31 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             .fold(BigDecimal.ZERO, BigDecimal::add)
         if (total == BigDecimal.ZERO) return ""
         return decimalString(total)
+    }
+
+    private fun depthLevels(
+        orders: List<OrderLifecycleState>,
+        descending: Boolean,
+        levels: Int
+    ): List<MarketDataDepthLevel> {
+        val grouped = orders
+            .groupBy { it.limitPrice }
+            .mapNotNull { (price, priceOrders) ->
+                val numericPrice = price.toBigDecimalOrNull() ?: return@mapNotNull null
+                val quantity = priceOrders
+                    .mapNotNull { it.remainingQuantityUnits.toBigDecimalOrNull() }
+                    .fold(BigDecimal.ZERO, BigDecimal::add)
+                if (quantity <= BigDecimal.ZERO) return@mapNotNull null
+                Triple(numericPrice, price, decimalString(quantity))
+            }
+        val sorted = if (descending) {
+            grouped.sortedByDescending { it.first }
+        } else {
+            grouped.sortedBy { it.first }
+        }
+        return sorted
+            .take(levels)
+            .map { (_, price, quantity) -> MarketDataDepthLevel(price = price, quantity = quantity) }
     }
 
     private fun decimalString(value: BigDecimal): String {

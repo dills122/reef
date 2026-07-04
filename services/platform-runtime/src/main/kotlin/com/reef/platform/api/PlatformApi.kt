@@ -9,6 +9,8 @@ import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
+import com.reef.platform.infrastructure.persistence.MarketDataDepthLevel
+import com.reef.platform.infrastructure.persistence.MarketDataDepthSnapshot
 import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
 import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
@@ -243,6 +245,23 @@ class PlatformApi(
         return JsonCodec.writeObject("snapshot" to snapshot.toMap())
     }
 
+    fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int = 5,
+        projectionName: String = "market-data-depth",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): String {
+        val snapshot = orderService.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
+        if (snapshot == null) {
+            return JsonCodec.writeObject(
+                "error" to "market data depth not found",
+                "instrumentId" to instrumentId,
+                "projectionName" to projectionName
+            )
+        }
+        return JsonCodec.writeObject("depth" to snapshot.toMap())
+    }
+
     fun trades(): String {
         return JsonCodec.writeObject("trades" to orderService.persistedTrades().map { it.toMap() })
     }
@@ -316,6 +335,24 @@ class PlatformApi(
         "lastPartitionSequence" to lastPartitionSequence,
         "lag" to lag,
         "updatedAt" to updatedAt
+    )
+
+    private fun MarketDataDepthSnapshot.toMap(): Map<String, Any> = mapOf(
+        "projectionName" to projectionName,
+        "sourceProjectionName" to sourceProjectionName,
+        "instrumentId" to instrumentId,
+        "bidLevels" to bidLevels.map { it.toMap() },
+        "askLevels" to askLevels.map { it.toMap() },
+        "currency" to currency,
+        "levels" to levels,
+        "lastPartitionSequence" to lastPartitionSequence,
+        "lag" to lag,
+        "updatedAt" to updatedAt
+    )
+
+    private fun MarketDataDepthLevel.toMap(): Map<String, Any> = mapOf(
+        "price" to price,
+        "quantity" to quantity
     )
 
     private fun OrderLifecycleState.toMap(): Map<String, Any> = mapOf(

@@ -353,6 +353,13 @@ class PlatformApiTest {
         assertContains(orderResponse, "\"lifecycleState\"")
         assertContains(orderResponse, "\"status\":\"PARTIALLY_FILLED\"")
         assertContains(orderResponse, "\"remainingQuantityUnits\":\"75\"")
+
+        val depthResponse = api.marketDataDepthSnapshot("AAPL", levels = 2)
+        assertContains(depthResponse, "\"depth\"")
+        assertContains(depthResponse, "\"projectionName\":\"market-data-depth\"")
+        assertContains(depthResponse, "\"bidLevels\":[{\"price\":\"150250000000\",\"quantity\":\"75\"}]")
+        assertContains(depthResponse, "\"askLevels\":[]")
+        assertContains(depthResponse, "\"levels\":2")
     }
 
     private fun validRequestBody(): String {

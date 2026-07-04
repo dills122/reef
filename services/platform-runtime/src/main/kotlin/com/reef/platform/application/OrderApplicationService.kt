@@ -632,6 +632,13 @@ class OrderApplicationService(
         projectionName: String = "market-data-top-of-book"
     ) = runtimePersistence.marketDataSnapshot(instrumentId, projectionName)
 
+    fun marketDataDepthSnapshot(
+        instrumentId: String,
+        levels: Int = 5,
+        projectionName: String = "market-data-depth",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ) = runtimePersistence.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
+
     fun createInstrument(instrument: Instrument) = runtimePersistence.saveInstrument(instrument)
 
     fun createParticipant(participant: Participant) = runtimePersistence.saveParticipant(participant)
