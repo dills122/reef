@@ -682,6 +682,7 @@ Summary:
 - initial materialization tables should include `runtime.canonical_venue_event_batches` and `runtime.canonical_command_outcomes`.
 - canonical batch rows must preserve batch id, shard id, partition id, command stream/topic, event stream/topic, first/last command sequence or offset, command count, payload checksum, payload format/version, creation time, and original batch payload or equivalent replay-safe fact payload.
 - command outcome lookup rows must support status lookup, idempotent materializer replay, command-to-batch linkage, command type, result status, reject code, instrument/order identifiers, stream sequence/offset, and payload hash.
+- the first runtime source is Kafka-compatible Redpanda consumption of the configured venue event topic through `PLATFORM_RUNTIME_ROLE=materializer`; JetStream event-batch materialization can be added behind the same `VenueEventBatchSource` contract later.
 - normalized `orders`, `executions`, `trades`, `runtime_events`, UI tables, metrics, and leaderboards remain downstream projections unless a future decision deliberately promotes a field into the materializer's compact canonical commit.
 - replay/checksum tests from durable event batch to Postgres rows are required before throughput claims for this slice.
 

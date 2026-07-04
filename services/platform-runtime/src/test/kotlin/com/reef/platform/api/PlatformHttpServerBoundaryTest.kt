@@ -263,6 +263,33 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun materializerRoleExposesOnlyInternalMaterializerStats() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            runtimeRole = PlatformRuntimeRole.Materializer
+        )
+        try {
+            val internal = get(server.address.port, "/internal/venue-event-materializer/stats")
+            val publicSubmit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-materializer-role"
+                ),
+                body = validSubmitBody("cmd-materializer-role", "trace-materializer-role", "ord-materializer-role", extra = streamRoutingExtra())
+            )
+
+            assertEquals(200, internal.status)
+            assertContains(internal.body, "\"role\":\"materializer\"")
+            assertContains(internal.body, "\"source\":\"kafka\"")
+            assertEquals(404, publicSubmit.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun legacyMutationRoutesRequireInternalMarkerWhenGateEnabled() {
         val server = testServerWithGateway(
             gateway = EchoOrderEngineGateway(),

@@ -9,7 +9,8 @@ enum class PlatformRuntimeRole(
 ) {
     Api("api", publicHttpEnabled = true, backgroundWorkersEnabled = false),
     Worker("worker", publicHttpEnabled = false, backgroundWorkersEnabled = true),
-    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = true);
+    Projector("projector", publicHttpEnabled = false, backgroundWorkersEnabled = true),
+    Materializer("materializer", publicHttpEnabled = false, backgroundWorkersEnabled = true);
 
     companion object {
         fun from(raw: String): PlatformRuntimeRole {

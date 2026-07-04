@@ -10,6 +10,7 @@ internal class PlatformDiagnosticRoutes(
     private val commandAccountingJson: (String) -> String,
     private val streamCommandHealthJson: () -> String,
     private val streamCommandWorkerStatsJson: () -> String,
+    private val venueEventMaterializerStatsJson: () -> String,
     private val projectorStatusJson: () -> String
 ) {
     val paths: List<String> = listOf(
@@ -21,6 +22,7 @@ internal class PlatformDiagnosticRoutes(
         "/internal/commands/accounting",
         "/internal/stream-ack/health",
         "/internal/stream-ack/worker/stats",
+        "/internal/venue-event-materializer/stats",
         "/internal/projector/status"
     )
 
@@ -36,6 +38,7 @@ internal class PlatformDiagnosticRoutes(
             }
             "/internal/stream-ack/health" -> getOnly(method) { streamCommandHealthJson() }
             "/internal/stream-ack/worker/stats" -> getOnly(method) { streamCommandWorkerStatsJson() }
+            "/internal/venue-event-materializer/stats" -> getOnly(method) { venueEventMaterializerStatsJson() }
             "/internal/projector/status" -> getOnly(method) { projectorStatusJson() }
             else -> null
         }

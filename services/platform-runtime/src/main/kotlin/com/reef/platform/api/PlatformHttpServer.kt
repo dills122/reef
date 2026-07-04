@@ -106,6 +106,11 @@ class PlatformHttpServer(
     private val streamAckProjectorPartitions: String = RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", "all"),
     private val streamAckProjectorBatchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val streamAckProjectorPollMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
+    private val venueEventMaterializerEnabled: Boolean = RuntimeEnv.bool("VENUE_EVENT_MATERIALIZER_ENABLED", false),
+    private val venueEventMaterializerBatchSize: Int = RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1),
+    private val venueEventMaterializerPollMs: Long = RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_POLL_MS", 25L, min = 1L),
+    private val venueEventMaterializerFetchTimeoutMs: Long =
+        RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", 200L, min = 1L),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -174,6 +179,7 @@ class PlatformHttpServer(
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
             streamCommandHealthJson = { streamCommandHealthJson() },
             streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
+            venueEventMaterializerStatsJson = { venueEventMaterializerStatsJson() },
             projectorStatusJson = { projectorStatusJson() }
         )
     }
@@ -447,6 +453,9 @@ class PlatformHttpServer(
         }
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startCanonicalProjector()
+        }
+        if (venueEventMaterializerShouldStart()) {
+            startVenueEventMaterializer()
         }
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
@@ -1942,6 +1951,31 @@ class PlatformHttpServer(
         )
     }
 
+    private fun venueEventMaterializerStatsJson(): String {
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        return JsonCodec.writeObject(
+            "enabled" to venueEventMaterializerShouldStart(),
+            "role" to runtimeRole.configValue,
+            "processingMode" to commandProcessingMode.configValue,
+            "batchSize" to venueEventMaterializerBatchSize,
+            "pollIntervalMs" to venueEventMaterializerPollMs,
+            "fetchTimeoutMs" to venueEventMaterializerFetchTimeoutMs,
+            "source" to "kafka",
+            "metrics" to mapOf(
+                "fetched" to stats.fetched,
+                "materialized" to stats.materialized,
+                "failed" to stats.failed,
+                "ackFailed" to stats.ackFailed,
+                "unsupported" to stats.unsupported,
+                "emptyPolls" to stats.emptyPolls,
+                "lastMaterializedStreamSequence" to stats.lastMaterializedStreamSequence,
+                "lastMaterializedAt" to stats.lastMaterializedAt,
+                "lastFailedAt" to stats.lastFailedAt,
+                "lastError" to stats.lastError
+            )
+        )
+    }
+
     private fun startStreamCommandWorkers() {
         val partitions = streamWorkerPartitions()
         if (partitions.isEmpty()) {
@@ -1980,6 +2014,27 @@ class PlatformHttpServer(
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,
             workerName = "reef-canonical-projector-$streamAckProjectionName"
+        ).start()
+    }
+
+    private fun venueEventMaterializerShouldStart(): Boolean {
+        return commandProcessingMode == CommandProcessingMode.StreamAck &&
+            (runtimeRole == PlatformRuntimeRole.Materializer || venueEventMaterializerEnabled)
+    }
+
+    private fun startVenueEventMaterializer() {
+        val provider = StreamCommandLogProvider.fromEnv()
+        if (provider != StreamCommandLogProvider.Redpanda) {
+            System.err.println("venue_event_materializer_unavailable reason=unsupported_log_provider provider=${provider.configValue}")
+            return
+        }
+        VenueEventBatchMaterializer(
+            source = KafkaVenueEventBatchSource(),
+            api = api,
+            batchSize = venueEventMaterializerBatchSize,
+            pollIntervalMs = venueEventMaterializerPollMs,
+            fetchTimeout = java.time.Duration.ofMillis(venueEventMaterializerFetchTimeoutMs),
+            workerName = "reef-venue-event-batch-materializer"
         ).start()
     }
 
