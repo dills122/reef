@@ -80,7 +80,8 @@ Rationale:
 - run account/bot risk checks after request validation and before durable command acceptance
 - non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages
 - supported boundary decisions are `allow`, `reject`, `backpressure`, and `disabled_bot`
-- keep the first implementation allow-all/static and cached; do not add projection reads, exposure scans, or synchronous heavy storage work to the hot path
+- supported implementations are allow-all, static env controls, and cached Postgres operator controls with non-allow audit rows
+- do not add projection reads, exposure scans, or synchronous heavy storage work to the hot path
 
 ### 7. Correlation metadata propagation
 

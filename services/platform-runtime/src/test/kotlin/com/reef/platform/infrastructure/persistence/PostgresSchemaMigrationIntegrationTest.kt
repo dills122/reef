@@ -1,6 +1,9 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.api.AccountRiskCheckRequest
+import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
+import com.reef.platform.api.PostgresAccountRiskCheck
 import com.reef.platform.api.PostgresCommandCaptureStore
 import com.reef.platform.api.PostgresCommandLogStore
 import com.reef.platform.api.PostgresIdempotencyStore
@@ -42,6 +45,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
                   'boundary/0004_command_capture_legacy_defaults.sql',
+                  'boundary/0006_account_risk_controls.sql',
                   'command_log/0001_commands.sql',
                   'command_log/0002_command_results.sql',
                   'command_log/0003_queue_result_split.sql',
@@ -72,6 +76,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0002_live_boundary_tables.sql",
                     "boundary/0003_command_capture_live_shape.sql",
                     "boundary/0004_command_capture_legacy_defaults.sql",
+                    "boundary/0006_account_risk_controls.sql",
                     "command_log/0001_commands.sql",
                     "command_log/0002_command_results.sql",
                     "command_log/0003_queue_result_split.sql",
@@ -108,6 +113,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "auth.auth_roles",
                 "boundary.api_command_captures",
                 "boundary.api_idempotency_records",
+                "boundary.account_risk_controls",
+                "boundary.account_risk_decisions",
                 "command_log.command_payloads",
                 "command_log.command_results",
                 "command_log.command_work_queue",
@@ -151,6 +158,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'auth_actor_roles',
                     'api_idempotency_records',
                     'api_command_captures',
+                    'account_risk_controls',
+                    'account_risk_decisions',
                     'commands',
                     'command_payloads',
                     'command_work_queue',
@@ -378,6 +387,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'auth_actor_roles',
                     'api_idempotency_records',
                     'api_command_captures',
+                    'account_risk_controls',
+                    'account_risk_decisions',
                     'commands'
                   )
                 """.trimIndent()
@@ -432,6 +443,10 @@ class PostgresSchemaMigrationIntegrationTest {
             bootstrapMode = PostgresBootstrapMode.Validate
         )
         PostgresCommandCaptureStore(
+            dataSource = boundaryDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresAccountRiskCheck(
             dataSource = boundaryDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )
@@ -516,6 +531,65 @@ class PostgresSchemaMigrationIntegrationTest {
                     assertEquals("", rs.getString("response_payload"))
                     assertEquals("BOUNDARY_UNAVAILABLE", rs.getString("error_class"))
                     assertEquals("capture failed", rs.getString("error_message"))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun postgresAccountRiskCheckRejectsFromControlStateAndAuditsDecision() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val riskCheck = PostgresAccountRiskCheck(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            cacheTtlMillis = 0L
+        )
+        val suffix = UUID.randomUUID().toString()
+        val accountId = "acct-risk-$suffix"
+        val commandId = "cmd-risk-$suffix"
+
+        riskCheck.upsertControl("ACCOUNT", accountId, AccountRiskDecision.REJECT, "operator hold")
+        val result = riskCheck.evaluate(
+            AccountRiskCheckRequest(
+                clientId = "client-risk",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = commandId,
+                idempotencyKey = "idem-risk-$suffix",
+                correlationId = "corr-risk-$suffix",
+                actorId = "actor-risk",
+                participantId = "participant-risk",
+                accountId = accountId,
+                botId = "bot-risk",
+                runId = "run-risk",
+                venueSessionId = "session-risk",
+                instrumentId = "AAPL",
+                orderId = "ord-risk",
+                payloadHash = "hash-risk"
+            )
+        )
+
+        assertEquals(AccountRiskDecision.REJECT, result.decision)
+        assertEquals("operator hold", result.message)
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT decision, code, message, account_id, command_id
+                FROM boundary.account_risk_decisions
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals("REJECT", rs.getString("decision"))
+                    assertEquals("ACCOUNT_RISK_REJECTED", rs.getString("code"))
+                    assertEquals("operator hold", rs.getString("message"))
+                    assertEquals(accountId, rs.getString("account_id"))
+                    assertEquals(commandId, rs.getString("command_id"))
                 }
             }
         }

@@ -57,15 +57,21 @@ Rationale:
 
 ### 4. Account/risk pre-checks
 
-- Interface: planned `AccountRiskCheck`
-- Current backend:
-  - not implemented
+- Interfaces:
+  - `AccountRiskCheck`
+  - `AccountRiskControlStore`
+- Current backends:
+  - `AllowAllAccountRiskCheck`
+  - `StaticAccountRiskCheck`
+  - `PostgresAccountRiskCheck`
 - Target backends:
   - in-memory/cached local simulation view
   - account-ledger-backed production-shaped view
 
 Decision:
 - intake should run a bounded account/risk pre-check before durable order acceptance.
+- non-allow decisions are audited to `boundary.account_risk_decisions` when the Postgres-backed mode is active.
+- operator/admin moderation state is stored in `boundary.account_risk_controls` and managed through `make dev-admin CMD="account-risk-set ..."` for local workflows.
 - settlement performs final enforcement after matching facts exist.
 - deep debt, exceeded risk thresholds, or settlement failures can block fulfillment and disable bots through account/admin facts.
 
@@ -79,11 +85,12 @@ Rationale:
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres`
 - `EXTERNAL_API_AUTH_MODE=allow-all|static-token`
 - `EXTERNAL_API_RATE_LIMIT_MODE=allow-all|fixed-window`
-- planned: `EXTERNAL_API_ACCOUNT_RISK_MODE=allow-all|cached|ledger`
+- `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all|static|postgres`
+- `EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS=<milliseconds>` controls the Postgres-backed control-state cache.
 
 ## Next Implementation Steps
 
 1. Add `PostgresAuthCredentialStore` and rotate `AuthHook` to store-backed token resolution.
 2. Add `RedisRateLimitStore` and wire it to `FixedWindowRateLimitHook`.
 3. Add idempotency TTL policy classes (`short|standard|long`) and scheduled cleanup for Postgres records.
-4. Define the first `AccountRiskCheck` contract for bot/account credit, holds, and risk-limit pre-checks.
+4. Extend the account-risk store toward ledger-backed exposure and limit snapshots without adding projection scans to the order-entry hot path.
