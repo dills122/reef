@@ -876,6 +876,17 @@ class PostgresCommandLogStore(
                   DELETE FROM ${names.commandWorkQueue}
                   WHERE command_id = ?
                   RETURNING command_id, attempt_count
+                ),
+                terminal_source AS (
+                  SELECT command_id, attempt_count
+                  FROM deleted_queue
+                  UNION ALL
+                  SELECT commands.command_id,
+                         COALESCE(results.attempt_count, commands.attempt_count)
+                  FROM ${names.commands} commands
+                  LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
+                  WHERE commands.command_id = ?
+                    AND NOT EXISTS (SELECT 1 FROM deleted_queue)
                 )
                 INSERT INTO ${names.commandResults}(
                   command_id,
@@ -887,7 +898,8 @@ class PostgresCommandLogStore(
                   completed_at
                 )
                 SELECT command_id, 'COMPLETED', attempt_count, '', ?, ?::jsonb, NOW()
-                FROM deleted_queue
+                FROM terminal_source
+                LIMIT 1
                 ON CONFLICT (command_id) DO UPDATE SET
                   status = EXCLUDED.status,
                   attempt_count = EXCLUDED.attempt_count,
@@ -899,8 +911,9 @@ class PostgresCommandLogStore(
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, commandId)
-                ps.setInt(2, responseStatus)
-                ps.setString(3, responsePayloadJson)
+                ps.setString(2, commandId)
+                ps.setInt(3, responseStatus)
+                ps.setString(4, responsePayloadJson)
                 ps.executeQuery().use { rs ->
                     while (rs.next()) {
                     }
@@ -917,6 +930,17 @@ class PostgresCommandLogStore(
                   DELETE FROM ${names.commandWorkQueue}
                   WHERE command_id = ?
                   RETURNING command_id, attempt_count
+                ),
+                terminal_source AS (
+                  SELECT command_id, attempt_count
+                  FROM deleted_queue
+                  UNION ALL
+                  SELECT commands.command_id,
+                         COALESCE(results.attempt_count, commands.attempt_count)
+                  FROM ${names.commands} commands
+                  LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
+                  WHERE commands.command_id = ?
+                    AND NOT EXISTS (SELECT 1 FROM deleted_queue)
                 )
                 INSERT INTO ${names.commandResults}(
                   command_id,
@@ -928,7 +952,8 @@ class PostgresCommandLogStore(
                   completed_at
                 )
                 SELECT command_id, 'FAILED', attempt_count, ?, ?, '{}'::jsonb, NOW()
-                FROM deleted_queue
+                FROM terminal_source
+                LIMIT 1
                 ON CONFLICT (command_id) DO UPDATE SET
                   status = EXCLUDED.status,
                   attempt_count = EXCLUDED.attempt_count,
@@ -940,8 +965,9 @@ class PostgresCommandLogStore(
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, commandId)
-                ps.setString(2, errorMessage)
-                ps.setInt(3, responseStatus)
+                ps.setString(2, commandId)
+                ps.setString(3, errorMessage)
+                ps.setInt(4, responseStatus)
                 ps.executeQuery().use { rs ->
                     while (rs.next()) {
                     }
@@ -962,6 +988,17 @@ class PostgresCommandLogStore(
                       DELETE FROM ${names.commandWorkQueue}
                       WHERE command_id = ?
                       RETURNING command_id, attempt_count
+                    ),
+                    terminal_source AS (
+                      SELECT command_id, attempt_count
+                      FROM deleted_queue
+                      UNION ALL
+                      SELECT commands.command_id,
+                             COALESCE(results.attempt_count, commands.attempt_count)
+                      FROM ${names.commands} commands
+                      LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
+                      WHERE commands.command_id = ?
+                        AND NOT EXISTS (SELECT 1 FROM deleted_queue)
                     )
                     INSERT INTO ${names.commandResults}(
                       command_id,
@@ -973,7 +1010,8 @@ class PostgresCommandLogStore(
                       completed_at
                     )
                     SELECT command_id, ?, attempt_count, ?, ?, ?::jsonb, NOW()
-                    FROM deleted_queue
+                    FROM terminal_source
+                    LIMIT 1
                     ON CONFLICT (command_id) DO UPDATE SET
                       status = EXCLUDED.status,
                       attempt_count = EXCLUDED.attempt_count,
@@ -988,11 +1026,12 @@ class PostgresCommandLogStore(
                             "terminal update status must be COMPLETED or FAILED"
                         }
                         ps.setString(1, update.commandId)
-                        ps.setString(2, update.status.name)
-                        ps.setString(3, if (update.status == CommandLogStatus.FAILED) update.errorMessage else "")
-                        ps.setInt(4, update.responseStatus)
+                        ps.setString(2, update.commandId)
+                        ps.setString(3, update.status.name)
+                        ps.setString(4, if (update.status == CommandLogStatus.FAILED) update.errorMessage else "")
+                        ps.setInt(5, update.responseStatus)
                         ps.setString(
-                            5,
+                            6,
                             if (update.status == CommandLogStatus.FAILED) "{}" else update.responsePayloadJson
                         )
                         ps.addBatch()
