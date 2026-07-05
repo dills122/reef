@@ -80,6 +80,7 @@ Hosted v1 should not expose:
 - `Buffer`
 - Node built-in module imports
 - dynamic `import()` outside the approved loader
+- CommonJS `require()` module loading
 - filesystem APIs
 - child process APIs
 - worker thread APIs

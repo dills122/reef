@@ -5,6 +5,7 @@ export interface BotSandboxPolicyV1 {
   readonly deniedImportSpecifiers: readonly string[];
   readonly allowedImportSpecifiers: readonly string[];
   readonly allowDynamicImport: boolean;
+  readonly allowDynamicRequire: boolean;
   readonly allowTimers: boolean;
   readonly allowNetwork: boolean;
   readonly allowFilesystem: boolean;
@@ -36,6 +37,7 @@ export const reefBotHostedSandboxPolicyV1: BotSandboxPolicyV1 = {
   ],
   allowedImportSpecifiers: ["@reef/bot-sdk", "../src/index", "../../src/index"],
   allowDynamicImport: false,
+  allowDynamicRequire: false,
   allowTimers: false,
   allowNetwork: false,
   allowFilesystem: false,
@@ -66,7 +68,7 @@ export function scanBotSourceForSandboxViolationsV1(
     }
   }
 
-  for (const specifier of importSpecifiers(source)) {
+  for (const specifier of moduleSpecifiers(source)) {
     if (policy.allowedImportSpecifiers.includes(specifier)) {
       continue;
     }
@@ -93,10 +95,23 @@ export function scanBotSourceForSandboxViolationsV1(
     });
   }
 
+  if (!policy.allowDynamicRequire) {
+    for (const expression of requireExpressions(source)) {
+      if (!/^\s*["'][^"']+["']\s*$/.test(expression)) {
+        violations.push({
+          code: "sandbox_dynamic_require",
+          message: "Hosted bot source uses dynamic require().",
+          severity: "error",
+          pattern: "require(",
+        });
+      }
+    }
+  }
+
   return violations;
 }
 
-function importSpecifiers(source: string): readonly string[] {
+function moduleSpecifiers(source: string): readonly string[] {
   const specifiers: string[] = [];
   const importPattern = /\bimport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?["']([^"']+)["']/g;
   for (const match of source.matchAll(importPattern)) {
@@ -105,7 +120,28 @@ function importSpecifiers(source: string): readonly string[] {
       specifiers.push(specifier);
     }
   }
+
+  const requirePattern = /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
+  for (const match of source.matchAll(requirePattern)) {
+    const specifier = match[1];
+    if (specifier !== undefined) {
+      specifiers.push(specifier);
+    }
+  }
+
   return specifiers;
+}
+
+function requireExpressions(source: string): readonly string[] {
+  const expressions: string[] = [];
+  const requirePattern = /\brequire\s*\(([^)]*)\)/g;
+  for (const match of source.matchAll(requirePattern)) {
+    const expression = match[1];
+    if (expression !== undefined) {
+      expressions.push(expression);
+    }
+  }
+  return expressions;
 }
 
 function escapeRegExp(value: string): string {
