@@ -147,17 +147,21 @@ Run local checks:
 bun scripts/dev/bot-sdk-contract.test.mjs
 bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-maker.ts
 bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
+bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicator-strategy-bot.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --summary-only
 ```
+
+`bot-sdk-test-bot.mjs` is the pre-merge hosted simulation gate. It builds the hosted artifact, scans approved imports, runs the bot through SES against the fixture market, and exits nonzero when the bot should be marked `do_not_merge`.
 
 To submit generated commands through the adapter-owned client against a local Reef stack, use the live smoke wrapper:
 
 ```bash
-bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-multi-tick.json --venue-url=http://127.0.0.1:8080 --seed-reference
+bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --venue-url=http://127.0.0.1:8080 --seed-reference
 ```
 
 Bot code still does not receive network access; only the runner/orchestrator owns the venue transport. See [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md) for setup and troubleshooting.
 
 Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md) for the current SES-compatible runner contract.
+For the planned application and matching-engine integration path, see [`BOT_SDK_ENGINE_INTEGRATION_PLAN.md`](./BOT_SDK_ENGINE_INTEGRATION_PLAN.md).
 
 See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
 See `packages/bot-sdk/examples/multi-symbol-strategy-bot.ts` for a v1.5 strategy example that subscribes to several instruments, emits Bollinger/momentum signals, and converts approved signals into proposed order actions.

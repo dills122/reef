@@ -44,7 +44,7 @@ The hosted runner wraps loaded bot classes with host-owned execution guards. Cur
 Use the hosted artifact runner for compiled single-file JavaScript bot bundles:
 
 ```bash
-bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --unsafe-vm-for-local-dev
+bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-technical-indicator.json --unsafe-vm-for-local-dev
 ```
 
 Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible path and expects `globalThis.Compartment` to be available after SES lockdown/bootstrap. The unsafe VM flag is local-only test plumbing; it is not a hosted security boundary.
@@ -61,10 +61,18 @@ bun scripts/dev/bot-sdk-build-hosted-artifact.mjs packages/bot-sdk/examples/simp
 
 The build step emits a `reef.bot.hostedArtifact.v1` manifest next to the artifact by default. The manifest includes the source hash and artifact hash so a registry or review workflow can pin exactly what was built and run.
 
+To run the pre-merge hosted simulation tester directly from a TypeScript bot entry:
+
+```bash
+bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicator-strategy-bot.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --summary-only
+```
+
+The tester builds the artifact, applies source and final-artifact scanner gates, executes the bot through SES, and emits `approved_for_merge` or `do_not_merge`.
+
 To run a built artifact through a separate hosted worker process:
 
 ```bash
-bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json
+bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-technical-indicator.json
 ```
 
 The worker process runs SES lockdown and the hosted scenario runner in a child process. The parent enforces a wall-clock timeout, output cap, and structured `do_not_merge` report for child failures. This catches synchronous hangs that in-process SES execution cannot interrupt.
