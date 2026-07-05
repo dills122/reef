@@ -1,8 +1,11 @@
 import type { BotActionV1, BotResultV1, OwnOrderV1, ReefBotMetadataV1 } from "./index";
 
 export interface BotVenueAdapterContextV1 {
+  readonly scenarioId?: string;
   readonly runId: string;
+  readonly runKind?: "scenario" | "live" | "stress" | string;
   readonly venueSessionId: string;
+  readonly clientId?: string;
   readonly actorId: string;
   readonly participantId: string;
   readonly accountId: string;
@@ -164,6 +167,8 @@ function commonCommandFields(
     correlationId: context.correlationId,
     actorId: context.actorId,
     occurredAt: context.occurredAt,
+    ...(context.scenarioId === undefined ? {} : { scenarioId: context.scenarioId }),
+    ...(context.runKind === undefined ? {} : { runKind: context.runKind }),
   };
 }
 
@@ -173,6 +178,7 @@ function commandHeaders(
 ): Readonly<Record<string, string>> {
   return {
     "Content-Type": "application/json",
+    "X-Client-Id": context.clientId ?? `bot:${context.botId}`,
     "Idempotency-Key": `${context.idempotencyKeyPrefix}-${sequence}`,
   };
 }

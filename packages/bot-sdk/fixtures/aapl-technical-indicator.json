@@ -1,6 +1,7 @@
 {
   "scenarioId": "aapl-technical-indicator-v1",
   "runId": "run-bot-sdk-aapl-technical-1",
+  "runKind": "scenario",
   "venueSessionId": "session-aapl-technical-1",
   "actorId": "actor-technical-indicator-strategy",
   "participantId": "participant-technical-indicator-strategy",

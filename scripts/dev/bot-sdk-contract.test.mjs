@@ -131,12 +131,31 @@ function assertVenueAdapter() {
   assert.equal(submit.ok, true);
   assert.equal(submit.value.length, 1);
   assert.equal(submit.value[0].route, "/api/v1/orders/submit");
+  assert.equal(submit.value[0].headers["X-Client-Id"], "bot:bot-1");
   assert.equal(submit.value[0].headers["Idempotency-Key"], "idem-bot-1");
   assert.equal(submit.value[0].body.commandId, "cmd-bot-1");
   assert.equal(submit.value[0].body.orderType, "LIMIT");
   assert.equal(submit.value[0].body.quantityUnits, "10");
   assert.equal(submit.value[0].body.botId, "bot-1");
+  assert.equal(submit.value[0].body.scenarioId, "scenario-1");
+  assert.equal(submit.value[0].body.runKind, "scenario");
   assert.equal(submit.value[0].body.venueSessionId, "session-1");
+
+  const override = toVenueCommandRequestsV1(
+    [
+      {
+        type: "cancel_order",
+        order: {
+          orderId: "bot-order-1",
+          instrumentId: "AAPL",
+        },
+      },
+    ],
+    { ...venueAdapterContext(), clientId: "configured-bot-client" },
+  );
+
+  assert.equal(override.ok, true);
+  assert.equal(override.value[0].headers["X-Client-Id"], "configured-bot-client");
 
   const market = toVenueCommandRequestsV1(
     [
@@ -158,7 +177,9 @@ function assertVenueAdapter() {
 
 function venueAdapterContext() {
   return {
+    scenarioId: "scenario-1",
     runId: "run-1",
+    runKind: "scenario",
     venueSessionId: "session-1",
     actorId: "actor-bot-1",
     participantId: "participant-bot-1",

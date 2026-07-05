@@ -67,7 +67,9 @@ const actions = await bot.onTick(
 );
 
 const commands = toVenueCommandRequestsV1(actions, {
+  scenarioId: "scenario-1",
   runId: "run-1",
+  runKind: "scenario",
   venueSessionId: "session-1",
   actorId: "bot-actor-1",
   participantId: "participant-1",
@@ -104,6 +106,8 @@ assert.deepEqual(Object.keys(bid.body).sort(), [
   "participantId",
   "quantityUnits",
   "runId",
+  "runKind",
+  "scenarioId",
   "side",
   "timeInForce",
   "traceId",
@@ -111,8 +115,12 @@ assert.deepEqual(Object.keys(bid.body).sort(), [
 ]);
 assert.equal(bid.headers["Idempotency-Key"], "idem-simple-mm-1");
 assert.equal(ask.headers["Idempotency-Key"], "idem-simple-mm-2");
+assert.equal(bid.headers["X-Client-Id"], "bot:simple-market-maker");
+assert.equal(ask.headers["X-Client-Id"], "bot:simple-market-maker");
 assert.equal(bid.body.commandId, "cmd-simple-mm-1");
 assert.equal(ask.body.commandId, "cmd-simple-mm-2");
+assert.equal(bid.body.scenarioId, "scenario-1");
+assert.equal(ask.body.runKind, "scenario");
 assert.equal(bid.body.traceId, "trace-simple-mm-1");
 assert.equal(ask.body.traceId, "trace-simple-mm-2");
 assert.equal(bid.body.side, "BUY");
