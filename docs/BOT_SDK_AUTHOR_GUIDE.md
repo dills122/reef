@@ -161,8 +161,9 @@ Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; se
 
 See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
 See `packages/bot-sdk/examples/multi-symbol-strategy-bot.ts` for a v1.5 strategy example that subscribes to several instruments, emits Bollinger/momentum signals, and converts approved signals into proposed order actions.
+See `packages/bot-sdk/examples/technical-indicator-strategy-bot.ts` for an approved-package example using `trading-signals`; approved packages are bundled into the hosted artifact and are not loaded dynamically at runtime.
 
-For package approval rules and the first strategy-helper candidates, see [`BOT_SDK_APPROVED_PACKAGES.md`](./BOT_SDK_APPROVED_PACKAGES.md).
+For exact approved package versions and approval rules, see [`BOT_SDK_APPROVED_PACKAGES.md`](./BOT_SDK_APPROVED_PACKAGES.md).
 
 Registration checks:
 

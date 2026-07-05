@@ -18,6 +18,45 @@ export interface BotSandboxViolationV1 {
   readonly pattern: string;
 }
 
+export interface BotApprovedPackageV1 {
+  readonly name: string;
+  readonly version: string;
+  readonly license: string;
+  readonly status: "approved";
+  readonly reason: string;
+}
+
+export const reefBotApprovedPackagesV1: readonly BotApprovedPackageV1[] = [
+  {
+    name: "trading-signals",
+    version: "7.4.3",
+    license: "MIT",
+    status: "approved",
+    reason: "Focused TypeScript technical indicators for strategy authoring.",
+  },
+  {
+    name: "simple-statistics",
+    version: "7.9.3",
+    license: "ISC",
+    status: "approved",
+    reason: "Pure JavaScript statistics helpers for strategy calculations.",
+  },
+  {
+    name: "decimal.js",
+    version: "10.6.0",
+    license: "MIT",
+    status: "approved",
+    reason: "Deterministic decimal arithmetic helper.",
+  },
+  {
+    name: "lodash-es",
+    version: "4.18.1",
+    license: "MIT",
+    status: "approved",
+    reason: "Tree-shakable utility helpers for author ergonomics.",
+  },
+];
+
 export const reefBotHostedSandboxPolicyV1: BotSandboxPolicyV1 = {
   deniedGlobals: ["fetch", "WebSocket", "setTimeout", "setInterval", "process", "Buffer", "Function", "eval"],
   deniedImportSpecifiers: [
@@ -41,6 +80,14 @@ export const reefBotHostedSandboxPolicyV1: BotSandboxPolicyV1 = {
   allowTimers: false,
   allowNetwork: false,
   allowFilesystem: false,
+};
+
+export const reefBotHostedSourceSandboxPolicyV1: BotSandboxPolicyV1 = {
+  ...reefBotHostedSandboxPolicyV1,
+  allowedImportSpecifiers: [
+    ...reefBotHostedSandboxPolicyV1.allowedImportSpecifiers,
+    ...reefBotApprovedPackagesV1.map((pkg) => pkg.name),
+  ],
 };
 
 export function scanBotSourceForSandboxViolationsV1(

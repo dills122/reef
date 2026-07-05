@@ -266,9 +266,14 @@ SES compartments are a good JavaScript-level confinement layer, but hosted safet
 
 ## Dependencies
 
-V1 starts with no third-party imports except `@reef/bot-sdk`.
+V1.5 keeps runtime dependency access closed, but bot source may import exact packages from the approved allowlist:
 
-An allowlist can be added after built-in example bots prove which packages materially improve bot authoring. Any allowlisted package needs scanner coverage, lockfile tracking, runtime compatibility checks, and replay impact review.
+- `trading-signals@7.4.3`
+- `simple-statistics@7.9.3`
+- `decimal.js@10.6.0`
+- `lodash-es@4.18.1`
+
+Approved packages are bundled into the hosted artifact, scanned after bundling, and recorded in the artifact manifest. SES execution still receives no package loader, filesystem access, network access, or dynamic dependency installation.
 
 ## Registration And Qualification
 

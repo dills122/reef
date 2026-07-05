@@ -4,16 +4,18 @@ Hosted bots may only use packages that Reef explicitly approves, pins, bundles, 
 
 V1.5 does not allow arbitrary runtime imports. Approved package use should be bundled into the hosted artifact, then scanned after bundling. Hosted execution still receives no filesystem, network, timer, child process, worker thread, or native module capability.
 
-## Initial Approval Candidates
+## V1.5 Approved Packages
 
-These packages are good candidates for the first strategy-helper allowlist after audit:
+These packages are the first exact-version strategy-helper allowlist. Bot source may import these package names, but the hosted artifact builder must bundle them before SES execution. Hosted runtime does not resolve package imports dynamically.
 
 | Package | Version | Status | Reason |
 | --- | --- | --- | --- |
-| `trading-signals` | `7.4.3` | candidate | TypeScript-oriented technical indicators with a focused package surface. |
-| `simple-statistics` | `7.9.3` | candidate | Pure JavaScript statistics helpers for mean, deviation, regression, and z-score style strategies. |
-| `decimal.js` | `10.6.0` | candidate | Mature deterministic decimal arithmetic helper. |
-| `lodash-es` | `4.18.1` | candidate | Utility helpers; should be bundled/tree-shaken and kept out of runtime import resolution. |
+| `trading-signals` | `7.4.3` | approved | TypeScript-oriented technical indicators with a focused package surface. |
+| `simple-statistics` | `7.9.3` | approved | Pure JavaScript statistics helpers for mean, deviation, regression, and z-score style strategies. |
+| `decimal.js` | `10.6.0` | approved | Mature deterministic decimal arithmetic helper. |
+| `lodash-es` | `4.18.1` | approved | Utility helpers; should be bundled/tree-shaken and kept out of runtime import resolution. |
+
+The executable allowlist lives in `packages/bot-sdk/src/sandbox-policy.ts` as `reefBotApprovedPackagesV1`. `packages/bot-sdk/approved-packages.v1.json` mirrors that list for review and publishing workflows.
 
 `technicalindicators` is a second-wave candidate because it has broad indicator coverage, but it needs closer audit before hosted approval.
 
@@ -38,3 +40,5 @@ Before a package becomes usable by bot authors:
 5. Scan the final artifact for denied globals, imports, and dynamic module loading.
 6. Run the artifact through SES E2E and hosted worker tests.
 7. Record the package/version/hash in the bot artifact manifest or registry review record.
+
+`packages/bot-sdk/examples/technical-indicator-strategy-bot.ts` is the first approved-package example. It imports `trading-signals`, then the hosted artifact test verifies the final bundle has no runtime imports and records `trading-signals@7.4.3` in the artifact manifest.

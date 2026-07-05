@@ -18,6 +18,7 @@ const { scanBotSourceForSandboxViolationsV1 } = await import(
 
 await assertSimpleMarketMakerArtifact();
 await assertMultiSymbolStrategyArtifact();
+await assertTechnicalIndicatorStrategyArtifact();
 
 console.log("bot SDK hosted artifact build checks passed");
 
@@ -53,6 +54,30 @@ async function assertMultiSymbolStrategyArtifact() {
   assert.equal(report.ticks[0].venueCommands.length, 2);
 }
 
+async function assertTechnicalIndicatorStrategyArtifact() {
+  const artifact = buildArtifact("packages/bot-sdk/examples/technical-indicator-strategy-bot.ts", "technical-indicator-strategy-bot");
+  assert.deepEqual(artifact.manifest.approvedPackages, [
+    {
+      name: "trading-signals",
+      version: "7.4.3",
+      license: "MIT",
+    },
+  ]);
+
+  const report = await hostedRunner.runHostedBotScenarioV1({
+    source: artifact.source,
+    fileName: artifact.fileName,
+    fixture: multiSymbolFixture(),
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.signalsGenerated, 3);
+  assert.equal(report.orderActionsProposed, 3);
+  assert.equal(report.dataCalls, 0);
+  assert.equal(report.ticks[0].signals[0].strategyId, "bb-rsi-reversion");
+  assert.equal(report.ticks[0].venueCommands.length, 1);
+}
+
 function buildArtifact(entryPath, name) {
   const artifactPath = join(outDir, `${name}.bundle.js`);
   const manifestPath = join(outDir, `${name}.bundle.manifest.json`);
@@ -80,7 +105,7 @@ function buildArtifact(entryPath, name) {
   assert.equal(source.includes("export default"), false);
   assert.deepEqual(scanBotSourceForSandboxViolationsV1(source), []);
 
-  return { source, fileName: `${name}.bundle.js` };
+  return { source, fileName: `${name}.bundle.js`, manifest };
 }
 
 function multiSymbolFixture() {

@@ -19,7 +19,7 @@ import {
   type OwnOrderV1,
   type ReefBotMetadataV1,
 } from "./index";
-import { scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
+import { reefBotHostedSourceSandboxPolicyV1, scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
 
 export interface ReefBotV1Instance {
   readonly strategies?: readonly BotStrategyV1[];
@@ -156,7 +156,7 @@ export function validateBotRegistrationV1(options: {
     issues.push(errorIssue("invalid_git_author_email", "Git author email must pass basic email syntax validation."));
   }
 
-  for (const violation of scanBotSourceForSandboxViolationsV1(options.source)) {
+  for (const violation of scanBotSourceForSandboxViolationsV1(options.source, reefBotHostedSourceSandboxPolicyV1)) {
     issues.push(errorIssue(violation.code, violation.message));
   }
 

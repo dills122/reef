@@ -123,7 +123,14 @@ The sidecar policy is represented by `reefBotHostedSandboxPolicyV1` and checked 
 
 ## Dependency Policy
 
-V1 starts with only the SDK import. Future allowlisted packages need:
+V1.5 allows exact approved package imports in bot source, then bundles them into the hosted artifact before SES execution. The current allowlist is:
+
+- `trading-signals@7.4.3`
+- `simple-statistics@7.9.3`
+- `decimal.js@10.6.0`
+- `lodash-es@4.18.1`
+
+The executable allowlist is `reefBotApprovedPackagesV1`; source scanning uses `reefBotHostedSourceSandboxPolicyV1`, while final artifact scanning still uses the stricter hosted runtime policy. New allowlisted packages need:
 
 - explicit package and version allowlist
 - lockfile or vendored artifact hash

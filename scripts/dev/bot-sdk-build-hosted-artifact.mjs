@@ -1,11 +1,15 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const sandboxPolicyUrl = new URL("../../packages/bot-sdk/src/sandbox-policy.ts", import.meta.url);
-const { scanBotSourceForSandboxViolationsV1 } = await import(sandboxPolicyUrl.href);
+const {
+  reefBotApprovedPackagesV1,
+  reefBotHostedSourceSandboxPolicyV1,
+  scanBotSourceForSandboxViolationsV1,
+} = await import(sandboxPolicyUrl.href);
+const approvedPackages = reefBotApprovedPackagesV1;
 
 const args = process.argv.slice(2);
 const entryPathArg = args.find((arg) => !arg.startsWith("--"));
@@ -26,15 +30,15 @@ const manifestPath = manifestPathArg === undefined
   : (isAbsolute(manifestPathArg) ? manifestPathArg : resolve(repoRoot, manifestPathArg));
 
 const source = readFileSync(entryPath, "utf8");
-const sourceViolations = scanBotSourceForSandboxViolationsV1(source);
+const sourceViolations = scanBotSourceForSandboxViolationsV1(source, reefBotHostedSourceSandboxPolicyV1);
 if (sourceViolations.length > 0) {
   console.error(JSON.stringify({ status: "do_not_merge", issues: sourceViolations }, null, 2));
   process.exit(1);
 }
 
+const usedApprovedPackages = usedApprovedPackageRecords(source);
 const hostedSource = toHostedArtifactTypeScript(source);
-const transpiler = new Bun.Transpiler({ loader: "ts", target: "browser" });
-const artifact = artifactHeader(entryPath) + transpiler.transformSync(hostedSource);
+const artifact = artifactHeader(entryPath) + await bundleHostedArtifactJavaScript(hostedSource, entryPath);
 const artifactViolations = scanBotSourceForSandboxViolationsV1(artifact);
 if (artifactViolations.length > 0) {
   console.error(JSON.stringify({ status: "do_not_merge", issues: artifactViolations }, null, 2));
@@ -53,9 +57,46 @@ const manifest = {
   artifactHash: sha256(artifact),
   sdkEndowment: "__reefBotSdk",
   moduleFormat: "commonjs-default-class",
+  approvedPackages: usedApprovedPackages.map((pkg) => ({
+    name: pkg.name,
+    version: pkg.version,
+    license: pkg.license,
+  })),
 };
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(JSON.stringify(manifest, null, 2));
+
+async function bundleHostedArtifactJavaScript(sourceText, entryPathValue) {
+  const buildDir = mkdtempSync(resolve(repoRoot, ".bot-sdk-build-"));
+  const buildEntry = join(buildDir, `${relativeToRepo(entryPathValue).replace(/[^a-zA-Z0-9_.-]/g, "_")}.ts`);
+  writeFileSync(buildEntry, sourceText);
+
+  try {
+    const build = await Bun.build({
+      entrypoints: [buildEntry],
+      target: "browser",
+      format: "cjs",
+      packages: "bundle",
+      write: false,
+      minify: false,
+      sourcemap: "none",
+    });
+
+    if (!build.success) {
+      const logs = build.logs.map((log) => log.message).join("\n");
+      throw new Error(`Hosted artifact bundle failed.${logs.length === 0 ? "" : `\n${logs}`}`);
+    }
+
+    const output = build.outputs[0];
+    if (output === undefined) {
+      throw new Error("Hosted artifact bundle produced no output.");
+    }
+
+    return output.text();
+  } finally {
+    rmSync(buildDir, { recursive: true, force: true });
+  }
+}
 
 function toHostedArtifactTypeScript(sourceText) {
   const withoutSdkImports = sourceText.replace(
@@ -71,6 +112,31 @@ function toHostedArtifactTypeScript(sourceText) {
 
   return `const { ReefBotV1 } = __reefBotSdk;\n${withoutSdkImports.replace(/\bexport\s+default\s+class\b/, "module.exports.default = class")}`;
 }
+
+function usedApprovedPackageRecords(sourceText) {
+  const approvedByName = new Map(approvedPackages.map((pkg) => [pkg.name, pkg]));
+  return [...new Set(moduleSpecifiers(sourceText))]
+    .map((specifier) => approvedByName.get(specifier))
+    .filter((pkg) => pkg !== undefined);
+}
+
+function moduleSpecifiers(sourceText) {
+  const specifiers = [];
+  const importPattern = /\bimport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?["']([^"']+)["']/g;
+  for (const match of sourceText.matchAll(importPattern)) {
+    if (match[1] !== undefined) {
+      specifiers.push(match[1]);
+    }
+  }
+  const requirePattern = /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
+  for (const match of sourceText.matchAll(requirePattern)) {
+    if (match[1] !== undefined) {
+      specifiers.push(match[1]);
+    }
+  }
+  return specifiers;
+}
+
 
 function artifactHeader(entryPathValue) {
   return [

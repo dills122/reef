@@ -35,6 +35,10 @@
     "dev:sim": "bun scripts/dev/sim-run.mjs"
   },
   "devDependencies": {
-    "ses": "^2.2.0"
+    "decimal.js": "10.6.0",
+    "lodash-es": "4.18.1",
+    "ses": "^2.2.0",
+    "simple-statistics": "7.9.3",
+    "trading-signals": "7.4.3"
   }
 }
