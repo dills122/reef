@@ -9,7 +9,14 @@ import com.reef.platform.api.CommandCircuitBreakerRequest
 import com.reef.platform.api.InstrumentPriceCollarRequest
 import com.reef.platform.api.InstrumentPriceCollarState
 import com.reef.platform.api.InstrumentPriceCollarStore
+import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.arena.ArenaBotMetadata
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaControlPlaneService
+import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
+import com.reef.platform.application.arena.RegisterArenaBotCommand
+import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -17,8 +24,13 @@ import kotlin.test.assertContains
 class AdminCliAdapterTest {
     @Test
     fun executesReferenceDataUpsertCommands() {
-        val service = AdminApplicationService(InMemoryRuntimePersistence())
+        val arenaStore = seededArenaStore()
         val accountRiskControls = RecordingAccountRiskControlStore()
+        val service = AdminApplicationService(
+            InMemoryRuntimePersistence(),
+            arenaRegistryStore = arenaStore,
+            accountRiskControlStore = accountRiskControls
+        )
         val commandCircuitBreakers = RecordingCommandCircuitBreakerStore()
         val instrumentPriceCollars = RecordingInstrumentPriceCollarStore()
         val cli = AdminCliAdapter(
@@ -50,6 +62,10 @@ class AdminCliAdapterTest {
             "\"instrumentId\":\"AAPL\""
         )
         assertContains(cli.execute(listOf("price-collar-list")), "\"collarsCount\":1")
+        assertContains(
+            cli.execute(listOf("arena-bot-version-transition", "bot-1", "v1", "quarantine", "scanner", "regression")),
+            "\"botVersionStatus\":\"Quarantined\""
+        )
         assertContains(cli.execute(listOf("calendar-upsert", "us-default", "America/New_York", "T+1")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("calendar-list")), "\"profilesCount\":")
         assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
@@ -78,6 +94,34 @@ class AdminCliAdapterTest {
         assertContains(cli.execute(listOf("price-collar-set", "AAPL", "bad", "151000000000")), "usage: price-collar-set")
         assertContains(cli.execute(listOf("price-collar-set", "AAPL", "151000000000", "150000000000")), "usage: price-collar-set")
     }
+}
+
+private fun seededArenaStore(): InMemoryArenaBotRegistryStore {
+    val store = InMemoryArenaBotRegistryStore()
+    val service = ArenaControlPlaneService(store) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
+    service.registerBot(
+        RegisterArenaBotCommand(
+            botId = "bot-1",
+            fileName = "bot-1.ts",
+            metadata = ArenaBotMetadata(
+                name = "Bot 1",
+                publisher = "Publisher",
+                email = "publisher@example.com"
+            )
+        )
+    )
+    service.registerVersion(
+        RegisterArenaBotVersionCommand(
+            botId = "bot-1",
+            versionId = "v1",
+            sourceHash = "sha256:source",
+            artifactHash = "sha256:artifact",
+            sdkVersion = "1.5.0",
+            apiVersion = "v1",
+            dependencyManifestHash = "sha256:deps"
+        )
+    )
+    return store
 }
 
 private class RecordingAccountRiskControlStore : AccountRiskControlStore {

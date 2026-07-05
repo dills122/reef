@@ -168,6 +168,8 @@ bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-m
 
 Bot code still does not receive network access; only the runner/orchestrator owns the venue transport. See [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md) for setup and troubleshooting.
 
+The venue adapter sends a bot-scoped API client identity as `X-Client-Id: bot:<botId>` by default. Hosted fixtures can set `clientId` when the run should use a configured platform client identity instead.
+
 Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md) for the current SES-compatible runner contract.
 For the planned application and matching-engine integration path, see [`BOT_SDK_ENGINE_INTEGRATION_PLAN.md`](./BOT_SDK_ENGINE_INTEGRATION_PLAN.md).
 

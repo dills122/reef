@@ -353,6 +353,61 @@ object PostgresSchemaRequirements {
             ).flatten()
         )
     }
+
+    fun arenaRegistry(
+        bots: String,
+        botVersions: String,
+        qualificationReports: String,
+        qualificationReportIssues: String,
+        operatorDecisions: String,
+        runRecords: String,
+        runBotVersions: String,
+        runtimeConfigDescriptors: String
+    ): PostgresSchemaRequirement {
+        val botsTable = PostgresSchemaObject.parse(bots)
+        val versionsTable = PostgresSchemaObject.parse(botVersions)
+        val reportsTable = PostgresSchemaObject.parse(qualificationReports)
+        val reportIssuesTable = PostgresSchemaObject.parse(qualificationReportIssues)
+        val decisionsTable = PostgresSchemaObject.parse(operatorDecisions)
+        val runsTable = PostgresSchemaObject.parse(runRecords)
+        val runBotsTable = PostgresSchemaObject.parse(runBotVersions)
+        val configTable = PostgresSchemaObject.parse(runtimeConfigDescriptors)
+        return PostgresSchemaRequirement(
+            tables = listOf(
+                botsTable,
+                versionsTable,
+                reportsTable,
+                reportIssuesTable,
+                decisionsTable,
+                runsTable,
+                runBotsTable,
+                configTable
+            ),
+            columns = listOf(
+                listOf(
+                    PostgresSchemaColumn(botsTable, "bot_id", "text"),
+                    PostgresSchemaColumn(botsTable, "file_name", "text"),
+                    PostgresSchemaColumn(botsTable, "email", "text"),
+                    PostgresSchemaColumn(versionsTable, "bot_id", "text"),
+                    PostgresSchemaColumn(versionsTable, "version_id", "text"),
+                    PostgresSchemaColumn(versionsTable, "status", "text"),
+                    PostgresSchemaColumn(reportsTable, "report_id", "text"),
+                    PostgresSchemaColumn(reportsTable, "policy_version", "text"),
+                    PostgresSchemaColumn(reportIssuesTable, "issue", "text"),
+                    PostgresSchemaColumn(decisionsTable, "actor_id", "text"),
+                    PostgresSchemaColumn(decisionsTable, "to_status", "text"),
+                    PostgresSchemaColumn(runsTable, "run_id", "text"),
+                    PostgresSchemaColumn(runsTable, "seed", "bigint"),
+                    PostgresSchemaColumn(runsTable, "policy_version", "text"),
+                    PostgresSchemaColumn(runBotsTable, "bot_order", "integer"),
+                    PostgresSchemaColumn(configTable, "config_key", "text"),
+                    PostgresSchemaColumn(configTable, "provider", "text"),
+                    PostgresSchemaColumn(configTable, "secret_path", "text"),
+                    PostgresSchemaColumn(configTable, "required", "boolean")
+                )
+            ).flatten()
+        )
+    }
 }
 
 object PostgresSchemaValidator {

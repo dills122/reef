@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.PostgresBoundarySqlNames
+import com.reef.platform.application.arena.PostgresArenaSqlNames
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -139,6 +140,47 @@ class PostgresSchemaRequirementsTest {
                 .filter { it.table.qualifiedName == "runtime.market_data_snapshots" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
+        )
+    }
+
+    @Test
+    fun arenaRegistryRequirementsCoverControlPlaneObjects() {
+        val names = PostgresArenaSqlNames()
+        val requirements = PostgresSchemaRequirements.arenaRegistry(
+            bots = names.bots,
+            botVersions = names.botVersions,
+            qualificationReports = names.qualificationReports,
+            qualificationReportIssues = names.qualificationReportIssues,
+            operatorDecisions = names.operatorDecisions,
+            runRecords = names.runRecords,
+            runBotVersions = names.runBotVersions,
+            runtimeConfigDescriptors = names.runtimeConfigDescriptors
+        )
+
+        assertEquals(
+            setOf(
+                "arena.bots",
+                "arena.bot_versions",
+                "arena.qualification_reports",
+                "arena.qualification_report_issues",
+                "arena.operator_decisions",
+                "arena.run_records",
+                "arena.run_bot_versions",
+                "arena.runtime_config_descriptors"
+            ),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(
+            requirements.columns
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .containsAll(
+                    setOf(
+                        "arena.bot_versions.status:text",
+                        "arena.run_records.seed:bigint",
+                        "arena.runtime_config_descriptors.secret_path:text",
+                        "arena.runtime_config_descriptors.required:boolean"
+                    )
+                )
         )
     }
 

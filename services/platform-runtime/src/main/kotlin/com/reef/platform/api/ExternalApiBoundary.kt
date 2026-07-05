@@ -1,5 +1,7 @@
 package com.reef.platform.api
 
+import com.reef.platform.application.arena.ArenaBotVersionRiskCheck
+import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.infrastructure.persistence.PostgresBootstrapMode
 import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
@@ -45,6 +47,7 @@ data class AccountRiskCheckRequest(
     val participantId: String,
     val accountId: String,
     val botId: String,
+    val botVersion: String = "",
     val runId: String,
     val venueSessionId: String,
     val instrumentId: String,
@@ -1691,7 +1694,7 @@ fun defaultBoundaryHooks(): BoundaryHooks {
     }
 
     val accountRiskMode = (System.getenv("EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE") ?: "allow-all").lowercase()
-    val accountRiskCheck = when (accountRiskMode) {
+    val baseAccountRiskCheck = when (accountRiskMode) {
         "static", "cached-static" -> StaticAccountRiskCheck(
             rejectedAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS")),
             backpressuredAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS")),
@@ -1708,6 +1711,20 @@ fun defaultBoundaryHooks(): BoundaryHooks {
             )
         }
         else -> AllowAllAccountRiskCheck()
+    }
+    val accountRiskCheck = if (envBool(System.getenv("EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED"), false)) {
+        val jdbcUrl = System.getenv("ARENA_POSTGRES_JDBC_URL")
+            ?: error("ARENA_POSTGRES_JDBC_URL is required when EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=true")
+        val dbUser = System.getenv("ARENA_POSTGRES_USER") ?: "reef"
+        val dbPassword = System.getenv("ARENA_POSTGRES_PASSWORD") ?: "reef"
+        ArenaBotVersionRiskCheck(
+            store = PostgresArenaBotRegistryStore(
+                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-bot-version-risk")
+            ),
+            delegate = baseAccountRiskCheck
+        )
+    } else {
+        baseAccountRiskCheck
     }
 
     val circuitBreakerMode = (System.getenv("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()

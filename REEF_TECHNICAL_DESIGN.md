@@ -25,7 +25,6 @@ Reef will be built as a multi-app, multi-language platform with a modular-first 
 
 ### Chosen direction
 
-- **Angular** for operational and simulation UIs
 - **Astro** for the marketing/documentation site
 - **Kotlin** for the platform API/runtime and workflow orchestration
 - **Go** for the matching/execution engine
@@ -36,27 +35,18 @@ Reef will be built as a multi-app, multi-language platform with a modular-first 
 
 ## 3. System Shape
 
-At a high level, Reef consists of six major parts.
-
-### 3.1 Platform UI layer
-Angular applications for operational users and simulation control.
-
-Planned surfaces:
-- simulator/control room UI
-- operations and post-trade UI
-- admin/reference data UI
-- audit and event explorer UI
+At a high level, Reef consists of five major parts.
 
 ### 3.2 Platform runtime/API
 A Kotlin service that acts as the central platform runtime.
 
 Responsibilities:
 - expose HTTP and WebSocket APIs
-- handle commands from UIs and simulation services
+- handle commands from clients and simulation services
 - orchestrate domain workflows
 - persist canonical state
 - publish domain events
-- build read models for UI consumption
+- build read models for client consumption
 - coordinate with the engine
 
 ### 3.2.1 External API boundary (public/client-facing)
@@ -121,7 +111,6 @@ Start with:
 - one Kotlin runtime/API service
 - one Go engine service
 - one Postgres instance
-- one Angular UI
 - optional in-process event bus inside Kotlin runtime
 
 This keeps development manageable while still preserving realistic boundaries.
@@ -134,7 +123,6 @@ Add:
 
 ### Phase 3: expanded platform
 Add:
-- multiple Angular UIs or shells
 - more advanced simulation modes
 - richer analytics and replay features
 - possible extraction of selected workflows into separate workers/services
@@ -714,30 +702,6 @@ Scenarios should be:
 - downstream failures
 - settlement rule overrides
 
-## 16. UI Design Direction (Angular)
-
-Angular should power operational platform surfaces.
-
-### Candidate apps or feature areas
-- simulator/control room
-- venue monitor
-- order blotter
-- trade processing console
-- settlement console
-- exception desk
-- audit explorer
-- admin/reference data management
-
-### UI data strategy
-- read models for grids and dashboards
-- websocket push for live updates where useful
-- route-level feature isolation
-- strong typing against shared API contracts
-
-### State management direction
-- use Angular signals for local UI state where possible
-- use broader store patterns only where state is genuinely cross-cutting or streaming-heavy
-
 ## 17. Messaging Strategy
 
 ### Early phase
@@ -779,7 +743,6 @@ A pragmatic monorepo is recommended.
 ```text
 reef/
   apps/
-    platform-ui/          # Angular
     docs-site/            # Astro
 
   services/
@@ -792,7 +755,6 @@ reef/
 
   packages/
     scenario-definitions/ # scenario definitions and fixtures
-    ui-models/            # shared frontend-facing model definitions
 
   scripts/
     dev/
@@ -810,7 +772,6 @@ Local development should remain simple.
 - start Postgres
 - start the Kotlin platform runtime
 - start the Go engine
-- run Angular UI locally
 - seed data and run a scenario
 - inspect orders, trades, settlements, and events live
 
@@ -858,7 +819,7 @@ Once the thin slice is working, likely next areas are:
 ## 23. Risks and Tradeoffs
 
 ### 23.1 Multi-language complexity
-Angular + Kotlin + Go adds tooling complexity. This is acceptable if contract boundaries are explicit and the repo stays organized.
+Kotlin + Go adds tooling complexity. This is acceptable if contract boundaries are explicit and the repo stays organized.
 
 ### 23.2 Framework drift
 If the Kotlin layer becomes overly framework-dependent, future adaptability drops. Keep domain and application code clean.
@@ -875,9 +836,8 @@ The project can become huge quickly. Favor a thin but coherent vertical slice fi
 2. Define shared contracts for the initial order and execution flow.
 3. Create the Kotlin runtime skeleton with basic command handling and persistence.
 4. Create the Go engine skeleton with a minimal hidden order book.
-5. Stand up the first Angular shell with basic event and blotter views.
-6. Build the first deterministic scenario that produces a full lifecycle from order submission to settlement outcome.
+5. Build the first deterministic scenario that produces a full lifecycle from order submission to settlement outcome.
 
 ## 25. One-Sentence Architecture Statement
 
-**Reef should be built as a simulation-first institutional trading platform with Angular operational UIs, a Kotlin platform runtime, a Go matching engine, relational current-state persistence plus an append-only event log, and a separate control plane for deterministic scenario execution and replay.**
+**Reef should be built as a simulation-first institutional trading platform with a Kotlin platform runtime, a Go matching engine, relational current-state persistence plus an append-only event log, and a separate control plane for deterministic scenario execution and replay.**

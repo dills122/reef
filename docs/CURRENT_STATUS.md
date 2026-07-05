@@ -54,9 +54,8 @@ Work should follow this order unless a new decision supersedes it:
 3. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
 4. Prove compact persistence projection end to end: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
 5. Make open-order quantity projection and market-data refresh incremental, then add venue-session-specific depth on top of the current rebuildable lifecycle-state snapshot.
-6. Build the simulator control-room MVP on top of existing scripts and artifacts.
-7. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
-8. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
+6. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+7. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 
 ## Documentation Map
 
@@ -67,7 +66,7 @@ Use these docs for active work:
 - Current and target architecture diagrams: [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
 - Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
-- Roadmap: [`ROADMAP.md`](./ROADMAP.md)
+- Roadmap: [`ROADMAP.md`](./archive/ROADMAP.md)
 - Decisions: [`DECISIONS.md`](./DECISIONS.md)
 - Performance evidence and next implications: [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 - Persistence materializer evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md)

@@ -18,6 +18,8 @@ This is a planning document, not an accepted architecture decision. If the direc
 
 Status: pending second review after the current active work settles.
 
+Current checkpoint: the Bot SDK runtime bridge is merged. Bot-originated order commands can use the normal venue command boundary with bot client identity, run metadata, stream-ack intake, command-log capture, canonical outcome persistence, projection, and replay-idempotency coverage. The next non-throughput slice should move from command-path proof to arena control-plane source facts and operator approval controls.
+
 This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
 
 Second-review scope:
@@ -52,6 +54,49 @@ The intended output of this review should be one or more focused specs, likely:
 - simulation and game execution model
 - order, matching, and settlement lifecycle for arena-originated activity
 - leaderboard, scoring, replay, and audit rules
+
+## Next Control-Plane Slice
+
+Start with durable arena source facts before UI or leaderboard work:
+
+- bot identity and public metadata
+- bot version, artifact hash, source hash, SDK/API versions, and dependency manifest reference
+- qualification report status and issue codes
+- approval lifecycle state: `draft`, `submitted`, `checks_passed`, `approved`, `active`, `suspended`, `quarantined`, `banned`, `archived`
+- operator decisions with actor, reason, correlation ID, and timestamp
+- run records that reference bot versions and policy versions
+
+This storage boundary should remain separate from trading hot-path state. Local development may begin with an in-memory or same-database schema, but the domain model should treat arena registry and approval facts as arena-owned data.
+
+Implementation checkpoint:
+
+- `ArenaControlPlaneService` defines the first arena-owned registry boundary in platform runtime.
+- `ArenaBotRegistryStore` and `InMemoryArenaBotRegistryStore` capture source facts for local tests without introducing a trading hot-path dependency.
+- `PostgresArenaBotRegistryStore` adds the first durable arena schema for registry, qualification, operator decision, and run-record facts.
+- Hosted arena admin and bot-version risk checks require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`), not the runtime or boundary datasource.
+- Bot versions now have explicit approval, active, suspended, quarantined, banned, and archived states.
+- Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
+- Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
+- Arena runtime config descriptors record OpenBao secret paths and required keys without storing secret values.
+- Arena bot version risk checks can reject exact bot/version commands before venue acceptance when the version is not approved or active.
+
+Remaining work before this becomes a production control plane:
+
+- add full database migration coverage for the arena schema in the repository migration flow
+- broaden arena operator read APIs beyond the current registration and lifecycle mutation endpoints
+- define the OpenBao fetcher that resolves descriptors during runner preflight and exposes only in-memory values to bot code
+- publish read APIs for bot status, qualification reports, run records, and operator audit history
+
+Local arena risk smoke:
+
+```bash
+ARENA_POSTGRES_JDBC_URL=jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena \
+PLATFORM_ARENA_ADMIN_ENABLED=1 \
+EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=1 \
+make dev-smoke-arena-bot-risk
+```
+
+The smoke registers a bot and bot version, quarantines that version through the hosted internal admin route, then submits a bot-versioned order and expects a pre-acceptance `BOT_DISABLED` rejection.
 
 ## Agreed Direction
 
@@ -136,7 +181,6 @@ Candidate ownership:
 - `packages/scenario-definitions/`: arena mode and scenario definitions
 - `services/simulator/`: arena run orchestration, seeded scheduling, replay checks
 - `services/platform-runtime/`: arena metadata, boundary enforcement hooks, leaderboard/read-model APIs where appropriate
-- `apps/platform-ui/`: bot registry, tournament setup, active run monitor, replay, and leaderboard views
 - `docs/`: governance, safety model, game mode specs, and operator guidance
 
 ## Bot Runtime Contract
@@ -480,8 +524,7 @@ Run plane responsibilities:
 Suggested low-cost local/MVP topology:
 
 ```text
-Angular UI
-  -> Kotlin platform runtime
+Kotlin platform runtime
   -> trading Postgres database/schema
   -> arena Postgres database/schema
   -> optional Redis for local active-run coordination
@@ -496,8 +539,7 @@ This keeps the MVP cheap and inspectable. It can run under the existing local-fi
 Suggested low-cost hosted topology:
 
 ```text
-static UI hosting
-  -> one small app host for platform runtime + control APIs
+one small app host for platform runtime + control APIs
   -> trading database
   -> arena database
   -> small Redis instance for active-run coordination and live caches
@@ -572,7 +614,7 @@ Performance posture:
 - make scale tests part of arena acceptance, including single-run throughput, multi-run throughput, worker saturation, replay reconstruction, and leaderboard aggregation lag
 
 First local stress baseline:
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ## Rollout Plan
 

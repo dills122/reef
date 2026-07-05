@@ -28,12 +28,11 @@ Performance work must never weaken correctness, determinism, auditability, or re
 
 ## Primary Deliverables
 
-- Angular platform UI for operations, simulation control, admin, audit, monitoring, and workflow views
 - Astro documentation and marketing site
 - Kotlin platform runtime for APIs, workflow orchestration, durable command intake, persistence, read models, projections, and admin modules
 - Go matching engine for order book, hidden-book behavior, matching, partial fills, cancel/modify behavior, and execution event generation
 - Simulator for deterministic scenarios, seeded participants, replay, synthetic actors, traffic generation, stress testing, and performance evidence
-- Versionable contracts and shared models across runtime, engine, simulator, and UI
+- Versionable contracts and shared models across runtime, engine, and simulator
 - Local-first operational tooling for setup, reset, smoke, stress, replay, diagnostics, and performance comparison
 
 ## Core Priorities
@@ -248,10 +247,6 @@ The UI and API should be honest about projection freshness.
 
 ## Active Boundaries
 
-- `apps/platform-ui/` owns user-facing operational workflows and must not bypass platform APIs.
-  - It should consume platform APIs and projected read models.
-  - It must not directly depend on runtime database internals or raw hot tables.
-  - Control-room views should prefer projected metrics and explicit lag/watermark data.
 - `apps/docs-site/` owns public/static documentation and should not contain runtime logic.
 - `services/platform-runtime/` owns API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, and admin behavior.
   - It owns command acceptance semantics.
@@ -269,8 +264,6 @@ The UI and API should be honest about projection freshness.
 - `contracts/proto/` owns versionable inter-service contract definitions.
   - Runtime-to-engine and runtime-to-simulator semantics must remain stable unless explicitly migrated.
   - Contract changes should preserve lifecycle meaning and replay compatibility.
-- `packages/ui-models/` owns shared UI-facing model definitions.
-  - UI models should reflect projection freshness where relevant.
 - `packages/scenario-definitions/` owns reusable scenario inputs.
   - Scenario definitions must preserve deterministic seeds, clocks, actors, instruments, and correlation inputs.
 - `scripts/` owns local development and operational automation.

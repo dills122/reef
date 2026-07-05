@@ -26,3 +26,5 @@ infra/do-benchmark/*.tfvars
 # checkouts and are recreated with `bun run claude:links`.
 .claude/skills/
 .aider*
+.agents
+skills-lock.json

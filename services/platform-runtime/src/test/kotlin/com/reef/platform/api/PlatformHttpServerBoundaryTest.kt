@@ -1,6 +1,8 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -1150,6 +1152,88 @@ class PlatformHttpServerBoundaryTest {
             assertContains(auditEvents.single().payloadJson, "\"decision\":\"DISABLED_BOT\"")
             assertContains(auditEvents.single().payloadJson, "\"maxQuantityUnits\":\"100\"")
             assertContains(auditEvents.single().payloadJson, "\"maxNotional\":\"15025000000000\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminArenaBotVersionEndpointTransitionsVersionAndAuditsChange() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        val persistence = InMemoryRuntimePersistence()
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val arenaAdminService = AdminApplicationService(
+            runtimePersistence = persistence,
+            arenaRegistryStore = arenaStore,
+            accountRiskControlStore = accountRiskStore
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            runtimePersistence = persistence,
+            arenaAdminService = arenaAdminService
+        )
+        try {
+            val registeredBot = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bots",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "fileName":"bot-1.ts",
+                      "name":"Bot 1",
+                      "publisher":"Publisher",
+                      "email":"publisher@example.com",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val registeredVersion = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bot-versions",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "sourceHash":"sha256:source",
+                      "artifactHash":"sha256:artifact",
+                      "sdkVersion":"1.5.0",
+                      "apiVersion":"v1",
+                      "dependencyManifestHash":"sha256:deps",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bot-versions/transition",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "status":"quarantined",
+                      "reason":"scanner regression",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val auditEvents = persistence.eventsForTrace("admin:admin-cli")
+
+            assertEquals(200, registeredBot.status)
+            assertContains(registeredBot.body, "\"botId\":\"bot-1\"")
+            assertEquals(200, registeredVersion.status)
+            assertContains(registeredVersion.body, "\"botVersionStatus\":\"Draft\"")
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"botVersionStatus\":\"Quarantined\"")
+            assertEquals(AccountRiskDecision.DISABLED_BOT, accountRiskStore.listControls().single().decision)
+            assertTrue(auditEvents.any { it.eventType == "AdminArenaBotVersionTransitioned" })
         } finally {
             server.stop(0)
         }
@@ -2387,6 +2471,7 @@ class PlatformHttpServerBoundaryTest {
         commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
         instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+        arenaAdminService: AdminApplicationService? = null,
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
@@ -2433,6 +2518,7 @@ class PlatformHttpServerBoundaryTest {
             commandCircuitBreakerStore = commandCircuitBreakerStore,
             instrumentPriceCollarCheck = instrumentPriceCollarCheck,
             instrumentPriceCollarStore = instrumentPriceCollarStore,
+            arenaAdminService = arenaAdminService,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
@@ -2713,6 +2799,7 @@ class PlatformHttpServerBoundaryTest {
             persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
         }
     }
+
 }
 
 private class RecordingCommandCaptureStore : CommandCaptureStore {

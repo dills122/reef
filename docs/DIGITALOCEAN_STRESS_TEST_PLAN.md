@@ -50,7 +50,6 @@ nats
 postgres
 boundary-postgres
 projection-postgres
-platform-ui, optional
 ```
 
 Suggested first sizes:

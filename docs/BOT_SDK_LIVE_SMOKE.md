@@ -12,6 +12,8 @@ make dev-up
 
 The smoke fixture must include `runId`, `venueSessionId`, `actorId`, `participantId`, `accountId`, `botId`, `botVersion`, `correlationId`, and at least one market snapshot instrument. The wrapper prints a preflight report before submitting commands.
 
+Venue command requests use `X-Client-Id: bot:<botId>` by default so they pass the same external API boundary checks as user-submitted commands. Add `clientId` to the fixture when a hosted run needs a configured platform client identity.
+
 ## Run
 
 For the default fixture and example bot:

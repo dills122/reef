@@ -8,7 +8,7 @@ import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 const defaultMigrationsRoot = path.join(repoRoot, "scripts/dev/db/migrations");
-const domainOrder = ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"];
+const domainOrder = ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "arena", "analytics"];
 
 export async function discoverMigrations(migrationsRoot = defaultMigrationsRoot) {
   const migrations = [];
@@ -72,6 +72,12 @@ COMMIT;
 `.trim();
 }
 
+export function migrationsForTarget(target, migrations) {
+  if (!target.domains) return migrations;
+  const domains = new Set(target.domains);
+  return migrations.filter((migration) => domains.has(migration.domain));
+}
+
 async function main() {
   loadDotEnv();
   const dryRun = process.argv.includes("--dry-run");
@@ -92,6 +98,7 @@ async function main() {
 }
 
 async function applyMigrationsToTarget(target, migrations) {
+  const targetMigrations = migrationsForTarget(target, migrations);
   if (target.label !== "primary") {
     console.log(`migrating ${target.label} database (${target.service})`);
   }
@@ -108,7 +115,7 @@ CREATE TABLE IF NOT EXISTS public.reef_schema_migrations (
     { target },
   );
 
-  for (const migration of migrations) {
+  for (const migration of targetMigrations) {
     const displayId = target.label === "primary" ? migration.id : `${target.label}:${migration.id}`;
     const existingChecksum = (
       await runPsql(
@@ -139,6 +146,7 @@ function migrationTargets() {
       service: env("REEF_POSTGRES_SERVICE", "postgres"),
       user: env("REEF_POSTGRES_USER", "reef"),
       dbName: env("REEF_POSTGRES_DB", "reef"),
+      domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"],
     },
   ];
   if (env("REEF_PROJECTION_POSTGRES_MIGRATIONS", "1") !== "0") {
@@ -147,6 +155,7 @@ function migrationTargets() {
       service: env("REEF_PROJECTION_POSTGRES_SERVICE", "projection-postgres"),
       user: env("REEF_PROJECTION_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
       dbName: env("REEF_PROJECTION_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+      domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"],
     });
   }
   if (env("REEF_BOUNDARY_POSTGRES_MIGRATIONS", "1") !== "0") {
@@ -155,6 +164,16 @@ function migrationTargets() {
       service: env("REEF_BOUNDARY_POSTGRES_SERVICE", "boundary-postgres"),
       user: env("REEF_BOUNDARY_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
       dbName: env("REEF_BOUNDARY_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+      domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"],
+    });
+  }
+  if (env("REEF_ARENA_POSTGRES_MIGRATIONS", "1") !== "0") {
+    targets.push({
+      label: "arena",
+      service: env("REEF_ARENA_POSTGRES_SERVICE", "arena-postgres"),
+      user: env("REEF_ARENA_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
+      dbName: env("REEF_ARENA_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+      domains: ["arena"],
     });
   }
   return targets;
