@@ -342,13 +342,30 @@ class ArenaControlPlaneService(
     }
 
     fun recordRunBotResult(result: ArenaRunBotResult): ArenaRunBotResult {
+        require(result.runId.isNotBlank()) { "runId is required" }
+        require(result.botId.isNotBlank()) { "botId is required" }
+        require(result.versionId.isNotBlank()) { "versionId is required" }
+        require(result.scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
+        require(result.maxDrawdown >= 0) { "maxDrawdown must be nonnegative" }
+        require(result.actionsProposed >= 0) { "actionsProposed must be nonnegative" }
+        require(result.orderActionsProposed >= 0) { "orderActionsProposed must be nonnegative" }
+        require(result.dataCalls >= 0) { "dataCalls must be nonnegative" }
+        require(result.signalsGenerated >= 0) { "signalsGenerated must be nonnegative" }
+        require(result.orderActionsProposed <= result.actionsProposed) {
+            "orderActionsProposed must be less than or equal to actionsProposed"
+        }
         val run = store.runRecord(result.runId) ?: error("unknown arena run: ${result.runId}")
         require(run.botVersions.any { it.botId == result.botId && it.versionId == result.versionId }) {
             "bot version is not registered for arena run: ${result.botId}/${result.versionId}"
         }
-        require(result.scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
         store.saveRunBotResult(result)
         return result
+    }
+
+    fun runBotResults(runId: String): List<ArenaRunBotResult> {
+        require(runId.isNotBlank()) { "runId is required" }
+        require(store.runRecord(runId) != null) { "unknown arena run: $runId" }
+        return store.runBotResults(runId)
     }
 
     fun leaderboard(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry> {

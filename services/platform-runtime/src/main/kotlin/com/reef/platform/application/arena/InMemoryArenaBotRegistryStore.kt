@@ -52,7 +52,11 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
 
     override fun saveRunBotResult(result: ArenaRunBotResult) {
         val results = runBotResults.getOrPut(result.runId) { mutableListOf() }
-        results.removeIf { it.botId == result.botId && it.versionId == result.versionId }
+        results.removeIf {
+            it.botId == result.botId &&
+                it.versionId == result.versionId &&
+                it.scoringPolicyVersion == result.scoringPolicyVersion
+        }
         results.add(result)
     }
 
