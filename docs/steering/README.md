@@ -15,7 +15,6 @@ These documents define how Reef should be built as the repository grows into the
 - [Repository](./repository.md): top-level folder conventions, naming, and documentation expectations
 - [Go](./go.md): matching engine and systems-side coding guidance
 - [Kotlin](./kotlin.md): platform runtime and workflow orchestration guidance
-- [Angular](./angular.md): operational UI guidance
 - [Astro](./astro.md): docs and marketing site guidance
 - [Post-Match Standards](../POST_MATCH_STANDARDS.md): normative post-match roles, calendar/time config, observability, exception taxonomy, and ledger standards
 - [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes

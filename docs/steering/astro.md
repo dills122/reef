@@ -13,7 +13,7 @@ The Astro site should explain:
 - how simulations and workflows behave
 - how to run and explore the platform
 
-It is not the operational UI and should not absorb application behavior that belongs in Angular.
+It is not an operational surface and should not absorb application behavior that belongs in a runtime service.
 
 ## Content Priorities
 

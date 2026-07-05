@@ -4,12 +4,11 @@ This repository builds Reef, a simulation-first institutional trading venue and 
 
 Primary deliverables:
 
-- Angular platform UI for operations, simulation control, admin, audit, and workflow views
 - Astro documentation/marketing site
 - Kotlin platform runtime for APIs, workflow orchestration, persistence, read models, and admin modules
 - Go matching engine for order book and matching behavior
 - Simulator for deterministic scenarios, replay, synthetic participants, and traffic generation
-- Versionable contracts and shared models across runtime, engine, simulator, and UI
+- Versionable contracts and shared models across runtime, engine, and simulator
 
 Core priorities:
 
@@ -21,7 +20,6 @@ Core priorities:
 
 ## Active Boundaries
 
-- `apps/platform-ui/` owns user-facing operational workflows and must not bypass platform APIs.
 - `apps/docs-site/` owns public/static documentation and should not contain runtime logic.
 - `services/platform-runtime/` owns API boundaries, workflow orchestration, persistence, read models, and admin behavior.
 - `services/matching-engine/` owns matching and execution logic, not platform workflow orchestration.

@@ -17,7 +17,7 @@ Current deployment assumptions:
 - Postgres as canonical state for durable runtime modes
 - JetStream and Redpanda/Kafka-compatible providers available for durable command-log experiments
 - simulator/load tools driving the same public command paths as manual users
-- Angular UI and post-trade modules added only after command/event causation is stable enough to inspect
+- post-trade modules added only after command/event causation is stable enough to inspect
 
 ## Completed Baseline
 

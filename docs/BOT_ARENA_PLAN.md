@@ -136,7 +136,6 @@ Candidate ownership:
 - `packages/scenario-definitions/`: arena mode and scenario definitions
 - `services/simulator/`: arena run orchestration, seeded scheduling, replay checks
 - `services/platform-runtime/`: arena metadata, boundary enforcement hooks, leaderboard/read-model APIs where appropriate
-- `apps/platform-ui/`: bot registry, tournament setup, active run monitor, replay, and leaderboard views
 - `docs/`: governance, safety model, game mode specs, and operator guidance
 
 ## Bot Runtime Contract
@@ -480,8 +479,7 @@ Run plane responsibilities:
 Suggested low-cost local/MVP topology:
 
 ```text
-Angular UI
-  -> Kotlin platform runtime
+Kotlin platform runtime
   -> trading Postgres database/schema
   -> arena Postgres database/schema
   -> optional Redis for local active-run coordination
@@ -496,8 +494,7 @@ This keeps the MVP cheap and inspectable. It can run under the existing local-fi
 Suggested low-cost hosted topology:
 
 ```text
-static UI hosting
-  -> one small app host for platform runtime + control APIs
+one small app host for platform runtime + control APIs
   -> trading database
   -> arena database
   -> small Redis instance for active-run coordination and live caches

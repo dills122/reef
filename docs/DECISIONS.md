@@ -200,7 +200,6 @@ Summary:
 - UI implementation should prioritize queue productivity and lifecycle trace visibility over visual mimicry.
 
 Primary references:
-- [`docs/steering/angular.md`](./steering/angular.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-014: Data Retention and Reset Policy for Simulator
@@ -436,7 +435,6 @@ Primary references:
 - [`docs/PROJECT_PITCH.md`](./archive/PROJECT_PITCH.md)
 - [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 - [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
-- [`apps/platform-ui/README.md`](../apps/platform-ui/README.md)
 
 ### D-030: Runtime Event Schema Baseline And Outbox Timing
 

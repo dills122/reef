@@ -22,7 +22,6 @@ The current system focuses on:
 
 ```text
 apps/
-  platform-ui/                 Angular operations and simulation-control surface
   docs-site/                   Astro documentation surface
 services/
   platform-runtime/            Kotlin API/runtime, command intake, persistence, projections, admin modules
@@ -127,7 +126,6 @@ Surface-specific steering:
 
 - [`docs/steering/go.md`](./docs/steering/go.md)
 - [`docs/steering/kotlin.md`](./docs/steering/kotlin.md)
-- [`docs/steering/angular.md`](./docs/steering/angular.md)
 - [`docs/steering/astro.md`](./docs/steering/astro.md)
 - [`docs/steering/data-platform.md`](./docs/steering/data-platform.md)
 - [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)

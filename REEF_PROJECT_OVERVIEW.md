@@ -208,7 +208,6 @@ A trade should be traceable from initial order intent to final outcome through s
 ## Technology Direction
 
 ### Frontend
-- **Angular** for platform UIs such as simulator, operations, admin, and audit consoles
 - **Astro** for a static marketing/documentation site
 
 ### Backend and orchestration
@@ -246,7 +245,7 @@ It should become both a learning platform and a serious portfolio project.
 The initial repository should eventually contain:
 
 - a project overview and technical design
-- a repository structure that supports Angular, Astro, Kotlin, and Go together
+- a repository structure that supports Astro, Kotlin, and Go together
 - shared protocol definitions
 - a basic order-to-trade-to-settlement thin slice
 - a scenario runner capable of deterministic seeded runs

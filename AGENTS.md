@@ -36,7 +36,6 @@ Language and surface-specific steering:
 
 - `docs/steering/go.md`
 - `docs/steering/kotlin.md`
-- `docs/steering/angular.md`
 - `docs/steering/astro.md`
 - `docs/steering/data-platform.md`
 - `docs/steering/inter-service-communication.md`
@@ -46,7 +45,6 @@ Language and surface-specific steering:
 
 Primary areas:
 
-- `apps/platform-ui/`: Angular operations, simulation control, admin, audit, and workflow UI
 - `apps/docs-site/`: Astro documentation/marketing surface
 - `services/platform-runtime/`: Kotlin API/runtime, workflow orchestration, persistence, read models, and admin modules
 - `services/matching-engine/`: Go matching and execution engine behavior

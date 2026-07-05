@@ -17,7 +17,6 @@ For product and architecture priorities that should guide every change, read [`r
 
 ## Ownership Boundaries
 
-- `apps/platform-ui/` owns operational workflows, simulation control, admin, audit, monitoring, and workflow UI. It should consume platform APIs and projected read models, not runtime database internals.
 - `apps/docs-site/` owns public/static documentation and should not contain runtime logic.
 - `services/platform-runtime/` owns API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, and admin behavior.
 - `services/matching-engine/` owns deterministic matching and execution behavior, not platform workflow orchestration or persistence.
