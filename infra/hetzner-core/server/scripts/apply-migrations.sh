@@ -6,8 +6,13 @@ MIGRATIONS_ROOT="${REEF_MIGRATIONS_ROOT:-$BASE/postgres/migrations}"
 POSTGRES_SERVICE="${REEF_POSTGRES_SERVICE:-postgres}"
 POSTGRES_USER="${REEF_POSTGRES_USER:-postgres}"
 POSTGRES_DB="${REEF_POSTGRES_DB:-reef}"
+APP_USER="${REEF_APP_USER:-reef_app}"
 
-domains=(runtime auth admin boundary command_log orchestration analytics)
+# Admin and analytics live in their own dedicated Postgres containers
+# (postgres-admin, postgres-analytics), not schemas in this DB - see D-046.
+# Override REEF_MIGRATION_DOMAINS/REEF_POSTGRES_SERVICE/REEF_POSTGRES_DB/
+# REEF_APP_USER to apply those domains against their own container instead.
+domains=(${REEF_MIGRATION_DOMAINS:-runtime auth boundary command_log orchestration arena})
 
 if [[ ! -d "$MIGRATIONS_ROOT" ]]; then
   echo "missing migrations directory: $MIGRATIONS_ROOT" >&2
@@ -27,15 +32,14 @@ run_sql() {
   run_psql -q
 }
 
-run_sql <<'SQL'
-CREATE SCHEMA IF NOT EXISTS runtime;
-CREATE SCHEMA IF NOT EXISTS auth;
-CREATE SCHEMA IF NOT EXISTS admin;
-CREATE SCHEMA IF NOT EXISTS boundary;
-CREATE SCHEMA IF NOT EXISTS command_log;
-CREATE SCHEMA IF NOT EXISTS orchestration;
-CREATE SCHEMA IF NOT EXISTS analytics;
+schema_ddl=""
+for domain in "${domains[@]}"; do
+  schema_ddl+="CREATE SCHEMA IF NOT EXISTS ${domain};
+"
+done
 
+run_sql <<SQL
+${schema_ddl}
 CREATE TABLE IF NOT EXISTS public.reef_schema_migrations (
   migration_id TEXT PRIMARY KEY,
   domain_name TEXT NOT NULL,
@@ -46,18 +50,20 @@ CREATE TABLE IF NOT EXISTS public.reef_schema_migrations (
 SQL
 
 grant_app_access() {
-  run_sql <<'SQL'
-GRANT USAGE ON SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics TO reef_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics TO reef_app;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics TO reef_app;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics TO reef_app;
+  local schema_list
+  schema_list="$(IFS=,; echo "${domains[*]}")"
+  run_sql <<SQL
+GRANT USAGE ON SCHEMA ${schema_list} TO ${APP_USER};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schema_list} TO ${APP_USER};
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ${schema_list} TO ${APP_USER};
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ${schema_list} TO ${APP_USER};
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO reef_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics
-  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO reef_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA runtime, auth, boundary, command_log, admin, orchestration, analytics
-  GRANT EXECUTE ON FUNCTIONS TO reef_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema_list}
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${APP_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema_list}
+  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${APP_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema_list}
+  GRANT EXECUTE ON FUNCTIONS TO ${APP_USER};
 SQL
 }
 

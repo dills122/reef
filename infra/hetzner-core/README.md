@@ -71,7 +71,7 @@ ssh "ops@$IP" '
   chmod +x /opt/reef/scripts/*.sh
   cd /opt/reef
   ./scripts/generate-local-secrets.sh
-  docker compose up -d postgres openbao
+  docker compose up -d postgres postgres-admin postgres-analytics openbao
 '
 ```
 
@@ -86,6 +86,14 @@ make hetzner-core ARGS=status
 `scripts/dev/db/migrations`, generates missing local env files, starts
 Postgres/OpenBao/matching-engine, applies migrations, and then starts the full
 Compose stack.
+
+Admin and analytics data live in two dedicated Postgres containers
+(`postgres-admin`, `postgres-analytics`), separate from the main `reef`
+database used for trading/runtime state and separate from each other - see
+[D-046](../../docs/DECISIONS.md). Migrations for those domains still live
+under `scripts/dev/db/migrations/admin/` and `.../analytics/`; `deploy` applies
+them against their own containers via `REEF_MIGRATION_DOMAINS`/
+`REEF_POSTGRES_SERVICE`/`REEF_POSTGRES_DB` overrides to `apply-migrations.sh`.
 
 If Docker Hub images are not public or ready yet, build the images on the Hetzner
 host and use local image tags:

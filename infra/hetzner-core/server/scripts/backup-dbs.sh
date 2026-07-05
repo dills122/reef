@@ -28,6 +28,18 @@ docker compose exec -T postgres pg_dump \
   -Fc \
   reef > "$WORKDIR/reef.dump"
 
+echo "Dumping admin..."
+docker compose exec -T postgres-admin pg_dump \
+  -U postgres \
+  -Fc \
+  admin > "$WORKDIR/admin.dump"
+
+echo "Dumping analytics..."
+docker compose exec -T postgres-analytics pg_dump \
+  -U postgres \
+  -Fc \
+  analytics > "$WORKDIR/analytics.dump"
+
 echo "Archiving..."
 tar -C "$WORKDIR" -cf "$ARCHIVE" .
 

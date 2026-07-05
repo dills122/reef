@@ -150,7 +150,18 @@ switch (command) {
     syncMigrations();
     run("ssh", [
       target,
-      `chmod +x ${deployDir}/scripts/*.sh ${deployDir}/postgres/init/*.sh && cd ${deployDir} && ./scripts/generate-local-secrets.sh && docker compose pull --ignore-pull-failures && docker compose up -d postgres openbao matching-engine && ./scripts/apply-migrations.sh && docker compose up -d --remove-orphans && ./scripts/verify-runtime.sh`,
+      [
+        `chmod +x ${deployDir}/scripts/*.sh ${deployDir}/postgres/init/*.sh ${deployDir}/postgres-admin/init/*.sh ${deployDir}/postgres-analytics/init/*.sh`,
+        `cd ${deployDir}`,
+        "./scripts/generate-local-secrets.sh",
+        "docker compose pull --ignore-pull-failures",
+        "docker compose up -d postgres postgres-admin postgres-analytics openbao matching-engine",
+        "./scripts/apply-migrations.sh",
+        "REEF_MIGRATION_DOMAINS=admin REEF_APP_USER=admin_app REEF_POSTGRES_SERVICE=postgres-admin REEF_POSTGRES_DB=admin ./scripts/apply-migrations.sh",
+        "REEF_MIGRATION_DOMAINS=analytics REEF_APP_USER=analytics_app REEF_POSTGRES_SERVICE=postgres-analytics REEF_POSTGRES_DB=analytics ./scripts/apply-migrations.sh",
+        "docker compose up -d --remove-orphans",
+        "./scripts/verify-runtime.sh",
+      ].join(" && "),
     ]);
     break;
   default:
