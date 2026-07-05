@@ -2,7 +2,12 @@ import {
   REEF_BOT_API_VERSION_V1,
   REEF_BOT_SDK_VERSION,
   ReefBotV1,
+  type BotActionV1,
+  type BotContextV1,
 } from "./index";
+
+declare const setTimeout: (callback: () => void, delayMs: number) => unknown;
+declare const clearTimeout: (timeoutId: unknown) => void;
 import type { ReefBotV1Constructor } from "./harness";
 import { runBotScenarioV1, type BotScenarioFixtureV1, type BotScenarioRunReportV1 } from "./runner";
 import { reefBotHostedSandboxPolicyV1, scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
@@ -21,11 +26,17 @@ export interface BotHostedCompartmentOptionsV1 {
   readonly endowments: Record<string, unknown>;
 }
 
+export interface BotHostedExecutionLimitsV1 {
+  readonly lifecycleTimeoutMs: number;
+  readonly tickTimeoutMs: number;
+}
+
 export interface BotHostedLoadOptionsV1 {
   readonly source: string;
   readonly fileName: string;
   readonly compartmentFactory?: BotHostedCompartmentFactoryV1;
   readonly sdkModule?: Record<string, unknown>;
+  readonly executionLimits?: Partial<BotHostedExecutionLimitsV1>;
 }
 
 export type BotHostedLoadResultV1 =
@@ -47,6 +58,11 @@ export interface BotHostedScenarioOptionsV1 extends BotHostedLoadOptionsV1 {
   readonly fixture: BotScenarioFixtureV1;
   readonly venueTransport?: VenueCommandTransportV1;
 }
+
+export const defaultBotHostedExecutionLimitsV1: BotHostedExecutionLimitsV1 = {
+  lifecycleTimeoutMs: 1000,
+  tickTimeoutMs: 1000,
+};
 
 export interface SesCompartmentConstructorV1 {
   new (endowments?: Record<string, unknown>, modules?: Record<string, unknown>, options?: Record<string, unknown>): BotHostedCompartmentV1;
@@ -86,7 +102,13 @@ export async function loadHostedBotClassV1(options: BotHostedLoadOptionsV1): Pro
     if (typeof BotClass !== "function") {
       return { ok: false, issues: [{ code: "missing_default_class", message: "Hosted bot bundle must export a default class." }] };
     }
-    return { ok: true, BotClass: BotClass as ReefBotV1Constructor };
+    return {
+      ok: true,
+      BotClass: wrapHostedBotClassWithExecutionGuardsV1(
+        BotClass as ReefBotV1Constructor,
+        { ...defaultBotHostedExecutionLimitsV1, ...options.executionLimits },
+      ),
+    };
   } catch (error) {
     return {
       ok: false,
@@ -114,11 +136,57 @@ export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1
     };
   }
 
-  return runBotScenarioV1({
-    BotClass: loadResult.BotClass,
-    fixture: options.fixture,
-    ...(options.venueTransport === undefined ? {} : { venueTransport: options.venueTransport }),
+  try {
+    return await runBotScenarioV1({
+      BotClass: loadResult.BotClass,
+      fixture: options.fixture,
+      ...(options.venueTransport === undefined ? {} : { venueTransport: options.venueTransport }),
+    });
+  } catch (error) {
+    return {
+      status: "do_not_merge",
+      scenarioId: options.fixture.scenarioId,
+      runId: options.fixture.runId,
+      ticksRun: 0,
+      actionsProposed: 0,
+      orderActionsProposed: 0,
+      dataCalls: 0,
+      issues: [{ code: "hosted_execution_failed", message: error instanceof Error ? error.message : String(error) }],
+      denials: [],
+      logs: [],
+      ticks: [],
+      finalOrders: [],
+    };
+  }
+}
+
+export function wrapHostedBotClassWithExecutionGuardsV1(
+  BotClass: ReefBotV1Constructor,
+  limits: BotHostedExecutionLimitsV1 = defaultBotHostedExecutionLimitsV1,
+): ReefBotV1Constructor {
+  class GuardedHostedBot extends ReefBotV1 {
+    private readonly inner = new BotClass();
+
+    override async onStart(ctx: BotContextV1): Promise<void> {
+      await withHostedTimeoutV1(this.inner.onStart(ctx), limits.lifecycleTimeoutMs, "onStart");
+    }
+
+    override async onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]> {
+      return withHostedTimeoutV1(this.inner.onTick(ctx), limits.tickTimeoutMs, "onTick");
+    }
+
+    override async onStop(ctx: BotContextV1): Promise<void> {
+      await withHostedTimeoutV1(this.inner.onStop(ctx), limits.lifecycleTimeoutMs, "onStop");
+    }
+  }
+
+  Object.defineProperty(GuardedHostedBot, "metadata", {
+    value: BotClass.metadata,
+    enumerable: true,
+    configurable: true,
   });
+
+  return GuardedHostedBot;
 }
 
 export function wrapHostedBotModuleSourceV1(source: string): string {
@@ -128,6 +196,25 @@ const exports = module.exports;
 ${source}
 return module.exports;
 })()`;
+}
+
+function withHostedTimeoutV1<T>(operation: Promise<T>, timeoutMs: number, lifecycle: string): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return operation;
+  }
+
+  let timeoutId: unknown;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Hosted bot ${lifecycle} timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([operation, timeout]).finally(() => {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  });
 }
 
 function hostedEndowmentsV1(sdkModule: Record<string, unknown>): Record<string, unknown> {

@@ -37,6 +37,8 @@ const { ReefBotV1 } = __reefBotSdk;
 
 They do not receive Reef transports, network clients, filesystem APIs, timers, child processes, worker threads, or ambient process access. The runner/orchestrator owns venue communication and injects only SDK capabilities.
 
+The hosted runner wraps loaded bot classes with host-owned execution guards. Current defaults are `1000ms` for lifecycle hooks and `1000ms` for each tick, overrideable through `executionLimits`. These guards catch async hangs and report `do_not_merge`; they do not replace worker/container CPU isolation for synchronous infinite loops.
+
 ## Target Hosted Sandbox
 
 Hosted execution should combine JavaScript-level confinement with an outer process or container boundary.

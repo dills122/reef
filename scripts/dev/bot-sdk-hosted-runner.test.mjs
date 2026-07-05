@@ -11,6 +11,7 @@ const hostedRunner = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk
 await assertHostedScenarioRunsInCompartment();
 await assertDeniedNetworkSourceDoesNotEvaluate();
 await assertCompartmentOmitsAmbientProcess();
+await assertHostedTickTimeoutReturnsDoNotMerge();
 
 console.log("bot SDK hosted runner checks passed");
 
@@ -78,6 +79,37 @@ module.exports.default = class HostedNoAmbientBot extends ReefBotV1 { async onTi
   });
 
   assert.equal(result.ok, true);
+}
+
+async function assertHostedTickTimeoutReturnsDoNotMerge() {
+  const source = `
+const { ReefBotV1 } = __reefBotSdk;
+module.exports.default = class HostedHangingBot extends ReefBotV1 {
+  static metadata = {
+    name: "hosted-hanging-bot",
+    publisher: "Reef",
+    email: "bots@example.com",
+    version: "1.0.0",
+    sdkVersion: "1.0.0",
+    botApiVersion: "v1",
+  };
+
+  async onTick() {
+    return new Promise(() => undefined);
+  }
+};`;
+
+  const report = await hostedRunner.runHostedBotScenarioV1({
+    source,
+    fileName: "hosted-hanging-bot.js",
+    fixture,
+    compartmentFactory: createVmCompartmentFactory(),
+    executionLimits: { tickTimeoutMs: 5 },
+  });
+
+  assert.equal(report.status, "do_not_merge");
+  assert.ok(report.issues.some((issue) => issue.code === "hosted_execution_failed"));
+  assert.match(report.issues[0].message, /onTick timed out/);
 }
 
 function createVmCompartmentFactory() {
