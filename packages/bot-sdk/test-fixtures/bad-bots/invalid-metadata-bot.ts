@@ -6,7 +6,7 @@ export default class InvalidMetadataBot extends ReefBotV1 {
     publisher: "Reef Test Fixtures",
     email: "not-an-email",
     version: "one",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   } as const;
 

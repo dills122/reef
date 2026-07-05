@@ -43,7 +43,7 @@ export default class ExampleBot extends ReefBotV1 {
     publisher: "Example Publisher",
     email: "bot-author@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   };
 

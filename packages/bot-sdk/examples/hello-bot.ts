@@ -6,7 +6,7 @@ export default class HelloBot extends ReefBotV1 {
     publisher: "Reef Examples",
     email: "examples@reef.local",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
     description: "Minimal no-op bot used to verify the v1 lifecycle.",
     tags: ["example", "noop"],

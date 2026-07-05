@@ -21,7 +21,7 @@ export default class MyBot extends ReefBotV1 {
     publisher: "My Publisher",
     email: "me@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   } as const;
 
@@ -152,10 +152,18 @@ bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicat
 
 `bot-sdk-test-bot.mjs` is the pre-merge hosted simulation gate. It builds the hosted artifact, scans approved imports, runs the bot through SES against the fixture market, and exits nonzero when the bot should be marked `do_not_merge`.
 
+Before submitting a bot:
+
+- run `bot-sdk-test-bot.mjs` against the intended fixture
+- confirm the report says `approved_for_merge`
+- review any `approvedPackages` recorded in the artifact summary
+- treat any `do_not_merge` issue code as blocking until fixed
+- keep bot metadata version and targeted `sdkVersion` current
+
 To submit generated commands through the adapter-owned client against a local Reef stack, use the live smoke wrapper:
 
 ```bash
-bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --venue-url=http://127.0.0.1:8080 --seed-reference
+bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-multi-tick.json --venue-url=http://127.0.0.1:8080 --seed-reference
 ```
 
 Bot code still does not receive network access; only the runner/orchestrator owns the venue transport. See [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md) for setup and troubleshooting.

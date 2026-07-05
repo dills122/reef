@@ -1,5 +1,5 @@
 export const REEF_BOT_API_VERSION_V1 = "v1" as const;
-export const REEF_BOT_SDK_VERSION = "1.0.0" as const;
+export const REEF_BOT_SDK_VERSION = "1.5.0" as const;
 
 export type BotApiVersionV1 = typeof REEF_BOT_API_VERSION_V1;
 export type BotSdkVersion = typeof REEF_BOT_SDK_VERSION;

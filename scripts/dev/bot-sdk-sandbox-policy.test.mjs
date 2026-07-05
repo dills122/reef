@@ -11,6 +11,7 @@ const {
 } = await import(
   pathToFileURL(join(repoRoot, "packages/bot-sdk/src/sandbox-policy.ts")).href
 );
+const approvedPackagesJson = JSON.parse(readFileSync(join(repoRoot, "packages/bot-sdk/approved-packages.v1.json"), "utf8"));
 
 const allowed = readFileSync(join(repoRoot, "packages/bot-sdk/examples/hello-bot.ts"), "utf8");
 assert.deepEqual(scanBotSourceForSandboxViolationsV1(allowed), []);
@@ -41,5 +42,19 @@ assert.ok(
     (violation) => violation.pattern === "left-pad",
   ),
 );
+assert.equal(approvedPackagesJson.schemaVersion, "reef.bot.approvedPackages.v1");
+assert.deepEqual(
+  approvedPackagesJson.packages.map(packageIdentity),
+  reefBotApprovedPackagesV1.map(packageIdentity),
+);
 
 console.log("bot SDK sandbox policy checks passed");
+
+function packageIdentity(pkg) {
+  return {
+    name: pkg.name,
+    version: pkg.version,
+    license: pkg.license,
+    status: pkg.status,
+  };
+}

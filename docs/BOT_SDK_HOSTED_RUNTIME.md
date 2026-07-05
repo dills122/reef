@@ -44,7 +44,7 @@ The hosted runner wraps loaded bot classes with host-owned execution guards. Cur
 Use the hosted artifact runner for compiled single-file JavaScript bot bundles:
 
 ```bash
-bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-technical-indicator.json --unsafe-vm-for-local-dev
+bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --unsafe-vm-for-local-dev
 ```
 
 Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible path and expects `globalThis.Compartment` to be available after SES lockdown/bootstrap. The unsafe VM flag is local-only test plumbing; it is not a hosted security boundary.
@@ -72,7 +72,7 @@ The tester builds the artifact, applies source and final-artifact scanner gates,
 To run a built artifact through a separate hosted worker process:
 
 ```bash
-bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-technical-indicator.json
+bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json
 ```
 
 The worker process runs SES lockdown and the hosted scenario runner in a child process. The parent enforces a wall-clock timeout, output cap, and structured `do_not_merge` report for child failures. This catches synchronous hangs that in-process SES execution cannot interrupt.

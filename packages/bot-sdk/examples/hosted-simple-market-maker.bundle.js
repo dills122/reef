@@ -6,7 +6,7 @@ module.exports.default = class HostedSimpleMarketMaker extends ReefBotV1 {
     publisher: "Reef Examples",
     email: "bots@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
     description: "Compiled hosted-runner artifact example.",
   };

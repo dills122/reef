@@ -6,7 +6,7 @@ export default class SyncHangingBot extends ReefBotV1 {
     publisher: "Reef Test Fixtures",
     email: "fixtures@reef.local",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   } as const;
 
