@@ -72,6 +72,25 @@ export REEF_CORE_REPORT_USER="ops"
 export REEF_CORE_REPORT_DIR="/opt/reef/reports/simulations"
 ```
 
+Optional R2 export - compresses the run's artifacts and uploads them to
+Cloudflare R2 directly from the worker, before fetch/destroy, reusing the same
+bucket/credentials as the backbone's Postgres/OpenBao backup dumps
+([D-046](../../docs/DECISIONS.md)) rather than a second object-storage vendor:
+
+```bash
+export R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
+export R2_BUCKET="reef-backups"
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+make simulation-run ARGS="--rate 1000 --duration 60s --workers 128 --export-to-r2"
+```
+
+This uploads `simulation-runs/<run-id>.tar.gz` to the bucket. It is opt-in
+(unset by default) since not every local run has R2 credentials configured.
+Shipping structured run results to the backbone's analytics service (rather
+than raw compressed debug artifacts) is a separate follow-up gated on that
+service existing - see D-046.
+
 Run a short smoke:
 
 ```bash

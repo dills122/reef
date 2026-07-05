@@ -38,12 +38,14 @@ const workers = option("workers", env("WORKERS", env("REEF_SIM_WORKERS", "")));
 const minRps = option("min-rps", env("REEF_SIM_MIN_RPS", defaultMinRps(rate)));
 const keepWorkerOnFailure = boolOption("keep-worker-on-failure", env("REEF_SIM_KEEP_WORKER_ON_FAILURE", "0"));
 const skipDestroy = boolOption("keep-worker", env("REEF_SIM_KEEP_WORKER", "0"));
+const exportToR2 = boolOption("export-to-r2", env("REEF_DO_EXPORT_TO_R2", "0"));
 
 const commonEnv = {
   ...process.env,
   REEF_DO_RUN_ID: runId,
   REEF_DO_LOCAL_REPORT_ROOT: reportRoot,
 };
+if (exportToR2) commonEnv.REEF_DO_EXPORT_TO_R2 = "1";
 if (rate) commonEnv.REEF_DO_STRESS_RATES = rate;
 if (duration) commonEnv.REEF_DO_STRESS_DURATION = duration;
 if (workers) commonEnv.REEF_DO_STRESS_WORKERS = workers;
@@ -135,6 +137,7 @@ Options:
   --report-root <path>          local artifact root; default reports/simulations/ephemeral-do
   --keep-worker-on-failure      leave DO worker up when the run fails
   --keep-worker                 leave DO worker up even after success
+  --export-to-r2                compress artifacts and upload to R2 from the worker before fetch/destroy
 
 Required for provisioning:
   DIGITALOCEAN_TOKEN or DO_TOKEN
@@ -144,6 +147,12 @@ Optional core artifact push:
   REEF_CORE_REPORT_HOST=core.example.com
   REEF_CORE_REPORT_USER=ops
   REEF_CORE_REPORT_DIR=/opt/reef/reports/simulations
+
+Optional R2 export (--export-to-r2), reusing the backbone's backup bucket credentials:
+  R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+  R2_BUCKET=reef-backups
+  AWS_ACCESS_KEY_ID=...
+  AWS_SECRET_ACCESS_KEY=...
 `);
 }
 
