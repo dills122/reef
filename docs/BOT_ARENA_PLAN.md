@@ -81,8 +81,8 @@ Implementation checkpoint:
 
 Remaining work before this becomes a production control plane:
 
-- add production migration/validation coverage for the arena schema
-- wire arena operator commands and bot-version risk checks into the hosted platform-runtime server configuration
+- add full database migration coverage for the arena schema in the repository migration flow
+- wire arena operator commands into a hosted HTTP/CLI surface for platform operators
 - define the OpenBao fetcher that resolves descriptors during runner preflight and exposes only in-memory values to bot code
 - publish read APIs for bot status, qualification reports, run records, and operator audit history
 
