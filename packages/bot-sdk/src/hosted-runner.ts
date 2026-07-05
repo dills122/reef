@@ -4,13 +4,18 @@ import {
   ReefBotV1,
   type BotActionV1,
   type BotContextV1,
+  type BotSignalV1,
+  type BotStrategyEventV1,
+  type BotStrategyV1,
 } from "./index";
 
 declare const setTimeout: (callback: () => void, delayMs: number) => unknown;
 declare const clearTimeout: (timeoutId: unknown) => void;
 import type { ReefBotV1Constructor } from "./harness";
-import { runBotScenarioV1, type BotScenarioFixtureV1, type BotScenarioRunReportV1 } from "./runner";
+import type { ReefBotV1Instance } from "./harness";
+import { type BotScenarioFixtureV1 } from "./runner";
 import { reefBotHostedSandboxPolicyV1, scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
+import { runBotStrategyScenarioV1, type BotStrategyScenarioRunReportV1 } from "./strategy-runner";
 import type { VenueCommandTransportV1 } from "./venue-client";
 
 export interface BotHostedCompartmentV1 {
@@ -117,7 +122,7 @@ export async function loadHostedBotClassV1(options: BotHostedLoadOptionsV1): Pro
   }
 }
 
-export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1): Promise<BotScenarioRunReportV1> {
+export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1): Promise<BotStrategyScenarioRunReportV1> {
   const loadResult = await loadHostedBotClassV1(options);
   if (!loadResult.ok) {
     return {
@@ -128,6 +133,8 @@ export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1
       actionsProposed: 0,
       orderActionsProposed: 0,
       dataCalls: 0,
+      signalsGenerated: 0,
+      eventsProcessed: 0,
       issues: loadResult.issues,
       denials: [],
       logs: [],
@@ -137,7 +144,7 @@ export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1
   }
 
   try {
-    return await runBotScenarioV1({
+    return await runBotStrategyScenarioV1({
       BotClass: loadResult.BotClass,
       fixture: options.fixture,
       ...(options.venueTransport === undefined ? {} : { venueTransport: options.venueTransport }),
@@ -151,6 +158,8 @@ export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1
       actionsProposed: 0,
       orderActionsProposed: 0,
       dataCalls: 0,
+      signalsGenerated: 0,
+      eventsProcessed: 0,
       issues: [{ code: "hosted_execution_failed", message: error instanceof Error ? error.message : String(error) }],
       denials: [],
       logs: [],
@@ -165,7 +174,14 @@ export function wrapHostedBotClassWithExecutionGuardsV1(
   limits: BotHostedExecutionLimitsV1 = defaultBotHostedExecutionLimitsV1,
 ): ReefBotV1Constructor {
   class GuardedHostedBot extends ReefBotV1 {
-    private readonly inner = new BotClass();
+    private readonly inner: ReefBotV1Instance;
+    override readonly strategies: readonly BotStrategyV1[];
+
+    constructor() {
+      super();
+      this.inner = new BotClass();
+      this.strategies = this.inner.strategies?.map((strategy) => wrapHostedStrategyV1(strategy, limits)) ?? [];
+    }
 
     override async onStart(ctx: BotContextV1): Promise<void> {
       await withHostedTimeoutV1(this.inner.onStart(ctx), limits.lifecycleTimeoutMs, "onStart");
@@ -173,6 +189,14 @@ export function wrapHostedBotClassWithExecutionGuardsV1(
 
     override async onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]> {
       return withHostedTimeoutV1(this.inner.onTick(ctx), limits.tickTimeoutMs, "onTick");
+    }
+
+    override async onSignal(
+      signal: BotSignalV1,
+      ctx: BotContextV1,
+      event: BotStrategyEventV1,
+    ): Promise<readonly BotActionV1[]> {
+      return withHostedTimeoutV1(this.inner.onSignal(signal, ctx, event), limits.tickTimeoutMs, "onSignal");
     }
 
     override async onStop(ctx: BotContextV1): Promise<void> {
@@ -187,6 +211,34 @@ export function wrapHostedBotClassWithExecutionGuardsV1(
   });
 
   return GuardedHostedBot;
+}
+
+function wrapHostedStrategyV1(strategy: BotStrategyV1, limits: BotHostedExecutionLimitsV1): BotStrategyV1 {
+  const onStart = strategy.onStart?.bind(strategy);
+  const onEvent = strategy.onEvent.bind(strategy);
+  const onStop = strategy.onStop?.bind(strategy);
+
+  return {
+    id: strategy.id,
+    subscription: strategy.subscription,
+    ...(onStart === undefined
+      ? {}
+      : {
+          onStart(ctx: BotContextV1): Promise<void> {
+            return withHostedTimeoutV1(onStart(ctx), limits.lifecycleTimeoutMs, `strategy ${strategy.id} onStart`);
+          },
+        }),
+    onEvent(event: BotStrategyEventV1, ctx: BotContextV1): Promise<readonly BotSignalV1[]> {
+      return withHostedTimeoutV1(onEvent(event, ctx), limits.tickTimeoutMs, `strategy ${strategy.id} onEvent`);
+    },
+    ...(onStop === undefined
+      ? {}
+      : {
+          onStop(ctx: BotContextV1): Promise<void> {
+            return withHostedTimeoutV1(onStop(ctx), limits.lifecycleTimeoutMs, `strategy ${strategy.id} onStop`);
+          },
+        }),
+  };
 }
 
 export function wrapHostedBotModuleSourceV1(source: string): string {
@@ -245,4 +297,3 @@ function requiredGlobalSesCompartmentV1(): SesCompartmentConstructorV1 {
   }
   return globalWithSes.Compartment;
 }
-
