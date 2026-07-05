@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildApplySql, discoverMigrations, validateMigrationOrder } from "./migrate.mjs";
+import { buildApplySql, discoverMigrations, migrationsForTarget, validateMigrationOrder } from "./migrate.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsRoot = path.resolve(__dirname, "migrations");
@@ -69,4 +69,21 @@ test("wraps migration SQL with checksum ledger insert", async () => {
   assert.match(sql, /INSERT INTO public\.reef_schema_migrations/);
   assert.match(sql, /boundary\/0002_live_boundary_tables\.sql/);
   assert.match(sql, /COMMIT;$/);
+});
+
+test("routes arena migrations only to arena database target", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+
+  const operationalTargetMigrations = migrationsForTarget(
+    { domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"] },
+    migrations,
+  );
+  const arenaTargetMigrations = migrationsForTarget({ domains: ["arena"] }, migrations);
+
+  assert.ok(operationalTargetMigrations.some((migration) => migration.id === "runtime/0001_runtime_init.sql"));
+  assert.ok(!operationalTargetMigrations.some((migration) => migration.id.startsWith("arena/")));
+  assert.deepEqual(
+    arenaTargetMigrations.map((migration) => migration.id),
+    ["arena/0001_arena_registry.sql"],
+  );
 });
