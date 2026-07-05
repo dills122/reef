@@ -61,11 +61,17 @@ export default class MultiSymbolStrategyBot extends ReefBotV1 {
     tags: ["example", "strategy", "multi-symbol"],
   } as const;
 
+  private readonly instrumentIds = ["AAPL", "MSFT", "NVDA", "TSLA"] as const;
   override readonly strategies = [new BollingerMomentumStrategy()] as const;
 
   override async onSignal(signalValue: BotSignalV1, ctx: BotContextV1): Promise<BotActionV1[]> {
     if (signalValue.confidence < 0.5) {
       return [ctx.actions.noop("signal confidence below threshold")];
+    }
+    const snapshots = await ctx.marketData.snapshots(this.instrumentIds);
+    const signalSnapshot = snapshots.ok ? snapshots.value[signalValue.instrumentId] : undefined;
+    if (!snapshots.ok || signalSnapshot === undefined) {
+      return [ctx.actions.noop("snapshot unavailable for signal")];
     }
 
     return [
@@ -73,7 +79,7 @@ export default class MultiSymbolStrategyBot extends ReefBotV1 {
         instrumentId: signalValue.instrumentId,
         side: signalValue.side,
         quantity: ctx.config.number("orderSize"),
-        limitPrice: signalValue.referencePrice,
+        limitPrice: signalSnapshot.midPrice,
       }),
     ];
   }

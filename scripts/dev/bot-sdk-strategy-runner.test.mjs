@@ -45,6 +45,22 @@ async function assertMultiSymbolStrategyRun() {
             midPrice: 212,
             lastPrice: 212,
           },
+          NVDA: {
+            instrumentId: "NVDA",
+            asOf: tick.occurredAt,
+            bidPrice: 499,
+            askPrice: 501,
+            midPrice: 500,
+            lastPrice: 500,
+          },
+          TSLA: {
+            instrumentId: "TSLA",
+            asOf: tick.occurredAt,
+            bidPrice: 249,
+            askPrice: 251,
+            midPrice: 250,
+            lastPrice: 250,
+          },
         },
       })),
     },
@@ -55,7 +71,7 @@ async function assertMultiSymbolStrategyRun() {
   assert.equal(report.ticksRun, 3);
   assert.equal(report.signalsGenerated, 6);
   assert.equal(report.orderActionsProposed, 6);
-  assert.equal(report.dataCalls, 0);
+  assert.equal(report.dataCalls, 6);
   assert.equal(report.ticks[0].signals.length, 2);
   assert.equal(report.ticks[0].venueCommands.length, 2);
   assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");

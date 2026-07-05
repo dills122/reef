@@ -150,15 +150,19 @@ export interface BotActionFactoryV1 {
 
 export interface BotMarketDataClientV1 {
   snapshot(instrumentId: string): Promise<BotResultV1<MarketSnapshotV1>>;
+  snapshots(instrumentIds: readonly string[]): Promise<BotResultV1<Record<string, MarketSnapshotV1>>>;
+}
+
+export interface BotHistoricalBarsRequestV1 {
+  readonly instrumentId: string;
+  readonly interval: BotBarIntervalV1;
+  readonly start: string;
+  readonly end: string;
 }
 
 export interface BotHistoricalDataClientV1 {
-  intradayBars(request: {
-    readonly instrumentId: string;
-    readonly interval: BotBarIntervalV1;
-    readonly start: string;
-    readonly end: string;
-  }): Promise<BotResultV1<readonly HistoricalBarV1[]>>;
+  intradayBars(request: BotHistoricalBarsRequestV1): Promise<BotResultV1<readonly HistoricalBarV1[]>>;
+  intradayBarsBatch(requests: readonly BotHistoricalBarsRequestV1[]): Promise<BotResultV1<Record<string, readonly HistoricalBarV1[]>>>;
 }
 
 export interface BotOrdersClientV1 {

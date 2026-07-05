@@ -96,6 +96,7 @@ Market data:
 
 ```ts
 await ctx.marketData.snapshot("AAPL");
+await ctx.marketData.snapshots(["AAPL", "MSFT", "NVDA"]);
 ```
 
 Historical data:
@@ -107,6 +108,14 @@ await ctx.historical.intradayBars({
   start: "2026-07-04T14:00:00.000Z",
   end: "2026-07-04T15:00:00.000Z",
 });
+await ctx.historical.intradayBarsBatch([
+  {
+    instrumentId: "AAPL",
+    interval: "1m",
+    start: "2026-07-04T14:00:00.000Z",
+    end: "2026-07-04T15:00:00.000Z",
+  },
+]);
 ```
 
 Private config:

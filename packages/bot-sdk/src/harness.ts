@@ -295,6 +295,26 @@ export function createFixtureBotContextV1(options?: {
         return { ok: true, value: snapshot };
       });
     },
+    async snapshots(instrumentIds) {
+      return dataGate(() => {
+        const values: Record<string, MarketSnapshotV1> = {};
+        const missing: string[] = [];
+        for (const instrumentId of instrumentIds) {
+          const snapshot = fixtureData.marketSnapshots?.[instrumentId];
+          if (!snapshot) {
+            missing.push(instrumentId);
+          } else {
+            values[instrumentId] = snapshot;
+          }
+        }
+        if (missing.length > 0) {
+          const denial = notFoundDenial(`No market snapshot for ${missing.join(", ")}.`);
+          denials.push(denial);
+          return { ok: false, denial };
+        }
+        return { ok: true, value: values };
+      });
+    },
   };
 
   const historical: BotHistoricalDataClientV1 = {
@@ -313,6 +333,41 @@ export function createFixtureBotContextV1(options?: {
         }
         historicalCache.set(cacheKey, bars);
         return { ok: true, value: bars };
+      });
+    },
+    async intradayBarsBatch(requests) {
+      const result: Record<string, readonly HistoricalBarV1[]> = {};
+      const misses = requests.filter((request) => {
+        const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
+        const cached = historicalCache.get(cacheKey);
+        if (cached !== undefined) {
+          result[request.instrumentId] = cached;
+          return false;
+        }
+        return true;
+      });
+      if (misses.length === 0) {
+        return { ok: true, value: result, cached: true };
+      }
+
+      return dataGate(() => {
+        const missing: string[] = [];
+        for (const request of misses) {
+          const bars = fixtureData.historicalBars?.[request.instrumentId];
+          if (!bars) {
+            missing.push(request.instrumentId);
+          } else {
+            const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
+            historicalCache.set(cacheKey, bars);
+            result[request.instrumentId] = bars;
+          }
+        }
+        if (missing.length > 0) {
+          const denial = notFoundDenial(`No historical bars for ${missing.join(", ")}.`);
+          denials.push(denial);
+          return { ok: false, denial };
+        }
+        return { ok: true, value: result };
       });
     },
   };
