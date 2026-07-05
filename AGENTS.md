@@ -50,7 +50,6 @@ Primary areas:
 - `services/matching-engine/`: Go matching and execution engine behavior
 - `services/simulator/`: scenario execution, seeded simulation, replay, and traffic generation
 - `contracts/proto/`: versionable inter-service contracts
-- `packages/ui-models/`: shared frontend-facing model definitions
 - `packages/scenario-definitions/`: reusable scenario definitions and simulation inputs
 - `docs/`: roadmap, delivery policy, architecture, decisions, steering, and operational notes
 - `scripts/`: local development, smoke, stress, admin, replay, and throughput automation

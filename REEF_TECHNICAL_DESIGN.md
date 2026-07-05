@@ -755,7 +755,6 @@ reef/
 
   packages/
     scenario-definitions/ # scenario definitions and fixtures
-    ui-models/            # shared frontend-facing model definitions
 
   scripts/
     dev/

@@ -41,7 +41,6 @@ The current gaps are:
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and has local no-DB proof; it still needs longer remote promotion evidence and persistence reintroduction from durable venue event batches
 - persisted order lifecycle projections do not yet fully mirror submit/cancel/modify/fill engine state
-- simulator control-room UI is still planned rather than implemented
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
 
@@ -68,17 +67,12 @@ The current gaps are:
    - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
-4. Build simulator control-room MVP.
-   - Wrap existing scripts and report artifacts.
-   - Store run metadata, seed/session config, command, git metadata, runtime mode, metric scope, and artifact paths.
-   - Compare accepted, completed, projected, success rate, p95/p99, reject taxonomy, trace checks, and replay status.
-
-5. Lock first lifecycle scenarios.
+4. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
    - Assert ordered events, final state, replay consistency, and visible timeline causation.
 
-6. Start post-trade expansion.
+5. Start post-trade expansion.
    - Add allocation, confirmation, settlement, and exception behavior only after the scenario/replay path can prove causation.
 
 ## Active Workstreams

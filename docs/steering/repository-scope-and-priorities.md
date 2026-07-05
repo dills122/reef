@@ -264,8 +264,6 @@ The UI and API should be honest about projection freshness.
 - `contracts/proto/` owns versionable inter-service contract definitions.
   - Runtime-to-engine and runtime-to-simulator semantics must remain stable unless explicitly migrated.
   - Contract changes should preserve lifecycle meaning and replay compatibility.
-- `packages/ui-models/` owns shared UI-facing model definitions.
-  - UI models should reflect projection freshness where relevant.
 - `packages/scenario-definitions/` owns reusable scenario inputs.
   - Scenario definitions must preserve deterministic seeds, clocks, actors, instruments, and correlation inputs.
 - `scripts/` owns local development and operational automation.

@@ -25,7 +25,6 @@ Core priorities:
 - `services/matching-engine/` owns matching and execution logic, not platform workflow orchestration.
 - `services/simulator/` owns scenario control, seeded activity, replay, and synthetic actors.
 - `contracts/proto/` owns versionable inter-service contract definitions.
-- `packages/ui-models/` owns shared UI-facing model definitions.
 - `packages/scenario-definitions/` owns reusable scenario inputs.
 - `scripts/` owns local development and operational automation.
 - `docs/steering/` owns normative direction for architecture, languages, APIs, repository shape, and communication boundaries.

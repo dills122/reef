@@ -30,7 +30,6 @@ services/
 contracts/
   proto/                       Versionable inter-service contracts
 packages/
-  ui-models/                   Shared frontend-facing model definitions
   scenario-definitions/        Reusable simulation inputs and scenario files
 scripts/
   dev/                         Local stack, smoke, stress, replay, admin, and migration automation

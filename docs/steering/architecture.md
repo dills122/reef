@@ -142,7 +142,6 @@ services/
 contracts/
   proto/
 packages/
-  ui-models/
   scenario-definitions/
 docs/
   steering/

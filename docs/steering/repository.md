@@ -22,7 +22,6 @@ For product and architecture priorities that should guide every change, read [`r
 - `services/matching-engine/` owns deterministic matching and execution behavior, not platform workflow orchestration or persistence.
 - `services/simulator/` owns deterministic scenarios, seeded actors, replay, traffic generation, stress/load evidence, and trace validation.
 - `contracts/proto/` owns versionable inter-service contracts.
-- `packages/ui-models/` owns shared UI-facing model definitions, including projection freshness where relevant.
 - `packages/scenario-definitions/` owns reusable scenario inputs, seeds, clocks, actors, instruments, and correlation inputs.
 - `scripts/` owns setup, reset, smoke, stress, replay, diagnostics, and performance comparison workflows.
 
