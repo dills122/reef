@@ -23,6 +23,20 @@ Implemented now:
 
 This is enough to reject obvious bad submissions and prove SDK shape. It is not enough to safely run arbitrary public code by itself.
 
+## Current Hosted Runner Slice
+
+`packages/bot-sdk/src/hosted-runner.ts` is the first executable hosted-runner boundary. It expects a compiled single-file JavaScript bot artifact, scans that artifact with `reefBotHostedSandboxPolicyV1`, evaluates it in a SES-compatible compartment, and passes the loaded default bot class into the deterministic scenario runner.
+
+The default factory uses a global SES `Compartment` after lockdown/bootstrap. Tests inject a VM-backed compartment so the contract can run locally without adding a package install step. That VM test compartment is not the production security boundary; it only keeps the hosted runner API, SDK endowment, and scanner gate under regression coverage.
+
+Hosted bundles receive a single SDK endowment:
+
+```js
+const { ReefBotV1 } = __reefBotSdk;
+```
+
+They do not receive Reef transports, network clients, filesystem APIs, timers, child processes, worker threads, or ambient process access. The runner/orchestrator owns venue communication and injects only SDK capabilities.
+
 ## Target Hosted Sandbox
 
 Hosted execution should combine JavaScript-level confinement with an outer process or container boundary.

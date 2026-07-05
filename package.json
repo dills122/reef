@@ -17,6 +17,7 @@
     "bot-sdk:test:venue-adapter": "bun scripts/dev/bot-sdk-venue-adapter.test.mjs",
     "bot-sdk:test:venue-client": "bun scripts/dev/bot-sdk-venue-client.test.mjs",
     "bot-sdk:test:runner": "bun scripts/dev/bot-sdk-runner.test.mjs",
+    "bot-sdk:test:hosted-runner": "bun scripts/dev/bot-sdk-hosted-runner.test.mjs",
     "bot-sdk:test:sandbox-policy": "bun scripts/dev/bot-sdk-sandbox-policy.test.mjs",
     "bot-sdk:test:preflight": "bun scripts/dev/bot-sdk-preflight.test.mjs",
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",

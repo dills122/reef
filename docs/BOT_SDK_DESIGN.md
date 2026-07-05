@@ -17,6 +17,16 @@ This document describes the initial `ReefBotV1` design. It does not add new runt
 For bot-author-facing usage, see [`BOT_SDK_AUTHOR_GUIDE.md`](./BOT_SDK_AUTHOR_GUIDE.md).
 For hosted sandbox direction, see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md).
 
+## Current Implementation Map
+
+- `packages/bot-sdk/src/index.ts` owns the public V1 authoring types and `ReefBotV1` base class.
+- `packages/bot-sdk/src/harness.ts` owns registration, metadata, registry, fixture context, and qualification checks.
+- `packages/bot-sdk/src/runner.ts` owns deterministic tick execution and scenario reports.
+- `packages/bot-sdk/src/hosted-runner.ts` owns hosted bundle loading through a SES-compatible compartment interface.
+- `packages/bot-sdk/src/venue-adapter.ts` maps approved bot actions to venue command requests.
+- `packages/bot-sdk/src/venue-client.ts` owns adapter-controlled HTTP transport and recording transport helpers.
+- `packages/bot-sdk/src/venue-preflight.ts` describes live venue seed requirements for fixture-backed smoke runs.
+
 ## V1 Authoring Model
 
 Each bot starts as one TypeScript file. The file exports one default class that extends `ReefBotV1`.
