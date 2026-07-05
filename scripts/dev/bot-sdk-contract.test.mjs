@@ -137,6 +137,8 @@ function assertVenueAdapter() {
   assert.equal(submit.value[0].body.orderType, "LIMIT");
   assert.equal(submit.value[0].body.quantityUnits, "10");
   assert.equal(submit.value[0].body.botId, "bot-1");
+  assert.equal(submit.value[0].body.scenarioId, "scenario-1");
+  assert.equal(submit.value[0].body.runKind, "scenario");
   assert.equal(submit.value[0].body.venueSessionId, "session-1");
 
   const override = toVenueCommandRequestsV1(
@@ -175,7 +177,9 @@ function assertVenueAdapter() {
 
 function venueAdapterContext() {
   return {
+    scenarioId: "scenario-1",
     runId: "run-1",
+    runKind: "scenario",
     venueSessionId: "session-1",
     actorId: "actor-bot-1",
     participantId: "participant-bot-1",

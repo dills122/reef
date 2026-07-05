@@ -315,7 +315,9 @@ function venueContext(
   startingSequence: number,
 ): BotVenueAdapterContextV1 {
   return {
+    scenarioId: fixture.scenarioId,
     runId: fixture.runId,
+    ...(fixture.runKind === undefined ? {} : { runKind: fixture.runKind }),
     venueSessionId: fixture.venueSessionId,
     actorId: fixture.actorId,
     participantId: fixture.participantId,

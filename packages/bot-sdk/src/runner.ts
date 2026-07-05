@@ -28,6 +28,7 @@ import {
 export interface BotScenarioFixtureV1 {
   readonly scenarioId: string;
   readonly runId: string;
+  readonly runKind?: "scenario" | "live" | "stress" | string;
   readonly venueSessionId: string;
   readonly actorId: string;
   readonly participantId: string;
@@ -253,7 +254,9 @@ function venueContext(
   startingSequence: number,
 ): BotVenueAdapterContextV1 {
   return {
+    scenarioId: fixture.scenarioId,
     runId: fixture.runId,
+    ...(fixture.runKind === undefined ? {} : { runKind: fixture.runKind }),
     venueSessionId: fixture.venueSessionId,
     actorId: fixture.actorId,
     participantId: fixture.participantId,

@@ -17,6 +17,7 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class BotRuntimeOrderClientTest {
     @Test
@@ -100,6 +101,42 @@ class BotRuntimeOrderClientTest {
         assertEquals(0, captureStore.receivedCalls)
     }
 
+    @Test
+    fun sendPersistsBotRunMetadataInCommandLogCapture() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val client = BotRuntimeOrderClient(
+            testPlatform(
+                captureStore = CommandLogCommandCaptureStore(
+                    delegate = NoopCommandCaptureStore(),
+                    commandLogStore = commandLogStore
+                )
+            )
+        )
+
+        val response = client.send(
+            BotRuntimeOrderCommand(
+                route = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "bot:bot-1",
+                    "Idempotency-Key" to "idem-bot-1"
+                ),
+                body = validSubmitBody()
+            )
+        )
+
+        assertEquals(200, response.status)
+        val record = commandLogStore.findByIdempotency("bot:bot-1", "/api/v1/orders/submit", "idem-bot-1")
+        assertNotNull(record)
+        assertEquals("cmd-bot-1", record.commandId)
+        assertEquals("bot:bot-1", record.clientId)
+        assertEquals("bot-1", record.actorId)
+        assertEquals("SubmitOrder", record.commandType)
+        assertEquals("run-bot-1", record.runId)
+        assertEquals("scenario", record.runKind)
+        assertEquals("scenario-bot-1", record.scenarioId)
+        assertEquals(CommandLogStatus.COMPLETED, record.status)
+    }
+
     private fun testPlatform(
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore(),
@@ -162,6 +199,8 @@ class BotRuntimeOrderClientTest {
               "botId":"bot-1",
               "botVersion":"1.0.0",
               "runId":"run-bot-1",
+              "runKind":"scenario",
+              "scenarioId":"scenario-bot-1",
               "venueSessionId":"session-1"
             }
         """.trimIndent()

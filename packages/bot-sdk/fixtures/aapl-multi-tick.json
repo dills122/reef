@@ -1,6 +1,7 @@
 {
   "scenarioId": "aapl-multi-tick-v1",
   "runId": "run-bot-sdk-aapl-1",
+  "runKind": "scenario",
   "venueSessionId": "session-aapl-1",
   "actorId": "actor-simple-market-maker",
   "participantId": "participant-simple-market-maker",
