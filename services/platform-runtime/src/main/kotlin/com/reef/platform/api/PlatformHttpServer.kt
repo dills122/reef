@@ -3,6 +3,8 @@ package com.reef.platform.api
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminActor
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.ArenaBotRegistrationCommand
+import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
@@ -211,6 +213,8 @@ class PlatformHttpServer(
             setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
             setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
             setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
+            registerArenaBotJson = { body -> registerArenaBotResponse(body) },
+            registerArenaBotVersionJson = { body -> registerArenaBotVersionResponse(body) },
             transitionArenaBotVersionJson = { body -> transitionArenaBotVersionResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
@@ -2150,6 +2154,81 @@ class PlatformHttpServer(
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena transition failed")))
         }
+    }
+
+    private fun registerArenaBotResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val actor = arenaAdminActor(json)
+        return try {
+            val bot = service.registerArenaBot(
+                actor,
+                ArenaBotRegistrationCommand(
+                    botId = json.string("botId"),
+                    fileName = json.string("fileName"),
+                    name = json.string("name"),
+                    publisher = json.string("publisher"),
+                    email = json.string("email"),
+                    description = json.string("description"),
+                    version = json.string("version")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to bot.botId,
+                    "fileName" to bot.fileName
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot registration failed")))
+        }
+    }
+
+    private fun registerArenaBotVersionResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val actor = arenaAdminActor(json)
+        return try {
+            val version = service.registerArenaBotVersion(
+                actor,
+                ArenaBotVersionRegistrationCommand(
+                    botId = json.string("botId"),
+                    versionId = json.string("versionId"),
+                    sourceHash = json.string("sourceHash"),
+                    artifactHash = json.string("artifactHash"),
+                    sdkVersion = json.string("sdkVersion"),
+                    apiVersion = json.string("apiVersion"),
+                    dependencyManifestHash = json.string("dependencyManifestHash")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to version.botId,
+                    "versionId" to version.versionId,
+                    "botVersionStatus" to version.status.name
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot version")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot version registration failed")))
+        }
+    }
+
+    private fun arenaAdminActor(json: JsonDocument): AdminActor {
+        return AdminActor(
+            actorId = json.string("actorId").ifBlank { "internal-admin" },
+            correlationId = json.string("correlationId").ifBlank { "internal-admin" },
+            occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
     }
 
     private fun setCommandCircuitBreakerResponse(body: String): PlatformHotPathResponse {

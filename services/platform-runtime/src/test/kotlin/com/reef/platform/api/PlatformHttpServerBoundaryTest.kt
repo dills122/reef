@@ -2,11 +2,7 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminApplicationService
-import com.reef.platform.application.arena.ArenaBotMetadata
-import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
-import com.reef.platform.application.arena.RegisterArenaBotCommand
-import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -1165,7 +1161,7 @@ class PlatformHttpServerBoundaryTest {
     fun internalAdminArenaBotVersionEndpointTransitionsVersionAndAuditsChange() {
         val accountRiskStore = RecordingAccountRiskStore()
         val persistence = InMemoryRuntimePersistence()
-        val arenaStore = seededArenaRegistryStore()
+        val arenaStore = InMemoryArenaBotRegistryStore()
         val arenaAdminService = AdminApplicationService(
             runtimePersistence = persistence,
             arenaRegistryStore = arenaStore,
@@ -1178,6 +1174,40 @@ class PlatformHttpServerBoundaryTest {
             arenaAdminService = arenaAdminService
         )
         try {
+            val registeredBot = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bots",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "fileName":"bot-1.ts",
+                      "name":"Bot 1",
+                      "publisher":"Publisher",
+                      "email":"publisher@example.com",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val registeredVersion = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bot-versions",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "sourceHash":"sha256:source",
+                      "artifactHash":"sha256:artifact",
+                      "sdkVersion":"1.5.0",
+                      "apiVersion":"v1",
+                      "dependencyManifestHash":"sha256:deps",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
             val response = post(
                 port = server.address.port,
                 path = "/internal/admin/arena/bot-versions/transition",
@@ -1195,6 +1225,10 @@ class PlatformHttpServerBoundaryTest {
             )
             val auditEvents = persistence.eventsForTrace("admin:admin-cli")
 
+            assertEquals(200, registeredBot.status)
+            assertContains(registeredBot.body, "\"botId\":\"bot-1\"")
+            assertEquals(200, registeredVersion.status)
+            assertContains(registeredVersion.body, "\"botVersionStatus\":\"Draft\"")
             assertEquals(200, response.status)
             assertContains(response.body, "\"status\":\"ok\"")
             assertContains(response.body, "\"botVersionStatus\":\"Quarantined\"")
@@ -2766,33 +2800,6 @@ class PlatformHttpServerBoundaryTest {
         }
     }
 
-    private fun seededArenaRegistryStore(): InMemoryArenaBotRegistryStore {
-        val store = InMemoryArenaBotRegistryStore()
-        val service = ArenaControlPlaneService(store) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
-        service.registerBot(
-            RegisterArenaBotCommand(
-                botId = "bot-1",
-                fileName = "bot-1.ts",
-                metadata = ArenaBotMetadata(
-                    name = "Bot 1",
-                    publisher = "Publisher",
-                    email = "publisher@example.com"
-                )
-            )
-        )
-        service.registerVersion(
-            RegisterArenaBotVersionCommand(
-                botId = "bot-1",
-                versionId = "v1",
-                sourceHash = "sha256:source",
-                artifactHash = "sha256:artifact",
-                sdkVersion = "1.5.0",
-                apiVersion = "v1",
-                dependencyManifestHash = "sha256:deps"
-            )
-        )
-        return store
-    }
 }
 
 private class RecordingCommandCaptureStore : CommandCaptureStore {
