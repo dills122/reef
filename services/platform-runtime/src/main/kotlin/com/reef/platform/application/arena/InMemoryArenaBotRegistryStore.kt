@@ -6,6 +6,7 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     private val versions = linkedMapOf<String, ArenaBotVersion>()
     private val reports = linkedMapOf<String, MutableList<ArenaQualificationReport>>()
     private val decisions = linkedMapOf<String, MutableList<ArenaOperatorDecision>>()
+    private val runs = linkedMapOf<String, ArenaRunRecord>()
 
     override fun saveBot(bot: ArenaBot) {
         bots[bot.botId] = bot
@@ -40,6 +41,12 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     override fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision> {
         return decisions[versionKey(botId, versionId)]?.toList() ?: emptyList()
     }
+
+    override fun saveRunRecord(runRecord: ArenaRunRecord) {
+        runs[runRecord.runId] = runRecord
+    }
+
+    override fun runRecord(runId: String): ArenaRunRecord? = runs[runId]
 
     private fun versionKey(botId: String, versionId: String): String = "$botId:$versionId"
 }

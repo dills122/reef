@@ -124,6 +124,93 @@ class ArenaControlPlaneServiceTest {
         assertFalse(service.mayAcceptRuntimeCommands("sample-bot", "v1"))
     }
 
+    @Test
+    fun registersRunRecordsForApprovedBotVersions() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+
+        val run = service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+
+        assertEquals(ArenaRunStatus.Planned, run.status)
+        assertEquals("policy-2026-07-05", run.policyVersion)
+        assertEquals(listOf(ArenaRunBotVersionRef("sample-bot", "v1")), run.botVersions)
+        assertEquals(run, store.runRecord("run-1"))
+    }
+
+    @Test
+    fun rejectsRunRecordsForUnapprovedBotVersions() {
+        val service = seededService(InMemoryArenaBotRegistryStore())
+
+        assertFailsWith<IllegalArgumentException> {
+            service.registerRun(
+                RegisterArenaRunCommand(
+                    runId = "run-1",
+                    modeId = "momentum",
+                    scenarioId = "scenario-a",
+                    seed = 42L,
+                    policyVersion = "policy-2026-07-05",
+                    botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+                )
+            )
+        }
+    }
+
+    @Test
+    fun tracksRunLifecycleWithTerminalCompletionTimestamp() {
+        val service = approvedService(InMemoryArenaBotRegistryStore())
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+
+        val running = service.updateRunStatus("run-1", ArenaRunStatus.Running)
+        val completed = service.updateRunStatus("run-1", ArenaRunStatus.Completed)
+
+        assertEquals(ArenaRunStatus.Running, running.status)
+        assertEquals(ArenaRunStatus.Completed, completed.status)
+        assertEquals(fixedNow, completed.completedAt)
+        assertFailsWith<IllegalArgumentException> {
+            service.updateRunStatus("run-1", ArenaRunStatus.Running)
+        }
+    }
+
+    private fun approvedService(store: InMemoryArenaBotRegistryStore): ArenaControlPlaneService {
+        return seededService(store).also { service ->
+            service.transitionVersion("sample-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-1")
+            service.transitionVersion(
+                "sample-bot",
+                "v1",
+                ArenaBotVersionStatus.ChecksPassed,
+                "operator-1",
+                "checks passed",
+                "corr-2"
+            )
+            service.transitionVersion(
+                "sample-bot",
+                "v1",
+                ArenaBotVersionStatus.Approved,
+                "operator-2",
+                "approved",
+                "corr-3"
+            )
+        }
+    }
+
     private fun seededService(store: InMemoryArenaBotRegistryStore): ArenaControlPlaneService {
         return ArenaControlPlaneService(store) { fixedNow }.also { service ->
             service.registerBot(registerBotCommand())

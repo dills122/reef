@@ -67,6 +67,31 @@ data class ArenaOperatorDecision(
     val occurredAt: Instant
 )
 
+data class ArenaRunBotVersionRef(
+    val botId: String,
+    val versionId: String
+)
+
+data class ArenaRunRecord(
+    val runId: String,
+    val modeId: String,
+    val scenarioId: String,
+    val seed: Long,
+    val policyVersion: String,
+    val botVersions: List<ArenaRunBotVersionRef>,
+    val status: ArenaRunStatus,
+    val createdAt: Instant,
+    val completedAt: Instant? = null
+)
+
+enum class ArenaRunStatus {
+    Planned,
+    Running,
+    Completed,
+    Failed,
+    Cancelled
+}
+
 data class RegisterArenaBotCommand(
     val botId: String,
     val fileName: String,
@@ -83,6 +108,15 @@ data class RegisterArenaBotVersionCommand(
     val dependencyManifestHash: String
 )
 
+data class RegisterArenaRunCommand(
+    val runId: String,
+    val modeId: String,
+    val scenarioId: String,
+    val seed: Long,
+    val policyVersion: String,
+    val botVersions: List<ArenaRunBotVersionRef>
+)
+
 interface ArenaBotRegistryStore {
     fun saveBot(bot: ArenaBot)
     fun bot(botId: String): ArenaBot?
@@ -93,6 +127,8 @@ interface ArenaBotRegistryStore {
     fun qualificationReports(botId: String, versionId: String): List<ArenaQualificationReport>
     fun saveOperatorDecision(decision: ArenaOperatorDecision)
     fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision>
+    fun saveRunRecord(runRecord: ArenaRunRecord)
+    fun runRecord(runId: String): ArenaRunRecord?
 }
 
 class ArenaControlPlaneService(
@@ -214,6 +250,46 @@ class ArenaControlPlaneService(
         }
     }
 
+    fun registerRun(command: RegisterArenaRunCommand): ArenaRunRecord {
+        require(command.runId.isNotBlank()) { "runId is required" }
+        require(command.modeId.isNotBlank()) { "modeId is required" }
+        require(command.scenarioId.isNotBlank()) { "scenarioId is required" }
+        require(command.policyVersion.isNotBlank()) { "policyVersion is required" }
+        require(command.botVersions.isNotEmpty()) { "botVersions is required" }
+        require(store.runRecord(command.runId) == null) { "runId already exists: ${command.runId}" }
+        command.botVersions.forEach { ref ->
+            require(mayAcceptRuntimeCommands(ref.botId, ref.versionId)) {
+                "bot version is not approved for runtime commands: ${ref.botId}/${ref.versionId}"
+            }
+        }
+
+        val run = ArenaRunRecord(
+            runId = command.runId,
+            modeId = command.modeId,
+            scenarioId = command.scenarioId,
+            seed = command.seed,
+            policyVersion = command.policyVersion,
+            botVersions = command.botVersions,
+            status = ArenaRunStatus.Planned,
+            createdAt = now()
+        )
+        store.saveRunRecord(run)
+        return run
+    }
+
+    fun updateRunStatus(runId: String, status: ArenaRunStatus): ArenaRunRecord {
+        val run = store.runRecord(runId) ?: error("unknown arena run: $runId")
+        require(canTransitionRun(run.status, status)) {
+            "invalid arena run transition: ${run.status} -> $status"
+        }
+        val updated = run.copy(
+            status = status,
+            completedAt = if (status.isTerminal()) now() else run.completedAt
+        )
+        store.saveRunRecord(updated)
+        return updated
+    }
+
     private fun requireVersion(botId: String, versionId: String): ArenaBotVersion {
         return store.version(botId, versionId) ?: error("unknown bot version: $botId/$versionId")
     }
@@ -234,6 +310,21 @@ class ArenaControlPlaneService(
             ArenaBotVersionStatus.Banned,
             ArenaBotVersionStatus.Archived -> false
         }
+    }
+
+    private fun canTransitionRun(from: ArenaRunStatus, to: ArenaRunStatus): Boolean {
+        if (from == to) return true
+        return when (from) {
+            ArenaRunStatus.Planned -> to == ArenaRunStatus.Running || to == ArenaRunStatus.Cancelled
+            ArenaRunStatus.Running -> to == ArenaRunStatus.Completed || to == ArenaRunStatus.Failed || to == ArenaRunStatus.Cancelled
+            ArenaRunStatus.Completed,
+            ArenaRunStatus.Failed,
+            ArenaRunStatus.Cancelled -> false
+        }
+    }
+
+    private fun ArenaRunStatus.isTerminal(): Boolean {
+        return this == ArenaRunStatus.Completed || this == ArenaRunStatus.Failed || this == ArenaRunStatus.Cancelled
     }
 
     companion object {
