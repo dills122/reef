@@ -127,6 +127,18 @@ async function setBreaker(scopeType, scopeId, action, reason) {
   });
 }
 
+async function setPriceCollar(instrumentId, minPrice, maxPrice, reason, currency = "USD") {
+  return expectOk("POST", "/internal/admin/price-collars", {
+    instrumentId,
+    minPrice,
+    maxPrice,
+    currency,
+    reason,
+    actorId: "protective-controls-smoke",
+    correlationId: `protective-controls-smoke-${suffix}`,
+  });
+}
+
 console.log("waiting for platform-api health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
 
@@ -134,6 +146,10 @@ console.log("checking protective control admin endpoints...");
 const controls = await request("GET", "/internal/boundary/account-risk/controls");
 if (controls.status !== 200) {
   throw new Error(`account-risk controls endpoint unavailable (${controls.status}): ${controls.text}`);
+}
+const collars = await request("GET", "/internal/boundary/price-collars");
+if (collars.status !== 200) {
+  throw new Error(`price collars endpoint unavailable (${collars.status}): ${collars.text}`);
 }
 
 console.log("seeding reference data...");
@@ -172,6 +188,26 @@ await setAccountRisk("account", "account-1", "allow", "smoke account limits clea
 const limitsCleared = await submitOrder("limits-cleared");
 if (!isAccepted(limitsCleared)) {
   throw new Error(`expected accepted command after account limit clear, got ${limitsCleared.status}: ${limitsCleared.text}`);
+}
+
+console.log("setting price collar and expecting low-side pre-acceptance reject...");
+await setPriceCollar("AAPL", "150000000000", "151000000000", "smoke regular band");
+const belowCollar = await submitOrder("below-collar", { limitPrice: "149999999999" });
+if (belowCollar.status !== 422 || belowCollar.json.code !== "PRICE_COLLAR_LOW") {
+  throw new Error(`expected low collar 422, got ${belowCollar.status}: ${belowCollar.text}`);
+}
+
+console.log("expecting high-side price collar pre-acceptance reject...");
+const aboveCollar = await submitOrder("above-collar", { limitPrice: "151000000001" });
+if (aboveCollar.status !== 422 || aboveCollar.json.code !== "PRICE_COLLAR_HIGH") {
+  throw new Error(`expected high collar 422, got ${aboveCollar.status}: ${aboveCollar.text}`);
+}
+
+console.log("clearing price collar and expecting accepted command...");
+await setPriceCollar("AAPL", "", "", "smoke collar cleared");
+const collarCleared = await submitOrder("collar-cleared");
+if (!isAccepted(collarCleared)) {
+  throw new Error(`expected accepted command after collar clear, got ${collarCleared.status}: ${collarCleared.text}`);
 }
 
 console.log("tripping instrument breaker and expecting pre-acceptance reject...");

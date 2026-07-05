@@ -8,8 +8,10 @@ internal class PlatformDiagnosticRoutes(
     private val accountRiskControlsJson: () -> String,
     private val accountRiskDecisionsJson: (Int) -> String,
     private val commandCircuitBreakersJson: () -> String,
+    private val instrumentPriceCollarsJson: () -> String,
     private val setAccountRiskControlJson: (String) -> PlatformHotPathResponse,
     private val setCommandCircuitBreakerJson: (String) -> PlatformHotPathResponse,
+    private val setInstrumentPriceCollarJson: (String) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -25,8 +27,10 @@ internal class PlatformDiagnosticRoutes(
         "/internal/boundary/account-risk/controls",
         "/internal/boundary/account-risk/decisions/recent",
         "/internal/boundary/circuit-breakers",
+        "/internal/boundary/price-collars",
         "/internal/admin/account-risk/controls",
         "/internal/admin/circuit-breakers",
+        "/internal/admin/price-collars",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
         "/internal/commands/async/stats",
@@ -47,8 +51,10 @@ internal class PlatformDiagnosticRoutes(
                 accountRiskDecisionsJson(queryValue(query, "limit").toIntOrNull() ?: 50)
             }
             "/internal/boundary/circuit-breakers" -> getOnly(method) { commandCircuitBreakersJson() }
+            "/internal/boundary/price-collars" -> getOnly(method) { instrumentPriceCollarsJson() }
             "/internal/admin/account-risk/controls" -> postOnly(method) { setAccountRiskControlJson(body) }
             "/internal/admin/circuit-breakers" -> postOnly(method) { setCommandCircuitBreakerJson(body) }
+            "/internal/admin/price-collars" -> postOnly(method) { setInstrumentPriceCollarJson(body) }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }

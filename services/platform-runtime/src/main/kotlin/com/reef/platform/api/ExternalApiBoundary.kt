@@ -179,6 +179,51 @@ interface CommandCircuitBreakerStore : CommandCircuitBreakerCheck {
     fun listBreakers(): List<CommandCircuitBreakerState>
 }
 
+data class InstrumentPriceCollarRequest(
+    val clientId: String,
+    val route: String,
+    val commandType: String,
+    val commandId: String,
+    val correlationId: String,
+    val instrumentId: String,
+    val limitPrice: String,
+    val currency: String
+)
+
+data class InstrumentPriceCollarState(
+    val instrumentId: String,
+    val minPrice: String,
+    val maxPrice: String,
+    val currency: String,
+    val reason: String,
+    val updatedAt: String = ""
+)
+
+interface InstrumentPriceCollarCheck {
+    fun evaluate(request: InstrumentPriceCollarRequest): BoundaryError?
+}
+
+interface InstrumentPriceCollarStore : InstrumentPriceCollarCheck {
+    fun setCollar(
+        instrumentId: String,
+        minPrice: String = "",
+        maxPrice: String = "",
+        currency: String = "",
+        reason: String = ""
+    )
+    fun listCollars(): List<InstrumentPriceCollarState>
+}
+
+interface BoundaryRejectionLog {
+    fun recordRejection(
+        guardrailType: String,
+        scopeType: String,
+        scopeId: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    )
+}
+
 class AllowAllAccountRiskCheck : AccountRiskCheck {
     override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
         return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
@@ -187,6 +232,20 @@ class AllowAllAccountRiskCheck : AccountRiskCheck {
 
 class AllowAllCommandCircuitBreakerCheck : CommandCircuitBreakerCheck {
     override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? = null
+}
+
+class AllowAllInstrumentPriceCollarCheck : InstrumentPriceCollarCheck {
+    override fun evaluate(request: InstrumentPriceCollarRequest): BoundaryError? = null
+}
+
+class NoopBoundaryRejectionLog : BoundaryRejectionLog {
+    override fun recordRejection(
+        guardrailType: String,
+        scopeType: String,
+        scopeId: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    ) {}
 }
 
 class StaticAccountRiskCheck(
@@ -770,6 +829,311 @@ class PostgresCommandCircuitBreakerStore(
     private fun connection() = dataSource.connection
 }
 
+class PostgresInstrumentPriceCollarStore(
+    private val dataSource: DataSource,
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
+    private val cacheTtlMillis: Long = 1_000L,
+    private val nowMillis: () -> Long = { System.currentTimeMillis() }
+) : InstrumentPriceCollarStore {
+    private data class CachedState(
+        val state: InstrumentPriceCollarState?,
+        val expiresAtMillis: Long
+    )
+
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedState>()
+
+    init {
+        connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryInstrumentPriceCollars(names.instrumentPriceCollars)
+                )
+                return@use
+            }
+            conn.createStatement().use { stmt ->
+                stmt.execute("CREATE SCHEMA IF NOT EXISTS ${names.schemaName}")
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.instrumentPriceCollars} (
+                      instrument_id TEXT NOT NULL PRIMARY KEY,
+                      min_price TEXT NOT NULL DEFAULT '',
+                      max_price TEXT NOT NULL DEFAULT '',
+                      currency TEXT NOT NULL DEFAULT '',
+                      reason TEXT NOT NULL DEFAULT '',
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    override fun evaluate(request: InstrumentPriceCollarRequest): BoundaryError? {
+        if (request.commandType != "SubmitOrder") return null
+        if (request.instrumentId.isBlank()) return null
+        val collar = stateFor(request.instrumentId) ?: return null
+        val expectedCurrency = collar.currency.trim()
+        if (expectedCurrency.isNotBlank() && !request.currency.equals(expectedCurrency, ignoreCase = true)) {
+            return null
+        }
+        val price = request.limitPrice.toBigDecimalOrNull() ?: return null
+        val minPrice = collar.minPrice.toBigDecimalOrNull()
+        if (minPrice != null && price < minPrice) {
+            return BoundaryError(
+                422,
+                "PRICE_COLLAR_LOW",
+                "limit price below collar for ${collar.instrumentId}: ${price.toPlainString()} < ${minPrice.toPlainString()}"
+            )
+        }
+        val maxPrice = collar.maxPrice.toBigDecimalOrNull()
+        if (maxPrice != null && price > maxPrice) {
+            return BoundaryError(
+                422,
+                "PRICE_COLLAR_HIGH",
+                "limit price above collar for ${collar.instrumentId}: ${price.toPlainString()} > ${maxPrice.toPlainString()}"
+            )
+        }
+        return null
+    }
+
+    override fun setCollar(instrumentId: String, minPrice: String, maxPrice: String, currency: String, reason: String) {
+        require(instrumentId.isNotBlank()) { "instrumentId is required" }
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.instrumentPriceCollars}(instrument_id, min_price, max_price, currency, reason, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+                ON CONFLICT (instrument_id)
+                DO UPDATE SET min_price = EXCLUDED.min_price,
+                              max_price = EXCLUDED.max_price,
+                              currency = EXCLUDED.currency,
+                              reason = EXCLUDED.reason,
+                              updated_at = NOW()
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, instrumentId)
+                ps.setString(2, minPrice)
+                ps.setString(3, maxPrice)
+                ps.setString(4, currency)
+                ps.setString(5, reason)
+                ps.executeUpdate()
+            }
+        }
+        cache.remove(instrumentId)
+    }
+
+    override fun listCollars(): List<InstrumentPriceCollarState> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT instrument_id, min_price, max_price, currency, reason, updated_at
+                FROM ${names.instrumentPriceCollars}
+                ORDER BY instrument_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<InstrumentPriceCollarState>()
+                    while (rs.next()) {
+                        rows.add(
+                            InstrumentPriceCollarState(
+                                instrumentId = rs.getString("instrument_id"),
+                                minPrice = rs.getString("min_price").orEmpty(),
+                                maxPrice = rs.getString("max_price").orEmpty(),
+                                currency = rs.getString("currency").orEmpty(),
+                                reason = rs.getString("reason").orEmpty(),
+                                updatedAt = rs.getString("updated_at").orEmpty()
+                            )
+                        )
+                    }
+                    return rows
+                }
+            }
+        }
+    }
+
+    private fun stateFor(instrumentId: String): InstrumentPriceCollarState? {
+        val now = nowMillis()
+        cache[instrumentId]?.let { cached ->
+            if (cached.expiresAtMillis > now) return cached.state
+        }
+        val loaded = loadState(instrumentId)
+        if (cacheTtlMillis > 0) {
+            cache[instrumentId] = CachedState(loaded, now + cacheTtlMillis)
+        }
+        return loaded
+    }
+
+    private fun loadState(instrumentId: String): InstrumentPriceCollarState? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT instrument_id, min_price, max_price, currency, reason, updated_at
+                FROM ${names.instrumentPriceCollars}
+                WHERE instrument_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, instrumentId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return InstrumentPriceCollarState(
+                        instrumentId = rs.getString("instrument_id"),
+                        minPrice = rs.getString("min_price").orEmpty(),
+                        maxPrice = rs.getString("max_price").orEmpty(),
+                        currency = rs.getString("currency").orEmpty(),
+                        reason = rs.getString("reason").orEmpty(),
+                        updatedAt = rs.getString("updated_at").orEmpty()
+                    )
+                }
+            }
+        }
+    }
+
+    private fun String.toBigDecimalOrNull(): BigDecimal? {
+        val trimmed = trim()
+        if (trimmed.isBlank()) return null
+        return try {
+            BigDecimal(trimmed)
+        } catch (_: NumberFormatException) {
+            null
+        }
+    }
+
+    private fun connection() = dataSource.connection
+}
+
+class PostgresBoundaryRejectionLog(
+    private val dataSource: DataSource,
+    private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
+    private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
+) : BoundaryRejectionLog {
+    init {
+        connection().use { conn ->
+            if (bootstrapMode == PostgresBootstrapMode.Validate) {
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.boundaryRejections(names.boundaryRejections)
+                )
+                return@use
+            }
+            conn.createStatement().use { stmt ->
+                stmt.execute("CREATE SCHEMA IF NOT EXISTS ${names.schemaName}")
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.boundaryRejections} (
+                      rejection_id TEXT NOT NULL PRIMARY KEY,
+                      rejected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      guardrail_type TEXT NOT NULL,
+                      scope_type TEXT NOT NULL DEFAULT '',
+                      scope_id TEXT NOT NULL DEFAULT '',
+                      status INTEGER NOT NULL,
+                      code TEXT NOT NULL,
+                      message TEXT NOT NULL,
+                      client_id TEXT NOT NULL,
+                      route TEXT NOT NULL,
+                      command_type TEXT NOT NULL,
+                      command_id TEXT NOT NULL,
+                      idempotency_key TEXT NOT NULL,
+                      correlation_id TEXT NOT NULL,
+                      actor_id TEXT NOT NULL,
+                      participant_id TEXT NOT NULL,
+                      account_id TEXT NOT NULL,
+                      bot_id TEXT NOT NULL,
+                      run_id TEXT NOT NULL,
+                      venue_session_id TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      order_id TEXT NOT NULL,
+                      quantity_units TEXT NOT NULL DEFAULT '',
+                      limit_price TEXT NOT NULL DEFAULT '',
+                      currency TEXT NOT NULL DEFAULT '',
+                      payload_hash TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_boundary_rejections_guardrail_time
+                      ON ${names.boundaryRejections}(guardrail_type, rejected_at DESC)
+                    """.trimIndent()
+                )
+            }
+        }
+    }
+
+    override fun recordRejection(
+        guardrailType: String,
+        scopeType: String,
+        scopeId: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    ) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.boundaryRejections}(
+                  rejection_id,
+                  guardrail_type,
+                  scope_type,
+                  scope_id,
+                  status,
+                  code,
+                  message,
+                  client_id,
+                  route,
+                  command_type,
+                  command_id,
+                  idempotency_key,
+                  correlation_id,
+                  actor_id,
+                  participant_id,
+                  account_id,
+                  bot_id,
+                  run_id,
+                  venue_session_id,
+                  instrument_id,
+                  order_id,
+                  quantity_units,
+                  limit_price,
+                  currency,
+                  payload_hash
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, UUID.randomUUID().toString())
+                ps.setString(2, guardrailType)
+                ps.setString(3, scopeType)
+                ps.setString(4, scopeId)
+                ps.setInt(5, error.status)
+                ps.setString(6, error.code)
+                ps.setString(7, error.message)
+                ps.setString(8, request.clientId)
+                ps.setString(9, request.route)
+                ps.setString(10, request.commandType)
+                ps.setString(11, request.commandId)
+                ps.setString(12, request.idempotencyKey)
+                ps.setString(13, request.correlationId)
+                ps.setString(14, request.actorId)
+                ps.setString(15, request.participantId)
+                ps.setString(16, request.accountId)
+                ps.setString(17, request.botId)
+                ps.setString(18, request.runId)
+                ps.setString(19, request.venueSessionId)
+                ps.setString(20, request.instrumentId)
+                ps.setString(21, request.orderId)
+                ps.setString(22, request.quantityUnits)
+                ps.setString(23, request.limitPrice)
+                ps.setString(24, request.currency)
+                ps.setString(25, request.payloadHash)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    private fun connection() = dataSource.connection
+}
+
 data class AbuseProtectionStats(
     val mode: String,
     val enabled: Boolean,
@@ -1271,6 +1635,8 @@ data class BoundaryHooks(
     val abuseProtectionHook: AbuseProtectionHook,
     val accountRiskCheck: AccountRiskCheck,
     val commandCircuitBreakerCheck: CommandCircuitBreakerCheck,
+    val instrumentPriceCollarCheck: InstrumentPriceCollarCheck,
+    val boundaryRejectionLog: BoundaryRejectionLog,
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
@@ -1359,6 +1725,21 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllCommandCircuitBreakerCheck()
     }
 
+    val instrumentPriceCollarMode = (System.getenv("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE") ?: "allow-all").lowercase()
+    val instrumentPriceCollarCheck = when (instrumentPriceCollarMode) {
+        "postgres", "cached-postgres" -> {
+            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            val cacheTtlMillis = System.getenv("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
+            PostgresInstrumentPriceCollarStore(
+                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "instrument-price-collar"),
+                cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
+            )
+        }
+        else -> AllowAllInstrumentPriceCollarCheck()
+    }
+
     val idempotencyMode = (System.getenv("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
     val retentionPolicy = DefaultIdempotencyRetentionPolicy()
     val idempotencyStore = if (idempotencyMode == "postgres") {
@@ -1373,12 +1754,30 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         InMemoryIdempotencyStore()
     }
 
+    val rejectionLogMode = (System.getenv("EXTERNAL_API_BOUNDARY_REJECTION_LOG") ?: "auto").lowercase()
+    val boundaryRejectionLog = when {
+        rejectionLogMode == "postgres" || (
+            rejectionLogMode == "auto" &&
+                listOf(accountRiskMode, circuitBreakerMode, instrumentPriceCollarMode).any { it == "postgres" || it == "cached-postgres" }
+            ) -> {
+            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            PostgresBoundaryRejectionLog(
+                dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "boundary-rejection-log")
+            )
+        }
+        else -> NoopBoundaryRejectionLog()
+    }
+
     return BoundaryHooks(
         authHook = authHook,
         rateLimitHook = rateLimitHook,
         abuseProtectionHook = abuseProtectionHook,
         accountRiskCheck = accountRiskCheck,
         commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+        instrumentPriceCollarCheck = instrumentPriceCollarCheck,
+        boundaryRejectionLog = boundaryRejectionLog,
         idempotencyStore = idempotencyStore,
         idempotencyRetentionPolicy = retentionPolicy,
         commandCaptureStore = defaultCommandCaptureStore(commandProcessingMode),
@@ -1402,6 +1801,16 @@ fun defaultCommandCircuitBreakerStore(): CommandCircuitBreakerStore {
     val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
     return PostgresCommandCircuitBreakerStore(
         dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-circuit-breaker-admin"),
+        cacheTtlMillis = 0L
+    )
+}
+
+fun defaultInstrumentPriceCollarStore(): InstrumentPriceCollarStore {
+    val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+    val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
+    val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+    return PostgresInstrumentPriceCollarStore(
+        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "instrument-price-collar-admin"),
         cacheTtlMillis = 0L
     )
 }

@@ -39,6 +39,8 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "boundary/0004_command_capture_legacy_defaults.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0006_account_risk_controls.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0007_command_circuit_breakers.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "boundary/0009_instrument_price_collars.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "boundary/0010_boundary_rejections.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0008_account_risk_limits.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0001_commands.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0002_command_results.sql"));

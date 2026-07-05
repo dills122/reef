@@ -15,6 +15,8 @@ class PostgresBoundarySqlNamesTest {
         assertEquals("boundary.account_risk_controls", names.accountRiskControls)
         assertEquals("boundary.account_risk_decisions", names.accountRiskDecisions)
         assertEquals("boundary.command_circuit_breakers", names.commandCircuitBreakers)
+        assertEquals("boundary.instrument_price_collars", names.instrumentPriceCollars)
+        assertEquals("boundary.boundary_rejections", names.boundaryRejections)
         assertEquals("idx_api_command_captures_status_updated", names.commandCapturesStatusUpdatedIndex)
     }
 

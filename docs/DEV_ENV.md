@@ -392,9 +392,28 @@ curl -s -X POST http://127.0.0.1:8080/internal/admin/circuit-breakers \
 curl -s http://127.0.0.1:8080/internal/boundary/circuit-breakers
 ```
 
+Instrument price collars are separate submit-order safeguards for instrument-level limit-price bands. Set `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres` to read cached collars from `boundary.instrument_price_collars`; `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS` controls the cache TTL. Submit orders below the configured minimum reject with `422 PRICE_COLLAR_LOW`; submit orders above the configured maximum reject with `422 PRICE_COLLAR_HIGH`. The rejection happens before command capture, stream-intake reservation, or durable publish. Blank min or max values leave that side unbounded; blank currency applies the collar regardless of request currency.
+
+Local price collar commands:
+
+```bash
+make dev-admin CMD="price-collar-set AAPL 150000000000 151000000000 --currency USD --reason regular-band"
+make dev-admin CMD="price-collar-set AAPL '*' '*' --currency USD --reason cleared"
+make dev-admin CMD="price-collar-list"
+curl -s -X POST http://127.0.0.1:8080/internal/admin/price-collars \
+  -H 'content-type: application/json' \
+  -d '{"instrumentId":"AAPL","minPrice":"150000000000","maxPrice":"151000000000","currency":"USD","reason":"regular-band","actorId":"ops-1"}'
+curl -s http://127.0.0.1:8080/internal/boundary/price-collars
+```
+
+Boundary rejection evidence is append-only in `boundary.boundary_rejections` when `EXTERNAL_API_BOUNDARY_REJECTION_LOG=postgres`. The default `auto` mode enables this log when any Postgres-backed boundary guardrail is enabled and otherwise stays no-op, so allow-all local runs do not require a boundary database.
+
 Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls:
 
 ```bash
+EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres \
+EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres \
+EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres \
 make dev-smoke-protective-controls
 ```
 

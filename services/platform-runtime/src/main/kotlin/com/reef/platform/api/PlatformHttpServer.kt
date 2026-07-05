@@ -77,6 +77,9 @@ class PlatformHttpServer(
     private val accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
     private val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
     private val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+    private val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
+    private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+    private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
@@ -198,8 +201,10 @@ class PlatformHttpServer(
             accountRiskControlsJson = { accountRiskControlsJson() },
             accountRiskDecisionsJson = { limit -> accountRiskDecisionsJson(limit) },
             commandCircuitBreakersJson = { commandCircuitBreakersJson() },
+            instrumentPriceCollarsJson = { instrumentPriceCollarsJson() },
             setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
             setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
+            setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -225,6 +230,9 @@ class PlatformHttpServer(
         accountRiskDecisionLog = deps.accountRiskDecisionLog,
         commandCircuitBreakerCheck = deps.commandCircuitBreakerCheck,
         commandCircuitBreakerStore = deps.commandCircuitBreakerStore,
+        instrumentPriceCollarCheck = deps.instrumentPriceCollarCheck,
+        instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
+        boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
@@ -851,7 +859,17 @@ class PlatformHttpServer(
             commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
         }
         if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
             writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            return
+        }
+
+        val collarViolation = HotPathMetrics.time("api.instrumentPriceCollar.check") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
@@ -1032,7 +1050,16 @@ class PlatformHttpServer(
             commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
         }
         if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
             return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+        }
+
+        val collarViolation = HotPathMetrics.time("api.instrumentPriceCollar.check") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            return PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
@@ -1288,9 +1315,21 @@ class PlatformHttpServer(
             commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
         }
         if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation, envelope)
             return completedStreamAckResponse(
                 started,
                 PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            )
+        }
+
+        val collarViolation = HotPathMetrics.time("api.streamAck.instrumentPriceCollar") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation, envelope)
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             )
         }
 
@@ -1449,6 +1488,75 @@ class PlatformHttpServer(
         )
     }
 
+    private fun instrumentPriceCollarViolation(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope? = null
+    ): BoundaryError? {
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+        return instrumentPriceCollarCheck.evaluate(
+            InstrumentPriceCollarRequest(
+                clientId = clientId,
+                route = route,
+                commandType = riskRequest.commandType,
+                commandId = riskRequest.commandId,
+                correlationId = correlationId,
+                instrumentId = riskRequest.instrumentId,
+                limitPrice = riskRequest.limitPrice,
+                currency = riskRequest.currency
+            )
+        )
+    }
+
+    private fun recordGuardrailRejection(
+        guardrailType: String,
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        error: BoundaryError,
+        envelope: StreamCommandEnvelope? = null
+    ) {
+        try {
+            val request = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+            val scope = rejectionScope(guardrailType, request, error)
+            boundaryRejectionLog.recordRejection(
+                guardrailType = guardrailType,
+                scopeType = scope.first,
+                scopeId = scope.second,
+                request = request,
+                error = error
+            )
+        } catch (ex: Exception) {
+            System.err.println(
+                "boundary_rejection_audit_failed guardrailType=$guardrailType route=$route clientId=$clientId commandId=${JsonFields.escape(JsonCodec.parseObjectOrEmpty(body).string("commandId"))} message=${JsonFields.escape(ex.message ?: "unknown")}"
+            )
+        }
+    }
+
+    private fun rejectionScope(
+        guardrailType: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    ): Pair<String, String> {
+        if (guardrailType == "instrument-price-collar") {
+            return "INSTRUMENT" to request.instrumentId
+        }
+        val match = Regex("for ([A-Z_]+):([^:]+)(:|$)").find(error.message)
+        if (match != null) {
+            return match.groupValues[1] to match.groupValues[2]
+        }
+        return when {
+            request.instrumentId.isNotBlank() -> "INSTRUMENT" to request.instrumentId
+            request.venueSessionId.isNotBlank() -> "VENUE_SESSION" to request.venueSessionId
+            else -> "GLOBAL" to "*"
+        }
+    }
+
     private fun accountRiskRequest(
         clientId: String,
         route: String,
@@ -1519,7 +1627,17 @@ class PlatformHttpServer(
             commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
         }
         if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
             writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            return
+        }
+
+        val collarViolation = HotPathMetrics.time("api.acceptedAsync.instrumentPriceCollar") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
@@ -1597,7 +1715,16 @@ class PlatformHttpServer(
             commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
         }
         if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
             return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+        }
+
+        val collarViolation = HotPathMetrics.time("api.acceptedAsync.instrumentPriceCollar") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            return PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
@@ -1887,6 +2014,23 @@ class PlatformHttpServer(
         )
     }
 
+    private fun instrumentPriceCollarsJson(): String {
+        val collars = instrumentPriceCollarStore?.listCollars().orEmpty()
+        return JsonCodec.writeObject(
+            "collars" to collars.map { collar ->
+                mapOf(
+                    "instrumentId" to collar.instrumentId,
+                    "minPrice" to collar.minPrice,
+                    "maxPrice" to collar.maxPrice,
+                    "currency" to collar.currency,
+                    "reason" to collar.reason,
+                    "updatedAt" to collar.updatedAt
+                )
+            },
+            "collarsCount" to collars.size
+        )
+    }
+
     private fun setAccountRiskControlResponse(body: String): PlatformHotPathResponse {
         val store = accountRiskControlStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "account risk control store unavailable"))
@@ -2005,6 +2149,71 @@ class PlatformHttpServer(
                     "scopeType" to current.scopeType,
                     "scopeId" to current.scopeId,
                     "tripped" to current.tripped,
+                    "reason" to current.reason,
+                    "updatedAt" to current.updatedAt
+                )
+            )
+        )
+    }
+
+    private fun setInstrumentPriceCollarResponse(body: String): PlatformHotPathResponse {
+        val store = instrumentPriceCollarStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "instrument price collar store unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val instrumentId = json.string("instrumentId").ifBlank { json.string("id") }
+        if (instrumentId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "instrumentId is required"))
+        }
+        val minPrice = json.string("minPrice")
+        val maxPrice = json.string("maxPrice")
+        val parsedMin = minPrice.toBigDecimalOrNull()
+        val parsedMax = maxPrice.toBigDecimalOrNull()
+        if (minPrice.isNotBlank() && parsedMin == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid minPrice"))
+        }
+        if (maxPrice.isNotBlank() && parsedMax == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxPrice"))
+        }
+        if (parsedMin != null && parsedMax != null && parsedMax < parsedMin) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "maxPrice must be greater than or equal to minPrice"))
+        }
+        val currency = json.string("currency").uppercase()
+        val reason = json.string("reason")
+        val actorId = json.string("actorId").ifBlank { "internal-admin" }
+        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val previous = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
+
+        store.setCollar(instrumentId, minPrice, maxPrice, currency, reason)
+        val current = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
+            ?: InstrumentPriceCollarState(instrumentId, minPrice, maxPrice, currency, reason)
+        recordProtectiveControlAudit(
+            actorId = actorId,
+            correlationId = correlationId,
+            eventType = "InstrumentPriceCollarChanged",
+            targetId = instrumentId,
+            payload = mapOf(
+                "controlType" to "instrument-price-collar",
+                "instrumentId" to instrumentId,
+                "previousMinPrice" to previous?.minPrice.orEmpty(),
+                "previousMaxPrice" to previous?.maxPrice.orEmpty(),
+                "previousCurrency" to previous?.currency.orEmpty(),
+                "previousReason" to previous?.reason.orEmpty(),
+                "minPrice" to minPrice,
+                "maxPrice" to maxPrice,
+                "currency" to currency,
+                "reason" to reason
+            )
+        )
+
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "collar" to mapOf(
+                    "instrumentId" to current.instrumentId,
+                    "minPrice" to current.minPrice,
+                    "maxPrice" to current.maxPrice,
+                    "currency" to current.currency,
                     "reason" to current.reason,
                     "updatedAt" to current.updatedAt
                 )
@@ -2682,6 +2891,9 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         accountRiskDecisionLog = hooks.accountRiskCheck as? AccountRiskDecisionLog,
         commandCircuitBreakerCheck = hooks.commandCircuitBreakerCheck,
         commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+        instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
+        instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+        boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
@@ -2707,6 +2919,9 @@ data class ServerBoundaryDeps(
     val accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
     val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
     val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+    val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
+    val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+    val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,
