@@ -1061,18 +1061,23 @@ class PlatformHttpServerBoundaryTest {
         )
         val breakerStore = RecordingCommandCircuitBreakerStore()
         breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val collarStore = RecordingInstrumentPriceCollarStore()
+        collarStore.setCollar("AAPL", "150000000000", "151000000000", "USD", "regular band")
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
             accountRiskCheck = accountRiskStore,
             accountRiskControlStore = accountRiskStore,
             accountRiskDecisionLog = accountRiskStore,
             commandCircuitBreakerCheck = breakerStore,
-            commandCircuitBreakerStore = breakerStore
+            commandCircuitBreakerStore = breakerStore,
+            instrumentPriceCollarCheck = collarStore,
+            instrumentPriceCollarStore = collarStore
         )
         try {
             val controls = get(server.address.port, "/internal/boundary/account-risk/controls")
             val decisions = get(server.address.port, "/internal/boundary/account-risk/decisions/recent?limit=10")
             val breakers = get(server.address.port, "/internal/boundary/circuit-breakers")
+            val collars = get(server.address.port, "/internal/boundary/price-collars")
 
             assertEquals(200, controls.status)
             assertContains(controls.body, "\"controlsCount\":1")
@@ -1090,6 +1095,11 @@ class PlatformHttpServerBoundaryTest {
             assertContains(breakers.body, "\"breakersCount\":1")
             assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
             assertContains(breakers.body, "\"tripped\":true")
+            assertEquals(200, collars.status)
+            assertContains(collars.body, "\"collarsCount\":1")
+            assertContains(collars.body, "\"instrumentId\":\"AAPL\"")
+            assertContains(collars.body, "\"minPrice\":\"150000000000\"")
+            assertContains(collars.body, "\"maxPrice\":\"151000000000\"")
         } finally {
             server.stop(0)
         }
@@ -1188,6 +1198,50 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun internalAdminPriceCollarEndpointSetsCollarAndAuditsChange() {
+        val collarStore = RecordingInstrumentPriceCollarStore()
+        val persistence = InMemoryRuntimePersistence()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            instrumentPriceCollarCheck = collarStore,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/price-collars",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "instrumentId":"AAPL",
+                      "minPrice":"150000000000",
+                      "maxPrice":"151000000000",
+                      "currency":"usd",
+                      "reason":"regular band",
+                      "actorId":"ops-3",
+                      "correlationId":"corr-admin-collar"
+                    }
+                """.trimIndent()
+            )
+            val collars = get(server.address.port, "/internal/boundary/price-collars")
+            val auditEvents = persistence.eventsForTrace("admin:ops-3")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"instrumentId\":\"AAPL\"")
+            assertContains(response.body, "\"currency\":\"USD\"")
+            assertContains(collars.body, "\"minPrice\":\"150000000000\"")
+            assertContains(collars.body, "\"maxPrice\":\"151000000000\"")
+            assertEquals(1, auditEvents.size)
+            assertEquals("InstrumentPriceCollarChanged", auditEvents.single().eventType)
+            assertContains(auditEvents.single().payloadJson, "\"previousMinPrice\":\"\"")
+            assertContains(auditEvents.single().payloadJson, "\"maxPrice\":\"151000000000\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun accountRiskControlRejectsThenClearAllowsCapturedAckCommand() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -1258,12 +1312,14 @@ class PlatformHttpServerBoundaryTest {
         )
         val breakerStore = RecordingCommandCircuitBreakerStore()
         breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val rejectionLog = RecordingBoundaryRejectionLog()
         val gateway = CountingEngineGateway(EchoOrderEngineGateway())
         val server = testServerWithGateway(
             gateway = gateway,
             captureStore = captureStore,
             commandProcessingMode = CommandProcessingMode.CapturedAck,
-            commandCircuitBreakerCheck = breakerStore
+            commandCircuitBreakerCheck = breakerStore,
+            boundaryRejectionLog = rejectionLog
         )
         try {
             val rejected = post(
@@ -1278,6 +1334,10 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, rejected.status)
             assertContains(rejected.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
             assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-reject").status)
+            assertEquals(1, rejectionLog.records.size)
+            assertEquals("command-circuit-breaker", rejectionLog.records.single().guardrailType)
+            assertEquals("INSTRUMENT", rejectionLog.records.single().scopeType)
+            assertEquals("AAPL", rejectionLog.records.single().scopeId)
 
             breakerStore.setBreaker("INSTRUMENT", "AAPL", false, "cleared")
             val accepted = post(
@@ -1294,6 +1354,69 @@ class PlatformHttpServerBoundaryTest {
             assertContains(accepted.body, "\"commandId\":\"cmd-breaker-smoke-accept\"")
             assertEquals(0, gateway.submitCalls)
             assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun instrumentPriceCollarRejectsThenClearAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val collarStore = RecordingInstrumentPriceCollarStore()
+        collarStore.setCollar("AAPL", "150000000000", "151000000000", "USD", "regular band")
+        val rejectionLog = RecordingBoundaryRejectionLog()
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            instrumentPriceCollarCheck = collarStore,
+            boundaryRejectionLog = rejectionLog
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-collar-smoke",
+                    "Idempotency-Key" to "idem-collar-smoke-reject"
+                ),
+                body = validSubmitBody(
+                    "cmd-collar-smoke-reject",
+                    "trace-collar-smoke-reject",
+                    "ord-collar-smoke-reject",
+                    extra = ",\"limitPrice\":\"149999999999\""
+                )
+            )
+            assertEquals(422, rejected.status)
+            assertContains(rejected.body, "\"code\":\"PRICE_COLLAR_LOW\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-collar-smoke-reject").status)
+            assertEquals(1, rejectionLog.records.size)
+            assertEquals("instrument-price-collar", rejectionLog.records.single().guardrailType)
+            assertEquals("INSTRUMENT", rejectionLog.records.single().scopeType)
+            assertEquals("AAPL", rejectionLog.records.single().scopeId)
+            assertEquals("cmd-collar-smoke-reject", rejectionLog.records.single().request.commandId)
+
+            collarStore.setCollar("AAPL", "", "", "USD", "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-collar-smoke",
+                    "Idempotency-Key" to "idem-collar-smoke-accept"
+                ),
+                body = validSubmitBody("cmd-collar-smoke-accept", "trace-collar-smoke-accept", "ord-collar-smoke-accept")
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-collar-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-collar-smoke-accept").status)
         } finally {
             server.stop(0)
         }
@@ -2262,6 +2385,9 @@ class PlatformHttpServerBoundaryTest {
         accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
         commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
         commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+        instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
+        instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+        boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
@@ -2305,6 +2431,9 @@ class PlatformHttpServerBoundaryTest {
             accountRiskDecisionLog = accountRiskDecisionLog,
             commandCircuitBreakerCheck = commandCircuitBreakerCheck,
             commandCircuitBreakerStore = commandCircuitBreakerStore,
+            instrumentPriceCollarCheck = instrumentPriceCollarCheck,
+            instrumentPriceCollarStore = instrumentPriceCollarStore,
+            boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -2900,6 +3029,69 @@ private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
     }
 
     override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
+}
+
+private class RecordingInstrumentPriceCollarStore : InstrumentPriceCollarStore {
+    private val collars = linkedMapOf<String, InstrumentPriceCollarState>()
+
+    override fun evaluate(request: InstrumentPriceCollarRequest): BoundaryError? {
+        if (request.commandType != "SubmitOrder") return null
+        val collar = collars[request.instrumentId] ?: return null
+        if (collar.currency.isNotBlank() && !request.currency.equals(collar.currency, ignoreCase = true)) return null
+        val price = request.limitPrice.toBigDecimalOrNull() ?: return null
+        val minPrice = collar.minPrice.toBigDecimalOrNull()
+        if (minPrice != null && price < minPrice) {
+            return BoundaryError(
+                422,
+                "PRICE_COLLAR_LOW",
+                "limit price below collar for ${collar.instrumentId}"
+            )
+        }
+        val maxPrice = collar.maxPrice.toBigDecimalOrNull()
+        if (maxPrice != null && price > maxPrice) {
+            return BoundaryError(
+                422,
+                "PRICE_COLLAR_HIGH",
+                "limit price above collar for ${collar.instrumentId}"
+            )
+        }
+        return null
+    }
+
+    override fun setCollar(instrumentId: String, minPrice: String, maxPrice: String, currency: String, reason: String) {
+        collars[instrumentId] = InstrumentPriceCollarState(
+            instrumentId = instrumentId,
+            minPrice = minPrice,
+            maxPrice = maxPrice,
+            currency = currency,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listCollars(): List<InstrumentPriceCollarState> = collars.values.toList()
+}
+
+private class RecordingBoundaryRejectionLog : BoundaryRejectionLog {
+    data class Record(
+        val guardrailType: String,
+        val scopeType: String,
+        val scopeId: String,
+        val request: AccountRiskCheckRequest,
+        val error: BoundaryError
+    )
+
+    val records = mutableListOf<Record>()
+
+    override fun recordRejection(
+        guardrailType: String,
+        scopeType: String,
+        scopeId: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    ) {
+        records.add(Record(guardrailType, scopeType, scopeId, request, error))
+    }
 }
 
 private class ThrowingEngineGateway : EngineGateway {

@@ -91,6 +91,11 @@ Rationale:
 - `EXTERNAL_API_RATE_LIMIT_MODE=allow-all|fixed-window`
 - `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all|static|postgres`
 - `EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS=<milliseconds>` controls the Postgres-backed control-state cache.
+- `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=allow-all|postgres`
+- `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS=<milliseconds>` controls the Postgres-backed breaker-state cache.
+- `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=allow-all|postgres`
+- `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS=<milliseconds>` controls the Postgres-backed collar-state cache.
+- `EXTERNAL_API_BOUNDARY_REJECTION_LOG=auto|none|postgres`
 
 ## Next Implementation Steps
 
@@ -122,3 +127,43 @@ Decision:
 Configuration:
 - `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=allow-all|postgres`
 - `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS=<milliseconds>`
+
+### 6. Instrument price collars
+
+- Interfaces:
+  - `InstrumentPriceCollarCheck`
+  - `InstrumentPriceCollarStore`
+- Current backends:
+  - `AllowAllInstrumentPriceCollarCheck`
+  - `PostgresInstrumentPriceCollarStore`
+- Current scope:
+  - `INSTRUMENT`
+
+Decision:
+- instrument price collars are submit-order pre-acceptance gates for instrument-level limit-price bands.
+- collar checks run after hard circuit breakers and before account/bot risk checks.
+- low-side violations return `422 PRICE_COLLAR_LOW`; high-side violations return `422 PRICE_COLLAR_HIGH`.
+- rejected commands must not append command-log rows, reserve stream-intake rows, or publish command messages.
+- internal write endpoint `/internal/admin/price-collars` supports local/admin band updates and emits admin audit events.
+- internal read endpoint `/internal/boundary/price-collars` exposes current collar state for operator surfaces.
+
+Configuration:
+- `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=allow-all|postgres`
+- `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS=<milliseconds>`
+
+### 7. Boundary rejection evidence
+
+- Interface:
+  - `BoundaryRejectionLog`
+- Current backends:
+  - `NoopBoundaryRejectionLog`
+  - `PostgresBoundaryRejectionLog`
+
+Decision:
+- breaker and price-collar pre-acceptance rejects are recorded to `boundary.boundary_rejections` when a Postgres-backed rejection log is enabled.
+- account-risk rejects continue to use `boundary.account_risk_decisions` because they carry risk-specific decision semantics.
+- rejection audit failures are non-fatal and must not weaken the actual guardrail decision.
+- default `auto` mode enables the Postgres rejection log when any Postgres-backed guardrail is configured, and remains no-op otherwise.
+
+Configuration:
+- `EXTERNAL_API_BOUNDARY_REJECTION_LOG=auto|none|postgres`

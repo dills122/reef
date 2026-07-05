@@ -8,13 +8,16 @@ import com.reef.platform.application.admin.UpsertParticipantCommand
 import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.CommandCircuitBreakerStore
+import com.reef.platform.api.InstrumentPriceCollarStore
 import com.reef.platform.api.defaultAccountRiskControlStore
 import com.reef.platform.api.defaultCommandCircuitBreakerStore
+import com.reef.platform.api.defaultInstrumentPriceCollarStore
 
 class AdminCliAdapter(
     private val adminService: AdminApplicationService = AdminApplicationService(),
     private val accountRiskControls: () -> AccountRiskControlStore = { defaultAccountRiskControlStore() },
     private val commandCircuitBreakers: () -> CommandCircuitBreakerStore = { defaultCommandCircuitBreakerStore() },
+    private val instrumentPriceCollars: () -> InstrumentPriceCollarStore = { defaultInstrumentPriceCollarStore() },
     private val now: () -> java.time.Instant = { java.time.Instant.now() }
 ) {
     fun execute(args: List<String>): String {
@@ -103,6 +106,24 @@ class AdminCliAdapter(
                 val breakers = commandCircuitBreakers().listBreakers()
                 """{"breakersCount":${breakers.size}}"""
             }
+            "price-collar-set" -> {
+                if (args.size < 4) return "usage: price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [currency] [reason]"
+                val minPrice = args[2].takeUnless { it == "*" }.orEmpty()
+                val maxPrice = args[3].takeUnless { it == "*" }.orEmpty()
+                val parsedMin = minPrice.toBigDecimalOrNull()
+                val parsedMax = maxPrice.toBigDecimalOrNull()
+                if (minPrice.isNotBlank() && parsedMin == null) return "usage: price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [currency] [reason]"
+                if (maxPrice.isNotBlank() && parsedMax == null) return "usage: price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [currency] [reason]"
+                if (parsedMin != null && parsedMax != null && parsedMax < parsedMin) return "usage: price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [currency] [reason]"
+                val currency = args.getOrNull(4).orEmpty()
+                val reason = args.drop(5).joinToString(" ")
+                instrumentPriceCollars().setCollar(args[1], minPrice, maxPrice, currency.uppercase(), reason)
+                """{"status":"ok","command":"price-collar-set","instrumentId":"${escapeJson(args[1])}","minPrice":"${escapeJson(minPrice)}","maxPrice":"${escapeJson(maxPrice)}"}"""
+            }
+            "price-collar-list" -> {
+                val collars = instrumentPriceCollars().listCollars()
+                """{"collarsCount":${collars.size}}"""
+            }
             "calendar-upsert" -> {
                 if (args.size < 4) return "usage: calendar-upsert <profileId> <timezone> <settlementCycle>"
                 adminService.upsertCalendarProfile(
@@ -168,6 +189,8 @@ class AdminCliAdapter(
               account-risk-list
               breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]
               breaker-list
+              price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [currency] [reason]
+              price-collar-list
               calendar-upsert <profileId> <timezone> <settlementCycle>
               calendar-list
               override-upsert <code> <description>

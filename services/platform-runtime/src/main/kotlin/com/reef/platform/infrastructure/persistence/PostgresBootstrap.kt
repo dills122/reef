@@ -231,6 +231,56 @@ object PostgresSchemaRequirements {
         )
     }
 
+    fun boundaryInstrumentPriceCollars(instrumentPriceCollars: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(instrumentPriceCollars)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                PostgresSchemaColumn(table, "instrument_id", "text"),
+                PostgresSchemaColumn(table, "min_price", "text"),
+                PostgresSchemaColumn(table, "max_price", "text"),
+                PostgresSchemaColumn(table, "currency", "text"),
+                PostgresSchemaColumn(table, "reason", "text"),
+                PostgresSchemaColumn(table, "updated_at", "timestamp with time zone")
+            )
+        )
+    }
+
+    fun boundaryRejections(boundaryRejections: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(boundaryRejections)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                PostgresSchemaColumn(table, "rejection_id", "text"),
+                PostgresSchemaColumn(table, "rejected_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "guardrail_type", "text"),
+                PostgresSchemaColumn(table, "scope_type", "text"),
+                PostgresSchemaColumn(table, "scope_id", "text"),
+                PostgresSchemaColumn(table, "status", "integer"),
+                PostgresSchemaColumn(table, "code", "text"),
+                PostgresSchemaColumn(table, "message", "text"),
+                PostgresSchemaColumn(table, "client_id", "text"),
+                PostgresSchemaColumn(table, "route", "text"),
+                PostgresSchemaColumn(table, "command_type", "text"),
+                PostgresSchemaColumn(table, "command_id", "text"),
+                PostgresSchemaColumn(table, "idempotency_key", "text"),
+                PostgresSchemaColumn(table, "correlation_id", "text"),
+                PostgresSchemaColumn(table, "actor_id", "text"),
+                PostgresSchemaColumn(table, "participant_id", "text"),
+                PostgresSchemaColumn(table, "account_id", "text"),
+                PostgresSchemaColumn(table, "bot_id", "text"),
+                PostgresSchemaColumn(table, "run_id", "text"),
+                PostgresSchemaColumn(table, "venue_session_id", "text"),
+                PostgresSchemaColumn(table, "instrument_id", "text"),
+                PostgresSchemaColumn(table, "order_id", "text"),
+                PostgresSchemaColumn(table, "quantity_units", "text"),
+                PostgresSchemaColumn(table, "limit_price", "text"),
+                PostgresSchemaColumn(table, "currency", "text"),
+                PostgresSchemaColumn(table, "payload_hash", "text")
+            )
+        )
+    }
+
     fun commandLog(
         commands: String,
         payloads: String = "command_log.command_payloads",

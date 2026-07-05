@@ -246,6 +246,36 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
+    fun boundaryInstrumentPriceCollarRequirementsCoverCollarTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryInstrumentPriceCollars(names.instrumentPriceCollars)
+
+        assertEquals(setOf("boundary.instrument_price_collars"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "boundary.instrument_price_collars.instrument_id:text",
+                "boundary.instrument_price_collars.min_price:text",
+                "boundary.instrument_price_collars.max_price:text",
+                "boundary.instrument_price_collars.currency:text",
+                "boundary.instrument_price_collars.reason:text",
+                "boundary.instrument_price_collars.updated_at:timestamp with time zone"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
+    fun boundaryRejectionRequirementsCoverGuardrailAuditTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryRejections(names.boundaryRejections)
+
+        assertEquals(setOf("boundary.boundary_rejections"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertTrue(requirements.columns.any { it.qualifiedName == "boundary.boundary_rejections.guardrail_type" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "boundary.boundary_rejections.command_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "boundary.boundary_rejections.payload_hash" })
+    }
+
+    @Test
     fun commandLogRequirementsCoverAppendOnlyCommandTable() {
         val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
 

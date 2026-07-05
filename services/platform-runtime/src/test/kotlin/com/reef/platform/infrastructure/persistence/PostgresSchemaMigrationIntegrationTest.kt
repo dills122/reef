@@ -4,9 +4,13 @@ import com.reef.platform.api.AccountRiskCheckRequest
 import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.CommandCircuitBreakerRequest
 import com.reef.platform.api.DefaultIdempotencyRetentionPolicy
+import com.reef.platform.api.BoundaryError
+import com.reef.platform.api.InstrumentPriceCollarRequest
 import com.reef.platform.api.PostgresAccountRiskCheck
+import com.reef.platform.api.PostgresBoundaryRejectionLog
 import com.reef.platform.api.PostgresCommandCaptureStore
 import com.reef.platform.api.PostgresCommandCircuitBreakerStore
+import com.reef.platform.api.PostgresInstrumentPriceCollarStore
 import com.reef.platform.api.PostgresCommandLogStore
 import com.reef.platform.api.PostgresIdempotencyStore
 import com.reef.platform.domain.RuntimeEvent
@@ -50,6 +54,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'boundary/0006_account_risk_controls.sql',
                   'boundary/0007_command_circuit_breakers.sql',
                   'boundary/0008_account_risk_limits.sql',
+                  'boundary/0009_instrument_price_collars.sql',
+                  'boundary/0010_boundary_rejections.sql',
                   'command_log/0001_commands.sql',
                   'command_log/0002_command_results.sql',
                   'command_log/0003_queue_result_split.sql',
@@ -83,6 +89,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0006_account_risk_controls.sql",
                     "boundary/0007_command_circuit_breakers.sql",
                     "boundary/0008_account_risk_limits.sql",
+                    "boundary/0009_instrument_price_collars.sql",
+                    "boundary/0010_boundary_rejections.sql",
                     "command_log/0001_commands.sql",
                     "command_log/0002_command_results.sql",
                     "command_log/0003_queue_result_split.sql",
@@ -122,6 +130,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "boundary.account_risk_controls",
                 "boundary.account_risk_decisions",
                 "boundary.command_circuit_breakers",
+                "boundary.instrument_price_collars",
+                "boundary.boundary_rejections",
                 "command_log.command_payloads",
                 "command_log.command_results",
                 "command_log.command_work_queue",
@@ -168,6 +178,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'account_risk_controls',
                     'account_risk_decisions',
                     'command_circuit_breakers',
+                    'instrument_price_collars',
+                    'boundary_rejections',
                     'commands',
                     'command_payloads',
                     'command_work_queue',
@@ -398,6 +410,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'account_risk_controls',
                     'account_risk_decisions',
                     'command_circuit_breakers',
+                    'instrument_price_collars',
+                    'boundary_rejections',
                     'commands'
                   )
                 """.trimIndent()
@@ -460,6 +474,14 @@ class PostgresSchemaMigrationIntegrationTest {
             bootstrapMode = PostgresBootstrapMode.Validate
         )
         PostgresCommandCircuitBreakerStore(
+            dataSource = boundaryDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresInstrumentPriceCollarStore(
+            dataSource = boundaryDataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        PostgresBoundaryRejectionLog(
             dataSource = boundaryDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )
@@ -712,5 +734,127 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals(503, error?.status)
         assertEquals("COMMAND_CIRCUIT_BREAKER_TRIPPED", error?.code)
         assertTrue(error?.message?.contains("operator halt") == true)
+    }
+
+    @Test
+    fun postgresInstrumentPriceCollarRejectsOutsideBand() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val collars = PostgresInstrumentPriceCollarStore(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            cacheTtlMillis = 0L
+        )
+        val instrumentId = "COLLAR-${UUID.randomUUID()}"
+
+        collars.setCollar(instrumentId, "150000000000", "151000000000", "USD", "regular band")
+        val low = collars.evaluate(
+            InstrumentPriceCollarRequest(
+                clientId = "client-collar",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-collar-low",
+                correlationId = "corr-collar-low",
+                instrumentId = instrumentId,
+                limitPrice = "149999999999",
+                currency = "USD"
+            )
+        )
+        val high = collars.evaluate(
+            InstrumentPriceCollarRequest(
+                clientId = "client-collar",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-collar-high",
+                correlationId = "corr-collar-high",
+                instrumentId = instrumentId,
+                limitPrice = "151000000001",
+                currency = "USD"
+            )
+        )
+        val inside = collars.evaluate(
+            InstrumentPriceCollarRequest(
+                clientId = "client-collar",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-collar-ok",
+                correlationId = "corr-collar-ok",
+                instrumentId = instrumentId,
+                limitPrice = "150500000000",
+                currency = "USD"
+            )
+        )
+
+        assertEquals(422, low?.status)
+        assertEquals("PRICE_COLLAR_LOW", low?.code)
+        assertEquals(422, high?.status)
+        assertEquals("PRICE_COLLAR_HIGH", high?.code)
+        assertEquals(null, inside)
+    }
+
+    @Test
+    fun postgresBoundaryRejectionLogPersistsGuardrailEvidence() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val log = PostgresBoundaryRejectionLog(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val commandId = "cmd-rejection-$suffix"
+
+        log.recordRejection(
+            guardrailType = "instrument-price-collar",
+            scopeType = "INSTRUMENT",
+            scopeId = "AAPL",
+            request = AccountRiskCheckRequest(
+                clientId = "client-rejection",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = commandId,
+                idempotencyKey = "idem-rejection-$suffix",
+                correlationId = "corr-rejection-$suffix",
+                actorId = "actor-rejection",
+                participantId = "participant-rejection",
+                accountId = "account-rejection",
+                botId = "bot-rejection",
+                runId = "run-rejection",
+                venueSessionId = "session-rejection",
+                instrumentId = "AAPL",
+                orderId = "ord-rejection",
+                quantityUnits = "100",
+                limitPrice = "149999999999",
+                currency = "USD",
+                payloadHash = "hash-rejection"
+            ),
+            error = BoundaryError(422, "PRICE_COLLAR_LOW", "limit price below collar")
+        )
+
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT guardrail_type, scope_type, scope_id, status, code, command_id, limit_price, currency
+                FROM boundary.boundary_rejections
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals("instrument-price-collar", rs.getString("guardrail_type"))
+                    assertEquals("INSTRUMENT", rs.getString("scope_type"))
+                    assertEquals("AAPL", rs.getString("scope_id"))
+                    assertEquals(422, rs.getInt("status"))
+                    assertEquals("PRICE_COLLAR_LOW", rs.getString("code"))
+                    assertEquals(commandId, rs.getString("command_id"))
+                    assertEquals("149999999999", rs.getString("limit_price"))
+                    assertEquals("USD", rs.getString("currency"))
+                }
+            }
+        }
     }
 }

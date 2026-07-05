@@ -6,6 +6,9 @@ import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.CommandCircuitBreakerState
 import com.reef.platform.api.CommandCircuitBreakerStore
 import com.reef.platform.api.CommandCircuitBreakerRequest
+import com.reef.platform.api.InstrumentPriceCollarRequest
+import com.reef.platform.api.InstrumentPriceCollarState
+import com.reef.platform.api.InstrumentPriceCollarStore
 import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
@@ -17,10 +20,12 @@ class AdminCliAdapterTest {
         val service = AdminApplicationService(InMemoryRuntimePersistence())
         val accountRiskControls = RecordingAccountRiskControlStore()
         val commandCircuitBreakers = RecordingCommandCircuitBreakerStore()
+        val instrumentPriceCollars = RecordingInstrumentPriceCollarStore()
         val cli = AdminCliAdapter(
             service,
             accountRiskControls = { accountRiskControls },
-            commandCircuitBreakers = { commandCircuitBreakers }
+            commandCircuitBreakers = { commandCircuitBreakers },
+            instrumentPriceCollars = { instrumentPriceCollars }
         )
 
         assertContains(cli.execute(listOf("instrument-upsert", "AAPL", "AAPL")), "\"status\":\"ok\"")
@@ -40,6 +45,11 @@ class AdminCliAdapterTest {
             "\"tripped\":true"
         )
         assertContains(cli.execute(listOf("breaker-list")), "\"breakersCount\":1")
+        assertContains(
+            cli.execute(listOf("price-collar-set", "AAPL", "150000000000", "151000000000", "USD", "regular", "band")),
+            "\"instrumentId\":\"AAPL\""
+        )
+        assertContains(cli.execute(listOf("price-collar-list")), "\"collarsCount\":1")
         assertContains(cli.execute(listOf("calendar-upsert", "us-default", "America/New_York", "T+1")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("calendar-list")), "\"profilesCount\":")
         assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
@@ -56,6 +66,17 @@ class AdminCliAdapterTest {
         val cli = AdminCliAdapter(AdminApplicationService(InMemoryRuntimePersistence()))
         val output = cli.execute(listOf("unknown"))
         assertContains(output, "admin commands:")
+    }
+
+    @Test
+    fun rejectsInvalidPriceCollarCliBands() {
+        val cli = AdminCliAdapter(
+            AdminApplicationService(InMemoryRuntimePersistence()),
+            instrumentPriceCollars = { RecordingInstrumentPriceCollarStore() }
+        )
+
+        assertContains(cli.execute(listOf("price-collar-set", "AAPL", "bad", "151000000000")), "usage: price-collar-set")
+        assertContains(cli.execute(listOf("price-collar-set", "AAPL", "151000000000", "150000000000")), "usage: price-collar-set")
     }
 }
 
@@ -87,4 +108,16 @@ private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
     }
 
     override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
+}
+
+private class RecordingInstrumentPriceCollarStore : InstrumentPriceCollarStore {
+    private val collars = linkedMapOf<String, InstrumentPriceCollarState>()
+
+    override fun evaluate(request: InstrumentPriceCollarRequest) = null
+
+    override fun setCollar(instrumentId: String, minPrice: String, maxPrice: String, currency: String, reason: String) {
+        collars[instrumentId] = InstrumentPriceCollarState(instrumentId, minPrice, maxPrice, currency, reason)
+    }
+
+    override fun listCollars(): List<InstrumentPriceCollarState> = collars.values.toList()
 }
