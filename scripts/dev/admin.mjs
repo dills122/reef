@@ -33,12 +33,38 @@ function usage() {
   account-upsert <accountId> <participantId>
   role-upsert <roleId> <permissionCsv>
   role-assign <actorId> <roleId>
-  account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]
+  account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [--max-quantity N] [--max-notional N] [--currency CCY] [--reason text]
   account-risk-list
   breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]
   breaker-list
   events [limit]
   traces <traceId>`);
+}
+
+function parseAccountRiskOptions(values) {
+  const options = {
+    reason: "",
+    maxQuantityUnits: "",
+    maxNotional: "",
+    currency: "",
+  };
+  const reasonParts = [];
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (value === "--max-quantity") {
+      options.maxQuantityUnits = values[++i] ?? "";
+    } else if (value === "--max-notional") {
+      options.maxNotional = values[++i] ?? "";
+    } else if (value === "--currency") {
+      options.currency = values[++i] ?? "";
+    } else if (value === "--reason") {
+      reasonParts.push(values[++i] ?? "");
+    } else {
+      reasonParts.push(value);
+    }
+  }
+  options.reason = reasonParts.join(" ").trim();
+  return options;
 }
 
 const [, , command, ...args] = process.argv;
@@ -97,14 +123,20 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    await post("/internal/admin/account-risk/controls", {
-      scopeType: args[0],
-      scopeId: args[1],
-      decision: args[2],
-      reason: args.slice(3).join(" "),
-      actorId: "dev-admin",
-      correlationId: "dev-admin",
-    });
+    {
+      const options = parseAccountRiskOptions(args.slice(3));
+      await post("/internal/admin/account-risk/controls", {
+        scopeType: args[0],
+        scopeId: args[1],
+        decision: args[2],
+        reason: options.reason,
+        maxQuantityUnits: options.maxQuantityUnits,
+        maxNotional: options.maxNotional,
+        currency: options.currency,
+        actorId: "dev-admin",
+        correlationId: "dev-admin",
+      });
+    }
     break;
   case "account-risk-list":
     await get("/internal/boundary/account-risk/controls");

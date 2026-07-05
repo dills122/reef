@@ -62,8 +62,16 @@ class AdminCliAdapterTest {
 private class RecordingAccountRiskControlStore : AccountRiskControlStore {
     private val controls = linkedMapOf<String, AccountRiskControl>()
 
-    override fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String) {
-        controls["$scopeType|$scopeId"] = AccountRiskControl(scopeType, scopeId, decision, reason)
+    override fun upsertControl(
+        scopeType: String,
+        scopeId: String,
+        decision: AccountRiskDecision,
+        reason: String,
+        maxQuantityUnits: String,
+        maxNotional: String,
+        currency: String
+    ) {
+        controls["$scopeType|$scopeId"] = AccountRiskControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
     }
 
     override fun listControls(): List<AccountRiskControl> = controls.values.toList()

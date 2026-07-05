@@ -195,6 +195,9 @@ class PostgresSchemaRequirementsTest {
                 "boundary.account_risk_controls.scope_id:text",
                 "boundary.account_risk_controls.decision:text",
                 "boundary.account_risk_controls.reason:text",
+                "boundary.account_risk_controls.max_quantity_units:text",
+                "boundary.account_risk_controls.max_notional:text",
+                "boundary.account_risk_controls.currency:text",
                 "boundary.account_risk_controls.updated_at:timestamp with time zone",
                 "boundary.account_risk_decisions.decision_id:text",
                 "boundary.account_risk_decisions.decided_at:timestamp with time zone",
@@ -215,6 +218,9 @@ class PostgresSchemaRequirementsTest {
                 "boundary.account_risk_decisions.venue_session_id:text",
                 "boundary.account_risk_decisions.instrument_id:text",
                 "boundary.account_risk_decisions.order_id:text",
+                "boundary.account_risk_decisions.quantity_units:text",
+                "boundary.account_risk_decisions.limit_price:text",
+                "boundary.account_risk_decisions.currency:text",
                 "boundary.account_risk_decisions.payload_hash:text"
             ),
             requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()

@@ -359,18 +359,19 @@ JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `syn
 
 The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
-Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish. Set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres` to read cached operator controls from `boundary.account_risk_controls` and audit non-allow decisions to `boundary.account_risk_decisions`; `EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS` controls the cache TTL.
+Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish. Set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres` to read cached operator controls from `boundary.account_risk_controls` and audit non-allow decisions to `boundary.account_risk_decisions`; `EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS` controls the cache TTL. Postgres-backed controls can also carry submit-order `maxQuantityUnits` and `maxNotional` limits. Limit violations reject before durable acceptance with `ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED` or `ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED`; the audit row records submit quantity, limit price, and currency.
 
 Local admin commands for the Postgres-backed mode:
 
 ```bash
 make dev-admin CMD="account-risk-set bot bot-1 disabled-bot operator-disabled"
 make dev-admin CMD="account-risk-set account acct-1 backpressure settlement-hold"
+make dev-admin CMD="account-risk-set account acct-1 allow --max-quantity 1000 --max-notional 150250000000000 --currency USD --reason desk-limit"
 make dev-admin CMD="account-risk-set account acct-1 allow cleared"
 make dev-admin CMD="account-risk-list"
 curl -s -X POST http://127.0.0.1:8080/internal/admin/account-risk/controls \
   -H 'content-type: application/json' \
-  -d '{"scopeType":"bot","scopeId":"bot-1","decision":"disabled-bot","reason":"operator-disabled","actorId":"ops-1"}'
+  -d '{"scopeType":"account","scopeId":"acct-1","decision":"allow","maxQuantityUnits":"1000","maxNotional":"150250000000000","currency":"USD","reason":"desk-limit","actorId":"ops-1"}'
 curl -s http://127.0.0.1:8080/internal/boundary/account-risk/controls
 curl -s 'http://127.0.0.1:8080/internal/boundary/account-risk/decisions/recent?limit=50'
 ```

@@ -49,6 +49,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'boundary/0004_command_capture_legacy_defaults.sql',
                   'boundary/0006_account_risk_controls.sql',
                   'boundary/0007_command_circuit_breakers.sql',
+                  'boundary/0008_account_risk_limits.sql',
                   'command_log/0001_commands.sql',
                   'command_log/0002_command_results.sql',
                   'command_log/0003_queue_result_split.sql',
@@ -81,6 +82,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "boundary/0004_command_capture_legacy_defaults.sql",
                     "boundary/0006_account_risk_controls.sql",
                     "boundary/0007_command_circuit_breakers.sql",
+                    "boundary/0008_account_risk_limits.sql",
                     "command_log/0001_commands.sql",
                     "command_log/0002_command_results.sql",
                     "command_log/0003_queue_result_split.sql",
@@ -562,7 +564,7 @@ class PostgresSchemaMigrationIntegrationTest {
         val accountId = "acct-risk-$suffix"
         val commandId = "cmd-risk-$suffix"
 
-        riskCheck.upsertControl("ACCOUNT", accountId, AccountRiskDecision.REJECT, "operator hold")
+        riskCheck.upsertControl("ACCOUNT", accountId, AccountRiskDecision.REJECT, "operator hold", "", "", "")
         val result = riskCheck.evaluate(
             AccountRiskCheckRequest(
                 clientId = "client-risk",
@@ -579,6 +581,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 venueSessionId = "session-risk",
                 instrumentId = "AAPL",
                 orderId = "ord-risk",
+                quantityUnits = "100",
+                limitPrice = "150250000000",
+                currency = "USD",
                 payloadHash = "hash-risk"
             )
         )
@@ -588,7 +593,7 @@ class PostgresSchemaMigrationIntegrationTest {
         DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
             conn.prepareStatement(
                 """
-                SELECT decision, code, message, account_id, command_id
+                SELECT decision, code, message, account_id, command_id, quantity_units, limit_price, currency
                 FROM boundary.account_risk_decisions
                 WHERE command_id = ?
                 """.trimIndent()
@@ -601,6 +606,78 @@ class PostgresSchemaMigrationIntegrationTest {
                     assertEquals("operator hold", rs.getString("message"))
                     assertEquals(accountId, rs.getString("account_id"))
                     assertEquals(commandId, rs.getString("command_id"))
+                    assertEquals("100", rs.getString("quantity_units"))
+                    assertEquals("150250000000", rs.getString("limit_price"))
+                    assertEquals("USD", rs.getString("currency"))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun postgresAccountRiskCheckRejectsSubmitOverMaxQuantityLimit() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val riskCheck = PostgresAccountRiskCheck(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate,
+            cacheTtlMillis = 0L
+        )
+        val suffix = UUID.randomUUID().toString()
+        val accountId = "acct-limit-$suffix"
+        val commandId = "cmd-limit-$suffix"
+
+        riskCheck.upsertControl(
+            scopeType = "ACCOUNT",
+            scopeId = accountId,
+            decision = AccountRiskDecision.ALLOW,
+            reason = "desk limit",
+            maxQuantityUnits = "100",
+            maxNotional = "",
+            currency = "USD"
+        )
+        val result = riskCheck.evaluate(
+            AccountRiskCheckRequest(
+                clientId = "client-limit",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = commandId,
+                idempotencyKey = "idem-limit-$suffix",
+                correlationId = "corr-limit-$suffix",
+                actorId = "actor-limit",
+                participantId = "participant-limit",
+                accountId = accountId,
+                botId = "bot-limit",
+                runId = "run-limit",
+                venueSessionId = "session-limit",
+                instrumentId = "AAPL",
+                orderId = "ord-limit",
+                quantityUnits = "101",
+                limitPrice = "150250000000",
+                currency = "USD",
+                payloadHash = "hash-limit"
+            )
+        )
+
+        assertEquals(AccountRiskDecision.REJECT, result.decision)
+        assertEquals("ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED", result.code)
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT code, quantity_units, limit_price, currency
+                FROM boundary.account_risk_decisions
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    assertTrue(rs.next())
+                    assertEquals("ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED", rs.getString("code"))
+                    assertEquals("101", rs.getString("quantity_units"))
+                    assertEquals("150250000000", rs.getString("limit_price"))
+                    assertEquals("USD", rs.getString("currency"))
                 }
             }
         }

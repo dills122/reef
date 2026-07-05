@@ -71,7 +71,9 @@ Rationale:
 Decision:
 - intake should run a bounded account/risk pre-check before durable order acceptance.
 - non-allow decisions are audited to `boundary.account_risk_decisions` when the Postgres-backed mode is active.
-- operator/admin moderation state is stored in `boundary.account_risk_controls` and managed through `make dev-admin CMD="account-risk-set ..."` for local workflows.
+- operator/admin moderation and pre-trade limit state is stored in `boundary.account_risk_controls` and managed through `make dev-admin CMD="account-risk-set ..."` for local workflows.
+- `ALLOW` controls may carry bounded submit-order limits: `max_quantity_units`, `max_notional`, and optional `currency`.
+- max-quantity and max-notional violations reject before durable command acceptance and are audited with submit quantity, limit price, and currency context.
 - internal write endpoint `/internal/admin/account-risk/controls` supports local/admin set operations and emits admin audit events.
 - internal read endpoints expose current controls and recent non-allow decisions at `/internal/boundary/account-risk/controls` and `/internal/boundary/account-risk/decisions/recent`.
 - settlement performs final enforcement after matching facts exist.
