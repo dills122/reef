@@ -11,10 +11,14 @@ import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.ArenaLeaderboardEntry
 import com.reef.platform.application.arena.ArenaOperatorDecision
 import com.reef.platform.application.arena.ArenaQualificationReport
+import com.reef.platform.application.arena.ArenaRunBotResult
 import com.reef.platform.application.arena.ArenaRunRecord
+import com.reef.platform.application.arena.ArenaRunStatus
+import com.reef.platform.application.arena.ArenaRunBotVersionRef
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
+import com.reef.platform.application.arena.RegisterArenaRunCommand
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
@@ -93,6 +97,35 @@ data class ArenaBotVersionRegistrationCommand(
     val sdkVersion: String,
     val apiVersion: String,
     val dependencyManifestHash: String
+)
+
+data class ArenaRunRegistrationCommand(
+    val runId: String,
+    val modeId: String,
+    val scenarioId: String,
+    val seed: Long,
+    val policyVersion: String,
+    val botVersions: List<ArenaRunBotVersionRef>
+)
+
+data class ArenaRunStatusCommand(
+    val runId: String,
+    val status: ArenaRunStatus
+)
+
+data class ArenaRunBotResultIngestionCommand(
+    val runId: String,
+    val botId: String,
+    val versionId: String,
+    val scoringPolicyVersion: String,
+    val finalEquity: Long,
+    val realizedPnl: Long,
+    val maxDrawdown: Long,
+    val actionsProposed: Int,
+    val orderActionsProposed: Int,
+    val dataCalls: Int,
+    val signalsGenerated: Int,
+    val disqualified: Boolean
 )
 
 class AdminApplicationService(
@@ -274,9 +307,68 @@ class AdminApplicationService(
         return arenaStore().operatorDecisions(botId, versionId)
     }
 
+    fun registerArenaRun(actor: AdminActor, command: ArenaRunRegistrationCommand): ArenaRunRecord {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val run = arenaControlPlane().registerRun(
+            RegisterArenaRunCommand(
+                runId = command.runId,
+                modeId = command.modeId,
+                scenarioId = command.scenarioId,
+                seed = command.seed,
+                policyVersion = command.policyVersion,
+                botVersions = command.botVersions
+            )
+        )
+        emitAudit(actor, "AdminArenaRunRegistered", command.runId, "modeId=${command.modeId},scenarioId=${command.scenarioId}")
+        return run
+    }
+
+    fun updateArenaRunStatus(actor: AdminActor, command: ArenaRunStatusCommand): ArenaRunRecord {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val run = arenaControlPlane().updateRunStatus(command.runId, command.status)
+        emitAudit(actor, "AdminArenaRunStatusUpdated", command.runId, "status=${command.status.name}")
+        return run
+    }
+
     fun arenaRun(actor: AdminActor, runId: String): ArenaRunRecord? {
         requirePermission(actor, Permission.ARENA_ADMIN)
         return arenaStore().runRecord(runId)
+    }
+
+    fun arenaRunBotResults(actor: AdminActor, runId: String): List<ArenaRunBotResult> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaControlPlane().runBotResults(runId)
+    }
+
+    fun recordArenaRunBotResult(
+        actor: AdminActor,
+        command: ArenaRunBotResultIngestionCommand
+    ): ArenaRunBotResult {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val result = arenaControlPlane().recordRunBotResult(
+            ArenaRunBotResult(
+                runId = command.runId,
+                botId = command.botId,
+                versionId = command.versionId,
+                scoringPolicyVersion = command.scoringPolicyVersion,
+                finalEquity = command.finalEquity,
+                realizedPnl = command.realizedPnl,
+                maxDrawdown = command.maxDrawdown,
+                actionsProposed = command.actionsProposed,
+                orderActionsProposed = command.orderActionsProposed,
+                dataCalls = command.dataCalls,
+                signalsGenerated = command.signalsGenerated,
+                disqualified = command.disqualified,
+                createdAt = now()
+            )
+        )
+        emitAudit(
+            actor,
+            "AdminArenaRunBotResultIngested",
+            "${command.runId}/${command.botId}/${command.versionId}",
+            "scoringPolicyVersion=${command.scoringPolicyVersion},finalEquity=${command.finalEquity}"
+        )
+        return result
     }
 
     fun arenaRuntimeConfigDescriptors(

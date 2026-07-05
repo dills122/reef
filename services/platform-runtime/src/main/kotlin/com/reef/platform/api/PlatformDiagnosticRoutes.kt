@@ -21,6 +21,10 @@ internal class PlatformDiagnosticRoutes(
     private val arenaOperatorDecisionsJson: (String?) -> PlatformHotPathResponse,
     private val arenaRuntimeConfigDescriptorsJson: (String?) -> PlatformHotPathResponse,
     private val arenaRunJson: (String?) -> PlatformHotPathResponse,
+    private val registerArenaRunJson: (String) -> PlatformHotPathResponse,
+    private val updateArenaRunStatusJson: (String) -> PlatformHotPathResponse,
+    private val arenaRunBotResultsJson: (String?) -> PlatformHotPathResponse,
+    private val recordArenaRunBotResultJson: (String) -> PlatformHotPathResponse,
     private val arenaLeaderboardJson: (String?) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
@@ -48,6 +52,8 @@ internal class PlatformDiagnosticRoutes(
         "/internal/admin/arena/operator-decisions",
         "/internal/admin/arena/runtime-config-descriptors",
         "/internal/admin/arena/runs",
+        "/internal/admin/arena/runs/status",
+        "/internal/admin/arena/run-bot-results",
         "/internal/admin/arena/leaderboard",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
@@ -89,7 +95,13 @@ internal class PlatformDiagnosticRoutes(
             "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) {
                 arenaRuntimeConfigDescriptorsJson(query)
             }
-            "/internal/admin/arena/runs" -> getResponseOnly(method) { arenaRunJson(query) }
+            "/internal/admin/arena/runs" -> getOrPost(method, { arenaRunJson(query) }, { registerArenaRunJson(body) })
+            "/internal/admin/arena/runs/status" -> postOnly(method) { updateArenaRunStatusJson(body) }
+            "/internal/admin/arena/run-bot-results" -> getOrPost(
+                method,
+                { arenaRunBotResultsJson(query) },
+                { recordArenaRunBotResultJson(body) }
+            )
             "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardJson(query) }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }

@@ -234,6 +234,84 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
+    fun keepsRunBotResultsSeparateByScoringPolicyVersion() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v2", finalEquity = 1_030_000))
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_026_000))
+
+        val results = store.runBotResults("run-1").sortedBy { it.scoringPolicyVersion }
+
+        assertEquals(2, results.size)
+        assertEquals("score-v1", results[0].scoringPolicyVersion)
+        assertEquals(1_026_000, results[0].finalEquity)
+        assertEquals("score-v2", results[1].scoringPolicyVersion)
+        assertEquals(1_030_000, results[1].finalEquity)
+    }
+
+    @Test
+    fun rejectsInvalidRunBotResultCounters() {
+        val service = approvedService(InMemoryArenaBotRegistryStore())
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000).copy(
+                actionsProposed = 1,
+                orderActionsProposed = 2
+            ))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000).copy(
+                maxDrawdown = -1
+            ))
+        }
+    }
+
+    @Test
+    fun readsRunBotResultsForRegisteredRun() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+
+        val results = service.runBotResults("run-1")
+
+        assertEquals(1, results.size)
+        assertEquals("score-v1", results.single().scoringPolicyVersion)
+        assertFailsWith<IllegalArgumentException> { service.runBotResults("missing-run") }
+    }
+
+    @Test
     fun replacesRuntimeConfigDescriptorsWithoutSecretValues() {
         val store = InMemoryArenaBotRegistryStore()
         val service = seededService(store)
@@ -335,6 +413,27 @@ class ArenaControlPlaneServiceTest {
             sdkVersion = "1.5.0",
             apiVersion = "v1",
             dependencyManifestHash = "sha256:deps"
+        )
+    }
+
+    private fun runBotResult(
+        scoringPolicyVersion: String,
+        finalEquity: Long
+    ): ArenaRunBotResult {
+        return ArenaRunBotResult(
+            runId = "run-1",
+            botId = "sample-bot",
+            versionId = "v1",
+            scoringPolicyVersion = scoringPolicyVersion,
+            finalEquity = finalEquity,
+            realizedPnl = finalEquity - 1_000_000,
+            maxDrawdown = 1_000,
+            actionsProposed = 12,
+            orderActionsProposed = 8,
+            dataCalls = 20,
+            signalsGenerated = 4,
+            disqualified = false,
+            createdAt = fixedNow
         )
     }
 }

@@ -6,13 +6,19 @@ import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.ArenaBotRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
+import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
+import com.reef.platform.application.admin.ArenaRunRegistrationCommand
+import com.reef.platform.application.admin.ArenaRunStatusCommand
 import com.reef.platform.application.arena.ArenaBot
 import com.reef.platform.application.arena.ArenaBotVersion
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaLeaderboardEntry
 import com.reef.platform.application.arena.ArenaOperatorDecision
 import com.reef.platform.application.arena.ArenaQualificationReport
+import com.reef.platform.application.arena.ArenaRunBotResult
+import com.reef.platform.application.arena.ArenaRunBotVersionRef
 import com.reef.platform.application.arena.ArenaRunRecord
+import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
@@ -229,6 +235,10 @@ class PlatformHttpServer(
             arenaOperatorDecisionsJson = { query -> arenaOperatorDecisionsResponse(query) },
             arenaRuntimeConfigDescriptorsJson = { query -> arenaRuntimeConfigDescriptorsResponse(query) },
             arenaRunJson = { query -> arenaRunResponse(query) },
+            registerArenaRunJson = { body -> registerArenaRunResponse(body) },
+            updateArenaRunStatusJson = { body -> updateArenaRunStatusResponse(body) },
+            arenaRunBotResultsJson = { query -> arenaRunBotResultsResponse(query) },
+            recordArenaRunBotResultJson = { body -> recordArenaRunBotResultResponse(body) },
             arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
@@ -2319,6 +2329,103 @@ class PlatformHttpServer(
         return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
     }
 
+    private fun registerArenaRunResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        return try {
+            val run = service.registerArenaRun(
+                arenaAdminActor(json),
+                ArenaRunRegistrationCommand(
+                    runId = json.string("runId"),
+                    modeId = json.string("modeId"),
+                    scenarioId = json.string("scenarioId"),
+                    seed = json.requiredLong("seed"),
+                    policyVersion = json.string("policyVersion"),
+                    botVersions = json.objectDocuments("botVersions").map { ref ->
+                        ArenaRunBotVersionRef(ref.string("botId"), ref.string("versionId"))
+                    }
+                )
+            )
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run registration failed")))
+        }
+    }
+
+    private fun updateArenaRunStatusResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val runId = json.string("runId")
+        val status = normalizeArenaRunStatus(json.string("status"))
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid arena run status"))
+        if (runId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
+        }
+        return try {
+            val run = service.updateArenaRunStatus(arenaAdminActor(json), ArenaRunStatusCommand(runId, status))
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run transition")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run transition failed")))
+        }
+    }
+
+    private fun arenaRunBotResultsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val runId = queryValue(query, "runId")
+        if (runId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
+        }
+        return try {
+            val results = service.arenaRunBotResults(arenaAdminActor(query), runId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "results" to results.map { arenaRunBotResultJson(it) })
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run bot results query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run bot results query failed")))
+        }
+    }
+
+    private fun recordArenaRunBotResultResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        return try {
+            val command = ArenaRunBotResultIngestionCommand(
+                runId = json.string("runId"),
+                botId = json.string("botId"),
+                versionId = json.string("versionId"),
+                scoringPolicyVersion = json.string("scoringPolicyVersion"),
+                finalEquity = json.requiredLong("finalEquity"),
+                realizedPnl = json.requiredLong("realizedPnl"),
+                maxDrawdown = json.requiredLong("maxDrawdown"),
+                actionsProposed = json.requiredInt("actionsProposed"),
+                orderActionsProposed = json.requiredInt("orderActionsProposed"),
+                dataCalls = json.requiredInt("dataCalls"),
+                signalsGenerated = json.requiredInt("signalsGenerated"),
+                disqualified = json.boolean("disqualified")
+            )
+            val result = service.recordArenaRunBotResult(arenaAdminActor(json), command)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "result" to arenaRunBotResultJson(result))
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run bot result")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run bot result ingestion failed")))
+        }
+    }
+
     private fun arenaLeaderboardResponse(query: String?): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
@@ -2430,6 +2537,24 @@ class PlatformHttpServer(
             "status" to run.status.name,
             "createdAt" to run.createdAt.toString(),
             "completedAt" to run.completedAt?.toString()
+        )
+    }
+
+    private fun arenaRunBotResultJson(result: ArenaRunBotResult): Map<String, Any?> {
+        return mapOf(
+            "runId" to result.runId,
+            "botId" to result.botId,
+            "versionId" to result.versionId,
+            "scoringPolicyVersion" to result.scoringPolicyVersion,
+            "finalEquity" to result.finalEquity,
+            "realizedPnl" to result.realizedPnl,
+            "maxDrawdown" to result.maxDrawdown,
+            "actionsProposed" to result.actionsProposed,
+            "orderActionsProposed" to result.orderActionsProposed,
+            "dataCalls" to result.dataCalls,
+            "signalsGenerated" to result.signalsGenerated,
+            "disqualified" to result.disqualified,
+            "createdAt" to result.createdAt.toString()
         )
     }
 
@@ -2613,6 +2738,17 @@ class PlatformHttpServer(
             "quarantined", "quarantine" -> ArenaBotVersionStatus.Quarantined
             "banned", "ban" -> ArenaBotVersionStatus.Banned
             "archived", "archive" -> ArenaBotVersionStatus.Archived
+            else -> null
+        }
+    }
+
+    private fun normalizeArenaRunStatus(value: String): ArenaRunStatus? {
+        return when (value.trim().lowercase()) {
+            "planned" -> ArenaRunStatus.Planned
+            "running" -> ArenaRunStatus.Running
+            "completed", "complete" -> ArenaRunStatus.Completed
+            "failed", "fail" -> ArenaRunStatus.Failed
+            "cancelled", "canceled", "cancel" -> ArenaRunStatus.Cancelled
             else -> null
         }
     }
@@ -3288,6 +3424,18 @@ private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationServ
         ),
         accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore
     )
+}
+
+private fun JsonDocument.requiredLong(key: String): Long {
+    return string(key).toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
+}
+
+private fun JsonDocument.requiredInt(key: String): Int {
+    return string(key).toIntOrNull() ?: throw IllegalArgumentException("$key must be an integer")
+}
+
+private fun JsonDocument.boolean(key: String): Boolean {
+    return string(key).equals("true", ignoreCase = true)
 }
 
 data class ServerBoundaryDeps(

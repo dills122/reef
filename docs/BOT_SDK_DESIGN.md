@@ -385,14 +385,20 @@ Completed runtime bridge coverage:
   - `GET /internal/admin/arena/operator-decisions?botId=...&versionId=...`
   - `GET /internal/admin/arena/runtime-config-descriptors?botId=...&versionId=...`
   - `GET /internal/admin/arena/runs?runId=...`
+  - `POST /internal/admin/arena/runs`
+  - `POST /internal/admin/arena/runs/status`
+  - `GET /internal/admin/arena/run-bot-results?runId=...`
+  - `POST /internal/admin/arena/run-bot-results`
 - Postgres schema-placement CI validates the migrated `arena-postgres` schema with `PostgresArenaBotRegistryStore` in `Validate` mode and round-trips bot versions, qualification reports, operator decisions, runtime config descriptors, and run records.
 - `resolveBotRuntimeConfigV1` defines runner preflight resolution for immutable `OpenBao` descriptors. It fetches through a platform-owned provider, validates required values and types, freezes resolved config for the run, and keeps fetch capability out of bot code.
-- `arena.run_bot_results` stores first bot/run scoring facts outside the trading hot path. `GET /internal/admin/arena/leaderboard?modeId=...&scoringPolicyVersion=...` exposes a rebuildable leaderboard read model ranked by disqualification, final equity, realized PnL, drawdown, run ID, and bot ID.
+- `arena.run_bot_results` stores first bot/run scoring facts outside the trading hot path. `GET /internal/admin/arena/run-bot-results?runId=...` exposes raw persisted scoring facts, while `GET /internal/admin/arena/leaderboard?modeId=...&scoringPolicyVersion=...` exposes a rebuildable leaderboard read model ranked by disqualification, final equity, realized PnL, drawdown, run ID, and bot ID.
+- `scripts/dev/arena-ingest-bot-run-result.mjs` maps hosted simulation/test-bot summary counters into `arena.run_bot_results`; score fields such as final equity, realized PnL, and drawdown stay explicit ingestion inputs until scoring policy is finalized.
+- `make dev-smoke-arena-run-results` proves the local-stack path from arena run registration through hosted-summary result ingestion to leaderboard readback.
 
 Next non-throughput integration work:
 
 1. Add CI or documented local-stack coverage for `make dev-smoke-arena-bot-risk`.
-2. Wire hosted simulation/test-bot report ingestion into `arena.run_bot_results`.
+2. Extend result ingestion smoke to use a real hosted bot test summary once score calculation policy is accepted.
 
 ## Future Runtime Modes
 

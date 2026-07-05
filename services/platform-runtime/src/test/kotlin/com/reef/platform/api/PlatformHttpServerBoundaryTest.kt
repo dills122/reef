@@ -1306,49 +1306,96 @@ class PlatformHttpServerBoundaryTest {
                 )
             )
         )
-        controlPlane.registerRun(
-            RegisterArenaRunCommand(
-                runId = "run-1",
-                modeId = "hosted-sim",
-                scenarioId = "scenario-1",
-                seed = 42,
-                policyVersion = "policy-v1",
-                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1"))
-            )
-        )
-        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Running)
-        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Completed)
-        controlPlane.recordRunBotResult(
-            ArenaRunBotResult(
-                runId = "run-1",
-                botId = "bot-1",
-                versionId = "v1",
-                scoringPolicyVersion = "score-v1",
-                finalEquity = 1_025_000,
-                realizedPnl = 25_000,
-                maxDrawdown = 1_000,
-                actionsProposed = 12,
-                orderActionsProposed = 8,
-                dataCalls = 20,
-                signalsGenerated = 4,
-                disqualified = false,
-                createdAt = java.time.Instant.parse("2026-07-05T12:00:00Z")
-            )
-        )
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
             runtimePersistence = persistence,
             arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
         )
         try {
+            val registeredRun = post(
+                server.address.port,
+                "/internal/admin/arena/runs",
+                emptyMap(),
+                """
+                    {
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-run-register",
+                      "runId":"run-1",
+                      "modeId":"hosted-sim",
+                      "scenarioId":"scenario-1",
+                      "seed":42,
+                      "policyVersion":"policy-v1",
+                      "botVersions":[{"botId":"bot-1","versionId":"v1"}]
+                    }
+                """.trimIndent()
+            )
+            val runningRun = post(
+                server.address.port,
+                "/internal/admin/arena/runs/status",
+                emptyMap(),
+                """
+                    {
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-run-running",
+                      "runId":"run-1",
+                      "status":"running"
+                    }
+                """.trimIndent()
+            )
+            val completedRun = post(
+                server.address.port,
+                "/internal/admin/arena/runs/status",
+                emptyMap(),
+                """
+                    {
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-run-completed",
+                      "runId":"run-1",
+                      "status":"completed"
+                    }
+                """.trimIndent()
+            )
+            val postedResult = post(
+                server.address.port,
+                "/internal/admin/arena/run-bot-results",
+                emptyMap(),
+                """
+                    {
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-run-result",
+                      "runId":"run-1",
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "scoringPolicyVersion":"score-v2",
+                      "finalEquity":1030000,
+                      "realizedPnl":30000,
+                      "maxDrawdown":900,
+                      "actionsProposed":13,
+                      "orderActionsProposed":9,
+                      "dataCalls":21,
+                      "signalsGenerated":5,
+                      "disqualified":false
+                    }
+                """.trimIndent()
+            )
             val bot = get(server.address.port, "/internal/admin/arena/bots?botId=bot-1")
             val version = get(server.address.port, "/internal/admin/arena/bot-versions?botId=bot-1&versionId=v1")
             val reports = get(server.address.port, "/internal/admin/arena/qualification-reports?botId=bot-1&versionId=v1")
             val decisions = get(server.address.port, "/internal/admin/arena/operator-decisions?botId=bot-1&versionId=v1")
             val descriptors = get(server.address.port, "/internal/admin/arena/runtime-config-descriptors?botId=bot-1&versionId=v1")
             val run = get(server.address.port, "/internal/admin/arena/runs?runId=run-1")
-            val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v1")
+            val runResults = get(server.address.port, "/internal/admin/arena/run-bot-results?runId=run-1")
+            val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2")
 
+            assertEquals(200, registeredRun.status)
+            assertContains(registeredRun.body, "\"status\":\"Planned\"")
+            assertEquals(200, runningRun.status)
+            assertContains(runningRun.body, "\"status\":\"Running\"")
+            assertEquals(200, completedRun.status)
+            assertContains(completedRun.body, "\"status\":\"Completed\"")
+            assertEquals(200, postedResult.status)
+            assertContains(postedResult.body, "\"scoringPolicyVersion\":\"score-v2\"")
+            assertContains(postedResult.body, "\"finalEquity\":1030000")
             assertEquals(200, bot.status)
             assertContains(bot.body, "\"fileName\":\"bot-1.ts\"")
             assertEquals(200, version.status)
@@ -1364,9 +1411,39 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, run.status)
             assertContains(run.body, "\"runId\":\"run-1\"")
             assertContains(run.body, "\"botVersions\":[{\"botId\":\"bot-1\",\"versionId\":\"v1\"}]")
+            assertEquals(200, runResults.status)
+            assertContains(runResults.body, "\"results\":[")
+            assertContains(runResults.body, "\"scoringPolicyVersion\":\"score-v2\"")
+            assertContains(runResults.body, "\"finalEquity\":1030000")
             assertEquals(200, leaderboard.status)
             assertContains(leaderboard.body, "\"rank\":1")
-            assertContains(leaderboard.body, "\"finalEquity\":1025000")
+            assertContains(leaderboard.body, "\"finalEquity\":1030000")
+
+            val invalidResult = post(
+                server.address.port,
+                "/internal/admin/arena/run-bot-results",
+                emptyMap(),
+                """
+                    {
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-run-result-invalid",
+                      "runId":"run-1",
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "scoringPolicyVersion":"score-v2",
+                      "finalEquity":1030000,
+                      "realizedPnl":30000,
+                      "maxDrawdown":900,
+                      "actionsProposed":1,
+                      "orderActionsProposed":2,
+                      "dataCalls":21,
+                      "signalsGenerated":5,
+                      "disqualified":false
+                    }
+                """.trimIndent()
+            )
+            assertEquals(400, invalidResult.status)
+            assertContains(invalidResult.body, "orderActionsProposed must be less than or equal to actionsProposed")
         } finally {
             server.stop(0)
         }
