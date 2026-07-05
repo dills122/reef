@@ -257,6 +257,9 @@ jobs:
           RUNTIME_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5432/reef
           RUNTIME_POSTGRES_USER_TEST: reef
           RUNTIME_POSTGRES_PASSWORD_TEST: reef
+          ARENA_POSTGRES_JDBC_URL_TEST: jdbc:postgresql://localhost:5435/reef
+          ARENA_POSTGRES_USER_TEST: reef
+          ARENA_POSTGRES_PASSWORD_TEST: reef
         run: ./gradlew --no-daemon test --tests com.reef.platform.infrastructure.persistence.PostgresSchemaMigrationIntegrationTest
       - name: Dump Postgres logs on failure
         if: failure()
