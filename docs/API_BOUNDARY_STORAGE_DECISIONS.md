@@ -72,6 +72,7 @@ Decision:
 - intake should run a bounded account/risk pre-check before durable order acceptance.
 - non-allow decisions are audited to `boundary.account_risk_decisions` when the Postgres-backed mode is active.
 - operator/admin moderation state is stored in `boundary.account_risk_controls` and managed through `make dev-admin CMD="account-risk-set ..."` for local workflows.
+- internal write endpoint `/internal/admin/account-risk/controls` supports local/admin set operations and emits admin audit events.
 - internal read endpoints expose current controls and recent non-allow decisions at `/internal/boundary/account-risk/controls` and `/internal/boundary/account-risk/decisions/recent`.
 - settlement performs final enforcement after matching facts exist.
 - deep debt, exceeded risk thresholds, or settlement failures can block fulfillment and disable bots through account/admin facts.
@@ -113,6 +114,7 @@ Decision:
 - circuit breakers are hard pre-acceptance gates for operator halts and venue control.
 - tripped breakers reject before command-log append, stream-intake reservation, or durable publish.
 - account/bot moderation remains in account-risk controls; breaker scopes should stay focused on venue/session/instrument control unless a later design explicitly merges them.
+- internal write endpoint `/internal/admin/circuit-breakers` supports local/admin trip/reset operations and emits admin audit events.
 - internal read endpoint `/internal/boundary/circuit-breakers` exposes current breaker state for operator surfaces.
 
 Configuration:

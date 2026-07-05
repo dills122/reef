@@ -8,6 +8,8 @@ internal class PlatformDiagnosticRoutes(
     private val accountRiskControlsJson: () -> String,
     private val accountRiskDecisionsJson: (Int) -> String,
     private val commandCircuitBreakersJson: () -> String,
+    private val setAccountRiskControlJson: (String) -> PlatformHotPathResponse,
+    private val setCommandCircuitBreakerJson: (String) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -23,6 +25,8 @@ internal class PlatformDiagnosticRoutes(
         "/internal/boundary/account-risk/controls",
         "/internal/boundary/account-risk/decisions/recent",
         "/internal/boundary/circuit-breakers",
+        "/internal/admin/account-risk/controls",
+        "/internal/admin/circuit-breakers",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
         "/internal/commands/async/stats",
@@ -34,7 +38,7 @@ internal class PlatformDiagnosticRoutes(
         "/internal/market-data/projector/status"
     )
 
-    fun handle(method: String, path: String, query: String?): PlatformHotPathResponse? {
+    fun handle(method: String, path: String, query: String?, body: String = ""): PlatformHotPathResponse? {
         return when (path) {
             "/health" -> getOnly(method) { healthJson() }
             "/internal/boundary/abuse/stats" -> getOnly(method) { abuseStatsJson() }
@@ -43,6 +47,8 @@ internal class PlatformDiagnosticRoutes(
                 accountRiskDecisionsJson(queryValue(query, "limit").toIntOrNull() ?: 50)
             }
             "/internal/boundary/circuit-breakers" -> getOnly(method) { commandCircuitBreakersJson() }
+            "/internal/admin/account-risk/controls" -> postOnly(method) { setAccountRiskControlJson(body) }
+            "/internal/admin/circuit-breakers" -> postOnly(method) { setCommandCircuitBreakerJson(body) }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }
@@ -72,6 +78,14 @@ internal class PlatformDiagnosticRoutes(
     private fun getOnly(method: String, body: () -> String): PlatformHotPathResponse {
         return if (method == "GET") {
             PlatformHotPathResponse(200, body())
+        } else {
+            methodNotAllowedResponse()
+        }
+    }
+
+    private fun postOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse {
+        return if (method == "POST") {
+            response()
         } else {
             methodNotAllowedResponse()
         }

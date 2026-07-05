@@ -198,6 +198,8 @@ class PlatformHttpServer(
             accountRiskControlsJson = { accountRiskControlsJson() },
             accountRiskDecisionsJson = { limit -> accountRiskDecisionsJson(limit) },
             commandCircuitBreakersJson = { commandCircuitBreakersJson() },
+            setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
+            setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -591,10 +593,16 @@ class PlatformHttpServer(
     private fun registerDiagnosticRoutes(server: HttpServer) {
         diagnosticRoutes.paths.forEach { path ->
             server.createContext(path) { exchange ->
+                val body = if (exchange.requestMethod == "POST") {
+                    readRequestBody(exchange) ?: return@createContext
+                } else {
+                    ""
+                }
                 val response = diagnosticRoutes.handle(
                     method = exchange.requestMethod,
                     path = exchange.requestURI.path,
-                    query = exchange.requestURI.query
+                    query = exchange.requestURI.query,
+                    body = body
                 )
                 if (response == null) {
                     exchange.sendResponseHeaders(404, -1)
@@ -607,7 +615,7 @@ class PlatformHttpServer(
     }
 
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
-        return diagnosticRoutes.handle(request.method, request.path, request.query) ?: when {
+        return diagnosticRoutes.handle(request.method, request.path, request.query, request.body) ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
             request.path == "/api/v1/orders/submit" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }
@@ -1868,6 +1876,164 @@ class PlatformHttpServer(
             },
             "breakersCount" to breakers.size
         )
+    }
+
+    private fun setAccountRiskControlResponse(body: String): PlatformHotPathResponse {
+        val store = accountRiskControlStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "account risk control store unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val scopeType = normalizeAccountRiskScope(json.string("scopeType").ifBlank { json.string("scope") })
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk scope"))
+        val scopeId = json.string("scopeId").ifBlank { json.string("id") }
+        if (scopeId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scopeId is required"))
+        }
+        val decision = normalizeAccountRiskDecision(json.string("decision"))
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk decision"))
+        val reason = json.string("reason")
+        val actorId = json.string("actorId").ifBlank { "internal-admin" }
+        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val previous = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
+
+        store.upsertControl(scopeType, scopeId, decision, reason)
+        val current = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
+            ?: AccountRiskControl(scopeType, scopeId, decision, reason)
+        recordProtectiveControlAudit(
+            actorId = actorId,
+            correlationId = correlationId,
+            eventType = "AccountRiskControlChanged",
+            targetId = "$scopeType:$scopeId",
+            payload = mapOf(
+                "controlType" to "account-risk",
+                "scopeType" to scopeType,
+                "scopeId" to scopeId,
+                "previousDecision" to previous?.decision?.name.orEmpty(),
+                "previousReason" to previous?.reason.orEmpty(),
+                "decision" to decision.name,
+                "reason" to reason
+            )
+        )
+
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "control" to mapOf(
+                    "scopeType" to current.scopeType,
+                    "scopeId" to current.scopeId,
+                    "decision" to current.decision.name,
+                    "reason" to current.reason,
+                    "updatedAt" to current.updatedAt
+                )
+            )
+        )
+    }
+
+    private fun setCommandCircuitBreakerResponse(body: String): PlatformHotPathResponse {
+        val store = commandCircuitBreakerStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "command circuit breaker store unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val scopeType = normalizeCircuitBreakerScope(json.string("scopeType").ifBlank { json.string("scope") })
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker scope"))
+        val scopeId = if (scopeType == "GLOBAL") {
+            json.string("scopeId").ifBlank { "*" }
+        } else {
+            json.string("scopeId").ifBlank { json.string("id") }
+        }
+        if (scopeId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scopeId is required"))
+        }
+        val tripped = normalizeBreakerTripState(json.string("tripped").ifBlank { json.string("action") })
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker action"))
+        val reason = json.string("reason")
+        val actorId = json.string("actorId").ifBlank { "internal-admin" }
+        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val normalizedScopeId = if (scopeType == "GLOBAL") "*" else scopeId
+        val previous = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
+
+        store.setBreaker(scopeType, normalizedScopeId, tripped, reason)
+        val current = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
+            ?: CommandCircuitBreakerState(scopeType, normalizedScopeId, tripped, reason)
+        recordProtectiveControlAudit(
+            actorId = actorId,
+            correlationId = correlationId,
+            eventType = "CommandCircuitBreakerChanged",
+            targetId = "$scopeType:$normalizedScopeId",
+            payload = mapOf(
+                "controlType" to "command-circuit-breaker",
+                "scopeType" to scopeType,
+                "scopeId" to normalizedScopeId,
+                "previousTripped" to (previous?.tripped ?: false),
+                "previousReason" to previous?.reason.orEmpty(),
+                "tripped" to tripped,
+                "reason" to reason
+            )
+        )
+
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "breaker" to mapOf(
+                    "scopeType" to current.scopeType,
+                    "scopeId" to current.scopeId,
+                    "tripped" to current.tripped,
+                    "reason" to current.reason,
+                    "updatedAt" to current.updatedAt
+                )
+            )
+        )
+    }
+
+    private fun recordProtectiveControlAudit(
+        actorId: String,
+        correlationId: String,
+        eventType: String,
+        targetId: String,
+        payload: Map<String, Any?>
+    ) {
+        try {
+            api.recordAdminEvent(actorId, correlationId, eventType, targetId, payload)
+        } catch (ex: Exception) {
+            System.err.println(
+                "protective_control_audit_failed eventType=$eventType targetId=$targetId message=${JsonFields.escape(ex.message ?: "unknown")}"
+            )
+        }
+    }
+
+    private fun normalizeAccountRiskScope(value: String): String? {
+        return when (value.trim().lowercase()) {
+            "account" -> "ACCOUNT"
+            "bot" -> "BOT"
+            else -> null
+        }
+    }
+
+    private fun normalizeAccountRiskDecision(value: String): AccountRiskDecision? {
+        return when (value.trim().lowercase()) {
+            "allow" -> AccountRiskDecision.ALLOW
+            "reject" -> AccountRiskDecision.REJECT
+            "backpressure" -> AccountRiskDecision.BACKPRESSURE
+            "disabled-bot", "disabled_bot" -> AccountRiskDecision.DISABLED_BOT
+            else -> null
+        }
+    }
+
+    private fun normalizeCircuitBreakerScope(value: String): String? {
+        return when (value.trim().lowercase()) {
+            "global" -> "GLOBAL"
+            "venue-session", "venue_session" -> "VENUE_SESSION"
+            "instrument" -> "INSTRUMENT"
+            else -> null
+        }
+    }
+
+    private fun normalizeBreakerTripState(value: String): Boolean? {
+        return when (value.trim().lowercase()) {
+            "true", "trip", "tripped", "on" -> true
+            "false", "reset", "clear", "off" -> false
+            else -> null
+        }
     }
 
     private fun asyncCommandStatsJson(): String {

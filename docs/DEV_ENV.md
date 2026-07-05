@@ -368,6 +368,9 @@ make dev-admin CMD="account-risk-set bot bot-1 disabled-bot operator-disabled"
 make dev-admin CMD="account-risk-set account acct-1 backpressure settlement-hold"
 make dev-admin CMD="account-risk-set account acct-1 allow cleared"
 make dev-admin CMD="account-risk-list"
+curl -s -X POST http://127.0.0.1:8080/internal/admin/account-risk/controls \
+  -H 'content-type: application/json' \
+  -d '{"scopeType":"bot","scopeId":"bot-1","decision":"disabled-bot","reason":"operator-disabled","actorId":"ops-1"}'
 curl -s http://127.0.0.1:8080/internal/boundary/account-risk/controls
 curl -s 'http://127.0.0.1:8080/internal/boundary/account-risk/decisions/recent?limit=50'
 ```
@@ -382,7 +385,16 @@ make dev-admin CMD="breaker-set venue-session session-1 trip session-halted"
 make dev-admin CMD="breaker-set instrument AAPL trip instrument-halt"
 make dev-admin CMD="breaker-set instrument AAPL reset cleared"
 make dev-admin CMD="breaker-list"
+curl -s -X POST http://127.0.0.1:8080/internal/admin/circuit-breakers \
+  -H 'content-type: application/json' \
+  -d '{"scopeType":"instrument","scopeId":"AAPL","action":"trip","reason":"instrument-halt","actorId":"ops-1"}'
 curl -s http://127.0.0.1:8080/internal/boundary/circuit-breakers
+```
+
+Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls:
+
+```bash
+make dev-smoke-protective-controls
 ```
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
