@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/dills122/reef/actions/workflows/ci.yml/badge.svg)](https://github.com/dills122/reef/actions/workflows/ci.yml)
 [![Throughput Stress](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml/badge.svg)](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Kotlin](https://img.shields.io/badge/platform--runtime-Kotlin-7F52FF.svg)](./services/platform-runtime)
+[![Go](https://img.shields.io/badge/matching--engine-Go-00ADD8.svg)](./services/matching-engine)
 
 <p align="center">
   <img src="./reef-logo-main.png" alt="Reef project logo" width="260" height="260" />

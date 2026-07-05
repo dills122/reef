@@ -1,6 +1,8 @@
-# Reef Architecture and Flow Diagrams
+# Reef Architecture and Flow Diagrams (Historical)
 
-This document visualizes the current setup and intended future shape, including order flow, transport paths, and admin/public boundaries.
+Superseded by [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](../ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md), which reflects the current Kafka/Redpanda direct-stream shape. These diagrams describe an earlier HTTP-JSON/NATS-oriented design and are kept only as historical context.
+
+This document visualizes an earlier setup and intended future shape, including order flow, transport paths, and admin/public boundaries.
 
 ## Current System Shape
 
