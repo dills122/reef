@@ -138,7 +138,7 @@ Exit criteria:
 
 Primary references:
 
-- [`SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 - [`SIMULATOR_PERSONA_CONFIG.md`](./SIMULATOR_PERSONA_CONFIG.md)
 - [`SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
 - [`packages/scenario-definitions/`](../packages/scenario-definitions/)

@@ -20,7 +20,6 @@ These documents define how Reef should be built as the repository grows into the
 - [Post-Match Standards](../POST_MATCH_STANDARDS.md): normative post-match roles, calendar/time config, observability, exception taxonomy, and ledger standards
 - [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes
 - [Performance Library Investigation](../PERFORMANCE_LIBRARY_INVESTIGATION.md): runtime/Go library benchmark candidates and acceptance criteria
-- [Project Goal/Plan Review](../PROJECT_GOAL_PLAN_REVIEW.md): current critique, implementation snapshot, and recommended execution checkpoint
 
 ## How To Use These
 

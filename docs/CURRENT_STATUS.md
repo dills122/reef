@@ -67,7 +67,7 @@ Use these docs for active work:
 - Current and target architecture diagrams: [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
 - Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
-- Roadmap: [`ROADMAP.md`](./ROADMAP.md)
+- Roadmap: [`ROADMAP.md`](./archive/ROADMAP.md)
 - Decisions: [`DECISIONS.md`](./DECISIONS.md)
 - Performance evidence and next implications: [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 - Persistence materializer evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md)

@@ -572,7 +572,7 @@ Performance posture:
 - make scale tests part of arena acceptance, including single-run throughput, multi-run throughput, worker saturation, replay reconstruction, and leaderboard aggregation lag
 
 First local stress baseline:
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ## Rollout Plan
 

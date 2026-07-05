@@ -353,7 +353,7 @@ Summary:
 - event delivery semantics are at-least-once; consumers must be idempotent by `eventId`.
 
 Primary references:
-- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-025: EOD Data Lifecycle Policy
@@ -369,7 +369,7 @@ Summary:
   - immutable archive artifacts (compressed file-based partitions with manifest/checksums)
 
 Primary references:
-- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-026: Minimal Scheduler/Orchestration Policy
@@ -384,7 +384,7 @@ Summary:
 
 Primary references:
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
-- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
 
 ### D-027: Postgres Procedure-First Persistence Policy
 
@@ -433,8 +433,8 @@ Summary:
 - this sprint supports the throughput track by making stress runs, comparisons, diagnostics, and scenario execution easier to repeat.
 
 Primary references:
-- [`docs/PROJECT_PITCH.md`](./PROJECT_PITCH.md)
-- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`docs/PROJECT_PITCH.md`](./archive/PROJECT_PITCH.md)
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 - [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
 - [`apps/platform-ui/README.md`](../apps/platform-ui/README.md)
 
@@ -467,7 +467,7 @@ Summary:
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ### D-033: Command Log Lifecycle Controls
 
@@ -770,4 +770,4 @@ Summary:
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)

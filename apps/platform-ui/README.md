@@ -32,11 +32,11 @@ Later platform surfaces:
 
 Simulator control room planning:
 
-- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](../../docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](../../docs/archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 
 Project pitch:
 
-- [`docs/PROJECT_PITCH.md`](../../docs/PROJECT_PITCH.md)
+- [`docs/PROJECT_PITCH.md`](../../docs/archive/PROJECT_PITCH.md)
 
 Build guidance:
 

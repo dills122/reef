@@ -10,7 +10,7 @@ Use this alongside:
 - [`architecture.md`](./architecture.md) for platform boundaries and domain shape
 - [`external-api-boundary.md`](./external-api-boundary.md) for API contracts
 - [`data-platform.md`](./data-platform.md) for source-of-truth and retention rules
-- [`../SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](../SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md) for the first control-room buildout
+- [`../SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](../archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md) for the first control-room buildout
 
 Angular is the primary framework for Reef's internal platform UI. The UI is not
 the system of record and must not become the place where domain rules live.
