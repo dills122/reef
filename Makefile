@@ -7,7 +7,7 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-venue-event-materializer dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark
+.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-venue-event-materializer dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
 
@@ -104,6 +104,10 @@ dev-smoke:
 dev-smoke-protective-controls:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/protective-controls-smoke.mjs
+
+dev-smoke-arena-bot-risk:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/arena-bot-risk-smoke.mjs
 
 dev-smoke-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

@@ -82,9 +82,19 @@ Implementation checkpoint:
 Remaining work before this becomes a production control plane:
 
 - add full database migration coverage for the arena schema in the repository migration flow
-- wire arena operator commands into a hosted HTTP/CLI surface for platform operators
+- broaden arena operator read APIs beyond the current registration and lifecycle mutation endpoints
 - define the OpenBao fetcher that resolves descriptors during runner preflight and exposes only in-memory values to bot code
 - publish read APIs for bot status, qualification reports, run records, and operator audit history
+
+Local arena risk smoke:
+
+```bash
+PLATFORM_ARENA_ADMIN_ENABLED=1 \
+EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=1 \
+make dev-smoke-arena-bot-risk
+```
+
+The smoke registers a bot and bot version, quarantines that version through the hosted internal admin route, then submits a bot-versioned order and expects a pre-acceptance `BOT_DISABLED` rejection.
 
 ## Agreed Direction
 
