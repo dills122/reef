@@ -1,0 +1,51 @@
+#cloud-config
+ssh_pwauth: false
+disable_root: true
+
+users:
+  - name: ${ops_user}
+    groups: [sudo]
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - rsync
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - docker.io
+  - docker-compose-v2
+  - postgresql-client
+  - age
+  - sysstat
+  - iotop
+
+runcmd:
+  - systemctl enable --now docker
+  - usermod -aG docker ${ops_user}
+  - systemctl enable --now fail2ban
+  - systemctl enable --now unattended-upgrades
+  - systemctl enable --now sysstat
+  - mkdir -p /opt/reef/backups
+  - mkdir -p /opt/reef/caddy
+  - mkdir -p /opt/reef/openbao/config
+  - mkdir -p /opt/reef/openbao/logs
+  - mkdir -p /opt/reef/postgres/init
+  - mkdir -p /opt/reef/scripts
+  - mkdir -p /opt/reef/secrets
+  - chmod 700 /opt/reef/secrets
+  - chown -R ${ops_user}:${ops_user} /opt/reef
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw --force enable

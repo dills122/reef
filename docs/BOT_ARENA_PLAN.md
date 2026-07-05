@@ -55,6 +55,42 @@ The intended output of this review should be one or more focused specs, likely:
 - order, matching, and settlement lifecycle for arena-originated activity
 - leaderboard, scoring, replay, and audit rules
 
+## Resolved Slice: Bot Submission Workflow And OpenBao Provisioning
+
+Status: agreed direction, 2026-07-05. This resolves the "bot creation flow" and part of "secret handling rules" items from Deferred Second Review above (line 28, line 45: secret partition activation, who provisions, isolation by bot/user). Other Deferred Second Review items (safety limits, fairness rules, order lifecycle, failure handling beyond what's listed here) remain open.
+
+Submission and update path is PR-based:
+
+- branch naming is a fixed enum: `bots/add/<bot-name>`, `bots/update/<bot-name>`, `bots/remove/<bot-name>`. The branch segment is documentation/routing only, not a trust boundary — CI does not trust it for authorization decisions.
+- new-vs-update detection is done by diffing the arena bot registry, not by branch name: if the bot ID does not exist in the registry, this is a new-bot flow (including OpenBao user/slice provisioning); if it exists, this is an update flow (new `ArenaBotVersion` under the existing bot, no new identity provisioning).
+- manifest convention: each submission adds/changes `bots/<bot-name>/bot.json` (schema in `scripts/dev/bot-submission-validate.mjs`) alongside the bot's TypeScript entry file at `bots/<bot-name>/index.ts`, in the same PR.
+- implementation: `.github/workflows/bot-submission.yml` scaffolds this pipeline. Stages 1-3 are real (manifest validation, then `bot-sdk-test-bot.mjs` for the combined security-scan/sandboxed-test-run gate); they may use an ephemeral `make dev-up` stack since they need no persistent state. Stage 4's OpenBao step is an intentional dry-run stub (`scripts/dev/bot-submission-provision-openbao.mjs`) until the GitHub OIDC → OpenBao JWT auth integration exists — it proves the pipeline wiring and merge-blocking behavior without claiming secrets are actually provisioned yet.
+- **stage 4 must call the real, always-on hosted admin API, never an ephemeral per-run stack.** Registry-diff and OpenBao provisioning both depend on durable state (the actual bot registry, the actual OpenBao instance) that a fresh `make dev-up` container does not have — every bot would incorrectly look "new" against an empty throwaway registry, and any "provisioned" secret would vanish when the ephemeral stack tears down. `bot-submission-registry-diff.mjs` and `bot-submission-provision-openbao.mjs` take `ARENA_ADMIN_API_URL` (a GitHub Actions secret) for this reason, not a derived localhost URL. Because CI only ever makes HTTP calls to this API, no JVM/Gradle runs in the bot-submission workflow at all — the Kotlin OpenBao client and the GitHub OIDC → `auth/jwt` exchange both run server-side, on the always-on host, never in a CI runner.
+- the hosted admin API is loopback-only today (SSH-tunnel access, per `infra/hetzner-core/server/README.md`). Reaching it from GitHub Actions requires exposing a narrowly-scoped route through the Caddy reverse proxy already present in that compose stack — e.g. only `/internal/admin/arena/bots` (read) and a new `/internal/admin/arena/bots/openbao-provision` route, bearer-token-gated (`ARENA_ADMIN_API_TOKEN`), not the full admin surface. This Caddy route is outstanding work in `infra/hetzner-core/server/` alongside the `auth/jwt` backend.
+- outstanding manual step: GitHub branch protection on `master`/`main` must require the `validate-manifest`, `scan-and-sandbox-test`, and `registry-diff-and-provision` status checks plus at least one human reviewer approval before merge (see "Merge gate" below) — this is a repo-settings change, not something a commit can express.
+
+PR pipeline, in order, each stage blocking the next:
+
+1. bot validity check (schema, manifest, required metadata fields including `email`)
+2. security/static analysis (approved-dependency scan, per `docs/BOT_SDK_APPROVED_PACKAGES.md`)
+3. sandboxed test run against the fixture market (reuses `bot-sdk-test-bot.mjs`'s existing SES-based gate; exits nonzero and marks `do_not_merge` on failure, per `docs/BOT_SDK_AUTHOR_GUIDE.md:156`)
+4. OpenBao provisioning check/step, only reached if 1-3 pass and only for `bots/add` and `bots/update` (not `bots/remove` — see removal below):
+   - new submitter (per authenticated PR-actor identity, not the self-reported `email` metadata field — email stays a contact field only and is never used as an identity/authorization key): provision a new OpenBao user identity, then a new bot secret slice for that user
+   - existing submitter, new bot: provision only a new bot secret slice under their existing identity
+   - existing submitter, bot update: no new provisioning; the existing slice is reused, since only one bot version trades at a time and secrets are not version-scoped
+
+Identity mapping mechanism: the real OpenBao infra (`infra/hetzner-core/server/`, `codex/hetzner-core-infra` branch, not yet merged to master) bootstraps `secret/` as a KV v2 mount with **AppRole** auth only (`configure-openbao.sh`), used by `reef-platform-runtime` and `reef-simulator` to read `secret/data/bots/*` and their own service secrets at runtime. That AppRole path is unchanged by this workflow. This submission pipeline adds a **second, separate auth backend**: `auth/jwt` (or `auth/oidc`), configured to validate short-lived GitHub Actions OIDC tokens and map `actor`/`repository` claims to a narrow, provisioning-only OpenBao policy (create/update/delete under `secret/data/bots/*` only — no read access to other services' secrets, no access to the AppRole auth backend itself). No long-lived OpenBao token or AppRole secret is stored in GitHub Actions secrets for this flow. Enabling this JWT/OIDC auth backend and writing its policy is outstanding work in `infra/hetzner-core/server/scripts/configure-openbao.sh` (or an equivalent new script alongside it) — not done as part of this doc slice.
+
+Secret slice path: `secret/bots/<submitter-identity>/<bot-id>` — nested under the existing `secret/data/bots/*` / `secret/metadata/bots/*` policy wildcard already granted to `reef-platform-runtime`/`reef-simulator` (no policy rewrite needed for runtime reads, since the wildcard already matches the deeper path), with a per-submitter segment added for provisioning-time isolation. No version segment: only one version of a given bot is ever active/trading at once, so slice-per-version would add path churn without an isolation benefit; version history and which version last held the slice's active secrets are tracked in registry/audit rows, not in the OpenBao path.
+
+Removal (`bots/remove/<bot-name>`): on merge, the bot transitions to `archived` in the registry AND its OpenBao secret slice is deleted/access-revoked in the same pipeline run, rather than left provisioned. This minimizes standing secret exposure for bots no longer running; if the bot is resubmitted later it goes through the new-submitter-or-existing-submitter provisioning path again as if new.
+
+Failure handling: any pipeline stage failing (1-4) hard-blocks the PR merge via required GitHub branch protection status checks. No registry write happens on failure — the bot/version never enters `draft`/`submitted` state, and no OpenBao identity or slice is created. This matches the existing `bot-sdk-test-bot.mjs` `do_not_merge` contract and avoids partially-provisioned state.
+
+Merge gate: branch protection requires both all automated stages (1-4) passing AND at least one human operator approval before merge — automated checks alone do not auto-merge. This matches the operator-decision-driven pattern already used for lifecycle transitions (`ArenaOperatorDecision` records actor, reason, correlation ID for state changes elsewhere in the control plane); the PR reviewer approval is the equivalent operator checkpoint for the submission path.
+
+Known tradeoff, accepted: running OpenBao provisioning (stage 4) inside the pre-merge PR pipeline means the PR-facing CI job holds OpenBao write credentials while also executing untrusted submitted bot code (stage 3) in the same workflow run. This is a larger blast radius than a post-merge provisioning job would be. Accepted here because the requirement is that OpenBao provisioning must block merge, not follow it. Mitigation to build alongside this: stage 3 (sandboxed test run) and stage 4 (OpenBao provisioning) should run as separate CI jobs/steps with different credential scopes, so the job holding OpenBao write credentials never executes bot code directly — it only runs after stage 3 reports success as a separate job.
+
 ## Next Control-Plane Slice
 
 Start with durable arena source facts before UI or leaderboard work:
@@ -546,6 +582,24 @@ one small app host for platform runtime + control APIs
   -> one run host that starts tournament workers only when needed
   -> object storage for bot bundles, run artifacts, and replay/debug payloads
 ```
+
+Concrete backbone/run-plane split — finalized 2026-07-05, ratified as [D-046](DECISIONS.md). Status against the merged infra (`infra/hetzner-core/`, PR #45, commit `aa70ed4`, merged to master 2026-07-05):
+
+**Backbone** — one always-on Hetzner droplet (`cx33`, `nbg1`, OpenTofu-provisioned, private network `10.70.0.0/16`):
+
+- **OpenBao instance** — done. `infra/hetzner-core/server/docker-compose.yml:36-53`, AppRole bootstrapped via `configure-openbao.sh`. The `auth/jwt` backend for CI provisioning (see "Resolved Slice: Bot Submission Workflow And OpenBao Provisioning" above) is still outstanding on top of this.
+- **Admin API** — done, as `platform-runtime` (`docker-compose.yml:67-88`). Same instance already handling arena registry/`ArenaControlPlaneService`/bot-submission OpenBao-provisioning route; also the natural home for any other admin/clerical game operations. Not a separate process.
+- **Reverse proxy** — done. Caddy (`docker-compose.yml:90-109`), gated behind `profiles: [public]`.
+- **Analytics microservice (API + DB)** — not built. Only a Postgres *schema* named `analytics` exists today, inside the single shared Postgres instance (`postgres/init/01-create-dbs.sh`). Needs its own API/service, holding leaderboard data, game results, aggregate data, and everything ingested from simulation runs.
+- **Admin DB** — not built as a separate DB. Currently a schema (`admin`) in the same shared Postgres instance as everything else. Finalized shape: **two separate Postgres containers on the same backbone droplet** — one for Admin DB (user accounts, game/meta config, other non-runtime/non-analytics persisted state), one for Analytics DB — not schemas in one instance, and not a separate managed DB service (stays on the one cheap droplet).
+
+**Simulation platform (run plane)** — finalized: stays on **DigitalOcean**, not a second Hetzner droplet, reusing the already-proven DO stress-test/benchmark compute path. Accepts cross-cloud complexity in exchange for reusing what already works. Today's actual implementation (`infra/simulation-runner/README.md`, `scripts/deploy/simulation-run.mjs`) is an ad-hoc reuse of the pre-existing `scripts/dev/do-benchmark-host.sh` harness — this gets rebuilt to mirror the backbone's own deploy pattern: new `infra/simulation-runner/tofu/` (DO provider, OpenTofu) + its own `docker-compose.yml` + a deploy script shaped like `scripts/deploy/hetzner-core-tofu.mjs`, so running/deploying the simulation platform is as easy and uniform as running the backbone despite targeting a different cloud.
+
+- **Full runtime** (matching engine, simulator, trading-side hot-path DB) — exists today bundled with the DO benchmark harness; stays ephemeral, scoped to the simulation droplet, never touches the backbone's Admin/Analytics DBs directly.
+- **Export/cleanup service** — new, not yet built. Runs on the ephemeral simulation droplet as the last step before teardown: aggregates a completed run's results and pushes them to the backbone's Analytics API, replacing today's raw `rsync` file copy in `simulation-run.mjs`'s `pushArtifacts()`. Runs locally on the droplet so it doesn't depend on the operator's machine staying available.
+- **Blob storage for compressed debug data** — new, not yet built. Finalized choice: **Cloudflare R2**, reusing the credential/bucket setup already established for Postgres/OpenBao backup dumps (`infra/hetzner-core/README.md`) rather than introducing a second object-storage vendor (e.g. DO Spaces was considered and dropped in favor of one less vendor to manage).
+
+`ARENA_ADMIN_API_URL` (used by the bot-submission workflow's registry-diff and OpenBao-provisioning stages) always points at the backbone's Admin API — never at an ephemeral DO simulation droplet, since the backbone is the only durable, always-addressable host in this split.
 
 Cost-control rules:
 

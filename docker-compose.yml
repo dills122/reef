@@ -160,6 +160,7 @@ x-platform-runtime-environment: &platform-runtime-environment
   RUNTIME_DB_POOL_COMMAND_CAPTURE_MIN_IDLE: "${RUNTIME_DB_POOL_COMMAND_CAPTURE_MIN_IDLE:-}"
 
 x-platform-runtime-service: &platform-runtime-service
+  image: ${REEF_PLATFORM_RUNTIME_IMAGE:-reef-platform-runtime}
   build: *platform-runtime-build
   environment:
     <<: *platform-runtime-environment
@@ -320,6 +321,7 @@ services:
       retries: 20
 
   matching-engine:
+    image: ${REEF_MATCHING_ENGINE_IMAGE:-reef-matching-engine}
     build:
       context: ./services/matching-engine
       dockerfile: Dockerfile

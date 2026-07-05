@@ -43,6 +43,7 @@ function createContext(options) {
     run: options.run ?? runCommand,
     jsRuntime: env("JS_RUNTIME", "bun"),
     profiles: env("DEV_COMPOSE_PROFILES", ""),
+    buildImages: env("DEV_COMPOSE_BUILD", "1") !== "0",
     waitTimeoutSeconds: env("DEV_COMPOSE_WAIT_TIMEOUT_SECONDS", "300"),
     runSmoke: env("DEV_RESET_RUN_SMOKE", "0") === "1",
     smokeWaitTimeoutSeconds: env("DEV_RESET_SMOKE_WAIT_TIMEOUT_SECONDS", "45"),
@@ -76,14 +77,17 @@ async function runMigrations(context) {
 }
 
 async function startFullStack(context) {
-  await context.run("docker", [
+  const args = [
     "compose",
     "up",
     "-d",
-    "--build",
     "--remove-orphans",
     "--wait",
     "--wait-timeout",
     context.waitTimeoutSeconds,
-  ]);
+  ];
+  if (context.buildImages) {
+    args.splice(3, 0, "--build");
+  }
+  await context.run("docker", args);
 }

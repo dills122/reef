@@ -768,3 +768,44 @@ Summary:
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+
+### D-045: Bot Arena Intake Direction
+
+Status: accepted
+
+Summary:
+- this decision ratifies only the "Agreed Direction" section of `docs/BOT_ARENA_PLAN.md`; the plan's "Deferred Second Review" scope (bot safety limits, fairness rules, secret handling rules, failure handling, onboarding/KYC gates, approval-lifecycle detail) remains open and unresolved pending that review — it is not accepted by this entry.
+- TypeScript is the first public bot authoring SDK; the durable bot-runtime contract stays language-neutral through protobuf-defined snapshots, actions, outcomes, and resource reports.
+- a dedicated gRPC/protobuf protocol connects sandbox workers to the arena orchestrator; bot code must not create REST or gRPC clients to Reef services directly.
+- every bot-originated action preserves venue command semantics, validation, idempotency, abuse controls, and audit metadata through the same `/api/v1` boundary used by manual users.
+- arena runs model real interactive markets with controlled market makers, controlled background traffic, and user competitor bots; the matching engine remains unaware of game mechanics.
+- the visible-data policy starts strict and expands only through versioned policies backed by replay evidence.
+- final equity is the first headline leaderboard metric; richer risk, conduct, and consistency metrics are retained from day one.
+- public bot submissions are delayed until built-in/local bots prove replay, scoring, sandboxing, and operator controls (Rollout Plan Phase 5 gated behind Phases 1-4).
+- arena metadata, leaderboards, bot registry, run history, and replay indexes stay outside the trading hot-path database; Redis is ephemeral coordination/cache only, never the sole durable store for competition records.
+- the run plane is designed for early horizontal scale by tournament run, shard, instrument group, and sandbox worker; it inherits the throughput target from `docs/THROUGHPUT_SCALING_WORK_PLAN.md` (`7500`+ completed commands/sec per runtime+engine instance) and uses `docs/STREAM_ACK_ARCHITECTURE_PLAN.md` as the target venue-ingress design for high-throughput bot traffic.
+- current implementation state (`ArenaControlPlaneService`, `ArenaBotRegistryStore`/`PostgresArenaBotRegistryStore`, `ArenaBotVersionRiskCheck`) is early Rollout Plan Phase 1 (control-plane registry only); no sandbox execution, modular game modes, UI, or public submissions exist yet.
+
+Primary references:
+- [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
+
+### D-046: Backbone/Run-Plane Infra Split
+
+Status: accepted
+
+Summary:
+- the platform splits into two independently deployable infra units: an always-on "backbone" (control plane) and an on-demand "simulation platform" (run plane). This is the Hetzner-vs-DO / always-on-vs-ephemeral split from `docs/BOT_ARENA_PLAN.md`'s "Infrastructure Architecture" section, made concrete after `infra/hetzner-core/` (PR #45, commit `aa70ed4`) merged.
+- backbone stays on Hetzner (single cheap droplet, OpenTofu-provisioned): OpenBao, the Admin API (`platform-runtime`, unchanged — same instance already handling arena registry), and Caddy as reverse proxy. These three are accepted as already correctly landed.
+- backbone gets two additional pieces not yet built: an Admin DB and an Analytics DB as **two separate Postgres containers on the same backbone droplet** (not schemas in one shared instance as currently implemented in `infra/hetzner-core/server/postgres/init/01-create-dbs.sh`, and not a separate managed DB service). Admin DB holds user accounts, game/meta config, and other non-runtime/non-analytics persisted state. Analytics DB holds leaderboard data, game results, aggregate data, and everything ingested from simulation runs, behind its own analytics API/microservice.
+- the simulation platform (run plane) stays on DigitalOcean, reusing the existing DO stress-test/benchmark harness compute path, not a second Hetzner droplet. This accepts cross-cloud operational complexity in exchange for reusing already-proven compute provisioning.
+- the simulation platform's deploy tooling is rebuilt to mirror the backbone's pattern: OpenTofu (DO provider) + its own `docker-compose.yml` + a deploy script shaped like `scripts/deploy/hetzner-core-tofu.mjs`, replacing today's ad-hoc reuse of `scripts/dev/do-benchmark-host.sh` inside `scripts/deploy/simulation-run.mjs`. Goal: running/deploying the simulation platform should be as easy and uniform as running the backbone, even though they target different clouds.
+- a new export/cleanup service runs on the ephemeral simulation droplet as the last step before teardown: it aggregates a completed run's results and pushes them to the backbone's Analytics API, replacing today's raw `rsync` file copy in `simulation-run.mjs`'s `pushArtifacts()`. This keeps the pipeline self-contained on the droplet and independent of the operator's local machine staying available.
+- compressed/stripped-down debug data from simulation runs is stored in Cloudflare R2, reusing the credential/bucket setup already established for Postgres/OpenBao backup dumps (`infra/hetzner-core/README.md`) rather than introducing a second object-storage vendor.
+
+Primary references:
+- [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
+- [`docs/ARENA_INTAKE_GAP_ANALYSIS.md`](./ARENA_INTAKE_GAP_ANALYSIS.md)
+- [`infra/hetzner-core/`](../infra/hetzner-core/)
+- [`infra/simulation-runner/README.md`](../infra/simulation-runner/README.md)
