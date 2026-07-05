@@ -154,6 +154,7 @@ class PostgresSchemaRequirementsTest {
             operatorDecisions = names.operatorDecisions,
             runRecords = names.runRecords,
             runBotVersions = names.runBotVersions,
+            runBotResults = names.runBotResults,
             runtimeConfigDescriptors = names.runtimeConfigDescriptors
         )
 
@@ -166,6 +167,7 @@ class PostgresSchemaRequirementsTest {
                 "arena.operator_decisions",
                 "arena.run_records",
                 "arena.run_bot_versions",
+                "arena.run_bot_results",
                 "arena.runtime_config_descriptors"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
@@ -177,6 +179,8 @@ class PostgresSchemaRequirementsTest {
                     setOf(
                         "arena.bot_versions.status:text",
                         "arena.run_records.seed:bigint",
+                        "arena.run_bot_results.final_equity:bigint",
+                        "arena.run_bot_results.disqualified:boolean",
                         "arena.runtime_config_descriptors.secret_path:text",
                         "arena.runtime_config_descriptors.required:boolean"
                     )

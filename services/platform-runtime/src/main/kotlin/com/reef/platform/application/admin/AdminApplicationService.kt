@@ -8,6 +8,7 @@ import com.reef.platform.application.arena.ArenaBotMetadata
 import com.reef.platform.application.arena.ArenaBotVersion
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaControlPlaneService
+import com.reef.platform.application.arena.ArenaLeaderboardEntry
 import com.reef.platform.application.arena.ArenaOperatorDecision
 import com.reef.platform.application.arena.ArenaQualificationReport
 import com.reef.platform.application.arena.ArenaRunRecord
@@ -285,6 +286,16 @@ class AdminApplicationService(
     ): List<ArenaRuntimeConfigDescriptor> {
         requirePermission(actor, Permission.ARENA_ADMIN)
         return arenaStore().runtimeConfigDescriptors(botId, versionId)
+    }
+
+    fun arenaLeaderboard(
+        actor: AdminActor,
+        modeId: String,
+        scoringPolicyVersion: String,
+        limit: Int = 50
+    ): List<ArenaLeaderboardEntry> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().leaderboard(modeId, scoringPolicyVersion, limit)
     }
 
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()

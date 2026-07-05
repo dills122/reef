@@ -7,7 +7,9 @@ import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
 import com.reef.platform.application.arena.ArenaQualificationStatus
+import com.reef.platform.application.arena.ArenaRunBotResult
 import com.reef.platform.application.arena.ArenaRunBotVersionRef
+import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
 import com.reef.platform.application.arena.RegisterArenaBotCommand
@@ -1314,6 +1316,25 @@ class PlatformHttpServerBoundaryTest {
                 botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1"))
             )
         )
+        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Running)
+        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Completed)
+        controlPlane.recordRunBotResult(
+            ArenaRunBotResult(
+                runId = "run-1",
+                botId = "bot-1",
+                versionId = "v1",
+                scoringPolicyVersion = "score-v1",
+                finalEquity = 1_025_000,
+                realizedPnl = 25_000,
+                maxDrawdown = 1_000,
+                actionsProposed = 12,
+                orderActionsProposed = 8,
+                dataCalls = 20,
+                signalsGenerated = 4,
+                disqualified = false,
+                createdAt = java.time.Instant.parse("2026-07-05T12:00:00Z")
+            )
+        )
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
             runtimePersistence = persistence,
@@ -1326,6 +1347,7 @@ class PlatformHttpServerBoundaryTest {
             val decisions = get(server.address.port, "/internal/admin/arena/operator-decisions?botId=bot-1&versionId=v1")
             val descriptors = get(server.address.port, "/internal/admin/arena/runtime-config-descriptors?botId=bot-1&versionId=v1")
             val run = get(server.address.port, "/internal/admin/arena/runs?runId=run-1")
+            val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v1")
 
             assertEquals(200, bot.status)
             assertContains(bot.body, "\"fileName\":\"bot-1.ts\"")
@@ -1342,6 +1364,9 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, run.status)
             assertContains(run.body, "\"runId\":\"run-1\"")
             assertContains(run.body, "\"botVersions\":[{\"botId\":\"bot-1\",\"versionId\":\"v1\"}]")
+            assertEquals(200, leaderboard.status)
+            assertContains(leaderboard.body, "\"rank\":1")
+            assertContains(leaderboard.body, "\"finalEquity\":1025000")
         } finally {
             server.stop(0)
         }

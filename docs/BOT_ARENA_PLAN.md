@@ -85,7 +85,7 @@ Remaining work before this becomes a production control plane:
 - keep `PostgresArenaBotRegistryStore` validation coverage in the schema-placement CI job as arena schema evolves
 - keep `make dev-smoke-arena-bot-risk` as the local stack gate for bot-version risk controls; `make test-bot-sdk` syntax-checks the smoke script
 - wire the platform-owned `OpenBao` provider into runner preflight using `resolveBotRuntimeConfigV1`
-- build leaderboard/read-model projections from arena run records after simulation output facts are persisted
+- ingest hosted simulation/test-bot summaries into `arena.run_bot_results` so leaderboards use persisted run facts
 
 Local arena risk smoke:
 

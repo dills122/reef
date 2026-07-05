@@ -9,6 +9,7 @@ import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
 import com.reef.platform.application.arena.ArenaBot
 import com.reef.platform.application.arena.ArenaBotVersion
 import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaLeaderboardEntry
 import com.reef.platform.application.arena.ArenaOperatorDecision
 import com.reef.platform.application.arena.ArenaQualificationReport
 import com.reef.platform.application.arena.ArenaRunRecord
@@ -228,6 +229,7 @@ class PlatformHttpServer(
             arenaOperatorDecisionsJson = { query -> arenaOperatorDecisionsResponse(query) },
             arenaRuntimeConfigDescriptorsJson = { query -> arenaRuntimeConfigDescriptorsResponse(query) },
             arenaRunJson = { query -> arenaRunResponse(query) },
+            arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -2317,6 +2319,22 @@ class PlatformHttpServer(
         return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
     }
 
+    private fun arenaLeaderboardResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val modeId = queryValue(query, "modeId")
+        val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
+        }
+        val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
+        )
+    }
+
     private fun arenaAdminActor(json: JsonDocument): AdminActor {
         return AdminActor(
             actorId = json.string("actorId").ifBlank { "internal-admin" },
@@ -2412,6 +2430,20 @@ class PlatformHttpServer(
             "status" to run.status.name,
             "createdAt" to run.createdAt.toString(),
             "completedAt" to run.completedAt?.toString()
+        )
+    }
+
+    private fun arenaLeaderboardEntryJson(entry: ArenaLeaderboardEntry): Map<String, Any?> {
+        return mapOf(
+            "rank" to entry.rank,
+            "runId" to entry.runId,
+            "botId" to entry.botId,
+            "versionId" to entry.versionId,
+            "scoringPolicyVersion" to entry.scoringPolicyVersion,
+            "finalEquity" to entry.finalEquity,
+            "realizedPnl" to entry.realizedPnl,
+            "maxDrawdown" to entry.maxDrawdown,
+            "disqualified" to entry.disqualified
         )
     }
 

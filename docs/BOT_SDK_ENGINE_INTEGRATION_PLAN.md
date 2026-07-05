@@ -88,8 +88,9 @@ Completed runtime bridge coverage:
   - `GET /internal/admin/arena/runs?runId=...`
 - Postgres schema-placement CI validates the migrated `arena-postgres` schema with `PostgresArenaBotRegistryStore` in `Validate` mode and round-trips bot versions, qualification reports, operator decisions, runtime config descriptors, and run records.
 - `resolveBotRuntimeConfigV1` defines runner preflight resolution for immutable `OpenBao` descriptors. It fetches through a platform-owned provider, validates required values and types, freezes resolved config for the run, and keeps fetch capability out of bot code.
+- `arena.run_bot_results` stores first bot/run scoring facts outside the trading hot path. `GET /internal/admin/arena/leaderboard?modeId=...&scoringPolicyVersion=...` exposes a rebuildable leaderboard read model ranked by disqualification, final equity, realized PnL, drawdown, run ID, and bot ID.
 
 Next non-throughput integration work:
 
 1. Add CI or documented local-stack coverage for `make dev-smoke-arena-bot-risk`.
-2. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.
+2. Wire hosted simulation/test-bot report ingestion into `arena.run_bot_results`.

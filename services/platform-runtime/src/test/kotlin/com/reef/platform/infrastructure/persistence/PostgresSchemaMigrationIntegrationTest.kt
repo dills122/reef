@@ -17,7 +17,9 @@ import com.reef.platform.application.arena.ArenaBotMetadata
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.ArenaQualificationStatus
+import com.reef.platform.application.arena.ArenaRunBotResult
 import com.reef.platform.application.arena.ArenaRunBotVersionRef
+import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
@@ -579,6 +581,25 @@ class PostgresSchemaMigrationIntegrationTest {
                 botVersions = listOf(ArenaRunBotVersionRef(botId, versionId))
             )
         )
+        controlPlane.updateRunStatus(runId, ArenaRunStatus.Running)
+        controlPlane.updateRunStatus(runId, ArenaRunStatus.Completed)
+        controlPlane.recordRunBotResult(
+            ArenaRunBotResult(
+                runId = runId,
+                botId = botId,
+                versionId = versionId,
+                scoringPolicyVersion = "score-v1",
+                finalEquity = 1_025_000,
+                realizedPnl = 25_000,
+                maxDrawdown = 1_000,
+                actionsProposed = 12,
+                orderActionsProposed = 8,
+                dataCalls = 20,
+                signalsGenerated = 4,
+                disqualified = false,
+                createdAt = Instant.parse("2026-07-05T12:00:00Z")
+            )
+        )
 
         assertEquals(botId, store.bot(botId)?.botId)
         assertEquals(ArenaBotVersionStatus.Approved, store.version(botId, versionId)?.status)
@@ -586,6 +607,8 @@ class PostgresSchemaMigrationIntegrationTest {
         assertEquals("admin-cli", store.operatorDecisions(botId, versionId).last().actorId)
         assertEquals("maxInventory", store.runtimeConfigDescriptors(botId, versionId).single().key)
         assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
+        assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
+        assertEquals(botId, store.leaderboard("hosted-sim", "score-v1").single().botId)
     }
 
     @Test
