@@ -87,9 +87,9 @@ Completed runtime bridge coverage:
   - `GET /internal/admin/arena/runtime-config-descriptors?botId=...&versionId=...`
   - `GET /internal/admin/arena/runs?runId=...`
 - Postgres schema-placement CI validates the migrated `arena-postgres` schema with `PostgresArenaBotRegistryStore` in `Validate` mode and round-trips bot versions, qualification reports, operator decisions, runtime config descriptors, and run records.
+- `resolveBotRuntimeConfigV1` defines runner preflight resolution for immutable `OpenBao` descriptors. It fetches through a platform-owned provider, validates required values and types, freezes resolved config for the run, and keeps fetch capability out of bot code.
 
 Next non-throughput integration work:
 
 1. Add CI or documented local-stack coverage for `make dev-smoke-arena-bot-risk`.
-2. Define the OpenBao fetcher that resolves immutable per-run config descriptors during runner preflight.
-3. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.
+2. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.

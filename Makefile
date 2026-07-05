@@ -50,6 +50,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-worker.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-runtime-config.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-test-bot.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
