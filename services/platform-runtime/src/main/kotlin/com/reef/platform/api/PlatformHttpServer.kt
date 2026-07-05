@@ -46,7 +46,7 @@ private sealed class PreparedApiV1MutationResult {
     data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
 }
 
-private val apiV1OrderMutationRoutes = setOf(
+internal val apiV1OrderMutationRoutes = setOf(
     "/api/v1/orders/submit",
     "/api/v1/orders/modify",
     "/api/v1/orders/cancel"
