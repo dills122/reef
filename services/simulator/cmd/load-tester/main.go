@@ -117,6 +117,7 @@ type summary struct {
 	Config                 Config                    `json:"config"`
 	ThroughputRPS          float64                   `json:"throughputRps"`
 	AcceptedBusinessOpsRPS float64                   `json:"acceptedBusinessOpsRps"`
+	Throughput             throughputSummary         `json:"throughput"`
 	TotalRequests          int64                     `json:"totalRequests"`
 	TotalSuccess           int64                     `json:"totalSuccess"`
 	TotalFailures          int64                     `json:"totalFailures"`
@@ -149,6 +150,8 @@ type loadScheduleSummary struct {
 	CompletedPerSecond    float64 `json:"completedPerSecond"`
 	CompletionToTargetPct float64 `json:"completionToTargetPct"`
 }
+
+type throughputSummary = reporting.ThroughputSummary
 
 type loadScheduleCounters struct {
 	scheduled int64
@@ -345,6 +348,7 @@ func parseConfig() (Config, error) {
 	flag.StringVar(&cfg.StreamAddress, "stream-address", cfg.StreamAddress, "stream ingress host:port when transport=stream")
 	flag.DurationVar(&cfg.Duration, "duration", cfg.Duration, "test duration")
 	flag.IntVar(&cfg.Workers, "workers", cfg.Workers, "concurrent workers")
+	flag.Int64Var(&cfg.Seed, "seed", cfg.Seed, "deterministic random seed")
 	flag.IntVar(&cfg.RatePerSecond, "rate", cfg.RatePerSecond, "global request rate per second (0 = unthrottled)")
 	flag.StringVar(&cfg.RateSchedule, "rate-schedule", cfg.RateSchedule, "rate scheduler: drop or precise")
 	flag.IntVar(&cfg.RateQueueDepth, "rate-queue-depth", cfg.RateQueueDepth, "rate-token queue depth (0 = scheduler default)")
@@ -480,6 +484,7 @@ func defaultConfigFromEnv() Config {
 		StreamAddress:       envOr("REEF_STREAM_ADDRESS", "127.0.0.1:8090"),
 		Duration:            envDuration("REEF_DURATION", 30*time.Second),
 		Workers:             envInt("REEF_WORKERS", 8),
+		Seed:                envInt64("REEF_SEED", 0),
 		RatePerSecond:       envInt("REEF_RATE", 0),
 		RateSchedule:        envOr("REEF_RATE_SCHEDULE", rateScheduleDrop),
 		RateQueueDepth:      envInt("REEF_RATE_QUEUE_DEPTH", 0),
@@ -574,6 +579,9 @@ func applyFlagOverrides(cfg *Config, parsed Config, explicit map[string]bool) {
 	}
 	if explicit["workers"] {
 		cfg.Workers = parsed.Workers
+	}
+	if explicit["seed"] {
+		cfg.Seed = parsed.Seed
 	}
 	if explicit["rate"] {
 		cfg.RatePerSecond = parsed.RatePerSecond
@@ -726,7 +734,7 @@ func runWorker(
 	traceSeen *sync.Map,
 ) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)*7919))
-	if cfg.HasSessionConfig && cfg.Seed != 0 {
+	if cfg.Seed != 0 {
 		rng = rand.New(rand.NewSource(cfg.Seed + int64(workerID)*7919))
 	}
 	var stream *streamSubmitter
@@ -1189,6 +1197,7 @@ func buildSummary(sessionID string, started, finished time.Time, cfg Config, res
 
 	report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
 	report.AcceptedBusinessOpsRPS = float64(report.TotalSuccess) / report.DurationSeconds
+	report.Throughput = reporting.ComputeThroughput(report.TotalRequests, report.TotalSuccess, 0, report.DurationSeconds)
 	report.LatencyMs = computeLatency(allLatencies)
 	for action, values := range actionLatencies {
 		current := report.ByAction[action]

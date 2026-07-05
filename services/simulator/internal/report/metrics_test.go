@@ -12,6 +12,19 @@ func TestComputeLatency(t *testing.T) {
 	}
 }
 
+func TestComputeThroughputUsesCanonicalNames(t *testing.T) {
+	row := ComputeThroughput(100, 90, 80, 10)
+	if row.AttemptedPerSecond != 10 {
+		t.Fatalf("unexpected attempted/sec: %+v", row)
+	}
+	if row.AcceptedPerSecond != 9 {
+		t.Fatalf("unexpected accepted/sec: %+v", row)
+	}
+	if row.CompletedPerSecond != 8 {
+		t.Fatalf("unexpected completed/sec: %+v", row)
+	}
+}
+
 func TestSummarizeRejectTaxonomy(t *testing.T) {
 	rows := SummarizeRejectTaxonomy(map[string]int64{"INVALID_STATE": 3, "NOT_FOUND": 1}, 5, 4, 10)
 	if len(rows) != 2 {
