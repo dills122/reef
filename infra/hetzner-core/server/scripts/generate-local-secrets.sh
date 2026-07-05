@@ -29,6 +29,42 @@ fi
 # shellcheck disable=SC1091
 source "$SECRETS/db.env"
 
+# Admin/analytics live in their own dedicated Postgres containers, not
+# schemas in the main reef DB - see D-046 in docs/DECISIONS.md.
+if [[ ! -s "$SECRETS/postgres-admin.env" ]]; then
+  ADMIN_POSTGRES_PASSWORD="$(rand_hex)"
+  ADMIN_APP_DB_PASSWORD="$(rand_hex)"
+
+  cat > "$SECRETS/postgres-admin.env" <<EOF
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=${ADMIN_POSTGRES_PASSWORD}
+POSTGRES_DB=admin
+ADMIN_APP_DB_PASSWORD=${ADMIN_APP_DB_PASSWORD}
+EOF
+
+  chmod 600 "$SECRETS/postgres-admin.env"
+fi
+
+# shellcheck disable=SC1091
+source "$SECRETS/postgres-admin.env"
+
+if [[ ! -s "$SECRETS/postgres-analytics.env" ]]; then
+  ANALYTICS_POSTGRES_PASSWORD="$(rand_hex)"
+  ANALYTICS_APP_DB_PASSWORD="$(rand_hex)"
+
+  cat > "$SECRETS/postgres-analytics.env" <<EOF
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=${ANALYTICS_POSTGRES_PASSWORD}
+POSTGRES_DB=analytics
+ANALYTICS_APP_DB_PASSWORD=${ANALYTICS_APP_DB_PASSWORD}
+EOF
+
+  chmod 600 "$SECRETS/postgres-analytics.env"
+fi
+
+# shellcheck disable=SC1091
+source "$SECRETS/postgres-analytics.env"
+
 cat > "$SECRETS/openbao.env" <<EOF
 BAO_ADDR=http://127.0.0.1:8200
 BAO_PG_CONNECTION_URL=postgres://openbao:${OPENBAO_DB_PASSWORD}@postgres:5432/openbao?sslmode=disable
@@ -56,6 +92,12 @@ EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED=false
 STREAM_ACK_WORKER_ENABLED=false
 STREAM_ACK_PROJECTOR_ENABLED=false
 BAO_ADDR=http://openbao:8200
+ADMIN_POSTGRES_JDBC_URL=jdbc:postgresql://postgres-admin:5432/admin?currentSchema=admin
+ADMIN_POSTGRES_USER=admin_app
+ADMIN_POSTGRES_PASSWORD=${ADMIN_APP_DB_PASSWORD}
+ANALYTICS_POSTGRES_JDBC_URL=jdbc:postgresql://postgres-analytics:5432/analytics?currentSchema=analytics
+ANALYTICS_POSTGRES_USER=analytics_app
+ANALYTICS_POSTGRES_PASSWORD=${ANALYTICS_APP_DB_PASSWORD}
 EOF
 chmod 600 "$SECRETS/platform-runtime.env"
 

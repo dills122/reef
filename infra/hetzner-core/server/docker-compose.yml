@@ -33,6 +33,42 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  postgres-admin:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ./secrets/postgres-admin.env
+    volumes:
+      - pgdata_admin:/var/lib/postgresql/data
+      - ./postgres-admin/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  postgres-analytics:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ./secrets/postgres-analytics.env
+    volumes:
+      - pgdata_analytics:/var/lib/postgresql/data
+      - ./postgres-analytics/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
   openbao:
     image: openbao/openbao:2.5.5
     restart: unless-stopped
@@ -132,5 +168,7 @@ networks:
 
 volumes:
   pgdata:
+  pgdata_admin:
+  pgdata_analytics:
   caddy_data:
   caddy_config:

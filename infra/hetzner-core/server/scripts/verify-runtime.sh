@@ -61,8 +61,14 @@ if [[ -f "$BASE/secrets/platform-runtime.env" ]]; then
   echo "reef_app visible migrated tables: $app_visible_tables"
 fi
 
+docker compose exec -T postgres-admin pg_isready -U postgres >/dev/null
+echo "postgres-admin: ready"
+
+docker compose exec -T postgres-analytics pg_isready -U postgres >/dev/null
+echo "postgres-analytics: ready"
+
 echo "resource snapshot:"
 docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" \
-  reef-platform-runtime-1 reef-matching-engine-1 reef-postgres-1 || true
+  reef-platform-runtime-1 reef-matching-engine-1 reef-postgres-1 reef-postgres-admin-1 reef-postgres-analytics-1 || true
 
 echo "runtime verification complete"
