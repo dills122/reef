@@ -8,7 +8,7 @@ import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 const defaultMigrationsRoot = path.join(repoRoot, "scripts/dev/db/migrations");
-const domainOrder = ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"];
+const domainOrder = ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "arena", "analytics"];
 
 export async function discoverMigrations(migrationsRoot = defaultMigrationsRoot) {
   const migrations = [];
@@ -155,6 +155,14 @@ function migrationTargets() {
       service: env("REEF_BOUNDARY_POSTGRES_SERVICE", "boundary-postgres"),
       user: env("REEF_BOUNDARY_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
       dbName: env("REEF_BOUNDARY_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
+    });
+  }
+  if (env("REEF_ARENA_POSTGRES_MIGRATIONS", "1") !== "0") {
+    targets.push({
+      label: "arena",
+      service: env("REEF_ARENA_POSTGRES_SERVICE", "arena-postgres"),
+      user: env("REEF_ARENA_POSTGRES_USER", env("REEF_POSTGRES_USER", "reef")),
+      dbName: env("REEF_ARENA_POSTGRES_DB", env("REEF_POSTGRES_DB", "reef")),
     });
   }
   return targets;

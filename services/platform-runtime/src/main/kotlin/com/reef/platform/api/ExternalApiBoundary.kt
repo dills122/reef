@@ -1713,9 +1713,10 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllAccountRiskCheck()
     }
     val accountRiskCheck = if (envBool(System.getenv("EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED"), false)) {
-        val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-        val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-        val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+        val jdbcUrl = System.getenv("ARENA_POSTGRES_JDBC_URL")
+            ?: error("ARENA_POSTGRES_JDBC_URL is required when EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=true")
+        val dbUser = System.getenv("ARENA_POSTGRES_USER") ?: "reef"
+        val dbPassword = System.getenv("ARENA_POSTGRES_PASSWORD") ?: "reef"
         ArenaBotVersionRiskCheck(
             store = PostgresArenaBotRegistryStore(
                 dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-bot-version-risk")

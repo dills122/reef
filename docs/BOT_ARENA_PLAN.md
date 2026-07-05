@@ -73,6 +73,7 @@ Implementation checkpoint:
 - `ArenaControlPlaneService` defines the first arena-owned registry boundary in platform runtime.
 - `ArenaBotRegistryStore` and `InMemoryArenaBotRegistryStore` capture source facts for local tests without introducing a trading hot-path dependency.
 - `PostgresArenaBotRegistryStore` adds the first durable arena schema for registry, qualification, operator decision, and run-record facts.
+- Hosted arena admin and bot-version risk checks require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`), not the runtime or boundary datasource.
 - Bot versions now have explicit approval, active, suspended, quarantined, banned, and archived states.
 - Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
 - Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
@@ -89,6 +90,7 @@ Remaining work before this becomes a production control plane:
 Local arena risk smoke:
 
 ```bash
+ARENA_POSTGRES_JDBC_URL=jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena \
 PLATFORM_ARENA_ADMIN_ENABLED=1 \
 EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=1 \
 make dev-smoke-arena-bot-risk

@@ -3060,9 +3060,10 @@ private fun defaultBoundary(): ServerBoundaryDeps {
 
 private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationService? {
     if (!RuntimeEnv.bool("PLATFORM_ARENA_ADMIN_ENABLED", false)) return null
-    val jdbcUrl = RuntimeEnv.string("RUNTIME_DB_URL", "jdbc:postgresql://localhost:5432/reef")
-    val dbUser = RuntimeEnv.string("RUNTIME_DB_USER", "reef")
-    val dbPassword = RuntimeEnv.string("RUNTIME_DB_PASSWORD", "reef")
+    val jdbcUrl = RuntimeEnv.string("ARENA_POSTGRES_JDBC_URL", "")
+        .ifBlank { error("ARENA_POSTGRES_JDBC_URL is required when PLATFORM_ARENA_ADMIN_ENABLED=true") }
+    val dbUser = RuntimeEnv.string("ARENA_POSTGRES_USER", "reef")
+    val dbPassword = RuntimeEnv.string("ARENA_POSTGRES_PASSWORD", "reef")
     return AdminApplicationService(
         runtimePersistence = defaultRuntimePersistence(),
         arenaRegistryStore = PostgresArenaBotRegistryStore(
