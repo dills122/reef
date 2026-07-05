@@ -133,11 +133,13 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     const actions = Array.from(await bot.onTick(context));
     const expandedActions = Array.from(expandCancelAllActionsV1(actions, Array.from(orderState.values())));
     const orderActionCount = expandedActions.filter(isOrderAction).length;
+    let tickBlocked = false;
     actionsProposed += actions.length;
     orderActionsProposed += orderActionCount;
     dataCalls += counters.dataCalls;
 
     if (orderActionCount > policy.maxOrderActionsPerTick) {
+      tickBlocked = true;
       issues.push({
         code: "max_order_actions_per_tick_exceeded",
         message: `Tick ${tick} proposed ${orderActionCount} order actions; limit is ${policy.maxOrderActionsPerTick}.`,
@@ -149,6 +151,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     const updatedWindowCount = (tradeCommandWindows.get(secondWindow) ?? 0) + orderActionCount;
     tradeCommandWindows.set(secondWindow, updatedWindowCount);
     if (updatedWindowCount > policy.maxTradeCommandsPerSecond) {
+      tickBlocked = true;
       issues.push({
         code: "max_trade_commands_per_second_exceeded",
         message: `Second ${secondWindow} proposed ${updatedWindowCount} trade commands; limit is ${policy.maxTradeCommandsPerSecond}.`,
@@ -156,10 +159,14 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       });
     }
 
-    const venueResult = toVenueCommandRequestsV1(expandedActions, venueContext(options.fixture, fixtureTick.occurredAt, commandSequence));
+    const venueResult = tickBlocked
+      ? { ok: true as const, value: [] }
+      : toVenueCommandRequestsV1(expandedActions, venueContext(options.fixture, fixtureTick.occurredAt, commandSequence));
     const venueCommands = venueResult.ok ? Array.from(venueResult.value) : [];
     let venueResponses: readonly VenueCommandResponseV1[] = [];
+    let venueAccepted = venueResult.ok && !tickBlocked;
     if (!venueResult.ok) {
+      venueAccepted = false;
       denials.push(venueResult.denial);
       issues.push({
         code: "venue_adapter_denial",
@@ -171,6 +178,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       if (sendResult.ok) {
         venueResponses = sendResult.value;
       } else {
+        venueAccepted = false;
         denials.push(sendResult.denial);
         issues.push({
           code: "venue_send_denial",
@@ -180,8 +188,10 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       }
     }
 
-    applyActionsToOrderState(expandedActions, orderState, orderHistory, tick);
-    commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
+    if (venueAccepted) {
+      applyActionsToOrderState(expandedActions, orderState, orderHistory, tick);
+      commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
+    }
 
     tickReports.push({
       tick,

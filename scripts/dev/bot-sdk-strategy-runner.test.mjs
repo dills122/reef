@@ -11,6 +11,7 @@ const { createRecordingVenueTransportV1 } = await import(
 );
 
 await assertMultiSymbolStrategyRun();
+await assertPolicyBlockedStrategyRunDoesNotSendOrApply();
 
 console.log("bot SDK strategy runner checks passed");
 
@@ -76,6 +77,22 @@ async function assertMultiSymbolStrategyRun() {
   assert.equal(report.ticks[0].venueCommands.length, 2);
   assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");
   assert.equal(transport.requests.length, 6);
+}
+
+async function assertPolicyBlockedStrategyRunDoesNotSendOrApply() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/test-fixtures/bad-bots/too-many-orders-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotStrategyScenarioV1({
+    BotClass: module.default,
+    fixture,
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "do_not_merge");
+  assert.ok(report.issues.some((issue) => issue.code === "max_order_actions_per_tick_exceeded"));
+  assert.equal(report.ticks[0].venueCommands.length, 0);
+  assert.equal(report.finalOrders.length, 0);
+  assert.equal(transport.requests.length, 0);
 }
 
 function bars(instrumentId, closes) {

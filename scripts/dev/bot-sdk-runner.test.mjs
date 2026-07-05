@@ -13,6 +13,7 @@ const { createRecordingVenueTransportV1 } = await import(
 await assertSimpleMarketMakerRun();
 await assertLifecycleSafeMarketMakerRun();
 await assertRefreshingMarketMakerRun();
+await assertPolicyBlockedRunDoesNotSendOrApply();
 
 console.log("bot SDK scenario runner checks passed");
 
@@ -85,4 +86,20 @@ async function assertRefreshingMarketMakerRun() {
   assert.equal(report.ticks[2].venueCommands[0].route, "/api/v1/orders/submit");
   assert.equal(report.finalOrders.length, 2);
   assert.equal(transport.requests.length, 6);
+}
+
+async function assertPolicyBlockedRunDoesNotSendOrApply() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/test-fixtures/bad-bots/too-many-orders-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture,
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "do_not_merge");
+  assert.ok(report.issues.some((issue) => issue.code === "max_order_actions_per_tick_exceeded"));
+  assert.equal(report.ticks[0].venueCommands.length, 0);
+  assert.equal(report.finalOrders.length, 0);
+  assert.equal(transport.requests.length, 0);
 }
