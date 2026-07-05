@@ -25,3 +25,4 @@ infra/do-benchmark/*.tfvars
 # Claude local integration links. These point at user-specific template
 # checkouts and are recreated with `bun run claude:links`.
 .claude/skills/
+.aider*

@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
@@ -1284,7 +1285,8 @@ class PostgresRuntimePersistence(
                     CREATE OR REPLACE FUNCTION ${names.projectCanonicalCommandOutcomesFunction}(
                       p_projection_name TEXT,
                       p_batch_size INTEGER,
-                      p_partitions INTEGER[] DEFAULT NULL
+                      p_partitions INTEGER[] DEFAULT NULL,
+                      p_include_fills BOOLEAN DEFAULT TRUE
                     )
                     RETURNS BIGINT
                     LANGUAGE plpgsql
@@ -1361,8 +1363,8 @@ class PostgresRuntimePersistence(
                             'reason', COALESCE(result_payload #>> '{rejected,reason}', ''),
                             'occurredAt', COALESCE(NULLIF(result_payload #>> '{accepted,occurredAt}', ''), NULLIF(result_payload #>> '{rejected,occurredAt}', ''), ''),
                             'acceptedOrder', NULL,
-                            'executions', '[]'::jsonb,
-                            'trades', '[]'::jsonb,
+                            'executions', CASE WHEN p_include_fills THEN COALESCE(result_payload->'executions', '[]'::jsonb) ELSE '[]'::jsonb END,
+                            'trades', CASE WHEN p_include_fills THEN COALESCE(result_payload->'trades', '[]'::jsonb) ELSE '[]'::jsonb END,
                             'events', jsonb_build_array(
                               jsonb_build_object(
                                 'eventId', COALESCE(NULLIF(result_payload #>> '{accepted,eventId}', ''), NULLIF(result_payload #>> '{rejected,eventId}', ''), 'evt-' || command_id),
@@ -1389,7 +1391,7 @@ class PostgresRuntimePersistence(
                       projected AS (
                         SELECT ${names.persistSubmitOutcomesFunction}(
                           COALESCE(
-                            jsonb_agg(result_payload ORDER BY stream_sequence, partition_id),
+                            jsonb_agg(result_payload ORDER BY canonical.stream_sequence, partition_id),
                             '[]'::jsonb
                           )
                         ) AS count
@@ -1777,20 +1779,26 @@ class PostgresRuntimePersistence(
         }
     }
 
-    override fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
+    override fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>,
+        includeFills: Boolean
+    ): Long {
         if (batchSize <= 0) return 0
         if (projectionStoreSeparated()) {
-            return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions)
+            return projectCanonicalCommandOutcomesAcrossStores(projectionName, batchSize, partitions, includeFills)
         }
         canonicalConnection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?)
+                SELECT ${names.projectCanonicalCommandOutcomesFunction}(?, ?, ?, ?)
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, projectionName)
                 ps.setInt(2, batchSize)
                 ps.setArray(3, conn.createArrayOf("integer", partitions.toTypedArray()))
+                ps.setBoolean(4, includeFills)
                 ps.executeQuery().use { rs ->
                     rs.next()
                     return rs.getLong(1)
@@ -1847,7 +1855,8 @@ class PostgresRuntimePersistence(
     private fun projectCanonicalCommandOutcomesAcrossStores(
         projectionName: String,
         batchSize: Int,
-        partitions: List<Int>
+        partitions: List<Int>,
+        includeFills: Boolean
     ): Long {
         val effectiveBatchSize = batchSize.coerceAtMost(CanonicalCommandOutcomeProjectionMaxBatchSize)
         val ownedPartitions = ownedCommandProjectionPartitions(partitions)
@@ -1876,7 +1885,7 @@ class PostgresRuntimePersistence(
             val previousAutoCommit = conn.autoCommit
             conn.autoCommit = false
             try {
-                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson).toJsonObject() }
+                val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
                 updateProjectionWatermarks(
                     conn,
@@ -2022,21 +2031,21 @@ class PostgresRuntimePersistence(
             conn.prepareStatement(
                 """
                 SELECT
-                  command_id,
-                  batch_id,
-                  shard_id,
-                  partition_id,
-                  command_stream,
-                  event_stream,
-                  stream_sequence,
-                  delivered_count,
-                  command_type,
-                  payload_hash,
-                  instrument_id,
-                  order_id,
-                  result_status,
-                  reject_code,
-                  result_payload::TEXT AS result_payload,
+                  canonical.command_id,
+                  canonical.batch_id,
+                  canonical.shard_id,
+                  canonical.partition_id,
+                  canonical.command_stream,
+                  canonical.event_stream,
+                  canonical.stream_sequence,
+                  canonical.delivered_count,
+                  canonical.command_type,
+                  canonical.payload_hash,
+                  canonical.instrument_id,
+                  canonical.order_id,
+                  canonical.result_status,
+                  canonical.reject_code,
+                  canonical.result_payload::TEXT AS result_payload,
                   $payloadSelect
                 FROM ${names.canonicalCommandOutcomes} canonical
                 $payloadJoin
@@ -3373,7 +3382,10 @@ class PostgresRuntimePersistence(
         return "{$stringFields,\"payloadJson\":${payloadJson.ifBlank { "{}" }}}"
     }
 
-    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(commandPayloadJson: String = "{}"): PersistableSubmitOutcome {
+    private fun CanonicalCommandOutcome.toPersistableSubmitOutcome(
+        commandPayloadJson: String = "{}",
+        includeFills: Boolean = true
+    ): PersistableSubmitOutcome {
         val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
         val occurredAt = jsonString(resultPayloadJson, "occurredAt")
         val rejected = resultStatus == "rejected"
@@ -3385,7 +3397,9 @@ class PostgresRuntimePersistence(
                     code = rejectCode.ifBlank { jsonString(resultPayloadJson, "code") },
                     reason = jsonString(resultPayloadJson, "reason"),
                     occurredAt = occurredAt
-                )
+                ),
+                executions = if (includeFills) executionsFromResultPayload(resultPayloadJson) else emptyList(),
+                trades = if (includeFills) tradesFromResultPayload(resultPayloadJson) else emptyList()
             )
         } else {
             SubmitOrderResult(
@@ -3394,7 +3408,9 @@ class PostgresRuntimePersistence(
                     orderId = orderId,
                     engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
                     occurredAt = occurredAt
-                )
+                ),
+                executions = if (includeFills) executionsFromResultPayload(resultPayloadJson) else emptyList(),
+                trades = if (includeFills) tradesFromResultPayload(resultPayloadJson) else emptyList()
             )
         }
         val acceptedOrder = if (commandType == "SubmitOrder" && !rejected && commandPayloadJson.isNotBlank()) {
@@ -3544,6 +3560,38 @@ class PostgresRuntimePersistence(
     private fun jsonObject(vararg fields: Pair<String, String>): String {
         return fields.joinToString(prefix = "{", postfix = "}") { (key, value) ->
             "\"${escapeJson(key)}\":\"${escapeJson(value)}\""
+        }
+    }
+
+    private fun executionsFromResultPayload(json: String): List<ExecutionCreated> {
+        return JsonCodec.parseObjectOrEmpty(json).objectDocuments("executions").map { execution ->
+            ExecutionCreated(
+                eventId = execution.string("eventId"),
+                executionId = execution.string("executionId"),
+                orderId = execution.string("orderId"),
+                instrumentId = execution.string("instrumentId"),
+                quantityUnits = execution.string("quantityUnits"),
+                executionPrice = execution.string("executionPrice"),
+                currency = execution.string("currency"),
+                occurredAt = execution.string("occurredAt")
+            )
+        }
+    }
+
+    private fun tradesFromResultPayload(json: String): List<TradeCreated> {
+        return JsonCodec.parseObjectOrEmpty(json).objectDocuments("trades").map { trade ->
+            TradeCreated(
+                eventId = trade.string("eventId"),
+                tradeId = trade.string("tradeId"),
+                executionId = trade.string("executionId"),
+                buyOrderId = trade.string("buyOrderId"),
+                sellOrderId = trade.string("sellOrderId"),
+                instrumentId = trade.string("instrumentId"),
+                quantityUnits = trade.string("quantityUnits"),
+                price = trade.string("price"),
+                currency = trade.string("currency"),
+                occurredAt = trade.string("occurredAt")
+            )
         }
     }
 

@@ -108,6 +108,8 @@ x-platform-runtime-environment: &platform-runtime-environment
   STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED: "${STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED:-true}"
   STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
   STREAM_ACK_PROJECTION_NAME: "${STREAM_ACK_PROJECTION_NAME:-runtime-normalized-submit}"
+  STREAM_ACK_PROJECTION_SOURCE: "${STREAM_ACK_PROJECTION_SOURCE:-canonical-submit}"
+  STREAM_ACK_PROJECTOR_INCLUDE_FILLS: "${STREAM_ACK_PROJECTOR_INCLUDE_FILLS:-true}"
   STREAM_ACK_PROJECTOR_BATCH_SIZE: "${STREAM_ACK_PROJECTOR_BATCH_SIZE:-250}"
   STREAM_ACK_PROJECTOR_POLL_MS: "${STREAM_ACK_PROJECTOR_POLL_MS:-50}"
   VENUE_EVENT_MATERIALIZER_ENABLED: "${VENUE_EVENT_MATERIALIZER_ENABLED:-false}"
@@ -295,6 +297,7 @@ services:
       MATCHING_ENGINE_DIRECT_STREAM_POLL_MS: "${MATCHING_ENGINE_DIRECT_STREAM_POLL_MS:-5}"
       MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS: "${MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS:-60000}"
       MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING: "${MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING:-4000}"
+      MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT: "${MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT:-0}"
       MATCHING_ENGINE_EVENT_STREAM: "${MATCHING_ENGINE_EVENT_STREAM:-REEF_VENUE_EVENTS}"
       MATCHING_ENGINE_EVENT_SUBJECT_PREFIX: "${MATCHING_ENGINE_EVENT_SUBJECT_PREFIX:-reef.venue.events.v1}"
       STREAM_ACK_LOG_PROVIDER: "${STREAM_ACK_LOG_PROVIDER:-jetstream}"
@@ -408,6 +411,7 @@ services:
       STREAM_ACK_WORKER_ENABLED: "false"
       STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
       STREAM_ACK_PROJECTOR_PARTITIONS: "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}"
+      RUNTIME_PERSISTENCE: "postgres"
       EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
       RUNTIME_DB_POOL_STREAM_INTAKE_MAX: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX:-4}"
       RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE:-0}"
@@ -424,6 +428,7 @@ services:
       STREAM_ACK_WORKER_ENABLED: "false"
       STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
       STREAM_ACK_PROJECTOR_PARTITIONS: "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}"
+      RUNTIME_PERSISTENCE: "postgres"
       EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
       RUNTIME_DB_POOL_STREAM_INTAKE_MAX: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX:-4}"
       RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE:-0}"
@@ -440,6 +445,7 @@ services:
       STREAM_ACK_WORKER_ENABLED: "false"
       STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
       STREAM_ACK_PROJECTOR_PARTITIONS: "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47}"
+      RUNTIME_PERSISTENCE: "postgres"
       EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
       RUNTIME_DB_POOL_STREAM_INTAKE_MAX: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX:-4}"
       RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE:-0}"
@@ -456,6 +462,7 @@ services:
       STREAM_ACK_WORKER_ENABLED: "false"
       STREAM_ACK_PROJECTOR_ENABLED: "${STREAM_ACK_PROJECTOR_ENABLED:-true}"
       STREAM_ACK_PROJECTOR_PARTITIONS: "${STREAM_ACK_PROJECTOR_3_PARTITIONS:-48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63}"
+      RUNTIME_PERSISTENCE: "postgres"
       EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
       RUNTIME_DB_POOL_STREAM_INTAKE_MAX: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MAX:-4}"
       RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE: "${RUNTIME_DB_POOL_STREAM_INTAKE_BACKGROUND_MIN_IDLE:-0}"
@@ -490,6 +497,96 @@ services:
         condition: service_healthy
     ports:
       - "${REEF_PLATFORM_MATERIALIZER_HOST_PORT:-8091}:8080"
+
+  platform-materializer-1:
+    <<: *platform-runtime-service
+    container_name: reef-platform-materializer-1
+    profiles: ["venue-event-materializer-scaled"]
+    environment:
+      <<: *platform-runtime-environment
+      PLATFORM_RUNTIME_ROLE: "materializer"
+      OTEL_SERVICE_NAME: "reef-platform-materializer-1"
+      STREAM_ACK_WORKER_ENABLED: "false"
+      STREAM_ACK_PROJECTOR_ENABLED: "false"
+      EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
+      RUNTIME_PERSISTENCE: "postgres"
+      PLATFORM_HTTP_SERVER: "jdk"
+      VENUE_EVENT_MATERIALIZER_KAFKA_CLIENT_ID: "reef-platform-runtime-venue-event-materializer-1"
+      RUNTIME_DB_POOL_RUNTIME_MAX: "${RUNTIME_DB_POOL_MATERIALIZER_MAX:-16}"
+      RUNTIME_DB_POOL_RUNTIME_MIN_IDLE: "${RUNTIME_DB_POOL_MATERIALIZER_MIN_IDLE:-4}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      boundary-postgres:
+        condition: service_healthy
+      projection-postgres:
+        condition: service_healthy
+      matching-engine:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_1_HOST_PORT:-8092}:8080"
+
+  platform-materializer-2:
+    <<: *platform-runtime-service
+    container_name: reef-platform-materializer-2
+    profiles: ["venue-event-materializer-scaled"]
+    environment:
+      <<: *platform-runtime-environment
+      PLATFORM_RUNTIME_ROLE: "materializer"
+      OTEL_SERVICE_NAME: "reef-platform-materializer-2"
+      STREAM_ACK_WORKER_ENABLED: "false"
+      STREAM_ACK_PROJECTOR_ENABLED: "false"
+      EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
+      RUNTIME_PERSISTENCE: "postgres"
+      PLATFORM_HTTP_SERVER: "jdk"
+      VENUE_EVENT_MATERIALIZER_KAFKA_CLIENT_ID: "reef-platform-runtime-venue-event-materializer-2"
+      RUNTIME_DB_POOL_RUNTIME_MAX: "${RUNTIME_DB_POOL_MATERIALIZER_MAX:-16}"
+      RUNTIME_DB_POOL_RUNTIME_MIN_IDLE: "${RUNTIME_DB_POOL_MATERIALIZER_MIN_IDLE:-4}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      boundary-postgres:
+        condition: service_healthy
+      projection-postgres:
+        condition: service_healthy
+      matching-engine:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_2_HOST_PORT:-8093}:8080"
+
+  platform-materializer-3:
+    <<: *platform-runtime-service
+    container_name: reef-platform-materializer-3
+    profiles: ["venue-event-materializer-scaled"]
+    environment:
+      <<: *platform-runtime-environment
+      PLATFORM_RUNTIME_ROLE: "materializer"
+      OTEL_SERVICE_NAME: "reef-platform-materializer-3"
+      STREAM_ACK_WORKER_ENABLED: "false"
+      STREAM_ACK_PROJECTOR_ENABLED: "false"
+      EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
+      RUNTIME_PERSISTENCE: "postgres"
+      PLATFORM_HTTP_SERVER: "jdk"
+      VENUE_EVENT_MATERIALIZER_KAFKA_CLIENT_ID: "reef-platform-runtime-venue-event-materializer-3"
+      RUNTIME_DB_POOL_RUNTIME_MAX: "${RUNTIME_DB_POOL_MATERIALIZER_MAX:-16}"
+      RUNTIME_DB_POOL_RUNTIME_MIN_IDLE: "${RUNTIME_DB_POOL_MATERIALIZER_MIN_IDLE:-4}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      boundary-postgres:
+        condition: service_healthy
+      projection-postgres:
+        condition: service_healthy
+      matching-engine:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_3_HOST_PORT:-8094}:8080"
 
   redis:
     image: redis:7-alpine
