@@ -72,7 +72,18 @@ The current harness already covers these categories at the SDK layer except true
 
 ## Next Integration Work
 
-1. Extend the live smoke to use the internal `BotRuntimeOrderClient` transport when the bot runner is hosted in-process with platform-runtime.
-2. Persist scenario/live mode alongside bot actor identity, bot ID/version, run ID, and idempotency key in command-log/read-model surfaces.
-3. Add a live arena smoke that runs a hosted bot against local Reef and verifies accepted commands, risk decisions, canonical events, and projections.
-4. Add a replay check proving bot-originated commands rebuild the same order/event state as user-originated commands.
+Completed runtime bridge coverage:
+
+- `BotRuntimeOrderClient` routes bot-originated order commands through the same `/api/v1/orders/*` hot-path mutation handler.
+- SDK venue commands carry `X-Client-Id`, `scenarioId`, `runKind`, `botId`, `botVersion`, and `runId`.
+- Command-log capture persists bot client identity and run metadata.
+- Deterministic runtime tests cover stream-ack bot intake, worker processing, canonical outcome persistence, projection, and projector replay idempotency.
+- Local live smoke covers adapter-owned HTTP submission into a running Reef stack with `stream-ack` acceptance.
+
+Next non-throughput integration work:
+
+1. Add full database migration coverage for the Postgres-backed arena registry store.
+2. Add operator read APIs for bot registry, bot versions, qualification reports, runtime config descriptors, and arena runs.
+3. Add CI or documented local-stack coverage for `make dev-smoke-arena-bot-risk`.
+4. Define the OpenBao fetcher that resolves immutable per-run config descriptors during runner preflight.
+5. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.
