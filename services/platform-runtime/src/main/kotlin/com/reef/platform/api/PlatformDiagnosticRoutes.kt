@@ -13,8 +13,14 @@ internal class PlatformDiagnosticRoutes(
     private val setCommandCircuitBreakerJson: (String) -> PlatformHotPathResponse,
     private val setInstrumentPriceCollarJson: (String) -> PlatformHotPathResponse,
     private val registerArenaBotJson: (String) -> PlatformHotPathResponse,
+    private val arenaBotJson: (String?) -> PlatformHotPathResponse,
     private val registerArenaBotVersionJson: (String) -> PlatformHotPathResponse,
+    private val arenaBotVersionJson: (String?) -> PlatformHotPathResponse,
     private val transitionArenaBotVersionJson: (String) -> PlatformHotPathResponse,
+    private val arenaQualificationReportsJson: (String?) -> PlatformHotPathResponse,
+    private val arenaOperatorDecisionsJson: (String?) -> PlatformHotPathResponse,
+    private val arenaRuntimeConfigDescriptorsJson: (String?) -> PlatformHotPathResponse,
+    private val arenaRunJson: (String?) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -37,6 +43,10 @@ internal class PlatformDiagnosticRoutes(
         "/internal/admin/arena/bots",
         "/internal/admin/arena/bot-versions",
         "/internal/admin/arena/bot-versions/transition",
+        "/internal/admin/arena/qualification-reports",
+        "/internal/admin/arena/operator-decisions",
+        "/internal/admin/arena/runtime-config-descriptors",
+        "/internal/admin/arena/runs",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
         "/internal/commands/async/stats",
@@ -61,11 +71,23 @@ internal class PlatformDiagnosticRoutes(
             "/internal/admin/account-risk/controls" -> postOnly(method) { setAccountRiskControlJson(body) }
             "/internal/admin/circuit-breakers" -> postOnly(method) { setCommandCircuitBreakerJson(body) }
             "/internal/admin/price-collars" -> postOnly(method) { setInstrumentPriceCollarJson(body) }
-            "/internal/admin/arena/bots" -> postOnly(method) { registerArenaBotJson(body) }
-            "/internal/admin/arena/bot-versions" -> postOnly(method) { registerArenaBotVersionJson(body) }
+            "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotJson(query) }, { registerArenaBotJson(body) })
+            "/internal/admin/arena/bot-versions" -> getOrPost(
+                method,
+                { arenaBotVersionJson(query) },
+                { registerArenaBotVersionJson(body) }
+            )
             "/internal/admin/arena/bot-versions/transition" -> postOnly(method) {
                 transitionArenaBotVersionJson(body)
             }
+            "/internal/admin/arena/qualification-reports" -> getResponseOnly(method) {
+                arenaQualificationReportsJson(query)
+            }
+            "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) { arenaOperatorDecisionsJson(query) }
+            "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) {
+                arenaRuntimeConfigDescriptorsJson(query)
+            }
+            "/internal/admin/arena/runs" -> getResponseOnly(method) { arenaRunJson(query) }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }
@@ -100,11 +122,31 @@ internal class PlatformDiagnosticRoutes(
         }
     }
 
+    private fun getResponseOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse {
+        return if (method == "GET") {
+            response()
+        } else {
+            methodNotAllowedResponse()
+        }
+    }
+
     private fun postOnly(method: String, response: () -> PlatformHotPathResponse): PlatformHotPathResponse {
         return if (method == "POST") {
             response()
         } else {
             methodNotAllowedResponse()
+        }
+    }
+
+    private fun getOrPost(
+        method: String,
+        getResponse: () -> PlatformHotPathResponse,
+        postResponse: () -> PlatformHotPathResponse
+    ): PlatformHotPathResponse {
+        return when (method) {
+            "GET" -> getResponse()
+            "POST" -> postResponse()
+            else -> methodNotAllowedResponse()
         }
     }
 }

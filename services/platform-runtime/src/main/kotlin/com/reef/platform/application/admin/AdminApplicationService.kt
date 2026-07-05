@@ -8,6 +8,10 @@ import com.reef.platform.application.arena.ArenaBotMetadata
 import com.reef.platform.application.arena.ArenaBotVersion
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaControlPlaneService
+import com.reef.platform.application.arena.ArenaOperatorDecision
+import com.reef.platform.application.arena.ArenaQualificationReport
+import com.reef.platform.application.arena.ArenaRunRecord
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.domain.Account
@@ -249,6 +253,40 @@ class AdminApplicationService(
         return updated
     }
 
+    fun arenaBot(actor: AdminActor, botId: String): ArenaBot? {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().bot(botId)
+    }
+
+    fun arenaBotVersion(actor: AdminActor, botId: String, versionId: String): ArenaBotVersion? {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().version(botId, versionId)
+    }
+
+    fun arenaQualificationReports(actor: AdminActor, botId: String, versionId: String): List<ArenaQualificationReport> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().qualificationReports(botId, versionId)
+    }
+
+    fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().operatorDecisions(botId, versionId)
+    }
+
+    fun arenaRun(actor: AdminActor, runId: String): ArenaRunRecord? {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().runRecord(runId)
+    }
+
+    fun arenaRuntimeConfigDescriptors(
+        actor: AdminActor,
+        botId: String,
+        versionId: String
+    ): List<ArenaRuntimeConfigDescriptor> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().runtimeConfigDescriptors(botId, versionId)
+    }
+
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()
 
     fun listParticipants(): List<Participant> = runtimePersistence.participants()
@@ -264,8 +302,11 @@ class AdminApplicationService(
     fun traceEvents(traceId: String): List<RuntimeEvent> = runtimePersistence.eventsForTrace(traceId)
 
     private fun arenaControlPlane(): ArenaControlPlaneService {
-        val store = arenaRegistryStore ?: error("arena registry store is not configured")
-        return ArenaControlPlaneService(store, now)
+        return ArenaControlPlaneService(arenaStore(), now)
+    }
+
+    private fun arenaStore(): ArenaBotRegistryStore {
+        return arenaRegistryStore ?: error("arena registry store is not configured")
     }
 
     private fun syncArenaBotRiskControl(command: ArenaBotVersionDecisionCommand, updated: ArenaBotVersion) {

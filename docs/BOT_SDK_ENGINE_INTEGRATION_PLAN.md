@@ -79,11 +79,17 @@ Completed runtime bridge coverage:
 - Command-log capture persists bot client identity and run metadata.
 - Deterministic runtime tests cover stream-ack bot intake, worker processing, canonical outcome persistence, projection, and projector replay idempotency.
 - Local live smoke covers adapter-owned HTTP submission into a running Reef stack with `stream-ack` acceptance.
+- Internal operator read APIs expose persisted arena control-plane state:
+  - `GET /internal/admin/arena/bots?botId=...`
+  - `GET /internal/admin/arena/bot-versions?botId=...&versionId=...`
+  - `GET /internal/admin/arena/qualification-reports?botId=...&versionId=...`
+  - `GET /internal/admin/arena/operator-decisions?botId=...&versionId=...`
+  - `GET /internal/admin/arena/runtime-config-descriptors?botId=...&versionId=...`
+  - `GET /internal/admin/arena/runs?runId=...`
 
 Next non-throughput integration work:
 
 1. Add full database migration coverage for the Postgres-backed arena registry store.
-2. Add operator read APIs for bot registry, bot versions, qualification reports, runtime config descriptors, and arena runs.
-3. Add CI or documented local-stack coverage for `make dev-smoke-arena-bot-risk`.
-4. Define the OpenBao fetcher that resolves immutable per-run config descriptors during runner preflight.
-5. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.
+2. Add CI or documented local-stack coverage for `make dev-smoke-arena-bot-risk`.
+3. Define the OpenBao fetcher that resolves immutable per-run config descriptors during runner preflight.
+4. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.
