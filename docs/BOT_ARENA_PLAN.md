@@ -72,13 +72,14 @@ Implementation checkpoint:
 
 - `ArenaControlPlaneService` defines the first arena-owned registry boundary in platform runtime.
 - `ArenaBotRegistryStore` and `InMemoryArenaBotRegistryStore` capture source facts for local tests without introducing a trading hot-path dependency.
+- `PostgresArenaBotRegistryStore` adds the first durable arena schema for registry, qualification, operator decision, and run-record facts.
 - Bot versions now have explicit approval, active, suspended, quarantined, banned, and archived states.
 - Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
 - Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
 
 Remaining work before this becomes a production control plane:
 
-- add a durable Postgres-backed arena registry store and migrations
+- add production migration/validation coverage for the arena schema
 - expose operator/admin commands behind existing platform-runtime authorization
 - connect suspended, quarantined, banned, and archived versions to the venue intake risk path before durable acceptance
 - define private runtime config descriptors and OpenBao loading rules
