@@ -151,6 +151,8 @@ jobs:
     if: needs.detect-flow.outputs.flow == 'skip'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Warn if bot files changed off-convention
         env:
           GH_TOKEN: ${{ github.token }}
