@@ -35,7 +35,9 @@
     "bot-sdk:smoke:live:check": "node --check scripts/dev/bot-sdk-live-smoke.mjs",
     "bot-sdk:smoke:hosted-ses-container": "bun scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
-    "dev:sim": "bun scripts/dev/sim-run.mjs"
+    "dev:sim": "bun scripts/dev/sim-run.mjs",
+    "docs-site:dev": "bun --cwd apps/docs-site run dev",
+    "docs-site:build": "bun --cwd apps/docs-site run build"
   },
   "devDependencies": {
     "decimal.js": "10.6.0",
