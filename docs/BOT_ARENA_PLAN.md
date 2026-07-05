@@ -18,6 +18,8 @@ This is a planning document, not an accepted architecture decision. If the direc
 
 Status: pending second review after the current active work settles.
 
+Current checkpoint: the Bot SDK runtime bridge is merged. Bot-originated order commands can use the normal venue command boundary with bot client identity, run metadata, stream-ack intake, command-log capture, canonical outcome persistence, projection, and replay-idempotency coverage. The next non-throughput slice should move from command-path proof to arena control-plane source facts and operator approval controls.
+
 This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
 
 Second-review scope:
@@ -52,6 +54,19 @@ The intended output of this review should be one or more focused specs, likely:
 - simulation and game execution model
 - order, matching, and settlement lifecycle for arena-originated activity
 - leaderboard, scoring, replay, and audit rules
+
+## Next Control-Plane Slice
+
+Start with durable arena source facts before UI or leaderboard work:
+
+- bot identity and public metadata
+- bot version, artifact hash, source hash, SDK/API versions, and dependency manifest reference
+- qualification report status and issue codes
+- approval lifecycle state: `draft`, `submitted`, `checks_passed`, `approved`, `active`, `suspended`, `quarantined`, `banned`, `archived`
+- operator decisions with actor, reason, correlation ID, and timestamp
+- run records that reference bot versions and policy versions
+
+This storage boundary should remain separate from trading hot-path state. Local development may begin with an in-memory or same-database schema, but the domain model should treat arena registry and approval facts as arena-owned data.
 
 ## Agreed Direction
 
