@@ -618,6 +618,8 @@ class OrderApplicationService(
 
     fun recentEvents(limit: Int) = runtimePersistence.recentEvents(limit)
 
+    fun saveRuntimeEvent(event: RuntimeEvent) = runtimePersistence.saveEvent(event)
+
     fun rebuildOrderLifecycleState() = runtimePersistence.rebuildOrderLifecycleState()
 
     fun orderLifecycleState(orderId: String) = runtimePersistence.orderLifecycleState(orderId)

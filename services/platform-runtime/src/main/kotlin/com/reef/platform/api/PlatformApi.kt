@@ -16,6 +16,7 @@ import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 class PlatformApi(
@@ -207,6 +208,32 @@ class PlatformApi(
         return JsonCodec.writeObject(
             "traceId" to traceId,
             "events" to orderService.persistedTraceEvents(traceId).map { it.toMap() }
+        )
+    }
+
+    fun recordAdminEvent(
+        actorId: String,
+        correlationId: String,
+        eventType: String,
+        targetId: String,
+        payload: Map<String, Any?>
+    ) {
+        val normalizedActor = actorId.ifBlank { "internal-admin" }
+        val normalizedCorrelation = correlationId.ifBlank { "internal-admin" }
+        orderService.saveRuntimeEvent(
+            RuntimeEvent(
+                eventId = "evt-admin-${UUID.randomUUID()}",
+                eventType = eventType,
+                orderId = targetId,
+                traceId = "admin:$normalizedActor",
+                causationId = eventType,
+                correlationId = normalizedCorrelation,
+                producer = "platform-runtime-admin",
+                schemaVersion = "v1",
+                occurredAt = java.time.Instant.now().toString(),
+                actorId = normalizedActor,
+                payloadJson = JsonCodec.writeObject(*payload.toList().toTypedArray())
+            )
         )
     }
 

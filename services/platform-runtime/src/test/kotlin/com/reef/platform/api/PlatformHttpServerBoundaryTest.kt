@@ -1038,6 +1038,90 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun internalAdminAccountRiskEndpointSetsControlAndAuditsChange() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        val persistence = InMemoryRuntimePersistence()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/account-risk/controls",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "scopeType":"bot",
+                      "scopeId":"bot-1",
+                      "decision":"disabled-bot",
+                      "reason":"operator disabled",
+                      "actorId":"ops-1",
+                      "correlationId":"corr-admin-risk"
+                    }
+                """.trimIndent()
+            )
+            val controls = get(server.address.port, "/internal/boundary/account-risk/controls")
+            val auditEvents = persistence.eventsForTrace("admin:ops-1")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(controls.body, "\"scopeType\":\"BOT\"")
+            assertContains(controls.body, "\"reason\":\"operator disabled\"")
+            assertEquals(1, auditEvents.size)
+            assertEquals("AccountRiskControlChanged", auditEvents.single().eventType)
+            assertContains(auditEvents.single().payloadJson, "\"previousDecision\":\"\"")
+            assertContains(auditEvents.single().payloadJson, "\"decision\":\"DISABLED_BOT\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        val persistence = InMemoryRuntimePersistence()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            commandCircuitBreakerCheck = breakerStore,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/circuit-breakers",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "scopeType":"instrument",
+                      "scopeId":"AAPL",
+                      "action":"trip",
+                      "reason":"operator halt",
+                      "actorId":"ops-2",
+                      "correlationId":"corr-admin-breaker"
+                    }
+                """.trimIndent()
+            )
+            val breakers = get(server.address.port, "/internal/boundary/circuit-breakers")
+            val auditEvents = persistence.eventsForTrace("admin:ops-2")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"tripped\":true")
+            assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
+            assertContains(breakers.body, "\"reason\":\"operator halt\"")
+            assertEquals(1, auditEvents.size)
+            assertEquals("CommandCircuitBreakerChanged", auditEvents.single().eventType)
+            assertContains(auditEvents.single().payloadJson, "\"previousTripped\":false")
+            assertContains(auditEvents.single().payloadJson, "\"tripped\":true")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun accountRiskControlRejectsThenClearAllowsCapturedAckCommand() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(

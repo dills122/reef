@@ -33,6 +33,10 @@ function usage() {
   account-upsert <accountId> <participantId>
   role-upsert <roleId> <permissionCsv>
   role-assign <actorId> <roleId>
+  account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]
+  account-risk-list
+  breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]
+  breaker-list
   events [limit]
   traces <traceId>`);
 }
@@ -87,6 +91,40 @@ switch (command) {
       process.exit(1);
     }
     await post("/auth/actor-roles", { actorId: args[0], roleId: args[1] });
+    break;
+  case "account-risk-set":
+    if (args.length < 3) {
+      usage();
+      process.exit(1);
+    }
+    await post("/internal/admin/account-risk/controls", {
+      scopeType: args[0],
+      scopeId: args[1],
+      decision: args[2],
+      reason: args.slice(3).join(" "),
+      actorId: "dev-admin",
+      correlationId: "dev-admin",
+    });
+    break;
+  case "account-risk-list":
+    await get("/internal/boundary/account-risk/controls");
+    break;
+  case "breaker-set":
+    if (args.length < 3) {
+      usage();
+      process.exit(1);
+    }
+    await post("/internal/admin/circuit-breakers", {
+      scopeType: args[0],
+      scopeId: args[1],
+      action: args[2],
+      reason: args.slice(3).join(" "),
+      actorId: "dev-admin",
+      correlationId: "dev-admin",
+    });
+    break;
+  case "breaker-list":
+    await get("/internal/boundary/circuit-breakers");
     break;
   case "events": {
     const limit = args[0] ?? "20";
