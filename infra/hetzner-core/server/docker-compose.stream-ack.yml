@@ -31,7 +31,7 @@ services:
       - internal
 
   platform-api:
-    image: ${REEF_PLATFORM_RUNTIME_IMAGE:-ghcr.io/dills122/reef-platform-runtime:latest}
+    image: ${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}
     restart: unless-stopped
     env_file:
       - ./secrets/platform-runtime.env

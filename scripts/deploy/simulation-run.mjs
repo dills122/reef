@@ -27,9 +27,9 @@ const runId = option("run-id", env("REEF_SIM_RUN_ID", `sim-do-${timestamp()}`));
 const reportRoot = resolve(repoRoot, option("report-root", env("REEF_SIM_REPORT_ROOT", "reports/simulations/ephemeral-do")));
 const reportDir = resolve(reportRoot, runId);
 const profile = option("profile", env("REEF_SIM_PROFILE", "stream-ack"));
-const imageMode = option("image-mode", env("REEF_SIM_IMAGE_MODE", "ghcr"));
-if (imageMode !== "ghcr" && imageMode !== "source") {
-  console.error(`Invalid image mode: ${imageMode}. Expected ghcr or source.`);
+const imageMode = option("image-mode", env("REEF_SIM_IMAGE_MODE", "dockerhub"));
+if (imageMode !== "dockerhub" && imageMode !== "source") {
+  console.error(`Invalid image mode: ${imageMode}. Expected dockerhub or source.`);
   process.exit(2);
 }
 const rate = option("rate", env("RATE", env("REEF_SIM_RATE", "")));
@@ -130,7 +130,8 @@ Options:
   --workers <count>             stress workers; maps to REEF_DO_STRESS_WORKERS
   --min-rps <rps>               attempted/accepted rps gate; default 90% of the lowest requested rate
   --profile <name>              metadata label; default stream-ack
-  --image-mode <ghcr|source>    runtime image mode; default ghcr
+  --image-mode <dockerhub|source>
+                                  runtime image mode; default dockerhub
   --report-root <path>          local artifact root; default reports/simulations/ephemeral-do
   --keep-worker-on-failure      leave DO worker up when the run fails
   --keep-worker                 leave DO worker up even after success

@@ -17,8 +17,8 @@ them to the always-on core, and destroy the worker by default, prefer
 `make simulation-run`. This lower-level harness remains the provider-specific
 primitive used by that wrapper.
 
-`REEF_DO_IMAGE_MODE=ghcr` pulls the published runtime/matching images and sets
-`DEV_COMPOSE_BUILD=0`. `REEF_DO_IMAGE_MODE=source` keeps the historical
+`REEF_DO_IMAGE_MODE=dockerhub` pulls the published runtime/matching images and
+sets `DEV_COMPOSE_BUILD=0`. `REEF_DO_IMAGE_MODE=source` keeps the historical
 source-sync/build behavior.
 
 Required local environment:

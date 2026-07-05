@@ -121,15 +121,15 @@ the worker keeps billing until destroyed.
 
 ## Image Strategy
 
-Target path is GHCR images:
+Target path is Docker Hub images:
 
-- `ghcr.io/dills122/reef-platform-runtime`
-- `ghcr.io/dills122/reef-matching-engine`
-- `ghcr.io/dills122/reef-simulator`
+- `dills122/reef-platform-runtime`
+- `dills122/reef-matching-engine`
+- `dills122/reef-simulator`
 
-The runner defaults to `--image-mode ghcr`. In that mode, runtime and matching
-engine images are pulled from GHCR and Compose builds are disabled with
-`DEV_COMPOSE_BUILD=0`.
+The runner defaults to `--image-mode dockerhub`. In that mode, runtime and
+matching engine images are pulled from Docker Hub and Compose builds are
+disabled with `DEV_COMPOSE_BUILD=0`.
 
 Use source-build fallback while package visibility is being finalized:
 

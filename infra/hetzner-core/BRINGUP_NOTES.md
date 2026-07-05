@@ -25,10 +25,10 @@ core deployment and the repo changes that now cover them.
 
 ## Images
 
-- GHCR images are the target path, but a fresh package setup may not be public
-  yet. `make hetzner-core ARGS=build-local-images` syncs service build contexts
-  to `/opt/reef-build/services`, builds `reef-*:local` images on the host, and
-  writes `/opt/reef/.env` image overrides.
+- Docker Hub images are the target path, but a fresh package setup may not be
+  public yet. `make hetzner-core ARGS=build-local-images` syncs service build
+  contexts to `/opt/reef-build/services`, builds `reef-*:local` images on the
+  host, and writes `/opt/reef/.env` image overrides.
 - The matching-engine Dockerfile must not depend on BuildKit-only platform
   arguments for host-local builds. It now defaults `TARGETARCH` to `amd64`,
   installs `git`, and allows direct module fallback through `GOPROXY`.

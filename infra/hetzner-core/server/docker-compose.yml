@@ -53,7 +53,7 @@ services:
       - no-new-privileges:true
 
   matching-engine:
-    image: ${REEF_MATCHING_ENGINE_IMAGE:-ghcr.io/dills122/reef-matching-engine:latest}
+    image: ${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}
     restart: unless-stopped
     env_file:
       - ./secrets/matching-engine.env
@@ -65,7 +65,7 @@ services:
       - no-new-privileges:true
 
   platform-runtime:
-    image: ${REEF_PLATFORM_RUNTIME_IMAGE:-ghcr.io/dills122/reef-platform-runtime:latest}
+    image: ${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}
     restart: unless-stopped
     env_file:
       - ./secrets/platform-runtime.env
@@ -109,7 +109,7 @@ services:
       - no-new-privileges:true
 
   simulator:
-    image: ${REEF_SIMULATOR_IMAGE:-ghcr.io/dills122/reef-simulator:latest}
+    image: ${REEF_SIMULATOR_IMAGE:-dills122/reef-simulator:latest}
     profiles:
       - manual
     env_file:

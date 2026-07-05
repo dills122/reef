@@ -65,7 +65,7 @@ optional:
   REEF_DO_STRESS_WORKERS=256
   REEF_DO_STRESS_DURATION=30s
   REEF_DO_DRAIN_BACKPRESSURE_POLICY=control-room-fresh
-  REEF_DO_IMAGE_MODE=ghcr|source
+  REEF_DO_IMAGE_MODE=dockerhub|source
 USAGE
 }
 
@@ -292,13 +292,13 @@ export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
 export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
 
-if [ "$REEF_BENCHMARK_IMAGE_MODE" = "ghcr" ]; then
-  export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-ghcr.io/dills122/reef-platform-runtime:latest}"
-  export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-ghcr.io/dills122/reef-matching-engine:latest}"
+if [ "$REEF_BENCHMARK_IMAGE_MODE" = "dockerhub" ]; then
+  export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}"
+  export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}"
   export DEV_COMPOSE_BUILD=0
-  echo "[$(date -Is)] stage: docker compose pull GHCR runtime images"
+  echo "[$(date -Is)] stage: docker compose pull Docker Hub runtime images"
   docker compose pull platform-api matching-engine
-  echo "[$(date -Is)] stage complete: docker compose pull GHCR runtime images"
+  echo "[$(date -Is)] stage complete: docker compose pull Docker Hub runtime images"
 else
   export DEV_COMPOSE_BUILD="${DEV_COMPOSE_BUILD:-1}"
 fi

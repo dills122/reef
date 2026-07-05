@@ -48,7 +48,7 @@ secrets.
 
 ## Deploy Server Files
 
-The Compose file defaults to GHCR image names published by
+The Compose file defaults to Docker Hub image names published by
 `.github/workflows/container-images.yml`. Override them in `/opt/reef/.env` if
 you publish from a fork or want to pin a specific tag:
 
@@ -58,7 +58,7 @@ cp /opt/reef/.env.example /opt/reef/.env
 ```
 
 Before deploying the application containers, publish the images and confirm
-their visibility. See [`GHCR.md`](./GHCR.md).
+their visibility. See [`DOCKERHUB.md`](./DOCKERHUB.md).
 
 After the server exists:
 
@@ -87,7 +87,7 @@ make hetzner-core ARGS=status
 Postgres/OpenBao/matching-engine, applies migrations, and then starts the full
 Compose stack.
 
-If GHCR packages are not public or ready yet, build the images on the Hetzner
+If Docker Hub images are not public or ready yet, build the images on the Hetzner
 host and use local image tags:
 
 ```bash
