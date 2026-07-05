@@ -1,6 +1,11 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.admin.AdminActor
+import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
@@ -79,6 +84,7 @@ class PlatformHttpServer(
     private val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
     private val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+    private val arenaAdminService: AdminApplicationService? = null,
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
@@ -205,6 +211,7 @@ class PlatformHttpServer(
             setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
             setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
             setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
+            transitionArenaBotVersionJson = { body -> transitionArenaBotVersionResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -232,6 +239,7 @@ class PlatformHttpServer(
         commandCircuitBreakerStore = deps.commandCircuitBreakerStore,
         instrumentPriceCollarCheck = deps.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
+        arenaAdminService = deps.arenaAdminService,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
@@ -2101,6 +2109,49 @@ class PlatformHttpServer(
         )
     }
 
+    private fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val botId = json.string("botId")
+        val versionId = json.string("versionId")
+        val status = normalizeArenaBotVersionStatus(json.string("status"))
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid arena bot version status"))
+        val reason = json.string("reason").ifBlank { "operator transition" }
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val actor = AdminActor(
+            actorId = json.string("actorId").ifBlank { "internal-admin" },
+            correlationId = json.string("correlationId").ifBlank { "internal-admin" },
+            occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
+        return try {
+            val updated = service.transitionArenaBotVersion(
+                actor,
+                ArenaBotVersionDecisionCommand(
+                    botId = botId,
+                    versionId = versionId,
+                    status = status,
+                    reason = reason
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to updated.botId,
+                    "versionId" to updated.versionId,
+                    "botVersionStatus" to updated.status.name
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena transition")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena transition failed")))
+        }
+    }
+
     private fun setCommandCircuitBreakerResponse(body: String): PlatformHotPathResponse {
         val store = commandCircuitBreakerStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "command circuit breaker store unavailable"))
@@ -2252,6 +2303,21 @@ class PlatformHttpServer(
             "reject" -> AccountRiskDecision.REJECT
             "backpressure" -> AccountRiskDecision.BACKPRESSURE
             "disabled-bot", "disabled_bot" -> AccountRiskDecision.DISABLED_BOT
+            else -> null
+        }
+    }
+
+    private fun normalizeArenaBotVersionStatus(value: String): ArenaBotVersionStatus? {
+        return when (value.trim().lowercase()) {
+            "draft" -> ArenaBotVersionStatus.Draft
+            "submitted" -> ArenaBotVersionStatus.Submitted
+            "checks-passed", "checks_passed" -> ArenaBotVersionStatus.ChecksPassed
+            "approved" -> ArenaBotVersionStatus.Approved
+            "active" -> ArenaBotVersionStatus.Active
+            "suspended", "freeze", "frozen" -> ArenaBotVersionStatus.Suspended
+            "quarantined", "quarantine" -> ArenaBotVersionStatus.Quarantined
+            "banned", "ban" -> ArenaBotVersionStatus.Banned
+            "archived", "archive" -> ArenaBotVersionStatus.Archived
             else -> null
         }
     }
@@ -2894,6 +2960,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+        arenaAdminService = defaultArenaAdminService(hooks),
         boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
@@ -2912,6 +2979,20 @@ private fun defaultBoundary(): ServerBoundaryDeps {
     )
 }
 
+private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationService? {
+    if (!RuntimeEnv.bool("PLATFORM_ARENA_ADMIN_ENABLED", false)) return null
+    val jdbcUrl = RuntimeEnv.string("RUNTIME_DB_URL", "jdbc:postgresql://localhost:5432/reef")
+    val dbUser = RuntimeEnv.string("RUNTIME_DB_USER", "reef")
+    val dbPassword = RuntimeEnv.string("RUNTIME_DB_PASSWORD", "reef")
+    return AdminApplicationService(
+        runtimePersistence = defaultRuntimePersistence(),
+        arenaRegistryStore = PostgresArenaBotRegistryStore(
+            dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-admin")
+        ),
+        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore
+    )
+}
+
 data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
     val abuseProtectionHook: AbuseProtectionHook,
@@ -2922,6 +3003,7 @@ data class ServerBoundaryDeps(
     val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
     val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+    val arenaAdminService: AdminApplicationService? = null,
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,

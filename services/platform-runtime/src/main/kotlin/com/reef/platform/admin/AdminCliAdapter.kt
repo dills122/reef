@@ -2,9 +2,11 @@ package com.reef.platform.admin
 
 import com.reef.platform.application.admin.AdminActor
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
 import com.reef.platform.application.admin.UpsertAccountCommand
 import com.reef.platform.application.admin.UpsertInstrumentCommand
 import com.reef.platform.application.admin.UpsertParticipantCommand
+import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.CommandCircuitBreakerStore
@@ -124,6 +126,22 @@ class AdminCliAdapter(
                 val collars = instrumentPriceCollars().listCollars()
                 """{"collarsCount":${collars.size}}"""
             }
+            "arena-bot-version-transition" -> {
+                if (args.size < 4) return "usage: arena-bot-version-transition <botId> <versionId> <status> [reason]"
+                val status = parseArenaBotVersionStatus(args[3])
+                    ?: return "usage: arena-bot-version-transition <botId> <versionId> <status> [reason]"
+                val reason = args.drop(4).joinToString(" ").ifBlank { "operator transition" }
+                val updated = adminService.transitionArenaBotVersion(
+                    actor,
+                    ArenaBotVersionDecisionCommand(
+                        botId = args[1],
+                        versionId = args[2],
+                        status = status,
+                        reason = reason
+                    )
+                )
+                """{"status":"ok","command":"arena-bot-version-transition","botId":"${escapeJson(updated.botId)}","versionId":"${escapeJson(updated.versionId)}","botVersionStatus":"${updated.status.name}"}"""
+            }
             "calendar-upsert" -> {
                 if (args.size < 4) return "usage: calendar-upsert <profileId> <timezone> <settlementCycle>"
                 adminService.upsertCalendarProfile(
@@ -191,6 +209,7 @@ class AdminCliAdapter(
               breaker-list
               price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [currency] [reason]
               price-collar-list
+              arena-bot-version-transition <botId> <versionId> <status> [reason]
               calendar-upsert <profileId> <timezone> <settlementCycle>
               calendar-list
               override-upsert <code> <description>
@@ -209,6 +228,21 @@ class AdminCliAdapter(
             "reject" -> AccountRiskDecision.REJECT
             "backpressure" -> AccountRiskDecision.BACKPRESSURE
             "disabled-bot", "disabled_bot" -> AccountRiskDecision.DISABLED_BOT
+            else -> null
+        }
+    }
+
+    private fun parseArenaBotVersionStatus(raw: String): ArenaBotVersionStatus? {
+        return when (raw.trim().lowercase()) {
+            "draft" -> ArenaBotVersionStatus.Draft
+            "submitted" -> ArenaBotVersionStatus.Submitted
+            "checks-passed", "checks_passed" -> ArenaBotVersionStatus.ChecksPassed
+            "approved" -> ArenaBotVersionStatus.Approved
+            "active" -> ArenaBotVersionStatus.Active
+            "suspended", "freeze", "frozen" -> ArenaBotVersionStatus.Suspended
+            "quarantined", "quarantine" -> ArenaBotVersionStatus.Quarantined
+            "banned", "ban" -> ArenaBotVersionStatus.Banned
+            "archived", "archive" -> ArenaBotVersionStatus.Archived
             else -> null
         }
     }

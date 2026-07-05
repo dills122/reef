@@ -12,6 +12,7 @@ internal class PlatformDiagnosticRoutes(
     private val setAccountRiskControlJson: (String) -> PlatformHotPathResponse,
     private val setCommandCircuitBreakerJson: (String) -> PlatformHotPathResponse,
     private val setInstrumentPriceCollarJson: (String) -> PlatformHotPathResponse,
+    private val transitionArenaBotVersionJson: (String) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -31,6 +32,7 @@ internal class PlatformDiagnosticRoutes(
         "/internal/admin/account-risk/controls",
         "/internal/admin/circuit-breakers",
         "/internal/admin/price-collars",
+        "/internal/admin/arena/bot-versions/transition",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
         "/internal/commands/async/stats",
@@ -55,6 +57,9 @@ internal class PlatformDiagnosticRoutes(
             "/internal/admin/account-risk/controls" -> postOnly(method) { setAccountRiskControlJson(body) }
             "/internal/admin/circuit-breakers" -> postOnly(method) { setCommandCircuitBreakerJson(body) }
             "/internal/admin/price-collars" -> postOnly(method) { setInstrumentPriceCollarJson(body) }
+            "/internal/admin/arena/bot-versions/transition" -> postOnly(method) {
+                transitionArenaBotVersionJson(body)
+            }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }
