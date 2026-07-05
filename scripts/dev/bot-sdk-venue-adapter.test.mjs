@@ -111,6 +111,8 @@ assert.deepEqual(Object.keys(bid.body).sort(), [
 ]);
 assert.equal(bid.headers["Idempotency-Key"], "idem-simple-mm-1");
 assert.equal(ask.headers["Idempotency-Key"], "idem-simple-mm-2");
+assert.equal(bid.headers["X-Client-Id"], "bot:simple-market-maker");
+assert.equal(ask.headers["X-Client-Id"], "bot:simple-market-maker");
 assert.equal(bid.body.commandId, "cmd-simple-mm-1");
 assert.equal(ask.body.commandId, "cmd-simple-mm-2");
 assert.equal(bid.body.traceId, "trace-simple-mm-1");

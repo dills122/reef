@@ -35,6 +35,8 @@ Production integration should keep these boundaries:
 
 The adapter may use an internal transport to avoid unnecessary HTTP overhead, but it must call the same application command handler as the external API boundary after auth/actor context has been resolved. A direct Kotlin function/port is acceptable; bypassing idempotency, risk, command logging, or deterministic lane routing is not.
 
+`BotRuntimeOrderClient` is the first platform-runtime version of that internal transport. It accepts `VenueCommandRequestV1`-equivalent order commands, converts them to the runtime hot-path request contract, and reuses the `/api/v1/orders/*` mutation handler so client identity, idempotency, command capture, account risk, circuit breakers, price collars, and abuse controls remain in the same path. The SDK venue adapter now supplies `X-Client-Id` as `bot:<botId>` by default, with fixture/context override support for hosted deployments.
+
 ## Proposed Command Flow
 
 ```mermaid
@@ -70,8 +72,7 @@ The current harness already covers these categories at the SDK layer except true
 
 ## Next Integration Work
 
-1. Add a platform-runtime bot intake port that accepts `VenueCommandRequestV1`-equivalent command DTOs from an internal actor-authenticated caller.
-2. Route that port through the same command handler used by `/api/v1/orders/*` after external auth and request parsing.
-3. Persist bot actor identity, bot ID/version, run ID, scenario/live mode, and idempotency key with the command log.
-4. Add a live arena smoke that runs a hosted bot against local Reef and verifies accepted commands, risk decisions, canonical events, and projections.
-5. Add a replay check proving bot-originated commands rebuild the same order/event state as user-originated commands.
+1. Extend the live smoke to use the internal `BotRuntimeOrderClient` transport when the bot runner is hosted in-process with platform-runtime.
+2. Persist scenario/live mode alongside bot actor identity, bot ID/version, run ID, and idempotency key in command-log/read-model surfaces.
+3. Add a live arena smoke that runs a hosted bot against local Reef and verifies accepted commands, risk decisions, canonical events, and projections.
+4. Add a replay check proving bot-originated commands rebuild the same order/event state as user-originated commands.

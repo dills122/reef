@@ -320,6 +320,7 @@ function venueContext(
     actorId: fixture.actorId,
     participantId: fixture.participantId,
     accountId: fixture.accountId,
+    ...(fixture.clientId === undefined ? {} : { clientId: fixture.clientId }),
     botId: fixture.botId,
     botVersion: fixture.botVersion,
     correlationId: fixture.correlationId,

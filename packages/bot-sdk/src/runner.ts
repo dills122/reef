@@ -34,6 +34,7 @@ export interface BotScenarioFixtureV1 {
   readonly accountId: string;
   readonly botId: string;
   readonly botVersion: string;
+  readonly clientId?: string;
   readonly correlationId: string;
   readonly config: Record<string, string | number | boolean>;
   readonly policy?: Partial<BotRuntimePolicyV1>;
@@ -257,6 +258,7 @@ function venueContext(
     actorId: fixture.actorId,
     participantId: fixture.participantId,
     accountId: fixture.accountId,
+    ...(fixture.clientId === undefined ? {} : { clientId: fixture.clientId }),
     botId: fixture.botId,
     botVersion: fixture.botVersion,
     correlationId: fixture.correlationId,

@@ -3,6 +3,7 @@ import type { BotActionV1, BotResultV1, OwnOrderV1, ReefBotMetadataV1 } from "./
 export interface BotVenueAdapterContextV1 {
   readonly runId: string;
   readonly venueSessionId: string;
+  readonly clientId?: string;
   readonly actorId: string;
   readonly participantId: string;
   readonly accountId: string;
@@ -173,6 +174,7 @@ function commandHeaders(
 ): Readonly<Record<string, string>> {
   return {
     "Content-Type": "application/json",
+    "X-Client-Id": context.clientId ?? `bot:${context.botId}`,
     "Idempotency-Key": `${context.idempotencyKeyPrefix}-${sequence}`,
   };
 }
