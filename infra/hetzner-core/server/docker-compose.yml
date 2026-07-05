@@ -1,0 +1,136 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_PG_MAX_CONNECTIONS:-240}"
+      - "-c"
+      - "max_wal_size=${REEF_PG_MAX_WAL_SIZE:-16GB}"
+      - "-c"
+      - "min_wal_size=${REEF_PG_MIN_WAL_SIZE:-4GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_PG_LOG_CHECKPOINTS:-on}"
+    env_file:
+      - ./secrets/db.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  openbao:
+    image: openbao/openbao:2.5.5
+    restart: unless-stopped
+    command: server -config=/bao/config/openbao.hcl
+    env_file:
+      - ./secrets/openbao.env
+    volumes:
+      - ./openbao/config:/bao/config:ro
+      - ./openbao/logs:/bao/logs
+    ports:
+      - "127.0.0.1:8200:8200"
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+  matching-engine:
+    image: ${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}
+    restart: unless-stopped
+    env_file:
+      - ./secrets/matching-engine.env
+    expose:
+      - "8081"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+
+  platform-runtime:
+    image: ${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}
+    restart: unless-stopped
+    env_file:
+      - ./secrets/platform-runtime.env
+    environment:
+      PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    expose:
+      - "8080"
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openbao:
+        condition: service_started
+      matching-engine:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - public
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.example.invalid}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+    depends_on:
+      - platform-runtime
+    security_opt:
+      - no-new-privileges:true
+
+  simulator:
+    image: ${REEF_SIMULATOR_IMAGE:-dills122/reef-simulator:latest}
+    profiles:
+      - manual
+    env_file:
+      - ./secrets/simulator.env
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openbao:
+        condition: service_started
+      platform-runtime:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
