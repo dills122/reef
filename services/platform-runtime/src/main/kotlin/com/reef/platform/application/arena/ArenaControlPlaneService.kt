@@ -1,0 +1,242 @@
+package com.reef.platform.application.arena
+
+import java.time.Instant
+
+data class ArenaBotMetadata(
+    val name: String,
+    val publisher: String,
+    val email: String,
+    val description: String = "",
+    val version: String = ""
+)
+
+data class ArenaBot(
+    val botId: String,
+    val fileName: String,
+    val metadata: ArenaBotMetadata,
+    val createdAt: Instant
+)
+
+data class ArenaBotVersion(
+    val botId: String,
+    val versionId: String,
+    val sourceHash: String,
+    val artifactHash: String,
+    val sdkVersion: String,
+    val apiVersion: String,
+    val dependencyManifestHash: String,
+    val status: ArenaBotVersionStatus,
+    val createdAt: Instant
+)
+
+enum class ArenaBotVersionStatus {
+    Draft,
+    Submitted,
+    ChecksPassed,
+    Approved,
+    Active,
+    Suspended,
+    Quarantined,
+    Banned,
+    Archived
+}
+
+data class ArenaQualificationReport(
+    val botId: String,
+    val versionId: String,
+    val reportId: String,
+    val status: ArenaQualificationStatus,
+    val issues: List<String>,
+    val policyVersion: String,
+    val createdAt: Instant
+)
+
+enum class ArenaQualificationStatus {
+    Passed,
+    Failed
+}
+
+data class ArenaOperatorDecision(
+    val botId: String,
+    val versionId: String,
+    val fromStatus: ArenaBotVersionStatus,
+    val toStatus: ArenaBotVersionStatus,
+    val actorId: String,
+    val reason: String,
+    val correlationId: String,
+    val occurredAt: Instant
+)
+
+data class RegisterArenaBotCommand(
+    val botId: String,
+    val fileName: String,
+    val metadata: ArenaBotMetadata
+)
+
+data class RegisterArenaBotVersionCommand(
+    val botId: String,
+    val versionId: String,
+    val sourceHash: String,
+    val artifactHash: String,
+    val sdkVersion: String,
+    val apiVersion: String,
+    val dependencyManifestHash: String
+)
+
+interface ArenaBotRegistryStore {
+    fun saveBot(bot: ArenaBot)
+    fun bot(botId: String): ArenaBot?
+    fun botByFileName(fileName: String): ArenaBot?
+    fun saveVersion(version: ArenaBotVersion)
+    fun version(botId: String, versionId: String): ArenaBotVersion?
+    fun saveQualificationReport(report: ArenaQualificationReport)
+    fun qualificationReports(botId: String, versionId: String): List<ArenaQualificationReport>
+    fun saveOperatorDecision(decision: ArenaOperatorDecision)
+    fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision>
+}
+
+class ArenaControlPlaneService(
+    private val store: ArenaBotRegistryStore,
+    private val now: () -> Instant = { Instant.now() }
+) {
+    fun registerBot(command: RegisterArenaBotCommand): ArenaBot {
+        require(command.botId.isNotBlank()) { "botId is required" }
+        require(command.fileName.isNotBlank()) { "fileName is required" }
+        require(command.metadata.name.isNotBlank()) { "metadata.name is required" }
+        require(command.metadata.publisher.isNotBlank()) { "metadata.publisher is required" }
+        require(BASIC_EMAIL_REGEX.matches(command.metadata.email)) { "metadata.email must be valid" }
+        require(store.bot(command.botId) == null) { "botId already exists: ${command.botId}" }
+        require(store.botByFileName(command.fileName) == null) { "bot fileName already exists: ${command.fileName}" }
+
+        val bot = ArenaBot(
+            botId = command.botId,
+            fileName = command.fileName,
+            metadata = command.metadata,
+            createdAt = now()
+        )
+        store.saveBot(bot)
+        return bot
+    }
+
+    fun registerVersion(command: RegisterArenaBotVersionCommand): ArenaBotVersion {
+        require(store.bot(command.botId) != null) { "unknown botId: ${command.botId}" }
+        require(command.versionId.isNotBlank()) { "versionId is required" }
+        require(command.sourceHash.isNotBlank()) { "sourceHash is required" }
+        require(command.artifactHash.isNotBlank()) { "artifactHash is required" }
+        require(command.sdkVersion.isNotBlank()) { "sdkVersion is required" }
+        require(command.apiVersion.isNotBlank()) { "apiVersion is required" }
+        require(command.dependencyManifestHash.isNotBlank()) { "dependencyManifestHash is required" }
+        require(store.version(command.botId, command.versionId) == null) {
+            "versionId already exists for botId: ${command.botId}/${command.versionId}"
+        }
+
+        val version = ArenaBotVersion(
+            botId = command.botId,
+            versionId = command.versionId,
+            sourceHash = command.sourceHash,
+            artifactHash = command.artifactHash,
+            sdkVersion = command.sdkVersion,
+            apiVersion = command.apiVersion,
+            dependencyManifestHash = command.dependencyManifestHash,
+            status = ArenaBotVersionStatus.Draft,
+            createdAt = now()
+        )
+        store.saveVersion(version)
+        return version
+    }
+
+    fun recordQualificationReport(
+        botId: String,
+        versionId: String,
+        reportId: String,
+        status: ArenaQualificationStatus,
+        issues: List<String>,
+        policyVersion: String
+    ): ArenaQualificationReport {
+        requireVersion(botId, versionId)
+        require(reportId.isNotBlank()) { "reportId is required" }
+        require(policyVersion.isNotBlank()) { "policyVersion is required" }
+        val report = ArenaQualificationReport(
+            botId = botId,
+            versionId = versionId,
+            reportId = reportId,
+            status = status,
+            issues = issues,
+            policyVersion = policyVersion,
+            createdAt = now()
+        )
+        store.saveQualificationReport(report)
+        return report
+    }
+
+    fun transitionVersion(
+        botId: String,
+        versionId: String,
+        toStatus: ArenaBotVersionStatus,
+        actorId: String,
+        reason: String,
+        correlationId: String
+    ): ArenaBotVersion {
+        require(actorId.isNotBlank()) { "actorId is required" }
+        require(reason.isNotBlank()) { "reason is required" }
+        val version = requireVersion(botId, versionId)
+        require(canTransition(version.status, toStatus)) {
+            "invalid bot version transition: ${version.status} -> $toStatus"
+        }
+        val updated = version.copy(status = toStatus)
+        store.saveVersion(updated)
+        store.saveOperatorDecision(
+            ArenaOperatorDecision(
+                botId = botId,
+                versionId = versionId,
+                fromStatus = version.status,
+                toStatus = toStatus,
+                actorId = actorId,
+                reason = reason,
+                correlationId = correlationId,
+                occurredAt = now()
+            )
+        )
+        return updated
+    }
+
+    fun mayAcceptRuntimeCommands(botId: String, versionId: String): Boolean {
+        return when (requireVersion(botId, versionId).status) {
+            ArenaBotVersionStatus.Approved,
+            ArenaBotVersionStatus.Active -> true
+            ArenaBotVersionStatus.Draft,
+            ArenaBotVersionStatus.Submitted,
+            ArenaBotVersionStatus.ChecksPassed,
+            ArenaBotVersionStatus.Suspended,
+            ArenaBotVersionStatus.Quarantined,
+            ArenaBotVersionStatus.Banned,
+            ArenaBotVersionStatus.Archived -> false
+        }
+    }
+
+    private fun requireVersion(botId: String, versionId: String): ArenaBotVersion {
+        return store.version(botId, versionId) ?: error("unknown bot version: $botId/$versionId")
+    }
+
+    private fun canTransition(from: ArenaBotVersionStatus, to: ArenaBotVersionStatus): Boolean {
+        if (from == to) return true
+        if (to == ArenaBotVersionStatus.Archived) return true
+        if (to == ArenaBotVersionStatus.Quarantined) return from != ArenaBotVersionStatus.Banned
+        if (to == ArenaBotVersionStatus.Banned) return true
+        return when (from) {
+            ArenaBotVersionStatus.Draft -> to == ArenaBotVersionStatus.Submitted
+            ArenaBotVersionStatus.Submitted -> to == ArenaBotVersionStatus.ChecksPassed
+            ArenaBotVersionStatus.ChecksPassed -> to == ArenaBotVersionStatus.Approved
+            ArenaBotVersionStatus.Approved -> to == ArenaBotVersionStatus.Active || to == ArenaBotVersionStatus.Suspended
+            ArenaBotVersionStatus.Active -> to == ArenaBotVersionStatus.Suspended
+            ArenaBotVersionStatus.Suspended -> to == ArenaBotVersionStatus.Active
+            ArenaBotVersionStatus.Quarantined -> to == ArenaBotVersionStatus.Suspended
+            ArenaBotVersionStatus.Banned,
+            ArenaBotVersionStatus.Archived -> false
+        }
+    }
+
+    companion object {
+        private val BASIC_EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+    }
+}
