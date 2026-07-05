@@ -210,6 +210,8 @@ The helper does not execute HTTP calls. Hosted bots still return proposed action
 
 The deterministic runner is dry-run by default. When passed a venue transport, it sends generated commands through the adapter-owned client and records venue responses on each tick report.
 
+Before live submission, `validateVenuePreflightV1` reports the fixture's required venue seed state: instruments, participant, account, actor role binding, and venue session. The preflight report is an adapter/orchestrator contract; it does not seed runtime data by itself.
+
 Current mapping support:
 
 - `submit_limit` -> `/api/v1/orders/submit`
@@ -282,6 +284,7 @@ The sidecar implementation starts with:
 - `bun scripts/dev/bot-sdk-venue-client.test.mjs` for adapter-owned venue client checks
 - `bun scripts/dev/bot-sdk-runner.test.mjs` for deterministic multi-tick scenario runner checks
 - `bun scripts/dev/bot-sdk-sandbox-policy.test.mjs` for hosted-mode source policy checks
+- `bun scripts/dev/bot-sdk-preflight.test.mjs` for live venue preflight contract checks
 - `packages/bot-sdk/bot-registry.example.json` as the first local registry fixture, with filename, bot ID, owner, publisher, approved version, status, and optional artifact hash
 - `packages/bot-sdk/test-fixtures/bad-bots/` for rejected-bot fixtures covering metadata, hosted API, and action-limit failures
 

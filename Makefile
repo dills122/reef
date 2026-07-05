@@ -43,6 +43,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-client.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal
