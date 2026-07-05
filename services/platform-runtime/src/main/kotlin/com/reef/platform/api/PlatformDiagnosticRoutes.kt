@@ -22,6 +22,7 @@ internal class PlatformDiagnosticRoutes(
     private val arenaRuntimeConfigDescriptorsJson: (String?) -> PlatformHotPathResponse,
     private val arenaRunJson: (String?) -> PlatformHotPathResponse,
     private val arenaLeaderboardJson: (String?) -> PlatformHotPathResponse,
+    private val arenaBotOpenBaoProvisionJson: (String) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -49,6 +50,7 @@ internal class PlatformDiagnosticRoutes(
         "/internal/admin/arena/runtime-config-descriptors",
         "/internal/admin/arena/runs",
         "/internal/admin/arena/leaderboard",
+        "/internal/admin/arena/bots/openbao-provision",
         "/internal/perf/hot-path",
         "/internal/perf/db-pools",
         "/internal/commands/async/stats",
@@ -91,6 +93,7 @@ internal class PlatformDiagnosticRoutes(
             }
             "/internal/admin/arena/runs" -> getResponseOnly(method) { arenaRunJson(query) }
             "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardJson(query) }
+            "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionJson(body) }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }

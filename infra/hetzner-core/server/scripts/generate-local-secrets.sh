@@ -65,6 +65,22 @@ fi
 # shellcheck disable=SC1091
 source "$SECRETS/postgres-analytics.env"
 
+# Bearer token gating the two narrow CI-facing admin routes Caddy exposes
+# publicly (registry read + OpenBao provisioning). See Caddyfile and D-046.
+if [[ ! -s "$SECRETS/caddy.env" ]]; then
+  ARENA_ADMIN_API_TOKEN="$(rand_hex)"
+
+  cat > "$SECRETS/caddy.env" <<EOF
+ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
+EOF
+
+  chmod 600 "$SECRETS/caddy.env"
+  echo "Generated ARENA_ADMIN_API_TOKEN - set this as the ARENA_ADMIN_API_TOKEN GitHub Actions secret for the bot-submission workflow."
+fi
+
+# shellcheck disable=SC1091
+source "$SECRETS/caddy.env"
+
 cat > "$SECRETS/openbao.env" <<EOF
 BAO_ADDR=http://127.0.0.1:8200
 BAO_PG_CONNECTION_URL=postgres://openbao:${OPENBAO_DB_PASSWORD}@postgres:5432/openbao?sslmode=disable

@@ -8,5 +8,24 @@
     -Server
   }
 
-  reverse_proxy platform-runtime:8080
+  # Bot-submission CI (GitHub Actions) reaches the otherwise loopback-only
+  # admin API through only these two routes, bearer-token-gated - not the
+  # full /internal/admin surface. See D-046 in docs/DECISIONS.md and
+  # docs/BOT_ARENA_PLAN.md's "Resolved Slice: Bot Submission Workflow And
+  # OpenBao Provisioning".
+  @ci_admin {
+    path /internal/admin/arena/bots
+    path /internal/admin/arena/bots/openbao-provision
+  }
+
+  handle @ci_admin {
+    @unauthorized not header Authorization "Bearer {$ARENA_ADMIN_API_TOKEN}"
+    respond @unauthorized 401
+
+    reverse_proxy platform-runtime:8080
+  }
+
+  handle {
+    respond 404
+  }
 }

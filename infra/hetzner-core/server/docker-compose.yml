@@ -133,6 +133,8 @@ services:
       - "443:443"
     environment:
       API_DOMAIN: ${API_DOMAIN:-api.example.invalid}
+    env_file:
+      - ./secrets/caddy.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
