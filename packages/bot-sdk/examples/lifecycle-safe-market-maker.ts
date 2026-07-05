@@ -1,0 +1,57 @@
+import { ReefBotV1, type BotActionV1, type BotContextV1 } from "../src/index";
+
+export default class LifecycleSafeMarketMaker extends ReefBotV1 {
+  static override metadata = {
+    name: "lifecycle-safe-market-maker",
+    publisher: "Reef Examples",
+    email: "examples@reef.local",
+    version: "1.0.0",
+    sdkVersion: "1.0.0",
+    botApiVersion: "v1",
+    description: "Example market maker that checks own orders before proposing new quotes.",
+    tags: ["example", "market-maker", "lifecycle-safe"],
+  } as const;
+
+  override async onTick(ctx: BotContextV1): Promise<BotActionV1[]> {
+    const instrumentId = ctx.config.string("instrumentId");
+    const openOrders = await ctx.orders.current();
+    if (!openOrders.ok) {
+      return [ctx.actions.noop("own orders unavailable")];
+    }
+
+    const activeForInstrument = openOrders.value.filter(
+      (order) =>
+        order.instrumentId === instrumentId &&
+        (order.status === "OPEN" || order.status === "PARTIALLY_FILLED") &&
+        order.remainingQuantity > 0,
+    );
+
+    if (activeForInstrument.length >= 2) {
+      return [ctx.actions.noop("quotes already resting")];
+    }
+
+    const snapshot = await ctx.marketData.snapshot(instrumentId);
+    if (!snapshot.ok) {
+      return [ctx.actions.noop("snapshot unavailable")];
+    }
+
+    const orderSize = ctx.config.number("orderSize");
+    const spread = ctx.config.number("spread");
+
+    return [
+      ctx.orders.placeLimit({
+        instrumentId,
+        side: "BUY",
+        quantity: orderSize,
+        limitPrice: snapshot.value.midPrice - spread / 2,
+      }),
+      ctx.orders.placeLimit({
+        instrumentId,
+        side: "SELL",
+        quantity: orderSize,
+        limitPrice: snapshot.value.midPrice + spread / 2,
+      }),
+    ];
+  }
+}
+

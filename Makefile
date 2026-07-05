@@ -7,9 +7,9 @@ JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
 
-.PHONY: test test-go test-platform-runtime test-simulator fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-venue-event-materializer dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark
+.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-venue-event-materializer dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark
 
-test: test-go test-simulator test-platform-runtime
+test: test-go test-simulator test-platform-runtime test-bot-sdk
 
 check-proto-additive:
 	./scripts/check-proto-additive.sh
@@ -34,6 +34,26 @@ bench-platform-runtime-check:
 
 test-platform-runtime:
 	cd $(PLATFORM_RUNTIME_DIR) && GRADLE_USER_HOME=/tmp/reef-gradle ./gradlew test
+
+test-bot-sdk:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	tsc -p packages/bot-sdk/tsconfig.json --noEmit
+	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-client.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-runner.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-worker.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
+	node --check scripts/dev/bot-sdk-live-smoke.mjs
+	node --check scripts/dev/bot-sdk-hosted-run.mjs
+	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
+	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
+	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
+	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal
@@ -84,6 +104,15 @@ dev-smoke-protective-controls:
 dev-smoke-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-materializer-smoke.mjs
+
+dev-smoke-bot-sdk-live:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	@if [ -z "$(BOT)" ]; then echo 'usage: make dev-smoke-bot-sdk-live BOT=packages/bot-sdk/examples/simple-market-maker.ts [FIXTURE=packages/bot-sdk/fixtures/aapl-multi-tick.json] [VENUE_URL=http://127.0.0.1:8080] [ARGS=--seed-reference]'; exit 1; fi
+	$(JS_RUNTIME) scripts/dev/bot-sdk-live-smoke.mjs $(BOT) $(or $(FIXTURE),packages/bot-sdk/fixtures/aapl-multi-tick.json) --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) $(ARGS)
+
+dev-smoke-bot-sdk-hosted-ses-container:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
 
 dev-venue-event-replay-check:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

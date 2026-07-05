@@ -12,7 +12,27 @@
     "dev:smoke:venue-event-materializer": "bun scripts/dev/venue-event-materializer-smoke.mjs",
     "dev:venue-event-replay-check": "bun scripts/dev/venue-event-replay-check.mjs",
     "dev:stress": "bun scripts/dev/stress.mjs",
+    "bot-sdk:test": "bun scripts/dev/bot-sdk-contract.test.mjs",
+    "bot-sdk:typecheck": "tsc -p packages/bot-sdk/tsconfig.json --noEmit",
+    "bot-sdk:test:venue-adapter": "bun scripts/dev/bot-sdk-venue-adapter.test.mjs",
+    "bot-sdk:test:venue-client": "bun scripts/dev/bot-sdk-venue-client.test.mjs",
+    "bot-sdk:test:runner": "bun scripts/dev/bot-sdk-runner.test.mjs",
+    "bot-sdk:test:hosted-runner": "bun scripts/dev/bot-sdk-hosted-runner.test.mjs",
+    "bot-sdk:test:hosted-ses-e2e": "bun scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs",
+    "bot-sdk:test:sandbox-policy": "bun scripts/dev/bot-sdk-sandbox-policy.test.mjs",
+    "bot-sdk:test:preflight": "bun scripts/dev/bot-sdk-preflight.test.mjs",
+    "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
+    "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",
+    "bot-sdk:run:hosted": "bun scripts/dev/bot-sdk-hosted-run.mjs",
+    "bot-sdk:run:hosted-worker": "bun scripts/dev/bot-sdk-hosted-worker-run.mjs",
+    "bot-sdk:build:hosted": "bun scripts/dev/bot-sdk-build-hosted-artifact.mjs",
+    "bot-sdk:smoke:live": "bun scripts/dev/bot-sdk-live-smoke.mjs",
+    "bot-sdk:smoke:live:check": "node --check scripts/dev/bot-sdk-live-smoke.mjs",
+    "bot-sdk:smoke:hosted-ses-container": "bun scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs"
+  },
+  "devDependencies": {
+    "ses": "^2.2.0"
   }
 }
