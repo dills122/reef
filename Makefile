@@ -44,10 +44,12 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
+	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
 
 fmt-go:

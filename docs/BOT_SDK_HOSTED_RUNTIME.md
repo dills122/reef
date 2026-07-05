@@ -53,6 +53,14 @@ Add `--venue-url=http://127.0.0.1:8080` to submit approved actions through the a
 
 `scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs` is the basic real SES E2E. It imports `ses`, runs lockdown, loads `hosted-simple-market-maker.bundle.js` through the default SES `Compartment` path, and executes the deterministic fixture to completion.
 
+To build a hosted artifact from a normal TypeScript bot entry file:
+
+```bash
+bun scripts/dev/bot-sdk-build-hosted-artifact.mjs packages/bot-sdk/examples/simple-market-maker.ts --out=/tmp/simple-market-maker.bundle.js
+```
+
+The build step emits a `reef.bot.hostedArtifact.v1` manifest next to the artifact by default. The manifest includes the source hash and artifact hash so a registry or review workflow can pin exactly what was built and run.
+
 For a server-shaped local smoke, run:
 
 ```bash

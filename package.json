@@ -24,6 +24,7 @@
     "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
     "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",
     "bot-sdk:run:hosted": "bun scripts/dev/bot-sdk-hosted-run.mjs",
+    "bot-sdk:build:hosted": "bun scripts/dev/bot-sdk-build-hosted-artifact.mjs",
     "bot-sdk:smoke:live": "bun scripts/dev/bot-sdk-live-smoke.mjs",
     "bot-sdk:smoke:live:check": "node --check scripts/dev/bot-sdk-live-smoke.mjs",
     "bot-sdk:smoke:hosted-ses-container": "bun scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs",
