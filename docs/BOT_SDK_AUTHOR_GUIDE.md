@@ -148,6 +148,8 @@ bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
 
 Bot code still does not receive network access; only the runner/orchestrator owns the venue transport.
 
+See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
+
 Registration checks:
 
 - unique filename registry

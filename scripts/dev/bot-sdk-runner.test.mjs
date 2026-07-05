@@ -12,6 +12,7 @@ const { createRecordingVenueTransportV1 } = await import(
 
 await assertSimpleMarketMakerRun();
 await assertLifecycleSafeMarketMakerRun();
+await assertRefreshingMarketMakerRun();
 
 console.log("bot SDK scenario runner checks passed");
 
@@ -58,4 +59,30 @@ async function assertLifecycleSafeMarketMakerRun() {
   assert.equal(report.ticks[1].actions[0].type, "noop");
   assert.equal(report.ticks[2].venueCommands.length, 0);
   assert.equal(report.finalOrders.length, 2);
+}
+
+async function assertRefreshingMarketMakerRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/refreshing-market-maker.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      botId: "refreshing-market-maker",
+      actorId: "actor-refreshing-market-maker",
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.ticksRun, 3);
+  assert.equal(report.orderActionsProposed, 6);
+  assert.equal(report.ticks[0].venueCommands.length, 2);
+  assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");
+  assert.equal(report.ticks[1].venueCommands.length, 2);
+  assert.equal(report.ticks[1].venueCommands[0].route, "/api/v1/orders/cancel");
+  assert.equal(report.ticks[2].venueCommands.length, 2);
+  assert.equal(report.ticks[2].venueCommands[0].route, "/api/v1/orders/submit");
+  assert.equal(report.finalOrders.length, 2);
+  assert.equal(transport.requests.length, 6);
 }
