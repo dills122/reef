@@ -14,6 +14,7 @@ import {
   type ReefBotV1Constructor,
 } from "./harness";
 import {
+  expandCancelAllActionsV1,
   toVenueCommandRequestsV1,
   type BotVenueAdapterContextV1,
   type VenueCommandRequestV1,
@@ -130,7 +131,8 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     });
 
     const actions = Array.from(await bot.onTick(context));
-    const orderActionCount = actions.filter(isOrderAction).length;
+    const expandedActions = Array.from(expandCancelAllActionsV1(actions, Array.from(orderState.values())));
+    const orderActionCount = expandedActions.filter(isOrderAction).length;
     actionsProposed += actions.length;
     orderActionsProposed += orderActionCount;
     dataCalls += counters.dataCalls;
@@ -154,7 +156,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       });
     }
 
-    const venueResult = toVenueCommandRequestsV1(actions, venueContext(options.fixture, fixtureTick.occurredAt, commandSequence));
+    const venueResult = toVenueCommandRequestsV1(expandedActions, venueContext(options.fixture, fixtureTick.occurredAt, commandSequence));
     const venueCommands = venueResult.ok ? Array.from(venueResult.value) : [];
     let venueResponses: readonly VenueCommandResponseV1[] = [];
     if (!venueResult.ok) {
@@ -178,13 +180,13 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       }
     }
 
-    applyActionsToOrderState(actions, orderState, orderHistory, tick);
-    commandSequence += actions.filter((action) => action.type !== "noop").length;
+    applyActionsToOrderState(expandedActions, orderState, orderHistory, tick);
+    commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
 
     tickReports.push({
       tick,
       occurredAt: fixtureTick.occurredAt,
-      actions,
+      actions: expandedActions,
       venueCommands,
       venueResponses,
       denials: denials.slice(tickDenialsStart),

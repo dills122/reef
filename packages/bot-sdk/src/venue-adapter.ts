@@ -1,4 +1,4 @@
-import type { BotActionV1, BotResultV1, ReefBotMetadataV1 } from "./index";
+import type { BotActionV1, BotResultV1, OwnOrderV1, ReefBotMetadataV1 } from "./index";
 
 export interface BotVenueAdapterContextV1 {
   readonly runId: string;
@@ -123,6 +123,35 @@ export function toVenueCommandRequestsV1(
   }
 
   return { ok: true, value: requests };
+}
+
+export function expandCancelAllActionsV1(
+  actions: readonly BotActionV1[],
+  ownOrders: readonly OwnOrderV1[],
+): readonly BotActionV1[] {
+  const expanded: BotActionV1[] = [];
+  for (const action of actions) {
+    if (action.type !== "cancel_all") {
+      expanded.push(action);
+      continue;
+    }
+
+    for (const order of ownOrders) {
+      if (action.instrumentId !== undefined && order.instrumentId !== action.instrumentId) {
+        continue;
+      }
+      if ((order.status === "OPEN" || order.status === "PARTIALLY_FILLED") && order.remainingQuantity > 0) {
+        expanded.push({
+          type: "cancel_order",
+          order: {
+            orderId: order.orderId,
+            instrumentId: order.instrumentId,
+          },
+        });
+      }
+    }
+  }
+  return expanded;
 }
 
 function commonCommandFields(

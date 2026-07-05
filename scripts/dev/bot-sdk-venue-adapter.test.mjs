@@ -12,7 +12,7 @@ const botModule = await import(pathToFileURL(botPath).href);
 const { qualifyBotV1, createFixtureBotContextV1, defaultBotRuntimePolicyV1 } = await import(
   pathToFileURL(join(repoRoot, "packages/bot-sdk/src/harness.ts")).href
 );
-const { toVenueCommandRequestsV1 } = await import(
+const { expandCancelAllActionsV1, toVenueCommandRequestsV1 } = await import(
   pathToFileURL(join(repoRoot, "packages/bot-sdk/src/venue-adapter.ts")).href
 );
 
@@ -128,5 +128,40 @@ assert.equal(bid.body.botVersion, "1.0.0");
 assert.equal(bid.body.runId, "run-1");
 assert.equal(bid.body.venueSessionId, "session-1");
 
-console.log("bot SDK venue adapter smoke checks passed");
+const expandedCancelAll = expandCancelAllActionsV1(
+  [{ type: "cancel_all", instrumentId: "AAPL" }],
+  [
+    {
+      orderId: "open-aapl",
+      instrumentId: "AAPL",
+      side: "BUY",
+      quantity: 10,
+      remainingQuantity: 10,
+      limitPrice: 99,
+      status: "OPEN",
+    },
+    {
+      orderId: "filled-aapl",
+      instrumentId: "AAPL",
+      side: "SELL",
+      quantity: 10,
+      remainingQuantity: 0,
+      limitPrice: 101,
+      status: "FILLED",
+    },
+    {
+      orderId: "open-msft",
+      instrumentId: "MSFT",
+      side: "BUY",
+      quantity: 10,
+      remainingQuantity: 10,
+      limitPrice: 200,
+      status: "OPEN",
+    },
+  ],
+);
+assert.equal(expandedCancelAll.length, 1);
+assert.equal(expandedCancelAll[0].type, "cancel_order");
+assert.equal(expandedCancelAll[0].order.orderId, "open-aapl");
 
+console.log("bot SDK venue adapter smoke checks passed");
