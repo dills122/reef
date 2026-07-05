@@ -58,6 +58,7 @@ test-bot-sdk:
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
+	node --check scripts/dev/arena-bot-risk-smoke.mjs
 	node scripts/dev/report-taxonomy.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
 

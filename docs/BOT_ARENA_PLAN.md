@@ -82,10 +82,10 @@ Implementation checkpoint:
 
 Remaining work before this becomes a production control plane:
 
-- add full database migration coverage for the arena schema in the repository migration flow
-- broaden arena operator read APIs beyond the current registration and lifecycle mutation endpoints
+- keep `PostgresArenaBotRegistryStore` validation coverage in the schema-placement CI job as arena schema evolves
+- keep `make dev-smoke-arena-bot-risk` as the local stack gate for bot-version risk controls; `make test-bot-sdk` syntax-checks the smoke script
 - define the OpenBao fetcher that resolves descriptors during runner preflight and exposes only in-memory values to bot code
-- publish read APIs for bot status, qualification reports, run records, and operator audit history
+- build leaderboard/read-model projections from arena run records after simulation output facts are persisted
 
 Local arena risk smoke:
 
