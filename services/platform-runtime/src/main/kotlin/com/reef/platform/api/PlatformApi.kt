@@ -68,8 +68,13 @@ class PlatformApi(
         return orderService.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
     }
 
-    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
-        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+    fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int> = emptyList(),
+        includeFills: Boolean = true
+    ): Long {
+        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills)
     }
 
     fun projectionStatus(

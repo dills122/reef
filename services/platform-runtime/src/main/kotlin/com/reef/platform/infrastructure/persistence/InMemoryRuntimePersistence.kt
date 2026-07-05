@@ -193,7 +193,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return outcomes.size.toLong()
     }
 
-    override fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int>): Long {
+    override fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int>,
+        includeFills: Boolean
+    ): Long {
         if (batchSize <= 0) return 0
         val partitionSet = partitions.toSet()
         val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }

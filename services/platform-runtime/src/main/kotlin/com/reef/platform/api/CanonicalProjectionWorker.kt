@@ -15,6 +15,7 @@ class CanonicalProjectionWorker(
     private val partitions: List<Int> = emptyList(),
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
+    private val includeFills: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_INCLUDE_FILLS", true),
     private val workerName: String = "reef-canonical-projection-worker"
 ) {
     private val running = AtomicBoolean(false)
@@ -41,7 +42,7 @@ class CanonicalProjectionWorker(
             HotPathMetrics.time("projector.${projectionSource.metricName}") {
                 when (projectionSource) {
                     CanonicalProjectionSource.CanonicalSubmit -> api.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
-                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills)
                 }
             }.also { projected ->
                 if (projected > 0) {

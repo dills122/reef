@@ -79,6 +79,21 @@ const streamDirectProbeTimeoutMs = Number(env("DEV_STRESS_STREAM_DIRECT_PROBE_TI
 const streamDirectUrls = parseCsvStrings(
   env("DEV_STRESS_STREAM_DIRECT_URLS", env("DEV_STRESS_STREAM_DIRECT_URL", engineUrl)),
 );
+const captureVenueEventMaterializerStats = env("DEV_STRESS_CAPTURE_VENUE_EVENT_MATERIALIZER", "0") === "1";
+const failOnVenueEventMaterializerFailures =
+  env("DEV_STRESS_FAIL_ON_VENUE_EVENT_MATERIALIZER_FAILURES", captureVenueEventMaterializerStats ? "1" : "0") === "1";
+const maxVenueEventMaterializerFailedDelta = Number(env("DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_FAILED_DELTA", "0"));
+const maxVenueEventMaterializerAckFailedDelta = Number(env("DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_ACK_FAILED_DELTA", "0"));
+const maxVenueEventMaterializerCompletionGap = Number(env("DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_COMPLETION_GAP", "0"));
+const venueEventMaterializerDrainWaitMs = Number(env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_DRAIN_WAIT_MS", "0"));
+const venueEventMaterializerDrainPollMs = Number(env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_DRAIN_POLL_MS", "1000"));
+const venueEventMaterializerProbeTimeoutMs = Number(env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_PROBE_TIMEOUT_MS", "2000"));
+const venueEventMaterializerUrls = parseCsvStrings(
+  env(
+    "DEV_STRESS_VENUE_EVENT_MATERIALIZER_URLS",
+    env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_URL", defaultVenueEventMaterializerUrls(runtimeUrl).join(",")),
+  ),
+);
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -237,6 +252,15 @@ if (!streamDirectGuardrail.pass) {
   process.exitCode = 1;
 }
 
+const venueEventMaterializerGuardrail = evaluateVenueEventMaterializerGuardrail(reportFiles);
+if (!venueEventMaterializerGuardrail.pass) {
+  console.error("venue-event-materializer (durable-canonical completion) guardrail failed");
+  for (const failure of venueEventMaterializerGuardrail.failures) {
+    console.error(`  - ${failure}`);
+  }
+  process.exitCode = 1;
+}
+
 function parseCsvInts(raw) {
   return raw
     .split(",")
@@ -318,6 +342,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
   const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
   const beforeStreamDirect = captureStreamDirectStats ? await sampleStreamDirect() : null;
+  const beforeVenueEventMaterializer = captureVenueEventMaterializerStats ? await sampleVenueEventMaterializer() : null;
   if (captureHotPath) {
     await resetHotPath(runtimeUrl);
   }
@@ -385,12 +410,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
         pollMs: streamAckDrainPollMs,
       });
       attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
-    }
-    if (captureStreamAckProjectorStats) {
-      const afterProjector = await sampleStreamAckProjectors();
-      attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
-    }
-    if (captureStreamDirectStats) {
+    }    if (captureStreamDirectStats) {
       const afterStreamDirect = await waitForStreamDirectDrain({
         reportOut,
         beforeStreamDirect,
@@ -398,6 +418,19 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
         pollMs: streamDirectDrainPollMs,
       });
       attachStreamDirectStats({ reportOut, duration, beforeStreamDirect, afterStreamDirect });
+    }
+    if (captureVenueEventMaterializerStats) {
+      const afterVenueEventMaterializer = await waitForVenueEventMaterializerDrain({
+        reportOut,
+        beforeVenueEventMaterializer,
+        timeoutMs: venueEventMaterializerDrainWaitMs,
+        pollMs: venueEventMaterializerDrainPollMs,
+      });
+      attachVenueEventMaterializerStats({ reportOut, duration, beforeVenueEventMaterializer, afterVenueEventMaterializer });
+    }
+    if (captureStreamAckProjectorStats) {
+      const afterProjector = await sampleStreamAckProjectors();
+      attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
     }
     if (captureHotPath) {
       const afterHotPath = await sampleHotPath(runtimeUrl);
@@ -521,6 +554,70 @@ function streamDirectDrainSatisfied(before, after, expectedTerminal) {
   return true;
 }
 
+async function sampleVenueEventMaterializer() {
+  const probes = await Promise.all(
+    venueEventMaterializerUrls.map((baseUrl, index) =>
+      requestAppProbe({
+        name: `venueEventMaterializer.${index}.stats`,
+        url: `${baseUrl}/internal/venue-event-materializer/stats`,
+        captureJson: true,
+        timeoutMs: venueEventMaterializerProbeTimeoutMs,
+      }),
+    ),
+  );
+  return {
+    ok: probes.every((probe) => probe.ok),
+    status: probes.find((probe) => !probe.ok)?.status ?? 200,
+    latencyMs: Math.max(0, ...probes.map((probe) => Number(probe.latencyMs ?? 0))),
+    error: probes.find((probe) => probe.error)?.error ?? "",
+    probes,
+    json: aggregateVenueEventMaterializerStats(probes),
+  };
+}
+
+function aggregateVenueEventMaterializerStats(probes) {
+  const instances = probes
+    .map((probe, index) => ({ index, url: venueEventMaterializerUrls[index], stats: probe.json }))
+    .filter((instance) => instance.stats);
+  const metrics = instances.reduce(
+    (totals, instance) => {
+      const m = instance.stats.metrics ?? {};
+      totals.fetched += Number(m.fetched ?? 0);
+      totals.materialized += Number(m.materialized ?? 0);
+      totals.materializedOutcomes += Number(m.materializedOutcomes ?? 0);
+      totals.failed += Number(m.failed ?? 0);
+      totals.ackFailed += Number(m.ackFailed ?? 0);
+      totals.unsupported += Number(m.unsupported ?? 0);
+      return totals;
+    },
+    { fetched: 0, materialized: 0, materializedOutcomes: 0, failed: 0, ackFailed: 0, unsupported: 0 },
+  );
+  return { instances, metrics };
+}
+
+async function waitForVenueEventMaterializerDrain({ reportOut, beforeVenueEventMaterializer, timeoutMs, pollMs }) {
+  const started = Date.now();
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+  const interval = Math.max(100, Number(pollMs) || 1000);
+  const expectedTerminal = streamAckExpectedTerminalCommands(reportOut);
+  let latest = await sampleVenueEventMaterializer();
+
+  while (timeout > 0 && !venueEventMaterializerDrainSatisfied(beforeVenueEventMaterializer?.json, latest?.json, expectedTerminal)) {
+    if (Date.now() - started >= timeout) break;
+    await sleep(Math.min(interval, Math.max(0, timeout - (Date.now() - started))));
+    latest = await sampleVenueEventMaterializer();
+  }
+  return latest;
+}
+
+function venueEventMaterializerDrainSatisfied(before, after, expectedTerminal) {
+  if (!after?.metrics) return expectedTerminal <= 0;
+  const delta = venueEventMaterializerDelta(before, after, 1);
+  const terminalDelta = Number(delta?.materializedDelta ?? 0) + Number(delta?.failedDelta ?? 0);
+  if (expectedTerminal > 0 && terminalDelta < expectedTerminal) return false;
+  return true;
+}
+
 async function resetHotPath(runtimeUrl) {
   return requestAppProbe({
     name: "runtime.hotPath.reset",
@@ -616,6 +713,12 @@ function defaultStreamAckWorkerUrls(runtimeUrl) {
     `${parsed.protocol}//${parsed.hostname}:${worker2Port}`,
     `${parsed.protocol}//${parsed.hostname}:${worker3Port}`,
   ];
+}
+
+function defaultVenueEventMaterializerUrls(runtimeUrl) {
+  const parsed = new URL(runtimeUrl);
+  const materializerPort = env("REEF_PLATFORM_MATERIALIZER_HOST_PORT", "8091");
+  return [`${parsed.protocol}//${parsed.hostname}:${materializerPort}`];
 }
 
 function defaultStreamAckProjectorUrls(runtimeUrl) {
@@ -979,6 +1082,59 @@ function attachStreamDirectStats({ reportOut, duration, beforeStreamDirect, afte
   }
 }
 
+function attachVenueEventMaterializerStats({ reportOut, duration, beforeVenueEventMaterializer, afterVenueEventMaterializer }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    const before = beforeVenueEventMaterializer?.json ?? null;
+    const after = afterVenueEventMaterializer?.json ?? null;
+    const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
+    const delta = venueEventMaterializerDelta(before, after, durationSeconds);
+    report.venueEventMaterializer = {
+      before,
+      after,
+      delta,
+      probes: {
+        before: accountingProbeSummary(beforeVenueEventMaterializer),
+        after: accountingProbeSummary(afterVenueEventMaterializer),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+    if (delta) {
+      console.log(
+        `  venue-event-materializer fetchedDelta=${delta.fetchedDelta} materializedDelta=${delta.materializedDelta} materializedBatchesDelta=${delta.materializedBatchesDelta} failedDelta=${delta.failedDelta} ackFailedDelta=${delta.ackFailedDelta} materializedRps=${delta.materializedRps.toFixed(2)}`,
+      );
+    }
+  } catch (error) {
+    console.warn(`  venue-event-materializer stats unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function venueEventMaterializerDelta(before, after, durationSeconds) {
+  if (!after?.metrics) return null;
+  const beforeMetrics = before?.metrics ?? {
+    fetched: 0,
+    materialized: 0,
+    materializedOutcomes: 0,
+    failed: 0,
+    ackFailed: 0,
+    unsupported: 0,
+  };
+  const afterMetrics = after.metrics;
+  // materializedDelta is command outcomes durably committed (the gate metric); materializedBatchesDelta
+  // is the raw batch-ack count, kept only as a diagnostic since one batch can carry many commands.
+  const materializedDelta = Number(afterMetrics.materializedOutcomes ?? 0) - Number(beforeMetrics.materializedOutcomes ?? 0);
+  const materializedBatchesDelta = Number(afterMetrics.materialized ?? 0) - Number(beforeMetrics.materialized ?? 0);
+  return {
+    fetchedDelta: Number(afterMetrics.fetched ?? 0) - Number(beforeMetrics.fetched ?? 0),
+    materializedDelta,
+    materializedBatchesDelta,
+    failedDelta: Number(afterMetrics.failed ?? 0) - Number(beforeMetrics.failed ?? 0),
+    ackFailedDelta: Number(afterMetrics.ackFailed ?? 0) - Number(beforeMetrics.ackFailed ?? 0),
+    unsupportedDelta: Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0),
+    materializedRps: durationSeconds > 0 ? materializedDelta / durationSeconds : 0,
+  };
+}
+
 function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector }) {
   try {
     const report = JSON.parse(readFileSync(reportOut, "utf8"));
@@ -1021,13 +1177,15 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
     const directAckedCommands = Number(report.streamDirect?.delta?.ackedDelta ?? 0);
     const directPublishedOutcomes = Number(report.streamDirect?.delta?.publishedDelta ?? 0);
     const projectedWorkItems = Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
+    const durableCanonicalCompletedItems = Number(report.venueEventMaterializer?.delta?.materializedDelta ?? 0);
     report.unitMetrics = {
       units: {
         attemptedCommands: "commands submitted by the load generator",
         acceptedCommands: "commands durably accepted by the API with 202",
         workerCompletedCommands: "commands completed by stream-ack workers after canonical persistence",
-        directAckedCommands: "commands consumed by matching-engine direct stream workers and acked after venue event batch publish",
+        directAckedCommands: "commands consumed by matching-engine direct stream workers and acked after venue event batch publish (engine ack, not durable canonical commit)",
         directPublishedOutcomes: "command outcomes published by matching-engine direct stream workers to the venue event stream",
+        durableCanonicalCompletedItems: "command outcomes durably committed to compact canonical Postgres rows by the venue event batch materializer; this is the primary completed/sec metric for durable-canonical gates",
         projectedWorkItems: "projection work items applied by stream-ack projectors",
         projectionLag: "projector backlog in projection work items / partition sequence units",
       },
@@ -1037,16 +1195,20 @@ function attachDerivedStressMetrics({ reportOut, duration }) {
       workerCompletedCommands,
       directAckedCommands,
       directPublishedOutcomes,
+      durableCanonicalCompletedItems,
       projectedWorkItems,
       attemptedCommandsPerSecond: perSecond(attemptedCommands, durationSeconds),
       acceptedCommandsPerSecond: perSecond(acceptedCommands, durationSeconds),
       workerCompletedCommandsPerSecond: perSecond(workerCompletedCommands, durationSeconds),
       directAckedCommandsPerSecond: perSecond(directAckedCommands, durationSeconds),
       directPublishedOutcomesPerSecond: perSecond(directPublishedOutcomes, durationSeconds),
+      durableCanonicalCompletedPerSecond: perSecond(durableCanonicalCompletedItems, durationSeconds),
       projectedWorkItemsPerSecond: perSecond(projectedWorkItems, durationSeconds),
       completedToAcceptedRatio: ratio(workerCompletedCommands, acceptedCommands),
       directAckedToAcceptedRatio: ratio(directAckedCommands, acceptedCommands),
       directPublishedToAcceptedRatio: ratio(directPublishedOutcomes, acceptedCommands),
+      durableCanonicalCompletedToAcceptedRatio: ratio(durableCanonicalCompletedItems, acceptedCommands),
+      durableCanonicalCompletionGap: Math.max(acceptedCommands - durableCanonicalCompletedItems, 0),
       projectedToCompletedRatio: ratio(projectedWorkItems, workerCompletedCommands),
       projectionLagAfter: Number(report.streamAckProjector?.delta?.afterLag ?? 0),
     };
@@ -1438,6 +1600,7 @@ function readReportTotals(reportFiles) {
     workerCompletedCommands: 0,
     directAckedCommands: 0,
     directPublishedOutcomes: 0,
+    durableCanonicalCompletedItems: 0,
     projectedWorkItems: 0,
   };
   for (const path of reportFiles) {
@@ -1449,6 +1612,7 @@ function readReportTotals(reportFiles) {
       totals.workerCompletedCommands += Number(report.streamAckWorkers?.delta?.completedDelta ?? 0);
       totals.directAckedCommands += Number(report.streamDirect?.delta?.ackedDelta ?? 0);
       totals.directPublishedOutcomes += Number(report.streamDirect?.delta?.publishedDelta ?? 0);
+      totals.durableCanonicalCompletedItems += Number(report.venueEventMaterializer?.delta?.materializedDelta ?? 0);
       totals.projectedWorkItems += Number(report.streamAckProjector?.delta?.projectedDelta ?? 0);
     } catch {
       // skip unreadable report
@@ -1506,6 +1670,11 @@ async function sampleAppEndpoints(sampledAt, runtimeUrl, engineUrl) {
     { name: "engine.health", url: `${engineUrl}/health` },
     { name: "engine.streamDirect", url: `${engineUrl}/internal/stream-direct/stats`, captureJson: true },
     { name: "engine.metrics", url: `${engineUrl}/actuator/prometheus` },
+    ...venueEventMaterializerUrls.map((baseUrl, index) => ({
+      name: `venueEventMaterializer.${index}.stats`,
+      url: `${baseUrl}/internal/venue-event-materializer/stats`,
+      captureJson: true,
+    })),
   ];
   const results = [];
   for (const probe of probes) {
@@ -1745,6 +1914,56 @@ function evaluateStreamDirectGuardrail(reportFiles) {
       }
     } catch {
       failures.push(`${path}: unable to parse report for stream-direct guardrail check`);
+    }
+  }
+  return { pass: failures.length === 0, failures };
+}
+
+function venueEventMaterializerIssues(report) {
+  const delta = report.venueEventMaterializer?.delta;
+  if (!delta) {
+    return { failedDelta: 0, ackFailedDelta: 0, completionGap: 0, totalIssueCount: 0 };
+  }
+  const acceptedCommands = Number(report.totalSuccess ?? 0);
+  const materializedDelta = Number(delta.materializedDelta ?? 0);
+  const failedDelta = Number(delta.failedDelta ?? 0);
+  const ackFailedDelta = Number(delta.ackFailedDelta ?? 0);
+  const completionGap = Math.max(acceptedCommands - materializedDelta, 0);
+  return {
+    failedDelta,
+    ackFailedDelta,
+    completionGap,
+    totalIssueCount: failedDelta + ackFailedDelta + completionGap,
+  };
+}
+
+function evaluateVenueEventMaterializerGuardrail(reportFiles) {
+  if (!failOnVenueEventMaterializerFailures) {
+    return { pass: true, failures: [] };
+  }
+  const failures = [];
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      if (!report.venueEventMaterializer?.delta) {
+        failures.push(`${path}: missing venue-event-materializer delta`);
+        continue;
+      }
+      if (report.venueEventMaterializer?.probes?.after?.ok === false) {
+        failures.push(`${path}: venue-event-materializer after probe failed: ${report.venueEventMaterializer.probes.after.error ?? report.venueEventMaterializer.probes.after.status ?? "unknown"}`);
+      }
+      const issues = venueEventMaterializerIssues(report);
+      if (issues.failedDelta > maxVenueEventMaterializerFailedDelta) {
+        failures.push(`${path}: venue-event-materializer failedDelta ${issues.failedDelta} > ${maxVenueEventMaterializerFailedDelta}`);
+      }
+      if (issues.ackFailedDelta > maxVenueEventMaterializerAckFailedDelta) {
+        failures.push(`${path}: venue-event-materializer ackFailedDelta ${issues.ackFailedDelta} > ${maxVenueEventMaterializerAckFailedDelta}`);
+      }
+      if (issues.completionGap > maxVenueEventMaterializerCompletionGap) {
+        failures.push(`${path}: durable-canonical accepted/materialized gap ${issues.completionGap} > ${maxVenueEventMaterializerCompletionGap}`);
+      }
+    } catch {
+      failures.push(`${path}: unable to parse report for venue-event-materializer guardrail check`);
     }
   }
   return { pass: failures.length === 0, failures };

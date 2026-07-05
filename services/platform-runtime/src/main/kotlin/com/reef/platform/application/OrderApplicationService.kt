@@ -269,10 +269,15 @@ class OrderApplicationService(
         }
     }
 
-    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+    fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int> = emptyList(),
+        includeFills: Boolean = true
+    ): Long {
         if (batchSize <= 0) return 0
         return HotPathMetrics.time("runtime.persistence.projectCanonicalCommandOutcomes") {
-            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions)
+            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills)
         }
     }
 

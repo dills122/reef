@@ -92,7 +92,7 @@ class VenueEventBatchMaterializer(
             return
         }
 
-        try {
+        val materializedOutcomes = try {
             HotPathMetrics.time("venueEventMaterializer.materializeBatch") {
                 api.materializeVenueEventBatch(batch)
             }
@@ -104,7 +104,7 @@ class VenueEventBatchMaterializer(
 
         try {
             delivery.ack()
-            VenueEventBatchMaterializerMetrics.recordMaterialized(delivery.streamSequence)
+            VenueEventBatchMaterializerMetrics.recordMaterialized(delivery.streamSequence, materializedOutcomes)
         } catch (ex: Exception) {
             VenueEventBatchMaterializerMetrics.recordAckFailed(ex.message ?: ex::class.simpleName ?: "unknown")
         }
@@ -172,6 +172,7 @@ class VenueEventBatchMaterializer(
 data class VenueEventBatchMaterializerStats(
     val fetched: Long,
     val materialized: Long,
+    val materializedOutcomes: Long,
     val failed: Long,
     val ackFailed: Long,
     val unsupported: Long,
@@ -185,6 +186,7 @@ data class VenueEventBatchMaterializerStats(
 object VenueEventBatchMaterializerMetrics {
     private val fetched = AtomicLong(0)
     private val materialized = AtomicLong(0)
+    private val materializedOutcomes = AtomicLong(0)
     private val failed = AtomicLong(0)
     private val ackFailed = AtomicLong(0)
     private val unsupported = AtomicLong(0)
@@ -199,8 +201,9 @@ object VenueEventBatchMaterializerMetrics {
         fetched.addAndGet(count)
     }
 
-    fun recordMaterialized(streamSequence: Long) {
+    fun recordMaterialized(streamSequence: Long, outcomeCount: Long) {
         materialized.incrementAndGet()
+        materializedOutcomes.addAndGet(outcomeCount)
         lastMaterializedStreamSequence.set(streamSequence)
         lastMaterializedAtEpochMs.set(System.currentTimeMillis())
     }
@@ -228,6 +231,7 @@ object VenueEventBatchMaterializerMetrics {
         return VenueEventBatchMaterializerStats(
             fetched = fetched.get(),
             materialized = materialized.get(),
+            materializedOutcomes = materializedOutcomes.get(),
             failed = failed.get(),
             ackFailed = ackFailed.get(),
             unsupported = unsupported.get(),
@@ -242,6 +246,7 @@ object VenueEventBatchMaterializerMetrics {
     fun resetForTests() {
         fetched.set(0)
         materialized.set(0)
+        materializedOutcomes.set(0)
         failed.set(0)
         ackFailed.set(0)
         unsupported.set(0)

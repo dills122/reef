@@ -82,6 +82,71 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals(1002L, status.watermarks.single().lastPartitionSequence)
     }
 
+    @Test
+    fun projectsExecutionsAndTradesCarriedInResultPayloadWhenMigratedPostgresIsAvailable() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val persistence = PostgresRuntimePersistence(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val projectionName = "runtime-normalized-venue-fills-$suffix"
+        val batch = fillingVenueEventBatch(suffix)
+
+        insertCommandPayload(dataSource, "match-cmd-$suffix", submitCommandPayload(suffix).replace("submit-cmd-$suffix", "match-cmd-$suffix"))
+        assertEquals(1, persistence.materializeVenueEventBatch(batch))
+        assertEquals(1, persistence.projectCanonicalCommandOutcomes(projectionName, 10, listOf(6)))
+
+        val executions = persistence.executionsForOrder("match-order-$suffix")
+        assertEquals(1, executions.size)
+        assertEquals("exec-$suffix", executions.single().executionId)
+        assertEquals("150250000000", executions.single().executionPrice)
+
+        val trades = persistence.tradesForOrder("match-order-$suffix")
+        assertEquals(1, trades.size)
+        assertEquals("trade-$suffix", trades.single().tradeId)
+        assertEquals("match-order-$suffix", trades.single().buyOrderId)
+        assertEquals("resting-order-$suffix", trades.single().sellOrderId)
+    }
+
+    private fun fillingVenueEventBatch(suffix: String): VenueEventBatchFact {
+        return VenueEventBatchFact(
+            batchId = "fill-batch-$suffix",
+            shardId = "engine-0",
+            partition = 6,
+            commandStream = "REEF_COMMANDS",
+            eventStream = "REEF_VENUE_EVENTS",
+            firstSequence = 2001,
+            lastSequence = 2001,
+            commandCount = 1,
+            createdAt = "2026-07-04T18:02:00Z",
+            payloadChecksum = "fill-checksum-$suffix",
+            outcomes = listOf(
+                VenueCommandOutcomeFact(
+                    commandId = "match-cmd-$suffix",
+                    commandType = "SubmitOrder",
+                    streamSequence = 2001,
+                    deliveredCount = 1,
+                    payloadHash = "match-payload-hash-$suffix",
+                    instrumentId = "AAPL",
+                    orderId = "match-order-$suffix",
+                    resultStatus = "accepted",
+                    resultPayloadJson = """
+                        {
+                          "accepted":{"eventId":"match-event-$suffix","engineOrderId":"match-engine-order-$suffix","occurredAt":"2026-07-04T18:02:00Z"},
+                          "executions":[{"eventId":"exec-evt-$suffix","executionId":"exec-$suffix","orderId":"match-order-$suffix","instrumentId":"AAPL","quantityUnits":"100","executionPrice":"150250000000","currency":"USD","occurredAt":"2026-07-04T18:02:00Z"}],
+                          "trades":[{"eventId":"trade-evt-$suffix","tradeId":"trade-$suffix","executionId":"exec-$suffix","buyOrderId":"match-order-$suffix","sellOrderId":"resting-order-$suffix","instrumentId":"AAPL","quantityUnits":"100","price":"150250000000","currency":"USD","occurredAt":"2026-07-04T18:02:00Z"}]
+                        }
+                    """.trimIndent()
+                )
+            )
+        )
+    }
+
     private fun insertCommandPayload(dataSource: javax.sql.DataSource, commandId: String, payloadJson: String) {
         dataSource.connection.use { conn ->
             conn.prepareStatement(
