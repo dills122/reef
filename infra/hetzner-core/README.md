@@ -1,0 +1,194 @@
+# Hetzner Core Deployment
+
+This stack is an MVP production-shaped deployment for Reef on one Hetzner Cloud
+server. OpenTofu owns durable cloud resources only. Secrets, OpenBao root
+material, R2 credentials, AppRole credentials, and local environment files stay
+outside OpenTofu state and outside git.
+
+## Shape
+
+- Hetzner CX33 by default
+- Ubuntu 24.04
+- Hetzner firewall with SSH restricted to `admin_cidrs`
+- no public HTTP/HTTPS by default
+- private Hetzner network reserved for future simulation workers
+- Docker Compose on the host for Postgres, OpenBao, platform runtime, matching
+  engine, and simulator
+- platform runtime and OpenBao bind to host loopback only for SSH tunnels
+- encrypted Postgres/OpenBao dumps uploaded to Cloudflare R2 by a host-side job
+
+## Provision
+
+```bash
+cd infra/hetzner-core/tofu
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars
+```
+
+The helper target loads `.env` from the repository root and maps
+`HETZNER_TOKEN` to the provider variable `HCLOUD_TOKEN`, so this is enough:
+
+```bash
+HETZNER_TOKEN="..." # in .env, not committed
+
+make hetzner-core-tofu ARGS=init
+make hetzner-core-tofu ARGS="plan -out=tfplan"
+make hetzner-core-tofu ARGS="apply tfplan"
+```
+
+Do not commit `terraform.tfvars`, state, plans, `.terraform/`, or generated
+secrets.
+
+## Deploy Server Files
+
+The Compose file defaults to GHCR image names published by
+`.github/workflows/container-images.yml`. Override them in `/opt/reef/.env` if
+you publish from a fork or want to pin a specific tag:
+
+```bash
+cp /opt/reef/.env.example /opt/reef/.env
+# edit image tags if needed
+```
+
+Before deploying the application containers, publish the images and confirm
+their visibility. See [`GHCR.md`](./GHCR.md).
+
+After the server exists:
+
+```bash
+IP="$(cd infra/hetzner-core/tofu && tofu output -raw core_ipv4)"
+
+rsync -av infra/hetzner-core/server/ "ops@$IP:/opt/reef/"
+
+ssh "ops@$IP" '
+  chmod +x /opt/reef/scripts/*.sh
+  cd /opt/reef
+  ./scripts/generate-local-secrets.sh
+  docker compose up -d postgres openbao
+'
+```
+
+For repeatable deploys after the first server is provisioned:
+
+```bash
+make hetzner-core ARGS=deploy
+make hetzner-core ARGS=status
+```
+
+`deploy` syncs the server bundle, syncs SQL migrations from
+`scripts/dev/db/migrations`, generates missing local env files, starts
+Postgres/OpenBao/matching-engine, applies migrations, and then starts the full
+Compose stack.
+
+If GHCR packages are not public or ready yet, build the images on the Hetzner
+host and use local image tags:
+
+```bash
+make hetzner-core ARGS=build-local-images
+make hetzner-core ARGS=deploy
+```
+
+Verify the running stack after deployment:
+
+```bash
+make hetzner-core ARGS=verify
+```
+
+Start the JetStream-backed stream-ack profile used by the local and
+DigitalOcean throughput work:
+
+```bash
+make hetzner-core ARGS=stream-ack
+```
+
+The platform runtime is private by default. Use an SSH tunnel for operator
+access:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 "ops@$IP"
+curl http://127.0.0.1:8080/health
+```
+
+If a public API is intentionally needed later, set `enable_public_web = true`,
+set `api_domain`, open the matching host UFW ports, and run Compose with the
+`public` profile so Caddy starts.
+
+Initialize and unseal OpenBao manually through an SSH tunnel. Store unseal keys
+and the root token in an offline vault or password manager, not on the server.
+
+```bash
+ssh -L 8200:127.0.0.1:8200 "ops@$IP"
+export BAO_ADDR="http://127.0.0.1:8200"
+bao operator init -key-shares=5 -key-threshold=3
+```
+
+After OpenBao is initialized, unsealed, and you have a valid root/admin token:
+
+```bash
+BAO_TOKEN="..." /opt/reef/scripts/configure-openbao.sh
+BAO_TOKEN="..." /opt/reef/scripts/print-openbao-approle.sh reef-platform-runtime
+```
+
+Append the printed `BAO_ROLE_ID` and `BAO_SECRET_ID` to
+`/opt/reef/secrets/platform-runtime.env`, then restart the platform runtime.
+Generate simulator AppRole credentials only when needed:
+
+```bash
+BAO_TOKEN="..." /opt/reef/scripts/print-openbao-approle.sh reef-simulator
+```
+
+## Backup
+
+Create `/opt/reef/secrets/backup.env` on the server:
+
+```bash
+R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
+R2_BUCKET="reef-backups"
+AWS_ACCESS_KEY_ID="..."
+AWS_SECRET_ACCESS_KEY="..."
+AWS_DEFAULT_REGION="auto"
+AGE_RECIPIENT="age1..."
+```
+
+Then run:
+
+```bash
+/opt/reef/scripts/backup-dbs.sh
+```
+
+Test restores before treating the backups as reliable.
+
+## Soak Runs
+
+Run deployment-shaped simulator traffic from the server's private Docker
+network:
+
+```bash
+RATE=10000 DURATION=3m WORKERS=384 make hetzner-core ARGS=soak
+```
+
+For stream-ack submit-spread probes, target the stream-ack API container and
+generate the same 64-instrument submit-only session shape used locally:
+
+```bash
+RATE=1000 \
+DURATION=30s \
+WORKERS=256 \
+BASE_URL=http://platform-api:8080 \
+HEALTH_URL=none \
+COMPOSE_STREAM_ACK=1 \
+DIRECT_DOCKER_RUN=1 \
+SUBMIT_PCT=100 \
+MODIFY_PCT=0 \
+CANCEL_PCT=0 \
+STREAM_ACK_SPREAD_INSTRUMENTS=64 \
+TRACE_CHECK_LIMIT=0 \
+make hetzner-core ARGS=soak
+```
+
+The host script writes reports to `/opt/reef/reports/soak` and prints a compact
+JSON summary. Gate promotion runs on completed throughput, trace checks, system
+failure rate, and accounting evidence, not only process exit status.
+
+Bring-up issues and the scripts added to cover them are tracked in
+[`BRINGUP_NOTES.md`](./BRINGUP_NOTES.md).

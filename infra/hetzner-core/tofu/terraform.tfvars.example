@@ -1,0 +1,11 @@
+project     = "reef"
+environment = "prod"
+location    = "nbg1"
+server_type = "cx33"
+
+enable_public_web = false
+# api_domain = "api.example.com"
+
+admin_cidrs = [
+  "YOUR.PUBLIC.IP.ADDRESS/32",
+]
