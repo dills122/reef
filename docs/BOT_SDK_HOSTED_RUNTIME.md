@@ -51,6 +51,16 @@ Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible 
 
 Add `--venue-url=http://127.0.0.1:8080` to submit approved actions through the adapter-owned venue client, just like the deterministic runner and live smoke wrapper.
 
+`scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs` is the basic real SES E2E. It imports `ses`, runs lockdown, loads `hosted-simple-market-maker.bundle.js` through the default SES `Compartment` path, and executes the deterministic fixture to completion.
+
+For a server-shaped local smoke, run:
+
+```bash
+make dev-smoke-bot-sdk-hosted-ses-container
+```
+
+That wrapper runs the same SES E2E in an `oven/bun` container with no network, a read-only repository mount, tmpfs `/tmp`, and CPU, memory, and PID caps. It assumes dependencies have already been installed on the host or baked into the image.
+
 ## Target Hosted Sandbox
 
 Hosted execution should combine JavaScript-level confinement with an outer process or container boundary.
