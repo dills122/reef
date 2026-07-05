@@ -82,8 +82,8 @@ Completed runtime bridge coverage:
 
 Next non-throughput integration work:
 
-1. Define and persist the arena control-plane source facts: bot identity, bot versions, artifact hashes, qualification reports, approval status, and operator decisions.
-2. Add operator-controlled freeze, quarantine, ban, and archive workflows for bot versions.
+1. Add a durable Postgres-backed arena registry store for bot identity, bot versions, artifact hashes, qualification reports, approval status, operator decisions, and run records.
+2. Expose operator-controlled freeze, quarantine, ban, and archive workflows through authenticated platform-runtime commands.
 3. Connect disabled or quarantined bot versions to the existing account-risk rejection path before durable venue acceptance.
 4. Define private runtime config descriptors and OpenBao loading rules for immutable per-run config.
-5. Add arena run records and policy-version references before building leaderboard/read-model projections.
+5. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.

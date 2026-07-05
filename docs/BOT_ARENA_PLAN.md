@@ -68,6 +68,22 @@ Start with durable arena source facts before UI or leaderboard work:
 
 This storage boundary should remain separate from trading hot-path state. Local development may begin with an in-memory or same-database schema, but the domain model should treat arena registry and approval facts as arena-owned data.
 
+Implementation checkpoint:
+
+- `ArenaControlPlaneService` defines the first arena-owned registry boundary in platform runtime.
+- `ArenaBotRegistryStore` and `InMemoryArenaBotRegistryStore` capture source facts for local tests without introducing a trading hot-path dependency.
+- Bot versions now have explicit approval, active, suspended, quarantined, banned, and archived states.
+- Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
+- Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
+
+Remaining work before this becomes a production control plane:
+
+- add a durable Postgres-backed arena registry store and migrations
+- expose operator/admin commands behind existing platform-runtime authorization
+- connect suspended, quarantined, banned, and archived versions to the venue intake risk path before durable acceptance
+- define private runtime config descriptors and OpenBao loading rules
+- publish read APIs for bot status, qualification reports, run records, and operator audit history
+
 ## Agreed Direction
 
 The current working direction is:
