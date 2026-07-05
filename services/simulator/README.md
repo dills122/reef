@@ -176,5 +176,5 @@ make dev-replay
 
 Reference:
 
-- [`docs/ROADMAP.md`](../../docs/ROADMAP.md)
+- [`docs/ROADMAP.md`](../../docs/archive/ROADMAP.md)
 - [`docs/steering/architecture.md`](../../docs/steering/architecture.md)

@@ -103,7 +103,7 @@ Finding:
 - optional stochastic mode (non-deterministic jitter) for long soak tests
 
 Primary plan:
-- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 
 ## Learnings and Pitfalls
 
@@ -213,7 +213,7 @@ Indicators favoring stabilization/refactor mode:
 
 ## Latest Locked Run (2026-05-27)
 
-- reference doc: [`docs/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md`](./THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md)
+- reference doc: [`docs/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md`](./archive/THROUGHPUT_CAPACITY_BASELINE_2026-05-27.md)
 - scenario: `capacity-baseline`, `5m`, `rate=5000`, `workers=512`, clean reset before run
 - post-tuning result:
   - throughput: `2694.15 rps`
@@ -260,8 +260,8 @@ Indicators favoring stabilization/refactor mode:
 - implemented reject-rate breaker with global/per-feature toggles and route scoping
 - exposed runtime breaker telemetry snapshot endpoint: `GET /internal/boundary/abuse/stats`
 - completed short non-tripping overhead A/B run:
-  - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./ABUSE_BREAKER_COMPARISON_2026-05-27.md)
+  - reference: [`docs/ABUSE_BREAKER_COMPARISON_2026-05-27.md`](./archive/ABUSE_BREAKER_COMPARISON_2026-05-27.md)
 - completed intentional-trip campaign lane with breaker counters captured per lane artifact:
-  - reference: [`docs/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md`](./ABUSE_BREAKER_TRIP_LANE_2026-05-27.md)
+  - reference: [`docs/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md`](./archive/ABUSE_BREAKER_TRIP_LANE_2026-05-27.md)
 - completed long-soak intentional-trip validation with release-cycle evidence (`releases > 0`):
-  - reference: [`docs/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md`](./ABUSE_BREAKER_LONG_SOAK_2026-05-27.md)
+  - reference: [`docs/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md`](./archive/ABUSE_BREAKER_LONG_SOAK_2026-05-27.md)

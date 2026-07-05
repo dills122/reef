@@ -20,7 +20,6 @@ The platform should be production-shaped and throughput-aware, but not an HFT be
 
 Reef is expected to grow into these primary surfaces:
 
-- Angular platform UI for operations, simulation control, admin, and audit views
 - Astro documentation/marketing site
 - Kotlin platform runtime for APIs, workflow orchestration, persistence, and read models
 - Go matching engine for order book and matching behavior
@@ -94,7 +93,6 @@ Phase 1 should bias toward a modular monolith plus separate engine:
 - one Kotlin runtime/API service
 - one Go matching engine service
 - one Postgres database
-- one Angular application
 - optional in-process event dispatcher inside the Kotlin runtime
 
 This is the default unless there is a strong reason to distribute more aggressively.
@@ -136,7 +134,6 @@ Use this target layout as the default:
 
 ```text
 apps/
-  platform-ui/
   docs-site/
 services/
   platform-runtime/
@@ -145,7 +142,6 @@ services/
 contracts/
   proto/
 packages/
-  ui-models/
   scenario-definitions/
 docs/
   steering/

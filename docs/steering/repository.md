@@ -17,13 +17,11 @@ For product and architecture priorities that should guide every change, read [`r
 
 ## Ownership Boundaries
 
-- `apps/platform-ui/` owns operational workflows, simulation control, admin, audit, monitoring, and workflow UI. It should consume platform APIs and projected read models, not runtime database internals.
 - `apps/docs-site/` owns public/static documentation and should not contain runtime logic.
 - `services/platform-runtime/` owns API boundaries, workflow orchestration, durable command intake, persistence, read models, projections, and admin behavior.
 - `services/matching-engine/` owns deterministic matching and execution behavior, not platform workflow orchestration or persistence.
 - `services/simulator/` owns deterministic scenarios, seeded actors, replay, traffic generation, stress/load evidence, and trace validation.
 - `contracts/proto/` owns versionable inter-service contracts.
-- `packages/ui-models/` owns shared UI-facing model definitions, including projection freshness where relevant.
 - `packages/scenario-definitions/` owns reusable scenario inputs, seeds, clocks, actors, instruments, and correlation inputs.
 - `scripts/` owns setup, reset, smoke, stress, replay, diagnostics, and performance comparison workflows.
 

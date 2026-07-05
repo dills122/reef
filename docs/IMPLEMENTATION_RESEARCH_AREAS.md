@@ -12,7 +12,6 @@ These areas are already well defined enough to proceed without outside research:
 
 - modular monolith plus separate engine as the initial deployment shape
 - Kotlin runtime plus Go engine split
-- Angular for the operator UI
 - Astro for the docs site
 - hybrid persistence model of current-state tables plus append-only events
 - simulation using the same command paths as manual users
@@ -86,21 +85,6 @@ Desired output:
 - deferrable features list
 - test scenarios that best demonstrate realism
 
-### 5. Angular operator UI information architecture
-
-Question:
-what layout and state model best fit operator-style workflows for orders, trades, post-trade queues, and audit exploration?
-
-Why it matters:
-
-- the UI should feel operational, not like a generic dashboard or retail app
-
-Desired output:
-
-- shell and route recommendations
-- core screens for Phase 1
-- table/detail/timeline interaction model
-
 ## Research Worth Deferring
 
 Do not spend time researching these yet:
@@ -122,7 +106,6 @@ If outside research is pursued, do it in this order:
 2. event log and read-model pattern
 3. contract evolution path to protobuf
 4. v1 matching engine feature scope
-5. Angular operator UI information architecture
 
 ## Suggested Output Format For Future Research Notes
 
