@@ -17,6 +17,14 @@
       "status": "draft"
     },
     {
+      "fileName": "multi-symbol-strategy-bot.ts",
+      "botId": "multi-symbol-strategy",
+      "owner": "reef",
+      "publisher": "Reef Examples",
+      "approvedVersion": "1.0.0",
+      "status": "draft"
+    },
+    {
       "fileName": "refreshing-market-maker.ts",
       "botId": "refreshing-market-maker",
       "owner": "reef",
@@ -27,6 +35,14 @@
     {
       "fileName": "simple-market-maker.ts",
       "botId": "simple-market-maker",
+      "owner": "reef",
+      "publisher": "Reef Examples",
+      "approvedVersion": "1.0.0",
+      "status": "draft"
+    },
+    {
+      "fileName": "technical-indicator-strategy-bot.ts",
+      "botId": "technical-indicator-strategy-bot",
       "owner": "reef",
       "publisher": "Reef Examples",
       "approvedVersion": "1.0.0",

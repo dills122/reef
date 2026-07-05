@@ -39,18 +39,22 @@ test-bot-sdk:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-batch-clients.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-client.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-strategy-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-artifact-build.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-worker.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-test-bot.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
+	node --check scripts/dev/bot-sdk-test-bot.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs

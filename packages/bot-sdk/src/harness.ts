@@ -11,16 +11,21 @@ import {
   type BotRandomV1,
   type BotResultV1,
   type BotRuntimePolicyV1,
+  type BotSignalV1,
+  type BotStrategyEventV1,
+  type BotStrategyV1,
   type HistoricalBarV1,
   type MarketSnapshotV1,
   type OwnOrderV1,
   type ReefBotMetadataV1,
 } from "./index";
-import { scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
+import { reefBotHostedSourceSandboxPolicyV1, scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
 
 export interface ReefBotV1Instance {
+  readonly strategies?: readonly BotStrategyV1[];
   onStart(ctx: BotContextV1): Promise<void>;
   onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]>;
+  onSignal(signal: BotSignalV1, ctx: BotContextV1, event: BotStrategyEventV1): Promise<readonly BotActionV1[]>;
   onStop(ctx: BotContextV1): Promise<void>;
 }
 
@@ -151,7 +156,7 @@ export function validateBotRegistrationV1(options: {
     issues.push(errorIssue("invalid_git_author_email", "Git author email must pass basic email syntax validation."));
   }
 
-  for (const violation of scanBotSourceForSandboxViolationsV1(options.source)) {
+  for (const violation of scanBotSourceForSandboxViolationsV1(options.source, reefBotHostedSourceSandboxPolicyV1)) {
     issues.push(errorIssue(violation.code, violation.message));
   }
 
@@ -290,6 +295,26 @@ export function createFixtureBotContextV1(options?: {
         return { ok: true, value: snapshot };
       });
     },
+    async snapshots(instrumentIds) {
+      return dataGate(() => {
+        const values: Record<string, MarketSnapshotV1> = {};
+        const missing: string[] = [];
+        for (const instrumentId of instrumentIds) {
+          const snapshot = fixtureData.marketSnapshots?.[instrumentId];
+          if (!snapshot) {
+            missing.push(instrumentId);
+          } else {
+            values[instrumentId] = snapshot;
+          }
+        }
+        if (missing.length > 0) {
+          const denial = notFoundDenial(`No market snapshot for ${missing.join(", ")}.`);
+          denials.push(denial);
+          return { ok: false, denial };
+        }
+        return { ok: true, value: values };
+      });
+    },
   };
 
   const historical: BotHistoricalDataClientV1 = {
@@ -308,6 +333,41 @@ export function createFixtureBotContextV1(options?: {
         }
         historicalCache.set(cacheKey, bars);
         return { ok: true, value: bars };
+      });
+    },
+    async intradayBarsBatch(requests) {
+      const result: Record<string, readonly HistoricalBarV1[]> = {};
+      const misses = requests.filter((request) => {
+        const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
+        const cached = historicalCache.get(cacheKey);
+        if (cached !== undefined) {
+          result[request.instrumentId] = cached;
+          return false;
+        }
+        return true;
+      });
+      if (misses.length === 0) {
+        return { ok: true, value: result, cached: true };
+      }
+
+      return dataGate(() => {
+        const missing: string[] = [];
+        for (const request of misses) {
+          const bars = fixtureData.historicalBars?.[request.instrumentId];
+          if (!bars) {
+            missing.push(request.instrumentId);
+          } else {
+            const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
+            historicalCache.set(cacheKey, bars);
+            result[request.instrumentId] = bars;
+          }
+        }
+        if (missing.length > 0) {
+          const denial = notFoundDenial(`No historical bars for ${missing.join(", ")}.`);
+          denials.push(denial);
+          return { ok: false, denial };
+        }
+        return { ok: true, value: result };
       });
     },
   };

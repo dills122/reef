@@ -16,6 +16,7 @@ This document describes the initial `ReefBotV1` design. It does not add new runt
 
 For bot-author-facing usage, see [`BOT_SDK_AUTHOR_GUIDE.md`](./BOT_SDK_AUTHOR_GUIDE.md).
 For hosted sandbox direction, see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md).
+For package approval rules, see [`BOT_SDK_APPROVED_PACKAGES.md`](./BOT_SDK_APPROVED_PACKAGES.md).
 
 ## Current Implementation Map
 
@@ -42,7 +43,7 @@ export default class ExampleBot extends ReefBotV1 {
     publisher: "Example Publisher",
     email: "bot-author@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   };
 
@@ -265,9 +266,14 @@ SES compartments are a good JavaScript-level confinement layer, but hosted safet
 
 ## Dependencies
 
-V1 starts with no third-party imports except `@reef/bot-sdk`.
+V1.5 keeps runtime dependency access closed, but bot source may import exact packages from the approved allowlist:
 
-An allowlist can be added after built-in example bots prove which packages materially improve bot authoring. Any allowlisted package needs scanner coverage, lockfile tracking, runtime compatibility checks, and replay impact review.
+- `trading-signals@7.4.3`
+- `simple-statistics@7.9.3`
+- `decimal.js@10.6.0`
+- `lodash-es@4.18.1`
+
+Approved packages are bundled into the hosted artifact, scanned after bundling, and recorded in the artifact manifest. SES execution still receives no package loader, filesystem access, network access, or dynamic dependency installation.
 
 ## Registration And Qualification
 

@@ -6,7 +6,7 @@ export default class LifecycleSafeMarketMaker extends ReefBotV1 {
     publisher: "Reef Examples",
     email: "examples@reef.local",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
     description: "Example market maker that checks own orders before proposing new quotes.",
     tags: ["example", "market-maker", "lifecycle-safe"],

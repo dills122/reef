@@ -21,7 +21,7 @@ export default class MyBot extends ReefBotV1 {
     publisher: "My Publisher",
     email: "me@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   } as const;
 
@@ -96,6 +96,7 @@ Market data:
 
 ```ts
 await ctx.marketData.snapshot("AAPL");
+await ctx.marketData.snapshots(["AAPL", "MSFT", "NVDA"]);
 ```
 
 Historical data:
@@ -107,6 +108,14 @@ await ctx.historical.intradayBars({
   start: "2026-07-04T14:00:00.000Z",
   end: "2026-07-04T15:00:00.000Z",
 });
+await ctx.historical.intradayBarsBatch([
+  {
+    instrumentId: "AAPL",
+    interval: "1m",
+    start: "2026-07-04T14:00:00.000Z",
+    end: "2026-07-04T15:00:00.000Z",
+  },
+]);
 ```
 
 Private config:
@@ -138,7 +147,18 @@ Run local checks:
 bun scripts/dev/bot-sdk-contract.test.mjs
 bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-maker.ts
 bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
+bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicator-strategy-bot.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --summary-only
 ```
+
+`bot-sdk-test-bot.mjs` is the pre-merge hosted simulation gate. It builds the hosted artifact, scans approved imports, runs the bot through SES against the fixture market, and exits nonzero when the bot should be marked `do_not_merge`.
+
+Before submitting a bot:
+
+- run `bot-sdk-test-bot.mjs` against the intended fixture
+- confirm the report says `approved_for_merge`
+- review any `approvedPackages` recorded in the artifact summary
+- treat any `do_not_merge` issue code as blocking until fixed
+- keep bot metadata version and targeted `sdkVersion` current
 
 To submit generated commands through the adapter-owned client against a local Reef stack, use the live smoke wrapper:
 
@@ -149,8 +169,13 @@ bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-m
 Bot code still does not receive network access; only the runner/orchestrator owns the venue transport. See [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md) for setup and troubleshooting.
 
 Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md) for the current SES-compatible runner contract.
+For the planned application and matching-engine integration path, see [`BOT_SDK_ENGINE_INTEGRATION_PLAN.md`](./BOT_SDK_ENGINE_INTEGRATION_PLAN.md).
 
 See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
+See `packages/bot-sdk/examples/multi-symbol-strategy-bot.ts` for a v1.5 strategy example that subscribes to several instruments, emits Bollinger/momentum signals, and converts approved signals into proposed order actions.
+See `packages/bot-sdk/examples/technical-indicator-strategy-bot.ts` for an approved-package example using `trading-signals`; approved packages are bundled into the hosted artifact and are not loaded dynamically at runtime.
+
+For exact approved package versions and approval rules, see [`BOT_SDK_APPROVED_PACKAGES.md`](./BOT_SDK_APPROVED_PACKAGES.md).
 
 Registration checks:
 

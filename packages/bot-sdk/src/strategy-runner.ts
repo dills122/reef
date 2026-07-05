@@ -1,7 +1,11 @@
 import {
   type BotActionV1,
+  type BotBarIntervalV1,
   type BotDenialV1,
   type BotRuntimePolicyV1,
+  type BotSignalV1,
+  type BotStrategyV1,
+  type BotStrategyEventV1,
   type HistoricalBarV1,
   type MarketSnapshotV1,
   type OwnOrderV1,
@@ -24,37 +28,15 @@ import {
   type VenueCommandResponseV1,
   type VenueCommandTransportV1,
 } from "./venue-client";
+import type { BotScenarioFixtureV1, BotScenarioIssueV1, BotScenarioTickV1 } from "./runner";
 
-export interface BotScenarioFixtureV1 {
-  readonly scenarioId: string;
-  readonly runId: string;
-  readonly venueSessionId: string;
-  readonly actorId: string;
-  readonly participantId: string;
-  readonly accountId: string;
-  readonly botId: string;
-  readonly botVersion: string;
-  readonly correlationId: string;
-  readonly config: Record<string, string | number | boolean>;
-  readonly policy?: Partial<BotRuntimePolicyV1>;
-  readonly ticks: readonly BotScenarioTickV1[];
-  readonly historicalBars?: Record<string, readonly HistoricalBarV1[]>;
-  readonly initialOrders?: readonly OwnOrderV1[];
-}
-
-export interface BotScenarioTickV1 {
-  readonly occurredAt: string;
-  readonly marketSnapshots: Record<string, MarketSnapshotV1>;
-  readonly historicalBarsClosed?: Record<string, readonly HistoricalBarV1[]>;
-}
-
-export interface BotScenarioRunOptionsV1 {
+export interface BotStrategyScenarioRunOptionsV1 {
   readonly BotClass: ReefBotV1Constructor;
   readonly fixture: BotScenarioFixtureV1;
   readonly venueTransport?: VenueCommandTransportV1;
 }
 
-export interface BotScenarioRunReportV1 {
+export interface BotStrategyScenarioRunReportV1 {
   readonly status: "completed" | "do_not_merge";
   readonly scenarioId: string;
   readonly runId: string;
@@ -62,22 +44,20 @@ export interface BotScenarioRunReportV1 {
   readonly actionsProposed: number;
   readonly orderActionsProposed: number;
   readonly dataCalls: number;
+  readonly signalsGenerated: number;
+  readonly eventsProcessed: number;
   readonly issues: readonly BotScenarioIssueV1[];
   readonly denials: readonly BotDenialV1[];
   readonly logs: readonly BotLogEntryV1[];
-  readonly ticks: readonly BotScenarioTickReportV1[];
+  readonly ticks: readonly BotStrategyScenarioTickReportV1[];
   readonly finalOrders: readonly OwnOrderV1[];
 }
 
-export interface BotScenarioIssueV1 {
-  readonly code: string;
-  readonly message: string;
-  readonly tick?: number;
-}
-
-export interface BotScenarioTickReportV1 {
+export interface BotStrategyScenarioTickReportV1 {
   readonly tick: number;
   readonly occurredAt: string;
+  readonly events: readonly BotStrategyEventV1[];
+  readonly signals: readonly BotSignalV1[];
   readonly actions: readonly BotActionV1[];
   readonly venueCommands: readonly VenueCommandRequestV1[];
   readonly venueResponses: readonly VenueCommandResponseV1[];
@@ -86,19 +66,24 @@ export interface BotScenarioTickReportV1 {
   readonly ordersAfterTick: readonly OwnOrderV1[];
 }
 
-export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promise<BotScenarioRunReportV1> {
+export async function runBotStrategyScenarioV1(
+  options: BotStrategyScenarioRunOptionsV1,
+): Promise<BotStrategyScenarioRunReportV1> {
   const policy: BotRuntimePolicyV1 = { ...defaultBotRuntimePolicyV1, ...options.fixture.policy };
   const bot = new options.BotClass();
+  const strategies = Array.from(bot.strategies ?? []);
   const logs: BotLogEntryV1[] = [];
   const denials: BotDenialV1[] = [];
   const issues: BotScenarioIssueV1[] = [];
-  const tickReports: BotScenarioTickReportV1[] = [];
+  const tickReports: BotStrategyScenarioTickReportV1[] = [];
   const orderState = new Map<string, OwnOrderV1>();
   const orderHistory = new Map<string, OwnOrderV1>();
   const tradeCommandWindows = new Map<number, number>();
   let actionsProposed = 0;
   let orderActionsProposed = 0;
   let dataCalls = 0;
+  let signalsGenerated = 0;
+  let eventsProcessed = 0;
   let commandSequence = 1;
 
   for (const order of options.fixture.initialOrders ?? []) {
@@ -114,6 +99,9 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     counters: { dataCalls: 0, dataCallsThisTick: 0 },
   });
   await bot.onStart(startContext);
+  for (const strategy of strategies) {
+    await strategy.onStart?.(startContext);
+  }
 
   for (let tick = 0; tick < options.fixture.ticks.length; tick += 1) {
     const fixtureTick = options.fixture.ticks[tick];
@@ -131,7 +119,23 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       counters,
     });
 
-    const actions = Array.from(await bot.onTick(context));
+    const events = strategyEventsForTick(tick, fixtureTick, options.fixture, Array.from(orderState.values()), strategies);
+    const signals: BotSignalV1[] = [];
+    const strategyActions: BotActionV1[] = [];
+    for (const event of events) {
+      eventsProcessed += 1;
+      for (const strategy of strategiesForEvent(strategies, event)) {
+        const emitted = Array.from(await strategy.onEvent(event, context));
+        signals.push(...emitted);
+        for (const signal of emitted) {
+          strategyActions.push(...Array.from(await bot.onSignal(signal, context, event)));
+        }
+      }
+    }
+
+    signalsGenerated += signals.length;
+    const tickActions = Array.from(await bot.onTick(context));
+    const actions = [...strategyActions, ...tickActions];
     const expandedActions = Array.from(expandCancelAllActionsV1(actions, Array.from(orderState.values())));
     const orderActionCount = expandedActions.filter(isOrderAction).length;
     let tickBlocked = false;
@@ -169,11 +173,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     if (!venueResult.ok) {
       venueAccepted = false;
       denials.push(venueResult.denial);
-      issues.push({
-        code: "venue_adapter_denial",
-        message: venueResult.denial.message,
-        tick,
-      });
+      issues.push({ code: "venue_adapter_denial", message: venueResult.denial.message, tick });
     } else if (options.venueTransport !== undefined && venueCommands.length > 0) {
       const sendResult = await sendVenueCommandRequestsV1(venueCommands, options.venueTransport);
       if (sendResult.ok) {
@@ -181,11 +181,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
       } else {
         venueAccepted = false;
         denials.push(sendResult.denial);
-        issues.push({
-          code: "venue_send_denial",
-          message: sendResult.denial.message,
-          tick,
-        });
+        issues.push({ code: "venue_send_denial", message: sendResult.denial.message, tick });
       }
     }
 
@@ -197,6 +193,8 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     tickReports.push({
       tick,
       occurredAt: fixtureTick.occurredAt,
+      events,
+      signals,
       actions: expandedActions,
       venueCommands,
       venueResponses,
@@ -213,6 +211,9 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },
   });
+  for (const strategy of strategies) {
+    await strategy.onStop?.(stopContext);
+  }
   await bot.onStop(stopContext);
 
   return {
@@ -223,12 +224,74 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     actionsProposed,
     orderActionsProposed,
     dataCalls,
+    signalsGenerated,
+    eventsProcessed,
     issues,
     denials,
     logs,
     ticks: tickReports,
     finalOrders: Array.from(orderState.values()),
   };
+}
+
+function strategyEventsForTick(
+  tick: number,
+  fixtureTick: BotScenarioTickV1,
+  fixture: BotScenarioFixtureV1,
+  currentOrders: readonly OwnOrderV1[],
+  strategies: readonly BotStrategyV1[],
+): readonly BotStrategyEventV1[] {
+  const events: BotStrategyEventV1[] = [{ type: "tick", tick, occurredAt: fixtureTick.occurredAt }];
+  for (const snapshot of Object.values(fixtureTick.marketSnapshots)) {
+    events.push({ type: "market_snapshot", tick, occurredAt: fixtureTick.occurredAt, snapshot });
+  }
+  const closedBars = fixtureTick.historicalBarsClosed ?? (tick === 0 ? fixture.historicalBars : undefined) ?? {};
+  for (const [instrumentId, bars] of Object.entries(closedBars)) {
+    if (bars.length > 0) {
+      events.push({
+        type: "bars_closed",
+        tick,
+        occurredAt: fixtureTick.occurredAt,
+        instrumentId,
+        interval: "1m",
+        bars: barsForSubscriptions(instrumentId, "1m", bars, strategies),
+      });
+    }
+  }
+  for (const order of currentOrders) {
+    events.push({ type: "order_update", tick, occurredAt: fixtureTick.occurredAt, order });
+  }
+  return events;
+}
+
+function strategiesForEvent(strategies: readonly BotStrategyV1[], event: BotStrategyEventV1) {
+  return strategies.filter((strategy) => {
+    if (event.type === "tick") {
+      return true;
+    }
+    if (event.type === "market_snapshot") {
+      return strategy.subscription.instruments.includes(event.snapshot.instrumentId);
+    }
+    if (event.type === "bars_closed") {
+      return strategy.subscription.bars?.some((bar) => bar.instrumentId === event.instrumentId && bar.interval === event.interval) ?? false;
+    }
+    return strategy.subscription.orderUpdates === true;
+  });
+}
+
+function barsForSubscriptions(
+  instrumentId: string,
+  interval: BotBarIntervalV1,
+  bars: readonly HistoricalBarV1[],
+  strategies: readonly BotStrategyV1[],
+): readonly HistoricalBarV1[] {
+  const lookbacks = strategies.flatMap((strategy) =>
+    strategy.subscription.bars
+      ?.filter((bar) => bar.instrumentId === instrumentId && bar.interval === interval && bar.lookback !== undefined)
+      .map((bar) => bar.lookback ?? 0) ?? [],
+  );
+  const maxLookback = lookbacks.length === 0 ? undefined : Math.max(...lookbacks);
+  return maxLookback === undefined ? bars : bars.slice(-maxLookback);
 }
 
 function fixtureDataForState(
@@ -314,11 +377,7 @@ function applyActionsToOrderState(
       case "cancel_order": {
         const current = orderState.get(action.order.orderId);
         if (current !== undefined) {
-          const canceled: OwnOrderV1 = {
-            ...current,
-            remainingQuantity: 0,
-            status: "CANCELED",
-          };
+          const canceled: OwnOrderV1 = { ...current, remainingQuantity: 0, status: "CANCELED" };
           orderState.delete(action.order.orderId);
           orderHistory.set(action.order.orderId, canceled);
         }

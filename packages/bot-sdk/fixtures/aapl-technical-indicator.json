@@ -1,0 +1,87 @@
+{
+  "scenarioId": "aapl-technical-indicator-v1",
+  "runId": "run-bot-sdk-aapl-technical-1",
+  "venueSessionId": "session-aapl-technical-1",
+  "actorId": "actor-technical-indicator-strategy",
+  "participantId": "participant-technical-indicator-strategy",
+  "accountId": "account-technical-indicator-strategy",
+  "botId": "technical-indicator-strategy-bot",
+  "botVersion": "1.0.0",
+  "correlationId": "corr-bot-sdk-aapl-technical-1",
+  "config": {
+    "instrumentId": "AAPL",
+    "orderSize": 5
+  },
+  "policy": {
+    "tickIntervalMs": 500,
+    "minTickIntervalMs": 250,
+    "maxOrderActionsPerTick": 10,
+    "maxDataCallsPerTick": 20,
+    "maxTradeCommandsPerSecond": 10
+  },
+  "ticks": [
+    {
+      "occurredAt": "2026-07-04T14:30:00.000Z",
+      "marketSnapshots": {
+        "AAPL": {
+          "instrumentId": "AAPL",
+          "asOf": "2026-07-04T14:30:00.000Z",
+          "bidPrice": 94.5,
+          "askPrice": 95.5,
+          "midPrice": 95,
+          "lastPrice": 95
+        }
+      }
+    },
+    {
+      "occurredAt": "2026-07-04T14:30:00.500Z",
+      "marketSnapshots": {
+        "AAPL": {
+          "instrumentId": "AAPL",
+          "asOf": "2026-07-04T14:30:00.500Z",
+          "bidPrice": 94.75,
+          "askPrice": 95.75,
+          "midPrice": 95.25,
+          "lastPrice": 95.25
+        }
+      }
+    },
+    {
+      "occurredAt": "2026-07-04T14:30:01.000Z",
+      "marketSnapshots": {
+        "AAPL": {
+          "instrumentId": "AAPL",
+          "asOf": "2026-07-04T14:30:01.000Z",
+          "bidPrice": 95,
+          "askPrice": 96,
+          "midPrice": 95.5,
+          "lastPrice": 95.5
+        }
+      }
+    }
+  ],
+  "historicalBars": {
+    "AAPL": [
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:00:00.000Z", "end": "2026-07-04T14:01:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1000 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:01:00.000Z", "end": "2026-07-04T14:02:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1001 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:02:00.000Z", "end": "2026-07-04T14:03:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1002 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:03:00.000Z", "end": "2026-07-04T14:04:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1003 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:04:00.000Z", "end": "2026-07-04T14:05:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1004 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:05:00.000Z", "end": "2026-07-04T14:06:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1005 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:06:00.000Z", "end": "2026-07-04T14:07:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1006 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:07:00.000Z", "end": "2026-07-04T14:08:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1007 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:08:00.000Z", "end": "2026-07-04T14:09:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1008 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:09:00.000Z", "end": "2026-07-04T14:10:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1009 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:10:00.000Z", "end": "2026-07-04T14:11:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1010 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:11:00.000Z", "end": "2026-07-04T14:12:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1011 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:12:00.000Z", "end": "2026-07-04T14:13:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1012 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:13:00.000Z", "end": "2026-07-04T14:14:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1013 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:14:00.000Z", "end": "2026-07-04T14:15:00.000Z", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 1014 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:15:00.000Z", "end": "2026-07-04T14:16:00.000Z", "open": 80, "high": 81, "low": 79, "close": 80, "volume": 1015 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:16:00.000Z", "end": "2026-07-04T14:17:00.000Z", "open": 85, "high": 86, "low": 84, "close": 85, "volume": 1016 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:17:00.000Z", "end": "2026-07-04T14:18:00.000Z", "open": 90, "high": 91, "low": 89, "close": 90, "volume": 1017 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:18:00.000Z", "end": "2026-07-04T14:19:00.000Z", "open": 92, "high": 93, "low": 91, "close": 92, "volume": 1018 },
+      { "instrumentId": "AAPL", "start": "2026-07-04T14:19:00.000Z", "end": "2026-07-04T14:20:00.000Z", "open": 95, "high": 96, "low": 94, "close": 95, "volume": 1019 }
+    ]
+  }
+}

@@ -6,7 +6,7 @@ export default class SimpleMarketMaker extends ReefBotV1 {
     publisher: "Reef Examples",
     email: "examples@reef.local",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
     description: "Example tick bot that proposes one bid and one offer around a public snapshot.",
     tags: ["example", "market-maker"],

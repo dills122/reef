@@ -61,6 +61,14 @@ bun scripts/dev/bot-sdk-build-hosted-artifact.mjs packages/bot-sdk/examples/simp
 
 The build step emits a `reef.bot.hostedArtifact.v1` manifest next to the artifact by default. The manifest includes the source hash and artifact hash so a registry or review workflow can pin exactly what was built and run.
 
+To run the pre-merge hosted simulation tester directly from a TypeScript bot entry:
+
+```bash
+bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicator-strategy-bot.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --summary-only
+```
+
+The tester builds the artifact, applies source and final-artifact scanner gates, executes the bot through SES, and emits `approved_for_merge` or `do_not_merge`.
+
 To run a built artifact through a separate hosted worker process:
 
 ```bash
@@ -123,7 +131,14 @@ The sidecar policy is represented by `reefBotHostedSandboxPolicyV1` and checked 
 
 ## Dependency Policy
 
-V1 starts with only the SDK import. Future allowlisted packages need:
+V1.5 allows exact approved package imports in bot source, then bundles them into the hosted artifact before SES execution. The current allowlist is:
+
+- `trading-signals@7.4.3`
+- `simple-statistics@7.9.3`
+- `decimal.js@10.6.0`
+- `lodash-es@4.18.1`
+
+The executable allowlist is `reefBotApprovedPackagesV1`; source scanning uses `reefBotHostedSourceSandboxPolicyV1`, while final artifact scanning still uses the stricter hosted runtime policy. New allowlisted packages need:
 
 - explicit package and version allowlist
 - lockfile or vendored artifact hash

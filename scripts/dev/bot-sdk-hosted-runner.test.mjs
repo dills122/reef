@@ -24,7 +24,7 @@ module.exports.default = class HostedMarketMaker extends ReefBotV1 {
     publisher: "Reef",
     email: "bots@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   };
 
@@ -90,7 +90,7 @@ module.exports.default = class HostedHangingBot extends ReefBotV1 {
     publisher: "Reef",
     email: "bots@example.com",
     version: "1.0.0",
-    sdkVersion: "1.0.0",
+    sdkVersion: "1.5.0",
     botApiVersion: "v1",
   };
 

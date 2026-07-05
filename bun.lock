@@ -5,7 +5,11 @@
     "": {
       "name": "reef",
       "devDependencies": {
+        "decimal.js": "10.6.0",
+        "lodash-es": "4.18.1",
         "ses": "^2.2.0",
+        "simple-statistics": "7.9.3",
+        "trading-signals": "7.4.3",
       },
     },
   },
@@ -16,6 +20,14 @@
 
     "@endo/immutable-arraybuffer": ["@endo/immutable-arraybuffer@1.1.2", "", {}, "sha512-u+NaYB2aqEugQ3u7w3c5QNkPogf8q/xGgsPaqdY6pUiGWtYiTiFspKFcha6+oeZhWXWQ23rf0KrUq0kfuzqYyQ=="],
 
+    "decimal.js": ["decimal.js@10.6.0", "", {}, "sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg=="],
+
+    "lodash-es": ["lodash-es@4.18.1", "", {}, "sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A=="],
+
     "ses": ["ses@2.2.0", "", { "dependencies": { "@endo/cache-map": "^1.1.0", "@endo/env-options": "^1.1.11", "@endo/immutable-arraybuffer": "^1.1.2" } }, "sha512-mXZfO9O2bhE9E3INX5Dbqq+eo1Dj6Yeo+r7jas7GYTXRS6fzcZFYf0UbSHcXO7xJuPbhztBskSuSqJLMMoYMVQ=="],
+
+    "simple-statistics": ["simple-statistics@7.9.3", "", {}, "sha512-WXpxUfo7BJCRpyl4besiuMV7wNj9xiPIq7IKmUQO4upIaF8pK2AXwhjttHN5L8KXZrLkGMCHGHq4p+pJXiIahQ=="],
+
+    "trading-signals": ["trading-signals@7.4.3", "", {}, "sha512-kOyzd85qhuhU7yGkB5z74MVP6j30xBCfZy5+bgBnvfxY1ZdvaQsdD+C5j+CoIRtCAgSOuxB7jmPpBrqO6h17sQ=="],
   }
 }
