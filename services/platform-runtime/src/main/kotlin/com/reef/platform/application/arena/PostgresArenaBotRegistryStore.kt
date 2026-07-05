@@ -27,6 +27,7 @@ class PostgresArenaBotRegistryStore(
                         operatorDecisions = names.operatorDecisions,
                         runRecords = names.runRecords,
                         runBotVersions = names.runBotVersions,
+                        runBotResults = names.runBotResults,
                         runtimeConfigDescriptors = names.runtimeConfigDescriptors
                     )
                 )
@@ -134,6 +135,28 @@ class PostgresArenaBotRegistryStore(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.runBotResults} (
+                      run_id TEXT NOT NULL,
+                      bot_id TEXT NOT NULL,
+                      version_id TEXT NOT NULL,
+                      scoring_policy_version TEXT NOT NULL,
+                      final_equity BIGINT NOT NULL,
+                      realized_pnl BIGINT NOT NULL,
+                      max_drawdown BIGINT NOT NULL,
+                      actions_proposed INTEGER NOT NULL,
+                      order_actions_proposed INTEGER NOT NULL,
+                      data_calls INTEGER NOT NULL,
+                      signals_generated INTEGER NOT NULL,
+                      disqualified BOOLEAN NOT NULL DEFAULT false,
+                      created_at TIMESTAMPTZ NOT NULL,
+                      PRIMARY KEY (run_id, bot_id, version_id, scoring_policy_version),
+                      FOREIGN KEY (run_id) REFERENCES ${names.runRecords}(run_id),
+                      FOREIGN KEY (bot_id, version_id) REFERENCES ${names.botVersions}(bot_id, version_id)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.runtimeConfigDescriptors} (
                       bot_id TEXT NOT NULL,
                       version_id TEXT NOT NULL,
@@ -149,6 +172,12 @@ class PostgresArenaBotRegistryStore(
                 )
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_bot_versions_status ON ${names.botVersions}(status)")
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_status_created ON ${names.runRecords}(status, created_at DESC)")
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_arena_run_bot_results_leaderboard
+                    ON ${names.runBotResults}(scoring_policy_version, disqualified, final_equity DESC, realized_pnl DESC, max_drawdown ASC)
+                    """.trimIndent()
+                )
             }
         }
     }
@@ -435,6 +464,101 @@ class PostgresArenaBotRegistryStore(
         }
     }
 
+    override fun saveRunBotResult(result: ArenaRunBotResult) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.runBotResults}(
+                  run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
+                  max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
+                  disqualified, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (run_id, bot_id, version_id, scoring_policy_version) DO UPDATE SET
+                  final_equity = EXCLUDED.final_equity,
+                  realized_pnl = EXCLUDED.realized_pnl,
+                  max_drawdown = EXCLUDED.max_drawdown,
+                  actions_proposed = EXCLUDED.actions_proposed,
+                  order_actions_proposed = EXCLUDED.order_actions_proposed,
+                  data_calls = EXCLUDED.data_calls,
+                  signals_generated = EXCLUDED.signals_generated,
+                  disqualified = EXCLUDED.disqualified,
+                  created_at = EXCLUDED.created_at
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, result.runId)
+                ps.setString(2, result.botId)
+                ps.setString(3, result.versionId)
+                ps.setString(4, result.scoringPolicyVersion)
+                ps.setLong(5, result.finalEquity)
+                ps.setLong(6, result.realizedPnl)
+                ps.setLong(7, result.maxDrawdown)
+                ps.setInt(8, result.actionsProposed)
+                ps.setInt(9, result.orderActionsProposed)
+                ps.setInt(10, result.dataCalls)
+                ps.setInt(11, result.signalsGenerated)
+                ps.setBoolean(12, result.disqualified)
+                ps.setTimestamp(13, Timestamp.from(result.createdAt))
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun runBotResults(runId: String): List<ArenaRunBotResult> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
+                       max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
+                       disqualified, created_at
+                FROM ${names.runBotResults}
+                WHERE run_id = ?
+                ORDER BY bot_id, version_id
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, runId)
+                ps.executeQuery().use { rs ->
+                    val results = mutableListOf<ArenaRunBotResult>()
+                    while (rs.next()) results.add(rs.toRunBotResult())
+                    return results
+                }
+            }
+        }
+    }
+
+    override fun leaderboard(
+        modeId: String,
+        scoringPolicyVersion: String,
+        limit: Int
+    ): List<ArenaLeaderboardEntry> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT r.run_id, rb.bot_id, rb.version_id, rb.scoring_policy_version, rb.final_equity,
+                       rb.realized_pnl, rb.max_drawdown, rb.disqualified
+                FROM ${names.runBotResults} rb
+                JOIN ${names.runRecords} r ON r.run_id = rb.run_id
+                WHERE r.mode_id = ?
+                  AND r.status = ?
+                  AND rb.scoring_policy_version = ?
+                ORDER BY rb.disqualified ASC, rb.final_equity DESC, rb.realized_pnl DESC,
+                         rb.max_drawdown ASC, rb.run_id ASC, rb.bot_id ASC
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, modeId)
+                ps.setString(2, ArenaRunStatus.Completed.name)
+                ps.setString(3, scoringPolicyVersion)
+                ps.setInt(4, limit.coerceIn(1, 500))
+                ps.executeQuery().use { rs ->
+                    val entries = mutableListOf<ArenaLeaderboardEntry>()
+                    while (rs.next()) entries.add(rs.toLeaderboardEntry(entries.size + 1))
+                    return entries
+                }
+            }
+        }
+    }
+
     override fun replaceRuntimeConfigDescriptors(
         botId: String,
         versionId: String,
@@ -621,6 +745,38 @@ class PostgresArenaBotRegistryStore(
             status = ArenaRunStatus.valueOf(getString("status")),
             createdAt = instant("created_at"),
             completedAt = nullableInstant("completed_at")
+        )
+    }
+
+    private fun ResultSet.toRunBotResult(): ArenaRunBotResult {
+        return ArenaRunBotResult(
+            runId = getString("run_id"),
+            botId = getString("bot_id"),
+            versionId = getString("version_id"),
+            scoringPolicyVersion = getString("scoring_policy_version"),
+            finalEquity = getLong("final_equity"),
+            realizedPnl = getLong("realized_pnl"),
+            maxDrawdown = getLong("max_drawdown"),
+            actionsProposed = getInt("actions_proposed"),
+            orderActionsProposed = getInt("order_actions_proposed"),
+            dataCalls = getInt("data_calls"),
+            signalsGenerated = getInt("signals_generated"),
+            disqualified = getBoolean("disqualified"),
+            createdAt = instant("created_at")
+        )
+    }
+
+    private fun ResultSet.toLeaderboardEntry(rank: Int): ArenaLeaderboardEntry {
+        return ArenaLeaderboardEntry(
+            rank = rank,
+            runId = getString("run_id"),
+            botId = getString("bot_id"),
+            versionId = getString("version_id"),
+            scoringPolicyVersion = getString("scoring_policy_version"),
+            finalEquity = getLong("final_equity"),
+            realizedPnl = getLong("realized_pnl"),
+            maxDrawdown = getLong("max_drawdown"),
+            disqualified = getBoolean("disqualified")
         )
     }
 

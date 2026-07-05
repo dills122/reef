@@ -84,6 +84,34 @@ data class ArenaRunRecord(
     val completedAt: Instant? = null
 )
 
+data class ArenaRunBotResult(
+    val runId: String,
+    val botId: String,
+    val versionId: String,
+    val scoringPolicyVersion: String,
+    val finalEquity: Long,
+    val realizedPnl: Long,
+    val maxDrawdown: Long,
+    val actionsProposed: Int,
+    val orderActionsProposed: Int,
+    val dataCalls: Int,
+    val signalsGenerated: Int,
+    val disqualified: Boolean,
+    val createdAt: Instant
+)
+
+data class ArenaLeaderboardEntry(
+    val rank: Int,
+    val runId: String,
+    val botId: String,
+    val versionId: String,
+    val scoringPolicyVersion: String,
+    val finalEquity: Long,
+    val realizedPnl: Long,
+    val maxDrawdown: Long,
+    val disqualified: Boolean
+)
+
 enum class ArenaRunStatus {
     Planned,
     Running,
@@ -143,6 +171,9 @@ interface ArenaBotRegistryStore {
     fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision>
     fun saveRunRecord(runRecord: ArenaRunRecord)
     fun runRecord(runId: String): ArenaRunRecord?
+    fun saveRunBotResult(result: ArenaRunBotResult)
+    fun runBotResults(runId: String): List<ArenaRunBotResult>
+    fun leaderboard(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry>
     fun replaceRuntimeConfigDescriptors(
         botId: String,
         versionId: String,
@@ -308,6 +339,22 @@ class ArenaControlPlaneService(
         )
         store.saveRunRecord(updated)
         return updated
+    }
+
+    fun recordRunBotResult(result: ArenaRunBotResult): ArenaRunBotResult {
+        val run = store.runRecord(result.runId) ?: error("unknown arena run: ${result.runId}")
+        require(run.botVersions.any { it.botId == result.botId && it.versionId == result.versionId }) {
+            "bot version is not registered for arena run: ${result.botId}/${result.versionId}"
+        }
+        require(result.scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
+        store.saveRunBotResult(result)
+        return result
+    }
+
+    fun leaderboard(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry> {
+        require(modeId.isNotBlank()) { "modeId is required" }
+        require(scoringPolicyVersion.isNotBlank()) { "scoringPolicyVersion is required" }
+        return store.leaderboard(modeId, scoringPolicyVersion, limit.coerceIn(1, 500))
     }
 
     fun replaceRuntimeConfigDescriptors(

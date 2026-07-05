@@ -7,6 +7,7 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     private val reports = linkedMapOf<String, MutableList<ArenaQualificationReport>>()
     private val decisions = linkedMapOf<String, MutableList<ArenaOperatorDecision>>()
     private val runs = linkedMapOf<String, ArenaRunRecord>()
+    private val runBotResults = linkedMapOf<String, MutableList<ArenaRunBotResult>>()
     private val runtimeConfigDescriptors = linkedMapOf<String, List<ArenaRuntimeConfigDescriptor>>()
 
     override fun saveBot(bot: ArenaBot) {
@@ -48,6 +49,52 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     }
 
     override fun runRecord(runId: String): ArenaRunRecord? = runs[runId]
+
+    override fun saveRunBotResult(result: ArenaRunBotResult) {
+        val results = runBotResults.getOrPut(result.runId) { mutableListOf() }
+        results.removeIf { it.botId == result.botId && it.versionId == result.versionId }
+        results.add(result)
+    }
+
+    override fun runBotResults(runId: String): List<ArenaRunBotResult> {
+        return runBotResults[runId]?.toList() ?: emptyList()
+    }
+
+    override fun leaderboard(
+        modeId: String,
+        scoringPolicyVersion: String,
+        limit: Int
+    ): List<ArenaLeaderboardEntry> {
+        val eligibleRunIds = runs.values
+            .filter { it.modeId == modeId && it.status == ArenaRunStatus.Completed }
+            .map { it.runId }
+            .toSet()
+        return runBotResults.values
+            .flatten()
+            .filter { it.runId in eligibleRunIds && it.scoringPolicyVersion == scoringPolicyVersion }
+            .sortedWith(
+                compareBy<ArenaRunBotResult> { it.disqualified }
+                    .thenByDescending { it.finalEquity }
+                    .thenByDescending { it.realizedPnl }
+                    .thenBy { it.maxDrawdown }
+                    .thenBy { it.runId }
+                    .thenBy { it.botId }
+            )
+            .take(limit)
+            .mapIndexed { index, result ->
+                ArenaLeaderboardEntry(
+                    rank = index + 1,
+                    runId = result.runId,
+                    botId = result.botId,
+                    versionId = result.versionId,
+                    scoringPolicyVersion = result.scoringPolicyVersion,
+                    finalEquity = result.finalEquity,
+                    realizedPnl = result.realizedPnl,
+                    maxDrawdown = result.maxDrawdown,
+                    disqualified = result.disqualified
+                )
+            }
+    }
 
     override fun replaceRuntimeConfigDescriptors(
         botId: String,

@@ -242,6 +242,14 @@ The SDK may expose config descriptors for author ergonomics and registration UI,
 
 Config values are immutable for a run.
 
+`resolveBotRuntimeConfigV1` defines the runner-side preflight contract:
+
+- descriptors identify a config key, `OpenBao` provider, secret path, required flag, and optional value type
+- the runner fetches secret values before bot startup through a platform-owned secret provider
+- resolved values are frozen and passed into the bot context config
+- missing required values, provider mismatches, invalid keys, and type mismatches fail preflight
+- bot source never receives the secret provider, secret path fetch capability, or network access
+
 ## Sandbox Policy
 
 Hosted v1 bots are untrusted.

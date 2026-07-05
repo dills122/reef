@@ -362,6 +362,7 @@ object PostgresSchemaRequirements {
         operatorDecisions: String,
         runRecords: String,
         runBotVersions: String,
+        runBotResults: String,
         runtimeConfigDescriptors: String
     ): PostgresSchemaRequirement {
         val botsTable = PostgresSchemaObject.parse(bots)
@@ -371,6 +372,7 @@ object PostgresSchemaRequirements {
         val decisionsTable = PostgresSchemaObject.parse(operatorDecisions)
         val runsTable = PostgresSchemaObject.parse(runRecords)
         val runBotsTable = PostgresSchemaObject.parse(runBotVersions)
+        val runResultsTable = PostgresSchemaObject.parse(runBotResults)
         val configTable = PostgresSchemaObject.parse(runtimeConfigDescriptors)
         return PostgresSchemaRequirement(
             tables = listOf(
@@ -381,6 +383,7 @@ object PostgresSchemaRequirements {
                 decisionsTable,
                 runsTable,
                 runBotsTable,
+                runResultsTable,
                 configTable
             ),
             columns = listOf(
@@ -400,6 +403,9 @@ object PostgresSchemaRequirements {
                     PostgresSchemaColumn(runsTable, "seed", "bigint"),
                     PostgresSchemaColumn(runsTable, "policy_version", "text"),
                     PostgresSchemaColumn(runBotsTable, "bot_order", "integer"),
+                    PostgresSchemaColumn(runResultsTable, "scoring_policy_version", "text"),
+                    PostgresSchemaColumn(runResultsTable, "final_equity", "bigint"),
+                    PostgresSchemaColumn(runResultsTable, "disqualified", "boolean"),
                     PostgresSchemaColumn(configTable, "config_key", "text"),
                     PostgresSchemaColumn(configTable, "provider", "text"),
                     PostgresSchemaColumn(configTable, "secret_path", "text"),

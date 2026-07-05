@@ -6,7 +6,14 @@ import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.ArenaBotRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
+import com.reef.platform.application.arena.ArenaBot
+import com.reef.platform.application.arena.ArenaBotVersion
 import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaLeaderboardEntry
+import com.reef.platform.application.arena.ArenaOperatorDecision
+import com.reef.platform.application.arena.ArenaQualificationReport
+import com.reef.platform.application.arena.ArenaRunRecord
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
@@ -214,8 +221,15 @@ class PlatformHttpServer(
             setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
             setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
             registerArenaBotJson = { body -> registerArenaBotResponse(body) },
+            arenaBotJson = { query -> arenaBotResponse(query) },
             registerArenaBotVersionJson = { body -> registerArenaBotVersionResponse(body) },
+            arenaBotVersionJson = { query -> arenaBotVersionResponse(query) },
             transitionArenaBotVersionJson = { body -> transitionArenaBotVersionResponse(body) },
+            arenaQualificationReportsJson = { query -> arenaQualificationReportsResponse(query) },
+            arenaOperatorDecisionsJson = { query -> arenaOperatorDecisionsResponse(query) },
+            arenaRuntimeConfigDescriptorsJson = { query -> arenaRuntimeConfigDescriptorsResponse(query) },
+            arenaRunJson = { query -> arenaRunResponse(query) },
+            arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -2223,11 +2237,213 @@ class PlatformHttpServer(
         }
     }
 
+    private fun arenaBotResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        if (botId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
+        }
+        val bot = service.arenaBot(arenaAdminActor(query), botId)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
+        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
+    }
+
+    private fun arenaBotVersionResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val version = service.arenaBotVersion(arenaAdminActor(query), botId, versionId)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot version not found"))
+        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "version" to arenaBotVersionJson(version)))
+    }
+
+    private fun arenaQualificationReportsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val reports = service.arenaQualificationReports(arenaAdminActor(query), botId, versionId)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "reports" to reports.map { arenaQualificationReportJson(it) })
+        )
+    }
+
+    private fun arenaOperatorDecisionsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val decisions = service.arenaOperatorDecisions(arenaAdminActor(query), botId, versionId)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map { arenaOperatorDecisionJson(it) })
+        )
+    }
+
+    private fun arenaRuntimeConfigDescriptorsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(query), botId, versionId)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "descriptors" to descriptors.map { arenaRuntimeConfigDescriptorJson(it) })
+        )
+    }
+
+    private fun arenaRunResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val runId = queryValue(query, "runId")
+        if (runId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
+        }
+        val run = service.arenaRun(arenaAdminActor(query), runId)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena run not found"))
+        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
+    }
+
+    private fun arenaLeaderboardResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val modeId = queryValue(query, "modeId")
+        val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
+        }
+        val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
+        )
+    }
+
     private fun arenaAdminActor(json: JsonDocument): AdminActor {
         return AdminActor(
             actorId = json.string("actorId").ifBlank { "internal-admin" },
             correlationId = json.string("correlationId").ifBlank { "internal-admin" },
             occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
+    }
+
+    private fun arenaAdminActor(query: String?): AdminActor {
+        return AdminActor(
+            actorId = queryValue(query, "actorId").ifBlank { "admin-cli" },
+            correlationId = queryValue(query, "correlationId").ifBlank { "internal-admin" },
+            occurredAt = queryValue(query, "occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
+    }
+
+    private fun arenaBotJson(bot: ArenaBot): Map<String, Any?> {
+        return mapOf(
+            "botId" to bot.botId,
+            "fileName" to bot.fileName,
+            "metadata" to mapOf(
+                "name" to bot.metadata.name,
+                "publisher" to bot.metadata.publisher,
+                "email" to bot.metadata.email,
+                "description" to bot.metadata.description,
+                "version" to bot.metadata.version
+            ),
+            "createdAt" to bot.createdAt.toString()
+        )
+    }
+
+    private fun arenaBotVersionJson(version: ArenaBotVersion): Map<String, Any?> {
+        return mapOf(
+            "botId" to version.botId,
+            "versionId" to version.versionId,
+            "sourceHash" to version.sourceHash,
+            "artifactHash" to version.artifactHash,
+            "sdkVersion" to version.sdkVersion,
+            "apiVersion" to version.apiVersion,
+            "dependencyManifestHash" to version.dependencyManifestHash,
+            "status" to version.status.name,
+            "createdAt" to version.createdAt.toString()
+        )
+    }
+
+    private fun arenaQualificationReportJson(report: ArenaQualificationReport): Map<String, Any?> {
+        return mapOf(
+            "botId" to report.botId,
+            "versionId" to report.versionId,
+            "reportId" to report.reportId,
+            "status" to report.status.name,
+            "issues" to report.issues,
+            "policyVersion" to report.policyVersion,
+            "createdAt" to report.createdAt.toString()
+        )
+    }
+
+    private fun arenaOperatorDecisionJson(decision: ArenaOperatorDecision): Map<String, Any?> {
+        return mapOf(
+            "botId" to decision.botId,
+            "versionId" to decision.versionId,
+            "fromStatus" to decision.fromStatus.name,
+            "toStatus" to decision.toStatus.name,
+            "actorId" to decision.actorId,
+            "reason" to decision.reason,
+            "correlationId" to decision.correlationId,
+            "occurredAt" to decision.occurredAt.toString()
+        )
+    }
+
+    private fun arenaRuntimeConfigDescriptorJson(descriptor: ArenaRuntimeConfigDescriptor): Map<String, Any?> {
+        return mapOf(
+            "botId" to descriptor.botId,
+            "versionId" to descriptor.versionId,
+            "key" to descriptor.key,
+            "provider" to descriptor.provider.name,
+            "secretPath" to descriptor.secretPath,
+            "required" to descriptor.required,
+            "description" to descriptor.description
+        )
+    }
+
+    private fun arenaRunJson(run: ArenaRunRecord): Map<String, Any?> {
+        return mapOf(
+            "runId" to run.runId,
+            "modeId" to run.modeId,
+            "scenarioId" to run.scenarioId,
+            "seed" to run.seed,
+            "policyVersion" to run.policyVersion,
+            "botVersions" to run.botVersions.map {
+                mapOf("botId" to it.botId, "versionId" to it.versionId)
+            },
+            "status" to run.status.name,
+            "createdAt" to run.createdAt.toString(),
+            "completedAt" to run.completedAt?.toString()
+        )
+    }
+
+    private fun arenaLeaderboardEntryJson(entry: ArenaLeaderboardEntry): Map<String, Any?> {
+        return mapOf(
+            "rank" to entry.rank,
+            "runId" to entry.runId,
+            "botId" to entry.botId,
+            "versionId" to entry.versionId,
+            "scoringPolicyVersion" to entry.scoringPolicyVersion,
+            "finalEquity" to entry.finalEquity,
+            "realizedPnl" to entry.realizedPnl,
+            "maxDrawdown" to entry.maxDrawdown,
+            "disqualified" to entry.disqualified
         )
     }
 

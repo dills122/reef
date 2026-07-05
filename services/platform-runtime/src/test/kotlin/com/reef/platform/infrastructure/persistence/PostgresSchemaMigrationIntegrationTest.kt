@@ -13,8 +13,22 @@ import com.reef.platform.api.PostgresCommandCircuitBreakerStore
 import com.reef.platform.api.PostgresInstrumentPriceCollarStore
 import com.reef.platform.api.PostgresCommandLogStore
 import com.reef.platform.api.PostgresIdempotencyStore
+import com.reef.platform.application.arena.ArenaBotMetadata
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaControlPlaneService
+import com.reef.platform.application.arena.ArenaQualificationStatus
+import com.reef.platform.application.arena.ArenaRunBotResult
+import com.reef.platform.application.arena.ArenaRunBotVersionRef
+import com.reef.platform.application.arena.ArenaRunStatus
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
+import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
+import com.reef.platform.application.arena.RegisterArenaBotCommand
+import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
+import com.reef.platform.application.arena.RegisterArenaRunCommand
 import com.reef.platform.domain.RuntimeEvent
 import java.sql.DriverManager
+import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -489,6 +503,112 @@ class PostgresSchemaMigrationIntegrationTest {
             dataSource = boundaryDataSource,
             bootstrapMode = PostgresBootstrapMode.Validate
         )
+    }
+
+    @Test
+    fun validateModeArenaRegistryStorePersistsControlPlaneStateWhenConfigured() {
+        val jdbcUrl = System.getenv("ARENA_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("ARENA_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("ARENA_POSTGRES_PASSWORD_TEST") ?: return
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword)
+        val store = PostgresArenaBotRegistryStore(
+            dataSource = dataSource,
+            bootstrapMode = PostgresBootstrapMode.Validate
+        )
+        val suffix = UUID.randomUUID().toString()
+        val botId = "bot-$suffix"
+        val versionId = "v1"
+        val runId = "run-$suffix"
+        val controlPlane = ArenaControlPlaneService(store) { Instant.parse("2026-07-05T12:00:00Z") }
+
+        controlPlane.registerBot(
+            RegisterArenaBotCommand(
+                botId = botId,
+                fileName = "$botId.ts",
+                metadata = ArenaBotMetadata(
+                    name = botId,
+                    publisher = "Schema Test",
+                    email = "schema-test@example.com",
+                    description = "postgres arena store test",
+                    version = "1.0.0"
+                )
+            )
+        )
+        controlPlane.registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = botId,
+                versionId = versionId,
+                sourceHash = "sha256:source-$suffix",
+                artifactHash = "sha256:artifact-$suffix",
+                sdkVersion = "1.5.0",
+                apiVersion = "v1",
+                dependencyManifestHash = "sha256:deps-$suffix"
+            )
+        )
+        controlPlane.transitionVersion(botId, versionId, ArenaBotVersionStatus.Submitted, "scanner", "submitted", "corr-$suffix")
+        controlPlane.transitionVersion(botId, versionId, ArenaBotVersionStatus.ChecksPassed, "scanner", "passed", "corr-$suffix")
+        controlPlane.transitionVersion(botId, versionId, ArenaBotVersionStatus.Approved, "admin-cli", "approved", "corr-$suffix")
+        controlPlane.recordQualificationReport(
+            botId = botId,
+            versionId = versionId,
+            reportId = "report-$suffix",
+            status = ArenaQualificationStatus.Passed,
+            issues = listOf("scanner ok", "stress ok"),
+            policyVersion = "policy-v1"
+        )
+        controlPlane.replaceRuntimeConfigDescriptors(
+            botId,
+            versionId,
+            listOf(
+                ArenaRuntimeConfigDescriptor(
+                    botId = botId,
+                    versionId = versionId,
+                    key = "maxInventory",
+                    provider = ArenaRuntimeConfigProvider.OpenBao,
+                    secretPath = "kv/bots/$botId/$versionId",
+                    required = true,
+                    description = "inventory cap"
+                )
+            )
+        )
+        controlPlane.registerRun(
+            RegisterArenaRunCommand(
+                runId = runId,
+                modeId = "hosted-sim",
+                scenarioId = "scenario-schema",
+                seed = 42,
+                policyVersion = "policy-v1",
+                botVersions = listOf(ArenaRunBotVersionRef(botId, versionId))
+            )
+        )
+        controlPlane.updateRunStatus(runId, ArenaRunStatus.Running)
+        controlPlane.updateRunStatus(runId, ArenaRunStatus.Completed)
+        controlPlane.recordRunBotResult(
+            ArenaRunBotResult(
+                runId = runId,
+                botId = botId,
+                versionId = versionId,
+                scoringPolicyVersion = "score-v1",
+                finalEquity = 1_025_000,
+                realizedPnl = 25_000,
+                maxDrawdown = 1_000,
+                actionsProposed = 12,
+                orderActionsProposed = 8,
+                dataCalls = 20,
+                signalsGenerated = 4,
+                disqualified = false,
+                createdAt = Instant.parse("2026-07-05T12:00:00Z")
+            )
+        )
+
+        assertEquals(botId, store.bot(botId)?.botId)
+        assertEquals(ArenaBotVersionStatus.Approved, store.version(botId, versionId)?.status)
+        assertEquals(listOf("scanner ok", "stress ok"), store.qualificationReports(botId, versionId).single().issues)
+        assertEquals("admin-cli", store.operatorDecisions(botId, versionId).last().actorId)
+        assertEquals("maxInventory", store.runtimeConfigDescriptors(botId, versionId).single().key)
+        assertEquals("scenario-schema", store.runRecord(runId)?.scenarioId)
+        assertEquals(1_025_000, store.runBotResults(runId).single().finalEquity)
+        assertEquals(botId, store.leaderboard("hosted-sim", "score-v1").single().botId)
     }
 
     @Test

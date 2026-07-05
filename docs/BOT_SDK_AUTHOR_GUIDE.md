@@ -126,6 +126,8 @@ const strategyName = ctx.config.optionalString("strategyName");
 ```
 
 Private config is loaded before the run, stored outside bot source, and exposed in memory through `ctx.config`.
+Runner preflight resolves registered `OpenBao` descriptors with `resolveBotRuntimeConfigV1`, freezes the values for the run, and fails before `onStart` when a required value is missing or has the wrong type.
+Bot code cannot fetch secret paths directly.
 
 ## Limits
 
@@ -148,6 +150,7 @@ bun scripts/dev/bot-sdk-contract.test.mjs
 bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-maker.ts
 bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
 bun scripts/dev/bot-sdk-test-bot.mjs packages/bot-sdk/examples/technical-indicator-strategy-bot.ts packages/bot-sdk/fixtures/aapl-technical-indicator.json --summary-only
+bun scripts/dev/bot-sdk-runtime-config.test.mjs
 ```
 
 `bot-sdk-test-bot.mjs` is the pre-merge hosted simulation gate. It builds the hosted artifact, scans approved imports, runs the bot through SES against the fixture market, and exits nonzero when the bot should be marked `do_not_merge`.

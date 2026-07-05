@@ -86,6 +86,9 @@ test("routes arena migrations only to arena database target", async () => {
   assert.ok(!operationalTargetMigrations.some((migration) => migration.id.startsWith("arena/")));
   assert.deepEqual(
     arenaTargetMigrations.map((migration) => migration.id),
-    ["arena/0001_arena_registry.sql"],
+    [
+      "arena/0001_arena_registry.sql",
+      "arena/0002_arena_run_bot_results.sql",
+    ],
   );
 });

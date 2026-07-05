@@ -190,6 +190,50 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
+    fun recordsRunBotResultsAndRanksCompletedRunLeaderboard() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+        service.updateRunStatus("run-1", ArenaRunStatus.Running)
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
+
+        service.recordRunBotResult(
+            ArenaRunBotResult(
+                runId = "run-1",
+                botId = "sample-bot",
+                versionId = "v1",
+                scoringPolicyVersion = "score-v1",
+                finalEquity = 1_025_000,
+                realizedPnl = 25_000,
+                maxDrawdown = 1_000,
+                actionsProposed = 12,
+                orderActionsProposed = 8,
+                dataCalls = 20,
+                signalsGenerated = 4,
+                disqualified = false,
+                createdAt = fixedNow
+            )
+        )
+
+        val results = store.runBotResults("run-1")
+        val leaderboard = service.leaderboard("momentum", "score-v1")
+
+        assertEquals(1, results.size)
+        assertEquals(1_025_000, results.single().finalEquity)
+        assertEquals(1, leaderboard.single().rank)
+        assertEquals("sample-bot", leaderboard.single().botId)
+    }
+
+    @Test
     fun replacesRuntimeConfigDescriptorsWithoutSecretValues() {
         val store = InMemoryArenaBotRegistryStore()
         val service = seededService(store)

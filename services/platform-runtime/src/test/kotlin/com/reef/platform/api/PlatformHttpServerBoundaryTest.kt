@@ -2,7 +2,19 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.arena.ArenaBotMetadata
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
+import com.reef.platform.application.arena.ArenaQualificationStatus
+import com.reef.platform.application.arena.ArenaRunBotResult
+import com.reef.platform.application.arena.ArenaRunBotVersionRef
+import com.reef.platform.application.arena.ArenaRunStatus
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
+import com.reef.platform.application.arena.RegisterArenaBotCommand
+import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
+import com.reef.platform.application.arena.RegisterArenaRunCommand
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -1234,6 +1246,127 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"botVersionStatus\":\"Quarantined\"")
             assertEquals(AccountRiskDecision.DISABLED_BOT, accountRiskStore.listControls().single().decision)
             assertTrue(auditEvents.any { it.eventType == "AdminArenaBotVersionTransitioned" })
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminArenaReadEndpointsReturnRegistryControlPlaneState() {
+        val persistence = InMemoryRuntimePersistence()
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
+        controlPlane.registerBot(
+            RegisterArenaBotCommand(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(
+                    name = "Bot 1",
+                    publisher = "Publisher",
+                    email = "publisher@example.com",
+                    description = "test bot",
+                    version = "1.0.0"
+                )
+            )
+        )
+        controlPlane.registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = "bot-1",
+                versionId = "v1",
+                sourceHash = "sha256:source",
+                artifactHash = "sha256:artifact",
+                sdkVersion = "1.5.0",
+                apiVersion = "v1",
+                dependencyManifestHash = "sha256:deps"
+            )
+        )
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Submitted, "scanner", "submitted", "corr")
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.ChecksPassed, "scanner", "checks passed", "corr")
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Approved, "admin-cli", "approved", "corr")
+        controlPlane.recordQualificationReport(
+            botId = "bot-1",
+            versionId = "v1",
+            reportId = "report-1",
+            status = ArenaQualificationStatus.Passed,
+            issues = listOf("scanner ok"),
+            policyVersion = "policy-v1"
+        )
+        controlPlane.replaceRuntimeConfigDescriptors(
+            "bot-1",
+            "v1",
+            listOf(
+                ArenaRuntimeConfigDescriptor(
+                    botId = "bot-1",
+                    versionId = "v1",
+                    key = "maxInventory",
+                    provider = ArenaRuntimeConfigProvider.OpenBao,
+                    secretPath = "kv/bots/bot-1/v1",
+                    required = true,
+                    description = "inventory cap"
+                )
+            )
+        )
+        controlPlane.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "hosted-sim",
+                scenarioId = "scenario-1",
+                seed = 42,
+                policyVersion = "policy-v1",
+                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1"))
+            )
+        )
+        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Running)
+        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Completed)
+        controlPlane.recordRunBotResult(
+            ArenaRunBotResult(
+                runId = "run-1",
+                botId = "bot-1",
+                versionId = "v1",
+                scoringPolicyVersion = "score-v1",
+                finalEquity = 1_025_000,
+                realizedPnl = 25_000,
+                maxDrawdown = 1_000,
+                actionsProposed = 12,
+                orderActionsProposed = 8,
+                dataCalls = 20,
+                signalsGenerated = 4,
+                disqualified = false,
+                createdAt = java.time.Instant.parse("2026-07-05T12:00:00Z")
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val bot = get(server.address.port, "/internal/admin/arena/bots?botId=bot-1")
+            val version = get(server.address.port, "/internal/admin/arena/bot-versions?botId=bot-1&versionId=v1")
+            val reports = get(server.address.port, "/internal/admin/arena/qualification-reports?botId=bot-1&versionId=v1")
+            val decisions = get(server.address.port, "/internal/admin/arena/operator-decisions?botId=bot-1&versionId=v1")
+            val descriptors = get(server.address.port, "/internal/admin/arena/runtime-config-descriptors?botId=bot-1&versionId=v1")
+            val run = get(server.address.port, "/internal/admin/arena/runs?runId=run-1")
+            val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v1")
+
+            assertEquals(200, bot.status)
+            assertContains(bot.body, "\"fileName\":\"bot-1.ts\"")
+            assertEquals(200, version.status)
+            assertContains(version.body, "\"status\":\"Approved\"")
+            assertEquals(200, reports.status)
+            assertContains(reports.body, "\"reportId\":\"report-1\"")
+            assertContains(reports.body, "\"issues\":[\"scanner ok\"]")
+            assertEquals(200, decisions.status)
+            assertContains(decisions.body, "\"toStatus\":\"Approved\"")
+            assertEquals(200, descriptors.status)
+            assertContains(descriptors.body, "\"key\":\"maxInventory\"")
+            assertContains(descriptors.body, "\"provider\":\"OpenBao\"")
+            assertEquals(200, run.status)
+            assertContains(run.body, "\"runId\":\"run-1\"")
+            assertContains(run.body, "\"botVersions\":[{\"botId\":\"bot-1\",\"versionId\":\"v1\"}]")
+            assertEquals(200, leaderboard.status)
+            assertContains(leaderboard.body, "\"rank\":1")
+            assertContains(leaderboard.body, "\"finalEquity\":1025000")
         } finally {
             server.stop(0)
         }
