@@ -14,6 +14,7 @@ import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -137,6 +138,99 @@ class BotRuntimeOrderClientTest {
         assertEquals(CommandLogStatus.COMPLETED, record.status)
     }
 
+    @Test
+    fun streamAckBotOrderCanBeWorkerProcessedProjectedAndReplayed() {
+        StreamCommandWorkerMetrics.resetForTests()
+        CanonicalProjectionMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        seedOrderReferenceData(persistence)
+        seedOrderAuthorization(persistence, "bot-1")
+        val gateway = CountingBotEngineGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val streamStore = InMemoryStreamCommandIntakeStore()
+        val publisher = RecordingBotStreamCommandPublisher()
+        val platform = PlatformHttpServer(
+            port = 0,
+            api = api,
+            boundary = ExternalApiBoundary(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            commandCaptureStore = CommandLogCommandCaptureStore(
+                delegate = NoopCommandCaptureStore(),
+                commandLogStore = InMemoryCommandLogStore(),
+                commandProcessingMode = CommandProcessingMode.StreamAck
+            ),
+            streamCommandIntakeStore = streamStore,
+            streamCommandPublisher = publisher,
+            streamCommandConfig = StreamCommandConfig(partitionCount = 1),
+            commandProcessingMode = CommandProcessingMode.StreamAck
+        )
+        val client = BotRuntimeOrderClient(platform)
+
+        val response = client.send(
+            BotRuntimeOrderCommand(
+                route = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "bot:bot-1",
+                    "Idempotency-Key" to "idem-bot-stream-1"
+                ),
+                body = validSubmitBody(commandId = "cmd-bot-stream-1", orderId = "ord-bot-stream-1")
+            )
+        )
+
+        assertEquals(202, response.status)
+        assertContains(response.body, "\"status\":\"ACCEPTED\"")
+        val envelope = publisher.published.single()
+        assertEquals("cmd-bot-stream-1", envelope.commandId)
+        assertEquals("bot:bot-1", envelope.clientId)
+        assertEquals("bot-1", envelope.botId)
+        assertEquals("run-bot-1", envelope.runId)
+        assertEquals("session-1", envelope.venueSessionId)
+        assertEquals(11L, streamStore.findByCommandId("cmd-bot-stream-1")?.streamSequence)
+
+        val worker = StreamCommandWorker(
+            source = FixedBotStreamCommandSource(
+                BotStreamCommandDelivery(
+                    envelope = envelope,
+                    streamSequence = 11L
+                )
+            ),
+            api = api,
+            partition = envelope.partition
+        )
+        val processed = worker.processOnce()
+
+        assertEquals(1, processed)
+        assertEquals(1, gateway.submitCalls)
+        assertEquals(1, persistence.canonicalSubmitOutcomes().size)
+        val canonical = persistence.canonicalSubmitOutcomes().single()
+        assertEquals("cmd-bot-stream-1", canonical.commandId)
+        assertEquals("run-bot-1", canonical.runId)
+        assertEquals("session-1", canonical.venueSessionId)
+        assertEquals("AAPL", canonical.instrumentId)
+        assertEquals("ord-bot-stream-1", canonical.outcome.result.accepted?.orderId)
+        assertEquals("accepted", canonical.resultStatus)
+        assertEquals(11L, canonical.streamSequence)
+
+        val projector = CanonicalProjectionWorker(
+            api = api,
+            projectionName = "runtime-normalized-submit-bot-e2e",
+            batchSize = 10
+        )
+        val projected = projector.processOnce()
+        val replayed = projector.processOnce()
+
+        assertEquals(1, projected)
+        assertEquals(0, replayed)
+        assertNotNull(persistence.acceptedOrder("ord-bot-stream-1"))
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit-bot-e2e").lag)
+    }
+
     private fun testPlatform(
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         idempotencyStore: IdempotencyStore = InMemoryIdempotencyStore(),
@@ -177,16 +271,16 @@ class BotRuntimeOrderClientTest {
         persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
     }
 
-    private fun validSubmitBody(): String {
+    private fun validSubmitBody(commandId: String = "cmd-bot-1", orderId: String = "ord-bot-1"): String {
         return """
             {
-              "commandId":"cmd-bot-1",
-              "traceId":"trace-bot-1",
+              "commandId":"$commandId",
+              "traceId":"trace-$commandId",
               "causationId":"",
-              "correlationId":"corr-bot-1",
+              "correlationId":"corr-$commandId",
               "actorId":"bot-1",
               "occurredAt":"2026-05-22T00:00:00Z",
-              "orderId":"ord-bot-1",
+              "orderId":"$orderId",
               "instrumentId":"AAPL",
               "participantId":"participant-1",
               "accountId":"account-1",
@@ -226,6 +320,76 @@ private class AcceptedBotEngineGateway : EngineGateway {
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class CountingBotEngineGateway : EngineGateway {
+    var submitCalls: Int = 0
+
+    override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
+        submitCalls++
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = command.occurredAt
+            )
+        )
+    }
+
+    override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        error("not used")
+    }
+
+    override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
+        error("not used")
+    }
+}
+
+private class RecordingBotStreamCommandPublisher : StreamCommandPublisher {
+    val published = mutableListOf<StreamCommandEnvelope>()
+
+    override fun publish(envelope: StreamCommandEnvelope): StreamPublishAck {
+        published.add(envelope)
+        return StreamPublishAck("REEF_COMMANDS", 10L + published.size)
+    }
+}
+
+private class FixedBotStreamCommandSource(
+    private val delivery: StreamCommandDelivery
+) : StreamCommandSource {
+    private var delivered = false
+
+    override fun fetch(batchSize: Int, timeout: Duration): List<StreamCommandDelivery> {
+        if (delivered) return emptyList()
+        delivered = true
+        return listOf(delivery)
+    }
+}
+
+private class BotStreamCommandDelivery(
+    private val envelope: StreamCommandEnvelope,
+    override val streamSequence: Long,
+    override val deliveredCount: Long = 1
+) : StreamCommandDelivery {
+    var ackCalls = 0
+    var nakCalls = 0
+    var termCalls = 0
+
+    override val subject: String = envelope.subject
+    override val payloadJson: String = envelope.payloadJson
+
+    override fun ack() {
+        ackCalls++
+    }
+
+    override fun nak() {
+        nakCalls++
+    }
+
+    override fun term() {
+        termCalls++
+    }
 }
 
 private class RecordingBotCommandCaptureStore : CommandCaptureStore {
