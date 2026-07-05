@@ -76,13 +76,14 @@ Implementation checkpoint:
 - Bot versions now have explicit approval, active, suspended, quarantined, banned, and archived states.
 - Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
 - Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
+- Arena runtime config descriptors record OpenBao secret paths and required keys without storing secret values.
+- Arena bot version risk checks can reject exact bot/version commands before venue acceptance when the version is not approved or active.
 
 Remaining work before this becomes a production control plane:
 
 - add production migration/validation coverage for the arena schema
-- expose operator/admin commands behind existing platform-runtime authorization
-- connect suspended, quarantined, banned, and archived versions to the venue intake risk path before durable acceptance
-- define private runtime config descriptors and OpenBao loading rules
+- wire arena operator commands and bot-version risk checks into the hosted platform-runtime server configuration
+- define the OpenBao fetcher that resolves descriptors during runner preflight and exposes only in-memory values to bot code
 - publish read APIs for bot status, qualification reports, run records, and operator audit history
 
 ## Agreed Direction

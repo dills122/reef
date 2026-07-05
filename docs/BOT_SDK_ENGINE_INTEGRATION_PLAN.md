@@ -83,7 +83,7 @@ Completed runtime bridge coverage:
 Next non-throughput integration work:
 
 1. Add production migration/validation coverage for the Postgres-backed arena registry store.
-2. Expose operator-controlled freeze, quarantine, ban, and archive workflows through authenticated platform-runtime commands.
-3. Connect disabled or quarantined bot versions to the existing account-risk rejection path before durable venue acceptance.
-4. Define private runtime config descriptors and OpenBao loading rules for immutable per-run config.
+2. Wire operator-controlled freeze, quarantine, ban, and archive workflows into the hosted platform-runtime server configuration.
+3. Wire arena bot-version risk checks into hosted venue intake before durable venue acceptance.
+4. Define the OpenBao fetcher that resolves immutable per-run config descriptors during runner preflight.
 5. Build leaderboard/read-model projections from arena run records after simulation output facts are persisted.
