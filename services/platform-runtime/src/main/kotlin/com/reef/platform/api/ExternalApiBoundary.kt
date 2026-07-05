@@ -5,6 +5,7 @@ import com.reef.platform.infrastructure.persistence.PostgresSchemaRequirements
 import com.reef.platform.infrastructure.persistence.PostgresSchemaValidator
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.sun.net.httpserver.Headers
+import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
 import javax.sql.DataSource
@@ -48,6 +49,9 @@ data class AccountRiskCheckRequest(
     val venueSessionId: String,
     val instrumentId: String,
     val orderId: String,
+    val quantityUnits: String = "",
+    val limitPrice: String = "",
+    val currency: String = "",
     val payloadHash: String
 )
 
@@ -102,6 +106,9 @@ data class AccountRiskControl(
     val scopeId: String,
     val decision: AccountRiskDecision,
     val reason: String,
+    val maxQuantityUnits: String = "",
+    val maxNotional: String = "",
+    val currency: String = "",
     val updatedAt: String = ""
 )
 
@@ -122,11 +129,22 @@ data class AccountRiskDecisionAudit(
     val botId: String,
     val venueSessionId: String,
     val instrumentId: String,
-    val orderId: String
+    val orderId: String,
+    val quantityUnits: String,
+    val limitPrice: String,
+    val currency: String
 )
 
 interface AccountRiskControlStore {
-    fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String = "")
+    fun upsertControl(
+        scopeType: String,
+        scopeId: String,
+        decision: AccountRiskDecision,
+        reason: String = "",
+        maxQuantityUnits: String = "",
+        maxNotional: String = "",
+        currency: String = ""
+    )
     fun listControls(): List<AccountRiskControl>
 }
 
@@ -196,12 +214,12 @@ class PostgresAccountRiskCheck(
     private val cacheTtlMillis: Long = 1_000L,
     private val nowMillis: () -> Long = { System.currentTimeMillis() }
 ) : AccountRiskCheck, AccountRiskControlStore, AccountRiskDecisionLog {
-    private data class CachedDecision(
-        val result: AccountRiskCheckResult?,
+    private data class CachedControl(
+        val control: AccountRiskControl?,
         val expiresAtMillis: Long
     )
 
-    private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedDecision>()
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, CachedControl>()
 
     init {
         connection().use { conn ->
@@ -224,6 +242,9 @@ class PostgresAccountRiskCheck(
                       scope_id TEXT NOT NULL,
                       decision TEXT NOT NULL,
                       reason TEXT NOT NULL DEFAULT '',
+                      max_quantity_units TEXT NOT NULL DEFAULT '',
+                      max_notional TEXT NOT NULL DEFAULT '',
+                      currency TEXT NOT NULL DEFAULT '',
                       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                       PRIMARY KEY (scope_type, scope_id),
                       CHECK (scope_type IN ('ACCOUNT', 'BOT')),
@@ -253,11 +274,20 @@ class PostgresAccountRiskCheck(
                       venue_session_id TEXT NOT NULL,
                       instrument_id TEXT NOT NULL,
                       order_id TEXT NOT NULL,
+                      quantity_units TEXT NOT NULL DEFAULT '',
+                      limit_price TEXT NOT NULL DEFAULT '',
+                      currency TEXT NOT NULL DEFAULT '',
                       payload_hash TEXT NOT NULL,
                       CHECK (decision IN ('REJECT', 'BACKPRESSURE', 'DISABLED_BOT'))
                     )
                     """.trimIndent()
                 )
+                stmt.execute("ALTER TABLE ${names.accountRiskControls} ADD COLUMN IF NOT EXISTS max_quantity_units TEXT NOT NULL DEFAULT ''")
+                stmt.execute("ALTER TABLE ${names.accountRiskControls} ADD COLUMN IF NOT EXISTS max_notional TEXT NOT NULL DEFAULT ''")
+                stmt.execute("ALTER TABLE ${names.accountRiskControls} ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT ''")
+                stmt.execute("ALTER TABLE ${names.accountRiskDecisions} ADD COLUMN IF NOT EXISTS quantity_units TEXT NOT NULL DEFAULT ''")
+                stmt.execute("ALTER TABLE ${names.accountRiskDecisions} ADD COLUMN IF NOT EXISTS limit_price TEXT NOT NULL DEFAULT ''")
+                stmt.execute("ALTER TABLE ${names.accountRiskDecisions} ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT ''")
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_account_risk_decisions_scope_time
@@ -269,30 +299,58 @@ class PostgresAccountRiskCheck(
     }
 
     override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
-        val decision = firstNonAllow(
-            if (request.botId.isBlank()) null else decisionFor("BOT", request.botId),
-            if (request.accountId.isBlank()) null else decisionFor("ACCOUNT", request.accountId)
-        ) ?: return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+        val controls = listOfNotNull(
+            if (request.botId.isBlank()) null else controlFor("BOT", request.botId),
+            if (request.accountId.isBlank()) null else controlFor("ACCOUNT", request.accountId)
+        )
+        val decision = firstNonAllow(controls.map { it.toDecision() })
+            ?: controls.firstNotNullOfOrNull { limitViolation(it, request) }
+            ?: return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
 
         recordDecision(request, decision)
         return decision
     }
 
-    override fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String) {
+    override fun upsertControl(
+        scopeType: String,
+        scopeId: String,
+        decision: AccountRiskDecision,
+        reason: String,
+        maxQuantityUnits: String,
+        maxNotional: String,
+        currency: String
+    ) {
         require(scopeType == "ACCOUNT" || scopeType == "BOT") { "scopeType must be ACCOUNT or BOT" }
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.accountRiskControls}(scope_type, scope_id, decision, reason, updated_at)
-                VALUES (?, ?, ?, ?, NOW())
+                INSERT INTO ${names.accountRiskControls}(
+                  scope_type,
+                  scope_id,
+                  decision,
+                  reason,
+                  max_quantity_units,
+                  max_notional,
+                  currency,
+                  updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
                 ON CONFLICT (scope_type, scope_id)
-                DO UPDATE SET decision = EXCLUDED.decision, reason = EXCLUDED.reason, updated_at = NOW()
+                DO UPDATE SET decision = EXCLUDED.decision,
+                              reason = EXCLUDED.reason,
+                              max_quantity_units = EXCLUDED.max_quantity_units,
+                              max_notional = EXCLUDED.max_notional,
+                              currency = EXCLUDED.currency,
+                              updated_at = NOW()
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, scopeType)
                 ps.setString(2, scopeId)
                 ps.setString(3, decision.name)
                 ps.setString(4, reason)
+                ps.setString(5, maxQuantityUnits)
+                ps.setString(6, maxNotional)
+                ps.setString(7, currency)
                 ps.executeUpdate()
             }
         }
@@ -303,7 +361,7 @@ class PostgresAccountRiskCheck(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT scope_type, scope_id, decision, reason, updated_at
+                SELECT scope_type, scope_id, decision, reason, max_quantity_units, max_notional, currency, updated_at
                 FROM ${names.accountRiskControls}
                 ORDER BY scope_type, scope_id
                 """.trimIndent()
@@ -317,6 +375,9 @@ class PostgresAccountRiskCheck(
                                 scopeId = rs.getString("scope_id"),
                                 decision = AccountRiskDecision.valueOf(rs.getString("decision")),
                                 reason = rs.getString("reason").orEmpty(),
+                                maxQuantityUnits = rs.getString("max_quantity_units").orEmpty(),
+                                maxNotional = rs.getString("max_notional").orEmpty(),
+                                currency = rs.getString("currency").orEmpty(),
                                 updatedAt = rs.getString("updated_at").orEmpty()
                             )
                         )
@@ -348,7 +409,10 @@ class PostgresAccountRiskCheck(
                        bot_id,
                        venue_session_id,
                        instrument_id,
-                       order_id
+                       order_id,
+                       quantity_units,
+                       limit_price,
+                       currency
                 FROM ${names.accountRiskDecisions}
                 ORDER BY decided_at DESC
                 LIMIT ?
@@ -376,7 +440,10 @@ class PostgresAccountRiskCheck(
                                 botId = rs.getString("bot_id"),
                                 venueSessionId = rs.getString("venue_session_id"),
                                 instrumentId = rs.getString("instrument_id"),
-                                orderId = rs.getString("order_id")
+                                orderId = rs.getString("order_id"),
+                                quantityUnits = rs.getString("quantity_units"),
+                                limitPrice = rs.getString("limit_price"),
+                                currency = rs.getString("currency")
                             )
                         )
                     }
@@ -386,28 +453,74 @@ class PostgresAccountRiskCheck(
         }
     }
 
-    private fun firstNonAllow(vararg decisions: AccountRiskCheckResult?): AccountRiskCheckResult? {
-        return decisions.firstOrNull { it != null && it.decision != AccountRiskDecision.ALLOW }
+    private fun firstNonAllow(decisions: List<AccountRiskCheckResult>): AccountRiskCheckResult? {
+        return decisions.firstOrNull { it.decision != AccountRiskDecision.ALLOW }
     }
 
-    private fun decisionFor(scopeType: String, scopeId: String): AccountRiskCheckResult? {
+    private fun AccountRiskControl.toDecision(): AccountRiskCheckResult {
+        return AccountRiskCheckResult(
+            decision = decision,
+            message = reason.ifBlank { AccountRiskCheckResult(decision).message }
+        )
+    }
+
+    private fun limitViolation(control: AccountRiskControl, request: AccountRiskCheckRequest): AccountRiskCheckResult? {
+        if (request.commandType != "SubmitOrder") return null
+        val quantity = request.quantityUnits.toBigDecimalOrNull() ?: return null
+        val maxQuantity = control.maxQuantityUnits.toBigDecimalOrNull()
+        if (maxQuantity != null && quantity > maxQuantity) {
+            return AccountRiskCheckResult(
+                decision = AccountRiskDecision.REJECT,
+                code = "ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED",
+                message = "max quantity exceeded for ${control.scopeType}:${control.scopeId}: ${request.quantityUnits} > ${control.maxQuantityUnits}"
+            )
+        }
+        val maxNotional = control.maxNotional.toBigDecimalOrNull()
+        if (maxNotional != null) {
+            val price = request.limitPrice.toBigDecimalOrNull() ?: return null
+            val notional = quantity.multiply(price)
+            val expectedCurrency = control.currency.trim()
+            if (expectedCurrency.isBlank() || request.currency.equals(expectedCurrency, ignoreCase = true)) {
+                if (notional > maxNotional) {
+                    return AccountRiskCheckResult(
+                        decision = AccountRiskDecision.REJECT,
+                        code = "ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED",
+                        message = "max notional exceeded for ${control.scopeType}:${control.scopeId}: ${notional.toPlainString()} > ${control.maxNotional}"
+                    )
+                }
+            }
+        }
+        return null
+    }
+
+    private fun String.toBigDecimalOrNull(): BigDecimal? {
+        val trimmed = trim()
+        if (trimmed.isBlank()) return null
+        return try {
+            BigDecimal(trimmed)
+        } catch (_: NumberFormatException) {
+            null
+        }
+    }
+
+    private fun controlFor(scopeType: String, scopeId: String): AccountRiskControl? {
         val key = "$scopeType|$scopeId"
         val now = nowMillis()
         cache[key]?.let { cached ->
-            if (cached.expiresAtMillis > now) return cached.result
+            if (cached.expiresAtMillis > now) return cached.control
         }
-        val loaded = loadDecision(scopeType, scopeId)
+        val loaded = loadControl(scopeType, scopeId)
         if (cacheTtlMillis > 0) {
-            cache[key] = CachedDecision(loaded, now + cacheTtlMillis)
+            cache[key] = CachedControl(loaded, now + cacheTtlMillis)
         }
         return loaded
     }
 
-    private fun loadDecision(scopeType: String, scopeId: String): AccountRiskCheckResult? {
+    private fun loadControl(scopeType: String, scopeId: String): AccountRiskControl? {
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT decision, reason
+                SELECT scope_type, scope_id, decision, reason, max_quantity_units, max_notional, currency, updated_at
                 FROM ${names.accountRiskControls}
                 WHERE scope_type = ? AND scope_id = ?
                 """.trimIndent()
@@ -416,11 +529,15 @@ class PostgresAccountRiskCheck(
                 ps.setString(2, scopeId)
                 ps.executeQuery().use { rs ->
                     if (!rs.next()) return null
-                    val decision = AccountRiskDecision.valueOf(rs.getString("decision"))
-                    val reason = rs.getString("reason").orEmpty()
-                    return AccountRiskCheckResult(
-                        decision = decision,
-                        message = reason.ifBlank { AccountRiskCheckResult(decision).message }
+                    return AccountRiskControl(
+                        scopeType = rs.getString("scope_type"),
+                        scopeId = rs.getString("scope_id"),
+                        decision = AccountRiskDecision.valueOf(rs.getString("decision")),
+                        reason = rs.getString("reason").orEmpty(),
+                        maxQuantityUnits = rs.getString("max_quantity_units").orEmpty(),
+                        maxNotional = rs.getString("max_notional").orEmpty(),
+                        currency = rs.getString("currency").orEmpty(),
+                        updatedAt = rs.getString("updated_at").orEmpty()
                     )
                 }
             }
@@ -452,9 +569,12 @@ class PostgresAccountRiskCheck(
                       venue_session_id,
                       instrument_id,
                       order_id,
+                      quantity_units,
+                      limit_price,
+                      currency,
                       payload_hash
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent()
                 ).use { ps ->
                     ps.setString(1, UUID.randomUUID().toString())
@@ -475,7 +595,10 @@ class PostgresAccountRiskCheck(
                     ps.setString(16, request.venueSessionId)
                     ps.setString(17, request.instrumentId)
                     ps.setString(18, request.orderId)
-                    ps.setString(19, request.payloadHash)
+                    ps.setString(19, request.quantityUnits)
+                    ps.setString(20, request.limitPrice)
+                    ps.setString(21, request.currency)
+                    ps.setString(22, request.payloadHash)
                     ps.executeUpdate()
                 }
             }

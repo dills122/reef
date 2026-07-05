@@ -186,6 +186,9 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(controls, "scope_id", "text"),
                 PostgresSchemaColumn(controls, "decision", "text"),
                 PostgresSchemaColumn(controls, "reason", "text"),
+                PostgresSchemaColumn(controls, "max_quantity_units", "text"),
+                PostgresSchemaColumn(controls, "max_notional", "text"),
+                PostgresSchemaColumn(controls, "currency", "text"),
                 PostgresSchemaColumn(controls, "updated_at", "timestamp with time zone"),
                 PostgresSchemaColumn(decisions, "decision_id", "text"),
                 PostgresSchemaColumn(decisions, "decided_at", "timestamp with time zone"),
@@ -206,6 +209,9 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(decisions, "venue_session_id", "text"),
                 PostgresSchemaColumn(decisions, "instrument_id", "text"),
                 PostgresSchemaColumn(decisions, "order_id", "text"),
+                PostgresSchemaColumn(decisions, "quantity_units", "text"),
+                PostgresSchemaColumn(decisions, "limit_price", "text"),
+                PostgresSchemaColumn(decisions, "currency", "text"),
                 PostgresSchemaColumn(decisions, "payload_hash", "text")
             )
         )

@@ -1474,6 +1474,9 @@ class PlatformHttpServer(
             venueSessionId = envelope?.venueSessionId ?: json.string("venueSessionId"),
             instrumentId = envelope?.instrumentId ?: json.string("instrumentId"),
             orderId = envelope?.orderId ?: json.string("orderId"),
+            quantityUnits = json.string("quantityUnits"),
+            limitPrice = json.string("limitPrice"),
+            currency = json.string("currency"),
             payloadHash = envelope?.payloadHash ?: sha256Hex(body)
         )
     }
@@ -1825,6 +1828,9 @@ class PlatformHttpServer(
                     "scopeId" to control.scopeId,
                     "decision" to control.decision.name,
                     "reason" to control.reason,
+                    "maxQuantityUnits" to control.maxQuantityUnits,
+                    "maxNotional" to control.maxNotional,
+                    "currency" to control.currency,
                     "updatedAt" to control.updatedAt
                 )
             },
@@ -1854,7 +1860,10 @@ class PlatformHttpServer(
                     "botId" to decision.botId,
                     "venueSessionId" to decision.venueSessionId,
                     "instrumentId" to decision.instrumentId,
-                    "orderId" to decision.orderId
+                    "orderId" to decision.orderId,
+                    "quantityUnits" to decision.quantityUnits,
+                    "limitPrice" to decision.limitPrice,
+                    "currency" to decision.currency
                 )
             },
             "decisionsCount" to decisions.size,
@@ -1891,13 +1900,22 @@ class PlatformHttpServer(
         val decision = normalizeAccountRiskDecision(json.string("decision"))
             ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk decision"))
         val reason = json.string("reason")
+        val maxQuantityUnits = json.string("maxQuantityUnits")
+        if (maxQuantityUnits.isNotBlank() && maxQuantityUnits.toBigDecimalOrNull() == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxQuantityUnits"))
+        }
+        val maxNotional = json.string("maxNotional")
+        if (maxNotional.isNotBlank() && maxNotional.toBigDecimalOrNull() == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxNotional"))
+        }
+        val currency = json.string("currency").uppercase()
         val actorId = json.string("actorId").ifBlank { "internal-admin" }
         val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
         val previous = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
 
-        store.upsertControl(scopeType, scopeId, decision, reason)
+        store.upsertControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
         val current = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
-            ?: AccountRiskControl(scopeType, scopeId, decision, reason)
+            ?: AccountRiskControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
         recordProtectiveControlAudit(
             actorId = actorId,
             correlationId = correlationId,
@@ -1909,8 +1927,14 @@ class PlatformHttpServer(
                 "scopeId" to scopeId,
                 "previousDecision" to previous?.decision?.name.orEmpty(),
                 "previousReason" to previous?.reason.orEmpty(),
+                "previousMaxQuantityUnits" to previous?.maxQuantityUnits.orEmpty(),
+                "previousMaxNotional" to previous?.maxNotional.orEmpty(),
+                "previousCurrency" to previous?.currency.orEmpty(),
                 "decision" to decision.name,
-                "reason" to reason
+                "reason" to reason,
+                "maxQuantityUnits" to maxQuantityUnits,
+                "maxNotional" to maxNotional,
+                "currency" to currency
             )
         )
 
@@ -1923,6 +1947,9 @@ class PlatformHttpServer(
                     "scopeId" to current.scopeId,
                     "decision" to current.decision.name,
                     "reason" to current.reason,
+                    "maxQuantityUnits" to current.maxQuantityUnits,
+                    "maxNotional" to current.maxNotional,
+                    "currency" to current.currency,
                     "updatedAt" to current.updatedAt
                 )
             )

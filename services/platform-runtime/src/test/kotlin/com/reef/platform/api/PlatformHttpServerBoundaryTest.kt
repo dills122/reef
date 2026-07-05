@@ -945,6 +945,57 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun capturedAckAccountRiskReceivesSubmitEconomicsBeforeCommandLogAppend() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val accountRiskCheck = object : AccountRiskCheck {
+            var lastRequest: AccountRiskCheckRequest? = null
+
+            override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+                lastRequest = request
+                return AccountRiskCheckResult(
+                    decision = AccountRiskDecision.REJECT,
+                    code = "ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED",
+                    message = "max notional exceeded"
+                )
+            }
+        }
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            accountRiskCheck = accountRiskCheck
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-limit",
+                    "Idempotency-Key" to "idem-risk-limit"
+                ),
+                body = validSubmitBody("cmd-risk-limit", "trace-risk-limit", "ord-risk-limit")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-risk-limit")
+
+            assertEquals(403, response.status)
+            assertContains(response.body, "\"code\":\"ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED\"")
+            assertEquals("100", accountRiskCheck.lastRequest?.quantityUnits)
+            assertEquals("150250000000", accountRiskCheck.lastRequest?.limitPrice)
+            assertEquals("USD", accountRiskCheck.lastRequest?.currency)
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun capturedAckCircuitBreakerRejectsBeforeCommandLogAppend() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(
@@ -983,7 +1034,7 @@ class PlatformHttpServerBoundaryTest {
     @Test
     fun boundaryControlDiagnosticsExposeControlsDecisionsAndBreakers() {
         val accountRiskStore = RecordingAccountRiskStore()
-        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled")
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled", "100", "15025000000000", "USD")
         accountRiskStore.decisions.add(
             AccountRiskDecisionAudit(
                 decisionId = "risk-decision-1",
@@ -1002,7 +1053,10 @@ class PlatformHttpServerBoundaryTest {
                 botId = "bot-1",
                 venueSessionId = "session-1",
                 instrumentId = "AAPL",
-                orderId = "ord-risk"
+                orderId = "ord-risk",
+                quantityUnits = "101",
+                limitPrice = "150250000000",
+                currency = "USD"
             )
         )
         val breakerStore = RecordingCommandCircuitBreakerStore()
@@ -1024,10 +1078,14 @@ class PlatformHttpServerBoundaryTest {
             assertContains(controls.body, "\"controlsCount\":1")
             assertContains(controls.body, "\"scopeType\":\"BOT\"")
             assertContains(controls.body, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(controls.body, "\"maxQuantityUnits\":\"100\"")
+            assertContains(controls.body, "\"maxNotional\":\"15025000000000\"")
+            assertContains(controls.body, "\"currency\":\"USD\"")
             assertEquals(200, decisions.status)
             assertContains(decisions.body, "\"decisionsCount\":1")
             assertContains(decisions.body, "\"code\":\"BOT_DISABLED\"")
             assertContains(decisions.body, "\"commandId\":\"cmd-risk\"")
+            assertContains(decisions.body, "\"quantityUnits\":\"101\"")
             assertEquals(200, breakers.status)
             assertContains(breakers.body, "\"breakersCount\":1")
             assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
@@ -1057,6 +1115,9 @@ class PlatformHttpServerBoundaryTest {
                       "scopeId":"bot-1",
                       "decision":"disabled-bot",
                       "reason":"operator disabled",
+                      "maxQuantityUnits":"100",
+                      "maxNotional":"15025000000000",
+                      "currency":"usd",
                       "actorId":"ops-1",
                       "correlationId":"corr-admin-risk"
                     }
@@ -1068,12 +1129,17 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, response.status)
             assertContains(response.body, "\"status\":\"ok\"")
             assertContains(response.body, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(response.body, "\"maxQuantityUnits\":\"100\"")
+            assertContains(response.body, "\"maxNotional\":\"15025000000000\"")
+            assertContains(response.body, "\"currency\":\"USD\"")
             assertContains(controls.body, "\"scopeType\":\"BOT\"")
             assertContains(controls.body, "\"reason\":\"operator disabled\"")
             assertEquals(1, auditEvents.size)
             assertEquals("AccountRiskControlChanged", auditEvents.single().eventType)
             assertContains(auditEvents.single().payloadJson, "\"previousDecision\":\"\"")
             assertContains(auditEvents.single().payloadJson, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(auditEvents.single().payloadJson, "\"maxQuantityUnits\":\"100\"")
+            assertContains(auditEvents.single().payloadJson, "\"maxNotional\":\"15025000000000\"")
         } finally {
             server.stop(0)
         }
@@ -1130,7 +1196,7 @@ class PlatformHttpServerBoundaryTest {
             commandProcessingMode = CommandProcessingMode.CapturedAck
         )
         val accountRiskStore = RecordingAccountRiskStore()
-        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled")
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled", "", "", "")
         val gateway = CountingEngineGateway(EchoOrderEngineGateway())
         val server = testServerWithGateway(
             gateway = gateway,
@@ -1157,7 +1223,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(rejected.body, "\"code\":\"BOT_DISABLED\"")
             assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-reject").status)
 
-            accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.ALLOW, "cleared")
+            accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.ALLOW, "cleared", "", "", "")
             val accepted = post(
                 port = server.address.port,
                 path = "/api/v1/orders/submit",
@@ -2770,15 +2836,37 @@ private class RecordingAccountRiskStore : AccountRiskCheck, AccountRiskControlSt
         if (accountDecision != null && accountDecision.decision != AccountRiskDecision.ALLOW) {
             return AccountRiskCheckResult(accountDecision.decision, message = accountDecision.reason)
         }
+        listOfNotNull(botDecision, accountDecision).forEach { control ->
+            val quantity = request.quantityUnits.toBigDecimalOrNull()
+            val maxQuantity = control.maxQuantityUnits.toBigDecimalOrNull()
+            if (quantity != null && maxQuantity != null && quantity > maxQuantity) {
+                return AccountRiskCheckResult(
+                    AccountRiskDecision.REJECT,
+                    code = "ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED",
+                    message = "max quantity exceeded"
+                )
+            }
+        }
         return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
     }
 
-    override fun upsertControl(scopeType: String, scopeId: String, decision: AccountRiskDecision, reason: String) {
+    override fun upsertControl(
+        scopeType: String,
+        scopeId: String,
+        decision: AccountRiskDecision,
+        reason: String,
+        maxQuantityUnits: String,
+        maxNotional: String,
+        currency: String
+    ) {
         controls["$scopeType|$scopeId"] = AccountRiskControl(
             scopeType = scopeType,
             scopeId = scopeId,
             decision = decision,
             reason = reason,
+            maxQuantityUnits = maxQuantityUnits,
+            maxNotional = maxNotional,
+            currency = currency,
             updatedAt = "2026-07-04T12:00:00Z"
         )
     }

@@ -40,7 +40,7 @@ async function expectOk(method, path, payload = undefined, headers = {}) {
 
 function isAccepted(response) {
   const status = String(response.json.status ?? "").toLowerCase();
-  return response.status === 202 || status === "accepted" || response.json.accepted === true;
+  return response.status === 202 || status === "accepted" || response.json.accepted === true || response.json.accepted?.orderId;
 }
 
 async function submitOrder(label, extra = {}) {
@@ -102,12 +102,15 @@ async function seedReferenceData() {
   }, internalRouteHeaders);
 }
 
-async function setAccountRisk(scopeType, scopeId, decision, reason) {
+async function setAccountRisk(scopeType, scopeId, decision, reason, limits = {}) {
   return expectOk("POST", "/internal/admin/account-risk/controls", {
     scopeType,
     scopeId,
     decision,
     reason,
+    maxQuantityUnits: limits.maxQuantityUnits ?? "",
+    maxNotional: limits.maxNotional ?? "",
+    currency: limits.currency ?? "",
     actorId: "protective-controls-smoke",
     correlationId: `protective-controls-smoke-${suffix}`,
   });
@@ -148,6 +151,27 @@ await setAccountRisk("bot", "protective-bot", "allow", "smoke cleared");
 const allowedBot = await submitOrder("allowed-bot", { botId: "protective-bot" });
 if (!isAccepted(allowedBot)) {
   throw new Error(`expected accepted command after bot clear, got ${allowedBot.status}: ${allowedBot.text}`);
+}
+
+console.log("setting account max quantity and expecting pre-acceptance reject...");
+await setAccountRisk("account", "account-1", "allow", "smoke max quantity", { maxQuantityUnits: "50", currency: "USD" });
+const quantityLimited = await submitOrder("quantity-limited", { quantityUnits: "51" });
+if (quantityLimited.status !== 403 || quantityLimited.json.code !== "ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED") {
+  throw new Error(`expected max quantity 403, got ${quantityLimited.status}: ${quantityLimited.text}`);
+}
+
+console.log("setting account max notional and expecting pre-acceptance reject...");
+await setAccountRisk("account", "account-1", "allow", "smoke max notional", { maxNotional: "15024999999999", currency: "USD" });
+const notionalLimited = await submitOrder("notional-limited");
+if (notionalLimited.status !== 403 || notionalLimited.json.code !== "ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED") {
+  throw new Error(`expected max notional 403, got ${notionalLimited.status}: ${notionalLimited.text}`);
+}
+
+console.log("clearing account limits and expecting accepted command...");
+await setAccountRisk("account", "account-1", "allow", "smoke account limits cleared");
+const limitsCleared = await submitOrder("limits-cleared");
+if (!isAccepted(limitsCleared)) {
+  throw new Error(`expected accepted command after account limit clear, got ${limitsCleared.status}: ${limitsCleared.text}`);
 }
 
 console.log("tripping instrument breaker and expecting pre-acceptance reject...");
