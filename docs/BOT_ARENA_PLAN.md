@@ -14,6 +14,45 @@ The goal is to let users build strategy bots that compete in deterministic simul
 
 This is a planning document, not an accepted architecture decision. If the direction is adopted, the stable parts should move into `docs/DECISIONS.md`, steering docs, and versioned contracts.
 
+## Deferred Second Review
+
+Status: pending second review after the current active work settles.
+
+This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
+
+Second-review scope:
+
+- onboarding, intake, and permission flow for human users, bots, first-level funding checks, KYC-style gates where applicable, and feature access
+- bot creation flow, including fork/create, SDK or tool configuration, owner permissions, secret partition activation, analyzer/simulation validation, and approval before live arena participation
+- bot runtime configuration, including private per-bot config, allowed runtime changes between runs, dependency policy, and isolation from other bots
+- external market-data access, including OpenBB or other providers behind an adapter boundary rather than direct domain coupling
+- order and user API behavior, including how orders are placed, validated, backed up, routed to matching, and exposed through order history
+- matching internals, including queue feed, per-engine consumer ownership, deterministic lane assignment, settlement after fulfilled matches, and cleanup after settlement
+- simulation setup, including startup snapshots, liquidity providers, built-in bots, admin or monitor actors, and controlled bot shutdown
+- bot API shape, including whether it is TypeScript-based only, command-based, state/test analyzed before merge, and lifecycle-managed through base classes or pluggable methods
+- game execution model, including daily, weekly, and all-time boards; scheduled runners; persistent result storage; and approved-player result aggregation
+- leaderboard construction, including ending assets, number of trades, best upside per trade, final equity, realized/unrealized PnL, drawdown, consistency, tie-breakers, and disqualification conditions
+
+Specific items to resolve during the second review:
+
+- define the canonical event model for bot registration, bot configuration, bot approval, simulation start, market snapshot capture, order acceptance/rejection, execution, settlement, game completion, and leaderboard publication
+- define the run reproducibility envelope: seed, market snapshot ID, bot version, commit or artifact hash, config hash, scenario definition version, input event log, and output events
+- define bot safety limits: max order size, max position, max notional exposure, order rate, cancel/replace rate, allowed instruments, allowed order types, loss limits, timeout behavior, and kill switch
+- define fairness rules for competitions: same starting cash, same market snapshot, same data access, same instruments, same duration, same latency model where applicable, same fee/slippage model, and same margin/leverage rules
+- define the bot approval lifecycle: draft, submitted, static checks passed, simulation checks passed, approved, active, suspended, and archived
+- define secret handling rules: who can read/write secrets, how secrets rotate, whether runners can access secrets directly, isolation by bot/user/game, and audit logging for secret access
+- define the data-provider abstraction for historical candles, live quotes, corporate actions, instrument metadata, provider health, and snapshot generation
+- define order lifecycle states: received, accepted, rejected, queued, partially filled, filled, cancelled, expired, and failed
+- define failure handling for bot crashes, runner timeout, market-data outage, matching-engine outage, duplicate submission, replay mismatch, settlement failure, and leaderboard calculation failure
+
+The intended output of this review should be one or more focused specs, likely:
+
+- bot onboarding and approval flow
+- bot runtime, secret, and data-access model
+- simulation and game execution model
+- order, matching, and settlement lifecycle for arena-originated activity
+- leaderboard, scoring, replay, and audit rules
+
 ## Agreed Direction
 
 The current working direction is:
