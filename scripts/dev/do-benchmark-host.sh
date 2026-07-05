@@ -46,6 +46,7 @@ commands:
   remote-status  show remote host and compose status
   reset-remote   stop remote compose, remove volumes, and wipe remote benchmark artifacts
   logs           fetch recent remote compose logs to stdout
+  export         compress the run's artifacts on the worker and upload to R2, before fetch/destroy
   fetch          fetch /tmp/reef-do-benchmark artifacts into reports/do-benchmark
   fetch-destroy  fetch artifacts, then destroy the droplet
   run-destroy    provision, run benchmark, fetch artifacts, check reports, then destroy
@@ -66,6 +67,15 @@ optional:
   REEF_DO_STRESS_DURATION=30s
   REEF_DO_DRAIN_BACKPRESSURE_POLICY=control-room-fresh
   REEF_DO_IMAGE_MODE=dockerhub|source
+
+optional R2 artifact export (compressed debug data, uploaded from the worker
+before fetch/destroy, reusing the backbone's Postgres/OpenBao backup R2
+bucket credentials - see D-046):
+  REEF_DO_EXPORT_TO_R2=1
+  R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+  R2_BUCKET=reef-backups
+  AWS_ACCESS_KEY_ID=...
+  AWS_SECRET_ACCESS_KEY=...
 USAGE
 }
 
@@ -87,6 +97,7 @@ main() {
     remote-status) cmd_remote_status ;;
     reset-remote) cmd_reset_remote ;;
     logs) cmd_logs ;;
+    export) cmd_export ;;
     fetch) cmd_fetch ;;
     fetch-destroy) cmd_fetch_destroy ;;
     run-destroy) cmd_run_destroy ;;
@@ -125,6 +136,9 @@ cmd_run() {
   local status=0
   remote_run_benchmark "$run_id" || status=$?
   remote_collect_artifacts "$run_id" || status=$?
+  if [ "${REEF_DO_EXPORT_TO_R2:-0}" = "1" ]; then
+    remote_export_to_r2 "$run_id" || status=$?
+  fi
   fetch_artifacts || status=$?
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-2000}" \
@@ -180,6 +194,14 @@ set -euo pipefail
 cd "$REMOTE_DIR"
 docker compose logs --no-color --tail="${REEF_DO_LOG_TAIL:-300}" || true
 REMOTE
+}
+
+cmd_export() {
+  configure_tf_vars optional
+  wait_for_ssh
+  local run_id
+  run_id="$(benchmark_run_id)"
+  remote_export_to_r2 "$run_id"
 }
 
 cmd_fetch() {
@@ -330,6 +352,62 @@ docker compose logs --no-color --tail=1000 > "$log_dir/docker-compose.log" 2>&1 
 free -h > "$log_dir/free.txt" 2>&1 || true
 df -h > "$log_dir/df.txt" 2>&1 || true
 uptime > "$log_dir/uptime.txt" 2>&1 || true
+REMOTE
+}
+
+# Compresses and uploads the run's artifacts to Cloudflare R2 directly from
+# the ephemeral worker, before fetch/destroy - this is the export/cleanup
+# step from D-046's simulation-platform infra split. Reuses the same R2
+# bucket/credential convention as the backbone's backup-dbs.sh so debug data
+# has one object-storage vendor, not a second one. No-op (with a warning) if
+# R2_ENDPOINT/R2_BUCKET/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are unset,
+# since export is opt-in (REEF_DO_EXPORT_TO_R2=1) and credentials may not be
+# configured for every local run.
+remote_export_to_r2() {
+  local run_id="$1"
+  if [[ -z "${R2_ENDPOINT:-}" || -z "${R2_BUCKET:-}" || -z "${AWS_ACCESS_KEY_ID:-}" || -z "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+    echo "R2_ENDPOINT/R2_BUCKET/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY not fully set; skipping R2 export" >&2
+    return 0
+  fi
+  remote_script \
+    REEF_BENCHMARK_RUN_ID="$run_id" \
+    R2_ENDPOINT="$R2_ENDPOINT" \
+    R2_BUCKET="$R2_BUCKET" \
+    AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+    AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+    <<'REMOTE'
+set -euo pipefail
+artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
+archive="/tmp/${REEF_BENCHMARK_RUN_ID}.tar.gz"
+
+if [ ! -d "$artifact_dir" ]; then
+  echo "no artifact directory at $artifact_dir; skipping R2 export" >&2
+  exit 0
+fi
+
+echo "compressing $artifact_dir -> $archive"
+tar czf "$archive" -C "$REMOTE_ARTIFACT_ROOT" "$REEF_BENCHMARK_RUN_ID"
+
+echo "uploading to R2..."
+if command -v aws >/dev/null 2>&1; then
+  AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+  AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+  AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}" \
+  aws --endpoint-url "$R2_ENDPOINT" \
+    s3 cp "$archive" "s3://$R2_BUCKET/simulation-runs/${REEF_BENCHMARK_RUN_ID}.tar.gz"
+else
+  docker run --rm \
+    -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+    -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+    -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}" \
+    -v "$(dirname "$archive"):/backups:ro" \
+    amazon/aws-cli:2 \
+    --endpoint-url "$R2_ENDPOINT" \
+    s3 cp "/backups/$(basename "$archive")" "s3://$R2_BUCKET/simulation-runs/${REEF_BENCHMARK_RUN_ID}.tar.gz"
+fi
+
+rm -f "$archive"
+echo "R2 export complete: simulation-runs/${REEF_BENCHMARK_RUN_ID}.tar.gz"
 REMOTE
 }
 
