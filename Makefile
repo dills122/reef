@@ -152,6 +152,14 @@ dev-stress-diagnostics:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1 $(JS_RUNTIME) scripts/dev/stress.mjs
 
+dev-stress-venue-event-materializer:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-materializer-stress.mjs
+
+dev-ablation-ladder:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/ablation-ladder.mjs
+
 dev-intake-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/intake-bench.mjs

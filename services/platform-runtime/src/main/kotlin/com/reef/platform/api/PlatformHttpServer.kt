@@ -2849,6 +2849,7 @@ class PlatformHttpServer(
             "metrics" to mapOf(
                 "fetched" to stats.fetched,
                 "materialized" to stats.materialized,
+                "materializedOutcomes" to stats.materializedOutcomes,
                 "failed" to stats.failed,
                 "ackFailed" to stats.ackFailed,
                 "unsupported" to stats.unsupported,

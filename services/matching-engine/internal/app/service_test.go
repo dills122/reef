@@ -407,6 +407,38 @@ func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	}
 }
 
+func TestTerminalOrderRetentionLimitPrunesOldestTerminalState(t *testing.T) {
+	service := NewService(WithTerminalOrderRetentionLimit(1))
+
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-cancel-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	service.CancelOrder(domain.CancelOrder{OrderID: "ord-cancel-1"})
+
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-cancel-2",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	service.CancelOrder(domain.CancelOrder{OrderID: "ord-cancel-2"})
+
+	if _, ok := service.OrderState("ord-cancel-1"); ok {
+		t.Fatalf("expected oldest terminal order to be pruned")
+	}
+	state, ok := service.OrderState("ord-cancel-2")
+	if !ok || state.Status != domain.OrderStatusCancelled {
+		t.Fatalf("expected newest terminal order to remain, got %#v", state)
+	}
+}
+
 func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
