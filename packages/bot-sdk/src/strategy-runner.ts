@@ -1,8 +1,10 @@
 import {
   type BotActionV1,
+  type BotBarIntervalV1,
   type BotDenialV1,
   type BotRuntimePolicyV1,
   type BotSignalV1,
+  type BotStrategyV1,
   type BotStrategyEventV1,
   type HistoricalBarV1,
   type MarketSnapshotV1,
@@ -117,7 +119,7 @@ export async function runBotStrategyScenarioV1(
       counters,
     });
 
-    const events = strategyEventsForTick(tick, fixtureTick, options.fixture, Array.from(orderState.values()));
+    const events = strategyEventsForTick(tick, fixtureTick, options.fixture, Array.from(orderState.values()), strategies);
     const signals: BotSignalV1[] = [];
     const strategyActions: BotActionV1[] = [];
     for (const event of events) {
@@ -237,14 +239,23 @@ function strategyEventsForTick(
   fixtureTick: BotScenarioTickV1,
   fixture: BotScenarioFixtureV1,
   currentOrders: readonly OwnOrderV1[],
+  strategies: readonly BotStrategyV1[],
 ): readonly BotStrategyEventV1[] {
   const events: BotStrategyEventV1[] = [{ type: "tick", tick, occurredAt: fixtureTick.occurredAt }];
   for (const snapshot of Object.values(fixtureTick.marketSnapshots)) {
     events.push({ type: "market_snapshot", tick, occurredAt: fixtureTick.occurredAt, snapshot });
   }
-  for (const [instrumentId, bars] of Object.entries(fixture.historicalBars ?? {})) {
+  const closedBars = fixtureTick.historicalBarsClosed ?? (tick === 0 ? fixture.historicalBars : undefined) ?? {};
+  for (const [instrumentId, bars] of Object.entries(closedBars)) {
     if (bars.length > 0) {
-      events.push({ type: "bars_closed", tick, occurredAt: fixtureTick.occurredAt, instrumentId, interval: "1m", bars });
+      events.push({
+        type: "bars_closed",
+        tick,
+        occurredAt: fixtureTick.occurredAt,
+        instrumentId,
+        interval: "1m",
+        bars: barsForSubscriptions(instrumentId, "1m", bars, strategies),
+      });
     }
   }
   for (const order of currentOrders) {
@@ -253,7 +264,7 @@ function strategyEventsForTick(
   return events;
 }
 
-function strategiesForEvent(strategies: readonly import("./index").BotStrategyV1[], event: BotStrategyEventV1) {
+function strategiesForEvent(strategies: readonly BotStrategyV1[], event: BotStrategyEventV1) {
   return strategies.filter((strategy) => {
     if (event.type === "tick") {
       return true;
@@ -266,6 +277,21 @@ function strategiesForEvent(strategies: readonly import("./index").BotStrategyV1
     }
     return strategy.subscription.orderUpdates === true;
   });
+}
+
+function barsForSubscriptions(
+  instrumentId: string,
+  interval: BotBarIntervalV1,
+  bars: readonly HistoricalBarV1[],
+  strategies: readonly BotStrategyV1[],
+): readonly HistoricalBarV1[] {
+  const lookbacks = strategies.flatMap((strategy) =>
+    strategy.subscription.bars
+      ?.filter((bar) => bar.instrumentId === instrumentId && bar.interval === interval && bar.lookback !== undefined)
+      .map((bar) => bar.lookback ?? 0) ?? [],
+  );
+  const maxLookback = lookbacks.length === 0 ? undefined : Math.max(...lookbacks);
+  return maxLookback === undefined ? bars : bars.slice(-maxLookback);
 }
 
 function fixtureDataForState(

@@ -11,8 +11,8 @@ assert.equal(approved.status, 0, `approved bot tester failed\nstdout:\n${approve
 const approvedReport = JSON.parse(approved.stdout);
 assert.equal(approvedReport.approvalStatus, "approved_for_merge");
 assert.equal(approvedReport.artifact.approvedPackages[0].name, "trading-signals");
-assert.equal(approvedReport.signalsGenerated, 3);
-assert.equal(approvedReport.orderActionsProposed, 3);
+assert.equal(approvedReport.signalsGenerated, 1);
+assert.equal(approvedReport.orderActionsProposed, 1);
 
 const blocked = runTester("packages/bot-sdk/test-fixtures/bad-bots/too-many-orders-bot.ts", "packages/bot-sdk/fixtures/aapl-multi-tick.json");
 assert.notEqual(blocked.status, 0, "blocked bot tester should exit nonzero");

@@ -47,9 +47,9 @@ async function assertMultiSymbolStrategyArtifact() {
 
   assert.equal(report.status, "completed");
   assert.equal(report.ticksRun, 3);
-  assert.equal(report.signalsGenerated, 6);
-  assert.equal(report.orderActionsProposed, 6);
-  assert.equal(report.dataCalls, 6);
+  assert.equal(report.signalsGenerated, 2);
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.dataCalls, 2);
   assert.equal(report.ticks[0].signals.length, 2);
   assert.equal(report.ticks[0].venueCommands.length, 2);
 }
@@ -71,8 +71,8 @@ async function assertTechnicalIndicatorStrategyArtifact() {
   });
 
   assert.equal(report.status, "completed");
-  assert.equal(report.signalsGenerated, 3);
-  assert.equal(report.orderActionsProposed, 3);
+  assert.equal(report.signalsGenerated, 1);
+  assert.equal(report.orderActionsProposed, 1);
   assert.equal(report.dataCalls, 0);
   assert.equal(report.ticks[0].signals[0].strategyId, "bb-rsi-reversion");
   assert.equal(report.ticks[0].venueCommands.length, 1);

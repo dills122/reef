@@ -70,13 +70,13 @@ async function assertMultiSymbolStrategyRun() {
 
   assert.equal(report.status, "completed");
   assert.equal(report.ticksRun, 3);
-  assert.equal(report.signalsGenerated, 6);
-  assert.equal(report.orderActionsProposed, 6);
-  assert.equal(report.dataCalls, 6);
+  assert.equal(report.signalsGenerated, 2);
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.dataCalls, 2);
   assert.equal(report.ticks[0].signals.length, 2);
   assert.equal(report.ticks[0].venueCommands.length, 2);
   assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");
-  assert.equal(transport.requests.length, 6);
+  assert.equal(transport.requests.length, 2);
 }
 
 async function assertPolicyBlockedStrategyRunDoesNotSendOrApply() {

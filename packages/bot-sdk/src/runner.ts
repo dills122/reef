@@ -45,6 +45,7 @@ export interface BotScenarioFixtureV1 {
 export interface BotScenarioTickV1 {
   readonly occurredAt: string;
   readonly marketSnapshots: Record<string, MarketSnapshotV1>;
+  readonly historicalBarsClosed?: Record<string, readonly HistoricalBarV1[]>;
 }
 
 export interface BotScenarioRunOptionsV1 {
