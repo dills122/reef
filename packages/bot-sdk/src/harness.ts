@@ -11,6 +11,9 @@ import {
   type BotRandomV1,
   type BotResultV1,
   type BotRuntimePolicyV1,
+  type BotSignalV1,
+  type BotStrategyEventV1,
+  type BotStrategyV1,
   type HistoricalBarV1,
   type MarketSnapshotV1,
   type OwnOrderV1,
@@ -19,8 +22,10 @@ import {
 import { scanBotSourceForSandboxViolationsV1 } from "./sandbox-policy";
 
 export interface ReefBotV1Instance {
+  readonly strategies?: readonly BotStrategyV1[];
   onStart(ctx: BotContextV1): Promise<void>;
   onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]>;
+  onSignal(signal: BotSignalV1, ctx: BotContextV1, event: BotStrategyEventV1): Promise<readonly BotActionV1[]>;
   onStop(ctx: BotContextV1): Promise<void>;
 }
 

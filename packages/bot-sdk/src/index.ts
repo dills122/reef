@@ -26,6 +26,8 @@ export interface BotRuntimePolicyV1 {
   readonly maxTradeCommandsPerSecond: number;
 }
 
+export type BotBarIntervalV1 = "1m" | "5m" | "15m" | "1h";
+
 export type BotResultV1<T> =
   | {
       readonly ok: true;
@@ -153,7 +155,7 @@ export interface BotMarketDataClientV1 {
 export interface BotHistoricalDataClientV1 {
   intradayBars(request: {
     readonly instrumentId: string;
-    readonly interval: "1m" | "5m" | "15m" | "1h";
+    readonly interval: BotBarIntervalV1;
     readonly start: string;
     readonly end: string;
   }): Promise<BotResultV1<readonly HistoricalBarV1[]>>;
@@ -212,14 +214,77 @@ export interface BotContextV1 {
   readonly orders: BotOrdersClientV1;
 }
 
+export interface BotStrategySubscriptionV1 {
+  readonly instruments: readonly string[];
+  readonly bars?: readonly {
+    readonly instrumentId: string;
+    readonly interval: BotBarIntervalV1;
+    readonly lookback?: number;
+  }[];
+  readonly orderUpdates?: boolean;
+}
+
+export type BotStrategyEventV1 =
+  | {
+      readonly type: "tick";
+      readonly tick: number;
+      readonly occurredAt: string;
+    }
+  | {
+      readonly type: "market_snapshot";
+      readonly tick: number;
+      readonly occurredAt: string;
+      readonly snapshot: MarketSnapshotV1;
+    }
+  | {
+      readonly type: "bars_closed";
+      readonly tick: number;
+      readonly occurredAt: string;
+      readonly instrumentId: string;
+      readonly interval: BotBarIntervalV1;
+      readonly bars: readonly HistoricalBarV1[];
+    }
+  | {
+      readonly type: "order_update";
+      readonly tick: number;
+      readonly occurredAt: string;
+      readonly order: OwnOrderV1;
+    };
+
+export interface BotSignalV1 {
+  readonly strategyId: string;
+  readonly instrumentId: string;
+  readonly side: OrderSideV1;
+  readonly confidence: number;
+  readonly referencePrice: number;
+  readonly reason: string;
+  readonly strength?: number;
+  readonly metadata?: Record<string, string | number | boolean>;
+}
+
+export interface BotStrategyV1 {
+  readonly id: string;
+  readonly subscription: BotStrategySubscriptionV1;
+  onStart?(ctx: BotContextV1): Promise<void>;
+  onEvent(event: BotStrategyEventV1, ctx: BotContextV1): Promise<readonly BotSignalV1[]>;
+  onStop?(ctx: BotContextV1): Promise<void>;
+}
+
 export abstract class ReefBotV1 {
   static metadata: ReefBotMetadataV1;
+  readonly strategies?: readonly BotStrategyV1[];
 
   async onStart(_ctx: BotContextV1): Promise<void> {
     return;
   }
 
-  abstract onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]>;
+  async onTick(_ctx: BotContextV1): Promise<readonly BotActionV1[]> {
+    return [];
+  }
+
+  async onSignal(_signal: BotSignalV1, _ctx: BotContextV1, _event: BotStrategyEventV1): Promise<readonly BotActionV1[]> {
+    return [];
+  }
 
   async onStop(_ctx: BotContextV1): Promise<void> {
     return;
@@ -230,6 +295,7 @@ export * from "./harness";
 export * from "./hosted-runner";
 export * from "./runner";
 export * from "./sandbox-policy";
+export * from "./strategy-runner";
 export * from "./venue-adapter";
 export * from "./venue-client";
 export * from "./venue-preflight";

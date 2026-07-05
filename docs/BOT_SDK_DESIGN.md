@@ -16,6 +16,7 @@ This document describes the initial `ReefBotV1` design. It does not add new runt
 
 For bot-author-facing usage, see [`BOT_SDK_AUTHOR_GUIDE.md`](./BOT_SDK_AUTHOR_GUIDE.md).
 For hosted sandbox direction, see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md).
+For package approval rules, see [`BOT_SDK_APPROVED_PACKAGES.md`](./BOT_SDK_APPROVED_PACKAGES.md).
 
 ## Current Implementation Map
 
