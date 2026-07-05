@@ -1,0 +1,40 @@
+---
+title: Reef
+description: Simulation-first institutional trading venue and post-trade platform.
+template: splash
+banner:
+  content: |
+    Pre-release, heavy development. APIs, schemas, and game mechanics change without notice — see <a href="/overview/status/">Current Status</a>.
+hero:
+  tagline: A simulation-first institutional trading venue and post-trade platform, with a bot arena taking shape on top of it.
+  actions:
+    - text: What Is Reef
+      link: /overview/what-is-reef/
+      icon: right-arrow
+      variant: primary
+    - text: Trading API
+      link: /api/overview/
+      icon: document
+    - text: Bot Arena (WIP)
+      link: /arena/overview/
+      icon: rocket
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Reef models the lifecycle of privately matched institutional trades — order intake, hidden-book matching, executions, and the post-trade path toward settlement — with production-shaped architecture that stays easy to run and inspect locally. A tournament-style **Bot Arena** is under active design on top of the same venue command paths.
+
+<CardGrid>
+	<Card title="Project Overview" icon="open-book">
+		What Reef is, why it exists, and how the core platform and simulation control plane relate. Start at [What Is Reef](/overview/what-is-reef/).
+	</Card>
+	<Card title="Bot Arena & Bot SDK" icon="rocket">
+		The work-in-progress trading-bot game: how to author a bot, how a run works, how scoring works. Start at [Arena Overview](/arena/overview/).
+	</Card>
+	<Card title="Trading API" icon="setting">
+		The external `/api/v1` surface: orders, market data, command status, headers, and error shape. Start at [API Overview](/api/overview/).
+	</Card>
+	<Card title="Data Schema" icon="document">
+		Persistent schema (`runtime`, `boundary`, `auth`, `admin`, and planned domains) plus the protobuf wire contracts. Start at [Schema Overview](/schema/overview/).
+	</Card>
+</CardGrid>

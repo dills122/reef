@@ -8,6 +8,8 @@ build/
 out/
 bin/
 coverage/
+dist/
+.astro/
 reports/do-benchmark/
 infra/do-benchmark/.terraform/
 infra/do-benchmark/terraform.tfstate
