@@ -61,6 +61,14 @@ bun scripts/dev/bot-sdk-build-hosted-artifact.mjs packages/bot-sdk/examples/simp
 
 The build step emits a `reef.bot.hostedArtifact.v1` manifest next to the artifact by default. The manifest includes the source hash and artifact hash so a registry or review workflow can pin exactly what was built and run.
 
+To run a built artifact through a separate hosted worker process:
+
+```bash
+bun scripts/dev/bot-sdk-hosted-worker-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json
+```
+
+The worker process runs SES lockdown and the hosted scenario runner in a child process. The parent enforces a wall-clock timeout, output cap, and structured `do_not_merge` report for child failures. This catches synchronous hangs that in-process SES execution cannot interrupt.
+
 For a server-shaped local smoke, run:
 
 ```bash
