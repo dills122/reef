@@ -140,13 +140,13 @@ bun scripts/dev/bot-sdk-register.mjs packages/bot-sdk/examples/simple-market-mak
 bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts
 ```
 
-To submit generated commands through the adapter-owned client against a local Reef stack, pass a venue URL:
+To submit generated commands through the adapter-owned client against a local Reef stack, use the live smoke wrapper:
 
 ```bash
-bun scripts/dev/bot-sdk-run.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-multi-tick.json --venue-url=http://127.0.0.1:8080
+bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-maker.ts packages/bot-sdk/fixtures/aapl-multi-tick.json --venue-url=http://127.0.0.1:8080 --seed-reference
 ```
 
-Bot code still does not receive network access; only the runner/orchestrator owns the venue transport.
+Bot code still does not receive network access; only the runner/orchestrator owns the venue transport. See [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md) for setup and troubleshooting.
 
 See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
 
