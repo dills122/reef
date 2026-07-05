@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { devReset, devUp } from "./dev-stack.mjs";
 
-const databaseServices = ["postgres", "boundary-postgres", "projection-postgres"];
+const databaseServices = ["postgres", "boundary-postgres", "projection-postgres", "arena-postgres"];
 
 test("devUp starts postgres, runs migrations, then starts full stack", async () => {
   const calls = [];

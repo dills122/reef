@@ -359,7 +359,63 @@ JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `syn
 
 The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
-Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish.
+Account/bot risk pre-checks run after boundary validation and before durable command acceptance. The default `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=allow-all` adds no rejection. For local policy tests, set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=static` with comma-separated `EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS`, `EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS`, or `EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS`; non-allow decisions return structured `403` or `429` responses before command-log append, stream intake reservation, or durable publish. Set `EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres` to read cached operator controls from `boundary.account_risk_controls` and audit non-allow decisions to `boundary.account_risk_decisions`; `EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS` controls the cache TTL. Postgres-backed controls can also carry submit-order `maxQuantityUnits` and `maxNotional` limits. Limit violations reject before durable acceptance with `ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED` or `ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED`; the audit row records submit quantity, limit price, and currency.
+
+Local admin commands for the Postgres-backed mode:
+
+```bash
+make dev-admin CMD="account-risk-set bot bot-1 disabled-bot operator-disabled"
+make dev-admin CMD="account-risk-set account acct-1 backpressure settlement-hold"
+make dev-admin CMD="account-risk-set account acct-1 allow --max-quantity 1000 --max-notional 150250000000000 --currency USD --reason desk-limit"
+make dev-admin CMD="account-risk-set account acct-1 allow cleared"
+make dev-admin CMD="account-risk-list"
+curl -s -X POST http://127.0.0.1:8080/internal/admin/account-risk/controls \
+  -H 'content-type: application/json' \
+  -d '{"scopeType":"account","scopeId":"acct-1","decision":"allow","maxQuantityUnits":"1000","maxNotional":"150250000000000","currency":"USD","reason":"desk-limit","actorId":"ops-1"}'
+curl -s http://127.0.0.1:8080/internal/boundary/account-risk/controls
+curl -s 'http://127.0.0.1:8080/internal/boundary/account-risk/decisions/recent?limit=50'
+```
+
+Command circuit breakers are separate hard pre-acceptance gates for venue-wide, venue-session, and instrument halts. Set `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres` to read cached breaker state from `boundary.command_circuit_breakers`; `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS` controls the cache TTL. A tripped breaker returns `503 COMMAND_CIRCUIT_BREAKER_TRIPPED` before command capture, stream-intake reservation, or durable publish.
+
+Local breaker commands:
+
+```bash
+make dev-admin CMD="breaker-set global '*' trip maintenance"
+make dev-admin CMD="breaker-set venue-session session-1 trip session-halted"
+make dev-admin CMD="breaker-set instrument AAPL trip instrument-halt"
+make dev-admin CMD="breaker-set instrument AAPL reset cleared"
+make dev-admin CMD="breaker-list"
+curl -s -X POST http://127.0.0.1:8080/internal/admin/circuit-breakers \
+  -H 'content-type: application/json' \
+  -d '{"scopeType":"instrument","scopeId":"AAPL","action":"trip","reason":"instrument-halt","actorId":"ops-1"}'
+curl -s http://127.0.0.1:8080/internal/boundary/circuit-breakers
+```
+
+Instrument price collars are separate submit-order safeguards for instrument-level limit-price bands. Set `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres` to read cached collars from `boundary.instrument_price_collars`; `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS` controls the cache TTL. Submit orders below the configured minimum reject with `422 PRICE_COLLAR_LOW`; submit orders above the configured maximum reject with `422 PRICE_COLLAR_HIGH`. The rejection happens before command capture, stream-intake reservation, or durable publish. Blank min or max values leave that side unbounded; blank currency applies the collar regardless of request currency.
+
+Local price collar commands:
+
+```bash
+make dev-admin CMD="price-collar-set AAPL 150000000000 151000000000 --currency USD --reason regular-band"
+make dev-admin CMD="price-collar-set AAPL '*' '*' --currency USD --reason cleared"
+make dev-admin CMD="price-collar-list"
+curl -s -X POST http://127.0.0.1:8080/internal/admin/price-collars \
+  -H 'content-type: application/json' \
+  -d '{"instrumentId":"AAPL","minPrice":"150000000000","maxPrice":"151000000000","currency":"USD","reason":"regular-band","actorId":"ops-1"}'
+curl -s http://127.0.0.1:8080/internal/boundary/price-collars
+```
+
+Boundary rejection evidence is append-only in `boundary.boundary_rejections` when `EXTERNAL_API_BOUNDARY_REJECTION_LOG=postgres`. The default `auto` mode enables this log when any Postgres-backed boundary guardrail is enabled and otherwise stays no-op, so allow-all local runs do not require a boundary database.
+
+Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls:
+
+```bash
+EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres \
+EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres \
+EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres \
+make dev-smoke-protective-controls
+```
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
@@ -367,7 +423,7 @@ Stream-ack projector status is exposed at `/internal/projector/status` on `platf
 
 Venue event replay/check evidence is exposed through `make dev-venue-event-replay-check`. The check replays stored `runtime.canonical_venue_event_batches.payload_json` through `runtime.runtime_materialize_venue_event_batch`, expects idempotent `0` inserts, compares batch command counts, payload checksums, command outcome payload hashes, missing/extra canonical rows, stream gaps/overlaps, and optionally projection watermarks. Set `DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME=<projection>` to fail on lag for a specific venue-event-batch projector watermark, or `DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY=true` for empty local databases.
 
-Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`) and `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`) services so command intake/idempotency and projection writes can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, and `projection-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
+Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`), `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`), and `arena-postgres` (`REEF_ARENA_POSTGRES_HOST_PORT`, default `5435`) services so command intake/idempotency, projection writes, and arena control-plane metadata can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, `projection-postgres`, and `arena-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and durable-log consumer snapshots (`consumerMetrics`). JetStream snapshots include pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. Redpanda snapshots report committed offset, end offset, and lag for the assigned partition. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 

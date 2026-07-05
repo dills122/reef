@@ -37,7 +37,7 @@ cp .env.example .env
 ## 3. Read Core Docs First
 
 - [Technical Design](../REEF_TECHNICAL_DESIGN.md)
-- [Roadmap](./ROADMAP.md)
+- [Roadmap (historical)](./archive/ROADMAP.md)
 - [Steering Index](./steering/README.md)
 - [Dev Environment Runbook](./DEV_ENV.md)
 - [Engineering Delivery Policy](./ENGINEERING_DELIVERY_POLICY.md)

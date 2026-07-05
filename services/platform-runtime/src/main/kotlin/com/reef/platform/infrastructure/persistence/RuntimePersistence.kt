@@ -225,7 +225,12 @@ interface RuntimePersistence {
     fun projectCanonicalSubmitOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
         return 0
     }
-    fun projectCanonicalCommandOutcomes(projectionName: String, batchSize: Int, partitions: List<Int> = emptyList()): Long {
+    fun projectCanonicalCommandOutcomes(
+        projectionName: String,
+        batchSize: Int,
+        partitions: List<Int> = emptyList(),
+        includeFills: Boolean = true
+    ): Long {
         return 0
     }
     fun projectionStatus(

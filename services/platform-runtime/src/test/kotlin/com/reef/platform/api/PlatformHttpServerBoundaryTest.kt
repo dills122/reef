@@ -1,6 +1,20 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.arena.ArenaBotMetadata
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaControlPlaneService
+import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
+import com.reef.platform.application.arena.ArenaQualificationStatus
+import com.reef.platform.application.arena.ArenaRunBotResult
+import com.reef.platform.application.arena.ArenaRunBotVersionRef
+import com.reef.platform.application.arena.ArenaRunStatus
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
+import com.reef.platform.application.arena.RegisterArenaBotCommand
+import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
+import com.reef.platform.application.arena.RegisterArenaRunCommand
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -939,6 +953,687 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"code\":\"ACCOUNT_RISK_REJECTED\"")
             assertEquals(0, gateway.submitCalls)
             assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedAckAccountRiskReceivesSubmitEconomicsBeforeCommandLogAppend() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val accountRiskCheck = object : AccountRiskCheck {
+            var lastRequest: AccountRiskCheckRequest? = null
+
+            override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+                lastRequest = request
+                return AccountRiskCheckResult(
+                    decision = AccountRiskDecision.REJECT,
+                    code = "ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED",
+                    message = "max notional exceeded"
+                )
+            }
+        }
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            accountRiskCheck = accountRiskCheck
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-limit",
+                    "Idempotency-Key" to "idem-risk-limit"
+                ),
+                body = validSubmitBody("cmd-risk-limit", "trace-risk-limit", "ord-risk-limit")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-risk-limit")
+
+            assertEquals(403, response.status)
+            assertContains(response.body, "\"code\":\"ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED\"")
+            assertEquals("100", accountRiskCheck.lastRequest?.quantityUnits)
+            assertEquals("150250000000", accountRiskCheck.lastRequest?.limitPrice)
+            assertEquals("USD", accountRiskCheck.lastRequest?.currency)
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun capturedAckCircuitBreakerRejectsBeforeCommandLogAppend() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandCircuitBreakerCheck = StaticCircuitBreakerCheck("AAPL")
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-reject",
+                    "Idempotency-Key" to "idem-breaker-reject"
+                ),
+                body = validSubmitBody("cmd-breaker-reject", "trace-breaker-reject", "ord-breaker-reject")
+            )
+            val status = get(server.address.port, "/api/v1/commands/cmd-breaker-reject")
+
+            assertEquals(503, response.status)
+            assertContains(response.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(404, status.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun boundaryControlDiagnosticsExposeControlsDecisionsAndBreakers() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled", "100", "15025000000000", "USD")
+        accountRiskStore.decisions.add(
+            AccountRiskDecisionAudit(
+                decisionId = "risk-decision-1",
+                decidedAt = "2026-07-04T12:00:00Z",
+                decision = AccountRiskDecision.DISABLED_BOT,
+                code = "BOT_DISABLED",
+                message = "bot is disabled",
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                commandType = "SubmitOrder",
+                commandId = "cmd-risk",
+                correlationId = "corr-risk",
+                actorId = "bot-1",
+                participantId = "participant-1",
+                accountId = "account-1",
+                botId = "bot-1",
+                venueSessionId = "session-1",
+                instrumentId = "AAPL",
+                orderId = "ord-risk",
+                quantityUnits = "101",
+                limitPrice = "150250000000",
+                currency = "USD"
+            )
+        )
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val collarStore = RecordingInstrumentPriceCollarStore()
+        collarStore.setCollar("AAPL", "150000000000", "151000000000", "USD", "regular band")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            accountRiskControlStore = accountRiskStore,
+            accountRiskDecisionLog = accountRiskStore,
+            commandCircuitBreakerCheck = breakerStore,
+            commandCircuitBreakerStore = breakerStore,
+            instrumentPriceCollarCheck = collarStore,
+            instrumentPriceCollarStore = collarStore
+        )
+        try {
+            val controls = get(server.address.port, "/internal/boundary/account-risk/controls")
+            val decisions = get(server.address.port, "/internal/boundary/account-risk/decisions/recent?limit=10")
+            val breakers = get(server.address.port, "/internal/boundary/circuit-breakers")
+            val collars = get(server.address.port, "/internal/boundary/price-collars")
+
+            assertEquals(200, controls.status)
+            assertContains(controls.body, "\"controlsCount\":1")
+            assertContains(controls.body, "\"scopeType\":\"BOT\"")
+            assertContains(controls.body, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(controls.body, "\"maxQuantityUnits\":\"100\"")
+            assertContains(controls.body, "\"maxNotional\":\"15025000000000\"")
+            assertContains(controls.body, "\"currency\":\"USD\"")
+            assertEquals(200, decisions.status)
+            assertContains(decisions.body, "\"decisionsCount\":1")
+            assertContains(decisions.body, "\"code\":\"BOT_DISABLED\"")
+            assertContains(decisions.body, "\"commandId\":\"cmd-risk\"")
+            assertContains(decisions.body, "\"quantityUnits\":\"101\"")
+            assertEquals(200, breakers.status)
+            assertContains(breakers.body, "\"breakersCount\":1")
+            assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
+            assertContains(breakers.body, "\"tripped\":true")
+            assertEquals(200, collars.status)
+            assertContains(collars.body, "\"collarsCount\":1")
+            assertContains(collars.body, "\"instrumentId\":\"AAPL\"")
+            assertContains(collars.body, "\"minPrice\":\"150000000000\"")
+            assertContains(collars.body, "\"maxPrice\":\"151000000000\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminAccountRiskEndpointSetsControlAndAuditsChange() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        val persistence = InMemoryRuntimePersistence()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/account-risk/controls",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "scopeType":"bot",
+                      "scopeId":"bot-1",
+                      "decision":"disabled-bot",
+                      "reason":"operator disabled",
+                      "maxQuantityUnits":"100",
+                      "maxNotional":"15025000000000",
+                      "currency":"usd",
+                      "actorId":"ops-1",
+                      "correlationId":"corr-admin-risk"
+                    }
+                """.trimIndent()
+            )
+            val controls = get(server.address.port, "/internal/boundary/account-risk/controls")
+            val auditEvents = persistence.eventsForTrace("admin:ops-1")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(response.body, "\"maxQuantityUnits\":\"100\"")
+            assertContains(response.body, "\"maxNotional\":\"15025000000000\"")
+            assertContains(response.body, "\"currency\":\"USD\"")
+            assertContains(controls.body, "\"scopeType\":\"BOT\"")
+            assertContains(controls.body, "\"reason\":\"operator disabled\"")
+            assertEquals(1, auditEvents.size)
+            assertEquals("AccountRiskControlChanged", auditEvents.single().eventType)
+            assertContains(auditEvents.single().payloadJson, "\"previousDecision\":\"\"")
+            assertContains(auditEvents.single().payloadJson, "\"decision\":\"DISABLED_BOT\"")
+            assertContains(auditEvents.single().payloadJson, "\"maxQuantityUnits\":\"100\"")
+            assertContains(auditEvents.single().payloadJson, "\"maxNotional\":\"15025000000000\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminArenaBotVersionEndpointTransitionsVersionAndAuditsChange() {
+        val accountRiskStore = RecordingAccountRiskStore()
+        val persistence = InMemoryRuntimePersistence()
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val arenaAdminService = AdminApplicationService(
+            runtimePersistence = persistence,
+            arenaRegistryStore = arenaStore,
+            accountRiskControlStore = accountRiskStore
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            runtimePersistence = persistence,
+            arenaAdminService = arenaAdminService
+        )
+        try {
+            val registeredBot = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bots",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "fileName":"bot-1.ts",
+                      "name":"Bot 1",
+                      "publisher":"Publisher",
+                      "email":"publisher@example.com",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val registeredVersion = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bot-versions",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "sourceHash":"sha256:source",
+                      "artifactHash":"sha256:artifact",
+                      "sdkVersion":"1.5.0",
+                      "apiVersion":"v1",
+                      "dependencyManifestHash":"sha256:deps",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/arena/bot-versions/transition",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "status":"quarantined",
+                      "reason":"scanner regression",
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-admin-arena"
+                    }
+                """.trimIndent()
+            )
+            val auditEvents = persistence.eventsForTrace("admin:admin-cli")
+
+            assertEquals(200, registeredBot.status)
+            assertContains(registeredBot.body, "\"botId\":\"bot-1\"")
+            assertEquals(200, registeredVersion.status)
+            assertContains(registeredVersion.body, "\"botVersionStatus\":\"Draft\"")
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"botVersionStatus\":\"Quarantined\"")
+            assertEquals(AccountRiskDecision.DISABLED_BOT, accountRiskStore.listControls().single().decision)
+            assertTrue(auditEvents.any { it.eventType == "AdminArenaBotVersionTransitioned" })
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminArenaReadEndpointsReturnRegistryControlPlaneState() {
+        val persistence = InMemoryRuntimePersistence()
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
+        controlPlane.registerBot(
+            RegisterArenaBotCommand(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(
+                    name = "Bot 1",
+                    publisher = "Publisher",
+                    email = "publisher@example.com",
+                    description = "test bot",
+                    version = "1.0.0"
+                )
+            )
+        )
+        controlPlane.registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = "bot-1",
+                versionId = "v1",
+                sourceHash = "sha256:source",
+                artifactHash = "sha256:artifact",
+                sdkVersion = "1.5.0",
+                apiVersion = "v1",
+                dependencyManifestHash = "sha256:deps"
+            )
+        )
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Submitted, "scanner", "submitted", "corr")
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.ChecksPassed, "scanner", "checks passed", "corr")
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Approved, "admin-cli", "approved", "corr")
+        controlPlane.recordQualificationReport(
+            botId = "bot-1",
+            versionId = "v1",
+            reportId = "report-1",
+            status = ArenaQualificationStatus.Passed,
+            issues = listOf("scanner ok"),
+            policyVersion = "policy-v1"
+        )
+        controlPlane.replaceRuntimeConfigDescriptors(
+            "bot-1",
+            "v1",
+            listOf(
+                ArenaRuntimeConfigDescriptor(
+                    botId = "bot-1",
+                    versionId = "v1",
+                    key = "maxInventory",
+                    provider = ArenaRuntimeConfigProvider.OpenBao,
+                    secretPath = "kv/bots/bot-1/v1",
+                    required = true,
+                    description = "inventory cap"
+                )
+            )
+        )
+        controlPlane.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "hosted-sim",
+                scenarioId = "scenario-1",
+                seed = 42,
+                policyVersion = "policy-v1",
+                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1"))
+            )
+        )
+        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Running)
+        controlPlane.updateRunStatus("run-1", ArenaRunStatus.Completed)
+        controlPlane.recordRunBotResult(
+            ArenaRunBotResult(
+                runId = "run-1",
+                botId = "bot-1",
+                versionId = "v1",
+                scoringPolicyVersion = "score-v1",
+                finalEquity = 1_025_000,
+                realizedPnl = 25_000,
+                maxDrawdown = 1_000,
+                actionsProposed = 12,
+                orderActionsProposed = 8,
+                dataCalls = 20,
+                signalsGenerated = 4,
+                disqualified = false,
+                createdAt = java.time.Instant.parse("2026-07-05T12:00:00Z")
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val bot = get(server.address.port, "/internal/admin/arena/bots?botId=bot-1")
+            val version = get(server.address.port, "/internal/admin/arena/bot-versions?botId=bot-1&versionId=v1")
+            val reports = get(server.address.port, "/internal/admin/arena/qualification-reports?botId=bot-1&versionId=v1")
+            val decisions = get(server.address.port, "/internal/admin/arena/operator-decisions?botId=bot-1&versionId=v1")
+            val descriptors = get(server.address.port, "/internal/admin/arena/runtime-config-descriptors?botId=bot-1&versionId=v1")
+            val run = get(server.address.port, "/internal/admin/arena/runs?runId=run-1")
+            val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v1")
+
+            assertEquals(200, bot.status)
+            assertContains(bot.body, "\"fileName\":\"bot-1.ts\"")
+            assertEquals(200, version.status)
+            assertContains(version.body, "\"status\":\"Approved\"")
+            assertEquals(200, reports.status)
+            assertContains(reports.body, "\"reportId\":\"report-1\"")
+            assertContains(reports.body, "\"issues\":[\"scanner ok\"]")
+            assertEquals(200, decisions.status)
+            assertContains(decisions.body, "\"toStatus\":\"Approved\"")
+            assertEquals(200, descriptors.status)
+            assertContains(descriptors.body, "\"key\":\"maxInventory\"")
+            assertContains(descriptors.body, "\"provider\":\"OpenBao\"")
+            assertEquals(200, run.status)
+            assertContains(run.body, "\"runId\":\"run-1\"")
+            assertContains(run.body, "\"botVersions\":[{\"botId\":\"bot-1\",\"versionId\":\"v1\"}]")
+            assertEquals(200, leaderboard.status)
+            assertContains(leaderboard.body, "\"rank\":1")
+            assertContains(leaderboard.body, "\"finalEquity\":1025000")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        val persistence = InMemoryRuntimePersistence()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            commandCircuitBreakerCheck = breakerStore,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/circuit-breakers",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "scopeType":"instrument",
+                      "scopeId":"AAPL",
+                      "action":"trip",
+                      "reason":"operator halt",
+                      "actorId":"ops-2",
+                      "correlationId":"corr-admin-breaker"
+                    }
+                """.trimIndent()
+            )
+            val breakers = get(server.address.port, "/internal/boundary/circuit-breakers")
+            val auditEvents = persistence.eventsForTrace("admin:ops-2")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"tripped\":true")
+            assertContains(breakers.body, "\"scopeType\":\"INSTRUMENT\"")
+            assertContains(breakers.body, "\"reason\":\"operator halt\"")
+            assertEquals(1, auditEvents.size)
+            assertEquals("CommandCircuitBreakerChanged", auditEvents.single().eventType)
+            assertContains(auditEvents.single().payloadJson, "\"previousTripped\":false")
+            assertContains(auditEvents.single().payloadJson, "\"tripped\":true")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun internalAdminPriceCollarEndpointSetsCollarAndAuditsChange() {
+        val collarStore = RecordingInstrumentPriceCollarStore()
+        val persistence = InMemoryRuntimePersistence()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            instrumentPriceCollarCheck = collarStore,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/internal/admin/price-collars",
+                headers = emptyMap(),
+                body = """
+                    {
+                      "instrumentId":"AAPL",
+                      "minPrice":"150000000000",
+                      "maxPrice":"151000000000",
+                      "currency":"usd",
+                      "reason":"regular band",
+                      "actorId":"ops-3",
+                      "correlationId":"corr-admin-collar"
+                    }
+                """.trimIndent()
+            )
+            val collars = get(server.address.port, "/internal/boundary/price-collars")
+            val auditEvents = persistence.eventsForTrace("admin:ops-3")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"status\":\"ok\"")
+            assertContains(response.body, "\"instrumentId\":\"AAPL\"")
+            assertContains(response.body, "\"currency\":\"USD\"")
+            assertContains(collars.body, "\"minPrice\":\"150000000000\"")
+            assertContains(collars.body, "\"maxPrice\":\"151000000000\"")
+            assertEquals(1, auditEvents.size)
+            assertEquals("InstrumentPriceCollarChanged", auditEvents.single().eventType)
+            assertContains(auditEvents.single().payloadJson, "\"previousMinPrice\":\"\"")
+            assertContains(auditEvents.single().payloadJson, "\"maxPrice\":\"151000000000\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun accountRiskControlRejectsThenClearAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.DISABLED_BOT, "disabled", "", "", "")
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            accountRiskCheck = accountRiskStore
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-smoke",
+                    "Idempotency-Key" to "idem-risk-smoke-reject"
+                ),
+                body = validSubmitBody(
+                    "cmd-risk-smoke-reject",
+                    "trace-risk-smoke-reject",
+                    "ord-risk-smoke-reject",
+                    extra = ",\"botId\":\"bot-1\""
+                )
+            )
+            assertEquals(403, rejected.status)
+            assertContains(rejected.body, "\"code\":\"BOT_DISABLED\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-reject").status)
+
+            accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.ALLOW, "cleared", "", "", "")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-risk-smoke",
+                    "Idempotency-Key" to "idem-risk-smoke-accept"
+                ),
+                body = validSubmitBody(
+                    "cmd-risk-smoke-accept",
+                    "trace-risk-smoke-accept",
+                    "ord-risk-smoke-accept",
+                    extra = ",\"botId\":\"bot-1\""
+                )
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-risk-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun commandCircuitBreakerRejectsThenResetAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val breakerStore = RecordingCommandCircuitBreakerStore()
+        breakerStore.setBreaker("INSTRUMENT", "AAPL", true, "halted")
+        val rejectionLog = RecordingBoundaryRejectionLog()
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            commandCircuitBreakerCheck = breakerStore,
+            boundaryRejectionLog = rejectionLog
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-smoke",
+                    "Idempotency-Key" to "idem-breaker-smoke-reject"
+                ),
+                body = validSubmitBody("cmd-breaker-smoke-reject", "trace-breaker-smoke-reject", "ord-breaker-smoke-reject")
+            )
+            assertEquals(503, rejected.status)
+            assertContains(rejected.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-reject").status)
+            assertEquals(1, rejectionLog.records.size)
+            assertEquals("command-circuit-breaker", rejectionLog.records.single().guardrailType)
+            assertEquals("INSTRUMENT", rejectionLog.records.single().scopeType)
+            assertEquals("AAPL", rejectionLog.records.single().scopeId)
+
+            breakerStore.setBreaker("INSTRUMENT", "AAPL", false, "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-breaker-smoke",
+                    "Idempotency-Key" to "idem-breaker-smoke-accept"
+                ),
+                body = validSubmitBody("cmd-breaker-smoke-accept", "trace-breaker-smoke-accept", "ord-breaker-smoke-accept")
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-breaker-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-accept").status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun instrumentPriceCollarRejectsThenClearAllowsCapturedAckCommand() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck
+        )
+        val collarStore = RecordingInstrumentPriceCollarStore()
+        collarStore.setCollar("AAPL", "150000000000", "151000000000", "USD", "regular band")
+        val rejectionLog = RecordingBoundaryRejectionLog()
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedAck,
+            instrumentPriceCollarCheck = collarStore,
+            boundaryRejectionLog = rejectionLog
+        )
+        try {
+            val rejected = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-collar-smoke",
+                    "Idempotency-Key" to "idem-collar-smoke-reject"
+                ),
+                body = validSubmitBody(
+                    "cmd-collar-smoke-reject",
+                    "trace-collar-smoke-reject",
+                    "ord-collar-smoke-reject",
+                    extra = ",\"limitPrice\":\"149999999999\""
+                )
+            )
+            assertEquals(422, rejected.status)
+            assertContains(rejected.body, "\"code\":\"PRICE_COLLAR_LOW\"")
+            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-collar-smoke-reject").status)
+            assertEquals(1, rejectionLog.records.size)
+            assertEquals("instrument-price-collar", rejectionLog.records.single().guardrailType)
+            assertEquals("INSTRUMENT", rejectionLog.records.single().scopeType)
+            assertEquals("AAPL", rejectionLog.records.single().scopeId)
+            assertEquals("cmd-collar-smoke-reject", rejectionLog.records.single().request.commandId)
+
+            collarStore.setCollar("AAPL", "", "", "USD", "cleared")
+            val accepted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-collar-smoke",
+                    "Idempotency-Key" to "idem-collar-smoke-accept"
+                ),
+                body = validSubmitBody("cmd-collar-smoke-accept", "trace-collar-smoke-accept", "ord-collar-smoke-accept")
+            )
+
+            assertEquals(202, accepted.status)
+            assertContains(accepted.body, "\"commandId\":\"cmd-collar-smoke-accept\"")
+            assertEquals(0, gateway.submitCalls)
+            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-collar-smoke-accept").status)
         } finally {
             server.stop(0)
         }
@@ -1903,6 +2598,14 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
+        commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+        commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+        instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
+        instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+        arenaAdminService: AdminApplicationService? = null,
+        boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
         seedOrderAuthorization: Boolean = true,
@@ -1942,6 +2645,14 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            accountRiskControlStore = accountRiskControlStore,
+            accountRiskDecisionLog = accountRiskDecisionLog,
+            commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+            commandCircuitBreakerStore = commandCircuitBreakerStore,
+            instrumentPriceCollarCheck = instrumentPriceCollarCheck,
+            instrumentPriceCollarStore = instrumentPriceCollarStore,
+            arenaAdminService = arenaAdminService,
+            boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -1968,6 +2679,10 @@ class PlatformHttpServerBoundaryTest {
         captureStore: CommandCaptureStore = NoopCommandCaptureStore(),
         abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
         accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+        accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
+        commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+        commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
@@ -1999,6 +2714,10 @@ class PlatformHttpServerBoundaryTest {
             boundary = boundary,
             abuseProtectionHook = abuseProtectionHook,
             accountRiskCheck = accountRiskCheck,
+            accountRiskControlStore = accountRiskControlStore,
+            accountRiskDecisionLog = accountRiskDecisionLog,
+            commandCircuitBreakerCheck = commandCircuitBreakerCheck,
+            commandCircuitBreakerStore = commandCircuitBreakerStore,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
             commandCaptureStore = captureStore,
@@ -2213,6 +2932,7 @@ class PlatformHttpServerBoundaryTest {
             persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
         }
     }
+
 }
 
 private class RecordingCommandCaptureStore : CommandCaptureStore {
@@ -2437,6 +3157,161 @@ private class StaticRejectedEngineGateway(
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult = submitOrder(
         SubmitOrderCommand("", "", "", "", "", "", command.orderId, "", "", "", "", "", "", "", "", "")
     )
+}
+
+private class StaticCircuitBreakerCheck(
+    private val trippedInstrumentId: String
+) : CommandCircuitBreakerCheck {
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        if (request.instrumentId != trippedInstrumentId) return null
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for INSTRUMENT:${request.instrumentId}"
+        )
+    }
+}
+
+private class RecordingAccountRiskStore : AccountRiskCheck, AccountRiskControlStore, AccountRiskDecisionLog {
+    private val controls = linkedMapOf<String, AccountRiskControl>()
+    val decisions = mutableListOf<AccountRiskDecisionAudit>()
+
+    override fun evaluate(request: AccountRiskCheckRequest): AccountRiskCheckResult {
+        val botDecision = controls["BOT|${request.botId}"]
+        if (botDecision != null && botDecision.decision != AccountRiskDecision.ALLOW) {
+            return AccountRiskCheckResult(botDecision.decision, message = botDecision.reason)
+        }
+        val accountDecision = controls["ACCOUNT|${request.accountId}"]
+        if (accountDecision != null && accountDecision.decision != AccountRiskDecision.ALLOW) {
+            return AccountRiskCheckResult(accountDecision.decision, message = accountDecision.reason)
+        }
+        listOfNotNull(botDecision, accountDecision).forEach { control ->
+            val quantity = request.quantityUnits.toBigDecimalOrNull()
+            val maxQuantity = control.maxQuantityUnits.toBigDecimalOrNull()
+            if (quantity != null && maxQuantity != null && quantity > maxQuantity) {
+                return AccountRiskCheckResult(
+                    AccountRiskDecision.REJECT,
+                    code = "ACCOUNT_RISK_MAX_QUANTITY_EXCEEDED",
+                    message = "max quantity exceeded"
+                )
+            }
+        }
+        return AccountRiskCheckResult(AccountRiskDecision.ALLOW)
+    }
+
+    override fun upsertControl(
+        scopeType: String,
+        scopeId: String,
+        decision: AccountRiskDecision,
+        reason: String,
+        maxQuantityUnits: String,
+        maxNotional: String,
+        currency: String
+    ) {
+        controls["$scopeType|$scopeId"] = AccountRiskControl(
+            scopeType = scopeType,
+            scopeId = scopeId,
+            decision = decision,
+            reason = reason,
+            maxQuantityUnits = maxQuantityUnits,
+            maxNotional = maxNotional,
+            currency = currency,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listControls(): List<AccountRiskControl> = controls.values.toList()
+
+    override fun recentDecisions(limit: Int): List<AccountRiskDecisionAudit> = decisions.take(limit)
+}
+
+private class RecordingCommandCircuitBreakerStore : CommandCircuitBreakerStore {
+    private val breakers = linkedMapOf<String, CommandCircuitBreakerState>()
+
+    override fun evaluate(request: CommandCircuitBreakerRequest): BoundaryError? {
+        val breaker = breakers["INSTRUMENT|${request.instrumentId}"] ?: breakers["VENUE_SESSION|${request.venueSessionId}"] ?: breakers["GLOBAL|*"]
+        if (breaker?.tripped != true) return null
+        return BoundaryError(
+            503,
+            "COMMAND_CIRCUIT_BREAKER_TRIPPED",
+            "command circuit breaker tripped for ${breaker.scopeType}:${breaker.scopeId}"
+        )
+    }
+
+    override fun setBreaker(scopeType: String, scopeId: String, tripped: Boolean, reason: String) {
+        breakers["$scopeType|$scopeId"] = CommandCircuitBreakerState(
+            scopeType = scopeType,
+            scopeId = scopeId,
+            tripped = tripped,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listBreakers(): List<CommandCircuitBreakerState> = breakers.values.toList()
+}
+
+private class RecordingInstrumentPriceCollarStore : InstrumentPriceCollarStore {
+    private val collars = linkedMapOf<String, InstrumentPriceCollarState>()
+
+    override fun evaluate(request: InstrumentPriceCollarRequest): BoundaryError? {
+        if (request.commandType != "SubmitOrder") return null
+        val collar = collars[request.instrumentId] ?: return null
+        if (collar.currency.isNotBlank() && !request.currency.equals(collar.currency, ignoreCase = true)) return null
+        val price = request.limitPrice.toBigDecimalOrNull() ?: return null
+        val minPrice = collar.minPrice.toBigDecimalOrNull()
+        if (minPrice != null && price < minPrice) {
+            return BoundaryError(
+                422,
+                "PRICE_COLLAR_LOW",
+                "limit price below collar for ${collar.instrumentId}"
+            )
+        }
+        val maxPrice = collar.maxPrice.toBigDecimalOrNull()
+        if (maxPrice != null && price > maxPrice) {
+            return BoundaryError(
+                422,
+                "PRICE_COLLAR_HIGH",
+                "limit price above collar for ${collar.instrumentId}"
+            )
+        }
+        return null
+    }
+
+    override fun setCollar(instrumentId: String, minPrice: String, maxPrice: String, currency: String, reason: String) {
+        collars[instrumentId] = InstrumentPriceCollarState(
+            instrumentId = instrumentId,
+            minPrice = minPrice,
+            maxPrice = maxPrice,
+            currency = currency,
+            reason = reason,
+            updatedAt = "2026-07-04T12:00:00Z"
+        )
+    }
+
+    override fun listCollars(): List<InstrumentPriceCollarState> = collars.values.toList()
+}
+
+private class RecordingBoundaryRejectionLog : BoundaryRejectionLog {
+    data class Record(
+        val guardrailType: String,
+        val scopeType: String,
+        val scopeId: String,
+        val request: AccountRiskCheckRequest,
+        val error: BoundaryError
+    )
+
+    val records = mutableListOf<Record>()
+
+    override fun recordRejection(
+        guardrailType: String,
+        scopeType: String,
+        scopeId: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    ) {
+        records.add(Record(guardrailType, scopeType, scopeId, request, error))
+    }
 }
 
 private class ThrowingEngineGateway : EngineGateway {

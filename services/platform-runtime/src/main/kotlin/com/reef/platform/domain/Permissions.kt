@@ -7,6 +7,7 @@ object Permission {
     const val CALENDAR_ADMIN = "calendar.admin"
     const val OVERRIDE_ADMIN = "override.admin"
     const val SIMULATION_CONTROL = "simulation.control"
+    const val ARENA_ADMIN = "arena.admin"
     const val ORDER_SUBMIT = "order.submit"
     const val ORDER_CANCEL = "order.cancel"
     const val ORDER_MODIFY = "order.modify"

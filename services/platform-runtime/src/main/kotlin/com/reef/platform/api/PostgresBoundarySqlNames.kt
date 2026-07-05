@@ -8,6 +8,11 @@ data class PostgresBoundarySqlNames(
     val idempotencyRecords = qualify("api_idempotency_records")
     val commandCaptures = qualify("api_command_captures")
     val streamCommandIntake = qualify("stream_command_intake")
+    val accountRiskControls = qualify("account_risk_controls")
+    val accountRiskDecisions = qualify("account_risk_decisions")
+    val commandCircuitBreakers = qualify("command_circuit_breakers")
+    val instrumentPriceCollars = qualify("instrument_price_collars")
+    val boundaryRejections = qualify("boundary_rejections")
     val commandCapturesStatusUpdatedIndex = "idx_api_command_captures_status_updated"
 
     private fun qualify(name: String): String {

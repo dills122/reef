@@ -27,7 +27,10 @@ Status: accepted
 Summary:
 - User-facing APIs are versioned under `/api/v1`.
 - Boundary concerns (auth hook, idempotency, rate limits, validation, account/bot risk pre-check, error envelope) are explicit architecture requirements.
-- Account/bot risk pre-checks run before durable command acceptance. Non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages; the first implementation is allow-all/static and must not perform projection reads or heavy synchronous exposure scans on the hot path.
+- Account/bot risk pre-checks run before durable command acceptance. Non-allow decisions must not append command-log rows, reserve stream intake rows, or publish command messages; supported implementations include allow-all, static env controls, and cached Postgres operator controls with non-allow decision audit rows. These checks must not perform projection reads or heavy synchronous exposure scans on the hot path.
+- Command circuit breakers for global, venue-session, and instrument scopes are hard pre-acceptance gates. Tripped breakers reject before command-log rows, stream intake rows, or command messages are created.
+- Instrument price collars are submit-order pre-acceptance gates for instrument-level limit-price bands. Violations reject before command-log rows, stream intake rows, or command messages are created.
+- Boundary rejection evidence is append-only for breaker and price-collar rejects when Postgres-backed rejection logging is enabled. Audit write failures are non-fatal to the guardrail decision.
 - Internal runtime/engine service contracts are not treated as public client contracts.
 
 Primary references:
@@ -44,7 +47,7 @@ Summary:
 - Future admin HTTP APIs must reuse the same admin application modules.
 
 Primary references:
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-004: Post-Match Lifecycle Baseline
@@ -61,7 +64,7 @@ Summary:
 - innovation paths are allowed only after baseline parity is established and test-covered.
 
 Primary references:
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-005: Participant Roles and Permission Model
@@ -96,7 +99,7 @@ Summary:
 - calendar configuration should be one of the first admin tools delivered.
 
 Primary references:
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-007: Cross-Language Engineering Standards
@@ -127,7 +130,7 @@ Summary:
 - replay runs must record which policy version was applied.
 
 Primary references:
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-009: Settlement Ledger Baseline
@@ -140,7 +143,7 @@ Summary:
 
 Primary references:
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-010: Simulation-Backed External Integrations
 
@@ -172,7 +175,7 @@ Summary:
 
 Primary references:
 - [`docs/steering/architecture.md`](./steering/architecture.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-012: Traffic Scenario Catalog Requirement
 
@@ -197,7 +200,6 @@ Summary:
 - UI implementation should prioritize queue productivity and lifecycle trace visibility over visual mimicry.
 
 Primary references:
-- [`docs/steering/angular.md`](./steering/angular.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-014: Data Retention and Reset Policy for Simulator
@@ -267,7 +269,7 @@ Summary:
 
 Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-019: Override Governance and Audit Controls
 
@@ -282,7 +284,7 @@ Summary:
 
 Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-020: Clock Source Determinism Policy
 
@@ -311,7 +313,7 @@ Summary:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-022: Baseline SLO Target Document
 
@@ -323,7 +325,7 @@ Summary:
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-023: Single-Instance Capacity Objective
 
@@ -337,7 +339,6 @@ Summary:
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
-- [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
 
 ### D-024: Event Durability and Distribution Pattern
 
@@ -350,7 +351,7 @@ Summary:
 - event delivery semantics are at-least-once; consumers must be idempotent by `eventId`.
 
 Primary references:
-- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-025: EOD Data Lifecycle Policy
@@ -366,7 +367,7 @@ Summary:
   - immutable archive artifacts (compressed file-based partitions with manifest/checksums)
 
 Primary references:
-- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-026: Minimal Scheduler/Orchestration Policy
@@ -381,7 +382,7 @@ Summary:
 
 Primary references:
 - [`docs/DB_SPLIT_READINESS.md`](./DB_SPLIT_READINESS.md)
-- [`docs/ROADMAP.md`](./ROADMAP.md)
+- [`docs/ROADMAP.md`](./archive/ROADMAP.md)
 
 ### D-027: Postgres Procedure-First Persistence Policy
 
@@ -430,10 +431,9 @@ Summary:
 - this sprint supports the throughput track by making stress runs, comparisons, diagnostics, and scenario execution easier to repeat.
 
 Primary references:
-- [`docs/PROJECT_PITCH.md`](./PROJECT_PITCH.md)
-- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
+- [`docs/PROJECT_PITCH.md`](./archive/PROJECT_PITCH.md)
+- [`docs/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md`](./archive/SIMULATOR_CONTROL_ROOM_SPRINT_PLAN.md)
 - [`docs/SIMULATOR_UPGRADE_BACKLOG.md`](./SIMULATOR_UPGRADE_BACKLOG.md)
-- [`apps/platform-ui/README.md`](../apps/platform-ui/README.md)
 
 ### D-030: Runtime Event Schema Baseline And Outbox Timing
 
@@ -464,7 +464,7 @@ Summary:
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ### D-033: Command Log Lifecycle Controls
 
@@ -767,4 +767,4 @@ Summary:
 
 Primary references:
 - [`docs/ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)

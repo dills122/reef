@@ -87,6 +87,7 @@ seed `bot-{worker}` actors.
 ### Report Additions
 
 - `acceptedBusinessOpsRps`: successful business operations per second
+- `throughput`: canonical metric taxonomy with `attemptedPerSecond`, `acceptedPerSecond`, and optional `completedPerSecond`, `projectedPerSecond`, and `visiblePerSecond`
 - `quality`: end-to-end success, valid-intent success, invalid-intent rate, and system-failure proxy metrics
 - `rejectReasons`: grouped rejection code/reason breakdown
 - `rejectTaxonomy`: reject-code counts with percentage-of-failures/rejects (includes boundary error envelopes such as `ABUSE_BLOCKED` on non-2xx responses when present)
@@ -117,6 +118,40 @@ go run ./cmd/load-tester \
 ```
 
 Environment overrides are supported using `REEF_*` variables that match the flag names, for example `REEF_BASE_URL`, `REEF_WORKERS`, `REEF_RATE`, `REEF_DURATION`.
+Set `--seed` or `REEF_SEED` to force deterministic worker random sources for non-session runs.
+
+## Multi-Seed Batch Runs
+
+`make dev-sim-batch` runs the load tester repeatedly with different deterministic seeds and writes one report per seed plus an aggregate report.
+
+```bash
+DEV_SIM_BATCH_SEEDS=101,202,303 \
+DEV_SIM_BATCH_ARTIFACT_DIR=/tmp/reef-sim-batch \
+make dev-sim-batch ARGS="--duration 20s --workers 8 --rate 120 --mode strict-lifecycle"
+```
+
+The aggregate report summarizes totals, canonical throughput fields, p95 latency, trace pass rate, and per-seed report paths.
+
+## Scenario Drift Checks
+
+`make dev-scenario-drift-check` compares a report against either:
+
+- the existing replay threshold baseline shape used by `make dev-replay`
+- a stable report fingerprint generated from a known-good report
+
+Generate a stable baseline:
+
+```bash
+make dev-scenario-drift-check ARGS="--report /tmp/reef-load-report.json --write-baseline /tmp/reef-scenario.baseline.json"
+```
+
+Check later report drift:
+
+```bash
+make dev-scenario-drift-check ARGS="--baseline /tmp/reef-scenario.baseline.json --report /tmp/reef-load-report.json --out /tmp/reef-scenario.check.json"
+```
+
+The stable fingerprint intentionally excludes wall-clock timestamps and latency percentiles. It compares deterministic counts, status codes, action counts, reject taxonomy, quality counts, trace-check counts, scenario ID, mode, and seed.
 
 ## Intake Bench CLI
 
@@ -176,5 +211,5 @@ make dev-replay
 
 Reference:
 
-- [`docs/ROADMAP.md`](../../docs/ROADMAP.md)
+- [`docs/ROADMAP.md`](../../docs/archive/ROADMAP.md)
 - [`docs/steering/architecture.md`](../../docs/steering/architecture.md)

@@ -1,0 +1,110 @@
+---
+title: Reef
+description: Simulation-first institutional trading venue and post-trade platform.
+template: splash
+banner:
+  content: |
+    Pre-release, heavy development. APIs, schemas, and game mechanics change without notice — see <a href="/overview/status/">Current Status</a>.
+hero:
+  tagline: A simulation-first institutional trading venue and post-trade platform, with a tournament-style Bot Arena taking shape on top of it.
+  actions:
+    - text: What Is Reef
+      link: /overview/what-is-reef/
+      icon: right-arrow
+      variant: primary
+    - text: Trading API
+      link: /api/overview/
+      icon: document
+    - text: Bot Arena (WIP)
+      link: /arena/overview/
+      icon: rocket
+---
+
+import { Card, CardGrid, Badge, Aside } from '@astrojs/starlight/components';
+
+Reef models the lifecycle of privately matched institutional trades — order intake, hidden-book matching, executions, and the post-trade path toward settlement — with production-shaped architecture that stays easy to run and inspect locally.
+
+<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">
+	<Badge text="Kotlin runtime" variant="note" />
+	<Badge text="Go matching engine" variant="note" />
+	<Badge text="Postgres" variant="note" />
+	<Badge text="Protobuf contracts" variant="note" />
+	<Badge text="Bot Arena: WIP" variant="caution" />
+</div>
+
+## Explore The Docs
+
+<CardGrid>
+	<Card title="Project Overview" icon="open-book">
+		What Reef is, why it exists, and how the core platform and simulation control plane relate. Start at [What Is Reef](/overview/what-is-reef/).
+	</Card>
+	<Card title="Bot Arena & Bot SDK" icon="rocket">
+		The work-in-progress trading-bot game: how to author a bot, how a run works, how scoring works. Start at [Arena Overview](/arena/overview/).
+	</Card>
+	<Card title="Trading API" icon="setting">
+		The external `/api/v1` surface: orders, market data, command status, headers, and error shape. Start at [API Overview](/api/overview/).
+	</Card>
+	<Card title="Data Schema" icon="document">
+		Persistent schema (`runtime`, `boundary`, `auth`, `admin`, and planned domains) plus the protobuf wire contracts. Start at [Schema Overview](/schema/overview/).
+	</Card>
+</CardGrid>
+
+## How It Fits Together
+
+Two layers, one command path. The **core platform** owns real business behavior — order intake, hidden-book matching, executions, and the post-trade path toward settlement. The **simulation control plane** — scenarios, participant bots, seeded randomness, and the emerging Bot Arena — drives that same platform through the identical commands a manual user would issue. Simulation never writes to domain tables directly.
+
+```text
+order intake -> hidden-book matching engine -> executions & trades
+             -> allocations -> confirmations -> settlement -> audit trail
+```
+
+<Card title="Read the full architecture" icon="puzzle">
+	Service boundaries, bounded contexts, and current deployment shape. See [Architecture](/overview/architecture/).
+</Card>
+
+## Write A Trading Bot
+
+Bots are TypeScript classes extending `ReefBotV1`. The harness owns scheduling, validation, and risk checks — your bot just decides what to do each tick.
+
+```ts
+export default class ExampleBot extends ReefBotV1 {
+  static override metadata = {
+    name: "example-bot",
+    publisher: "Example Publisher",
+    email: "bot-author@example.com",
+    version: "1.0.0",
+    sdkVersion: "1.5.0",
+    botApiVersion: "v1",
+  } as const;
+
+  override async onTick(ctx: BotContextV1) {
+    const snapshot = await ctx.marketData.snapshot("AAPL");
+    if (!snapshot.ok) return [];
+
+    return [
+      ctx.orders.placeLimit({
+        instrumentId: "AAPL",
+        side: "BUY",
+        quantity: 10,
+        limitPrice: snapshot.value.midPrice - 1,
+      }),
+    ];
+  }
+}
+```
+
+<Card title="Write your first bot" icon="rocket">
+	Full lifecycle, limits, and local qualification checks. See [Bot SDK Quickstart](/arena/bot-sdk-quickstart/).
+</Card>
+
+## Run It Locally
+
+```bash
+make dev-up      # start Postgres, runtime, matching engine
+make dev-smoke    # verify the local stack end to end
+make dev-sim      # drive a seeded scenario
+```
+
+<Aside type="caution" title="Pre-release">
+	Reef is under heavy development. Routes, schemas, and game mechanics described in these docs are the current target, not a stable release — see [Current Status](/overview/status/) for what's actually built today.
+</Aside>

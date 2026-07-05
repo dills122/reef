@@ -12,34 +12,12 @@ Detailed execution plan:
 
 ## Current Baseline
 
-Historical high-throughput synchronous/capacity profile:
+Live measured baselines, worker/rate sweeps, and evidence-dated benchmark history live in [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md) (this plan does not duplicate those numbers).
 
-- runtime -> engine transport: gRPC
-- runtime HTTP threads: `64`
-- runtime DB pool max: `48`
-- simulator profile: `capacity-baseline`
-- best measured point: `6500` target / `768` workers / `60s`
-- throughput: `2961.43 rps`
-- accepted throughput: `2919.27 rps`
-- success rate: `98.58%`
-- p95 / p99 latency: `325.39ms / 484.59ms`
-- trace checks: `100/100`
-
-Interpretation:
-- The current stack is healthy enough that the next gains should target architecture, not only tuning.
-- The write path is likely dominated by synchronous boundary capture, idempotency, runtime persistence, and event/table growth.
-- Further worker/rate increases already show diminishing returns and worse p99.
-
-Current captured-ack evidence from the bot-arena scaling branch:
-- raw durable intake can exceed `7k accepted rps` in narrow local benchmarks.
-- async worker drain is currently below target: about `4k-4.3k completed/sec` at `16` workers and about `4.9k completed/sec` at `24` workers, with worsening persistence and completion latency.
-- indexed queue claims and lease reclaim fixed correctness/drain blockers, but they did not remove the remaining write-amplification ceiling.
-- the best set-based runtime persistence and command-log FK tuning evidence stayed lossless, but still reached only about `4015 accepted rps`, `2404 completed/sec` during load, and `5606/sec` post-load drain.
-
-Interpretation:
-- the next capacity gate is not whether the API can accept commands.
-- the next capacity gate is whether accepted commands reach terminal state at `7500-10000 completed/sec` without unbounded backlog, unexplained gaps, or lossy overload behavior.
-- the current Postgres `captured-ack` path remains a useful fallback and baseline, but it should not be treated as the final bot-arena throughput architecture.
+Standing interpretation:
+- The next capacity gate is not whether the API can accept commands; it is whether accepted commands reach terminal state at `7500-10000 completed/sec` without unbounded backlog, unexplained gaps, or lossy overload behavior.
+- The write path is dominated by synchronous boundary capture, idempotency, runtime persistence, and event/table growth — target architecture, not only tuning.
+- The current Postgres `captured-ack` path remains a useful fallback and baseline, but it should not be treated as the final bot-arena throughput architecture.
 
 ## Per-Instance Scaling Model
 

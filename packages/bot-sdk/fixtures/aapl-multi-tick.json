@@ -1,0 +1,79 @@
+{
+  "scenarioId": "aapl-multi-tick-v1",
+  "runId": "run-bot-sdk-aapl-1",
+  "runKind": "scenario",
+  "venueSessionId": "session-aapl-1",
+  "actorId": "actor-simple-market-maker",
+  "participantId": "participant-simple-market-maker",
+  "accountId": "account-simple-market-maker",
+  "botId": "simple-market-maker",
+  "botVersion": "1.0.0",
+  "correlationId": "corr-bot-sdk-aapl-1",
+  "config": {
+    "instrumentId": "AAPL",
+    "orderSize": 10,
+    "spread": 1
+  },
+  "policy": {
+    "tickIntervalMs": 500,
+    "minTickIntervalMs": 250,
+    "maxOrderActionsPerTick": 10,
+    "maxDataCallsPerTick": 20,
+    "maxTradeCommandsPerSecond": 10
+  },
+  "ticks": [
+    {
+      "occurredAt": "2026-07-04T14:30:00.000Z",
+      "marketSnapshots": {
+        "AAPL": {
+          "instrumentId": "AAPL",
+          "asOf": "2026-07-04T14:30:00.000Z",
+          "bidPrice": 99.5,
+          "askPrice": 100.5,
+          "midPrice": 100,
+          "lastPrice": 100
+        }
+      }
+    },
+    {
+      "occurredAt": "2026-07-04T14:30:00.500Z",
+      "marketSnapshots": {
+        "AAPL": {
+          "instrumentId": "AAPL",
+          "asOf": "2026-07-04T14:30:00.500Z",
+          "bidPrice": 100,
+          "askPrice": 101,
+          "midPrice": 100.5,
+          "lastPrice": 100.5
+        }
+      }
+    },
+    {
+      "occurredAt": "2026-07-04T14:30:01.000Z",
+      "marketSnapshots": {
+        "AAPL": {
+          "instrumentId": "AAPL",
+          "asOf": "2026-07-04T14:30:01.000Z",
+          "bidPrice": 100.25,
+          "askPrice": 101.25,
+          "midPrice": 100.75,
+          "lastPrice": 100.75
+        }
+      }
+    }
+  ],
+  "historicalBars": {
+    "AAPL": [
+      {
+        "instrumentId": "AAPL",
+        "start": "2026-07-04T14:00:00.000Z",
+        "end": "2026-07-04T14:01:00.000Z",
+        "open": 99,
+        "high": 101,
+        "low": 98.75,
+        "close": 100,
+        "volume": 1000
+      }
+    ]
+  }
+}

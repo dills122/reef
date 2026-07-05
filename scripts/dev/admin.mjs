@@ -33,8 +33,60 @@ function usage() {
   account-upsert <accountId> <participantId>
   role-upsert <roleId> <permissionCsv>
   role-assign <actorId> <roleId>
+  account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [--max-quantity N] [--max-notional N] [--currency CCY] [--reason text]
+  account-risk-list
+  breaker-set <global|venue-session|instrument> <id|*> <trip|reset> [reason]
+  breaker-list
+  price-collar-set <instrumentId> <minPrice|*> <maxPrice|*> [--currency CCY] [--reason text]
+  price-collar-list
   events [limit]
   traces <traceId>`);
+}
+
+function parseAccountRiskOptions(values) {
+  const options = {
+    reason: "",
+    maxQuantityUnits: "",
+    maxNotional: "",
+    currency: "",
+  };
+  const reasonParts = [];
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (value === "--max-quantity") {
+      options.maxQuantityUnits = values[++i] ?? "";
+    } else if (value === "--max-notional") {
+      options.maxNotional = values[++i] ?? "";
+    } else if (value === "--currency") {
+      options.currency = values[++i] ?? "";
+    } else if (value === "--reason") {
+      reasonParts.push(values[++i] ?? "");
+    } else {
+      reasonParts.push(value);
+    }
+  }
+  options.reason = reasonParts.join(" ").trim();
+  return options;
+}
+
+function parsePriceCollarOptions(values) {
+  const options = {
+    currency: "",
+    reason: "",
+  };
+  const reasonParts = [];
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (value === "--currency") {
+      options.currency = values[++i] ?? "";
+    } else if (value === "--reason") {
+      reasonParts.push(values[++i] ?? "");
+    } else {
+      reasonParts.push(value);
+    }
+  }
+  options.reason = reasonParts.join(" ").trim();
+  return options;
 }
 
 const [, , command, ...args] = process.argv;
@@ -87,6 +139,67 @@ switch (command) {
       process.exit(1);
     }
     await post("/auth/actor-roles", { actorId: args[0], roleId: args[1] });
+    break;
+  case "account-risk-set":
+    if (args.length < 3) {
+      usage();
+      process.exit(1);
+    }
+    {
+      const options = parseAccountRiskOptions(args.slice(3));
+      await post("/internal/admin/account-risk/controls", {
+        scopeType: args[0],
+        scopeId: args[1],
+        decision: args[2],
+        reason: options.reason,
+        maxQuantityUnits: options.maxQuantityUnits,
+        maxNotional: options.maxNotional,
+        currency: options.currency,
+        actorId: "dev-admin",
+        correlationId: "dev-admin",
+      });
+    }
+    break;
+  case "account-risk-list":
+    await get("/internal/boundary/account-risk/controls");
+    break;
+  case "breaker-set":
+    if (args.length < 3) {
+      usage();
+      process.exit(1);
+    }
+    await post("/internal/admin/circuit-breakers", {
+      scopeType: args[0],
+      scopeId: args[1],
+      action: args[2],
+      reason: args.slice(3).join(" "),
+      actorId: "dev-admin",
+      correlationId: "dev-admin",
+    });
+    break;
+  case "breaker-list":
+    await get("/internal/boundary/circuit-breakers");
+    break;
+  case "price-collar-set":
+    if (args.length < 3) {
+      usage();
+      process.exit(1);
+    }
+    {
+      const options = parsePriceCollarOptions(args.slice(3));
+      await post("/internal/admin/price-collars", {
+        instrumentId: args[0],
+        minPrice: args[1] === "*" ? "" : args[1],
+        maxPrice: args[2] === "*" ? "" : args[2],
+        currency: options.currency,
+        reason: options.reason,
+        actorId: "dev-admin",
+        correlationId: "dev-admin",
+      });
+    }
+    break;
+  case "price-collar-list":
+    await get("/internal/boundary/price-collars");
     break;
   case "events": {
     const limit = args[0] ?? "20";

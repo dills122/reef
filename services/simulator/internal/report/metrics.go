@@ -35,6 +35,28 @@ type QualitySummary struct {
 	SystemFailureRatePct      float64  `json:"systemFailureRatePct"`
 }
 
+type ThroughputSummary struct {
+	AttemptedPerSecond float64 `json:"attemptedPerSecond"`
+	AcceptedPerSecond  float64 `json:"acceptedPerSecond"`
+	CompletedPerSecond float64 `json:"completedPerSecond,omitempty"`
+	ProjectedPerSecond float64 `json:"projectedPerSecond,omitempty"`
+	VisiblePerSecond   float64 `json:"visiblePerSecond,omitempty"`
+}
+
+func ComputeThroughput(totalRequests, accepted, completed int64, durationSeconds float64) ThroughputSummary {
+	if durationSeconds <= 0 {
+		return ThroughputSummary{}
+	}
+	out := ThroughputSummary{
+		AttemptedPerSecond: float64(totalRequests) / durationSeconds,
+		AcceptedPerSecond:  float64(accepted) / durationSeconds,
+	}
+	if completed > 0 {
+		out.CompletedPerSecond = float64(completed) / durationSeconds
+	}
+	return out
+}
+
 func ComputeLatency(values []float64) LatencySummary {
 	if len(values) == 0 {
 		return LatencySummary{}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,9 +13,13 @@ import (
 )
 
 type Service struct {
-	books  sync.Map // map[string]*orderBook
-	orders sync.Map // map[string]*orderRecord
-	now    func() time.Time
+	books                  sync.Map // map[string]*orderBook
+	orders                 sync.Map // map[string]*orderRecord
+	now                    func() time.Time
+	terminalRetentionLimit int
+	terminalRetentionMu    sync.Mutex
+	terminalRetentionOrder []string
+	terminalRetentionHead  int
 }
 
 type restingOrder = hotbook.RestingOrder
@@ -34,6 +39,7 @@ type orderRecord struct {
 	Currency          string
 	Status            domain.OrderStatus
 	LastUpdatedAt     string
+	terminalTracked   bool
 }
 
 type Option func(*Service)
@@ -46,8 +52,17 @@ func WithClock(clock func() time.Time) Option {
 	}
 }
 
+func WithTerminalOrderRetentionLimit(limit int) Option {
+	return func(s *Service) {
+		if limit > 0 {
+			s.terminalRetentionLimit = limit
+		}
+	}
+}
+
 func NewService(options ...Option) *Service {
 	service := &Service{
+		terminalRetentionLimit: envInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", 0),
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -154,6 +169,7 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 	record.RemainingQuantity = 0
 	record.Status = domain.OrderStatusCancelled
 	record.LastUpdatedAt = now
+	s.trackTerminalOrder(record)
 
 	return domain.SubmitOrderResult{
 		Accepted: &domain.OrderAccepted{
@@ -395,8 +411,48 @@ func (s *Service) refreshOrderStatus(record *orderRecord) {
 		record.Status = domain.OrderStatusAccepted
 	case record.RemainingQuantity == 0:
 		record.Status = domain.OrderStatusFilled
+		s.trackTerminalOrder(record)
 	default:
 		record.Status = domain.OrderStatusPartiallyFilled
+	}
+}
+
+func (s *Service) trackTerminalOrder(record *orderRecord) {
+	if s.terminalRetentionLimit <= 0 || record.terminalTracked {
+		return
+	}
+	if record.Status != domain.OrderStatusFilled && record.Status != domain.OrderStatusCancelled {
+		return
+	}
+
+	s.terminalRetentionMu.Lock()
+	defer s.terminalRetentionMu.Unlock()
+	if record.terminalTracked {
+		return
+	}
+	record.terminalTracked = true
+	s.terminalRetentionOrder = append(s.terminalRetentionOrder, record.OrderID)
+	for len(s.terminalRetentionOrder)-s.terminalRetentionHead > s.terminalRetentionLimit {
+		evictID := s.terminalRetentionOrder[s.terminalRetentionHead]
+		s.terminalRetentionHead++
+		if evictID == record.OrderID {
+			continue
+		}
+		value, ok := s.orders.Load(evictID)
+		if !ok {
+			continue
+		}
+		evictRecord, ok := value.(*orderRecord)
+		if !ok {
+			continue
+		}
+		if evictRecord.Status == domain.OrderStatusFilled || evictRecord.Status == domain.OrderStatusCancelled {
+			s.orders.Delete(evictID)
+		}
+	}
+	if s.terminalRetentionHead > 0 && s.terminalRetentionHead*2 >= len(s.terminalRetentionOrder) {
+		s.terminalRetentionOrder = append([]string(nil), s.terminalRetentionOrder[s.terminalRetentionHead:]...)
+		s.terminalRetentionHead = 0
 	}
 }
 
@@ -449,4 +505,16 @@ func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {
 func (s *Service) reserveOrder(record *orderRecord) bool {
 	_, loaded := s.orders.LoadOrStore(record.OrderID, record)
 	return !loaded
+}
+
+func envInt(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < 0 {
+		return fallback
+	}
+	return parsed
 }

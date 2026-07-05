@@ -1,5 +1,20 @@
 package com.reef.platform.application.admin
 
+import com.reef.platform.api.AccountRiskControlStore
+import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.application.arena.ArenaBotRegistryStore
+import com.reef.platform.application.arena.ArenaBot
+import com.reef.platform.application.arena.ArenaBotMetadata
+import com.reef.platform.application.arena.ArenaBotVersion
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaControlPlaneService
+import com.reef.platform.application.arena.ArenaLeaderboardEntry
+import com.reef.platform.application.arena.ArenaOperatorDecision
+import com.reef.platform.application.arena.ArenaQualificationReport
+import com.reef.platform.application.arena.ArenaRunRecord
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.RegisterArenaBotCommand
+import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
@@ -53,8 +68,37 @@ data class SimulationControlState(
     val scenario: String = ""
 )
 
+data class ArenaBotVersionDecisionCommand(
+    val botId: String,
+    val versionId: String,
+    val status: ArenaBotVersionStatus,
+    val reason: String
+)
+
+data class ArenaBotRegistrationCommand(
+    val botId: String,
+    val fileName: String,
+    val name: String,
+    val publisher: String,
+    val email: String,
+    val description: String = "",
+    val version: String = ""
+)
+
+data class ArenaBotVersionRegistrationCommand(
+    val botId: String,
+    val versionId: String,
+    val sourceHash: String,
+    val artifactHash: String,
+    val sdkVersion: String,
+    val apiVersion: String,
+    val dependencyManifestHash: String
+)
+
 class AdminApplicationService(
     private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence(),
+    private val arenaRegistryStore: ArenaBotRegistryStore? = null,
+    private val accountRiskControlStore: AccountRiskControlStore? = null,
     private val now: () -> Instant = { Instant.now() }
 ) {
     private val eventProducer = "platform-runtime-admin"
@@ -150,6 +194,110 @@ class AdminApplicationService(
 
     fun simulationState(): SimulationControlState = simulationState
 
+    fun registerArenaBot(actor: AdminActor, command: ArenaBotRegistrationCommand): ArenaBot {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val bot = arenaControlPlane().registerBot(
+            RegisterArenaBotCommand(
+                botId = command.botId,
+                fileName = command.fileName,
+                metadata = ArenaBotMetadata(
+                    name = command.name,
+                    publisher = command.publisher,
+                    email = command.email,
+                    description = command.description,
+                    version = command.version
+                )
+            )
+        )
+        emitAudit(actor, "AdminArenaBotRegistered", command.botId, "fileName=${command.fileName}")
+        return bot
+    }
+
+    fun registerArenaBotVersion(
+        actor: AdminActor,
+        command: ArenaBotVersionRegistrationCommand
+    ): ArenaBotVersion {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val version = arenaControlPlane().registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = command.botId,
+                versionId = command.versionId,
+                sourceHash = command.sourceHash,
+                artifactHash = command.artifactHash,
+                sdkVersion = command.sdkVersion,
+                apiVersion = command.apiVersion,
+                dependencyManifestHash = command.dependencyManifestHash
+            )
+        )
+        emitAudit(actor, "AdminArenaBotVersionRegistered", "${command.botId}/${command.versionId}", "status=${version.status.name}")
+        return version
+    }
+
+    fun transitionArenaBotVersion(actor: AdminActor, command: ArenaBotVersionDecisionCommand): ArenaBotVersion {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val service = arenaControlPlane()
+        val updated = service.transitionVersion(
+            botId = command.botId,
+            versionId = command.versionId,
+            toStatus = command.status,
+            actorId = actor.actorId,
+            reason = command.reason,
+            correlationId = actor.correlationId
+        )
+        syncArenaBotRiskControl(command, updated)
+        emitAudit(
+            actor,
+            "AdminArenaBotVersionTransitioned",
+            "${command.botId}/${command.versionId}",
+            "status=${command.status.name},reason=${command.reason}"
+        )
+        return updated
+    }
+
+    fun arenaBot(actor: AdminActor, botId: String): ArenaBot? {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().bot(botId)
+    }
+
+    fun arenaBotVersion(actor: AdminActor, botId: String, versionId: String): ArenaBotVersion? {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().version(botId, versionId)
+    }
+
+    fun arenaQualificationReports(actor: AdminActor, botId: String, versionId: String): List<ArenaQualificationReport> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().qualificationReports(botId, versionId)
+    }
+
+    fun arenaOperatorDecisions(actor: AdminActor, botId: String, versionId: String): List<ArenaOperatorDecision> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().operatorDecisions(botId, versionId)
+    }
+
+    fun arenaRun(actor: AdminActor, runId: String): ArenaRunRecord? {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().runRecord(runId)
+    }
+
+    fun arenaRuntimeConfigDescriptors(
+        actor: AdminActor,
+        botId: String,
+        versionId: String
+    ): List<ArenaRuntimeConfigDescriptor> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().runtimeConfigDescriptors(botId, versionId)
+    }
+
+    fun arenaLeaderboard(
+        actor: AdminActor,
+        modeId: String,
+        scoringPolicyVersion: String,
+        limit: Int = 50
+    ): List<ArenaLeaderboardEntry> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().leaderboard(modeId, scoringPolicyVersion, limit)
+    }
+
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()
 
     fun listParticipants(): List<Participant> = runtimePersistence.participants()
@@ -163,6 +311,40 @@ class AdminApplicationService(
     fun recentEvents(limit: Int): List<RuntimeEvent> = runtimePersistence.recentEvents(limit)
 
     fun traceEvents(traceId: String): List<RuntimeEvent> = runtimePersistence.eventsForTrace(traceId)
+
+    private fun arenaControlPlane(): ArenaControlPlaneService {
+        return ArenaControlPlaneService(arenaStore(), now)
+    }
+
+    private fun arenaStore(): ArenaBotRegistryStore {
+        return arenaRegistryStore ?: error("arena registry store is not configured")
+    }
+
+    private fun syncArenaBotRiskControl(command: ArenaBotVersionDecisionCommand, updated: ArenaBotVersion) {
+        val riskStore = accountRiskControlStore ?: return
+        val reason = "arena ${updated.status.name}: ${command.reason}"
+        when (updated.status) {
+            ArenaBotVersionStatus.Approved,
+            ArenaBotVersionStatus.Active -> riskStore.upsertControl(
+                scopeType = "BOT",
+                scopeId = updated.botId,
+                decision = AccountRiskDecision.ALLOW,
+                reason = reason
+            )
+            ArenaBotVersionStatus.Suspended,
+            ArenaBotVersionStatus.Quarantined,
+            ArenaBotVersionStatus.Banned,
+            ArenaBotVersionStatus.Archived -> riskStore.upsertControl(
+                scopeType = "BOT",
+                scopeId = updated.botId,
+                decision = AccountRiskDecision.DISABLED_BOT,
+                reason = reason
+            )
+            ArenaBotVersionStatus.Draft,
+            ArenaBotVersionStatus.Submitted,
+            ArenaBotVersionStatus.ChecksPassed -> Unit
+        }
+    }
 
     private fun emitAudit(actor: AdminActor, eventType: String, targetId: String, detail: String) {
         val eventTime = if (actor.occurredAt.isBlank()) now().toString() else actor.occurredAt

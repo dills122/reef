@@ -68,6 +68,7 @@ async function startPostgres(context) {
     "postgres",
     "boundary-postgres",
     "projection-postgres",
+    "arena-postgres",
   ]);
 }
 

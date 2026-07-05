@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/dills122/reef/actions/workflows/ci.yml/badge.svg)](https://github.com/dills122/reef/actions/workflows/ci.yml)
 [![Throughput Stress](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml/badge.svg)](https://github.com/dills122/reef/actions/workflows/throughput-stress.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Kotlin](https://img.shields.io/badge/platform--runtime-Kotlin-7F52FF.svg)](./services/platform-runtime)
+[![Go](https://img.shields.io/badge/matching--engine-Go-00ADD8.svg)](./services/matching-engine)
 
 <p align="center">
   <img src="./reef-logo-main.png" alt="Reef project logo" width="260" height="260" />
@@ -22,7 +25,6 @@ The current system focuses on:
 
 ```text
 apps/
-  platform-ui/                 Angular operations and simulation-control surface
   docs-site/                   Astro documentation surface
 services/
   platform-runtime/            Kotlin API/runtime, command intake, persistence, projections, admin modules
@@ -31,7 +33,6 @@ services/
 contracts/
   proto/                       Versionable inter-service contracts
 packages/
-  ui-models/                   Shared frontend-facing model definitions
   scenario-definitions/        Reusable simulation inputs and scenario files
 scripts/
   dev/                         Local stack, smoke, stress, replay, admin, and migration automation
@@ -127,7 +128,6 @@ Surface-specific steering:
 
 - [`docs/steering/go.md`](./docs/steering/go.md)
 - [`docs/steering/kotlin.md`](./docs/steering/kotlin.md)
-- [`docs/steering/angular.md`](./docs/steering/angular.md)
 - [`docs/steering/astro.md`](./docs/steering/astro.md)
 - [`docs/steering/data-platform.md`](./docs/steering/data-platform.md)
 - [`docs/steering/inter-service-communication.md`](./docs/steering/inter-service-communication.md)

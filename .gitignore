@@ -3,10 +3,13 @@
 .env.local
 .env.*.local
 .gradle/
+node_modules/
 build/
 out/
 bin/
 coverage/
+dist/
+.astro/
 reports/do-benchmark/
 reports/simulations/
 infra/do-benchmark/.terraform/
@@ -29,3 +32,10 @@ infra/hetzner-core/server/secrets/
 .codex/steering/*-steering.md
 !.codex/steering/repository-steering.md
 !.codex/steering/testing-quality-gates-steering.md
+
+# Claude local integration links. These point at user-specific template
+# checkouts and are recreated with `bun run claude:links`.
+.claude/skills/
+.aider*
+.agents
+skills-lock.json

@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.PostgresBoundarySqlNames
+import com.reef.platform.application.arena.PostgresArenaSqlNames
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -143,6 +144,51 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
+    fun arenaRegistryRequirementsCoverControlPlaneObjects() {
+        val names = PostgresArenaSqlNames()
+        val requirements = PostgresSchemaRequirements.arenaRegistry(
+            bots = names.bots,
+            botVersions = names.botVersions,
+            qualificationReports = names.qualificationReports,
+            qualificationReportIssues = names.qualificationReportIssues,
+            operatorDecisions = names.operatorDecisions,
+            runRecords = names.runRecords,
+            runBotVersions = names.runBotVersions,
+            runBotResults = names.runBotResults,
+            runtimeConfigDescriptors = names.runtimeConfigDescriptors
+        )
+
+        assertEquals(
+            setOf(
+                "arena.bots",
+                "arena.bot_versions",
+                "arena.qualification_reports",
+                "arena.qualification_report_issues",
+                "arena.operator_decisions",
+                "arena.run_records",
+                "arena.run_bot_versions",
+                "arena.run_bot_results",
+                "arena.runtime_config_descriptors"
+            ),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(
+            requirements.columns
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .containsAll(
+                    setOf(
+                        "arena.bot_versions.status:text",
+                        "arena.run_records.seed:bigint",
+                        "arena.run_bot_results.final_equity:bigint",
+                        "arena.run_bot_results.disqualified:boolean",
+                        "arena.runtime_config_descriptors.secret_path:text",
+                        "arena.runtime_config_descriptors.required:boolean"
+                    )
+                )
+        )
+    }
+
+    @Test
     fun boundaryIdempotencyRequirementsCoverMigratedTable() {
         val names = PostgresBoundarySqlNames()
         val requirements = PostgresSchemaRequirements.boundaryIdempotency(names.idempotencyRecords)
@@ -175,6 +221,104 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns.map { it.qualifiedName }.toSet()
         )
+    }
+
+    @Test
+    fun boundaryAccountRiskRequirementsCoverControlsAndDecisionAudit() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryAccountRisk(
+            names.accountRiskControls,
+            names.accountRiskDecisions
+        )
+
+        assertEquals(
+            setOf("boundary.account_risk_controls", "boundary.account_risk_decisions"),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertEquals(
+            setOf(
+                "boundary.account_risk_controls.scope_type:text",
+                "boundary.account_risk_controls.scope_id:text",
+                "boundary.account_risk_controls.decision:text",
+                "boundary.account_risk_controls.reason:text",
+                "boundary.account_risk_controls.max_quantity_units:text",
+                "boundary.account_risk_controls.max_notional:text",
+                "boundary.account_risk_controls.currency:text",
+                "boundary.account_risk_controls.updated_at:timestamp with time zone",
+                "boundary.account_risk_decisions.decision_id:text",
+                "boundary.account_risk_decisions.decided_at:timestamp with time zone",
+                "boundary.account_risk_decisions.decision:text",
+                "boundary.account_risk_decisions.code:text",
+                "boundary.account_risk_decisions.message:text",
+                "boundary.account_risk_decisions.client_id:text",
+                "boundary.account_risk_decisions.route:text",
+                "boundary.account_risk_decisions.command_type:text",
+                "boundary.account_risk_decisions.command_id:text",
+                "boundary.account_risk_decisions.idempotency_key:text",
+                "boundary.account_risk_decisions.correlation_id:text",
+                "boundary.account_risk_decisions.actor_id:text",
+                "boundary.account_risk_decisions.participant_id:text",
+                "boundary.account_risk_decisions.account_id:text",
+                "boundary.account_risk_decisions.bot_id:text",
+                "boundary.account_risk_decisions.run_id:text",
+                "boundary.account_risk_decisions.venue_session_id:text",
+                "boundary.account_risk_decisions.instrument_id:text",
+                "boundary.account_risk_decisions.order_id:text",
+                "boundary.account_risk_decisions.quantity_units:text",
+                "boundary.account_risk_decisions.limit_price:text",
+                "boundary.account_risk_decisions.currency:text",
+                "boundary.account_risk_decisions.payload_hash:text"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
+    fun boundaryCommandCircuitBreakerRequirementsCoverBreakerTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryCommandCircuitBreakers(names.commandCircuitBreakers)
+
+        assertEquals(setOf("boundary.command_circuit_breakers"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "boundary.command_circuit_breakers.scope_type:text",
+                "boundary.command_circuit_breakers.scope_id:text",
+                "boundary.command_circuit_breakers.tripped:boolean",
+                "boundary.command_circuit_breakers.reason:text",
+                "boundary.command_circuit_breakers.updated_at:timestamp with time zone"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
+    fun boundaryInstrumentPriceCollarRequirementsCoverCollarTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryInstrumentPriceCollars(names.instrumentPriceCollars)
+
+        assertEquals(setOf("boundary.instrument_price_collars"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "boundary.instrument_price_collars.instrument_id:text",
+                "boundary.instrument_price_collars.min_price:text",
+                "boundary.instrument_price_collars.max_price:text",
+                "boundary.instrument_price_collars.currency:text",
+                "boundary.instrument_price_collars.reason:text",
+                "boundary.instrument_price_collars.updated_at:timestamp with time zone"
+            ),
+            requirements.columns.map { "${it.qualifiedName}:${it.expectedDataType}" }.toSet()
+        )
+    }
+
+    @Test
+    fun boundaryRejectionRequirementsCoverGuardrailAuditTable() {
+        val names = PostgresBoundarySqlNames()
+        val requirements = PostgresSchemaRequirements.boundaryRejections(names.boundaryRejections)
+
+        assertEquals(setOf("boundary.boundary_rejections"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertTrue(requirements.columns.any { it.qualifiedName == "boundary.boundary_rejections.guardrail_type" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "boundary.boundary_rejections.command_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "boundary.boundary_rejections.payload_hash" })
     }
 
     @Test

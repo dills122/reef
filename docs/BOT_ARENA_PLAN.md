@@ -14,6 +14,90 @@ The goal is to let users build strategy bots that compete in deterministic simul
 
 This is a planning document, not an accepted architecture decision. If the direction is adopted, the stable parts should move into `docs/DECISIONS.md`, steering docs, and versioned contracts.
 
+## Deferred Second Review
+
+Status: pending second review after the current active work settles.
+
+Current checkpoint: the Bot SDK runtime bridge is merged. Bot-originated order commands can use the normal venue command boundary with bot client identity, run metadata, stream-ack intake, command-log capture, canonical outcome persistence, projection, and replay-idempotency coverage. The next non-throughput slice should move from command-path proof to arena control-plane source facts and operator approval controls.
+
+This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
+
+Second-review scope:
+
+- onboarding, intake, and permission flow for human users, bots, first-level funding checks, KYC-style gates where applicable, and feature access
+- bot creation flow, including fork/create, SDK or tool configuration, owner permissions, secret partition activation, analyzer/simulation validation, and approval before live arena participation
+- bot runtime configuration, including private per-bot config, allowed runtime changes between runs, dependency policy, and isolation from other bots
+- external market-data access, including OpenBB or other providers behind an adapter boundary rather than direct domain coupling
+- order and user API behavior, including how orders are placed, validated, backed up, routed to matching, and exposed through order history
+- matching internals, including queue feed, per-engine consumer ownership, deterministic lane assignment, settlement after fulfilled matches, and cleanup after settlement
+- simulation setup, including startup snapshots, liquidity providers, built-in bots, admin or monitor actors, and controlled bot shutdown
+- bot API shape, including whether it is TypeScript-based only, command-based, state/test analyzed before merge, and lifecycle-managed through base classes or pluggable methods
+- game execution model, including daily, weekly, and all-time boards; scheduled runners; persistent result storage; and approved-player result aggregation
+- leaderboard construction, including ending assets, number of trades, best upside per trade, final equity, realized/unrealized PnL, drawdown, consistency, tie-breakers, and disqualification conditions
+
+Specific items to resolve during the second review:
+
+- define the canonical event model for bot registration, bot configuration, bot approval, simulation start, market snapshot capture, order acceptance/rejection, execution, settlement, game completion, and leaderboard publication
+- define the run reproducibility envelope: seed, market snapshot ID, bot version, commit or artifact hash, config hash, scenario definition version, input event log, and output events
+- define bot safety limits: max order size, max position, max notional exposure, order rate, cancel/replace rate, allowed instruments, allowed order types, loss limits, timeout behavior, and kill switch
+- define fairness rules for competitions: same starting cash, same market snapshot, same data access, same instruments, same duration, same latency model where applicable, same fee/slippage model, and same margin/leverage rules
+- define the bot approval lifecycle: draft, submitted, static checks passed, simulation checks passed, approved, active, suspended, and archived
+- define secret handling rules: who can read/write secrets, how secrets rotate, whether runners can access secrets directly, isolation by bot/user/game, and audit logging for secret access
+- define the data-provider abstraction for historical candles, live quotes, corporate actions, instrument metadata, provider health, and snapshot generation
+- define order lifecycle states: received, accepted, rejected, queued, partially filled, filled, cancelled, expired, and failed
+- define failure handling for bot crashes, runner timeout, market-data outage, matching-engine outage, duplicate submission, replay mismatch, settlement failure, and leaderboard calculation failure
+
+The intended output of this review should be one or more focused specs, likely:
+
+- bot onboarding and approval flow
+- bot runtime, secret, and data-access model
+- simulation and game execution model
+- order, matching, and settlement lifecycle for arena-originated activity
+- leaderboard, scoring, replay, and audit rules
+
+## Next Control-Plane Slice
+
+Start with durable arena source facts before UI or leaderboard work:
+
+- bot identity and public metadata
+- bot version, artifact hash, source hash, SDK/API versions, and dependency manifest reference
+- qualification report status and issue codes
+- approval lifecycle state: `draft`, `submitted`, `checks_passed`, `approved`, `active`, `suspended`, `quarantined`, `banned`, `archived`
+- operator decisions with actor, reason, correlation ID, and timestamp
+- run records that reference bot versions and policy versions
+
+This storage boundary should remain separate from trading hot-path state. Local development may begin with an in-memory or same-database schema, but the domain model should treat arena registry and approval facts as arena-owned data.
+
+Implementation checkpoint:
+
+- `ArenaControlPlaneService` defines the first arena-owned registry boundary in platform runtime.
+- `ArenaBotRegistryStore` and `InMemoryArenaBotRegistryStore` capture source facts for local tests without introducing a trading hot-path dependency.
+- `PostgresArenaBotRegistryStore` adds the first durable arena schema for registry, qualification, operator decision, and run-record facts.
+- Hosted arena admin and bot-version risk checks require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`), not the runtime or boundary datasource.
+- Bot versions now have explicit approval, active, suspended, quarantined, banned, and archived states.
+- Operator decisions record actor, reason, correlation ID, timestamp, and lifecycle transition.
+- Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
+- Arena runtime config descriptors record OpenBao secret paths and required keys without storing secret values.
+- Arena bot version risk checks can reject exact bot/version commands before venue acceptance when the version is not approved or active.
+
+Remaining work before this becomes a production control plane:
+
+- keep `PostgresArenaBotRegistryStore` validation coverage in the schema-placement CI job as arena schema evolves
+- keep `make dev-smoke-arena-bot-risk` as the local stack gate for bot-version risk controls; `make test-bot-sdk` syntax-checks the smoke script
+- wire the platform-owned `OpenBao` provider into runner preflight using `resolveBotRuntimeConfigV1`
+- ingest hosted simulation/test-bot summaries into `arena.run_bot_results` so leaderboards use persisted run facts
+
+Local arena risk smoke:
+
+```bash
+ARENA_POSTGRES_JDBC_URL=jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena \
+PLATFORM_ARENA_ADMIN_ENABLED=1 \
+EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=1 \
+make dev-smoke-arena-bot-risk
+```
+
+The smoke registers a bot and bot version, quarantines that version through the hosted internal admin route, then submits a bot-versioned order and expects a pre-acceptance `BOT_DISABLED` rejection.
+
 ## Agreed Direction
 
 The current working direction is:
@@ -97,7 +181,6 @@ Candidate ownership:
 - `packages/scenario-definitions/`: arena mode and scenario definitions
 - `services/simulator/`: arena run orchestration, seeded scheduling, replay checks
 - `services/platform-runtime/`: arena metadata, boundary enforcement hooks, leaderboard/read-model APIs where appropriate
-- `apps/platform-ui/`: bot registry, tournament setup, active run monitor, replay, and leaderboard views
 - `docs/`: governance, safety model, game mode specs, and operator guidance
 
 ## Bot Runtime Contract
@@ -441,8 +524,7 @@ Run plane responsibilities:
 Suggested low-cost local/MVP topology:
 
 ```text
-Angular UI
-  -> Kotlin platform runtime
+Kotlin platform runtime
   -> trading Postgres database/schema
   -> arena Postgres database/schema
   -> optional Redis for local active-run coordination
@@ -457,8 +539,7 @@ This keeps the MVP cheap and inspectable. It can run under the existing local-fi
 Suggested low-cost hosted topology:
 
 ```text
-static UI hosting
-  -> one small app host for platform runtime + control APIs
+one small app host for platform runtime + control APIs
   -> trading database
   -> arena database
   -> small Redis instance for active-run coordination and live caches
@@ -533,7 +614,7 @@ Performance posture:
 - make scale tests part of arena acceptance, including single-run throughput, multi-run throughput, worker saturation, replay reconstruction, and leaderboard aggregation lag
 
 First local stress baseline:
-- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
+- [`docs/BOT_ARENA_STRESS_BASELINE_2026-07-01.md`](./archive/BOT_ARENA_STRESS_BASELINE_2026-07-01.md)
 
 ## Rollout Plan
 

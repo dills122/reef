@@ -1,0 +1,112 @@
+package com.reef.platform.application.arena
+
+class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
+    private val bots = linkedMapOf<String, ArenaBot>()
+    private val botIdsByFileName = linkedMapOf<String, String>()
+    private val versions = linkedMapOf<String, ArenaBotVersion>()
+    private val reports = linkedMapOf<String, MutableList<ArenaQualificationReport>>()
+    private val decisions = linkedMapOf<String, MutableList<ArenaOperatorDecision>>()
+    private val runs = linkedMapOf<String, ArenaRunRecord>()
+    private val runBotResults = linkedMapOf<String, MutableList<ArenaRunBotResult>>()
+    private val runtimeConfigDescriptors = linkedMapOf<String, List<ArenaRuntimeConfigDescriptor>>()
+
+    override fun saveBot(bot: ArenaBot) {
+        bots[bot.botId] = bot
+        botIdsByFileName[bot.fileName] = bot.botId
+    }
+
+    override fun bot(botId: String): ArenaBot? = bots[botId]
+
+    override fun botByFileName(fileName: String): ArenaBot? {
+        val botId = botIdsByFileName[fileName] ?: return null
+        return bots[botId]
+    }
+
+    override fun saveVersion(version: ArenaBotVersion) {
+        versions[versionKey(version.botId, version.versionId)] = version
+    }
+
+    override fun version(botId: String, versionId: String): ArenaBotVersion? = versions[versionKey(botId, versionId)]
+
+    override fun saveQualificationReport(report: ArenaQualificationReport) {
+        reports.getOrPut(versionKey(report.botId, report.versionId)) { mutableListOf() }.add(report)
+    }
+
+    override fun qualificationReports(botId: String, versionId: String): List<ArenaQualificationReport> {
+        return reports[versionKey(botId, versionId)]?.toList() ?: emptyList()
+    }
+
+    override fun saveOperatorDecision(decision: ArenaOperatorDecision) {
+        decisions.getOrPut(versionKey(decision.botId, decision.versionId)) { mutableListOf() }.add(decision)
+    }
+
+    override fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision> {
+        return decisions[versionKey(botId, versionId)]?.toList() ?: emptyList()
+    }
+
+    override fun saveRunRecord(runRecord: ArenaRunRecord) {
+        runs[runRecord.runId] = runRecord
+    }
+
+    override fun runRecord(runId: String): ArenaRunRecord? = runs[runId]
+
+    override fun saveRunBotResult(result: ArenaRunBotResult) {
+        val results = runBotResults.getOrPut(result.runId) { mutableListOf() }
+        results.removeIf { it.botId == result.botId && it.versionId == result.versionId }
+        results.add(result)
+    }
+
+    override fun runBotResults(runId: String): List<ArenaRunBotResult> {
+        return runBotResults[runId]?.toList() ?: emptyList()
+    }
+
+    override fun leaderboard(
+        modeId: String,
+        scoringPolicyVersion: String,
+        limit: Int
+    ): List<ArenaLeaderboardEntry> {
+        val eligibleRunIds = runs.values
+            .filter { it.modeId == modeId && it.status == ArenaRunStatus.Completed }
+            .map { it.runId }
+            .toSet()
+        return runBotResults.values
+            .flatten()
+            .filter { it.runId in eligibleRunIds && it.scoringPolicyVersion == scoringPolicyVersion }
+            .sortedWith(
+                compareBy<ArenaRunBotResult> { it.disqualified }
+                    .thenByDescending { it.finalEquity }
+                    .thenByDescending { it.realizedPnl }
+                    .thenBy { it.maxDrawdown }
+                    .thenBy { it.runId }
+                    .thenBy { it.botId }
+            )
+            .take(limit)
+            .mapIndexed { index, result ->
+                ArenaLeaderboardEntry(
+                    rank = index + 1,
+                    runId = result.runId,
+                    botId = result.botId,
+                    versionId = result.versionId,
+                    scoringPolicyVersion = result.scoringPolicyVersion,
+                    finalEquity = result.finalEquity,
+                    realizedPnl = result.realizedPnl,
+                    maxDrawdown = result.maxDrawdown,
+                    disqualified = result.disqualified
+                )
+            }
+    }
+
+    override fun replaceRuntimeConfigDescriptors(
+        botId: String,
+        versionId: String,
+        descriptors: List<ArenaRuntimeConfigDescriptor>
+    ) {
+        runtimeConfigDescriptors[versionKey(botId, versionId)] = descriptors.toList()
+    }
+
+    override fun runtimeConfigDescriptors(botId: String, versionId: String): List<ArenaRuntimeConfigDescriptor> {
+        return runtimeConfigDescriptors[versionKey(botId, versionId)]?.toList() ?: emptyList()
+    }
+
+    private fun versionKey(botId: String, versionId: String): String = "$botId:$versionId"
+}

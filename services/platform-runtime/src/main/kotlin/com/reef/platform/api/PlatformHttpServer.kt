@@ -1,6 +1,20 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.admin.AdminActor
+import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.ArenaBotRegistrationCommand
+import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
+import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
+import com.reef.platform.application.arena.ArenaBot
+import com.reef.platform.application.arena.ArenaBotVersion
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaLeaderboardEntry
+import com.reef.platform.application.arena.ArenaOperatorDecision
+import com.reef.platform.application.arena.ArenaQualificationReport
+import com.reef.platform.application.arena.ArenaRunRecord
+import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
@@ -46,7 +60,7 @@ private sealed class PreparedApiV1MutationResult {
     data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
 }
 
-private val apiV1OrderMutationRoutes = setOf(
+internal val apiV1OrderMutationRoutes = setOf(
     "/api/v1/orders/submit",
     "/api/v1/orders/modify",
     "/api/v1/orders/cancel"
@@ -73,6 +87,14 @@ class PlatformHttpServer(
     private val boundary: ExternalApiBoundary,
     private val abuseProtectionHook: AbuseProtectionHook = AllowAllAbuseProtectionHook(),
     private val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+    private val accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+    private val accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
+    private val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+    private val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+    private val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
+    private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+    private val arenaAdminService: AdminApplicationService? = null,
+    private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     private val commandCaptureStore: CommandCaptureStore = NoopCommandCaptureStore(),
@@ -191,6 +213,23 @@ class PlatformHttpServer(
         PlatformDiagnosticRoutes(
             healthJson = { api.health() },
             abuseStatsJson = { abuseStatsJson(abuseProtectionHook.stats()) },
+            accountRiskControlsJson = { accountRiskControlsJson() },
+            accountRiskDecisionsJson = { limit -> accountRiskDecisionsJson(limit) },
+            commandCircuitBreakersJson = { commandCircuitBreakersJson() },
+            instrumentPriceCollarsJson = { instrumentPriceCollarsJson() },
+            setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
+            setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
+            setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
+            registerArenaBotJson = { body -> registerArenaBotResponse(body) },
+            arenaBotJson = { query -> arenaBotResponse(query) },
+            registerArenaBotVersionJson = { body -> registerArenaBotVersionResponse(body) },
+            arenaBotVersionJson = { query -> arenaBotVersionResponse(query) },
+            transitionArenaBotVersionJson = { body -> transitionArenaBotVersionResponse(body) },
+            arenaQualificationReportsJson = { query -> arenaQualificationReportsResponse(query) },
+            arenaOperatorDecisionsJson = { query -> arenaOperatorDecisionsResponse(query) },
+            arenaRuntimeConfigDescriptorsJson = { query -> arenaRuntimeConfigDescriptorsResponse(query) },
+            arenaRunJson = { query -> arenaRunResponse(query) },
+            arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -212,6 +251,14 @@ class PlatformHttpServer(
         boundary = deps.boundary,
         abuseProtectionHook = deps.abuseProtectionHook,
         accountRiskCheck = deps.accountRiskCheck,
+        accountRiskControlStore = deps.accountRiskControlStore,
+        accountRiskDecisionLog = deps.accountRiskDecisionLog,
+        commandCircuitBreakerCheck = deps.commandCircuitBreakerCheck,
+        commandCircuitBreakerStore = deps.commandCircuitBreakerStore,
+        instrumentPriceCollarCheck = deps.instrumentPriceCollarCheck,
+        instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
+        arenaAdminService = deps.arenaAdminService,
+        boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
         commandCaptureStore = deps.commandCaptureStore,
@@ -580,10 +627,16 @@ class PlatformHttpServer(
     private fun registerDiagnosticRoutes(server: HttpServer) {
         diagnosticRoutes.paths.forEach { path ->
             server.createContext(path) { exchange ->
+                val body = if (exchange.requestMethod == "POST") {
+                    readRequestBody(exchange) ?: return@createContext
+                } else {
+                    ""
+                }
                 val response = diagnosticRoutes.handle(
                     method = exchange.requestMethod,
                     path = exchange.requestURI.path,
-                    query = exchange.requestURI.query
+                    query = exchange.requestURI.query,
+                    body = body
                 )
                 if (response == null) {
                     exchange.sendResponseHeaders(404, -1)
@@ -596,7 +649,7 @@ class PlatformHttpServer(
     }
 
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
-        return diagnosticRoutes.handle(request.method, request.path, request.query) ?: when {
+        return diagnosticRoutes.handle(request.method, request.path, request.query, request.body) ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
             request.path == "/api/v1/orders/submit" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }
@@ -828,6 +881,24 @@ class PlatformHttpServer(
             }
         }
 
+        val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            return
+        }
+
+        val collarViolation = HotPathMetrics.time("api.instrumentPriceCollar.check") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
+            return
+        }
+
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
             accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
         }
@@ -999,6 +1070,22 @@ class PlatformHttpServer(
             if (backpressure != null) {
                 return PlatformHotPathResponse(backpressure.status, boundary.toErrorJson(backpressure, correlationId))
             }
+        }
+
+        val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+        }
+
+        val collarViolation = HotPathMetrics.time("api.instrumentPriceCollar.check") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            return PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
@@ -1250,6 +1337,28 @@ class PlatformHttpServer(
             is EitherBoundaryError.Envelope -> envelopeResult.envelope
         }
 
+        val breakerViolation = HotPathMetrics.time("api.streamAck.commandCircuitBreaker") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+        }
+        if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation, envelope)
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            )
+        }
+
+        val collarViolation = HotPathMetrics.time("api.streamAck.instrumentPriceCollar") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation, envelope)
+            return completedStreamAckResponse(
+                started,
+                PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
+            )
+        }
+
         val riskViolation = HotPathMetrics.time("api.streamAck.accountRisk") {
             accountRiskViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
         }
@@ -1383,6 +1492,97 @@ class PlatformHttpServer(
         return accountRiskCheck.evaluate(request).toBoundaryError()
     }
 
+    private fun commandCircuitBreakerViolation(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope? = null
+    ): BoundaryError? {
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+        return commandCircuitBreakerCheck.evaluate(
+            CommandCircuitBreakerRequest(
+                clientId = clientId,
+                route = route,
+                commandType = riskRequest.commandType,
+                commandId = riskRequest.commandId,
+                correlationId = correlationId,
+                venueSessionId = riskRequest.venueSessionId,
+                instrumentId = riskRequest.instrumentId
+            )
+        )
+    }
+
+    private fun instrumentPriceCollarViolation(
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        envelope: StreamCommandEnvelope? = null
+    ): BoundaryError? {
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+        return instrumentPriceCollarCheck.evaluate(
+            InstrumentPriceCollarRequest(
+                clientId = clientId,
+                route = route,
+                commandType = riskRequest.commandType,
+                commandId = riskRequest.commandId,
+                correlationId = correlationId,
+                instrumentId = riskRequest.instrumentId,
+                limitPrice = riskRequest.limitPrice,
+                currency = riskRequest.currency
+            )
+        )
+    }
+
+    private fun recordGuardrailRejection(
+        guardrailType: String,
+        clientId: String,
+        route: String,
+        idempotencyKey: String,
+        correlationId: String,
+        body: String,
+        error: BoundaryError,
+        envelope: StreamCommandEnvelope? = null
+    ) {
+        try {
+            val request = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+            val scope = rejectionScope(guardrailType, request, error)
+            boundaryRejectionLog.recordRejection(
+                guardrailType = guardrailType,
+                scopeType = scope.first,
+                scopeId = scope.second,
+                request = request,
+                error = error
+            )
+        } catch (ex: Exception) {
+            System.err.println(
+                "boundary_rejection_audit_failed guardrailType=$guardrailType route=$route clientId=$clientId commandId=${JsonFields.escape(JsonCodec.parseObjectOrEmpty(body).string("commandId"))} message=${JsonFields.escape(ex.message ?: "unknown")}"
+            )
+        }
+    }
+
+    private fun rejectionScope(
+        guardrailType: String,
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
+    ): Pair<String, String> {
+        if (guardrailType == "instrument-price-collar") {
+            return "INSTRUMENT" to request.instrumentId
+        }
+        val match = Regex("for ([A-Z_]+):([^:]+)(:|$)").find(error.message)
+        if (match != null) {
+            return match.groupValues[1] to match.groupValues[2]
+        }
+        return when {
+            request.instrumentId.isNotBlank() -> "INSTRUMENT" to request.instrumentId
+            request.venueSessionId.isNotBlank() -> "VENUE_SESSION" to request.venueSessionId
+            else -> "GLOBAL" to "*"
+        }
+    }
+
     private fun accountRiskRequest(
         clientId: String,
         route: String,
@@ -1404,10 +1604,14 @@ class PlatformHttpServer(
             participantId = json.string("participantId"),
             accountId = json.string("accountId"),
             botId = envelope?.botId ?: json.string("botId"),
+            botVersion = envelope?.botVersion ?: json.string("botVersion"),
             runId = envelope?.runId ?: json.string("runId").ifBlank { json.string("scenarioRunId") },
             venueSessionId = envelope?.venueSessionId ?: json.string("venueSessionId"),
             instrumentId = envelope?.instrumentId ?: json.string("instrumentId"),
             orderId = envelope?.orderId ?: json.string("orderId"),
+            quantityUnits = json.string("quantityUnits"),
+            limitPrice = json.string("limitPrice"),
+            currency = json.string("currency"),
             payloadHash = envelope?.payloadHash ?: sha256Hex(body)
         )
     }
@@ -1443,6 +1647,24 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             writeDuplicateCommandReservation(exchange, clientId, route, idempotencyKey, existing, correlationId)
+            return
+        }
+
+        val breakerViolation = HotPathMetrics.time("api.acceptedAsync.commandCircuitBreaker") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+            return
+        }
+
+        val collarViolation = HotPathMetrics.time("api.acceptedAsync.instrumentPriceCollar") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
@@ -1514,6 +1736,22 @@ class PlatformHttpServer(
         val existing = intake.findCommandStatus(clientId, route, idempotencyKey)
         if (existing != null) {
             return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existing, correlationId)
+        }
+
+        val breakerViolation = HotPathMetrics.time("api.acceptedAsync.commandCircuitBreaker") {
+            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (breakerViolation != null) {
+            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
+        }
+
+        val collarViolation = HotPathMetrics.time("api.acceptedAsync.instrumentPriceCollar") {
+            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+        }
+        if (collarViolation != null) {
+            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            return PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
@@ -1733,6 +1971,667 @@ class PlatformHttpServer(
             "releases" to stats.releases,
             "activeBlockedClients" to stats.activeBlockedClients
         )
+    }
+
+    private fun accountRiskControlsJson(): String {
+        val controls = accountRiskControlStore?.listControls().orEmpty()
+        return JsonCodec.writeObject(
+            "controls" to controls.map { control ->
+                mapOf(
+                    "scopeType" to control.scopeType,
+                    "scopeId" to control.scopeId,
+                    "decision" to control.decision.name,
+                    "reason" to control.reason,
+                    "maxQuantityUnits" to control.maxQuantityUnits,
+                    "maxNotional" to control.maxNotional,
+                    "currency" to control.currency,
+                    "updatedAt" to control.updatedAt
+                )
+            },
+            "controlsCount" to controls.size
+        )
+    }
+
+    private fun accountRiskDecisionsJson(limit: Int): String {
+        val boundedLimit = limit.coerceIn(1, 500)
+        val decisions = accountRiskDecisionLog?.recentDecisions(boundedLimit).orEmpty()
+        return JsonCodec.writeObject(
+            "decisions" to decisions.map { decision ->
+                mapOf(
+                    "decisionId" to decision.decisionId,
+                    "decidedAt" to decision.decidedAt,
+                    "decision" to decision.decision.name,
+                    "code" to decision.code,
+                    "message" to decision.message,
+                    "clientId" to decision.clientId,
+                    "route" to decision.route,
+                    "commandType" to decision.commandType,
+                    "commandId" to decision.commandId,
+                    "correlationId" to decision.correlationId,
+                    "actorId" to decision.actorId,
+                    "participantId" to decision.participantId,
+                    "accountId" to decision.accountId,
+                    "botId" to decision.botId,
+                    "venueSessionId" to decision.venueSessionId,
+                    "instrumentId" to decision.instrumentId,
+                    "orderId" to decision.orderId,
+                    "quantityUnits" to decision.quantityUnits,
+                    "limitPrice" to decision.limitPrice,
+                    "currency" to decision.currency
+                )
+            },
+            "decisionsCount" to decisions.size,
+            "limit" to boundedLimit
+        )
+    }
+
+    private fun commandCircuitBreakersJson(): String {
+        val breakers = commandCircuitBreakerStore?.listBreakers().orEmpty()
+        return JsonCodec.writeObject(
+            "breakers" to breakers.map { breaker ->
+                mapOf(
+                    "scopeType" to breaker.scopeType,
+                    "scopeId" to breaker.scopeId,
+                    "tripped" to breaker.tripped,
+                    "reason" to breaker.reason,
+                    "updatedAt" to breaker.updatedAt
+                )
+            },
+            "breakersCount" to breakers.size
+        )
+    }
+
+    private fun instrumentPriceCollarsJson(): String {
+        val collars = instrumentPriceCollarStore?.listCollars().orEmpty()
+        return JsonCodec.writeObject(
+            "collars" to collars.map { collar ->
+                mapOf(
+                    "instrumentId" to collar.instrumentId,
+                    "minPrice" to collar.minPrice,
+                    "maxPrice" to collar.maxPrice,
+                    "currency" to collar.currency,
+                    "reason" to collar.reason,
+                    "updatedAt" to collar.updatedAt
+                )
+            },
+            "collarsCount" to collars.size
+        )
+    }
+
+    private fun setAccountRiskControlResponse(body: String): PlatformHotPathResponse {
+        val store = accountRiskControlStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "account risk control store unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val scopeType = normalizeAccountRiskScope(json.string("scopeType").ifBlank { json.string("scope") })
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk scope"))
+        val scopeId = json.string("scopeId").ifBlank { json.string("id") }
+        if (scopeId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scopeId is required"))
+        }
+        val decision = normalizeAccountRiskDecision(json.string("decision"))
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk decision"))
+        val reason = json.string("reason")
+        val maxQuantityUnits = json.string("maxQuantityUnits")
+        if (maxQuantityUnits.isNotBlank() && maxQuantityUnits.toBigDecimalOrNull() == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxQuantityUnits"))
+        }
+        val maxNotional = json.string("maxNotional")
+        if (maxNotional.isNotBlank() && maxNotional.toBigDecimalOrNull() == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxNotional"))
+        }
+        val currency = json.string("currency").uppercase()
+        val actorId = json.string("actorId").ifBlank { "internal-admin" }
+        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val previous = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
+
+        store.upsertControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
+        val current = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
+            ?: AccountRiskControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
+        recordProtectiveControlAudit(
+            actorId = actorId,
+            correlationId = correlationId,
+            eventType = "AccountRiskControlChanged",
+            targetId = "$scopeType:$scopeId",
+            payload = mapOf(
+                "controlType" to "account-risk",
+                "scopeType" to scopeType,
+                "scopeId" to scopeId,
+                "previousDecision" to previous?.decision?.name.orEmpty(),
+                "previousReason" to previous?.reason.orEmpty(),
+                "previousMaxQuantityUnits" to previous?.maxQuantityUnits.orEmpty(),
+                "previousMaxNotional" to previous?.maxNotional.orEmpty(),
+                "previousCurrency" to previous?.currency.orEmpty(),
+                "decision" to decision.name,
+                "reason" to reason,
+                "maxQuantityUnits" to maxQuantityUnits,
+                "maxNotional" to maxNotional,
+                "currency" to currency
+            )
+        )
+
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "control" to mapOf(
+                    "scopeType" to current.scopeType,
+                    "scopeId" to current.scopeId,
+                    "decision" to current.decision.name,
+                    "reason" to current.reason,
+                    "maxQuantityUnits" to current.maxQuantityUnits,
+                    "maxNotional" to current.maxNotional,
+                    "currency" to current.currency,
+                    "updatedAt" to current.updatedAt
+                )
+            )
+        )
+    }
+
+    private fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val botId = json.string("botId")
+        val versionId = json.string("versionId")
+        val status = normalizeArenaBotVersionStatus(json.string("status"))
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid arena bot version status"))
+        val reason = json.string("reason").ifBlank { "operator transition" }
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val actor = AdminActor(
+            actorId = json.string("actorId").ifBlank { "internal-admin" },
+            correlationId = json.string("correlationId").ifBlank { "internal-admin" },
+            occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
+        return try {
+            val updated = service.transitionArenaBotVersion(
+                actor,
+                ArenaBotVersionDecisionCommand(
+                    botId = botId,
+                    versionId = versionId,
+                    status = status,
+                    reason = reason
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to updated.botId,
+                    "versionId" to updated.versionId,
+                    "botVersionStatus" to updated.status.name
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena transition")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena transition failed")))
+        }
+    }
+
+    private fun registerArenaBotResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val actor = arenaAdminActor(json)
+        return try {
+            val bot = service.registerArenaBot(
+                actor,
+                ArenaBotRegistrationCommand(
+                    botId = json.string("botId"),
+                    fileName = json.string("fileName"),
+                    name = json.string("name"),
+                    publisher = json.string("publisher"),
+                    email = json.string("email"),
+                    description = json.string("description"),
+                    version = json.string("version")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to bot.botId,
+                    "fileName" to bot.fileName
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot registration failed")))
+        }
+    }
+
+    private fun registerArenaBotVersionResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val actor = arenaAdminActor(json)
+        return try {
+            val version = service.registerArenaBotVersion(
+                actor,
+                ArenaBotVersionRegistrationCommand(
+                    botId = json.string("botId"),
+                    versionId = json.string("versionId"),
+                    sourceHash = json.string("sourceHash"),
+                    artifactHash = json.string("artifactHash"),
+                    sdkVersion = json.string("sdkVersion"),
+                    apiVersion = json.string("apiVersion"),
+                    dependencyManifestHash = json.string("dependencyManifestHash")
+                )
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to version.botId,
+                    "versionId" to version.versionId,
+                    "botVersionStatus" to version.status.name
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot version")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot version registration failed")))
+        }
+    }
+
+    private fun arenaBotResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        if (botId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
+        }
+        val bot = service.arenaBot(arenaAdminActor(query), botId)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
+        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
+    }
+
+    private fun arenaBotVersionResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val version = service.arenaBotVersion(arenaAdminActor(query), botId, versionId)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot version not found"))
+        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "version" to arenaBotVersionJson(version)))
+    }
+
+    private fun arenaQualificationReportsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val reports = service.arenaQualificationReports(arenaAdminActor(query), botId, versionId)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "reports" to reports.map { arenaQualificationReportJson(it) })
+        )
+    }
+
+    private fun arenaOperatorDecisionsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val decisions = service.arenaOperatorDecisions(arenaAdminActor(query), botId, versionId)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map { arenaOperatorDecisionJson(it) })
+        )
+    }
+
+    private fun arenaRuntimeConfigDescriptorsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val botId = queryValue(query, "botId")
+        val versionId = queryValue(query, "versionId")
+        if (botId.isBlank() || versionId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
+        }
+        val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(query), botId, versionId)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "descriptors" to descriptors.map { arenaRuntimeConfigDescriptorJson(it) })
+        )
+    }
+
+    private fun arenaRunResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val runId = queryValue(query, "runId")
+        if (runId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
+        }
+        val run = service.arenaRun(arenaAdminActor(query), runId)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena run not found"))
+        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
+    }
+
+    private fun arenaLeaderboardResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val modeId = queryValue(query, "modeId")
+        val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
+        }
+        val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
+        )
+    }
+
+    private fun arenaAdminActor(json: JsonDocument): AdminActor {
+        return AdminActor(
+            actorId = json.string("actorId").ifBlank { "internal-admin" },
+            correlationId = json.string("correlationId").ifBlank { "internal-admin" },
+            occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
+    }
+
+    private fun arenaAdminActor(query: String?): AdminActor {
+        return AdminActor(
+            actorId = queryValue(query, "actorId").ifBlank { "admin-cli" },
+            correlationId = queryValue(query, "correlationId").ifBlank { "internal-admin" },
+            occurredAt = queryValue(query, "occurredAt").ifBlank { java.time.Instant.now().toString() }
+        )
+    }
+
+    private fun arenaBotJson(bot: ArenaBot): Map<String, Any?> {
+        return mapOf(
+            "botId" to bot.botId,
+            "fileName" to bot.fileName,
+            "metadata" to mapOf(
+                "name" to bot.metadata.name,
+                "publisher" to bot.metadata.publisher,
+                "email" to bot.metadata.email,
+                "description" to bot.metadata.description,
+                "version" to bot.metadata.version
+            ),
+            "createdAt" to bot.createdAt.toString()
+        )
+    }
+
+    private fun arenaBotVersionJson(version: ArenaBotVersion): Map<String, Any?> {
+        return mapOf(
+            "botId" to version.botId,
+            "versionId" to version.versionId,
+            "sourceHash" to version.sourceHash,
+            "artifactHash" to version.artifactHash,
+            "sdkVersion" to version.sdkVersion,
+            "apiVersion" to version.apiVersion,
+            "dependencyManifestHash" to version.dependencyManifestHash,
+            "status" to version.status.name,
+            "createdAt" to version.createdAt.toString()
+        )
+    }
+
+    private fun arenaQualificationReportJson(report: ArenaQualificationReport): Map<String, Any?> {
+        return mapOf(
+            "botId" to report.botId,
+            "versionId" to report.versionId,
+            "reportId" to report.reportId,
+            "status" to report.status.name,
+            "issues" to report.issues,
+            "policyVersion" to report.policyVersion,
+            "createdAt" to report.createdAt.toString()
+        )
+    }
+
+    private fun arenaOperatorDecisionJson(decision: ArenaOperatorDecision): Map<String, Any?> {
+        return mapOf(
+            "botId" to decision.botId,
+            "versionId" to decision.versionId,
+            "fromStatus" to decision.fromStatus.name,
+            "toStatus" to decision.toStatus.name,
+            "actorId" to decision.actorId,
+            "reason" to decision.reason,
+            "correlationId" to decision.correlationId,
+            "occurredAt" to decision.occurredAt.toString()
+        )
+    }
+
+    private fun arenaRuntimeConfigDescriptorJson(descriptor: ArenaRuntimeConfigDescriptor): Map<String, Any?> {
+        return mapOf(
+            "botId" to descriptor.botId,
+            "versionId" to descriptor.versionId,
+            "key" to descriptor.key,
+            "provider" to descriptor.provider.name,
+            "secretPath" to descriptor.secretPath,
+            "required" to descriptor.required,
+            "description" to descriptor.description
+        )
+    }
+
+    private fun arenaRunJson(run: ArenaRunRecord): Map<String, Any?> {
+        return mapOf(
+            "runId" to run.runId,
+            "modeId" to run.modeId,
+            "scenarioId" to run.scenarioId,
+            "seed" to run.seed,
+            "policyVersion" to run.policyVersion,
+            "botVersions" to run.botVersions.map {
+                mapOf("botId" to it.botId, "versionId" to it.versionId)
+            },
+            "status" to run.status.name,
+            "createdAt" to run.createdAt.toString(),
+            "completedAt" to run.completedAt?.toString()
+        )
+    }
+
+    private fun arenaLeaderboardEntryJson(entry: ArenaLeaderboardEntry): Map<String, Any?> {
+        return mapOf(
+            "rank" to entry.rank,
+            "runId" to entry.runId,
+            "botId" to entry.botId,
+            "versionId" to entry.versionId,
+            "scoringPolicyVersion" to entry.scoringPolicyVersion,
+            "finalEquity" to entry.finalEquity,
+            "realizedPnl" to entry.realizedPnl,
+            "maxDrawdown" to entry.maxDrawdown,
+            "disqualified" to entry.disqualified
+        )
+    }
+
+    private fun setCommandCircuitBreakerResponse(body: String): PlatformHotPathResponse {
+        val store = commandCircuitBreakerStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "command circuit breaker store unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val scopeType = normalizeCircuitBreakerScope(json.string("scopeType").ifBlank { json.string("scope") })
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker scope"))
+        val scopeId = if (scopeType == "GLOBAL") {
+            json.string("scopeId").ifBlank { "*" }
+        } else {
+            json.string("scopeId").ifBlank { json.string("id") }
+        }
+        if (scopeId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scopeId is required"))
+        }
+        val tripped = normalizeBreakerTripState(json.string("tripped").ifBlank { json.string("action") })
+            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker action"))
+        val reason = json.string("reason")
+        val actorId = json.string("actorId").ifBlank { "internal-admin" }
+        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val normalizedScopeId = if (scopeType == "GLOBAL") "*" else scopeId
+        val previous = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
+
+        store.setBreaker(scopeType, normalizedScopeId, tripped, reason)
+        val current = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
+            ?: CommandCircuitBreakerState(scopeType, normalizedScopeId, tripped, reason)
+        recordProtectiveControlAudit(
+            actorId = actorId,
+            correlationId = correlationId,
+            eventType = "CommandCircuitBreakerChanged",
+            targetId = "$scopeType:$normalizedScopeId",
+            payload = mapOf(
+                "controlType" to "command-circuit-breaker",
+                "scopeType" to scopeType,
+                "scopeId" to normalizedScopeId,
+                "previousTripped" to (previous?.tripped ?: false),
+                "previousReason" to previous?.reason.orEmpty(),
+                "tripped" to tripped,
+                "reason" to reason
+            )
+        )
+
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "breaker" to mapOf(
+                    "scopeType" to current.scopeType,
+                    "scopeId" to current.scopeId,
+                    "tripped" to current.tripped,
+                    "reason" to current.reason,
+                    "updatedAt" to current.updatedAt
+                )
+            )
+        )
+    }
+
+    private fun setInstrumentPriceCollarResponse(body: String): PlatformHotPathResponse {
+        val store = instrumentPriceCollarStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "instrument price collar store unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val instrumentId = json.string("instrumentId").ifBlank { json.string("id") }
+        if (instrumentId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "instrumentId is required"))
+        }
+        val minPrice = json.string("minPrice")
+        val maxPrice = json.string("maxPrice")
+        val parsedMin = minPrice.toBigDecimalOrNull()
+        val parsedMax = maxPrice.toBigDecimalOrNull()
+        if (minPrice.isNotBlank() && parsedMin == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid minPrice"))
+        }
+        if (maxPrice.isNotBlank() && parsedMax == null) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxPrice"))
+        }
+        if (parsedMin != null && parsedMax != null && parsedMax < parsedMin) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "maxPrice must be greater than or equal to minPrice"))
+        }
+        val currency = json.string("currency").uppercase()
+        val reason = json.string("reason")
+        val actorId = json.string("actorId").ifBlank { "internal-admin" }
+        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val previous = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
+
+        store.setCollar(instrumentId, minPrice, maxPrice, currency, reason)
+        val current = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
+            ?: InstrumentPriceCollarState(instrumentId, minPrice, maxPrice, currency, reason)
+        recordProtectiveControlAudit(
+            actorId = actorId,
+            correlationId = correlationId,
+            eventType = "InstrumentPriceCollarChanged",
+            targetId = instrumentId,
+            payload = mapOf(
+                "controlType" to "instrument-price-collar",
+                "instrumentId" to instrumentId,
+                "previousMinPrice" to previous?.minPrice.orEmpty(),
+                "previousMaxPrice" to previous?.maxPrice.orEmpty(),
+                "previousCurrency" to previous?.currency.orEmpty(),
+                "previousReason" to previous?.reason.orEmpty(),
+                "minPrice" to minPrice,
+                "maxPrice" to maxPrice,
+                "currency" to currency,
+                "reason" to reason
+            )
+        )
+
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "collar" to mapOf(
+                    "instrumentId" to current.instrumentId,
+                    "minPrice" to current.minPrice,
+                    "maxPrice" to current.maxPrice,
+                    "currency" to current.currency,
+                    "reason" to current.reason,
+                    "updatedAt" to current.updatedAt
+                )
+            )
+        )
+    }
+
+    private fun recordProtectiveControlAudit(
+        actorId: String,
+        correlationId: String,
+        eventType: String,
+        targetId: String,
+        payload: Map<String, Any?>
+    ) {
+        try {
+            api.recordAdminEvent(actorId, correlationId, eventType, targetId, payload)
+        } catch (ex: Exception) {
+            System.err.println(
+                "protective_control_audit_failed eventType=$eventType targetId=$targetId message=${JsonFields.escape(ex.message ?: "unknown")}"
+            )
+        }
+    }
+
+    private fun normalizeAccountRiskScope(value: String): String? {
+        return when (value.trim().lowercase()) {
+            "account" -> "ACCOUNT"
+            "bot" -> "BOT"
+            else -> null
+        }
+    }
+
+    private fun normalizeAccountRiskDecision(value: String): AccountRiskDecision? {
+        return when (value.trim().lowercase()) {
+            "allow" -> AccountRiskDecision.ALLOW
+            "reject" -> AccountRiskDecision.REJECT
+            "backpressure" -> AccountRiskDecision.BACKPRESSURE
+            "disabled-bot", "disabled_bot" -> AccountRiskDecision.DISABLED_BOT
+            else -> null
+        }
+    }
+
+    private fun normalizeArenaBotVersionStatus(value: String): ArenaBotVersionStatus? {
+        return when (value.trim().lowercase()) {
+            "draft" -> ArenaBotVersionStatus.Draft
+            "submitted" -> ArenaBotVersionStatus.Submitted
+            "checks-passed", "checks_passed" -> ArenaBotVersionStatus.ChecksPassed
+            "approved" -> ArenaBotVersionStatus.Approved
+            "active" -> ArenaBotVersionStatus.Active
+            "suspended", "freeze", "frozen" -> ArenaBotVersionStatus.Suspended
+            "quarantined", "quarantine" -> ArenaBotVersionStatus.Quarantined
+            "banned", "ban" -> ArenaBotVersionStatus.Banned
+            "archived", "archive" -> ArenaBotVersionStatus.Archived
+            else -> null
+        }
+    }
+
+    private fun normalizeCircuitBreakerScope(value: String): String? {
+        return when (value.trim().lowercase()) {
+            "global" -> "GLOBAL"
+            "venue-session", "venue_session" -> "VENUE_SESSION"
+            "instrument" -> "INSTRUMENT"
+            else -> null
+        }
+    }
+
+    private fun normalizeBreakerTripState(value: String): Boolean? {
+        return when (value.trim().lowercase()) {
+            "true", "trip", "tripped", "on" -> true
+            "false", "reset", "clear", "off" -> false
+            else -> null
+        }
     }
 
     private fun asyncCommandStatsJson(): String {
@@ -2166,6 +3065,7 @@ class PlatformHttpServer(
             "metrics" to mapOf(
                 "fetched" to stats.fetched,
                 "materialized" to stats.materialized,
+                "materializedOutcomes" to stats.materializedOutcomes,
                 "failed" to stats.failed,
                 "ackFailed" to stats.ackFailed,
                 "unsupported" to stats.unsupported,
@@ -2350,6 +3250,14 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         ),
         abuseProtectionHook = hooks.abuseProtectionHook,
         accountRiskCheck = hooks.accountRiskCheck,
+        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore,
+        accountRiskDecisionLog = hooks.accountRiskCheck as? AccountRiskDecisionLog,
+        commandCircuitBreakerCheck = hooks.commandCircuitBreakerCheck,
+        commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+        instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
+        instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+        arenaAdminService = defaultArenaAdminService(hooks),
+        boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
         commandCaptureStore = hooks.commandCaptureStore,
@@ -2367,10 +3275,33 @@ private fun defaultBoundary(): ServerBoundaryDeps {
     )
 }
 
+private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationService? {
+    if (!RuntimeEnv.bool("PLATFORM_ARENA_ADMIN_ENABLED", false)) return null
+    val jdbcUrl = RuntimeEnv.string("ARENA_POSTGRES_JDBC_URL", "")
+        .ifBlank { error("ARENA_POSTGRES_JDBC_URL is required when PLATFORM_ARENA_ADMIN_ENABLED=true") }
+    val dbUser = RuntimeEnv.string("ARENA_POSTGRES_USER", "reef")
+    val dbPassword = RuntimeEnv.string("ARENA_POSTGRES_PASSWORD", "reef")
+    return AdminApplicationService(
+        runtimePersistence = defaultRuntimePersistence(),
+        arenaRegistryStore = PostgresArenaBotRegistryStore(
+            dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-admin")
+        ),
+        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore
+    )
+}
+
 data class ServerBoundaryDeps(
     val boundary: ExternalApiBoundary,
     val abuseProtectionHook: AbuseProtectionHook,
     val accountRiskCheck: AccountRiskCheck = AllowAllAccountRiskCheck(),
+    val accountRiskControlStore: AccountRiskControlStore? = accountRiskCheck as? AccountRiskControlStore,
+    val accountRiskDecisionLog: AccountRiskDecisionLog? = accountRiskCheck as? AccountRiskDecisionLog,
+    val commandCircuitBreakerCheck: CommandCircuitBreakerCheck = AllowAllCommandCircuitBreakerCheck(),
+    val commandCircuitBreakerStore: CommandCircuitBreakerStore? = commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
+    val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
+    val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
+    val arenaAdminService: AdminApplicationService? = null,
+    val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
     val commandCaptureStore: CommandCaptureStore,

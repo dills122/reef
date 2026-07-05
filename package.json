@@ -4,6 +4,7 @@
   "packageManager": "bun@1.1.38",
   "scripts": {
     "codex:links": "bun scripts/dev/setup-codex-links.mjs",
+    "claude:links": "bun scripts/dev/setup-claude-links.mjs",
     "dev:up": "bun scripts/dev/up.mjs",
     "dev:down": "bun scripts/dev/down.mjs",
     "dev:reset": "bun scripts/dev/reset.mjs",
@@ -12,7 +13,37 @@
     "dev:smoke:venue-event-materializer": "bun scripts/dev/venue-event-materializer-smoke.mjs",
     "dev:venue-event-replay-check": "bun scripts/dev/venue-event-replay-check.mjs",
     "dev:stress": "bun scripts/dev/stress.mjs",
+    "bot-sdk:test": "bun scripts/dev/bot-sdk-contract.test.mjs",
+    "bot-sdk:typecheck": "tsc -p packages/bot-sdk/tsconfig.json --noEmit",
+    "bot-sdk:test:batch-clients": "bun scripts/dev/bot-sdk-batch-clients.test.mjs",
+    "bot-sdk:test:venue-adapter": "bun scripts/dev/bot-sdk-venue-adapter.test.mjs",
+    "bot-sdk:test:venue-client": "bun scripts/dev/bot-sdk-venue-client.test.mjs",
+    "bot-sdk:test:runner": "bun scripts/dev/bot-sdk-runner.test.mjs",
+    "bot-sdk:test:strategy-runner": "bun scripts/dev/bot-sdk-strategy-runner.test.mjs",
+    "bot-sdk:test:hosted-runner": "bun scripts/dev/bot-sdk-hosted-runner.test.mjs",
+    "bot-sdk:test:hosted-ses-e2e": "bun scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs",
+    "bot-sdk:test:sandbox-policy": "bun scripts/dev/bot-sdk-sandbox-policy.test.mjs",
+    "bot-sdk:test:tester": "bun scripts/dev/bot-sdk-test-bot.test.mjs",
+    "bot-sdk:test:preflight": "bun scripts/dev/bot-sdk-preflight.test.mjs",
+    "bot-sdk:register": "bun scripts/dev/bot-sdk-register.mjs",
+    "bot-sdk:run": "bun scripts/dev/bot-sdk-run.mjs",
+    "bot-sdk:run:hosted": "bun scripts/dev/bot-sdk-hosted-run.mjs",
+    "bot-sdk:run:hosted-worker": "bun scripts/dev/bot-sdk-hosted-worker-run.mjs",
+    "bot-sdk:test-bot": "bun scripts/dev/bot-sdk-test-bot.mjs",
+    "bot-sdk:build:hosted": "bun scripts/dev/bot-sdk-build-hosted-artifact.mjs",
+    "bot-sdk:smoke:live": "bun scripts/dev/bot-sdk-live-smoke.mjs",
+    "bot-sdk:smoke:live:check": "node --check scripts/dev/bot-sdk-live-smoke.mjs",
+    "bot-sdk:smoke:hosted-ses-container": "bun scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
-    "dev:sim": "bun scripts/dev/sim-run.mjs"
+    "dev:sim": "bun scripts/dev/sim-run.mjs",
+    "docs-site:dev": "bun --cwd apps/docs-site run dev",
+    "docs-site:build": "bun --cwd apps/docs-site run build"
+  },
+  "devDependencies": {
+    "decimal.js": "10.6.0",
+    "lodash-es": "4.18.1",
+    "ses": "^2.2.0",
+    "simple-statistics": "7.9.3",
+    "trading-signals": "7.4.3"
   }
 }

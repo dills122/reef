@@ -454,10 +454,47 @@ Include this in PR descriptions for runtime/engine/simulator/dev-env changes:
 3. Add lightweight phase timing (`validate`, `engine`, `persist`) in hot paths before deeper refactors.
 4. Prefer reversible tuning flags over one-way hardcoded changes.
 
+## Code Audit (2026-05-23)
+
+Targeted hot-path audit and refactor across the matching engine order-book path and the platform runtime order lifecycle event path.
+
+Findings addressed:
+
+1. Matching engine insertion path had repeated `sync.Map` lookups inside each book scan (`insertBuy` / `insertSell`), causing avoidable overhead per submit/modify.
+2. Matching engine matching path repeatedly formatted identical numeric strings per match event.
+3. Matching engine validation/parsing logic duplicated positive integer parsing and rejection handling.
+4. Matching engine cancel/modify/order-state paths reloaded order records unnecessarily after lock acquisition.
+5. Runtime order service duplicated lifecycle event assembly logic and allocated dynamic event lists without capacity hints.
+
+Refactors implemented in `services/matching-engine/internal/app/service.go` and `services/platform-runtime/src/main/kotlin/com/reef/platform/application/OrderApplicationService.kt`:
+
+- Added `LimitPrice` to `restingOrder` so insertion can compare directly without map lookups.
+- Replaced linear compare+map-load insertion logic with binary-search insertion (`sort.Search`) while preserving price-time ordering.
+- Added generic helper `insertAt[T any]` for reusable ordered insertion mechanics.
+- Added `parsePositiveInt` helper to reduce parse/validation duplication.
+- Reused parsed match quantities/prices as strings in `appendMatch` to avoid repeated conversions.
+- Removed redundant order reloads in `CancelOrder`, `ModifyOrder`, and `OrderState`.
+- Added shared `lifecycleEvent(...)` builder and `traceId(traceId, orderId)` helper in the runtime order service to remove repetitive construction.
+- Pre-sized accepted lifecycle event list with `ArrayList` capacity (`1 + executions + trades`) to reduce reallocations.
+
+Validated via `go test ./...` and `go test -race ./internal/app` in `services/matching-engine`, and `./gradlew test --tests com.reef.platform.application.OrderApplicationServiceTest` in `services/platform-runtime`.
+
+Baseline benchmarks (Apple M1 Max, `go test -benchmem`):
+
+- `BenchmarkSubmitOrderResting`: `1309 ns/op`, `592 B/op`, `14 allocs/op`
+- `BenchmarkSubmitOrderMatchAgainstResting`: `2703 ns/op`, `1524 B/op`, `32 allocs/op`
+- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op`
+
+Deferred high-impact candidates:
+
+1. Split `services/simulator/cmd/load-tester/main.go` (currently large/monolithic) into focused packages (`actions`, `state`, `reporting`, `io`) for maintainability and safer perf changes.
+2. Consider a purpose-built book structure (price levels / indexed queues) if we need to push beyond current TPS envelopes with lower GC/lock pressure.
+3. Add lightweight micro-benchmarks for matching-engine `SubmitOrder`, `ModifyOrder`, and insertion/match loops to quantify future gains and prevent regressions.
+
 ## Cross-References
 
 - Steering index: [`docs/steering/README.md`](./steering/README.md)
 - Architecture steering: [`docs/steering/architecture.md`](./steering/architecture.md)
 - Work plan: [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - Performance library investigation: [`docs/PERFORMANCE_LIBRARY_INVESTIGATION.md`](./PERFORMANCE_LIBRARY_INVESTIGATION.md)
-- Current stress baseline: [`docs/DEV_STRESS_BASELINE_2026-05-23.md`](./DEV_STRESS_BASELINE_2026-05-23.md)
+- Historical stress baseline: [`docs/archive/DEV_STRESS_BASELINE_2026-05-23.md`](./archive/DEV_STRESS_BASELINE_2026-05-23.md)
