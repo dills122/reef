@@ -8,6 +8,7 @@ out/
 bin/
 coverage/
 reports/do-benchmark/
+reports/simulations/
 infra/do-benchmark/.terraform/
 infra/do-benchmark/terraform.tfstate
 infra/do-benchmark/terraform.tfstate.backup

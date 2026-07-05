@@ -1,9 +1,11 @@
 # Hetzner Core Deployment
 
-This stack is an MVP production-shaped deployment for Reef on one Hetzner Cloud
-server. OpenTofu owns durable cloud resources only. Secrets, OpenBao root
-material, R2 credentials, AppRole credentials, and local environment files stay
-outside OpenTofu state and outside git.
+This stack is the low-cost always-on core for Reef. It can still run the full
+Compose bundle for smoke tests and admin workflows, but high-throughput
+simulations should run on ephemeral compute and push artifacts back here.
+OpenTofu owns durable cloud resources only. Secrets, OpenBao root material, R2
+credentials, AppRole credentials, and local environment files stay outside
+OpenTofu state and outside git.
 
 ## Shape
 
@@ -12,10 +14,15 @@ outside OpenTofu state and outside git.
 - Hetzner firewall with SSH restricted to `admin_cidrs`
 - no public HTTP/HTTPS by default
 - private Hetzner network reserved for future simulation workers
-- Docker Compose on the host for Postgres, OpenBao, platform runtime, matching
-  engine, and simulator
+- Docker Compose on the host for Postgres, OpenBao, lightweight platform
+  runtime/admin workflows, and optional smoke-test matching/simulator services
 - platform runtime and OpenBao bind to host loopback only for SSH tunnels
 - encrypted Postgres/OpenBao dumps uploaded to Cloudflare R2 by a host-side job
+
+For budget control, this host should not be treated as the sustained simulation
+compute tier. Use [`../simulation-runner`](../simulation-runner) for
+DigitalOcean workers that are created for a run, fetch/push debug artifacts,
+and then destroy themselves.
 
 ## Provision
 

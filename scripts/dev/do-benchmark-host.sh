@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 INFRA_DIR="$ROOT_DIR/infra/do-benchmark"
-LOCAL_REPORT_ROOT="$ROOT_DIR/reports/do-benchmark"
+LOCAL_REPORT_ROOT="${REEF_DO_LOCAL_REPORT_ROOT:-$ROOT_DIR/reports/do-benchmark}"
 REMOTE_DIR=""
 REMOTE_ARTIFACT_ROOT=""
 
@@ -65,6 +65,7 @@ optional:
   REEF_DO_STRESS_WORKERS=256
   REEF_DO_STRESS_DURATION=30s
   REEF_DO_DRAIN_BACKPRESSURE_POLICY=control-room-fresh
+  REEF_DO_IMAGE_MODE=ghcr|source
 USAGE
 }
 
@@ -242,8 +243,9 @@ remote_run_benchmark() {
   local trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-200}"
   local min_success="${REEF_DO_MIN_SUCCESS_RATE_PCT:-100}"
   local drain_backpressure_policy="${REEF_DO_DRAIN_BACKPRESSURE_POLICY:-${STREAM_ACK_DRAIN_BACKPRESSURE_POLICY:-venue-core}}"
+  local image_mode="${REEF_DO_IMAGE_MODE:-source}"
 
-  echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration drain_backpressure_policy=$drain_backpressure_policy"
+  echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration drain_backpressure_policy=$drain_backpressure_policy image_mode=$image_mode"
   remote_script \
     REEF_BENCHMARK_RUN_ID="$run_id" \
     REEF_BENCHMARK_STREAM="$stream_name" \
@@ -254,7 +256,8 @@ remote_run_benchmark() {
     REEF_BENCHMARK_DURATION="$duration" \
     REEF_BENCHMARK_TRACE_LIMIT="$trace_limit" \
     REEF_BENCHMARK_MIN_SUCCESS="$min_success" \
-    REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY="$drain_backpressure_policy" <<'REMOTE'
+    REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY="$drain_backpressure_policy" \
+    REEF_BENCHMARK_IMAGE_MODE="$image_mode" <<'REMOTE'
 set -euo pipefail
 artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
 log_dir="$artifact_dir/logs"
@@ -269,6 +272,7 @@ echo "subject_prefix=$REEF_BENCHMARK_SUBJECT_PREFIX"
 echo "durable_prefix=$REEF_BENCHMARK_DURABLE_PREFIX"
 echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS duration=$REEF_BENCHMARK_DURATION"
 echo "drain_backpressure_policy=$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
+echo "image_mode=$REEF_BENCHMARK_IMAGE_MODE"
 
 export JS_RUNTIME=node
 export STREAM_ACK_COMMAND_STREAM="$REEF_BENCHMARK_STREAM"
@@ -287,6 +291,17 @@ export DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS=1
 export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
 export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
+
+if [ "$REEF_BENCHMARK_IMAGE_MODE" = "ghcr" ]; then
+  export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-ghcr.io/dills122/reef-platform-runtime:latest}"
+  export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-ghcr.io/dills122/reef-matching-engine:latest}"
+  export DEV_COMPOSE_BUILD=0
+  echo "[$(date -Is)] stage: docker compose pull GHCR runtime images"
+  docker compose pull platform-api matching-engine
+  echo "[$(date -Is)] stage complete: docker compose pull GHCR runtime images"
+else
+  export DEV_COMPOSE_BUILD="${DEV_COMPOSE_BUILD:-1}"
+fi
 
 echo "[$(date -Is)] stage: make dev-up-stream-ack"
 make dev-up-stream-ack </dev/null
