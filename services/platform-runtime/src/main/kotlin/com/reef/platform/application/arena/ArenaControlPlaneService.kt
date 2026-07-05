@@ -92,6 +92,20 @@ enum class ArenaRunStatus {
     Cancelled
 }
 
+data class ArenaRuntimeConfigDescriptor(
+    val botId: String,
+    val versionId: String,
+    val key: String,
+    val provider: ArenaRuntimeConfigProvider,
+    val secretPath: String,
+    val required: Boolean,
+    val description: String = ""
+)
+
+enum class ArenaRuntimeConfigProvider {
+    OpenBao
+}
+
 data class RegisterArenaBotCommand(
     val botId: String,
     val fileName: String,
@@ -129,6 +143,12 @@ interface ArenaBotRegistryStore {
     fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision>
     fun saveRunRecord(runRecord: ArenaRunRecord)
     fun runRecord(runId: String): ArenaRunRecord?
+    fun replaceRuntimeConfigDescriptors(
+        botId: String,
+        versionId: String,
+        descriptors: List<ArenaRuntimeConfigDescriptor>
+    )
+    fun runtimeConfigDescriptors(botId: String, versionId: String): List<ArenaRuntimeConfigDescriptor>
 }
 
 class ArenaControlPlaneService(
@@ -290,6 +310,26 @@ class ArenaControlPlaneService(
         return updated
     }
 
+    fun replaceRuntimeConfigDescriptors(
+        botId: String,
+        versionId: String,
+        descriptors: List<ArenaRuntimeConfigDescriptor>
+    ): List<ArenaRuntimeConfigDescriptor> {
+        requireVersion(botId, versionId)
+        val keys = descriptors.map { it.key }
+        require(keys.distinct().size == keys.size) { "runtime config descriptor keys must be unique" }
+        descriptors.forEach { descriptor ->
+            require(descriptor.botId == botId) { "descriptor botId must match requested botId" }
+            require(descriptor.versionId == versionId) { "descriptor versionId must match requested versionId" }
+            require(descriptor.key.matches(RuntimeConfigKeyPattern)) {
+                "runtime config key must be a simple identifier: ${descriptor.key}"
+            }
+            require(descriptor.secretPath.isNotBlank()) { "runtime config secretPath is required" }
+        }
+        store.replaceRuntimeConfigDescriptors(botId, versionId, descriptors)
+        return store.runtimeConfigDescriptors(botId, versionId)
+    }
+
     private fun requireVersion(botId: String, versionId: String): ArenaBotVersion {
         return store.version(botId, versionId) ?: error("unknown bot version: $botId/$versionId")
     }
@@ -329,5 +369,6 @@ class ArenaControlPlaneService(
 
     companion object {
         private val BASIC_EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+        private val RuntimeConfigKeyPattern = Regex("[A-Za-z_][A-Za-z0-9_]*")
     }
 }

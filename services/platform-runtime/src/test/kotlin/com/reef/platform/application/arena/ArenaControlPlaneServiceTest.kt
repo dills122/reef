@@ -189,6 +189,53 @@ class ArenaControlPlaneServiceTest {
         }
     }
 
+    @Test
+    fun replacesRuntimeConfigDescriptorsWithoutSecretValues() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = seededService(store)
+
+        val descriptors = service.replaceRuntimeConfigDescriptors(
+            "sample-bot",
+            "v1",
+            listOf(
+                ArenaRuntimeConfigDescriptor(
+                    botId = "sample-bot",
+                    versionId = "v1",
+                    key = "apiKey",
+                    provider = ArenaRuntimeConfigProvider.OpenBao,
+                    secretPath = "secret/data/arena/sample-bot/v1/api-key",
+                    required = true,
+                    description = "market data provider credential"
+                )
+            )
+        )
+
+        assertEquals(descriptors, store.runtimeConfigDescriptors("sample-bot", "v1"))
+        assertEquals("secret/data/arena/sample-bot/v1/api-key", descriptors.single().secretPath)
+    }
+
+    @Test
+    fun rejectsUnsafeRuntimeConfigDescriptorKeys() {
+        val service = seededService(InMemoryArenaBotRegistryStore())
+
+        assertFailsWith<IllegalArgumentException> {
+            service.replaceRuntimeConfigDescriptors(
+                "sample-bot",
+                "v1",
+                listOf(
+                    ArenaRuntimeConfigDescriptor(
+                        botId = "sample-bot",
+                        versionId = "v1",
+                        key = "api-key",
+                        provider = ArenaRuntimeConfigProvider.OpenBao,
+                        secretPath = "secret/data/arena/sample-bot/v1/api-key",
+                        required = true
+                    )
+                )
+            )
+        }
+    }
+
     private fun approvedService(store: InMemoryArenaBotRegistryStore): ArenaControlPlaneService {
         return seededService(store).also { service ->
             service.transitionVersion("sample-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-1")

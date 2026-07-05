@@ -7,6 +7,7 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     private val reports = linkedMapOf<String, MutableList<ArenaQualificationReport>>()
     private val decisions = linkedMapOf<String, MutableList<ArenaOperatorDecision>>()
     private val runs = linkedMapOf<String, ArenaRunRecord>()
+    private val runtimeConfigDescriptors = linkedMapOf<String, List<ArenaRuntimeConfigDescriptor>>()
 
     override fun saveBot(bot: ArenaBot) {
         bots[bot.botId] = bot
@@ -47,6 +48,18 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     }
 
     override fun runRecord(runId: String): ArenaRunRecord? = runs[runId]
+
+    override fun replaceRuntimeConfigDescriptors(
+        botId: String,
+        versionId: String,
+        descriptors: List<ArenaRuntimeConfigDescriptor>
+    ) {
+        runtimeConfigDescriptors[versionKey(botId, versionId)] = descriptors.toList()
+    }
+
+    override fun runtimeConfigDescriptors(botId: String, versionId: String): List<ArenaRuntimeConfigDescriptor> {
+        return runtimeConfigDescriptors[versionKey(botId, versionId)]?.toList() ?: emptyList()
+    }
 
     private fun versionKey(botId: String, versionId: String): String = "$botId:$versionId"
 }

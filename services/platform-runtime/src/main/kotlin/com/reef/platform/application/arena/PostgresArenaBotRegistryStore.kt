@@ -117,6 +117,21 @@ class PostgresArenaBotRegistryStore(
                     )
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeConfigDescriptors} (
+                      bot_id TEXT NOT NULL,
+                      version_id TEXT NOT NULL,
+                      config_key TEXT NOT NULL,
+                      provider TEXT NOT NULL,
+                      secret_path TEXT NOT NULL,
+                      required BOOLEAN NOT NULL,
+                      description TEXT NOT NULL DEFAULT '',
+                      PRIMARY KEY (bot_id, version_id, config_key),
+                      FOREIGN KEY (bot_id, version_id) REFERENCES ${names.botVersions}(bot_id, version_id)
+                    )
+                    """.trimIndent()
+                )
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_bot_versions_status ON ${names.botVersions}(status)")
                 stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_runs_status_created ON ${names.runRecords}(status, created_at DESC)")
             }
@@ -405,6 +420,72 @@ class PostgresArenaBotRegistryStore(
         }
     }
 
+    override fun replaceRuntimeConfigDescriptors(
+        botId: String,
+        versionId: String,
+        descriptors: List<ArenaRuntimeConfigDescriptor>
+    ) {
+        connection().use { conn ->
+            conn.autoCommit = false
+            try {
+                conn.prepareStatement(
+                    "DELETE FROM ${names.runtimeConfigDescriptors} WHERE bot_id = ? AND version_id = ?"
+                ).use { ps ->
+                    ps.setString(1, botId)
+                    ps.setString(2, versionId)
+                    ps.executeUpdate()
+                }
+                conn.prepareStatement(
+                    """
+                    INSERT INTO ${names.runtimeConfigDescriptors}(
+                      bot_id, version_id, config_key, provider, secret_path, required, description
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """.trimIndent()
+                ).use { ps ->
+                    descriptors.forEach { descriptor ->
+                        ps.setString(1, descriptor.botId)
+                        ps.setString(2, descriptor.versionId)
+                        ps.setString(3, descriptor.key)
+                        ps.setString(4, descriptor.provider.name)
+                        ps.setString(5, descriptor.secretPath)
+                        ps.setBoolean(6, descriptor.required)
+                        ps.setString(7, descriptor.description)
+                        ps.addBatch()
+                    }
+                    ps.executeBatch()
+                }
+                conn.commit()
+            } catch (ex: Exception) {
+                conn.rollback()
+                throw ex
+            } finally {
+                conn.autoCommit = true
+            }
+        }
+    }
+
+    override fun runtimeConfigDescriptors(botId: String, versionId: String): List<ArenaRuntimeConfigDescriptor> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT bot_id, version_id, config_key, provider, secret_path, required, description
+                FROM ${names.runtimeConfigDescriptors}
+                WHERE bot_id = ? AND version_id = ?
+                ORDER BY config_key
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, botId)
+                ps.setString(2, versionId)
+                ps.executeQuery().use { rs ->
+                    val descriptors = mutableListOf<ArenaRuntimeConfigDescriptor>()
+                    while (rs.next()) descriptors.add(rs.toRuntimeConfigDescriptor())
+                    return descriptors
+                }
+            }
+        }
+    }
+
     private fun queryBot(whereClause: String, value: String): ArenaBot? {
         connection().use { conn ->
             conn.prepareStatement(
@@ -525,6 +606,18 @@ class PostgresArenaBotRegistryStore(
             status = ArenaRunStatus.valueOf(getString("status")),
             createdAt = instant("created_at"),
             completedAt = nullableInstant("completed_at")
+        )
+    }
+
+    private fun ResultSet.toRuntimeConfigDescriptor(): ArenaRuntimeConfigDescriptor {
+        return ArenaRuntimeConfigDescriptor(
+            botId = getString("bot_id"),
+            versionId = getString("version_id"),
+            key = getString("config_key"),
+            provider = ArenaRuntimeConfigProvider.valueOf(getString("provider")),
+            secretPath = getString("secret_path"),
+            required = getBoolean("required"),
+            description = getString("description")
         )
     }
 
