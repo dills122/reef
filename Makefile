@@ -46,6 +46,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
+	node --check scripts/dev/bot-sdk-hosted-run.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal

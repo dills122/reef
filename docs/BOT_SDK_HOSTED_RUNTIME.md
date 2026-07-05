@@ -39,6 +39,18 @@ They do not receive Reef transports, network clients, filesystem APIs, timers, c
 
 The hosted runner wraps loaded bot classes with host-owned execution guards. Current defaults are `1000ms` for lifecycle hooks and `1000ms` for each tick, overrideable through `executionLimits`. These guards catch async hangs and report `do_not_merge`; they do not replace worker/container CPU isolation for synchronous infinite loops.
 
+## Local Hosted Artifact Runner
+
+Use the hosted artifact runner for compiled single-file JavaScript bot bundles:
+
+```bash
+bun scripts/dev/bot-sdk-hosted-run.mjs packages/bot-sdk/examples/hosted-simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --unsafe-vm-for-local-dev
+```
+
+Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible path and expects `globalThis.Compartment` to be available after SES lockdown/bootstrap. The unsafe VM flag is local-only test plumbing; it is not a hosted security boundary.
+
+Add `--venue-url=http://127.0.0.1:8080` to submit approved actions through the adapter-owned venue client, just like the deterministic runner and live smoke wrapper.
+
 ## Target Hosted Sandbox
 
 Hosted execution should combine JavaScript-level confinement with an outer process or container boundary.

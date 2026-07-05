@@ -148,6 +148,8 @@ bun scripts/dev/bot-sdk-live-smoke.mjs packages/bot-sdk/examples/simple-market-m
 
 Bot code still does not receive network access; only the runner/orchestrator owns the venue transport. See [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md) for setup and troubleshooting.
 
+Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md) for the current SES-compatible runner contract.
+
 See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
 
 Registration checks:
