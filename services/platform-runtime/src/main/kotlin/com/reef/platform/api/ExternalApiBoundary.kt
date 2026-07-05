@@ -45,6 +45,7 @@ data class AccountRiskCheckRequest(
     val participantId: String,
     val accountId: String,
     val botId: String,
+    val botVersion: String = "",
     val runId: String,
     val venueSessionId: String,
     val instrumentId: String,

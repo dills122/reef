@@ -1578,6 +1578,7 @@ class PlatformHttpServer(
             participantId = json.string("participantId"),
             accountId = json.string("accountId"),
             botId = envelope?.botId ?: json.string("botId"),
+            botVersion = envelope?.botVersion ?: json.string("botVersion"),
             runId = envelope?.runId ?: json.string("runId").ifBlank { json.string("scenarioRunId") },
             venueSessionId = envelope?.venueSessionId ?: json.string("venueSessionId"),
             instrumentId = envelope?.instrumentId ?: json.string("instrumentId"),

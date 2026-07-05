@@ -1,5 +1,11 @@
 package com.reef.platform.application.admin
 
+import com.reef.platform.api.AccountRiskControlStore
+import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.application.arena.ArenaBotRegistryStore
+import com.reef.platform.application.arena.ArenaBotVersion
+import com.reef.platform.application.arena.ArenaBotVersionStatus
+import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
@@ -53,8 +59,17 @@ data class SimulationControlState(
     val scenario: String = ""
 )
 
+data class ArenaBotVersionDecisionCommand(
+    val botId: String,
+    val versionId: String,
+    val status: ArenaBotVersionStatus,
+    val reason: String
+)
+
 class AdminApplicationService(
     private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence(),
+    private val arenaRegistryStore: ArenaBotRegistryStore? = null,
+    private val accountRiskControlStore: AccountRiskControlStore? = null,
     private val now: () -> Instant = { Instant.now() }
 ) {
     private val eventProducer = "platform-runtime-admin"
@@ -150,6 +165,27 @@ class AdminApplicationService(
 
     fun simulationState(): SimulationControlState = simulationState
 
+    fun transitionArenaBotVersion(actor: AdminActor, command: ArenaBotVersionDecisionCommand): ArenaBotVersion {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val service = arenaControlPlane()
+        val updated = service.transitionVersion(
+            botId = command.botId,
+            versionId = command.versionId,
+            toStatus = command.status,
+            actorId = actor.actorId,
+            reason = command.reason,
+            correlationId = actor.correlationId
+        )
+        syncArenaBotRiskControl(command, updated)
+        emitAudit(
+            actor,
+            "AdminArenaBotVersionTransitioned",
+            "${command.botId}/${command.versionId}",
+            "status=${command.status.name},reason=${command.reason}"
+        )
+        return updated
+    }
+
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()
 
     fun listParticipants(): List<Participant> = runtimePersistence.participants()
@@ -163,6 +199,37 @@ class AdminApplicationService(
     fun recentEvents(limit: Int): List<RuntimeEvent> = runtimePersistence.recentEvents(limit)
 
     fun traceEvents(traceId: String): List<RuntimeEvent> = runtimePersistence.eventsForTrace(traceId)
+
+    private fun arenaControlPlane(): ArenaControlPlaneService {
+        val store = arenaRegistryStore ?: error("arena registry store is not configured")
+        return ArenaControlPlaneService(store, now)
+    }
+
+    private fun syncArenaBotRiskControl(command: ArenaBotVersionDecisionCommand, updated: ArenaBotVersion) {
+        val riskStore = accountRiskControlStore ?: return
+        val reason = "arena ${updated.status.name}: ${command.reason}"
+        when (updated.status) {
+            ArenaBotVersionStatus.Approved,
+            ArenaBotVersionStatus.Active -> riskStore.upsertControl(
+                scopeType = "BOT",
+                scopeId = updated.botId,
+                decision = AccountRiskDecision.ALLOW,
+                reason = reason
+            )
+            ArenaBotVersionStatus.Suspended,
+            ArenaBotVersionStatus.Quarantined,
+            ArenaBotVersionStatus.Banned,
+            ArenaBotVersionStatus.Archived -> riskStore.upsertControl(
+                scopeType = "BOT",
+                scopeId = updated.botId,
+                decision = AccountRiskDecision.DISABLED_BOT,
+                reason = reason
+            )
+            ArenaBotVersionStatus.Draft,
+            ArenaBotVersionStatus.Submitted,
+            ArenaBotVersionStatus.ChecksPassed -> Unit
+        }
+    }
 
     private fun emitAudit(actor: AdminActor, eventType: String, targetId: String, detail: String) {
         val eventTime = if (actor.occurredAt.isBlank()) now().toString() else actor.occurredAt
