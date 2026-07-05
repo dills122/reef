@@ -47,7 +47,7 @@ Summary:
 - Future admin HTTP APIs must reuse the same admin application modules.
 
 Primary references:
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-004: Post-Match Lifecycle Baseline
@@ -64,7 +64,7 @@ Summary:
 - innovation paths are allowed only after baseline parity is established and test-covered.
 
 Primary references:
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
 
 ### D-005: Participant Roles and Permission Model
@@ -99,7 +99,7 @@ Summary:
 - calendar configuration should be one of the first admin tools delivered.
 
 Primary references:
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-007: Cross-Language Engineering Standards
@@ -130,7 +130,7 @@ Summary:
 - replay runs must record which policy version was applied.
 
 Primary references:
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 
 ### D-009: Settlement Ledger Baseline
@@ -143,7 +143,7 @@ Summary:
 
 Primary references:
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-010: Simulation-Backed External Integrations
 
@@ -175,7 +175,7 @@ Summary:
 
 Primary references:
 - [`docs/steering/architecture.md`](./steering/architecture.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-012: Traffic Scenario Catalog Requirement
 
@@ -269,7 +269,7 @@ Summary:
 
 Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-019: Override Governance and Audit Controls
 
@@ -284,7 +284,7 @@ Summary:
 
 Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-020: Clock Source Determinism Policy
 
@@ -313,7 +313,7 @@ Summary:
 
 Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
-- [`docs/SPRINT_POST_MATCH_ENGINES.md`](./SPRINT_POST_MATCH_ENGINES.md)
+- [`docs/archive/SPRINT_POST_MATCH_ENGINES.md`](./archive/SPRINT_POST_MATCH_ENGINES.md)
 
 ### D-022: Baseline SLO Target Document
 
@@ -325,7 +325,7 @@ Summary:
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
-- [`docs/SPRINT_COMMUNICATION_API_ADMIN.md`](./SPRINT_COMMUNICATION_API_ADMIN.md)
+- [`docs/archive/SPRINT_COMMUNICATION_API_ADMIN.md`](./archive/SPRINT_COMMUNICATION_API_ADMIN.md)
 
 ### D-023: Single-Instance Capacity Objective
 
@@ -339,7 +339,6 @@ Summary:
 
 Primary references:
 - [`docs/SLO_BASELINES.md`](./SLO_BASELINES.md)
-- [`docs/SPRINT_DEV_ENV.md`](./SPRINT_DEV_ENV.md)
 
 ### D-024: Event Durability and Distribution Pattern
 

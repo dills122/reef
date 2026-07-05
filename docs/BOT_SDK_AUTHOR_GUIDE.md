@@ -174,7 +174,7 @@ Bot code still does not receive network access; only the runner/orchestrator own
 The venue adapter sends a bot-scoped API client identity as `X-Client-Id: bot:<botId>` by default. Hosted fixtures can set `clientId` when the run should use a configured platform client identity instead.
 
 Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md) for the current SES-compatible runner contract.
-For the planned application and matching-engine integration path, see [`BOT_SDK_ENGINE_INTEGRATION_PLAN.md`](./BOT_SDK_ENGINE_INTEGRATION_PLAN.md).
+For the runtime integration path and command flow, see the "Runtime Integration" section in [`BOT_SDK_DESIGN.md`](./BOT_SDK_DESIGN.md).
 
 See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
 See `packages/bot-sdk/examples/multi-symbol-strategy-bot.ts` for a v1.5 strategy example that subscribes to several instruments, emits Bollinger/momentum signals, and converts approved signals into proposed order actions.

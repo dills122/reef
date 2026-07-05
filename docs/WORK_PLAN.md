@@ -147,10 +147,9 @@ Exit criteria:
 
 These documents remain useful as evidence or design context, but they are no longer the active execution ladder by themselves:
 
-- `SPRINT_COMMUNICATION_API_ADMIN.md`
-- `SPRINT_DEV_ENV.md`
+- `archive/SPRINT_COMMUNICATION_API_ADMIN.md`
 - `SPRINT_CRITICAL_QUALITY_HARDENING.md`
-- `SPRINT_POST_MATCH_ENGINES.md`
+- `archive/SPRINT_POST_MATCH_ENGINES.md`
 - `BOT_ARENA_STRESS_BASELINE_2026-07-01.md`
 - May 2026 throughput and abuse-breaker baseline reports
 
