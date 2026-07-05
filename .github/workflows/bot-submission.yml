@@ -58,8 +58,8 @@ jobs:
             bots/update/*) flow="update" ;;
             bots/remove/*) flow="remove" ;;
             *)
-              echo "not a bot-submission branch (bots/add|update|remove/<name>): $branch" >&2
-              exit 1
+              echo "not a bot-submission branch (bots/add|update|remove/<name>), skipping: $branch"
+              flow="skip"
               ;;
           esac
           bot_name="${branch#bots/*/}"
@@ -70,7 +70,7 @@ jobs:
   validate-manifest:
     needs: detect-flow
     runs-on: ubuntu-latest
-    if: needs.detect-flow.outputs.flow != 'remove'
+    if: needs.detect-flow.outputs.flow != 'remove' && needs.detect-flow.outputs.flow != 'skip'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -88,7 +88,7 @@ jobs:
   scan-and-sandbox-test:
     needs: [detect-flow, validate-manifest]
     runs-on: ubuntu-latest
-    if: needs.detect-flow.outputs.flow != 'remove'
+    if: needs.detect-flow.outputs.flow != 'remove' && needs.detect-flow.outputs.flow != 'skip'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -111,6 +111,7 @@ jobs:
     if: |
       always() &&
       needs.detect-flow.result == 'success' &&
+      needs.detect-flow.outputs.flow != 'skip' &&
       (needs.detect-flow.outputs.flow == 'remove' ||
         (needs.validate-manifest.result == 'success' && needs.scan-and-sandbox-test.result == 'success'))
     env:
@@ -139,3 +140,27 @@ jobs:
             "${{ needs.detect-flow.outputs.bot-name }}" \
             "$provision_flow" \
             "${{ github.actor }}"
+
+  # Off-convention PRs skip the pipeline above entirely (see detect-flow).
+  # This job catches the case that would otherwise slip through silently:
+  # a bots/** file changed on a branch that isn't bots/add|update|remove/<name>,
+  # so it never got schema-validated, scanned, or sandbox-tested.
+  warn-unconventional-bot-changes:
+    needs: detect-flow
+    runs-on: ubuntu-latest
+    if: needs.detect-flow.outputs.flow == 'skip'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Warn if bot files changed off-convention
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base" "$head" -- 'bots/**')
+          if [ -n "$changed" ]; then
+            echo "::warning::Bot files changed on branch '${{ github.head_ref }}', which doesn't match bots/add|update|remove/<bot-name>. This PR skipped manifest validation, security scan, and sandbox test. Rename the branch to run the bot-submission pipeline."
+            echo "$changed" | while read -r f; do
+              echo "::warning file=$f::Changed on non-bot-submission branch; not validated/scanned/tested."
+            done
+          fi
