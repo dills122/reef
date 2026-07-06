@@ -365,6 +365,64 @@ class PlatformApiTest {
     }
 
     @Test
+    fun tradeTapeApiReturnsRecentPublicSafeTradesForInstrumentMostRecentFirst() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-trade-1",
+                    tradeId = "trade-1",
+                    executionId = "exec-1",
+                    buyOrderId = "bid-1",
+                    sellOrderId = "ask-1",
+                    instrumentId = "AAPL",
+                    quantityUnits = "25",
+                    price = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:02Z"
+                ),
+                TradeCreated(
+                    eventId = "evt-trade-2",
+                    tradeId = "trade-2",
+                    executionId = "exec-2",
+                    buyOrderId = "bid-2",
+                    sellOrderId = "ask-1",
+                    instrumentId = "MSFT",
+                    quantityUnits = "10",
+                    price = "300000000000",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:03Z"
+                ),
+                TradeCreated(
+                    eventId = "evt-trade-3",
+                    tradeId = "trade-3",
+                    executionId = "exec-3",
+                    buyOrderId = "bid-3",
+                    sellOrderId = "ask-2",
+                    instrumentId = "AAPL",
+                    quantityUnits = "50",
+                    price = "150260000000",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:04Z"
+                )
+            )
+        )
+
+        val response = api.tradeTape("AAPL")
+
+        assertContains(response, "\"instrumentId\":\"AAPL\"")
+        assertContains(response, "\"tradeId\":\"trade-3\"")
+        assertContains(response, "\"tradeId\":\"trade-1\"")
+        assert(!response.contains("\"tradeId\":\"trade-2\"")) { "unrelated instrument leaked into tape" }
+        assert(!response.contains("buyOrderId")) { "counterparty order id leaked into public tape" }
+        assert(!response.contains("sellOrderId")) { "counterparty order id leaked into public tape" }
+        assert(response.indexOf("\"tradeId\":\"trade-3\"") < response.indexOf("\"tradeId\":\"trade-1\"")) {
+            "expected most recent trade first"
+        }
+    }
+
+    @Test
     fun operationalProjectionSmokeReachesOrderAndMarketDataReads() {
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(

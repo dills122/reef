@@ -81,6 +81,16 @@ data class TradeCreated(
     val occurredAt: String
 )
 
+data class PublicTradeTapeEntry(
+    val sequence: Long,
+    val tradeId: String,
+    val instrumentId: String,
+    val quantityUnits: String,
+    val price: String,
+    val currency: String,
+    val occurredAt: String
+)
+
 val NonLifecycleRejectCodes: Set<String> = setOf("AUTHORIZATION_ERROR", "REFERENCE_DATA_ERROR")
 
 data class SubmitOrderResult(

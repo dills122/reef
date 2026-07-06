@@ -3,6 +3,7 @@ package com.reef.platform.api
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -325,6 +326,14 @@ class PlatformApi(
         return JsonCodec.writeObject("trades" to orderService.recentTrades(limit).map { it.toMap() })
     }
 
+    fun tradeTape(instrumentId: String, limit: Int = 50, beforeSequence: Long? = null): String {
+        val entries = orderService.tradeTape(instrumentId, limit, beforeSequence)
+        return JsonCodec.writeObject(
+            "instrumentId" to instrumentId,
+            "trades" to entries.map { it.toMap() }
+        )
+    }
+
     private fun toJson(result: SubmitOrderResult): String {
         val accepted = result.accepted
         if (accepted != null) {
@@ -371,6 +380,16 @@ class PlatformApi(
         "executionId" to executionId,
         "buyOrderId" to buyOrderId,
         "sellOrderId" to sellOrderId,
+        "instrumentId" to instrumentId,
+        "quantityUnits" to quantityUnits,
+        "price" to price,
+        "currency" to currency,
+        "occurredAt" to occurredAt
+    )
+
+    private fun PublicTradeTapeEntry.toMap(): Map<String, Any> = mapOf(
+        "sequence" to sequence,
+        "tradeId" to tradeId,
         "instrumentId" to instrumentId,
         "quantityUnits" to quantityUnits,
         "price" to price,

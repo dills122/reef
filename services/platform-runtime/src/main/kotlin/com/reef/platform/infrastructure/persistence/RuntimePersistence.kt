@@ -5,6 +5,7 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
@@ -288,6 +289,9 @@ interface RuntimePersistence {
     fun trades(): List<TradeCreated>
     fun recentTrades(limit: Int): List<TradeCreated>
     fun tradesForOrder(orderId: String): List<TradeCreated>
+    fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long? = null): List<PublicTradeTapeEntry> {
+        return emptyList()
+    }
     fun eventsForOrder(orderId: String): List<RuntimeEvent>
     fun eventsForTrace(traceId: String): List<RuntimeEvent>
     fun events(): List<RuntimeEvent>

@@ -5,6 +5,7 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
@@ -148,6 +149,28 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         if (limit <= 0) return emptyList()
         val from = (trades.size - limit).coerceAtLeast(0)
         return trades.subList(from, trades.size).toList()
+    }
+
+    override fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long?): List<PublicTradeTapeEntry> {
+        val effectiveLimit = limit.coerceIn(1, 500)
+        return trades
+            .mapIndexed { index, trade -> (index + 1).toLong() to trade }
+            .filter { (sequence, trade) ->
+                trade.instrumentId == instrumentId && (beforeSequence == null || sequence < beforeSequence)
+            }
+            .sortedByDescending { (sequence, _) -> sequence }
+            .take(effectiveLimit)
+            .map { (sequence, trade) ->
+                PublicTradeTapeEntry(
+                    sequence = sequence,
+                    tradeId = trade.tradeId,
+                    instrumentId = trade.instrumentId,
+                    quantityUnits = trade.quantityUnits,
+                    price = trade.price,
+                    currency = trade.currency,
+                    occurredAt = trade.occurredAt
+                )
+            }
     }
 
     override fun eventsForOrder(orderId: String): List<RuntimeEvent> {
