@@ -6,7 +6,7 @@ Define the high-throughput command path Reef should move toward for bot-arena an
 
 The current Postgres `captured-ack` path is useful as a correctness baseline and fallback, but the measured local ceiling is still below the required `7500-10000` completed commands/sec per runtime + engine instance. More small tuning on the same command-log hot path is unlikely to close the gap.
 
-The accepted target architecture uses a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. JetStream remains the stream-ack baseline. Redpanda/Kafka-compatible ingress is available as an opt-in comparison provider, and D-041 moves the next hot-ingress experiment toward a Kafka-compatible producer plus matching-engine direct partition consumption while keeping JetStream available as fallback/comparison.
+The accepted target architecture uses a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. JetStream remains the stream-ack baseline and fallback/comparison provider. D-041 moves the active hot-ingress work toward a Kafka-compatible producer plus matching-engine direct partition consumption. [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) is the current implementation contract for submit/cancel intake, idempotency, accepted-but-not-completed accounting, and readiness gates.
 
 ## Product Framing
 
@@ -92,17 +92,18 @@ Backpressure must look at completed throughput, oldest unprocessed age, and lag 
 client / simulator / arena bot
   -> external API boundary
   -> validation, auth, idempotency guard, risk/rate gate
-  -> JetStream durable publish ack
+  -> durable command-log publish ack
   -> 202 Accepted with command reference
-  -> partition worker
+  -> matching-engine direct partition consumer
   -> matching engine / venue application boundary
-  -> canonical command result + event log transaction in Postgres
-  -> JetStream ack
+  -> durable venue event batch publication
+  -> command offset commit
+  -> compact canonical Postgres materialization
   -> projection workers
   -> metrics, leaderboards, replay indexes, UI read models
 ```
 
-JetStream is the default durable accepted-command log. Redpanda can be selected with `STREAM_ACK_LOG_PROVIDER=redpanda` for A/B testing. Postgres remains the canonical record of what the venue decided in both provider modes.
+Redpanda/Kafka-compatible ingress is the active hot-ingress target. JetStream remains available for fallback and comparison. Postgres remains the canonical materialized record of what the venue decided in both provider modes.
 
 ## Stream Configuration Guardrails
 
@@ -117,9 +118,9 @@ Required command stream posture:
 - explicit stream version and subject contract
 - no `202 Accepted` until publish ack succeeds
 - publish failure, timeout, or overload returns `503` or `429`
-- consumer acknowledgments happen only after canonical DB facts are durable
+- command offsets or consumer acknowledgments happen only after the durable matching handoff succeeds
 
-Do not use JetStream WorkQueue retention for the accepted-command stream. WorkQueue semantics are too queue-shaped for the audit/replay guarantee needed here.
+Do not use JetStream WorkQueue retention for the accepted-command stream. WorkQueue semantics are too queue-shaped for the audit/replay guarantee needed here. In Kafka-compatible mode, command topics must preserve partition replay and offset-commit semantics; offsets commit only after durable venue event-batch publication.
 
 ## Deterministic Partitioning
 
@@ -338,6 +339,8 @@ The current Postgres `captured-ack` path should remain available for local fallb
 
 ## Implementation Work Plan
 
+This ladder records the stream-ack build-out, including the earlier JetStream worker phase. The active near-term intake contract is now [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): Redpanda/Kafka-compatible hot ingress first, matching-engine direct consumption, and JetStream retained as fallback/comparison.
+
 0. Architecture decision checkpoint
 - record D-037 as the stream-ack canonical append and projection split
 - define accepted/completed/projected/visible metrics
@@ -356,16 +359,17 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - add stream version and partition-count configuration
 - update simulator/arena command generation to include routing metadata
 
-3. Local JetStream profile
-- add NATS/JetStream to the local dev profile
-- create command stream bootstrap script
+3. Local durable-log profiles
+- keep NATS/JetStream in the local dev profile as fallback/comparison
+- keep Redpanda/Kafka-compatible ingress as the active hot-ingress profile
+- create command stream or topic bootstrap script
 - expose stream health and lag diagnostics
 - add publish-ack latency telemetry
 
 4. Stream-ack API mode
 - add `stream-ack` processing mode beside `sync-result` and `captured-ack`
 - validate command, idempotency key, routing metadata, and visible actor context
-- publish to JetStream and return `202` only after publish ack
+- publish to the configured durable command log and return `202` only after publish ack
 - return `429`/`503` before acceptance when stream health fails
 
 5. Idempotency guard
@@ -374,14 +378,14 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - implement same-key/same-hash replay and same-key/different-hash conflict
 - add crash/retry tests around publish acknowledgment
 
-6. Canonical append store and partition worker
-- consume assigned subject partitions
+6. Canonical append store and direct partition consumer
+- consume assigned command partitions
 - preserve ordering per partition
 - execute existing venue command path
-- write canonical command result and event log in one DB transaction
-- ack JetStream after commit only
+- publish durable venue event batches before command offset commit
+- materialize compact canonical command outcomes and batch rows asynchronously
 - add redelivery idempotency tests
-- initial submit slice exists: workers batch append canonical submit outcomes before ack and retain normalized writes until projector ownership is separated
+- earlier submit-worker slices remain compatibility scaffolding, not the target hot matching architecture
 
 7. Canonical replay support
 - formalize event IDs and command-result linkage
@@ -402,7 +406,7 @@ The current Postgres `captured-ack` path should remain available for local fallb
 - do this after canonical append/projection split unless profiling proves the engine is the next bottleneck
 
 10. Backpressure and operations
-- combine stream, worker, DB, and projection health into explicit overload decisions
+- combine durable-log, direct consumer, materializer, DB, and projection health into explicit overload decisions
 - add Kubernetes readiness/liveness/drain behavior for partition ownership
 - add dead-letter handling and operator remediation path
 
