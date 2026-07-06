@@ -18,6 +18,7 @@ Current deployment assumptions:
 - JetStream and Redpanda/Kafka-compatible providers available for durable command-log experiments
 - simulator/load tools driving the same public command paths as manual users
 - post-trade modules added only after command/event causation is stable enough to inspect
+- command intake work follows [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) for the current submit/cancel hot-path contract, accepted-but-not-completed semantics, and readiness gates
 
 ## Completed Baseline
 
@@ -40,6 +41,7 @@ The current gaps are:
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and has local no-DB proof; it still needs longer remote promotion evidence and persistence reintroduction from durable venue event batches
+- the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and provider-neutral status lookup
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
 
@@ -48,6 +50,7 @@ The current gaps are:
 1. Validate D-041 hot ingress.
    - Promote Redpanda/Kafka-compatible durable producer plus matching-engine direct consumer beyond local no-DB proof with longer remote stress evidence.
    - Require durable ack-before-`202`, bounded queue/in-flight depth, clean accepted/acked accounting, and replay/audit metadata.
+   - Use [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) as the implementation contract: `SubmitOrder` and `CancelOrder` first, `ModifyOrder` deferred, hot cancel without routing metadata rejected, and provider metadata kept diagnostic rather than public-contract required.
    - Keep JetStream as fallback and comparison until evidence says otherwise.
 
 2. Implement venue event batch materialization.
@@ -90,6 +93,7 @@ Primary references:
 - [`DECISIONS.md`](./DECISIONS.md), especially D-036 through D-041
 - [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 - [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+- [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 
@@ -98,6 +102,8 @@ Exit criteria:
 - no accepted-command accounting gaps
 - clean command ack or offset commit semantics
 - no unresolved redelivery, async worker failure, or hidden accepted/completed gap
+- hot-path cancel rejects missing routing metadata instead of performing synchronous lookup
+- status lookup is provider-neutral and distinguishes accepted, in-flight, event-published, completed, rejected, and failed states
 - benchmark reports distinguish attempted, durably accepted, engine-acked/completed, persisted, projected, and visible throughput
 - replay/audit metadata is sufficient to prove every accepted command outcome
 

@@ -809,3 +809,26 @@ Primary references:
 - [`docs/ARENA_INTAKE_GAP_ANALYSIS.md`](./ARENA_INTAKE_GAP_ANALYSIS.md)
 - [`infra/hetzner-core/`](../infra/hetzner-core/)
 - [`infra/simulation-runner/README.md`](../infra/simulation-runner/README.md)
+
+### D-047: Command Intake Process And Accounting Contract
+
+Status: accepted
+
+Summary:
+- the first implementation-ready hot intake scope is `SubmitOrder` and `CancelOrder`; `ModifyOrder` keeps the same routing and partitioning shape but is deferred from the first gate.
+- the runtime must return `202 Accepted` only after the configured durable command-log provider acknowledges the command.
+- the public `202` response should expose a stable command reference and status URL; provider details such as broker, partition, offset, and stream sequence are diagnostic metadata, not required public-client fields.
+- hot-path cancel commands must carry enough routing metadata to reach the same deterministic partition as the original order. Cancel requests without `runId`, `venueSessionId`, `instrumentId`, and order identifier are rejected instead of doing synchronous DB or projection lookup on the hot path.
+- idempotency scope is `clientId + route + idempotencyKey`. Same scope and same payload hash returns the prior accepted command reference while retained; same scope and different payload hash returns `409`.
+- hot intake should avoid writing full command payloads to Postgres before durable broker publish. If a Postgres idempotency guard is needed for a profile, it should be small, explicit, and benchmarked separately.
+- accepted-but-not-completed means durable pending work, not possible loss. Command offsets commit only after durable `VenueEventBatch` publication, and materializer offsets commit only after compact canonical Postgres rows commit.
+- poison commands must not be silently dropped. After retry policy is exhausted, the system must publish and materialize a terminal `FAILED` outcome so accepted-command accounting closes.
+- command status lookup is provider-neutral and should prefer `runtime.canonical_command_outcomes`, then durable event-batch metadata, then stream intake or broker reference, then legacy command-log fallback for non-hot modes.
+- intake readiness requires canonical materialization and replay/checksum evidence with no accepted/materialized accounting gap after drain. Projection freshness remains a separate gate.
+- Redpanda/Kafka-compatible ingress is the active hot-ingress target, with JetStream retained as fallback/comparison. The provider abstraction remains thin and must not hide partition, offset, acknowledgement, or backpressure semantics.
+
+Primary references:
+- [`docs/COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
+- [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
