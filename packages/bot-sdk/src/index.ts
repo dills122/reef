@@ -221,6 +221,12 @@ export interface BotDataAvailabilityClientV1 {
   availability(): Promise<BotResultV1<DataAvailabilityV1>>;
 }
 
+export interface BotReadClientsV1 {
+  readonly marketData?: BotMarketDataClientV1;
+  readonly historical?: BotHistoricalDataClientV1;
+  readonly orders?: Pick<BotOrdersClientV1, "current" | "history">;
+}
+
 export interface BotConfigV1 {
   string(key: string): string;
   number(key: string): number;

@@ -328,9 +328,8 @@ export interface LiveBotContextOptionsV1 extends LiveVenueDataClientOptionsV1 {
  * Builds a BotContextV1 that reads market data, bars, and own-order state from a
  * live platform-runtime instance instead of a fixture. Order actions still flow
  * through the existing venue-adapter/venue-client HTTP command path; this only
- * covers reads. Not wired into runner.ts/strategy-runner.ts's tick loop (which is
- * fixture-only today) - intended for direct use by scripts/operators until that
- * runner integration is a deliberate follow-up.
+ * covers reads. runner.ts/strategy-runner.ts can receive these clients through
+ * their readClients option; fixture mode remains the default.
  *
  * Read-side prices are converted from the venue's fixed-point nanos to plain
  * dollars (see priceFromNanos). The venue adapter converts bot action limit

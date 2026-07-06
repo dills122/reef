@@ -9,6 +9,7 @@ import {
   type BotLoggerV1,
   type BotMarketDataClientV1,
   type BotRandomV1,
+  type BotReadClientsV1,
   type BotResultV1,
   type BotRuntimePolicyV1,
   type BotSignalV1,
@@ -260,12 +261,14 @@ export async function qualifyBotV1(options: BotQualificationOptionsV1): Promise<
 export function createFixtureBotContextV1(options?: {
   readonly policy?: BotRuntimePolicyV1;
   readonly fixtureData?: BotFixtureDataV1;
+  readonly readClients?: BotReadClientsV1 | undefined;
   readonly logs?: BotLogEntryV1[];
   readonly denials?: BotDenialV1[];
   readonly counters?: { dataCalls: number; dataCallsThisTick: number };
 }): BotContextV1 {
   const policy = options?.policy ?? defaultBotRuntimePolicyV1;
   const fixtureData = options?.fixtureData ?? {};
+  const readClients = options?.readClients;
   const logs = options?.logs ?? [];
   const denials = options?.denials ?? [];
   const counters = options?.counters ?? { dataCalls: 0, dataCallsThisTick: 0 };
@@ -281,10 +284,30 @@ export function createFixtureBotContextV1(options?: {
     }
     return read();
   };
+  const dataGateAsync = async <T>(read: () => Promise<BotResultV1<T>>): Promise<BotResultV1<T>> => {
+    counters.dataCalls += 1;
+    counters.dataCallsThisTick += 1;
+    if (counters.dataCallsThisTick > policy.maxDataCallsPerTick) {
+      const denial = rateLimitDenial("data API call limit exceeded");
+      denials.push(denial);
+      return { ok: false, denial };
+    }
+    const result = await read();
+    if (!result.ok) {
+      denials.push(result.denial);
+    }
+    return result;
+  };
 
   const actions = createBotActionFactoryV1();
   const marketData: BotMarketDataClientV1 = {
     async snapshot(instrumentId) {
+      if (readClients?.marketData !== undefined) {
+        return dataGateAsync(() =>
+          readClients.marketData?.snapshot(instrumentId) ??
+          Promise.resolve({ ok: false, denial: notFoundDenial(`No market snapshot for ${instrumentId}.`) })
+        );
+      }
       return dataGate(() => {
         const snapshot = fixtureData.marketSnapshots?.[instrumentId];
         if (!snapshot) {
@@ -296,6 +319,12 @@ export function createFixtureBotContextV1(options?: {
       });
     },
     async snapshots(instrumentIds) {
+      if (readClients?.marketData !== undefined) {
+        return dataGateAsync(() =>
+          readClients.marketData?.snapshots(instrumentIds) ??
+          Promise.resolve({ ok: false, denial: notFoundDenial(`No market snapshot for ${instrumentIds.join(", ")}.`) })
+        );
+      }
       return dataGate(() => {
         const values: Record<string, MarketSnapshotV1> = {};
         const missing: string[] = [];
@@ -319,6 +348,12 @@ export function createFixtureBotContextV1(options?: {
 
   const historical: BotHistoricalDataClientV1 = {
     async intradayBars(request) {
+      if (readClients?.historical !== undefined) {
+        return dataGateAsync(() =>
+          readClients.historical?.intradayBars(request) ??
+          Promise.resolve({ ok: false, denial: notFoundDenial(`No historical bars for ${request.instrumentId}.`) })
+        );
+      }
       const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
       if (historicalCache.has(cacheKey)) {
         return { ok: true, value: historicalCache.get(cacheKey) ?? [], cached: true };
@@ -336,6 +371,12 @@ export function createFixtureBotContextV1(options?: {
       });
     },
     async intradayBarsBatch(requests) {
+      if (readClients?.historical !== undefined) {
+        return dataGateAsync(() =>
+          readClients.historical?.intradayBarsBatch(requests) ??
+          Promise.resolve({ ok: false, denial: notFoundDenial(`No historical bars for ${requests.map((request) => request.instrumentId).join(", ")}.`) })
+        );
+      }
       const result: Record<string, readonly HistoricalBarV1[]> = {};
       const misses = requests.filter((request) => {
         const cacheKey = `${request.instrumentId}:${request.interval}:${request.start}:${request.end}`;
@@ -387,16 +428,36 @@ export function createFixtureBotContextV1(options?: {
     orders: {
       safe: {
         async modify(order) {
+          if (readClients?.orders !== undefined) {
+            const current = await dataGateAsync(() => readClients.orders?.current() ?? Promise.resolve({ ok: true, value: [] as readonly OwnOrderV1[] }));
+            if (!current.ok) {
+              return { ok: false, denial: current.denial };
+            }
+            return safeModifyOrder(order, current.value, actions);
+          }
           return safeModifyOrder(order, fixtureData.currentOrders ?? [], actions);
         },
         async cancel(order) {
+          if (readClients?.orders !== undefined) {
+            const current = await dataGateAsync(() => readClients.orders?.current() ?? Promise.resolve({ ok: true, value: [] as readonly OwnOrderV1[] }));
+            if (!current.ok) {
+              return { ok: false, denial: current.denial };
+            }
+            return safeCancelOrder(order, current.value, actions);
+          }
           return safeCancelOrder(order, fixtureData.currentOrders ?? [], actions);
         },
       },
       async current() {
+        if (readClients?.orders !== undefined) {
+          return dataGateAsync(() => readClients.orders?.current() ?? Promise.resolve({ ok: true, value: [] as readonly OwnOrderV1[] }));
+        }
         return dataGate(() => ({ ok: true, value: fixtureData.currentOrders ?? [] }));
       },
       async history(request) {
+        if (readClients?.orders !== undefined) {
+          return dataGateAsync(() => readClients.orders?.history(request) ?? Promise.resolve({ ok: true, value: [] as readonly OwnOrderV1[] }));
+        }
         return dataGate(() => {
           const allOrders = fixtureData.orderHistory ?? [];
           const filtered = request?.instrumentId

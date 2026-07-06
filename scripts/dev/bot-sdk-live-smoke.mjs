@@ -12,6 +12,13 @@ const runnerUrl = new URL("../../packages/bot-sdk/src/runner.ts", import.meta.ur
 const { runBotScenarioV1 } = await import(runnerUrl.href);
 const venueClientUrl = new URL("../../packages/bot-sdk/src/venue-client.ts", import.meta.url);
 const { createVenueHttpTransportV1 } = await import(venueClientUrl.href);
+const liveClientUrl = new URL("../../packages/bot-sdk/src/live-client.ts", import.meta.url);
+const {
+  createLiveMarketDataClientV1,
+  createLiveHistoricalDataClientV1,
+  createLiveOwnOrdersReadClientV1,
+  createLiveDataAvailabilityClientV1,
+} = await import(liveClientUrl.href);
 const preflightUrl = new URL("../../packages/bot-sdk/src/venue-preflight.ts", import.meta.url);
 const { validateVenuePreflightV1 } = await import(preflightUrl.href);
 
@@ -45,6 +52,14 @@ if (preflight.status !== "ready") {
 }
 
 await waitForHttp(`${venueUrl}/health`, waitTimeoutSeconds);
+const liveClientOptions = { baseUrl: venueUrl, participantId: fixture.participantId };
+const availabilityClient = createLiveDataAvailabilityClientV1(liveClientOptions);
+const availability = await availabilityClient.availability();
+console.log("Bot SDK venue data availability:");
+console.log(JSON.stringify(availability, null, 2));
+if (!availability.ok) {
+  process.exit(1);
+}
 
 if (seedReference) {
   console.log("seeding reference/auth data inferred from fixture...");
@@ -55,6 +70,11 @@ const report = await runBotScenarioV1({
   BotClass: botModule.default,
   fixture,
   venueTransport: createVenueHttpTransportV1({ baseUrl: venueUrl }),
+  readClients: {
+    marketData: createLiveMarketDataClientV1(liveClientOptions),
+    historical: createLiveHistoricalDataClientV1(liveClientOptions),
+    orders: createLiveOwnOrdersReadClientV1(liveClientOptions),
+  },
 });
 
 console.log(JSON.stringify(report, null, 2));

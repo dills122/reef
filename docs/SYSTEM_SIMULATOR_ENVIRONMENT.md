@@ -302,7 +302,7 @@ not the target architecture.
 
 ## Next Simulator Improvements
 
-- Wire Bot SDK live-read clients into the hosted/tick runner deliberately.
+- Extend hosted-runner/operator flows to choose fixture reads or injected live reads explicitly per run.
 - Add scenario-level assertions that span command status, canonical outcomes,
   order projections, market-data projections, and replay output.
 - Expand deterministic settlement/break/repair scenarios after the venue-core

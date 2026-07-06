@@ -1,6 +1,6 @@
 # Bot SDK Live Smoke
 
-The live smoke path submits Bot SDK runner output through the approved venue HTTP client against a local Reef runtime. Bot code still receives only SDK context objects; network access belongs to the runner/orchestrator.
+The live smoke path reads market data, historical bars, and own orders through Bot SDK live-read clients, then submits runner output through the approved venue HTTP client against a local Reef runtime. Bot code still receives only SDK context objects; network access belongs to the runner/orchestrator.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ Start the local stack first:
 make dev-up
 ```
 
-The smoke fixture must include `runId`, `venueSessionId`, `actorId`, `participantId`, `accountId`, `botId`, `botVersion`, `correlationId`, and at least one market snapshot instrument. The wrapper prints a preflight report before submitting commands.
+The smoke fixture must include `runId`, `venueSessionId`, `actorId`, `participantId`, `accountId`, `botId`, `botVersion`, `correlationId`, and at least one market snapshot instrument. The wrapper prints a fixture preflight report and a `/api/v1/data/availability` report before submitting commands.
 
 Venue command requests use `X-Client-Id: bot:<botId>` by default so they pass the same external API boundary checks as user-submitted commands. Add `clientId` to the fixture when a hosted run needs a configured platform client identity.
 
@@ -42,6 +42,7 @@ Omit `--seed-reference` when the stack is already seeded by a scenario or an ope
 A passing run prints:
 
 - the venue preflight report
+- the venue data availability report
 - runner tick reports
 - venue command requests
 - venue responses from `/api/v1/orders/*`

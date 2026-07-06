@@ -143,7 +143,7 @@ The initial implemented snapshot is `runtime.market_data_snapshots`, kept live f
 
 `/api/v1/data/availability` is the side API inventory for bots, users, and test harnesses. It reports each current read surface, its endpoint, source table/projection, freshness model, and the current projection lag/watermark when a projection defines freshness. This endpoint is not a production throughput claim by itself; it is the contract that tells clients which facts are direct durable rows, which facts are rebuilt projections, and where lag must be considered.
 
-`packages/bot-sdk/src/live-client.ts` is the first Bot SDK client that calls these market-data/order-read endpoints over real HTTP rather than fixtures — previously the SDK's `marketData`/`historical`/`orders.current()`/`history()` were fixture-only in every run mode, including "hosted"/"live"; only order actions reached a real venue. It is not yet wired into the tick-runner (`runner.ts`/`strategy-runner.ts`, still fixture-only), which remains a deliberate follow-up. Venue-session-specific depth remains follow-on work.
+`packages/bot-sdk/src/live-client.ts` is the first Bot SDK client that calls these market-data/order-read endpoints over real HTTP rather than fixtures. `runner.ts` and `strategy-runner.ts` accept optional `readClients`, so operators can keep deterministic fixture mode by default or inject live market-data, historical, and own-order clients for live smoke runs. Venue-session-specific depth remains follow-on work.
 
 Later, real-time feeds can be added from event streams or specialized market-data publishers. They should still consume canonical or event-stream facts, not the engine's mutable book internals directly.
 

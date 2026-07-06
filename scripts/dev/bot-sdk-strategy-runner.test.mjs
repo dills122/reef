@@ -11,6 +11,7 @@ const { createRecordingVenueTransportV1 } = await import(
 );
 
 await assertMultiSymbolStrategyRun();
+await assertLiveReadClientsStrategyRun();
 await assertPolicyBlockedStrategyRunDoesNotSendOrApply();
 
 console.log("bot SDK strategy runner checks passed");
@@ -79,6 +80,58 @@ async function assertMultiSymbolStrategyRun() {
   assert.equal(transport.requests.length, 2);
 }
 
+async function assertLiveReadClientsStrategyRun() {
+  const transport = createRecordingVenueTransportV1(202);
+  const readClients = {
+    marketData: {
+      async snapshot(instrumentId) {
+        assert.equal(instrumentId, "AAPL");
+        return { ok: true, value: { instrumentId, asOf: "2026-07-06T00:00:00Z", midPrice: 124 } };
+      },
+      async snapshots() {
+        throw new Error("not used");
+      },
+    },
+    orders: {
+      async current() {
+        return {
+          ok: true,
+          value: [{
+            orderId: "live-strategy-open-1",
+            instrumentId: "AAPL",
+            side: "BUY",
+            quantity: 5,
+            remainingQuantity: 5,
+            limitPrice: 123,
+            status: "OPEN",
+          }],
+        };
+      },
+      async history() {
+        return { ok: true, value: [] };
+      },
+    },
+  };
+
+  const report = await runBotStrategyScenarioV1({
+    BotClass: LiveReadProbeBot,
+    fixture: {
+      ...fixture,
+      ticks: fixture.ticks.slice(0, 1).map((tick) => ({ ...tick, marketSnapshots: {} })),
+      initialOrders: [],
+    },
+    venueTransport: transport,
+    readClients,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.dataCalls, 2);
+  assert.equal(report.ticks[0].venueCommands.length, 1);
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "124000000000");
+  assert.equal(report.finalOrders.length, 1);
+  assert.equal(report.finalOrders[0].orderId, "live-strategy-open-1");
+}
+
 async function assertPolicyBlockedStrategyRunDoesNotSendOrApply() {
   const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/test-fixtures/bad-bots/too-many-orders-bot.ts")).href);
   const transport = createRecordingVenueTransportV1(202);
@@ -93,6 +146,23 @@ async function assertPolicyBlockedStrategyRunDoesNotSendOrApply() {
   assert.equal(report.ticks[0].venueCommands.length, 0);
   assert.equal(report.finalOrders.length, 0);
   assert.equal(transport.requests.length, 0);
+}
+
+class LiveReadProbeBot {
+  strategies = [];
+  async onStart() {}
+  async onStop() {}
+  async onSignal() {
+    return [];
+  }
+  async onTick(ctx) {
+    const snapshot = await ctx.marketData.snapshot("AAPL");
+    const current = await ctx.orders.current();
+    if (!snapshot.ok || !current.ok) {
+      return [ctx.actions.noop("live data unavailable")];
+    }
+    return [ctx.orders.placeLimit({ instrumentId: "AAPL", side: "BUY", quantity: 1, limitPrice: snapshot.value.midPrice })];
+  }
 }
 
 function bars(instrumentId, closes) {

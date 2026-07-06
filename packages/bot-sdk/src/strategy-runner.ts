@@ -2,6 +2,7 @@ import {
   type BotActionV1,
   type BotBarIntervalV1,
   type BotDenialV1,
+  type BotReadClientsV1,
   type BotRuntimePolicyV1,
   type BotSignalV1,
   type BotStrategyV1,
@@ -34,6 +35,7 @@ export interface BotStrategyScenarioRunOptionsV1 {
   readonly BotClass: ReefBotV1Constructor;
   readonly fixture: BotScenarioFixtureV1;
   readonly venueTransport?: VenueCommandTransportV1;
+  readonly readClients?: BotReadClientsV1;
 }
 
 export interface BotStrategyScenarioRunReportV1 {
@@ -90,10 +92,12 @@ export async function runBotStrategyScenarioV1(
     orderState.set(order.orderId, order);
     orderHistory.set(order.orderId, order);
   }
+  await refreshOrdersFromReadClient(options.readClients, orderState, orderHistory, denials, issues);
 
   const startContext = createFixtureBotContextV1({
     policy,
     fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory),
+    readClients: options.readClients,
     logs,
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },
@@ -108,12 +112,14 @@ export async function runBotStrategyScenarioV1(
     if (fixtureTick === undefined) {
       continue;
     }
+    await refreshOrdersFromReadClient(options.readClients, orderState, orderHistory, denials, issues, tick);
 
     const counters = { dataCalls: 0, dataCallsThisTick: 0 };
     const tickDenialsStart = denials.length;
     const context = createFixtureBotContextV1({
       policy,
       fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory, fixtureTick.marketSnapshots),
+      readClients: options.readClients,
       logs,
       denials,
       counters,
@@ -185,8 +191,10 @@ export async function runBotStrategyScenarioV1(
       }
     }
 
-    if (venueAccepted) {
+    if (venueAccepted && options.readClients?.orders === undefined) {
       applyActionsToOrderState(expandedActions, orderState, orderHistory, tick);
+      commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
+    } else if (venueAccepted) {
       commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
     }
 
@@ -207,6 +215,7 @@ export async function runBotStrategyScenarioV1(
   const stopContext = createFixtureBotContextV1({
     policy,
     fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory),
+    readClients: options.readClients,
     logs,
     denials,
     counters: { dataCalls: 0, dataCallsThisTick: 0 },
@@ -232,6 +241,34 @@ export async function runBotStrategyScenarioV1(
     ticks: tickReports,
     finalOrders: Array.from(orderState.values()),
   };
+}
+
+async function refreshOrdersFromReadClient(
+  readClients: BotReadClientsV1 | undefined,
+  orderState: Map<string, OwnOrderV1>,
+  orderHistory: Map<string, OwnOrderV1>,
+  denials: BotDenialV1[],
+  issues: BotScenarioIssueV1[],
+  tick?: number,
+): Promise<void> {
+  if (readClients?.orders === undefined) {
+    return;
+  }
+  const current = await readClients.orders.current();
+  if (!current.ok) {
+    denials.push(current.denial);
+    issues.push({
+      code: "live_order_read_denial",
+      message: current.denial.message,
+      ...(tick === undefined ? {} : { tick }),
+    });
+    return;
+  }
+  orderState.clear();
+  for (const order of current.value) {
+    orderState.set(order.orderId, order);
+    orderHistory.set(order.orderId, order);
+  }
 }
 
 function strategyEventsForTick(
