@@ -573,7 +573,9 @@ class PlatformHttpServer(
                 return@createContext
             }
             val participantId = queryValue(exchange, "participantId")
-            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true))
+            val instrumentId = queryValue(exchange, "instrumentId")
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/api/v1/orders/history") { exchange ->
@@ -582,7 +584,9 @@ class PlatformHttpServer(
                 return@createContext
             }
             val participantId = queryValue(exchange, "participantId")
-            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false))
+            val instrumentId = queryValue(exchange, "instrumentId")
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/trades") { exchange ->
@@ -823,12 +827,22 @@ class PlatformHttpServer(
             request.path == "/api/v1/orders/current" && request.method == "GET" ->
                 PlatformHotPathResponse(
                     status = 200,
-                    body = api.ownOrders(queryValue(request.query, "participantId"), openOnly = true)
+                    body = api.ownOrders(
+                        participantId = queryValue(request.query, "participantId"),
+                        openOnly = true,
+                        instrumentId = queryValue(request.query, "instrumentId"),
+                        limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+                    )
                 )
             request.path == "/api/v1/orders/history" && request.method == "GET" ->
                 PlatformHotPathResponse(
                     status = 200,
-                    body = api.ownOrders(queryValue(request.query, "participantId"), openOnly = false)
+                    body = api.ownOrders(
+                        participantId = queryValue(request.query, "participantId"),
+                        openOnly = false,
+                        instrumentId = queryValue(request.query, "instrumentId"),
+                        limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+                    )
                 )
             else -> legacySetupRoutes.handle(request)
         }

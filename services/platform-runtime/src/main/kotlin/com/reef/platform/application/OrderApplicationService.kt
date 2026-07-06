@@ -635,8 +635,8 @@ class OrderApplicationService(
     fun intradayBars(instrumentId: String, interval: String, start: String, end: String) =
         runtimePersistence.intradayBars(instrumentId, interval, start, end)
 
-    fun ordersForParticipant(participantId: String, openOnly: Boolean) =
-        runtimePersistence.ordersForParticipant(participantId, openOnly)
+    fun ordersForParticipant(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0) =
+        runtimePersistence.ordersForParticipant(participantId, openOnly, instrumentId, limit)
 
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
 

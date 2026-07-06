@@ -576,6 +576,22 @@ class PlatformApiTest {
                 acceptedAt = "2026-03-14T18:00:03Z"
             )
         )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "mine-msft",
+                engineOrderId = "eng-mine-msft",
+                instrumentId = "MSFT",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "10",
+                limitPrice = "300",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:04Z"
+            )
+        )
         persistence.rebuildOrderLifecycleState()
 
         val current = api.ownOrders("participant-1", openOnly = true)
@@ -591,6 +607,13 @@ class PlatformApiTest {
         assertContains(history, "\"mine-cancelled\"")
         assertContains(history, "\"openOnly\":false")
         assert(!history.contains("someone-elses")) { "other participant's order leaked into history" }
+
+        val filtered = api.ownOrders("participant-1", openOnly = false, instrumentId = "AAPL", limit = 1)
+        assertContains(filtered, "\"instrumentId\":\"AAPL\"")
+        assertContains(filtered, "\"limit\":1")
+        assertContains(filtered, "\"mine-open\"")
+        assert(!filtered.contains("mine-msft")) { "instrument filter not applied" }
+        assert(!filtered.contains("mine-cancelled")) { "limit not applied" }
     }
 
     @Test

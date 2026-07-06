@@ -68,13 +68,18 @@ function fakeFetch(routes) {
 
 // own orders: status mapping CANCELLED -> CANCELED, scoped read, limitPrice in nanos
 {
-  const fetchImpl = fakeFetch([
+  const requestedUrls = [];
+  const routeFetch = fakeFetch([
     [/orders\/current/, { orders: [{ orderId: "o1", instrumentId: "AAPL", side: "BUY", quantityUnits: "10", remainingQuantityUnits: "10", limitPrice: "100000000000", status: "OPEN" }] }],
     [/orders\/history/, { orders: [
       { orderId: "o1", instrumentId: "AAPL", side: "BUY", quantityUnits: "10", remainingQuantityUnits: "10", limitPrice: "100000000000", status: "OPEN" },
       { orderId: "o2", instrumentId: "AAPL", side: "SELL", quantityUnits: "5", remainingQuantityUnits: "0", limitPrice: "101000000000", status: "CANCELLED" },
     ] }],
   ]);
+  const fetchImpl = async (url) => {
+    requestedUrls.push(url);
+    return routeFetch(url);
+  };
   const client = createLiveOwnOrdersReadClientV1({ baseUrl: "http://venue", participantId: "p1", fetch: fetchImpl });
   const current = await client.current();
   assert.equal(current.ok, true);
@@ -87,6 +92,11 @@ function fakeFetch(routes) {
   assert.equal(history.value.length, 2);
   assert.equal(history.value[1].status, "CANCELED");
   assert.equal(history.value[1].limitPrice, 101);
+
+  const filteredHistory = await client.history({ instrumentId: "AAPL", limit: 1 });
+  assert.equal(filteredHistory.ok, true);
+  assert.equal(filteredHistory.value.length, 1);
+  assert.match(requestedUrls.at(-1), /orders\/history\?participantId=p1&instrumentId=AAPL&limit=1/);
 }
 
 // data availability: exposes read source/freshness and projection lag

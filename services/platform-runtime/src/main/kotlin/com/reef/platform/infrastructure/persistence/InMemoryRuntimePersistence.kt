@@ -143,9 +143,16 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return orders.values.toList()
     }
 
-    override fun ordersForParticipant(participantId: String, openOnly: Boolean): List<OwnOrderView> {
-        return orders.values
+    override fun ordersForParticipant(
+        participantId: String,
+        openOnly: Boolean,
+        instrumentId: String,
+        limit: Int
+    ): List<OwnOrderView> {
+        val boundedLimit = limit.coerceIn(0, 500)
+        val views = orders.values
             .filter { it.participantId == participantId }
+            .filter { instrumentId.isBlank() || it.instrumentId == instrumentId }
             .mapNotNull { order ->
                 val state = orderLifecycleStates[order.orderId] ?: return@mapNotNull null
                 if (openOnly && state.status !in OpenLifecycleStatuses) return@mapNotNull null
@@ -159,6 +166,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     status = state.status
                 )
             }
+        return if (boundedLimit > 0) views.take(boundedLimit) else views
     }
 
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> {

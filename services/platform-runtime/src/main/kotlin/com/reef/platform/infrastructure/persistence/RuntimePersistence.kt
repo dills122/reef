@@ -297,7 +297,12 @@ interface RuntimePersistence {
     fun intradayBars(instrumentId: String, interval: String, start: String, end: String): List<IntradayBar> {
         return emptyList()
     }
-    fun ordersForParticipant(participantId: String, openOnly: Boolean): List<OwnOrderView> {
+    fun ordersForParticipant(
+        participantId: String,
+        openOnly: Boolean,
+        instrumentId: String = "",
+        limit: Int = 0
+    ): List<OwnOrderView> {
         return emptyList()
     }
     fun eventsForOrder(orderId: String): List<RuntimeEvent>

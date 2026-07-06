@@ -72,7 +72,7 @@ curl "http://127.0.0.1:8080/api/v1/market-data/depth/AAPL?levels=5"
 curl "http://127.0.0.1:8080/api/v1/market-data/trades/AAPL?limit=50"
 curl "http://127.0.0.1:8080/api/v1/market-data/bars/AAPL?interval=1m&start=2026-07-06T18:00:00Z&end=2026-07-06T18:05:00Z"
 curl "http://127.0.0.1:8080/api/v1/orders/current?participantId=participant-1"
-curl "http://127.0.0.1:8080/api/v1/orders/history?participantId=participant-1"
+curl "http://127.0.0.1:8080/api/v1/orders/history?participantId=participant-1&instrumentId=AAPL&limit=50"
 curl "http://127.0.0.1:8080/api/v1/data/availability"
 ```
 
@@ -82,7 +82,7 @@ The trade tape endpoint reads durable `runtime.trades` rows directly (no project
 
 The intraday bars endpoint aggregates `runtime.trades` into OHLCV buckets (`interval` one of `1m`/`5m`/`15m`/`1h`) between `start`/`end`, matching the Bot SDK's `BotHistoricalBarsRequestV1`/`HistoricalBarV1` contract. It reads trades directly (no projector) via Postgres `date_bin`; unsupported intervals return `400` with `"error":"unsupported interval"`.
 
-`/api/v1/orders/current` and `/api/v1/orders/history` return only orders for the given `participantId` (own orders only, matching the bot visible-data policy) — `current` filters to `OPEN`/`PARTIALLY_FILLED`, `history` returns all statuses. Backed by a join between `runtime.orders` and `runtime.order_lifecycle_state`.
+`/api/v1/orders/current` and `/api/v1/orders/history` return only orders for the given `participantId` (own orders only, matching the bot visible-data policy) — `current` filters to `OPEN`/`PARTIALLY_FILLED`, `history` returns all statuses. Both accept optional `instrumentId` and `limit` query parameters to keep bot reads bounded. Backed by a join between `runtime.orders` and `runtime.order_lifecycle_state`.
 
 `/api/v1/data/availability` reports the current bot/user read surfaces, their source tables/projections, freshness model, and projection lag/watermark when available. Use it before simulator or bot runs when the run needs to prove projection freshness instead of only canonical command completion.
 

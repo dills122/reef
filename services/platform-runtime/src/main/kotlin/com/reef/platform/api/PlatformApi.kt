@@ -430,16 +430,19 @@ class PlatformApi(
         )
     }
 
-    fun ownOrders(participantId: String, openOnly: Boolean): String {
+    fun ownOrders(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0): String {
+        val boundedLimit = limit.coerceIn(0, 500)
         return JsonCodec.writeObject(
             "participantId" to participantId,
             "meta" to mapOf(
                 "source" to "runtime.orders + runtime.order_lifecycle_state",
                 "freshness" to "dirty-tracked lifecycle projection",
                 "scope" to "participant",
-                "openOnly" to openOnly
+                "openOnly" to openOnly,
+                "instrumentId" to instrumentId,
+                "limit" to boundedLimit
             ),
-            "orders" to orderService.ordersForParticipant(participantId, openOnly).map { it.toMap() }
+            "orders" to orderService.ordersForParticipant(participantId, openOnly, instrumentId, boundedLimit).map { it.toMap() }
         )
     }
 

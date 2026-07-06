@@ -248,6 +248,17 @@ export function createLiveOwnOrdersReadClientV1(
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const participantId = encodeURIComponent(options.participantId);
 
+  function ownOrdersUrl(path: "current" | "history", request?: { readonly instrumentId?: string; readonly limit?: number }): string {
+    const params = [`participantId=${participantId}`];
+    if (request?.instrumentId !== undefined) {
+      params.push(`instrumentId=${encodeURIComponent(request.instrumentId)}`);
+    }
+    if (request?.limit !== undefined) {
+      params.push(`limit=${encodeURIComponent(String(request.limit))}`);
+    }
+    return `${baseUrl}/api/v1/orders/${path}?${params.join("&")}`;
+  }
+
   function toOwnOrder(order: Record<string, string>): OwnOrderV1 {
     const status = OrderStatusFromPlatformV1[order.status ?? ""] ?? "REJECTED";
     const limitPrice = priceFromNanos(order.limitPrice);
@@ -264,7 +275,7 @@ export function createLiveOwnOrdersReadClientV1(
 
   return {
     async current() {
-      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/orders/current?participantId=${participantId}`);
+      const result = await getJson(fetchImpl, ownOrdersUrl("current"));
       if (result.status < 200 || result.status >= 300) {
         return unavailableDenial("Failed to load current orders.") as BotResultV1<readonly OwnOrderV1[]>;
       }
@@ -272,7 +283,7 @@ export function createLiveOwnOrdersReadClientV1(
       return { ok: true, value: orders.map(toOwnOrder) };
     },
     async history(request) {
-      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/orders/history?participantId=${participantId}`);
+      const result = await getJson(fetchImpl, ownOrdersUrl("history", request));
       if (result.status < 200 || result.status >= 300) {
         return unavailableDenial("Failed to load order history.") as BotResultV1<readonly OwnOrderV1[]>;
       }
