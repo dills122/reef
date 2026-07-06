@@ -138,6 +138,65 @@ class VenueEventBatchMaterializerTest {
         assertEquals(1, stats.failed)
     }
 
+    @Test
+    fun materializerKeepsFirstOutcomeWhenRedeliveredCommandProducesConflictingResult() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        val accepted = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson("batch-crash-1", "checksum-crash-1"),
+            streamSequence = 60
+        )
+        // Simulates engine crash-then-redelivery: same commandId, a *different*
+        // batchId (a real redelivery produces a new VenueEventBatch, not a byte-identical
+        // replay of the old one), and a conflicting rejected outcome because the
+        // engine's own duplicate-order-id guard rejected the second attempt.
+        val redeliveredRejected = RecordingVenueEventBatchDelivery(
+            payloadJson = JsonCodec.writeObject(
+                "batchId" to "batch-crash-2",
+                "shardId" to "engine-0",
+                "partition" to 2,
+                "commandStream" to "REEF_COMMANDS",
+                "eventStream" to "REEF_VENUE_EVENTS",
+                "firstSequence" to 101L,
+                "lastSequence" to 101L,
+                "commandCount" to 1,
+                "createdAt" to "2026-07-04T18:00:01Z",
+                "payloadChecksum" to "checksum-crash-2",
+                "outcomes" to listOf(
+                    mapOf(
+                        "commandId" to "cmd-1",
+                        "commandType" to "SubmitOrder",
+                        "streamSequence" to 101L,
+                        "deliveredCount" to 2L,
+                        "payloadHash" to "payload-hash-1",
+                        "instrumentId" to "AAPL",
+                        "orderId" to "ord-1",
+                        "status" to "rejected",
+                        "result" to mapOf("rejected" to mapOf("code" to "DUPLICATE_ORDER_ID"))
+                    )
+                )
+            ),
+            streamSequence = 61
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(accepted, redeliveredRejected),
+            api = api
+        )
+
+        val processed = materializer.processOnce()
+
+        assertEquals(2, processed)
+        assertEquals(1, accepted.ackCalls)
+        assertEquals(1, redeliveredRejected.ackCalls)
+        assertEquals(0, accepted.nakCalls + redeliveredRejected.nakCalls)
+        val outcome = persistence.canonicalCommandOutcome("cmd-1")
+        assertNotNull(outcome)
+        assertEquals("batch-crash-1", outcome.batchId)
+        assertEquals("accepted", outcome.resultStatus)
+        assertEquals(1L, VenueEventBatchMaterializerMetrics.snapshot().materializedOutcomes)
+    }
+
     private fun venueEventBatch(batchId: String, checksum: String): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = batchId,

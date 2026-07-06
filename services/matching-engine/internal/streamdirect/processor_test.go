@@ -261,6 +261,68 @@ func TestProcessorPublishesFailedOutcomeForUndecodableCommand(t *testing.T) {
 	}
 }
 
+func TestProcessorRedeliveredSubmitAfterCrashIsRejectedNotReexecuted(t *testing.T) {
+	payload := map[string]string{
+		"commandId":     "cmd-crash-redelivery",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-crash-redelivery",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	}
+	service := app.NewService()
+	publisher := &fakePublisher{}
+
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 30, payload)
+	firstProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{first}}, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := firstProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("first ProcessOnce returned error: %v", err)
+	}
+	if len(publisher.batches) != 1 || publisher.batches[0].Outcomes[0].Status != "accepted" {
+		t.Fatalf("expected first attempt accepted, got %#v", publisher.batches)
+	}
+	if first.acked != 1 {
+		t.Fatalf("expected first delivery acked, got %d", first.acked)
+	}
+
+	// Simulate engine crash after publish succeeded but before the command
+	// offset committed: the broker redelivers the same command bytes on the
+	// same (still-shared, in-process) service/order-book state.
+	redelivered := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 31, payload)
+	redeliveredProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redelivered}}, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := redeliveredProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("redelivered ProcessOnce returned error: %v", err)
+	}
+	if len(publisher.batches) != 2 {
+		t.Fatalf("expected redelivery to publish a second outcome batch, got %d", len(publisher.batches))
+	}
+	redeliveredOutcome := publisher.batches[1].Outcomes[0]
+	if redeliveredOutcome.CommandID != "cmd-crash-redelivery" || redeliveredOutcome.Status != "rejected" {
+		t.Fatalf("expected redelivered submit to be rejected, got %#v", redeliveredOutcome)
+	}
+	if redeliveredOutcome.Result.Rejected == nil || redeliveredOutcome.Result.Rejected.Code != "DUPLICATE_ORDER_ID" {
+		t.Fatalf("expected DUPLICATE_ORDER_ID rejection on redelivery, got %#v", redeliveredOutcome.Result.Rejected)
+	}
+	if redelivered.acked != 1 {
+		t.Fatalf("expected redelivered delivery acked (not endlessly nak-retried), got %d", redelivered.acked)
+	}
+}
+
 type fakeSource struct {
 	deliveries []CommandDelivery
 }
