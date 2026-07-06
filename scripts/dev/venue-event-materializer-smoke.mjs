@@ -9,17 +9,26 @@ const smokeId = env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_ID", `materializer-smoke
 const commandId = `cmd-${smokeId}`;
 const orderId = `ord-${smokeId}`;
 const traceId = `trace-${smokeId}`;
+const instrumentId = `AAPL-${smokeId}`;
+const participantId = `participant-${smokeId}`;
+const accountId = `account-${smokeId}`;
 const runtimeUrl = env("RUNTIME_BASE_URL", `http://127.0.0.1:${env("REEF_PLATFORM_API_HOST_PORT", "8080")}`);
 const engineUrl = env("ENGINE_BASE_URL", `http://127.0.0.1:${env("REEF_MATCHING_ENGINE_HOST_PORT", "8081")}`);
 const materializerUrl = env(
   "VENUE_EVENT_MATERIALIZER_BASE_URL",
   `http://127.0.0.1:${env("REEF_PLATFORM_MATERIALIZER_HOST_PORT", "8091")}`,
 );
+const readApiUrl = env(
+  "DEV_VENUE_EVENT_MATERIALIZER_READ_API_URL",
+  `http://127.0.0.1:${env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", "8084")}`,
+);
 const waitTimeoutSeconds = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
 const materializerTimeoutMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_TIMEOUT_MS", "60000"));
 const materializerPollMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_POLL_MS", "1000"));
 const expectOrderRead = env("DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW", "1") !== "0";
 const projectionName = env("DEV_VENUE_EVENT_MATERIALIZER_PROJECTION_NAME", `runtime-normalized-venue-outcomes-${smokeId}`);
+const marketDataProjectionName = env("DEV_VENUE_EVENT_MATERIALIZER_MARKET_DATA_PROJECTION_NAME", `market-data-top-of-book-${smokeId}`);
+const depthProjectionName = env("DEV_VENUE_EVENT_MATERIALIZER_DEPTH_PROJECTION_NAME", `market-data-depth-${smokeId}`);
 const streamToken = smokeId.replace(/[^A-Za-z0-9_-]/g, "_");
 
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
@@ -36,6 +45,7 @@ setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "50");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer"]));
+setValue("RUNTIME_PROJECTION_POSTGRES_JDBC_URL", "jdbc:postgresql://postgres:5432/reef?currentSchema=runtime");
 const projectionEventStream = env("MATCHING_ENGINE_EVENT_STREAM");
 
 console.log("starting Redpanda direct-stream materializer smoke stack...");
@@ -65,9 +75,9 @@ const submit = await postJson(
     venueSessionId: `session-${smokeId}`,
     occurredAt: "2026-07-04T18:00:00Z",
     orderId,
-    instrumentId: "AAPL",
-    participantId: "participant-1",
-    accountId: "account-1",
+    instrumentId,
+    participantId,
+    accountId,
     side: "BUY",
     orderType: "LIMIT",
     quantityUnits: "100",
@@ -83,6 +93,8 @@ console.log("waiting for canonical command outcome row...");
 const outcome = await waitForCanonicalOutcome(commandId);
 console.log("projecting canonical command outcome into compact lifecycle rows...");
 const projection = await projectCompactLifecycleRows(outcome);
+console.log("proving projected read APIs...");
+const readApiProof = await proveProjectedReadApis(outcome);
 const afterStats = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
 const afterMaterialized = Number(afterStats.metrics?.materialized ?? 0);
 if (afterMaterialized <= beforeMaterialized) {
@@ -98,24 +110,26 @@ console.log(JSON.stringify({
   materializedDelta: afterMaterialized - beforeMaterialized,
   projectedDelta: projection.projected,
   projectedReplayDelta: projection.replayed,
+  readApiProof,
   projectionName,
+  marketDataProjectionName,
 }, null, 2));
 
 async function seedReferenceData() {
   const internal = { "X-Reef-Internal-Route": "true" };
   await postJson(`${runtimeUrl}/reference/instruments`, {
-    instrumentId: "AAPL",
-    symbol: "AAPL",
+    instrumentId,
+    symbol: instrumentId,
     assetClass: "US_EQ",
     currency: "USD",
   }, internal);
   await postJson(`${runtimeUrl}/reference/participants`, {
-    participantId: "participant-1",
-    name: "Participant 1",
+    participantId,
+    name: "Materializer Smoke Participant",
   }, internal);
   await postJson(`${runtimeUrl}/reference/accounts`, {
-    accountId: "account-1",
-    participantId: "participant-1",
+    accountId,
+    participantId,
     accountType: "HOUSE",
   }, internal);
   await postJson(`${runtimeUrl}/auth/roles`, {
@@ -215,9 +229,9 @@ async function projectCompactLifecycleRows(outcome) {
     }
     orderRow = orderRows[0];
     if (
-      orderRow.instrument_id !== "AAPL" ||
-      orderRow.participant_id !== "participant-1" ||
-      orderRow.account_id !== "account-1" ||
+      orderRow.instrument_id !== instrumentId ||
+      orderRow.participant_id !== participantId ||
+      orderRow.account_id !== accountId ||
       orderRow.quantity_units !== "100"
     ) {
       throw new Error(`projected order row mismatch: ${JSON.stringify(orderRow)}`);
@@ -235,6 +249,176 @@ async function projectCompactLifecycleRows(outcome) {
   }
 
   return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0], orderRow };
+}
+
+async function proveProjectedReadApis(outcome) {
+  await prioritizeDirtyOrder();
+  const lifecycleProjected = Number(await queryRuntimeValue("SELECT runtime.runtime_project_order_lifecycle_state(5000)"));
+  await prioritizeDirtyInstrument();
+  const marketDataProjected = Number(await queryRuntimeValue(`
+    SELECT runtime.runtime_project_market_data_snapshots(
+      '${sqlLiteral(marketDataProjectionName)}',
+      '${sqlLiteral(projectionName)}',
+      ${Number(outcome.stream_sequence)},
+      0,
+      1000
+    )
+  `));
+
+  const lifecycleRows = await queryRuntimeRows(`
+    SELECT order_id, instrument_id, participant_id, remaining_quantity_units, filled_quantity_units, status, limit_price
+    FROM runtime.order_lifecycle_state
+    WHERE order_id = '${sqlLiteral(orderId)}'
+  `, ["order_id", "instrument_id", "participant_id", "remaining_quantity_units", "filled_quantity_units", "status", "limit_price"]);
+  if (lifecycleRows.length !== 1) {
+    throw new Error(`expected one order_lifecycle_state row for ${orderId}, got ${lifecycleRows.length}`);
+  }
+  const lifecycle = lifecycleRows[0];
+  if (
+    lifecycle.instrument_id !== instrumentId ||
+    lifecycle.participant_id !== participantId ||
+    lifecycle.remaining_quantity_units !== "100" ||
+    lifecycle.filled_quantity_units !== "0" ||
+    lifecycle.status !== "OPEN" ||
+    lifecycle.limit_price !== "150250000000"
+  ) {
+    throw new Error(`projected order_lifecycle_state mismatch: ${JSON.stringify(lifecycle)}`);
+  }
+
+  const currentOrders = await getJson(
+    `${readApiUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&instrumentId=${encodeURIComponent(instrumentId)}&limit=10`,
+  );
+  assertOwnOrderResponse("currentOrders", currentOrders, { openOnly: true });
+
+  const orderHistory = await getJson(
+    `${readApiUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&instrumentId=${encodeURIComponent(instrumentId)}&limit=10`,
+  );
+  assertOwnOrderResponse("orderHistory", orderHistory, { openOnly: false });
+
+  const snapshot = await getJson(
+    `${readApiUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}?projectionName=${encodeURIComponent(marketDataProjectionName)}`,
+  );
+  if (snapshot.snapshot?.bestBidPrice !== "150250000000" || snapshot.snapshot?.bestBidQuantity !== "100") {
+    throw new Error(`market-data snapshot mismatch: ${JSON.stringify(snapshot)}`);
+  }
+
+  const depth = await getJson(
+    `${readApiUrl}/api/v1/market-data/depth/${encodeURIComponent(instrumentId)}?levels=5&projectionName=${encodeURIComponent(depthProjectionName)}&sourceProjectionName=${encodeURIComponent(projectionName)}`,
+  );
+  if (depth.depth?.bidLevels?.[0]?.price !== "150250000000" || depth.depth?.bidLevels?.[0]?.quantity !== "100") {
+    throw new Error(`market-data depth mismatch: ${JSON.stringify(depth)}`);
+  }
+
+  const availability = await getJson(
+    `${readApiUrl}/api/v1/data/availability?venueProjectionName=${encodeURIComponent(projectionName)}&marketDataProjectionName=${encodeURIComponent(marketDataProjectionName)}&source=venue-event-batch`,
+  );
+  const surfaces = Array.isArray(availability.surfaces) ? availability.surfaces : [];
+  assertAvailabilitySurface(surfaces, {
+    name: "currentOrders",
+    source: "runtime.orders + runtime.order_lifecycle_state",
+    freshness: "dirty-tracked lifecycle projection",
+    scope: "participant-own-orders",
+    requiredQuery: ["participantId"],
+  });
+  assertAvailabilitySurface(surfaces, {
+    name: "marketDataDepth",
+    source: "runtime.order_lifecycle_state",
+    freshness: "read-time bounded aggregation",
+    scope: "public-market-data",
+    optionalQuery: ["levels", "projectionName", "sourceProjectionName"],
+  });
+
+  return {
+    lifecycleProjected,
+    marketDataProjected,
+    lifecycleStatus: lifecycle.status,
+    currentOrders: currentOrders.orders.length,
+    orderHistory: orderHistory.orders.length,
+    bestBidPrice: snapshot.snapshot.bestBidPrice,
+    depthBidLevels: depth.depth.bidLevels.length,
+    availabilitySurfaces: surfaces.length,
+    readApiUrl,
+  };
+}
+
+async function prioritizeDirtyOrder() {
+  await queryRuntimeValue(`
+    WITH prioritized AS (
+      UPDATE runtime.order_lifecycle_dirty
+      SET dirtied_at = to_timestamp(0)
+      WHERE order_id = '${sqlLiteral(orderId)}'
+      RETURNING 1
+    )
+    SELECT COUNT(*) FROM prioritized
+  `);
+}
+
+async function prioritizeDirtyInstrument() {
+  await queryRuntimeValue(`
+    WITH prioritized AS (
+      UPDATE runtime.market_data_snapshot_dirty
+      SET dirtied_at = to_timestamp(0)
+      WHERE instrument_id = '${sqlLiteral(instrumentId)}'
+      RETURNING 1
+    )
+    SELECT COUNT(*) FROM prioritized
+  `);
+}
+
+function assertOwnOrderResponse(label, response, expected) {
+  if (response.participantId !== participantId) {
+    throw new Error(`${label} participant mismatch: ${JSON.stringify(response)}`);
+  }
+  if (response.meta?.source !== "runtime.orders + runtime.order_lifecycle_state") {
+    throw new Error(`${label} source mismatch: ${JSON.stringify(response.meta)}`);
+  }
+  if (response.meta?.freshness !== "dirty-tracked lifecycle projection") {
+    throw new Error(`${label} freshness mismatch: ${JSON.stringify(response.meta)}`);
+  }
+  if (response.meta?.scope !== "participant") {
+    throw new Error(`${label} scope mismatch: ${JSON.stringify(response.meta)}`);
+  }
+  if (response.meta?.openOnly !== expected.openOnly) {
+    throw new Error(`${label} openOnly mismatch: ${JSON.stringify(response.meta)}`);
+  }
+  const orders = Array.isArray(response.orders) ? response.orders : [];
+  const order = orders.find((candidate) => candidate.orderId === orderId);
+  if (!order) {
+    throw new Error(`${label} missing order ${orderId}: ${JSON.stringify(response)}`);
+  }
+  if (
+    order.orderId !== orderId ||
+    order.instrumentId !== instrumentId ||
+    order.side !== "BUY" ||
+    order.remainingQuantityUnits !== "100" ||
+    order.limitPrice !== "150250000000" ||
+    order.status !== "OPEN"
+  ) {
+    throw new Error(`${label} order mismatch: ${JSON.stringify(order)}`);
+  }
+}
+
+function assertAvailabilitySurface(surfaces, expected) {
+  const surface = surfaces.find((candidate) => candidate.name === expected.name);
+  if (!surface) {
+    throw new Error(`missing availability surface ${expected.name}: ${JSON.stringify(surfaces)}`);
+  }
+  for (const field of ["source", "freshness", "scope"]) {
+    if (surface[field] !== expected[field]) {
+      throw new Error(`availability ${expected.name} ${field} mismatch: ${JSON.stringify(surface)}`);
+    }
+  }
+  for (const [field, values] of Object.entries({
+    requiredQuery: expected.requiredQuery ?? [],
+    optionalQuery: expected.optionalQuery ?? [],
+  })) {
+    const actual = Array.isArray(surface[field]) ? surface[field] : [];
+    for (const value of values) {
+      if (!actual.includes(value)) {
+        throw new Error(`availability ${expected.name} missing ${field}=${value}: ${JSON.stringify(surface)}`);
+      }
+    }
+  }
 }
 
 async function projectUntilSubmitResult(commandId, partition) {

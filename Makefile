@@ -10,7 +10,7 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-validate-stream-profile dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-venue-event-materializer dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-sim-batch dev-scenario-plan dev-scenario-smoke dev-scenario-drift-check dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
+.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-validate-stream-profile dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-venue-event-materializer dev-smoke-projection-proof dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-sim-batch dev-scenario-plan dev-scenario-smoke dev-scenario-drift-check dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
 
@@ -131,6 +131,8 @@ dev-smoke-arena-run-results:
 dev-smoke-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/venue-event-materializer-smoke.mjs
+
+dev-smoke-projection-proof: dev-smoke-venue-event-materializer
 
 dev-smoke-bot-sdk-live:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
