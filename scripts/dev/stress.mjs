@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -393,7 +393,7 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
         traceLimit,
         "--pretty-summary",
         "--report-out",
-        reportOut,
+        resolve(reportOut),
       ],
       { cwd: "services/simulator" },
     );
