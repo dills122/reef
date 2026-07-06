@@ -128,6 +128,15 @@ If a public API is intentionally needed later, set `enable_public_web = true`,
 set `api_domain`, open the matching host UFW ports, and run Compose with the
 `public` profile so Caddy starts.
 
+When public Caddy is enabled, only narrow bearer-token routes are exposed:
+
+- `GET|POST /internal/admin/arena/bots`
+- `POST /internal/admin/arena/bots/openbao-provision`
+- `POST /internal/admin/analytics/run-exports`
+
+The analytics export route uses `ANALYTICS_EXPORT_API_TOKEN` from
+`/opt/reef/secrets/caddy.env`. Keep read/list access tunnel-only.
+
 Initialize and unseal OpenBao manually through an SSH tunnel. Store unseal keys
 and the root token in an offline vault or password manager, not on the server.
 
@@ -163,15 +172,30 @@ AWS_ACCESS_KEY_ID="..."
 AWS_SECRET_ACCESS_KEY="..."
 AWS_DEFAULT_REGION="auto"
 AGE_RECIPIENT="age1..."
+# For restore checks only; private identity path stays on operator-controlled host.
+AGE_IDENTITY_FILE="/opt/reef/secrets/age-identity.txt"
 ```
 
-Then run:
+Then run one backup:
 
 ```bash
 /opt/reef/scripts/backup-dbs.sh
 ```
 
-Test restores before treating the backups as reliable.
+Install daily systemd backup timer:
+
+```bash
+make hetzner-core ARGS=backup-timer
+```
+
+Run non-destructive restore-list check against latest local encrypted archive:
+
+```bash
+/opt/reef/scripts/restore-backup-check.sh
+```
+
+Do not treat backups as reliable until this check passes with the real private
+age identity.
 
 ## Soak Runs
 

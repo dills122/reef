@@ -67,6 +67,29 @@ echo "postgres-admin: ready"
 docker compose exec -T postgres-analytics pg_isready -U postgres >/dev/null
 echo "postgres-analytics: ready"
 
+analytics_export_tables="$(
+  docker compose exec -T postgres-analytics psql -U postgres -d analytics -X -q -t -A \
+    -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'analytics' AND table_name = 'simulation_run_exports';"
+)"
+if [[ "$analytics_export_tables" -ne 1 ]]; then
+  echo "analytics.simulation_run_exports is missing" >&2
+  exit 1
+fi
+
+if [[ -f "$BASE/secrets/platform-runtime.env" ]]; then
+  analytics_visible_tables="$(
+    docker compose exec -T \
+      -e PGPASSWORD="${ANALYTICS_POSTGRES_PASSWORD:-}" \
+      postgres-analytics psql -U "${ANALYTICS_POSTGRES_USER:-analytics_app}" -d analytics -X -q -t -A \
+      -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'analytics' AND table_name = 'simulation_run_exports';"
+  )"
+  if [[ "$analytics_visible_tables" -ne 1 ]]; then
+    echo "analytics_app cannot see analytics.simulation_run_exports" >&2
+    exit 1
+  fi
+  echo "analytics_app visible export tables: $analytics_visible_tables"
+fi
+
 echo "resource snapshot:"
 docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" \
   reef-platform-runtime-1 reef-matching-engine-1 reef-postgres-1 reef-postgres-admin-1 reef-postgres-analytics-1 || true

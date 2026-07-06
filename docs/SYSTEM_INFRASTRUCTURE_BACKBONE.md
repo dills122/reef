@@ -151,6 +151,11 @@ Default exposure:
 127.0.0.1:8080 -> platform-runtime:8080
 ```
 
+Optional public Caddy exposure is intentionally narrow. It can forward only
+bot-submission CI routes and `POST /internal/admin/analytics/run-exports`, each
+behind bearer tokens from `/opt/reef/secrets/caddy.env`. Analytics reads remain
+tunnel-only.
+
 Operator access normally uses SSH tunneling:
 
 ```bash

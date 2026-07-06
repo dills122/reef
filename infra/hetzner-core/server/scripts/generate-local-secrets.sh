@@ -69,13 +69,24 @@ source "$SECRETS/postgres-analytics.env"
 # publicly (registry read + OpenBao provisioning). See Caddyfile and D-046.
 if [[ ! -s "$SECRETS/caddy.env" ]]; then
   ARENA_ADMIN_API_TOKEN="$(rand_hex)"
+  ANALYTICS_EXPORT_API_TOKEN="$(rand_hex)"
 
   cat > "$SECRETS/caddy.env" <<EOF
 ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
+ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
 
   chmod 600 "$SECRETS/caddy.env"
   echo "Generated ARENA_ADMIN_API_TOKEN - set this as the ARENA_ADMIN_API_TOKEN GitHub Actions secret for the bot-submission workflow."
+  echo "Generated ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /internal/admin/analytics/run-exports."
+fi
+
+if ! grep -q '^ANALYTICS_EXPORT_API_TOKEN=' "$SECRETS/caddy.env"; then
+  ANALYTICS_EXPORT_API_TOKEN="$(rand_hex)"
+  cat >> "$SECRETS/caddy.env" <<EOF
+ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
+EOF
+  echo "Generated missing ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /internal/admin/analytics/run-exports."
 fi
 
 # shellcheck disable=SC1091
