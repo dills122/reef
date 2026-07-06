@@ -30,6 +30,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.order_lifecycle_state",
                 "runtime.order_lifecycle_dirty",
                 "runtime.market_data_snapshots",
+                "runtime.market_data_snapshot_dirty",
                 "auth.auth_roles",
                 "auth.auth_actor_roles"
             ),
@@ -44,7 +45,8 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_project_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_command_outcomes",
                 "runtime.runtime_materialize_venue_event_batch",
-                "runtime.runtime_project_order_lifecycle_state"
+                "runtime.runtime_project_order_lifecycle_state",
+                "runtime.runtime_project_market_data_snapshots"
             ),
             requirements.functions.map { it.qualifiedName }.toSet()
         )

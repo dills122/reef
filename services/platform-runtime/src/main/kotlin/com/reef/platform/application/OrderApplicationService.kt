@@ -650,6 +650,12 @@ class OrderApplicationService(
         sourceProjectionName: String = "runtime-normalized-venue-outcomes"
     ) = runtimePersistence.refreshMarketDataSnapshots(projectionName, sourceProjectionName)
 
+    fun projectMarketDataSnapshots(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes",
+        batchSize: Int = 500
+    ) = runtimePersistence.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize)
+
     fun marketDataSnapshot(
         instrumentId: String,
         projectionName: String = "market-data-top-of-book"

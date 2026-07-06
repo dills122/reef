@@ -159,6 +159,8 @@ class PlatformHttpServer(
         RuntimeEnv.string("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", "runtime-normalized-venue-outcomes"),
     private val marketDataProjectorPollMs: Long =
         RuntimeEnv.long("MARKET_DATA_PROJECTOR_POLL_MS", 250L, min = 1L),
+    private val marketDataProjectorBatchSize: Int =
+        RuntimeEnv.int("MARKET_DATA_PROJECTOR_BATCH_SIZE", 500, min = 1),
     private val orderLifecycleProjectorEnabled: Boolean = RuntimeEnv.bool("ORDER_LIFECYCLE_PROJECTOR_ENABLED", false),
     private val orderLifecycleProjectorPollMs: Long =
         RuntimeEnv.long("ORDER_LIFECYCLE_PROJECTOR_POLL_MS", 250L, min = 1L),
@@ -3271,11 +3273,12 @@ class PlatformHttpServer(
             "projectionName" to marketDataProjectorProjectionName,
             "sourceProjectionName" to marketDataProjectorSourceProjectionName,
             "pollIntervalMs" to marketDataProjectorPollMs,
+            "batchSize" to marketDataProjectorBatchSize,
             "metrics" to mapOf(
-                "refreshes" to stats.refreshes,
-                "refreshedRows" to stats.refreshedRows,
+                "cycles" to stats.cycles,
+                "processedRows" to stats.processedRows,
                 "failed" to stats.failed,
-                "lastRefreshedAt" to stats.lastRefreshedAt,
+                "lastProcessedAt" to stats.lastProcessedAt,
                 "lastFailedAt" to stats.lastFailedAt,
                 "lastError" to stats.lastError
             )
@@ -3352,6 +3355,7 @@ class PlatformHttpServer(
             projectionName = marketDataProjectorProjectionName,
             sourceProjectionName = marketDataProjectorSourceProjectionName,
             pollIntervalMs = marketDataProjectorPollMs,
+            batchSize = marketDataProjectorBatchSize,
             workerName = "reef-market-data-projector-$marketDataProjectorProjectionName"
         ).start()
     }

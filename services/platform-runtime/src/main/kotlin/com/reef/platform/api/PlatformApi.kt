@@ -265,6 +265,14 @@ class PlatformApi(
         return orderService.refreshMarketDataSnapshots(projectionName, sourceProjectionName)
     }
 
+    fun projectMarketDataSnapshotsCount(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes",
+        batchSize: Int = 500
+    ): Long {
+        return orderService.projectMarketDataSnapshots(projectionName, sourceProjectionName, batchSize)
+    }
+
     fun rebuildOrderLifecycleState(): String {
         return JsonCodec.writeObject("rebuilt" to orderService.rebuildOrderLifecycleState())
     }

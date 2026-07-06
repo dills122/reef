@@ -80,6 +80,7 @@ object PostgresSchemaRequirements {
                 names.orderLifecycleState,
                 names.orderLifecycleDirty,
                 names.marketDataSnapshots,
+                names.marketDataSnapshotDirty,
                 names.authRoles,
                 names.authActorRoles
             ).map(PostgresSchemaObject::parse),
@@ -91,7 +92,8 @@ object PostgresSchemaRequirements {
                 names.projectCanonicalSubmitOutcomesFunction,
                 names.projectCanonicalCommandOutcomesFunction,
                 names.materializeVenueEventBatchFunction,
-                names.projectOrderLifecycleStateFunction
+                names.projectOrderLifecycleStateFunction,
+                names.projectMarketDataSnapshotsFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),

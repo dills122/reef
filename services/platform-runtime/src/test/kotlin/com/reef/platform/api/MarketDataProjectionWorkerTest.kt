@@ -35,14 +35,17 @@ class MarketDataProjectionWorkerTest {
             pollIntervalMs = 1L
         )
 
-        val refreshed = worker.processOnce()
+        val processed = worker.processOnce()
 
-        assertEquals(1, refreshed)
+        assertEquals(1, processed)
         assertNotNull(persistence.orderLifecycleState("bid-1"))
         assertContains(api.marketDataSnapshot("AAPL"), "\"bestBidPrice\":\"150250000000\"")
         val stats = MarketDataProjectionMetrics.snapshot()
-        assertEquals(1, stats.refreshes)
-        assertEquals(1, stats.refreshedRows)
+        assertEquals(1, stats.cycles)
+        assertEquals(1, stats.processedRows)
         assertEquals(0, stats.failed)
+
+        val secondCycleProcessed = worker.processOnce()
+        assertEquals(0, secondCycleProcessed)
     }
 }
