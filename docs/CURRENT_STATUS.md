@@ -44,6 +44,7 @@ Current decision anchors:
 - Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
 - Account/bot risk pre-checks now have a boundary contract and allow-all/static implementation that can reject, backpressure, or disable bots before command-log append, stream intake reservation, or durable publish.
 - Market-data reads have a first conservative projection-backed slice: `runtime.order_lifecycle_state` rebuilds open/filled/cancelled order state, `runtime.market_data_snapshots` reads remaining open `LIMIT` quantity for `/api/v1/market-data/snapshots/{instrumentId}`, and `/api/v1/market-data/depth/{instrumentId}` exposes bounded lifecycle-backed depth. The opt-in `MARKET_DATA_PROJECTOR_ENABLED=true` loop refreshes top-of-book snapshots and reports status at `/internal/market-data/projector/status`.
+- `runtime.order_lifecycle_state` can now also be kept live by its own opt-in `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` background loop (status at `/internal/order-lifecycle/projector/status`), rather than only through the manual/admin rebuild endpoint. It remains a full-table rebuild per cycle, not incremental per-order maintenance.
 
 ## Current Forward Path
 

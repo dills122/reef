@@ -63,8 +63,9 @@ The current gaps are:
 3. Complete venue lifecycle projection.
    - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
    - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
-   - Full `orders` projection from the event-batch path still needs either submit command metadata in `VenueEventBatch` or a durable command-payload join.
-   - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.
+   - The durable command-payload join now exists (`command_log.command_payloads` joined by `command_id`), so `orders` rows are reconstructed at submit-accept time without extra `VenueEventBatch` metadata.
+   - Submit/cancel/modify/fill/reject state is queryable through `runtime.order_lifecycle_state` (rebuilt from `orders`, `executions`, and `runtime_events`), now kept live by the opt-in `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` background loop (status at `/internal/order-lifecycle/projector/status`) instead of manual/admin-triggered rebuild only.
+   - `runtime.order_lifecycle_state` is a full-table rebuild per cycle, not an incremental per-order update; this is fine at current local data volumes but should move to incremental maintenance before large-order-count stress runs.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
 4. Lock first lifecycle scenarios.

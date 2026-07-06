@@ -89,6 +89,20 @@ Projector status is exposed at:
 curl "http://127.0.0.1:8084/internal/market-data/projector/status"
 ```
 
+An opt-in background order-lifecycle projector can keep `runtime.order_lifecycle_state` rebuilt on background-capable runtime roles, instead of relying only on the manual/admin rebuild endpoint:
+
+```bash
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+ORDER_LIFECYCLE_PROJECTOR_POLL_MS=250 \
+make dev-up
+```
+
+Projector status is exposed at:
+
+```bash
+curl "http://127.0.0.1:8084/internal/order-lifecycle/projector/status"
+```
+
 Stack startup passes `--remove-orphans` so renamed local services, such as the retired all-in-one runtime container, do not keep stale ports or process roles alive.
 
 Optional inline smoke during reset:

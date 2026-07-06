@@ -269,6 +269,10 @@ class PlatformApi(
         return JsonCodec.writeObject("rebuilt" to orderService.rebuildOrderLifecycleState())
     }
 
+    fun rebuildOrderLifecycleStateCount(): Long {
+        return orderService.rebuildOrderLifecycleState()
+    }
+
     fun marketDataSnapshot(
         instrumentId: String,
         projectionName: String = "market-data-top-of-book"
