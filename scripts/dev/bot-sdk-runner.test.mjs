@@ -31,9 +31,9 @@ async function assertSimpleMarketMakerRun() {
   assert.equal(report.ticks[0].venueCommands.length, 2);
   assert.equal(report.ticks[0].venueResponses.length, 2);
   assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");
-  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99.5");
-  assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "100");
-  assert.equal(report.ticks[2].venueCommands[1].body.limitPrice, "101.25");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99500000000");
+  assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "100000000000");
+  assert.equal(report.ticks[2].venueCommands[1].body.limitPrice, "101250000000");
   assert.equal(report.finalOrders.length, 6);
   assert.equal(transport.requests.length, 6);
 }

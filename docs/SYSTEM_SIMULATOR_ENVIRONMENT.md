@@ -230,12 +230,17 @@ GET /api/v1/market-data/trades/{instrumentId}
 GET /api/v1/market-data/bars/{instrumentId}
 GET /api/v1/orders/current?participantId=...
 GET /api/v1/orders/history?participantId=...
+GET /api/v1/data/availability
 GET /api/v1/commands/{commandId}
 GET /traces/{traceId}/events
 ```
 
 Read models may lag. Simulator reports should record whether the test asserts
-projection visibility or only canonical command completion.
+projection visibility or only canonical command completion. `GET /api/v1/data/availability`
+is the read-side inventory for this: it reports each bot/user data surface, its
+backing source (`runtime.trades`, `runtime.market_data_snapshots`,
+`runtime.order_lifecycle_state`, etc.), and the current projection lag/watermark
+where a projection owns freshness.
 
 ## Local Development Flow
 

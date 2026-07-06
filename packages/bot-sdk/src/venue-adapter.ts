@@ -1,5 +1,7 @@
 import type { BotActionV1, BotResultV1, OwnOrderV1, ReefBotMetadataV1 } from "./index";
 
+const PRICE_SCALE_NANOS = 1_000_000_000;
+
 export interface BotVenueAdapterContextV1 {
   readonly scenarioId?: string;
   readonly runId: string;
@@ -47,6 +49,10 @@ export function toVenueCommandRequestsV1(
     switch (action.type) {
       case "submit_limit": {
         const orderId = action.order.clientOrderId ?? `${context.commandIdPrefix}-order-${sequence}`;
+        const limitPrice = priceToNanos(action.order.limitPrice);
+        if (limitPrice === undefined) {
+          return unsupportedAction("Venue API v1 limitPrice must be a finite non-negative number.");
+        }
         requests.push({
           method: "POST",
           route: "/api/v1/orders/submit",
@@ -60,7 +66,7 @@ export function toVenueCommandRequestsV1(
             side: action.order.side,
             orderType: "LIMIT",
             quantityUnits: String(action.order.quantity),
-            limitPrice: String(action.order.limitPrice),
+            limitPrice,
             currency: context.currency ?? "USD",
             timeInForce: action.order.timeInForce ?? "DAY",
             clientOrderId: action.order.clientOrderId,
@@ -82,6 +88,10 @@ export function toVenueCommandRequestsV1(
             },
           };
         }
+        const limitPrice = priceToNanos(action.order.limitPrice);
+        if (limitPrice === undefined) {
+          return unsupportedAction("Venue API v1 limitPrice must be a finite non-negative number.");
+        }
         requests.push({
           method: "POST",
           route: "/api/v1/orders/modify",
@@ -91,7 +101,7 @@ export function toVenueCommandRequestsV1(
             orderId: action.order.orderId,
             instrumentId: action.order.instrumentId,
             quantityUnits: String(action.order.quantity),
-            limitPrice: String(action.order.limitPrice),
+            limitPrice,
             botId: context.botId,
             botVersion: context.botVersion,
             runId: context.runId,
@@ -191,6 +201,13 @@ function unsupportedAction(message: string): BotResultV1<readonly VenueCommandRe
       message,
     },
   };
+}
+
+function priceToNanos(price: number): string | undefined {
+  if (!Number.isFinite(price) || price < 0) {
+    return undefined;
+  }
+  return String(Math.round(price * PRICE_SCALE_NANOS));
 }
 
 function omitUndefinedStringValues(values: Record<string, string | undefined>): Readonly<Record<string, string>> {

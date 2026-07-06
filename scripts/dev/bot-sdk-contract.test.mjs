@@ -136,6 +136,7 @@ function assertVenueAdapter() {
   assert.equal(submit.value[0].body.commandId, "cmd-bot-1");
   assert.equal(submit.value[0].body.orderType, "LIMIT");
   assert.equal(submit.value[0].body.quantityUnits, "10");
+  assert.equal(submit.value[0].body.limitPrice, "99500000000");
   assert.equal(submit.value[0].body.botId, "bot-1");
   assert.equal(submit.value[0].body.scenarioId, "scenario-1");
   assert.equal(submit.value[0].body.runKind, "scenario");

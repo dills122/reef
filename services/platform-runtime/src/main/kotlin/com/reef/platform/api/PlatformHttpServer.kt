@@ -527,6 +527,17 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
         }
 
+        server.createContext("/api/v1/data/availability") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val venueProjectionName = queryValue(exchange, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            val marketDataProjectionName = queryValue(exchange, "marketDataProjectionName").ifBlank { "market-data-top-of-book" }
+            val source = queryValue(exchange, "source").ifBlank { "venue-event-batch" }
+            writeJson(exchange, 200, api.dataAvailability(venueProjectionName, marketDataProjectionName, source))
+        }
+
         server.createContext("/api/v1/market-data/depth/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -572,7 +583,9 @@ class PlatformHttpServer(
                 return@createContext
             }
             val participantId = queryValue(exchange, "participantId")
-            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true))
+            val instrumentId = queryValue(exchange, "instrumentId")
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/api/v1/orders/history") { exchange ->
@@ -581,7 +594,9 @@ class PlatformHttpServer(
                 return@createContext
             }
             val participantId = queryValue(exchange, "participantId")
-            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false))
+            val instrumentId = queryValue(exchange, "instrumentId")
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/trades") { exchange ->
@@ -764,6 +779,15 @@ class PlatformHttpServer(
                         queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
                     )
                 )
+            request.path == "/api/v1/data/availability" && request.method == "GET" ->
+                PlatformHotPathResponse(
+                    status = 200,
+                    body = api.dataAvailability(
+                        venueProjectionName = queryValue(request.query, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" },
+                        marketDataProjectionName = queryValue(request.query, "marketDataProjectionName").ifBlank { "market-data-top-of-book" },
+                        source = queryValue(request.query, "source").ifBlank { "venue-event-batch" }
+                    )
+                )
             request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
                 val response = api.marketDataSnapshot(
@@ -813,12 +837,22 @@ class PlatformHttpServer(
             request.path == "/api/v1/orders/current" && request.method == "GET" ->
                 PlatformHotPathResponse(
                     status = 200,
-                    body = api.ownOrders(queryValue(request.query, "participantId"), openOnly = true)
+                    body = api.ownOrders(
+                        participantId = queryValue(request.query, "participantId"),
+                        openOnly = true,
+                        instrumentId = queryValue(request.query, "instrumentId"),
+                        limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+                    )
                 )
             request.path == "/api/v1/orders/history" && request.method == "GET" ->
                 PlatformHotPathResponse(
                     status = 200,
-                    body = api.ownOrders(queryValue(request.query, "participantId"), openOnly = false)
+                    body = api.ownOrders(
+                        participantId = queryValue(request.query, "participantId"),
+                        openOnly = false,
+                        instrumentId = queryValue(request.query, "instrumentId"),
+                        limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+                    )
                 )
             else -> legacySetupRoutes.handle(request)
         }

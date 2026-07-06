@@ -65,6 +65,25 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1DataAvailabilityReportsReadSurfaceFreshness() {
+        val server = testServer()
+        try {
+            val response = get(server.address.port, "/api/v1/data/availability")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"source\":\"venue-event-batch\"")
+            assertContains(response.body, "\"name\":\"marketDataSnapshots\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/market-data/snapshots/{instrumentId}\"")
+            assertContains(response.body, "\"name\":\"currentOrders\"")
+            assertContains(response.body, "\"freshness\":\"dirty-tracked lifecycle projection\"")
+            assertContains(response.body, "\"name\":\"tradeTape\"")
+            assertContains(response.body, "\"freshness\":\"durable fact rows\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1SubmitReturnsRateLimitedFromHook() {
         val server = testServer(
             boundary = ExternalApiBoundary(

@@ -1,10 +1,15 @@
 import type {
   BotContextV1,
+  BotDataAvailabilityClientV1,
   BotHistoricalBarsRequestV1,
   BotHistoricalDataClientV1,
   BotMarketDataClientV1,
   BotOrdersClientV1,
   BotResultV1,
+  DataAvailabilityProjectionV1,
+  DataAvailabilityProjectionWatermarkV1,
+  DataAvailabilitySurfaceV1,
+  DataAvailabilityV1,
   HistoricalBarV1,
   MarketSnapshotV1,
   OwnOrderV1,
@@ -56,6 +61,60 @@ const PRICE_SCALE_NANOS = 1_000_000_000;
 function priceFromNanos(value: string | undefined): number | undefined {
   const parsed = numberOrUndefined(value);
   return parsed === undefined ? undefined : parsed / PRICE_SCALE_NANOS;
+}
+
+function recordOrEmpty(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function arrayOrEmpty(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" ? value : Number(value ?? 0);
+}
+
+function parseAvailabilityWatermark(value: unknown): DataAvailabilityProjectionWatermarkV1 {
+  const row = recordOrEmpty(value);
+  return {
+    projectionName: stringValue(row.projectionName),
+    partition: numberValue(row.partition),
+    lastPartitionSequence: numberValue(row.lastPartitionSequence),
+    canonicalMaxPartitionSequence: numberValue(row.canonicalMaxPartitionSequence),
+    lag: numberValue(row.lag),
+    updatedAt: stringValue(row.updatedAt),
+    lastError: stringValue(row.lastError),
+  };
+}
+
+function parseAvailabilityProjection(value: unknown): DataAvailabilityProjectionV1 {
+  const row = recordOrEmpty(value);
+  return {
+    projectionName: stringValue(row.projectionName),
+    role: stringValue(row.role),
+    projectedCount: numberValue(row.projectedCount),
+    lag: numberValue(row.lag),
+    watermarks: arrayOrEmpty(row.watermarks).map(parseAvailabilityWatermark),
+  };
+}
+
+function parseAvailabilitySurface(value: unknown): DataAvailabilitySurfaceV1 {
+  const row = recordOrEmpty(value);
+  return {
+    name: stringValue(row.name),
+    endpoint: stringValue(row.endpoint),
+    source: stringValue(row.source),
+    freshness: stringValue(row.freshness),
+    projectionName: stringValue(row.projectionName),
+    lag: numberValue(row.lag),
+    lastPartitionSequence: numberValue(row.lastPartitionSequence),
+    lastUpdatedAt: stringValue(row.lastUpdatedAt),
+  };
 }
 
 const OrderStatusFromPlatformV1: Record<string, OwnOrderV1["status"]> = {
@@ -189,6 +248,17 @@ export function createLiveOwnOrdersReadClientV1(
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   const participantId = encodeURIComponent(options.participantId);
 
+  function ownOrdersUrl(path: "current" | "history", request?: { readonly instrumentId?: string; readonly limit?: number }): string {
+    const params = [`participantId=${participantId}`];
+    if (request?.instrumentId !== undefined) {
+      params.push(`instrumentId=${encodeURIComponent(request.instrumentId)}`);
+    }
+    if (request?.limit !== undefined) {
+      params.push(`limit=${encodeURIComponent(String(request.limit))}`);
+    }
+    return `${baseUrl}/api/v1/orders/${path}?${params.join("&")}`;
+  }
+
   function toOwnOrder(order: Record<string, string>): OwnOrderV1 {
     const status = OrderStatusFromPlatformV1[order.status ?? ""] ?? "REJECTED";
     const limitPrice = priceFromNanos(order.limitPrice);
@@ -205,7 +275,7 @@ export function createLiveOwnOrdersReadClientV1(
 
   return {
     async current() {
-      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/orders/current?participantId=${participantId}`);
+      const result = await getJson(fetchImpl, ownOrdersUrl("current"));
       if (result.status < 200 || result.status >= 300) {
         return unavailableDenial("Failed to load current orders.") as BotResultV1<readonly OwnOrderV1[]>;
       }
@@ -213,7 +283,7 @@ export function createLiveOwnOrdersReadClientV1(
       return { ok: true, value: orders.map(toOwnOrder) };
     },
     async history(request) {
-      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/orders/history?participantId=${participantId}`);
+      const result = await getJson(fetchImpl, ownOrdersUrl("history", request));
       if (result.status < 200 || result.status >= 300) {
         return unavailableDenial("Failed to load order history.") as BotResultV1<readonly OwnOrderV1[]>;
       }
@@ -221,6 +291,29 @@ export function createLiveOwnOrdersReadClientV1(
       const mapped = orders.map(toOwnOrder);
       const filtered = request?.instrumentId ? mapped.filter((order) => order.instrumentId === request.instrumentId) : mapped;
       return { ok: true, value: filtered.slice(0, request?.limit ?? filtered.length) };
+    },
+  };
+}
+
+export function createLiveDataAvailabilityClientV1(options: LiveVenueDataClientOptionsV1): BotDataAvailabilityClientV1 {
+  const fetchImpl = resolveFetch(options.fetch);
+  const baseUrl = options.baseUrl.replace(/\/$/, "");
+
+  return {
+    async availability() {
+      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/data/availability`);
+      if (result.status < 200 || result.status >= 300 || result.json.error !== undefined) {
+        return unavailableDenial("Failed to load data availability.") as BotResultV1<DataAvailabilityV1>;
+      }
+      return {
+        ok: true,
+        value: {
+          generatedAt: stringValue(result.json.generatedAt),
+          source: stringValue(result.json.source),
+          projections: arrayOrEmpty(result.json.projections).map(parseAvailabilityProjection),
+          surfaces: arrayOrEmpty(result.json.surfaces).map(parseAvailabilitySurface),
+        },
+      };
     },
   };
 }
@@ -240,11 +333,8 @@ export interface LiveBotContextOptionsV1 extends LiveVenueDataClientOptionsV1 {
  * runner integration is a deliberate follow-up.
  *
  * Read-side prices are converted from the venue's fixed-point nanos to plain
- * dollars (see priceFromNanos). Note venue-adapter.ts's write path (placeLimit/
- * modify) does not do the inverse conversion - it sends BotActionV1's limitPrice
- * straight through as-is, so a bot using dollar-denominated limitPrice values
- * (as the SDK docs show) would submit a corrupted price today. That is a
- * separate, pre-existing bug outside this module's scope.
+ * dollars (see priceFromNanos). The venue adapter converts bot action limit
+ * prices back to fixed-point nanos before submitting commands.
  */
 export function createLiveBotContextV1(options: LiveBotContextOptionsV1): BotContextV1 {
   const marketData = createLiveMarketDataClientV1(options);

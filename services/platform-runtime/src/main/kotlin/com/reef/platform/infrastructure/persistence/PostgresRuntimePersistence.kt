@@ -137,6 +137,12 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE INDEX IF NOT EXISTS idx_orders_participant_instrument_accepted
+                    ON ${names.orders}(participant_id, instrument_id, accepted_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.executions} (
                       event_id TEXT PRIMARY KEY,
                       execution_id TEXT NOT NULL,
@@ -3223,18 +3229,33 @@ class PostgresRuntimePersistence(
         )
     }
 
-    override fun ordersForParticipant(participantId: String, openOnly: Boolean): List<OwnOrderView> {
+    override fun ordersForParticipant(
+        participantId: String,
+        openOnly: Boolean,
+        instrumentId: String,
+        limit: Int
+    ): List<OwnOrderView> {
         val statusFilter = if (openOnly) "AND ols.status IN ('OPEN', 'PARTIALLY_FILLED')" else ""
+        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND o.instrument_id = ?"
+        val boundedLimit = limit.coerceIn(0, 500)
+        val limitClause = if (boundedLimit > 0) "LIMIT ?" else ""
+        val params = buildList {
+            add(participantId)
+            if (instrumentId.isNotBlank()) add(instrumentId)
+            if (boundedLimit > 0) add(boundedLimit.toString())
+        }
         return projectionQueryList(
             """
             SELECT o.order_id, o.instrument_id, o.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
             FROM ${names.orders} o
             JOIN ${names.orderLifecycleState} ols ON ols.order_id = o.order_id
             WHERE o.participant_id = ?
+            $instrumentFilter
             $statusFilter
             ORDER BY o.accepted_at
+            $limitClause
             """.trimIndent(),
-            participantId
+            *params.toTypedArray()
         ) {
             OwnOrderView(
                 orderId = getString("order_id"),

@@ -7,6 +7,7 @@ const {
   createLiveMarketDataClientV1,
   createLiveHistoricalDataClientV1,
   createLiveOwnOrdersReadClientV1,
+  createLiveDataAvailabilityClientV1,
   createLiveBotContextV1,
 } = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/src/live-client.ts")).href);
 
@@ -67,13 +68,18 @@ function fakeFetch(routes) {
 
 // own orders: status mapping CANCELLED -> CANCELED, scoped read, limitPrice in nanos
 {
-  const fetchImpl = fakeFetch([
+  const requestedUrls = [];
+  const routeFetch = fakeFetch([
     [/orders\/current/, { orders: [{ orderId: "o1", instrumentId: "AAPL", side: "BUY", quantityUnits: "10", remainingQuantityUnits: "10", limitPrice: "100000000000", status: "OPEN" }] }],
     [/orders\/history/, { orders: [
       { orderId: "o1", instrumentId: "AAPL", side: "BUY", quantityUnits: "10", remainingQuantityUnits: "10", limitPrice: "100000000000", status: "OPEN" },
       { orderId: "o2", instrumentId: "AAPL", side: "SELL", quantityUnits: "5", remainingQuantityUnits: "0", limitPrice: "101000000000", status: "CANCELLED" },
     ] }],
   ]);
+  const fetchImpl = async (url) => {
+    requestedUrls.push(url);
+    return routeFetch(url);
+  };
   const client = createLiveOwnOrdersReadClientV1({ baseUrl: "http://venue", participantId: "p1", fetch: fetchImpl });
   const current = await client.current();
   assert.equal(current.ok, true);
@@ -86,6 +92,54 @@ function fakeFetch(routes) {
   assert.equal(history.value.length, 2);
   assert.equal(history.value[1].status, "CANCELED");
   assert.equal(history.value[1].limitPrice, 101);
+
+  const filteredHistory = await client.history({ instrumentId: "AAPL", limit: 1 });
+  assert.equal(filteredHistory.ok, true);
+  assert.equal(filteredHistory.value.length, 1);
+  assert.match(requestedUrls.at(-1), /orders\/history\?participantId=p1&instrumentId=AAPL&limit=1/);
+}
+
+// data availability: exposes read source/freshness and projection lag
+{
+  const fetchImpl = fakeFetch([
+    [/data\/availability/, {
+      generatedAt: "2026-07-06T00:00:00Z",
+      source: "venue-event-batch",
+      projections: [{
+        projectionName: "runtime-normalized-venue-outcomes",
+        role: "canonical venue outcome projection",
+        projectedCount: 10,
+        lag: 2,
+        watermarks: [{
+          projectionName: "runtime-normalized-venue-outcomes",
+          partition: 0,
+          lastPartitionSequence: 8,
+          canonicalMaxPartitionSequence: 10,
+          lag: 2,
+          updatedAt: "2026-07-06T00:00:01Z",
+          lastError: "",
+        }],
+      }],
+      surfaces: [{
+        name: "tradeTape",
+        endpoint: "/api/v1/market-data/trades/{instrumentId}",
+        source: "runtime.trades",
+        freshness: "durable fact rows",
+        projectionName: "runtime-normalized-venue-outcomes",
+        lag: 2,
+        lastPartitionSequence: 8,
+        lastUpdatedAt: "2026-07-06T00:00:01Z",
+      }],
+    }],
+  ]);
+  const client = createLiveDataAvailabilityClientV1({ baseUrl: "http://venue", participantId: "p1", fetch: fetchImpl });
+  const result = await client.availability();
+  assert.equal(result.ok, true);
+  assert.equal(result.value.source, "venue-event-batch");
+  assert.equal(result.value.projections[0].lag, 2);
+  assert.equal(result.value.projections[0].watermarks[0].lastPartitionSequence, 8);
+  assert.equal(result.value.surfaces[0].name, "tradeTape");
+  assert.equal(result.value.surfaces[0].freshness, "durable fact rows");
 }
 
 // createLiveBotContextV1 wires safe.cancel against live current-orders read
