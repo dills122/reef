@@ -44,4 +44,4 @@ Bot code is never trusted. Minimum controls: isolated execution context per bot,
 
 - `docs/BOT_ARENA_PLAN.md` — full plan: game-mode module contract, infrastructure/scale-out design, open questions (source for this page)
 - `docs/STREAM_ACK_ARCHITECTURE_PLAN.md` — target high-throughput ingress path for bot-arena scale
-- [Arena Overview](/arena/overview/) — current build status
+- [Arena Overview](../overview/) — current build status

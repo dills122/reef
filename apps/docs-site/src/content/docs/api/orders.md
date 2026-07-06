@@ -3,7 +3,7 @@ title: Orders API
 description: /api/v1/orders/submit, modify, cancel, and lifecycle-state.
 ---
 
-All three mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [API Overview](/api/overview/)). Field validation happens before any durable command acceptance.
+All three mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [API Overview](../overview/)). Field validation happens before any durable command acceptance.
 
 ## POST /api/v1/orders/submit
 
@@ -28,7 +28,7 @@ All three mutation routes require `X-Client-Id` and `Idempotency-Key` headers (s
 }
 ```
 
-`orderType` currently only accepts `LIMIT` — market orders are not yet validated at this boundary (see [Bot SDK Reference](/arena/bot-sdk-reference/) for how the arena adapter handles this today).
+`orderType` currently only accepts `LIMIT` — market orders are not yet validated at this boundary (see [Bot SDK Reference](../../arena/bot-sdk-reference/) for how the arena adapter handles this today).
 
 ## POST /api/v1/orders/modify
 
@@ -63,7 +63,7 @@ All three mutation routes require `X-Client-Id` and `Idempotency-Key` headers (s
 
 ## Response Shape
 
-All three return the same result envelope (mirrors `SubmitOrderResult` in the wire contract — see [Wire Contracts](/schema/contracts/)):
+All three return the same result envelope (mirrors `SubmitOrderResult` in the wire contract — see [Wire Contracts](../../schema/contracts/)):
 
 ```json
 {
@@ -83,6 +83,6 @@ Rebuilds the `runtime.order_lifecycle_state` projection (open/filled/cancelled o
 
 ## Learn More
 
-- [API Overview](/api/overview/) — headers, error envelope, processing modes
-- [Command Status](/api/commands/) — poll a command by ID after acceptance
-- [Wire Contracts](/schema/contracts/) — the underlying protobuf message shapes
+- [API Overview](../overview/) — headers, error envelope, processing modes
+- [Command Status](../commands/) — poll a command by ID after acceptance
+- [Wire Contracts](../../schema/contracts/) — the underlying protobuf message shapes

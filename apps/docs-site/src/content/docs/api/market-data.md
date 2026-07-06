@@ -33,5 +33,5 @@ Query params: `levels` (default `5`), `projectionName` (default `market-data-dep
 
 ## Learn More
 
-- [API Overview](/api/overview/) — boundary contract shared across all routes
+- [API Overview](../overview/) — boundary contract shared across all routes
 - `docs/TRADING_MARKET_DATA_BOUNDARIES.md` — why order-entry and market-data are kept as separate planes

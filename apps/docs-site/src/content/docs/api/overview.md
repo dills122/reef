@@ -42,16 +42,16 @@ The runtime supports multiple internal processing modes behind the same external
 
 | Route | Method | Purpose |
 |---|---|---|
-| [`/api/v1/orders/submit`](/api/orders/) | POST | Submit a new order |
-| [`/api/v1/orders/modify`](/api/orders/) | POST | Modify quantity/price of a resting order |
-| [`/api/v1/orders/cancel`](/api/orders/) | POST | Cancel an order |
-| [`/api/v1/orders/lifecycle-state`](/api/orders/) | POST | Rebuild order lifecycle projection |
-| [`/api/v1/market-data/snapshots/{instrumentId}`](/api/market-data/) | GET | Top-of-book snapshot |
-| [`/api/v1/market-data/snapshots`](/api/market-data/) | POST | Refresh snapshot projection |
-| [`/api/v1/market-data/depth/{instrumentId}`](/api/market-data/) | GET | Bounded depth snapshot |
-| [`/api/v1/commands/{commandId}`](/api/commands/) | GET | Command status lookup |
+| [`/api/v1/orders/submit`](../orders/) | POST | Submit a new order |
+| [`/api/v1/orders/modify`](../orders/) | POST | Modify quantity/price of a resting order |
+| [`/api/v1/orders/cancel`](../orders/) | POST | Cancel an order |
+| [`/api/v1/orders/lifecycle-state`](../orders/) | POST | Rebuild order lifecycle projection |
+| [`/api/v1/market-data/snapshots/{instrumentId}`](../market-data/) | GET | Top-of-book snapshot |
+| [`/api/v1/market-data/snapshots`](../market-data/) | POST | Refresh snapshot projection |
+| [`/api/v1/market-data/depth/{instrumentId}`](../market-data/) | GET | Bounded depth snapshot |
+| [`/api/v1/commands/{commandId}`](../commands/) | GET | Command status lookup |
 
-`/internal/*` routes exist for operator/admin tooling and diagnostics only — see [Internal & Admin Routes](/api/internal-admin/). They are not part of the public client contract.
+`/internal/*` routes exist for operator/admin tooling and diagnostics only — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract.
 
 ## Learn More
 

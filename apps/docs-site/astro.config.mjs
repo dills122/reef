@@ -1,7 +1,12 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
+const site = process.env.DOCS_SITE_URL;
+const base = process.env.DOCS_SITE_BASE;
+
 export default defineConfig({
+  ...(site ? { site } : {}),
+  ...(base ? { base } : {}),
   integrations: [
     starlight({
       title: "Reef",

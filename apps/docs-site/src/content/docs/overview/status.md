@@ -18,13 +18,13 @@ Reef has moved past a repository skeleton, but most of the platform is still ear
 - Protobuf contracts for order execution commands and results
 - Go simulator/load tester: persona/session support, deterministic replay checks, stress reports, intake benchmarks
 - Docker-first local setup, reset, smoke, stress, replay, and benchmark automation
-- First arena control-plane slice: bot registry, bot-version approval lifecycle, operator decisions, run records (see [Arena Overview](/arena/overview/))
+- First arena control-plane slice: bot registry, bot-version approval lifecycle, operator decisions, run records (see [Arena Overview](../../arena/overview/))
 - First conservative market-data read slice: order lifecycle projection, top-of-book snapshots, bounded depth
 
 ## Not Yet Built (Planned)
 
 - Platform UI and most post-trade lifecycle (allocation, confirmation, settlement, exceptions) — still early
-- `account`, `settlement`, `market_data` (beyond the current slice), and `analytics` schemas — designed, not implemented (see [Planned Schema](/schema/planned-schema/))
+- `account`, `settlement`, `market_data` (beyond the current slice), and `analytics` schemas — designed, not implemented (see [Planned Schema](../../schema/planned-schema/))
 - Public bot submissions and hosted sandbox execution at scale — arena is still built-in-bots/control-plane stage
 - Leaderboards and scoring beyond the control-plane source facts
 - Kafka-compatible durable command log as the default hot-ingress path — proven locally, not yet the default

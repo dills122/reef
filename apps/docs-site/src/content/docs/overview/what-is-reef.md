@@ -23,7 +23,7 @@ The goal is a platform that is realistic enough in architecture to teach real ma
 
 ## Where The Bot Arena Fits
 
-The [Bot Arena](/arena/overview/) is an exploratory extension of the simulation control plane: user-authored bots compete in deterministic simulated markets, using the same venue command paths as everything else. It is planning-stage/early-build, not a finished game — see [Arena Overview](/arena/overview/) for current status.
+The [Bot Arena](../../arena/overview/) is an exploratory extension of the simulation control plane: user-authored bots compete in deterministic simulated markets, using the same venue command paths as everything else. It is planning-stage/early-build, not a finished game — see [Arena Overview](../../arena/overview/) for current status.
 
 ## Technology Direction
 
@@ -38,5 +38,5 @@ The [Bot Arena](/arena/overview/) is an exploratory extension of the simulation 
 
 - `REEF_PROJECT_OVERVIEW.md` — full product vision, personas, functional scope
 - `REEF_TECHNICAL_DESIGN.md` — full technical design, bounded contexts, event model
-- [Architecture](/overview/architecture/) — service boundaries and repo shape on this site
-- [Current Status](/overview/status/) — what's actually built today
+- [Architecture](../architecture/) — service boundaries and repo shape on this site
+- [Current Status](../status/) — what's actually built today

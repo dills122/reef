@@ -76,5 +76,5 @@ All limits are runtime configuration, not API constants — they can change per 
 ## Learn More
 
 - `docs/BOT_SDK_AUTHOR_GUIDE.md` — full author guide (source for this page)
-- [Bot SDK Reference](/arena/bot-sdk-reference/) — full `ctx` API surface and sandbox rules
+- [Bot SDK Reference](../bot-sdk-reference/) — full `ctx` API surface and sandbox rules
 - `docs/BOT_SDK_LIVE_SMOKE.md` — submitting generated commands against a local Reef stack

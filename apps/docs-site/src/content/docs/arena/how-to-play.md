@@ -23,7 +23,7 @@ Not allowed: direct database or network access, internal event logs, future scen
 
 ## What Your Bot Can Do
 
-Initial action set: submit limit order, submit market order (mode-permitting), modify order, cancel order, cancel all own open orders, no-op. See [Bot SDK Reference](/arena/bot-sdk-reference/) for the exact `ctx.orders` API.
+Initial action set: submit limit order, submit market order (mode-permitting), modify order, cancel order, cancel all own open orders, no-op. See [Bot SDK Reference](../bot-sdk-reference/) for the exact `ctx.orders` API.
 
 ## Scoring (Initial)
 
@@ -37,5 +37,5 @@ Final equity is the first headline leaderboard metric — easy to understand, fu
 
 ## Learn More
 
-- [Bot SDK Quickstart](/arena/bot-sdk-quickstart/) — write your first bot
+- [Bot SDK Quickstart](../bot-sdk-quickstart/) — write your first bot
 - `docs/BOT_ARENA_PLAN.md` — full fairness, scoring, and safety rules under design

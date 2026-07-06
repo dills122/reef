@@ -34,7 +34,7 @@ The matching engine never knows whether an order came from a manual user, simula
 
 Built:
 
-- `ReefBotV1` SDK contract and TypeScript authoring model (see [Bot SDK Quickstart](/arena/bot-sdk-quickstart/))
+- `ReefBotV1` SDK contract and TypeScript authoring model (see [Bot SDK Quickstart](../bot-sdk-quickstart/))
 - Registration/qualification harness, deterministic tick runner, SES-compatible hosted runner
 - Arena control-plane registry: bot identity, bot versions, artifact hashes, approval lifecycle (`draft` → `submitted` → `checks_passed` → `approved` → `active` / `suspended` / `quarantined` / `banned` / `archived`), operator decisions, run records
 - Bot-originated orders can flow through the real venue command boundary with bot client identity and pre-acceptance risk checks (a quarantined bot version is rejected before order acceptance)
@@ -49,5 +49,5 @@ Not yet built:
 
 - `docs/BOT_ARENA_PLAN.md` — full product concept, rollout phases, open questions (this page's source)
 - `docs/BOT_SDK_DESIGN.md` — SDK contract detail
-- [How The Game Works](/arena/how-the-game-works/) — architecture/pipeline detail on this site
-- [How To Play](/arena/how-to-play/) — player-facing walkthrough
+- [How The Game Works](../how-the-game-works/) — architecture/pipeline detail on this site
+- [How To Play](../how-to-play/) — player-facing walkthrough

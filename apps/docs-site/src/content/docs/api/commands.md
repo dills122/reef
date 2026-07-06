@@ -58,5 +58,5 @@ Poll `statusUrl` to get the full status view above once processing completes.
 
 ## Learn More
 
-- [API Overview](/api/overview/) — processing modes and the durable-acceptance contract
-- [Orders API](/api/orders/) — the mutation routes this status lookup tracks
+- [API Overview](../overview/) — processing modes and the durable-acceptance contract
+- [Orders API](../orders/) — the mutation routes this status lookup tracks
