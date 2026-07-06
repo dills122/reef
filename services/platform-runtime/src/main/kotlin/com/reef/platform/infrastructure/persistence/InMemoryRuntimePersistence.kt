@@ -33,6 +33,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val traceSequences = mutableMapOf<String, Long>()
     private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
     private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
+    private val orderLifecycleDirty = linkedSetOf<String>()
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         submitResults[commandId] = result
@@ -97,20 +98,29 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun saveAcceptedOrder(order: PersistedOrder) {
         orders[order.orderId] = order
+        orderLifecycleDirty.add(order.orderId)
     }
 
     override fun saveExecutions(executions: List<ExecutionCreated>) {
         this.executions.addAll(executions)
+        executions.forEach { orderLifecycleDirty.add(it.orderId) }
     }
 
     override fun saveTrades(trades: List<TradeCreated>) {
         this.trades.addAll(trades)
+        trades.forEach {
+            orderLifecycleDirty.add(it.buyOrderId)
+            orderLifecycleDirty.add(it.sellOrderId)
+        }
     }
 
     override fun saveEvent(event: RuntimeEvent) {
         val nextSequence = (traceSequences[event.traceId] ?: 0) + 1
         traceSequences[event.traceId] = nextSequence
         events.add(event.copy(sequenceNumber = nextSequence))
+        if (event.orderId.isNotBlank()) {
+            orderLifecycleDirty.add(event.orderId)
+        }
     }
 
     override fun acceptedOrder(orderId: String): PersistedOrder? {
@@ -308,48 +318,67 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun rebuildOrderLifecycleState(): Long {
         orderLifecycleStates.clear()
         orders.values.forEach { order ->
-            val orderExecutions = executions.filter { it.orderId == order.orderId }
-            val filledQuantity = orderExecutions
-                .mapNotNull { it.quantityUnits.toBigDecimalOrNull() }
-                .fold(BigDecimal.ZERO, BigDecimal::add)
-            val orderEvents = events
-                .filter { it.orderId == order.orderId }
-                .sortedWith(compareBy<RuntimeEvent> { it.occurredAt }.thenBy { it.sequenceNumber }.thenBy { it.eventId })
-            val latestModify = orderEvents.lastOrNull { it.eventType == "OrderModified" }
-            val currentQuantity = jsonString(latestModify?.payloadJson.orEmpty(), "quantityUnits")
-                .ifBlank { order.quantityUnits }
-            val currentLimitPrice = jsonString(latestModify?.payloadJson.orEmpty(), "limitPrice")
-                .ifBlank { order.limitPrice }
-            val quantity = currentQuantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
-            val remainingQuantity = (quantity - filledQuantity).coerceAtLeast(BigDecimal.ZERO)
-            val cancelled = orderEvents.any { it.eventType == "OrderCancelled" }
-            val status = when {
-                cancelled -> "CANCELLED"
-                quantity > BigDecimal.ZERO && remainingQuantity == BigDecimal.ZERO -> "FILLED"
-                filledQuantity > BigDecimal.ZERO -> "PARTIALLY_FILLED"
-                else -> "OPEN"
-            }
-            orderLifecycleStates[order.orderId] = OrderLifecycleState(
-                orderId = order.orderId,
-                engineOrderId = order.engineOrderId,
-                instrumentId = order.instrumentId,
-                participantId = order.participantId,
-                accountId = order.accountId,
-                side = order.side,
-                orderType = order.orderType,
-                originalQuantityUnits = order.quantityUnits,
-                remainingQuantityUnits = if (cancelled) "0" else decimalString(remainingQuantity),
-                filledQuantityUnits = decimalString(filledQuantity),
-                limitPrice = currentLimitPrice,
-                currency = order.currency,
-                timeInForce = order.timeInForce,
-                status = status,
-                acceptedAt = order.acceptedAt,
-                lastEventAt = orderEvents.lastOrNull()?.occurredAt ?: order.acceptedAt,
-                updatedAt = Instant.now().toString()
-            )
+            orderLifecycleStates[order.orderId] = computeLifecycleState(order)
         }
+        orderLifecycleDirty.clear()
         return orderLifecycleStates.size.toLong()
+    }
+
+    override fun projectOrderLifecycleState(batchSize: Int): Long {
+        if (batchSize <= 0) return 0
+        val batch = orderLifecycleDirty.take(batchSize)
+        batch.forEach { orderId ->
+            orders[orderId]?.let { order ->
+                orderLifecycleStates[orderId] = computeLifecycleState(order)
+            }
+            orderLifecycleDirty.remove(orderId)
+        }
+        return batch.size.toLong()
+    }
+
+    private fun computeLifecycleState(order: PersistedOrder): OrderLifecycleState {
+        val orderExecutions = executions.filter { it.orderId == order.orderId }
+        val filledQuantity = orderExecutions
+            .mapNotNull { it.quantityUnits.toBigDecimalOrNull() }
+            .fold(BigDecimal.ZERO, BigDecimal::add)
+        val orderEvents = events
+            .filter { it.orderId == order.orderId }
+            .sortedWith(compareBy<RuntimeEvent> { it.occurredAt }.thenBy { it.sequenceNumber }.thenBy { it.eventId })
+        val latestModify = orderEvents.lastOrNull { it.eventType == "OrderModified" }
+        val currentQuantity = jsonString(latestModify?.payloadJson.orEmpty(), "quantityUnits")
+            .ifBlank { order.quantityUnits }
+        val currentLimitPrice = jsonString(latestModify?.payloadJson.orEmpty(), "limitPrice")
+            .ifBlank { order.limitPrice }
+        val quantity = currentQuantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
+        val remainingQuantity = (quantity - filledQuantity).coerceAtLeast(BigDecimal.ZERO)
+        val cancelled = orderEvents.any { it.eventType == "OrderCancelled" }
+        val rejected = orderEvents.any { it.eventType == "OrderRejected" }
+        val status = when {
+            rejected -> "REJECTED"
+            cancelled -> "CANCELLED"
+            quantity > BigDecimal.ZERO && remainingQuantity == BigDecimal.ZERO -> "FILLED"
+            filledQuantity > BigDecimal.ZERO -> "PARTIALLY_FILLED"
+            else -> "OPEN"
+        }
+        return OrderLifecycleState(
+            orderId = order.orderId,
+            engineOrderId = order.engineOrderId,
+            instrumentId = order.instrumentId,
+            participantId = order.participantId,
+            accountId = order.accountId,
+            side = order.side,
+            orderType = order.orderType,
+            originalQuantityUnits = order.quantityUnits,
+            remainingQuantityUnits = if (cancelled || rejected) "0" else decimalString(remainingQuantity),
+            filledQuantityUnits = decimalString(filledQuantity),
+            limitPrice = currentLimitPrice,
+            currency = order.currency,
+            timeInForce = order.timeInForce,
+            status = status,
+            acceptedAt = order.acceptedAt,
+            lastEventAt = orderEvents.lastOrNull()?.occurredAt ?: order.acceptedAt,
+            updatedAt = Instant.now().toString()
+        )
     }
 
     override fun orderLifecycleState(orderId: String): OrderLifecycleState? {

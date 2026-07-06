@@ -18,7 +18,6 @@ import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -64,7 +63,7 @@ class OrderApplicationServiceTest {
     }
 
     @Test
-    fun submitOrderDoesNotPersistRejectedArtifacts() {
+    fun submitOrderPersistsRejectedOrderAsLifecycleStateButNoFillArtifacts() {
         val service = OrderApplicationService(RejectingEngineGateway(), InMemoryRuntimePersistence())
         seedReferenceData(service)
         seedOrderAuthorization(service, "trader-2")
@@ -91,11 +90,18 @@ class OrderApplicationServiceTest {
         )
 
         assertNotNull(result.rejected)
-        assertNull(service.persistedOrder("ord-2"))
+        val persistedOrder = service.persistedOrder("ord-2")
+        assertNotNull(persistedOrder)
+        assertEquals("", persistedOrder.engineOrderId)
         assertEquals(0, service.persistedExecutions("ord-2").size)
         assertEquals(0, service.persistedTrades("ord-2").size)
         assertEquals(1, service.persistedEvents("ord-2").size)
         assertEquals(1, service.persistedTraceEvents("trace-2").size)
+
+        service.rebuildOrderLifecycleState()
+        val lifecycleState = service.orderLifecycleState("ord-2")
+        assertNotNull(lifecycleState)
+        assertEquals("REJECTED", lifecycleState.status)
     }
 
     @Test

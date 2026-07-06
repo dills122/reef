@@ -249,6 +249,9 @@ interface RuntimePersistence {
     fun rebuildOrderLifecycleState(): Long {
         return 0
     }
+    fun projectOrderLifecycleState(batchSize: Int): Long {
+        return rebuildOrderLifecycleState()
+    }
     fun orderLifecycleState(orderId: String): OrderLifecycleState? {
         return null
     }

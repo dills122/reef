@@ -4,7 +4,7 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-04.
+Last aligned: 2026-07-05.
 
 ## Current Project State
 
@@ -43,7 +43,8 @@ Current decision anchors:
 - The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Accepted submit `orders` are reconstructed through the durable `command_log.command_payloads` join when the original command payload is available.
 - Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
 - Account/bot risk pre-checks now have a boundary contract and allow-all/static implementation that can reject, backpressure, or disable bots before command-log append, stream intake reservation, or durable publish.
-- Market-data reads have a first conservative projection-backed slice: `runtime.order_lifecycle_state` rebuilds open/filled/cancelled order state, `runtime.market_data_snapshots` reads remaining open `LIMIT` quantity for `/api/v1/market-data/snapshots/{instrumentId}`, and `/api/v1/market-data/depth/{instrumentId}` exposes bounded lifecycle-backed depth. The opt-in `MARKET_DATA_PROJECTOR_ENABLED=true` loop refreshes top-of-book snapshots and reports status at `/internal/market-data/projector/status`.
+- Market-data reads have a first conservative projection-backed slice: `runtime.order_lifecycle_state` tracks open/partially-filled/filled/cancelled/rejected order state, `runtime.market_data_snapshots` reads remaining open `LIMIT` quantity for `/api/v1/market-data/snapshots/{instrumentId}`, and `/api/v1/market-data/depth/{instrumentId}` exposes bounded lifecycle-backed depth. The opt-in `MARKET_DATA_PROJECTOR_ENABLED=true` loop refreshes top-of-book snapshots and reports status at `/internal/market-data/projector/status`.
+- `runtime.order_lifecycle_state` is kept live by its own opt-in `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` background loop (status at `/internal/order-lifecycle/projector/status`), rather than only through the manual/admin rebuild endpoint. Maintenance is incremental: every write that touches `orders`/`executions`/`trades`/`runtime_events` marks affected order_ids in `runtime.order_lifecycle_dirty`, and each cycle recomputes only those, bounded by `ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE`. The old full-table rebuild stays available as a manual/admin repair tool. Genuine engine-level `SubmitOrder` rejects (not boundary rejects like `AUTHORIZATION_ERROR`/`REFERENCE_DATA_ERROR`) now get an `orders` row and a `REJECTED` lifecycle status instead of being visible only through `submit_results`.
 
 ## Current Forward Path
 
@@ -53,7 +54,7 @@ Work should follow this order unless a new decision supersedes it:
 2. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
 3. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
 4. Prove compact persistence projection end to end: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
-5. Make open-order quantity projection and market-data refresh incremental, then add venue-session-specific depth on top of the current rebuildable lifecycle-state snapshot.
+5. Order-lifecycle-state maintenance is now incremental (dirty-tracked, not full-table rebuild); market-data snapshot/depth refresh itself is still a periodic full pass. Make that incremental too, then add venue-session-specific depth on top of the current lifecycle-state snapshot.
 6. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
 7. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 

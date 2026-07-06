@@ -34,7 +34,8 @@ internal class PlatformDiagnosticRoutes(
     private val streamCommandWorkerStatsJson: () -> String,
     private val venueEventMaterializerStatsJson: () -> String,
     private val projectorStatusJson: () -> String,
-    private val marketDataProjectorStatsJson: () -> String
+    private val marketDataProjectorStatsJson: () -> String,
+    private val orderLifecycleProjectorStatsJson: () -> String
 ) {
     val paths: List<String> = listOf(
         "/health",
@@ -65,7 +66,8 @@ internal class PlatformDiagnosticRoutes(
         "/internal/stream-ack/worker/stats",
         "/internal/venue-event-materializer/stats",
         "/internal/projector/status",
-        "/internal/market-data/projector/status"
+        "/internal/market-data/projector/status",
+        "/internal/order-lifecycle/projector/status"
     )
 
     fun handle(method: String, path: String, query: String?, body: String = ""): PlatformHotPathResponse? {
@@ -117,6 +119,7 @@ internal class PlatformDiagnosticRoutes(
             "/internal/venue-event-materializer/stats" -> getOnly(method) { venueEventMaterializerStatsJson() }
             "/internal/projector/status" -> getOnly(method) { projectorStatusJson() }
             "/internal/market-data/projector/status" -> getOnly(method) { marketDataProjectorStatsJson() }
+            "/internal/order-lifecycle/projector/status" -> getOnly(method) { orderLifecycleProjectorStatsJson() }
             else -> null
         }
     }

@@ -40,7 +40,6 @@ The current gaps are:
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and has local no-DB proof; it still needs longer remote promotion evidence and persistence reintroduction from durable venue event batches
-- persisted order lifecycle projections do not yet fully mirror submit/cancel/modify/fill engine state
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
 
@@ -63,8 +62,10 @@ The current gaps are:
 3. Complete venue lifecycle projection.
    - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
    - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
-   - Full `orders` projection from the event-batch path still needs either submit command metadata in `VenueEventBatch` or a durable command-payload join.
-   - Submit/cancel/modify/fill/reject state should be queryable through persisted read APIs.
+   - The durable command-payload join now exists (`command_log.command_payloads` joined by `command_id`), so `orders` rows are reconstructed at submit-accept time without extra `VenueEventBatch` metadata.
+   - Submit/cancel/modify/fill/reject state is queryable through `runtime.order_lifecycle_state` (derived from `orders`, `executions`, and `runtime_events`), kept live by the opt-in `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` background loop (status at `/internal/order-lifecycle/projector/status`) instead of manual/admin-triggered rebuild only.
+   - Genuine engine-level `SubmitOrder` rejects (not boundary rejects like `AUTHORIZATION_ERROR`/`REFERENCE_DATA_ERROR`) now get an `orders` row and a `REJECTED` `order_lifecycle_state` status instead of being visible only through `submit_results`.
+   - The background loop maintains `runtime.order_lifecycle_state` incrementally: every write path that touches `orders`/`executions`/`trades`/`runtime_events` marks affected order_ids in `runtime.order_lifecycle_dirty`, and `runtime.runtime_project_order_lifecycle_state(batchSize)` only recomputes those, bounded by `ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE`. Cost scales with recent activity, not total historical order count. The old full-table rebuild (`rebuildOrderLifecycleState`) is kept as a manual/admin repair tool.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
 4. Lock first lifecycle scenarios.
