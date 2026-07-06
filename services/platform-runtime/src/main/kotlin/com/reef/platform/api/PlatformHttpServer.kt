@@ -9,6 +9,12 @@ import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
 import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
 import com.reef.platform.application.admin.ArenaRunRegistrationCommand
 import com.reef.platform.application.admin.ArenaRunStatusCommand
+import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
+import com.reef.platform.application.analytics.PostgresAnalyticsSqlNames
+import com.reef.platform.application.analytics.PostgresSimulationRunExportStore
+import com.reef.platform.application.analytics.SimulationRunExportCommand
+import com.reef.platform.application.analytics.SimulationRunExportRecord
+import com.reef.platform.application.analytics.SimulationRunExportService
 import com.reef.platform.application.arena.ArenaBot
 import com.reef.platform.application.arena.ArenaBotVersion
 import com.reef.platform.application.arena.ArenaBotVersionStatus
@@ -106,6 +112,7 @@ class PlatformHttpServer(
     private val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
     private val arenaAdminService: AdminApplicationService? = null,
+    private val analyticsRunExportService: SimulationRunExportService? = null,
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
@@ -270,6 +277,8 @@ class PlatformHttpServer(
             recordArenaRunBotResultJson = { body -> recordArenaRunBotResultResponse(body) },
             arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
+            analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
+            recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -299,6 +308,7 @@ class PlatformHttpServer(
         instrumentPriceCollarCheck = deps.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
         arenaAdminService = deps.arenaAdminService,
+        analyticsRunExportService = deps.analyticsRunExportService,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
@@ -2635,6 +2645,115 @@ class PlatformHttpServer(
         )
     }
 
+    private fun recordAnalyticsRunExportResponse(body: String): PlatformHotPathResponse {
+        val service = analyticsRunExportService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val counts = json.obj("counts")
+        val latency = json.obj("latencyMs")
+        return try {
+            val record = service.ingest(
+                SimulationRunExportCommand(
+                    runId = json.string("runId"),
+                    scenarioId = json.string("scenarioId"),
+                    runKind = json.string("runKind"),
+                    source = json.string("source"),
+                    gitSha = json.string("gitSha"),
+                    profile = json.string("profile"),
+                    startedAt = instantOrNull(json.string("startedAt")),
+                    completedAt = instantOrNull(json.string("completedAt")),
+                    exportedAt = instantOrNull(json.string("exportedAt")),
+                    status = json.string("status"),
+                    attemptedCount = longValue(json, counts, "attemptedCount", "attempted"),
+                    acceptedCount = longValue(json, counts, "acceptedCount", "accepted"),
+                    completedCount = longValue(json, counts, "completedCount", "completed"),
+                    materializedCount = longValue(json, counts, "materializedCount", "materialized"),
+                    projectedCount = longValue(json, counts, "projectedCount", "projected"),
+                    failedCount = longValue(json, counts, "failedCount", "failed"),
+                    p50LatencyMs = doubleValue(json, latency, "p50LatencyMs", "p50"),
+                    p95LatencyMs = doubleValue(json, latency, "p95LatencyMs", "p95"),
+                    p99LatencyMs = doubleValue(json, latency, "p99LatencyMs", "p99"),
+                    artifactManifestJson = normalizedRawJson(json.raw("artifactManifest").ifBlank { json.raw("artifacts") }, "[]"),
+                    summaryJson = normalizedRawJson(json.raw("summary"), "{}")
+                )
+            )
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "export" to analyticsRunExportJson(record)))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid analytics run export")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "analytics run export ingestion failed")))
+        }
+    }
+
+    private fun analyticsRunExportsResponse(query: String?): PlatformHotPathResponse {
+        val service = analyticsRunExportService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
+        val runId = queryValue(query, "runId")
+        if (runId.isNotBlank()) {
+            val record = service.find(runId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "analytics run export not found"))
+            return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "export" to analyticsRunExportJson(record)))
+        }
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        val records = service.list(limit)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "exports" to records.map { analyticsRunExportJson(it) },
+                "exportsCount" to records.size,
+                "limit" to limit.coerceIn(1, 500)
+            )
+        )
+    }
+
+    private fun analyticsRunExportJson(record: SimulationRunExportRecord): Map<String, Any?> {
+        return mapOf(
+            "runId" to record.runId,
+            "scenarioId" to record.scenarioId,
+            "runKind" to record.runKind,
+            "source" to record.source,
+            "gitSha" to record.gitSha,
+            "profile" to record.profile,
+            "startedAt" to record.startedAt?.toString(),
+            "completedAt" to record.completedAt?.toString(),
+            "exportedAt" to record.exportedAt.toString(),
+            "status" to record.status,
+            "counts" to mapOf(
+                "attempted" to record.attemptedCount,
+                "accepted" to record.acceptedCount,
+                "completed" to record.completedCount,
+                "materialized" to record.materializedCount,
+                "projected" to record.projectedCount,
+                "failed" to record.failedCount
+            ),
+            "latencyMs" to mapOf(
+                "p50" to record.p50LatencyMs,
+                "p95" to record.p95LatencyMs,
+                "p99" to record.p99LatencyMs
+            ),
+            "artifacts" to JsonCodec.rawJsonOrText(record.artifactManifestJson),
+            "summary" to JsonCodec.rawJsonOrText(record.summaryJson)
+        )
+    }
+
+    private fun longValue(root: JsonDocument, nested: JsonDocument, rootKey: String, nestedKey: String): Long {
+        return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toLongOrNull() ?: 0L
+    }
+
+    private fun doubleValue(root: JsonDocument, nested: JsonDocument, rootKey: String, nestedKey: String): Double? {
+        return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toDoubleOrNull()
+    }
+
+    private fun instantOrNull(value: String): java.time.Instant? {
+        if (value.isBlank()) return null
+        return java.time.Instant.parse(value)
+    }
+
+    private fun normalizedRawJson(raw: String, fallback: String): String {
+        return if (raw.isBlank()) fallback else JsonCodec.writeNode(JsonCodec.rawJsonOrText(raw))
+    }
+
     private fun arenaAdminActor(json: JsonDocument): AdminActor {
         return AdminActor(
             actorId = json.string("actorId").ifBlank { "internal-admin" },
@@ -3619,6 +3738,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService = defaultArenaAdminService(hooks),
+        analyticsRunExportService = defaultAnalyticsRunExportService(),
         boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
@@ -3652,6 +3772,24 @@ private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationServ
     )
 }
 
+private fun defaultAnalyticsRunExportService(): SimulationRunExportService? {
+    val jdbcUrl = RuntimeEnv.string("ANALYTICS_POSTGRES_JDBC_URL", "")
+    val enabled = RuntimeEnv.bool("PLATFORM_ANALYTICS_EXPORT_ENABLED", jdbcUrl.isNotBlank())
+    if (!enabled) return null
+    val store = if (jdbcUrl.isBlank()) {
+        InMemorySimulationRunExportStore()
+    } else {
+        val dbUser = RuntimeEnv.string("ANALYTICS_POSTGRES_USER", "reef")
+        val dbPassword = RuntimeEnv.string("ANALYTICS_POSTGRES_PASSWORD", "reef")
+        val schema = RuntimeEnv.string("ANALYTICS_POSTGRES_SCHEMA", "analytics")
+        PostgresSimulationRunExportStore(
+            dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "analytics-run-export"),
+            names = PostgresAnalyticsSqlNames(schema)
+        )
+    }
+    return SimulationRunExportService(store)
+}
+
 private fun JsonDocument.requiredLong(key: String): Long {
     return string(key).toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
 }
@@ -3675,6 +3813,7 @@ data class ServerBoundaryDeps(
     val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
     val arenaAdminService: AdminApplicationService? = null,
+    val analyticsRunExportService: SimulationRunExportService? = null,
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,

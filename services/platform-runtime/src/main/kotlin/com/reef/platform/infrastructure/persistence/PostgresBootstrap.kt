@@ -418,6 +418,36 @@ object PostgresSchemaRequirements {
             ).flatten()
         )
     }
+
+    fun analyticsRunExports(simulationRunExports: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(simulationRunExports)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                PostgresSchemaColumn(table, "run_id", "text"),
+                PostgresSchemaColumn(table, "scenario_id", "text"),
+                PostgresSchemaColumn(table, "run_kind", "text"),
+                PostgresSchemaColumn(table, "source", "text"),
+                PostgresSchemaColumn(table, "git_sha", "text"),
+                PostgresSchemaColumn(table, "profile", "text"),
+                PostgresSchemaColumn(table, "started_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "completed_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "exported_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "status", "text"),
+                PostgresSchemaColumn(table, "attempted_count", "bigint"),
+                PostgresSchemaColumn(table, "accepted_count", "bigint"),
+                PostgresSchemaColumn(table, "completed_count", "bigint"),
+                PostgresSchemaColumn(table, "materialized_count", "bigint"),
+                PostgresSchemaColumn(table, "projected_count", "bigint"),
+                PostgresSchemaColumn(table, "failed_count", "bigint"),
+                PostgresSchemaColumn(table, "p50_latency_ms", "double precision"),
+                PostgresSchemaColumn(table, "p95_latency_ms", "double precision"),
+                PostgresSchemaColumn(table, "p99_latency_ms", "double precision"),
+                PostgresSchemaColumn(table, "artifact_manifest", "jsonb"),
+                PostgresSchemaColumn(table, "summary", "jsonb")
+            )
+        )
+    }
 }
 
 object PostgresSchemaValidator {

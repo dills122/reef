@@ -64,6 +64,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0012_command_payloads.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0013_drop_hot_path_foreign_keys.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {
