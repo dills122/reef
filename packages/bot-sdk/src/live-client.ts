@@ -48,6 +48,16 @@ function notFoundDenial(message: string): BotResultV1<never> {
   return { ok: false, denial: { code: "NOT_FOUND", message } };
 }
 
+// Prices are stored venue-wide as fixed-point nanos (contracts/proto/order_execution.proto's
+// Price.nanos: price_nanos = price_dollars * 10^9), not plain decimals. Quantity fields
+// (OrderQuantity.units) are NOT scaled this way - only price fields need this conversion.
+const PRICE_SCALE_NANOS = 1_000_000_000;
+
+function priceFromNanos(value: string | undefined): number | undefined {
+  const parsed = numberOrUndefined(value);
+  return parsed === undefined ? undefined : parsed / PRICE_SCALE_NANOS;
+}
+
 const OrderStatusFromPlatformV1: Record<string, OwnOrderV1["status"]> = {
   OPEN: "OPEN",
   PARTIALLY_FILLED: "PARTIALLY_FILLED",
@@ -70,14 +80,14 @@ export function createLiveMarketDataClientV1(options: LiveVenueDataClientOptions
       return notFoundDenial(`No market snapshot for ${instrumentId}.`) as BotResultV1<MarketSnapshotV1>;
     }
 
-    const bidPrice = numberOrUndefined(snapshot.bestBidPrice);
-    const askPrice = numberOrUndefined(snapshot.bestAskPrice);
+    const bidPrice = priceFromNanos(snapshot.bestBidPrice);
+    const askPrice = priceFromNanos(snapshot.bestAskPrice);
 
     let lastPrice: number | undefined;
     const tapeResult = await getJson(fetchImpl, `${baseUrl}/api/v1/market-data/trades/${encodeURIComponent(instrumentId)}?limit=1`);
     if (tapeResult.status >= 200 && tapeResult.status < 300) {
       const trades = tapeResult.json.trades as Array<Record<string, string>> | undefined;
-      lastPrice = numberOrUndefined(trades?.[0]?.price);
+      lastPrice = priceFromNanos(trades?.[0]?.price);
     }
 
     const midPrice = bidPrice !== undefined && askPrice !== undefined
@@ -140,10 +150,10 @@ export function createLiveHistoricalDataClientV1(options: LiveVenueDataClientOpt
         instrumentId: request.instrumentId,
         start: bar.start ?? "",
         end: bar.end ?? "",
-        open: Number(bar.open),
-        high: Number(bar.high),
-        low: Number(bar.low),
-        close: Number(bar.close),
+        open: priceFromNanos(bar.open) ?? 0,
+        high: priceFromNanos(bar.high) ?? 0,
+        low: priceFromNanos(bar.low) ?? 0,
+        close: priceFromNanos(bar.close) ?? 0,
         volume: Number(bar.volume),
       })),
     };
@@ -181,13 +191,14 @@ export function createLiveOwnOrdersReadClientV1(
 
   function toOwnOrder(order: Record<string, string>): OwnOrderV1 {
     const status = OrderStatusFromPlatformV1[order.status ?? ""] ?? "REJECTED";
+    const limitPrice = priceFromNanos(order.limitPrice);
     return {
       orderId: order.orderId ?? "",
       instrumentId: order.instrumentId ?? "",
       side: (order.side as OwnOrderV1["side"]) ?? "BUY",
       quantity: Number(order.quantityUnits),
       remainingQuantity: Number(order.remainingQuantityUnits),
-      ...(order.limitPrice ? { limitPrice: Number(order.limitPrice) } : {}),
+      ...(limitPrice === undefined ? {} : { limitPrice }),
       status,
     };
   }
@@ -227,6 +238,13 @@ export interface LiveBotContextOptionsV1 extends LiveVenueDataClientOptionsV1 {
  * covers reads. Not wired into runner.ts/strategy-runner.ts's tick loop (which is
  * fixture-only today) - intended for direct use by scripts/operators until that
  * runner integration is a deliberate follow-up.
+ *
+ * Read-side prices are converted from the venue's fixed-point nanos to plain
+ * dollars (see priceFromNanos). Note venue-adapter.ts's write path (placeLimit/
+ * modify) does not do the inverse conversion - it sends BotActionV1's limitPrice
+ * straight through as-is, so a bot using dollar-denominated limitPrice values
+ * (as the SDK docs show) would submit a corrupted price today. That is a
+ * separate, pre-existing bug outside this module's scope.
  */
 export function createLiveBotContextV1(options: LiveBotContextOptionsV1): BotContextV1 {
   const marketData = createLiveMarketDataClientV1(options);

@@ -10,6 +10,7 @@
         "ses": "^2.2.0",
         "simple-statistics": "7.9.3",
         "trading-signals": "7.4.3",
+        "typescript": "^6.0.3",
       },
     },
   },
@@ -29,5 +30,7 @@
     "simple-statistics": ["simple-statistics@7.9.3", "", {}, "sha512-WXpxUfo7BJCRpyl4besiuMV7wNj9xiPIq7IKmUQO4upIaF8pK2AXwhjttHN5L8KXZrLkGMCHGHq4p+pJXiIahQ=="],
 
     "trading-signals": ["trading-signals@7.4.3", "", {}, "sha512-kOyzd85qhuhU7yGkB5z74MVP6j30xBCfZy5+bgBnvfxY1ZdvaQsdD+C5j+CoIRtCAgSOuxB7jmPpBrqO6h17sQ=="],
+
+    "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
   }
 }
