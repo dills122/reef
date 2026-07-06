@@ -451,6 +451,10 @@ class PlatformHttpServer(
             }
         }
 
+        server.createContext("/api/v1/orders/cancel-by-client-order") { exchange ->
+            handleCancelByClientOrder(exchange)
+        }
+
         server.createContext("/orders/modify") { exchange ->
             if (exchange.requestMethod != "POST") {
                 methodNotAllowed(exchange)
@@ -981,11 +985,12 @@ class PlatformHttpServer(
     private fun handleApiV1Mutation(
         exchange: HttpExchange,
         route: String,
+        presetBody: String? = null,
         operation: (String) -> String
     ) {
         val started = System.nanoTime()
         try {
-            handleApiV1MutationMeasured(exchange, route, operation)
+            handleApiV1MutationMeasured(exchange, route, presetBody, operation)
         } finally {
             HotPathMetrics.record("api.mutation.total", System.nanoTime() - started)
         }
@@ -994,6 +999,7 @@ class PlatformHttpServer(
     private fun handleApiV1MutationMeasured(
         exchange: HttpExchange,
         route: String,
+        presetBody: String? = null,
         operation: (String) -> String
     ) {
         if (exchange.requestMethod != "POST") {
@@ -1012,9 +1018,9 @@ class PlatformHttpServer(
         val clientId = boundary.clientId(exchange.requestHeaders).orEmpty()
         val idempotencyKey = boundary.idempotencyKey(exchange.requestHeaders).orEmpty()
         val correlationId = correlationId(exchange)
-        val body = HotPathMetrics.time("api.readRequestBody") {
+        val body = presetBody ?: (HotPathMetrics.time("api.readRequestBody") {
             readRequestBody(exchange)
-        } ?: return
+        } ?: return)
         val validationError = HotPathMetrics.time("api.command.validate") {
             PlatformCommandParsers.validateApiV1Command(route, body)
         }
@@ -2108,6 +2114,52 @@ class PlatformHttpServer(
         )
     }
 
+    private fun handleCancelByClientOrder(exchange: HttpExchange) {
+        if (exchange.requestMethod != "POST") {
+            methodNotAllowed(exchange)
+            return
+        }
+        val requestBody = readRequestBody(exchange) ?: return
+        val request = JsonCodec.parseObjectOrEmpty(requestBody)
+        val correlationId = correlationId(exchange)
+        val participantId = request.string("participantId")
+        val clientOrderId = request.string("clientOrderId")
+        if (participantId.isBlank() || clientOrderId.isBlank()) {
+            val missing = if (participantId.isBlank()) "participantId" else "clientOrderId"
+            writeJson(
+                exchange,
+                400,
+                boundary.toErrorJson(
+                    BoundaryError(400, "VALIDATION_ERROR", "missing required field: $missing"),
+                    correlationId
+                )
+            )
+            return
+        }
+        val resolved = api.findOrderByClientOrderId(participantId, clientOrderId)
+        if (resolved == null || resolved.runId.isBlank() || resolved.venueSessionId.isBlank()) {
+            writeJson(exchange, 404, simpleErrorJson("client order not found"))
+            return
+        }
+        val synthesizedCancelBody = JsonCodec.writeObject(
+            "commandId" to request.string("commandId"),
+            "traceId" to request.string("traceId"),
+            "causationId" to request.string("causationId"),
+            "correlationId" to request.string("correlationId"),
+            "actorId" to request.string("actorId"),
+            "occurredAt" to request.string("occurredAt").ifBlank { java.time.Instant.now().toString() },
+            "orderId" to resolved.orderId,
+            "reason" to request.string("reason"),
+            "runId" to resolved.runId,
+            "venueSessionId" to resolved.venueSessionId,
+            "instrumentId" to resolved.instrumentId,
+            "clientOrderId" to clientOrderId
+        )
+        handleApiV1Mutation(exchange, "/api/v1/orders/cancel", presetBody = synthesizedCancelBody) { body ->
+            api.cancelOrder(body)
+        }
+    }
+
     private fun handleCommandStatusLookup(exchange: HttpExchange) {
         if (exchange.requestMethod != "GET") {
             methodNotAllowed(exchange)
@@ -2148,7 +2200,13 @@ class PlatformHttpServer(
             System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
         }
         val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-        return lookup?.findCommandStatus(commandId)
+        lookup?.findCommandStatus(commandId)?.let { return it }
+        if (commandProcessingMode == CommandProcessingMode.StreamAck) {
+            streamCommandIntakeStore?.findByCommandId(commandId)?.let { reference ->
+                return reference.toStatusView()
+            }
+        }
+        return null
     }
 
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {

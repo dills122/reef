@@ -26,7 +26,8 @@ data class CommandStatusView(
     val instrumentId: String = "",
     val orderId: String = "",
     val rejectCode: String = "",
-    val resultPayloadJson: String = ""
+    val resultPayloadJson: String = "",
+    val source: String = ""
 )
 
 interface CommandStatusLookup {
@@ -61,7 +62,8 @@ object CommandStatusResponse {
             "instrumentId" to view.instrumentId,
             "orderId" to view.orderId,
             "rejectCode" to view.rejectCode,
-            "resultPayloadJson" to view.resultPayloadJson
+            "resultPayloadJson" to view.resultPayloadJson,
+            "source" to view.source
         )
     }
 
@@ -85,8 +87,40 @@ fun CommandLogRecord.toStatusView(processingMode: CommandProcessingMode): Comman
         processingMode = processingMode,
         responseStatus = responseStatus,
         responsePayloadJson = responsePayloadJson,
-        lastError = lastError
+        lastError = lastError,
+        source = "command_log"
     )
+}
+
+fun StreamCommandReference.toStatusView(): CommandStatusView {
+    return CommandStatusView(
+        commandId = commandId,
+        clientId = "",
+        route = route,
+        idempotencyKey = "",
+        status = CommandLogStatus.RECEIVED,
+        processingMode = CommandProcessingMode.StreamAck,
+        responseStatus = 202,
+        responsePayloadJson = "",
+        lastError = "",
+        batchId = "",
+        shardId = "",
+        partition = partition,
+        commandStream = streamName,
+        eventStream = "",
+        streamSequence = streamSequence,
+        commandType = streamReferenceCommandType(route),
+        source = "stream_reference"
+    )
+}
+
+private fun streamReferenceCommandType(route: String): String {
+    return when {
+        route.endsWith("/orders/submit") -> "SubmitOrder"
+        route.endsWith("/orders/cancel") -> "CancelOrder"
+        route.endsWith("/orders/modify") -> "ModifyOrder"
+        else -> ""
+    }
 }
 
 fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
@@ -120,6 +154,7 @@ fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
         instrumentId = instrumentId,
         orderId = orderId,
         rejectCode = rejectCode,
-        resultPayloadJson = resultPayloadJson
+        resultPayloadJson = resultPayloadJson,
+        source = "canonical_outcome"
     )
 }

@@ -61,6 +61,7 @@ object PostgresSchemaRequirements {
         val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
+        val orders = PostgresSchemaObject.parse(names.orders)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -96,6 +97,9 @@ object PostgresSchemaRequirements {
                 names.projectMarketDataSnapshotsFunction
             ).map(PostgresSchemaObject::parse),
             columns = listOf(
+                PostgresSchemaColumn(orders, "client_order_id", "text"),
+                PostgresSchemaColumn(orders, "run_id", "text"),
+                PostgresSchemaColumn(orders, "venue_session_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "occurred_at", "text"),
                 PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),

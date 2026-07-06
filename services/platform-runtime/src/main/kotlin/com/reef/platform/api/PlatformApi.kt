@@ -269,6 +269,10 @@ class PlatformApi(
         })
     }
 
+    fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
+        return orderService.findOrderByClientOrderId(participantId, clientOrderId)
+    }
+
     fun order(orderId: String): String {
         val order = orderService.persistedOrder(orderId)
         if (order == null) {

@@ -135,7 +135,10 @@ data class PersistedOrder(
     val limitPrice: String,
     val currency: String,
     val timeInForce: String,
-    val acceptedAt: String
+    val acceptedAt: String,
+    val clientOrderId: String = "",
+    val runId: String = "",
+    val venueSessionId: String = ""
 )
 
 data class Instrument(

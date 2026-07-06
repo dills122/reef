@@ -26,6 +26,7 @@ import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.Permission
+import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
@@ -704,6 +705,115 @@ class PlatformHttpServerBoundaryTest {
             assertContains(status.body, "\"rejectCode\":\"ORDER_NOT_FOUND\"")
             assertContains(status.body, "\"responseStatus\":422")
             assertContains(status.body, "\"resultPayloadJson\":\"{\\\"rejected\\\":{\\\"code\\\":\\\"ORDER_NOT_FOUND\\\"}}\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun cancelByClientOrderResolvesAndCancelsUnderlyingOrder() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ord-resolved-1",
+                engineOrderId = "eng-ord-resolved-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "100000000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-07-06T00:00:00Z",
+                clientOrderId = "co-1",
+                runId = "run-1",
+                venueSessionId = "session-1"
+            )
+        )
+        val gateway = CountingEngineGateway(EchoOrderEngineGateway())
+        val server = testServerWithGateway(
+            gateway = gateway,
+            runtimePersistence = persistence
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel-by-client-order",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-cancel-by-client-order-1"
+                ),
+                body = JsonCodec.writeObject(
+                    "commandId" to "cmd-cancel-by-client-order-1",
+                    "traceId" to "trace-cancel-by-client-order-1",
+                    "correlationId" to "corr-cancel-by-client-order-1",
+                    "causationId" to "cause-cancel-by-client-order-1",
+                    "actorId" to "bot-1",
+                    "participantId" to "participant-1",
+                    "clientOrderId" to "co-1",
+                    "reason" to "test cancel"
+                )
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"orderId\":\"ord-resolved-1\"")
+            assertEquals(1, gateway.cancelCalls)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun cancelByClientOrderReturns404WhenClientOrderUnknown() {
+        val server = testServerWithGateway(gateway = EchoOrderEngineGateway())
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel-by-client-order",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-cancel-by-client-order-missing"
+                ),
+                body = JsonCodec.writeObject(
+                    "commandId" to "cmd-cancel-by-client-order-missing",
+                    "traceId" to "trace-cancel-by-client-order-missing",
+                    "correlationId" to "corr-cancel-by-client-order-missing",
+                    "actorId" to "bot-1",
+                    "participantId" to "participant-1",
+                    "clientOrderId" to "co-unknown",
+                    "reason" to "test cancel"
+                )
+            )
+
+            assertEquals(404, response.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun cancelByClientOrderReturns400WhenMissingRequiredFields() {
+        val server = testServerWithGateway(gateway = EchoOrderEngineGateway())
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/cancel-by-client-order",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-cancel-by-client-order-invalid"
+                ),
+                body = JsonCodec.writeObject(
+                    "commandId" to "cmd-cancel-by-client-order-invalid",
+                    "actorId" to "bot-1",
+                    "participantId" to "participant-1"
+                )
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "missing required field: clientOrderId")
         } finally {
             server.stop(0)
         }
@@ -2248,6 +2358,39 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun streamAckCommandStatusFallsBackToStreamReferenceBeforeMaterialization() {
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandPublisher = publisher
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-status-pending"
+                ),
+                body = validSubmitBody("cmd-stream-status-pending", "trace-stream-status-pending", "ord-stream-status-pending", extra = streamRoutingExtra())
+            )
+            assertEquals(202, submit.status)
+
+            val status = get(server.address.port, "/api/v1/commands/cmd-stream-status-pending")
+
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-stream-status-pending\"")
+            assertContains(status.body, "\"source\":\"stream_reference\"")
+            assertContains(status.body, "\"status\":\"RECEIVED\"")
+            assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun streamAckRiskDisabledBotRejectsBeforeReserveOrPublish() {
         val publisher = RecordingStreamCommandPublisher()
         val intakeStore = InMemoryStreamCommandIntakeStore()
@@ -3287,6 +3430,7 @@ private class CountingEngineGateway(
     private val delegate: EngineGateway
 ) : EngineGateway {
     var submitCalls: Int = 0
+    var cancelCalls: Int = 0
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         submitCalls++
@@ -3294,6 +3438,7 @@ private class CountingEngineGateway(
     }
 
     override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
+        cancelCalls++
         return delegate.cancelOrder(command)
     }
 

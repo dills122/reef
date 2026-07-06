@@ -3071,8 +3071,8 @@ class PostgresRuntimePersistence(
         projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
-                INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ${names.orders}(order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (order_id) DO UPDATE SET
                   engine_order_id = EXCLUDED.engine_order_id,
                   instrument_id = EXCLUDED.instrument_id,
@@ -3084,7 +3084,10 @@ class PostgresRuntimePersistence(
                   limit_price = EXCLUDED.limit_price,
                   currency = EXCLUDED.currency,
                   time_in_force = EXCLUDED.time_in_force,
-                  accepted_at = EXCLUDED.accepted_at
+                  accepted_at = EXCLUDED.accepted_at,
+                  client_order_id = EXCLUDED.client_order_id,
+                  run_id = EXCLUDED.run_id,
+                  venue_session_id = EXCLUDED.venue_session_id
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, order.orderId)
@@ -3099,6 +3102,9 @@ class PostgresRuntimePersistence(
                 ps.setString(10, order.currency)
                 ps.setString(11, order.timeInForce)
                 ps.setString(12, order.acceptedAt)
+                ps.setString(13, order.clientOrderId)
+                ps.setString(14, order.runId)
+                ps.setString(15, order.venueSessionId)
                 ps.executeUpdate()
             }
         }
@@ -3229,7 +3235,7 @@ class PostgresRuntimePersistence(
         projectionConnection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at
+                SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
                 FROM ${names.orders} WHERE order_id = ?
                 """.trimIndent()
             ).use { ps ->
@@ -3248,7 +3254,46 @@ class PostgresRuntimePersistence(
                         limitPrice = rs.getString("limit_price"),
                         currency = rs.getString("currency"),
                         timeInForce = rs.getString("time_in_force"),
-                        acceptedAt = rs.getString("accepted_at")
+                        acceptedAt = rs.getString("accepted_at"),
+                        clientOrderId = rs.getString("client_order_id"),
+                        runId = rs.getString("run_id"),
+                        venueSessionId = rs.getString("venue_session_id")
+                    )
+                }
+            }
+        }
+    }
+
+    override fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
+                FROM ${names.orders} WHERE participant_id = ? AND client_order_id = ?
+                ORDER BY accepted_at DESC
+                LIMIT 1
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, participantId)
+                ps.setString(2, clientOrderId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return PersistedOrder(
+                        orderId = rs.getString("order_id"),
+                        engineOrderId = rs.getString("engine_order_id"),
+                        instrumentId = rs.getString("instrument_id"),
+                        participantId = rs.getString("participant_id"),
+                        accountId = rs.getString("account_id"),
+                        side = rs.getString("side"),
+                        orderType = rs.getString("order_type"),
+                        quantityUnits = rs.getString("quantity_units"),
+                        limitPrice = rs.getString("limit_price"),
+                        currency = rs.getString("currency"),
+                        timeInForce = rs.getString("time_in_force"),
+                        acceptedAt = rs.getString("accepted_at"),
+                        clientOrderId = rs.getString("client_order_id"),
+                        runId = rs.getString("run_id"),
+                        venueSessionId = rs.getString("venue_session_id")
                     )
                 }
             }
@@ -3257,7 +3302,7 @@ class PostgresRuntimePersistence(
 
     override fun acceptedOrders(): List<PersistedOrder> = projectionQueryList(
         """
-        SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at
+        SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
         FROM ${names.orders} ORDER BY accepted_at
         """.trimIndent()
     ) {
@@ -3273,7 +3318,10 @@ class PostgresRuntimePersistence(
             limitPrice = getString("limit_price"),
             currency = getString("currency"),
             timeInForce = getString("time_in_force"),
-            acceptedAt = getString("accepted_at")
+            acceptedAt = getString("accepted_at"),
+            clientOrderId = getString("client_order_id"),
+            runId = getString("run_id"),
+            venueSessionId = getString("venue_session_id")
         )
     }
 
@@ -3580,7 +3628,10 @@ class PostgresRuntimePersistence(
         "limitPrice" to limitPrice,
         "currency" to currency,
         "timeInForce" to timeInForce,
-        "acceptedAt" to acceptedAt
+        "acceptedAt" to acceptedAt,
+        "clientOrderId" to clientOrderId,
+        "runId" to runId,
+        "venueSessionId" to venueSessionId
     )
 
     private fun ExecutionCreated.toJsonObject(): String = jsonObject(
@@ -3679,7 +3730,10 @@ class PostgresRuntimePersistence(
                 limitPrice = orderField("limitPrice"),
                 currency = orderField("currency"),
                 timeInForce = orderField("timeInForce"),
-                acceptedAt = orderField("acceptedAt").ifBlank { occurredAt }
+                acceptedAt = orderField("acceptedAt").ifBlank { occurredAt },
+                clientOrderId = orderField("clientOrderId"),
+                runId = orderField("runId"),
+                venueSessionId = orderField("venueSessionId")
             ).takeIf {
                 it.orderId.isNotBlank() &&
                 it.instrumentId.isNotBlank() &&

@@ -383,18 +383,21 @@ func acceptedOrderFact(command domain.SubmitOrder, result domain.SubmitOrderResu
 	}
 
 	return &domain.AcceptedOrderFact{
-		OrderID:       command.OrderID,
-		EngineOrderID: engineOrderID,
-		InstrumentID:  command.InstrumentID,
-		ParticipantID: command.ParticipantID,
-		AccountID:     command.AccountID,
-		Side:          command.Side,
-		OrderType:     command.OrderType,
-		QuantityUnits: command.QuantityUnits,
-		LimitPrice:    command.LimitPrice,
-		Currency:      command.Currency,
-		TimeInForce:   command.TimeInForce,
-		AcceptedAt:    occurredAt,
+		OrderID:        command.OrderID,
+		EngineOrderID:  engineOrderID,
+		ClientOrderID:  command.ClientOrderID,
+		RunID:          command.RunID,
+		VenueSessionID: command.VenueSessionID,
+		InstrumentID:   command.InstrumentID,
+		ParticipantID:  command.ParticipantID,
+		AccountID:      command.AccountID,
+		Side:           command.Side,
+		OrderType:      command.OrderType,
+		QuantityUnits:  command.QuantityUnits,
+		LimitPrice:     command.LimitPrice,
+		Currency:       command.Currency,
+		TimeInForce:    command.TimeInForce,
+		AcceptedAt:     occurredAt,
 	}
 }
 
