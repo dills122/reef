@@ -2534,6 +2534,23 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun projectOrderLifecycleState(batchSize: Int): Long {
+        if (batchSize <= 0) return 0
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT ${names.projectOrderLifecycleStateFunction}(?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, batchSize)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getLong(1)
+                }
+            }
+        }
+    }
+
     override fun orderLifecycleState(orderId: String): OrderLifecycleState? {
         return projectionQueryList(
             """

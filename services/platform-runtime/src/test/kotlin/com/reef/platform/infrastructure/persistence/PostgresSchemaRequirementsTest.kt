@@ -28,6 +28,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.canonical_command_outcomes",
                 "runtime.projection_watermarks",
                 "runtime.order_lifecycle_state",
+                "runtime.order_lifecycle_dirty",
                 "runtime.market_data_snapshots",
                 "auth.auth_roles",
                 "auth.auth_actor_roles"
@@ -42,7 +43,8 @@ class PostgresSchemaRequirementsTest {
                 "runtime.runtime_append_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_submit_outcomes",
                 "runtime.runtime_project_canonical_command_outcomes",
-                "runtime.runtime_materialize_venue_event_batch"
+                "runtime.runtime_materialize_venue_event_batch",
+                "runtime.runtime_project_order_lifecycle_state"
             ),
             requirements.functions.map { it.qualifiedName }.toSet()
         )

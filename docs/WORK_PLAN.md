@@ -66,7 +66,7 @@ The current gaps are:
    - The durable command-payload join now exists (`command_log.command_payloads` joined by `command_id`), so `orders` rows are reconstructed at submit-accept time without extra `VenueEventBatch` metadata.
    - Submit/cancel/modify/fill/reject state is queryable through `runtime.order_lifecycle_state` (rebuilt from `orders`, `executions`, and `runtime_events`), now kept live by the opt-in `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` background loop (status at `/internal/order-lifecycle/projector/status`) instead of manual/admin-triggered rebuild only.
    - Genuine engine-level `SubmitOrder` rejects (not boundary rejects like `AUTHORIZATION_ERROR`/`REFERENCE_DATA_ERROR`) now get an `orders` row and a `REJECTED` `order_lifecycle_state` status instead of being visible only through `submit_results`.
-   - `runtime.order_lifecycle_state` is a full-table rebuild per cycle, not an incremental per-order update; this is fine at current local data volumes but should move to incremental maintenance before large-order-count stress runs.
+   - The background loop now maintains `runtime.order_lifecycle_state` incrementally: every write path that touches `orders`/`executions`/`trades`/`runtime_events` marks affected order_ids in `runtime.order_lifecycle_dirty`, and `runtime.runtime_project_order_lifecycle_state(batchSize)` only recomputes those, bounded by `ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE`. Cost now scales with recent activity, not total historical order count. The old full-table rebuild (`rebuildOrderLifecycleState`) is kept as a manual/admin repair tool.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
 4. Lock first lifecycle scenarios.

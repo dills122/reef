@@ -9,6 +9,7 @@ import kotlin.concurrent.thread
 class OrderLifecycleProjectionWorker(
     private val api: PlatformApi,
     private val pollIntervalMs: Long = 250L,
+    private val batchSize: Int = 500,
     private val workerName: String = "reef-order-lifecycle-projector"
 ) {
     private val running = AtomicBoolean(false)
@@ -36,10 +37,10 @@ class OrderLifecycleProjectionWorker(
 
     fun processOnce(): Long {
         return try {
-            HotPathMetrics.time("orderLifecycleProjector.rebuild") {
-                api.rebuildOrderLifecycleStateCount()
-            }.also { rebuilt ->
-                OrderLifecycleProjectionMetrics.recordRebuilt(rebuilt)
+            HotPathMetrics.time("orderLifecycleProjector.project") {
+                api.projectOrderLifecycleStateCount(batchSize)
+            }.also { processed ->
+                OrderLifecycleProjectionMetrics.recordProcessed(processed)
             }
         } catch (ex: Exception) {
             OrderLifecycleProjectionMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
@@ -49,27 +50,27 @@ class OrderLifecycleProjectionWorker(
 }
 
 data class OrderLifecycleProjectionStats(
-    val rebuilds: Long,
-    val rebuiltRows: Long,
+    val cycles: Long,
+    val processedRows: Long,
     val failed: Long,
-    val lastRebuiltAt: String,
+    val lastProcessedAt: String,
     val lastFailedAt: String,
     val lastError: String
 )
 
 object OrderLifecycleProjectionMetrics {
-    private val rebuilds = AtomicLong(0)
-    private val rebuiltRows = AtomicLong(0)
+    private val cycles = AtomicLong(0)
+    private val processedRows = AtomicLong(0)
     private val failed = AtomicLong(0)
-    private val lastRebuiltAtEpochMs = AtomicLong(0)
+    private val lastProcessedAtEpochMs = AtomicLong(0)
     private val lastFailedAtEpochMs = AtomicLong(0)
     @Volatile
     private var lastError: String = ""
 
-    fun recordRebuilt(rows: Long) {
-        rebuilds.incrementAndGet()
-        rebuiltRows.addAndGet(rows)
-        lastRebuiltAtEpochMs.set(System.currentTimeMillis())
+    fun recordProcessed(rows: Long) {
+        cycles.incrementAndGet()
+        processedRows.addAndGet(rows)
+        lastProcessedAtEpochMs.set(System.currentTimeMillis())
     }
 
     fun recordFailed(error: String) {
@@ -80,20 +81,20 @@ object OrderLifecycleProjectionMetrics {
 
     fun snapshot(): OrderLifecycleProjectionStats {
         return OrderLifecycleProjectionStats(
-            rebuilds = rebuilds.get(),
-            rebuiltRows = rebuiltRows.get(),
+            cycles = cycles.get(),
+            processedRows = processedRows.get(),
             failed = failed.get(),
-            lastRebuiltAt = instantString(lastRebuiltAtEpochMs.get()),
+            lastProcessedAt = instantString(lastProcessedAtEpochMs.get()),
             lastFailedAt = instantString(lastFailedAtEpochMs.get()),
             lastError = lastError
         )
     }
 
     fun resetForTests() {
-        rebuilds.set(0)
-        rebuiltRows.set(0)
+        cycles.set(0)
+        processedRows.set(0)
         failed.set(0)
-        lastRebuiltAtEpochMs.set(0)
+        lastProcessedAtEpochMs.set(0)
         lastFailedAtEpochMs.set(0)
         lastError = ""
     }

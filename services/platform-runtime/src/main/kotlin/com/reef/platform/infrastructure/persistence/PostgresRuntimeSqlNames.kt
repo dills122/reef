@@ -17,6 +17,7 @@ data class PostgresRuntimeSqlNames(
     val runtimeTraceSequences = qualify(runtimeSchemaName, "runtime_trace_sequences")
     val submitResults = qualify(runtimeSchemaName, "submit_results")
     val orderLifecycleState = qualify(runtimeSchemaName, "order_lifecycle_state")
+    val orderLifecycleDirty = qualify(runtimeSchemaName, "order_lifecycle_dirty")
     val marketDataSnapshots = qualify(runtimeSchemaName, "market_data_snapshots")
     val canonicalCommandResults = qualify(runtimeSchemaName, "canonical_command_results")
     val canonicalVenueEvents = qualify(runtimeSchemaName, "canonical_venue_events")
@@ -30,6 +31,7 @@ data class PostgresRuntimeSqlNames(
     val projectCanonicalSubmitOutcomesFunction = qualify(runtimeSchemaName, "runtime_project_canonical_submit_outcomes")
     val projectCanonicalCommandOutcomesFunction = qualify(runtimeSchemaName, "runtime_project_canonical_command_outcomes")
     val materializeVenueEventBatchFunction = qualify(runtimeSchemaName, "runtime_materialize_venue_event_batch")
+    val projectOrderLifecycleStateFunction = qualify(runtimeSchemaName, "runtime_project_order_lifecycle_state")
 
     val authRoles = qualify(authSchemaName, "auth_roles")
     val authActorRoles = qualify(authSchemaName, "auth_actor_roles")

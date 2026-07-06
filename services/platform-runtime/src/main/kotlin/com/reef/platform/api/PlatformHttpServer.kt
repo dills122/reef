@@ -162,6 +162,8 @@ class PlatformHttpServer(
     private val orderLifecycleProjectorEnabled: Boolean = RuntimeEnv.bool("ORDER_LIFECYCLE_PROJECTOR_ENABLED", false),
     private val orderLifecycleProjectorPollMs: Long =
         RuntimeEnv.long("ORDER_LIFECYCLE_PROJECTOR_POLL_MS", 250L, min = 1L),
+    private val orderLifecycleProjectorBatchSize: Int =
+        RuntimeEnv.int("ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE", 500, min = 1),
     private val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
     private val asyncCommandWorkerEnabled: Boolean = RuntimeEnv.bool("EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED", false),
     private val asyncCommandWorkerThreads: Int = RuntimeEnv.int("EXTERNAL_API_COMMAND_ASYNC_WORKER_THREADS", 1, min = 1),
@@ -3286,11 +3288,12 @@ class PlatformHttpServer(
             "enabled" to orderLifecycleProjectorShouldStart(),
             "role" to runtimeRole.configValue,
             "pollIntervalMs" to orderLifecycleProjectorPollMs,
+            "batchSize" to orderLifecycleProjectorBatchSize,
             "metrics" to mapOf(
-                "rebuilds" to stats.rebuilds,
-                "rebuiltRows" to stats.rebuiltRows,
+                "cycles" to stats.cycles,
+                "processedRows" to stats.processedRows,
                 "failed" to stats.failed,
-                "lastRebuiltAt" to stats.lastRebuiltAt,
+                "lastProcessedAt" to stats.lastProcessedAt,
                 "lastFailedAt" to stats.lastFailedAt,
                 "lastError" to stats.lastError
             )
@@ -3361,6 +3364,7 @@ class PlatformHttpServer(
         OrderLifecycleProjectionWorker(
             api = api,
             pollIntervalMs = orderLifecycleProjectorPollMs,
+            batchSize = orderLifecycleProjectorBatchSize,
             workerName = "reef-order-lifecycle-projector"
         ).start()
     }

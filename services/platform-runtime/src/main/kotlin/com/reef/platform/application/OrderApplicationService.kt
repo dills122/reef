@@ -641,6 +641,8 @@ class OrderApplicationService(
 
     fun rebuildOrderLifecycleState() = runtimePersistence.rebuildOrderLifecycleState()
 
+    fun projectOrderLifecycleState(batchSize: Int) = runtimePersistence.projectOrderLifecycleState(batchSize)
+
     fun orderLifecycleState(orderId: String) = runtimePersistence.orderLifecycleState(orderId)
 
     fun refreshMarketDataSnapshots(

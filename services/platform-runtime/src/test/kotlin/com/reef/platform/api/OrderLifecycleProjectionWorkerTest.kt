@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 
 class OrderLifecycleProjectionWorkerTest {
     @Test
-    fun processOnceRebuildsLifecycleStateForAcceptedOrders() {
+    fun processOnceProjectsLifecycleStateForDirtyOrders() {
         OrderLifecycleProjectionMetrics.resetForTests()
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
@@ -34,15 +34,18 @@ class OrderLifecycleProjectionWorkerTest {
             pollIntervalMs = 1L
         )
 
-        val rebuilt = worker.processOnce()
+        val processed = worker.processOnce()
 
-        assertEquals(1, rebuilt)
+        assertEquals(1, processed)
         val state = persistence.orderLifecycleState("order-1")
         assertNotNull(state)
         assertEquals("OPEN", state.status)
         val stats = OrderLifecycleProjectionMetrics.snapshot()
-        assertEquals(1, stats.rebuilds)
-        assertEquals(1, stats.rebuiltRows)
+        assertEquals(1, stats.cycles)
+        assertEquals(1, stats.processedRows)
         assertEquals(0, stats.failed)
+
+        val secondCycleProcessed = worker.processOnce()
+        assertEquals(0, secondCycleProcessed)
     }
 }

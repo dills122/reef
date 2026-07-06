@@ -89,11 +89,12 @@ Projector status is exposed at:
 curl "http://127.0.0.1:8084/internal/market-data/projector/status"
 ```
 
-An opt-in background order-lifecycle projector can keep `runtime.order_lifecycle_state` rebuilt on background-capable runtime roles, instead of relying only on the manual/admin rebuild endpoint:
+An opt-in background order-lifecycle projector can keep `runtime.order_lifecycle_state` current on background-capable runtime roles, instead of relying only on the manual/admin rebuild endpoint. It processes only orders marked dirty since the last cycle (bounded by the batch size), not a full rebuild of every historical order:
 
 ```bash
 ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
 ORDER_LIFECYCLE_PROJECTOR_POLL_MS=250 \
+ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE=500 \
 make dev-up
 ```
 
