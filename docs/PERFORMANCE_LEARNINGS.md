@@ -35,6 +35,29 @@ Immediate implications:
 
 Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 
+## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
+
+Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.
+
+Evidence:
+
+- heap dump from the failed `10k/sec`, `15m` API-front-door run retained millions of `StreamCommandReference` and `InMemoryStreamCommandIntakeStore.Entry` objects, plus matching `String` and map-node overhead.
+- `scripts/dev/stream-direct-nodb-up.mjs` already set `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`, but `docker-compose.yml` did not pass those values into platform-runtime containers. Runtime default `0` meant unlimited in-memory retention.
+- after compose pass-through and bounded sharded intake, local no-op publisher evidence recovered:
+  - `10k/sec`, `15m`, `448` workers: `8,999,952` requests, `8,999,952` success, `0` failures, `9999.89 rps`, p99 `47.40ms`, API `restartCount=0`, post-run API RSS about `1.17GiB`.
+  - `11k/sec`, `2m`, `448` workers: `1,320,000` requests, `0` failures, `10999.48 rps`, p99 `34.46ms`.
+  - `12.5k/sec`, `2m`, `448` workers: `1,499,983` requests, `0` failures, `12499.43 rps`, p99 `34.10ms`, API RSS about `1.205GiB`, publish queue single digits, API `restartCount=0`, `oomKilled=false`.
+- focused verification passed:
+  - platform-runtime tests: `StreamCommandIntakeTest` and `PlatformHttpServerBoundaryTest.streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference`
+  - simulator load-tester tests: `go test ./cmd/load-tester`
+
+Immediate implications:
+
+1. Bounded intake is required for long no-DB ceiling tests. Unlimited replay retention measures heap growth, not command-intake throughput.
+2. Compose env pass-through is part of the contract for benchmark profiles; setting defaults only in wrapper scripts is not enough.
+3. `STREAM_ACK_PUBLISHER=noop` evidence proves API boundary/intake/Netty ceiling only. It must not be used for durable-acceptance claims because `202` no longer proves broker append.
+4. The earlier apparent `~1k/sec` loss is closed for the no-op API-front-door profile. Next bottleneck hunt should move back to durable broker publish, direct matching-engine consumption, and materializer/projector drain.
+
 ## Aged-State Soak Learnings (May 26, 2026)
 
 From a 30-minute fixed-load soak (`capacity-baseline`, `capacity-heavy`, `2500 rps`, `workers=128`):

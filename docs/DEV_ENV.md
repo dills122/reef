@@ -332,6 +332,14 @@ make dev-stream-publish-bench
 
 For API-front-door ceiling tests only, set `STREAM_ACK_PUBLISHER=noop` when starting the direct no-DB profile. This keeps boundary validation, in-memory stream-intake reservation, Netty response handling, and stream-ack marker behavior in path, but replaces the durable broker append with an immediate monotonic ack. Do not use this for correctness or durability claims because `202` no longer proves command-log acceptance.
 
+Latest local no-op API-front-door evidence:
+
+- `/tmp/reef-local-noop-10000-900s-intake-cap`: `10k/sec` for `15m`, `8999952` requests, `0` failures, `9999.89 rps`, p99 `47.40ms`, API `restartCount=0`, RSS about `1.17GiB`.
+- `/tmp/reef-local-noop-11000-120s-headroom`: `11k/sec` for `2m`, `0` failures, `10999.48 rps`, p99 `34.46ms`.
+- `/tmp/reef-local-noop-12500-120s-headroom`: `12.5k/sec` for `2m`, `0` failures, `12499.43 rps`, p99 `34.10ms`, API `restartCount=0`, `oomKilled=false`.
+
+This evidence depends on bounded in-memory intake retention. The direct no-DB wrapper defaults `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`; keep those visible in the container environment when running long soaks. Set max entries to `0` only when intentionally measuring unlimited replay-window memory growth.
+
 Run the local Redpanda direct-stream materializer smoke:
 
 ```bash

@@ -243,7 +243,7 @@ Projection runs also check:
 
 ## Current Capacity Read
 
-Current local evidence:
+Current local evidence for durable materializer path:
 
 - One materializer does not reliably drain to zero durable-canonical gap at 10k sustained load.
 - Four materializers drained accepted commands to zero durable gap at 10k for 60s and 180s validation runs.
@@ -271,3 +271,29 @@ Matching-engine terminal retention:
 - API status after run: healthy
 - matching-engine status after run: healthy
 - note: durable materialized outcomes are higher than accepted commands because this run drained backlog from earlier failed attempts.
+
+Current local evidence for API-front-door no-op isolation:
+
+- artifact root: `/tmp/reef-local-noop-10000-900s-intake-cap`
+- profile: `STREAM_ACK_PUBLISHER=noop`, `STREAM_ACK_INTAKE_STORE=inmemory`, Netty hot-path adapter, workers/projectors disabled
+- offered target: 10000 rps for 15m
+- completed/accepted throughput: 9999.89 rps
+- requests/success/failures: 8999952 / 8999952 / 0
+- p99: 47.40ms
+- API status after run: healthy, `restartCount=0`, post-run RSS about 1.17GiB
+
+Headroom probes after the 15m soak:
+
+- `/tmp/reef-local-noop-11000-120s-headroom`: 11000 rps for 2m, 1320000 / 1320000 / 0, p99 34.46ms
+- `/tmp/reef-local-noop-12500-120s-headroom`: 12500 rps for 2m, 1499983 / 1499983 / 0, p99 34.10ms, API RSS about 1.205GiB, publish queue single digits, `restartCount=0`, `oomKilled=false`
+
+Root-cause note:
+
+- The failed 10k/15m no-op soak retained unbounded in-memory intake entries because Compose did not pass `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES` into platform-runtime containers.
+- The current direct no-DB wrapper sets `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`; Compose now passes both through.
+- `STREAM_ACK_PUBLISHER=noop` remains an isolation tool only. It proves API validation, intake reservation, response handling, and load-generator accounting; it does not prove durable command-log acceptance.
+
+Verification status for the bounded-intake patch:
+
+- `GRADLE_USER_HOME=/tmp/reef-gradle-verify-1 ./gradlew test --tests com.reef.platform.api.StreamCommandIntakeTest --tests com.reef.platform.api.PlatformHttpServerBoundaryTest.streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference`
+- `go test ./cmd/load-tester` from `services/simulator`
