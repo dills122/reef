@@ -322,11 +322,8 @@ export interface LiveBotContextOptionsV1 extends LiveVenueDataClientOptionsV1 {
  * runner integration is a deliberate follow-up.
  *
  * Read-side prices are converted from the venue's fixed-point nanos to plain
- * dollars (see priceFromNanos). Note venue-adapter.ts's write path (placeLimit/
- * modify) does not do the inverse conversion - it sends BotActionV1's limitPrice
- * straight through as-is, so a bot using dollar-denominated limitPrice values
- * (as the SDK docs show) would submit a corrupted price today. That is a
- * separate, pre-existing bug outside this module's scope.
+ * dollars (see priceFromNanos). The venue adapter converts bot action limit
+ * prices back to fixed-point nanos before submitting commands.
  */
 export function createLiveBotContextV1(options: LiveBotContextOptionsV1): BotContextV1 {
   const marketData = createLiveMarketDataClientV1(options);

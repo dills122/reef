@@ -29,7 +29,7 @@ async function assertSesHostedScenarioRuns() {
   assert.equal(report.dataCalls, 3);
   assert.equal(report.issues.length, 0);
   assert.equal(report.ticks[0].venueCommands[0].route, "/api/v1/orders/submit");
-  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99000000000");
 }
 
 async function assertSesCompartmentDoesNotExposeAmbientNetwork() {
