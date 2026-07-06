@@ -32,6 +32,8 @@ interface BatchAsyncStreamCommandPublisher {
 
 class StreamCommandPublishBackpressureException(message: String) : RuntimeException(message)
 
+class StreamCommandPublishTimeoutException(message: String) : RuntimeException(message)
+
 data class StreamCommandHealthSnapshot(
     val available: Boolean,
     val streamName: String,
@@ -86,6 +88,33 @@ data class StreamCommandPublishLaneSnapshot(
 
 interface StreamCommandHealthCheck {
     fun snapshot(): StreamCommandHealthSnapshot
+}
+
+class NoopStreamCommandPublisher(
+    private val config: StreamCommandConfig = StreamCommandConfig()
+) : StreamCommandPublisher, AsyncStreamCommandPublisher, StreamCommandHealthCheck {
+    private val sequence = AtomicLong(0L)
+
+    override fun publish(envelope: StreamCommandEnvelope): StreamPublishAck {
+        return nextAck()
+    }
+
+    override fun publishAsync(envelope: StreamCommandEnvelope): CompletableFuture<StreamPublishAck> {
+        return CompletableFuture.completedFuture(nextAck())
+    }
+
+    override fun snapshot(): StreamCommandHealthSnapshot {
+        return StreamCommandHealthSnapshot(
+            available = true,
+            streamName = config.streamName,
+            messageCount = sequence.get(),
+            publishMode = "noop"
+        )
+    }
+
+    private fun nextAck(): StreamPublishAck {
+        return StreamPublishAck(config.streamName, sequence.incrementAndGet())
+    }
 }
 
 class NatsJetStreamCommandPublisher(

@@ -26,7 +26,10 @@ interface StreamCommandIntakeStore : StreamCommandPublicationMarker {
     fun findByCommandId(commandId: String): StreamCommandReference?
 }
 
-class InMemoryStreamCommandIntakeStore : StreamCommandIntakeStore {
+class InMemoryStreamCommandIntakeStore(
+    maxEntries: Int = RuntimeEnv.int("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES", 0, min = 0),
+    shardCount: Int = RuntimeEnv.int("STREAM_ACK_INMEMORY_INTAKE_SHARDS", 64, min = 1)
+) : StreamCommandIntakeStore {
     private data class Entry(
         val scope: String,
         val idempotencyKey: String,
@@ -34,74 +37,125 @@ class InMemoryStreamCommandIntakeStore : StreamCommandIntakeStore {
         val reference: StreamCommandReference
     )
 
-    private val byIdempotency = ConcurrentHashMap<String, Entry>()
     private val byCommandId = ConcurrentHashMap<String, String>()
+    private val shards = Array(shardCount.coerceAtLeast(1)) { Shard(maxEntriesPerShard(maxEntries, shardCount.coerceAtLeast(1))) }
+    private val commandLocks = Array(shards.size) { Any() }
 
     override fun reserve(envelope: StreamCommandEnvelope, reference: StreamCommandReference): StreamCommandReservation {
         val key = key(envelope.scope, envelope.idempotencyKey)
-        synchronized(this) {
-            val existing = byIdempotency[key]
-            if (existing != null) {
-                if (existing.payloadHash != envelope.payloadHash) {
-                    return StreamCommandReservation.Conflict(existing.payloadHash)
-                }
-                return StreamCommandReservation.Replay(existing.reference)
+        synchronized(commandLock(reference.commandId)) {
+            entryByKey(key)?.let { existing ->
+                return reservationForExisting(existing, envelope)
             }
             val commandKey = byCommandId[reference.commandId]
             if (commandKey != null) {
-                val existingByCommand = byIdempotency.getValue(commandKey)
-                if (existingByCommand.payloadHash != envelope.payloadHash) {
-                    return StreamCommandReservation.Conflict(existingByCommand.payloadHash)
+                val existingByCommand = entryByKey(commandKey)
+                if (existingByCommand != null) {
+                    return reservationForExisting(existingByCommand, envelope)
                 }
-                return StreamCommandReservation.Replay(existingByCommand.reference)
+                byCommandId.remove(reference.commandId, commandKey)
             }
-            val entry = Entry(envelope.scope, envelope.idempotencyKey, envelope.payloadHash, reference)
-            byIdempotency[key] = entry
-            byCommandId[reference.commandId] = key
-            return StreamCommandReservation.Reserved(reference)
+            val shard = shardFor(key)
+            synchronized(shard) {
+                shard.byIdempotency[key]?.let { existing ->
+                    return reservationForExisting(existing, envelope)
+                }
+                val entry = Entry(envelope.scope, envelope.idempotencyKey, envelope.payloadHash, reference)
+                shard.byIdempotency[key] = entry
+                byCommandId[reference.commandId] = key
+                shard.insertionOrder.addLast(key)
+                shard.trim(byCommandId)
+                return StreamCommandReservation.Reserved(reference)
+            }
         }
     }
 
     override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean {
         val key = key(scope, idempotencyKey)
-        synchronized(this) {
-            val existing = byIdempotency[key] ?: return false
+        val shard = shardFor(key)
+        synchronized(shard) {
+            val existing = shard.byIdempotency[key] ?: return false
             val published = existing.reference.copy(streamSequence = streamSequence)
-            byIdempotency[key] = existing.copy(reference = published)
+            shard.byIdempotency[key] = existing.copy(reference = published)
             return true
         }
     }
 
     override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
-        synchronized(this) {
-            val key = byCommandId[commandId] ?: return false
-            val existing = byIdempotency[key] ?: return false
+        val key = byCommandId[commandId] ?: return false
+        val shard = shardFor(key)
+        synchronized(shard) {
+            val existing = shard.byIdempotency[key]
+            if (existing == null) {
+                byCommandId.remove(commandId, key)
+                return false
+            }
             val published = existing.reference.copy(streamSequence = streamSequence)
-            byIdempotency[key] = existing.copy(reference = published)
+            shard.byIdempotency[key] = existing.copy(reference = published)
             return true
         }
     }
 
     override fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
-        if (commands.isEmpty()) return 0
-        synchronized(this) {
-            var marked = 0
-            commands.forEach { (commandId, streamSequence) ->
-                val key = byCommandId[commandId] ?: return@forEach
-                val existing = byIdempotency[key] ?: return@forEach
-                val published = existing.reference.copy(streamSequence = streamSequence)
-                byIdempotency[key] = existing.copy(reference = published)
-                marked += 1
-            }
-            return marked
+        return commands.count { (commandId, streamSequence) ->
+            markPublishedByCommandId(commandId, streamSequence)
         }
     }
 
     override fun findByCommandId(commandId: String): StreamCommandReference? {
-        return byCommandId[commandId]?.let { byIdempotency[it]?.reference }
+        val key = byCommandId[commandId] ?: return null
+        val entry = entryByKey(key)
+        if (entry == null) {
+            byCommandId.remove(commandId, key)
+            return null
+        }
+        return entry.reference
     }
 
     private fun key(scope: String, idempotencyKey: String): String = "$scope|$idempotencyKey"
+
+    private fun reservationForExisting(existing: Entry, envelope: StreamCommandEnvelope): StreamCommandReservation {
+        if (existing.payloadHash != envelope.payloadHash) {
+            return StreamCommandReservation.Conflict(existing.payloadHash)
+        }
+        return StreamCommandReservation.Replay(existing.reference)
+    }
+
+    private fun entryByKey(key: String): Entry? {
+        val shard = shardFor(key)
+        synchronized(shard) {
+            return shard.byIdempotency[key]
+        }
+    }
+
+    private fun shardFor(key: String): Shard {
+        return shards[Math.floorMod(key.hashCode(), shards.size)]
+    }
+
+    private fun commandLock(commandId: String): Any {
+        return commandLocks[Math.floorMod(commandId.hashCode(), commandLocks.size)]
+    }
+
+    private class Shard(private val maxEntries: Int) {
+        val byIdempotency = HashMap<String, Entry>()
+        val insertionOrder = ArrayDeque<String>()
+
+        fun trim(byCommandId: ConcurrentHashMap<String, String>) {
+            if (maxEntries <= 0) return
+            while (byIdempotency.size > maxEntries && insertionOrder.isNotEmpty()) {
+                val oldest = insertionOrder.removeFirst()
+                val removed = byIdempotency.remove(oldest) ?: continue
+                byCommandId.remove(removed.reference.commandId, oldest)
+            }
+        }
+    }
+
+    private companion object {
+        fun maxEntriesPerShard(maxEntries: Int, shardCount: Int): Int {
+            if (maxEntries <= 0) return 0
+            return ((maxEntries + shardCount - 1) / shardCount).coerceAtLeast(1)
+        }
+    }
 }
 
 class PostgresStreamCommandIntakeStore(
@@ -413,9 +467,15 @@ object StreamCommandIntakeFactory {
     }
 
     fun defaultPublisher(): StreamCommandPublisher {
-        val publisher = when (StreamCommandLogProvider.fromEnv()) {
-            StreamCommandLogProvider.JetStream -> NatsJetStreamCommandPublisher()
-            StreamCommandLogProvider.Redpanda -> KafkaStreamCommandPublisher()
+        val publisher = when (val override = RuntimeEnv.string("STREAM_ACK_PUBLISHER", "").trim().lowercase()) {
+            "", "log", "stream" -> when (StreamCommandLogProvider.fromEnv()) {
+                StreamCommandLogProvider.JetStream -> NatsJetStreamCommandPublisher()
+                StreamCommandLogProvider.Redpanda -> KafkaStreamCommandPublisher()
+            }
+            "noop" -> NoopStreamCommandPublisher()
+            else -> throw IllegalArgumentException(
+                "Unsupported STREAM_ACK_PUBLISHER '$override'; expected empty/log/stream or noop"
+            )
         }
         return if (RuntimeEnv.bool("STREAM_ACK_PUBLISH_PIPELINE_ENABLED", false)) {
             PartitionedStreamCommandPublisher(publisher)

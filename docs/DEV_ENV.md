@@ -310,7 +310,7 @@ Run the engine-direct no-DB stress profile:
 make dev-stress-stream-direct-nodb
 ```
 
-This starts the stream-ack command intake profile with DB-backed hot-path persistence disabled, disables stream workers/projectors, enables `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`, uses the Netty hot-path adapter, enables the bounded partitioned command-publish pipeline, and runs submit-only stress steps at `5000,10000,15000,20000` rps for `90s` by default. Reports are written under `/tmp/reef-stream-direct-nodb-stress`. The profile uses isolated high-capacity JetStream defaults, `STREAM_ACK_COMMAND_STREAM=REEF_DIRECT_NODB_COMMANDS_V2`, `STREAM_ACK_SUBJECT_PREFIX=reef.direct.nodb.v2.cmd.v1`, `STREAM_ACK_COMMAND_STREAM_MAX_BYTES=34359738368`, `MATCHING_ENGINE_EVENT_STREAM=REEF_DIRECT_NODB_VENUE_EVENTS_V2`, and `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.direct.nodb.v2.venue.events.v1`, so retained local streams from older profiles do not overlap subjects or hit the older 1 GiB command-stream cap. Trace validation is disabled with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test.
+This starts the stream-ack command intake profile with DB-backed hot-path persistence disabled, disables stream workers/projectors, enables `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`, uses the Netty hot-path adapter, enables the bounded partitioned command-publish pipeline, and runs submit-only stress steps at `5000,10000,15000,20000` rps for `90s` by default. Reports are written under `/tmp/reef-stream-direct-nodb-stress`. The profile uses isolated high-capacity JetStream defaults, `STREAM_ACK_COMMAND_STREAM=REEF_DIRECT_NODB_COMMANDS_V2`, `STREAM_ACK_SUBJECT_PREFIX=reef.direct.nodb.v2.cmd.v1`, `STREAM_ACK_COMMAND_STREAM_MAX_BYTES=34359738368`, `MATCHING_ENGINE_EVENT_STREAM=REEF_DIRECT_NODB_VENUE_EVENTS_V2`, and `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.direct.nodb.v2.venue.events.v1`, so retained local streams from older profiles do not overlap subjects or hit the older 1 GiB command-stream cap. Trace validation is disabled with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test. The profile caps the in-memory stream-intake idempotency window with `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and shards it with `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256` by default so long no-DB soaks do not measure unbounded heap retention or a single in-memory monitor instead of command intake.
 
 Run the same no-DB direct profile against Redpanda/Kafka-compatible command and event topics:
 
@@ -319,6 +319,18 @@ STREAM_ACK_LOG_PROVIDER=redpanda make dev-stress-stream-direct-nodb
 ```
 
 In this mode the API still returns `202` only after the Kafka-compatible producer receives an `acks=all` broker acknowledgment. The matching engine consumes assigned Kafka topic partitions directly, publishes `VenueEventBatch` records to the configured event topic, and commits Kafka offsets only after the event batch publish succeeds. A platform runtime can then run `PLATFORM_RUNTIME_ROLE=materializer` with `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack` and `STREAM_ACK_LOG_PROVIDER=redpanda` to read those event batches, commit compact canonical Postgres rows, and commit its Kafka event-topic offsets only after the Postgres materialization call returns. This is the apples-to-apples path for the durable command-log boundary plus async canonical materialization; the older `STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack` path still exercises the DB-backed stream workers.
+
+Isolate publisher capacity without HTTP or matching-engine work:
+
+```bash
+STREAM_ACK_LOG_PROVIDER=redpanda \
+STREAM_ACK_COMMAND_STREAM=REEF_PUBLISH_BENCH \
+STREAM_PUBLISH_BENCH_RATE=12500 \
+STREAM_PUBLISH_BENCH_DURATION=180s \
+make dev-stream-publish-bench
+```
+
+For API-front-door ceiling tests only, set `STREAM_ACK_PUBLISHER=noop` when starting the direct no-DB profile. This keeps boundary validation, in-memory stream-intake reservation, Netty response handling, and stream-ack marker behavior in path, but replaces the durable broker append with an immediate monotonic ack. Do not use this for correctness or durability claims because `202` no longer proves command-log acceptance.
 
 Run the local Redpanda direct-stream materializer smoke:
 
@@ -368,6 +380,7 @@ Kafka-compatible producer tuning is exposed with:
 - `STREAM_ACK_KAFKA_LINGER_MS`
 - `STREAM_ACK_KAFKA_BATCH_SIZE`
 - `STREAM_ACK_KAFKA_COMPRESSION_TYPE`
+- `MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE`
 - `STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES`
 - `STREAM_ACK_KAFKA_MAX_BLOCK_MS`
 - `STREAM_ACK_KAFKA_REQUEST_TIMEOUT_MS`
@@ -384,6 +397,8 @@ Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpre
 JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `sync` uses one synchronous durable publish call per accepted command. `async` uses JNATS async publish futures with a bounded in-flight limit from `STREAM_ACK_PUBLISH_MAX_IN_FLIGHT`, then waits for the specific command's publish ack before returning `202`.
 
 `STREAM_ACK_PUBLISH_PIPELINE_ENABLED=true` wraps the configured stream publisher in a bounded partitioned publish pipeline. Each command partition gets a lane with queue capacity `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY` and in-flight durable publish cap `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE`. Netty stream-ack intake waits asynchronously for the durable publish future, so request threads no longer own JetStream concurrency. The stream-ack health response includes `publishMode`, `publishInFlight`, `publishMaxInFlight`, `publishQueueDepth`, `publishMaxQueueDepth`, `publishLaneCount`, publish accepted/completed/failed/rejected counters, phase timings for queue wait, slot wait, delegate ack, and per-lane snapshots for benchmark interpretation.
+
+The no-DB direct profile defaults `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY=1024` so overload becomes publish backpressure instead of retaining a large per-partition command backlog.
 
 The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
@@ -554,7 +569,7 @@ HTTP boundary comparison knobs:
 
 - `PLATFORM_HTTP_SERVER=jdk` keeps the default JDK `HttpServer` adapter and full local route surface.
 - `PLATFORM_HTTP_SERVER=netty` enables the measured Netty hot-path adapter. This adapter intentionally covers the no-DB ceiling-test surface first: setup POSTs for reference/auth seeding, `/health`, `/api/v1/orders/submit`, `/api/v1/commands/{commandId}`, `/internal/perf/hot-path`, `/internal/perf/db-pools`, `/internal/commands/async/stats`, stream-ack/projector status probes, and abuse stats.
-- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, and `PLATFORM_NETTY_APPLICATION_THREADS=64` tune the Netty adapter. A worker count of `0` uses Netty's default event-loop sizing, while application threads run the hot-path command handler off the IO event loop.
+- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, `PLATFORM_NETTY_APPLICATION_THREADS`, and `PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS=2048` tune the Netty adapter. A worker count of `0` uses Netty's default event-loop sizing, blank application threads use a CPU-aware runtime default, and max pending tasks bounds each application executor queue so overload fails fast instead of growing heap without limit.
 
 Accepted-async no-DB isolation knobs:
 

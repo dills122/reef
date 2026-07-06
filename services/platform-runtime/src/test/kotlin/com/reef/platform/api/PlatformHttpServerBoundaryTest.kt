@@ -32,6 +32,7 @@ import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.net.HttpURLConnection
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -2323,6 +2324,39 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference() {
+        val store = InMemoryStreamCommandIntakeStore()
+        val publisher = DelayedAckStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = store,
+            streamCommandPublisher = publisher,
+            streamCommandPublishResponseTimeoutMs = 25L
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-stream-late-ack"
+            )
+            val body = validSubmitBody("cmd-stream-late-ack", "trace-stream-late-ack", "ord-stream-late-ack", extra = streamRoutingExtra())
+            val first = post(server.address.port, "/api/v1/orders/submit", headers, body)
+            assertEquals(503, first.status)
+            assertContains(first.body, "timed out waiting 25ms")
+            assertEquals(1, publisher.published.size)
+
+            publisher.complete(StreamPublishAck("REEF_COMMANDS", 123L))
+
+            val replay = post(server.address.port, "/api/v1/orders/submit", headers, body)
+            assertEquals(202, replay.status)
+            assertContains(replay.body, "\"streamSequence\":123")
+            assertEquals(1, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun streamAckHealthEndpointReturnsStreamSnapshot() {
         val server = testServerWithGateway(
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
@@ -2696,6 +2730,7 @@ class PlatformHttpServerBoundaryTest {
         streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
         streamCommandMaxStorageUtilization: Double = 0.95,
         streamCommandBackpressureSampleMs: Long = 100L,
+        streamCommandPublishResponseTimeoutMs: Long = 2_000L,
         venueEventMaterializerEnabled: Boolean = false,
         runtimePersistence: InMemoryRuntimePersistence = InMemoryRuntimePersistence()
     ): com.sun.net.httpserver.HttpServer {
@@ -2740,6 +2775,7 @@ class PlatformHttpServerBoundaryTest {
             streamCommandConfig = streamCommandConfig,
             streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
             streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
+            streamCommandPublishResponseTimeoutMs = streamCommandPublishResponseTimeoutMs,
             venueEventMaterializerEnabled = venueEventMaterializerEnabled,
             commandProcessingMode = commandProcessingMode,
             commandIntakeMaxActive = commandIntakeMaxActive,
@@ -3089,6 +3125,24 @@ private class RecordingStreamCommandPublisher(
             error("publish ack timeout")
         }
         return StreamPublishAck("REEF_COMMANDS", published.size.toLong())
+    }
+}
+
+private class DelayedAckStreamCommandPublisher : StreamCommandPublisher, AsyncStreamCommandPublisher {
+    val published = mutableListOf<StreamCommandEnvelope>()
+    private val pending = CompletableFuture<StreamPublishAck>()
+
+    override fun publish(envelope: StreamCommandEnvelope): StreamPublishAck {
+        return publishAsync(envelope).get(2, TimeUnit.SECONDS)
+    }
+
+    override fun publishAsync(envelope: StreamCommandEnvelope): CompletableFuture<StreamPublishAck> {
+        published.add(envelope)
+        return pending
+    }
+
+    fun complete(ack: StreamPublishAck) {
+        pending.complete(ack)
     }
 }
 

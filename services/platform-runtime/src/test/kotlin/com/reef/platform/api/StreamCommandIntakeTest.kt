@@ -86,6 +86,24 @@ class StreamCommandIntakeTest {
     }
 
     @Test
+    fun intakeStoreCanBoundInMemoryRetentionWindow() {
+        val store = InMemoryStreamCommandIntakeStore(maxEntries = 2, shardCount = 1)
+        val first = validEnvelope(commandId = "cmd-window-1", idempotencyKey = "idem-window-1")
+        val second = validEnvelope(commandId = "cmd-window-2", idempotencyKey = "idem-window-2")
+        val third = validEnvelope(commandId = "cmd-window-3", idempotencyKey = "idem-window-3")
+
+        assertIs<StreamCommandReservation.Reserved>(store.reserve(first, first.reference("REEF_COMMANDS")))
+        assertTrue(store.markPublishedByCommandId(first.commandId, 11L))
+        assertIs<StreamCommandReservation.Reserved>(store.reserve(second, second.reference("REEF_COMMANDS")))
+        assertIs<StreamCommandReservation.Reserved>(store.reserve(third, third.reference("REEF_COMMANDS")))
+
+        assertTrue(!store.markPublishedByCommandId(first.commandId, 12L))
+        assertIs<StreamCommandReservation.Reserved>(store.reserve(first, first.reference("REEF_COMMANDS")))
+        val replay = store.reserve(third, third.reference("REEF_COMMANDS"))
+        assertEquals(0L, assertIs<StreamCommandReservation.Replay>(replay).reference.streamSequence)
+    }
+
+    @Test
     fun asyncPublicationMarkerEventuallyMarksReservedCommandPublished() {
         val store = InMemoryStreamCommandIntakeStore()
         val envelope = assertIs<EitherBoundaryError.Envelope>(

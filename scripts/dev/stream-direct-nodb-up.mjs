@@ -7,12 +7,14 @@ setValue("EXTERNAL_API_IDEMPOTENCY_STORE", "inmemory");
 setValue("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setValue("EXTERNAL_API_COMMAND_LOG_MODE", "disabled");
 setValue("STREAM_ACK_INTAKE_STORE", "inmemory");
+setDefault("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES", "100000");
+setDefault("STREAM_ACK_INMEMORY_INTAKE_SHARDS", "256");
 setValue("PLATFORM_HTTP_SERVER", "netty");
 setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_DIRECT_NODB_COMMANDS_V2");
 setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.direct.nodb.v2.cmd.v1");
 setDefault("STREAM_ACK_COMMAND_STREAM_MAX_BYTES", "34359738368");
 setDefault("STREAM_ACK_PUBLISH_PIPELINE_ENABLED", "true");
-setDefault("STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY", "8192");
+setDefault("STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY", "1024");
 setDefault("STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE", "256");
 setDefault("STREAM_ACK_PUBLISH_PIPELINE_BATCH_SIZE", "1");
 setDefault("STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS", "0");
@@ -21,6 +23,7 @@ setDefault("STREAM_INGRESS_PORT", "8090");
 if (streamAckLogProvider() === "redpanda") {
   setDefault("STREAM_ACK_PARTITION_COUNT", "16");
   setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..15");
+  setDefault("MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE", "none");
 } else {
   setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..63");
 }
@@ -38,15 +41,19 @@ setValue("EXTERNAL_API_ABUSE_BREAKER_MODE", "off");
 
 console.log("stream-direct no-db settings:");
 console.log(`  logProvider=${env("STREAM_ACK_LOG_PROVIDER", "jetstream")}`);
+console.log(`  publisher=${env("STREAM_ACK_PUBLISHER", "stream") || "stream"}`);
 if (streamAckLogProvider() === "redpanda") {
   console.log(`  kafkaBootstrapServers=${env("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092")}`);
   console.log(`  kafkaLingerMs=${env("STREAM_ACK_KAFKA_LINGER_MS", "1")}`);
   console.log(`  kafkaBatchSize=${env("STREAM_ACK_KAFKA_BATCH_SIZE", "65536")}`);
   console.log(`  kafkaCompression=${env("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4")}`);
+  console.log(`  engineKafkaCompression=${env("MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE", "") || env("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4")}`);
 }
 console.log(`  runtimePersistence=${env("RUNTIME_PERSISTENCE")}`);
 console.log(`  idempotencyStore=${env("EXTERNAL_API_IDEMPOTENCY_STORE")}`);
 console.log(`  streamIntakeStore=${env("STREAM_ACK_INTAKE_STORE")}`);
+console.log(`  streamIntakeMaxEntries=${env("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES")}`);
+console.log(`  streamIntakeShards=${env("STREAM_ACK_INMEMORY_INTAKE_SHARDS")}`);
 console.log(`  stream=${env("STREAM_ACK_COMMAND_STREAM")}`);
 console.log(`  subjectPrefix=${env("STREAM_ACK_SUBJECT_PREFIX")}`);
 console.log(`  streamMaxBytes=${env("STREAM_ACK_COMMAND_STREAM_MAX_BYTES")}`);

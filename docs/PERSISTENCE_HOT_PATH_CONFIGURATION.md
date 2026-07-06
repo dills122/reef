@@ -39,6 +39,13 @@ Default shape:
 - API publishes commands to Redpanda/Kafka.
 - Matching engine consumes the command stream directly.
 - Runtime persistence is `noop` unless a background role overrides it.
+- `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` bounds the no-DB idempotency window for long ceiling tests; set it to `0` for unlimited in-memory replay retention.
+- `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256` shards no-DB stream-intake reservation state so the ceiling profile does not serialize all accepted commands on one in-memory monitor.
+
+Isolation tools:
+
+- `make dev-stream-publish-bench` measures configured stream publisher capacity without HTTP, intake reservation, or matching-engine work.
+- `STREAM_ACK_PUBLISHER=noop make dev-up-stream-direct-nodb` keeps the API stream-ack front door active but replaces durable broker publish with an immediate ack. Use only to isolate HTTP/API ceiling; it is not a durable-acceptance profile.
 
 ### Venue Event Materializer
 
@@ -119,16 +126,22 @@ Current hot-path materializer profile uses 16 command partitions and matching-en
 
 ### API Publish Pipeline
 
+- `STREAM_ACK_PUBLISHER` (`noop` only for API isolation benchmarks)
+- `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES`
+- `STREAM_ACK_INMEMORY_INTAKE_SHARDS`
 - `STREAM_ACK_PUBLISH_PIPELINE_ENABLED`
 - `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY`
 - `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE`
 - `STREAM_ACK_PUBLISH_PIPELINE_BATCH_SIZE`
 - `STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS`
+- `PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS`
 - `STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT`
 - `STREAM_ACK_KAFKA_BATCH_SIZE`
 - `STREAM_ACK_KAFKA_COMPRESSION_TYPE`
+- `MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE`
 
 The materializer stress profile uses the publish pipeline with lz4 Kafka compression and high per-lane in-flight capacity.
+The direct no-DB Redpanda profile defaults matching-engine event publish compression to `none` because the current Sarama record batch encoder leaves compressed batch `max_timestamp` unset, which forces Redpanda to decompress produced batches for validation.
 
 ### Materializer Consumers
 
