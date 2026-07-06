@@ -10,7 +10,11 @@ object JsonCodec {
     private val mapper = JsonMapper.builder().build()
 
     fun parseObject(body: String): JsonDocument {
-        val root = mapper.readTree(body)
+        val root = try {
+            mapper.readTree(body)
+        } catch (ex: Exception) {
+            throw IllegalArgumentException("invalid json payload", ex)
+        }
         if (root == null || !root.isObject) {
             throw IllegalArgumentException("json payload must be an object")
         }

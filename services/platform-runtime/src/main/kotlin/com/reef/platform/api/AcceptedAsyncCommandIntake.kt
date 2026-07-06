@@ -24,7 +24,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withTimeoutOrNull
 
 data class AcceptedAsyncCommandReceipt(
@@ -68,7 +67,7 @@ class AcceptedAsyncCommandIntake(
     private val api: PlatformApi,
     laneCount: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_LANES", 16, min = 1),
     private val queueCapacityPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY", 100_000, min = 1),
-    private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 32, min = 1),
+    private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 1, min = 1).coerceAtMost(1),
     private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L)
 ) : CommandStatusLookup {
     private val lanes: Array<Channel<AcceptedAsyncCommand>> =
@@ -216,25 +215,16 @@ class AcceptedAsyncCommandIntake(
     }
 
     private suspend fun processLane(lane: Int, queue: Channel<AcceptedAsyncCommand>) {
-        val permits = Semaphore(inFlightPerLane)
         for (command in queue) {
             if (!started.get() || !scope.isActive) break
             laneQueued.decrementAndGet(lane)
-            permits.acquire()
             val pending = try {
                 submit(lane, command)
             } catch (ex: Exception) {
                 fail(lane, command, ex)
-                permits.release()
                 continue
             }
-            scope.launch(CoroutineName("reef-accepted-async-lane-$lane-complete")) {
-                try {
-                    complete(lane, pending)
-                } finally {
-                    permits.release()
-                }
-            }
+            complete(lane, pending)
         }
     }
 

@@ -120,7 +120,7 @@ object PlatformCommandParsers {
     }
 
     fun submitOrder(body: String): SubmitOrderCommand {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return SubmitOrderCommand(
             commandId = json.string("commandId"),
             traceId = json.string("traceId"),
@@ -142,7 +142,7 @@ object PlatformCommandParsers {
     }
 
     fun cancelOrder(body: String): CancelOrderCommand {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return CancelOrderCommand(
             commandId = json.string("commandId"),
             traceId = json.string("traceId"),
@@ -156,7 +156,7 @@ object PlatformCommandParsers {
     }
 
     fun modifyOrder(body: String): ModifyOrderCommand {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return ModifyOrderCommand(
             commandId = json.string("commandId"),
             traceId = json.string("traceId"),
@@ -171,7 +171,7 @@ object PlatformCommandParsers {
     }
 
     fun instrument(body: String): Instrument {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return Instrument(
             instrumentId = json.string("instrumentId"),
             symbol = json.string("symbol")
@@ -179,7 +179,7 @@ object PlatformCommandParsers {
     }
 
     fun participant(body: String): Participant {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return Participant(
             participantId = json.string("participantId"),
             name = json.string("name")
@@ -187,7 +187,7 @@ object PlatformCommandParsers {
     }
 
     fun account(body: String): Account {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return Account(
             accountId = json.string("accountId"),
             participantId = json.string("participantId")
@@ -195,7 +195,7 @@ object PlatformCommandParsers {
     }
 
     fun roleDefinition(body: String): RoleDefinition {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return RoleDefinition(
             roleId = json.string("roleId"),
             permissions = json.string("permissions")
@@ -206,7 +206,7 @@ object PlatformCommandParsers {
     }
 
     fun actorRoleBinding(body: String): ActorRoleBinding {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         return ActorRoleBinding(
             actorId = json.string("actorId"),
             roleId = json.string("roleId")

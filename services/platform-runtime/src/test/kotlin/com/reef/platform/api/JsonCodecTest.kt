@@ -3,6 +3,7 @@ package com.reef.platform.api
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class JsonCodecTest {
@@ -64,5 +65,12 @@ class JsonCodecTest {
     fun jsonFieldsFacadePreservesEmptyFallbackForMalformedPayloads() {
         assertEquals("", JsonFields.extract("""{"orderId":""", "orderId"))
         assertTrue(JsonFields.extractObjects("""{"executions":""", "executions").isEmpty())
+    }
+
+    @Test
+    fun commandParsersRejectMalformedJsonPayloads() {
+        assertFailsWith<IllegalArgumentException> {
+            PlatformCommandParsers.submitOrder("""{"commandId":""")
+        }
     }
 }

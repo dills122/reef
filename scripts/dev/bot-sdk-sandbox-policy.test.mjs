@@ -33,6 +33,13 @@ assert.ok(violations.some((violation) => violation.pattern === "setTimeout"));
 assert.ok(violations.some((violation) => violation.pattern === "node:fs"));
 assert.ok(codes.includes("sandbox_dynamic_require"));
 
+const inertText = `
+  // fetch("https://example.com");
+  const message = "setTimeout and process are words here";
+  const payload = { fetch: "field-name-only" };
+`;
+assert.deepEqual(scanBotSourceForSandboxViolationsV1(inertText), []);
+
 const approvedPackageSource = 'import { RSI } from "trading-signals";\nexport default class Example {}';
 assert.ok(reefBotApprovedPackagesV1.some((pkg) => pkg.name === "trading-signals" && pkg.version === "7.4.3"));
 assert.deepEqual(scanBotSourceForSandboxViolationsV1(approvedPackageSource, reefBotHostedSourceSandboxPolicyV1), []);

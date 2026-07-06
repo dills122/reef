@@ -3775,23 +3775,11 @@ class PlatformHttpServer(
     }
 
     private fun projectorPartitions(): List<Int> {
-        return configuredPartitions(streamAckProjectorPartitions)
+        return configuredRuntimePartitions(streamAckProjectorPartitions, streamCommandConfig.partitionCount)
     }
 
     private fun streamWorkerPartitions(): List<Int> {
-        return configuredPartitions(streamCommandWorkerPartitions)
-    }
-
-    private fun configuredPartitions(rawValue: String): List<Int> {
-        val raw = rawValue.trim()
-        if (raw.equals("all", ignoreCase = true)) {
-            return (0 until streamCommandConfig.partitionCount).toList()
-        }
-        return raw.split(",")
-            .mapNotNull { value -> value.trim().toIntOrNull() }
-            .filter { it in 0 until streamCommandConfig.partitionCount }
-            .distinct()
-            .sorted()
+        return configuredRuntimePartitions(streamCommandWorkerPartitions, streamCommandConfig.partitionCount)
     }
 }
 

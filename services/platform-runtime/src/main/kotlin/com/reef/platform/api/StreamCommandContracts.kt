@@ -96,7 +96,13 @@ object StreamCommandEnvelopeBuilder {
         body: String,
         config: StreamCommandConfig = StreamCommandConfig()
     ): EitherBoundaryError {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = try {
+            JsonCodec.parseObject(body)
+        } catch (ex: IllegalArgumentException) {
+            return EitherBoundaryError.Error(
+                BoundaryError(400, "INVALID_JSON", ex.message ?: "invalid json payload")
+            )
+        }
         val commandId = json.string("commandId")
         val commandType = commandType(route)
         val runId = json.string("runId").ifBlank { json.string("scenarioRunId") }

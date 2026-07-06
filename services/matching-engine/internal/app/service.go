@@ -222,12 +222,7 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	record.LastUpdatedAt = now
 	s.refreshOrderStatus(record)
 
-	if record.RemainingQuantity > 0 {
-		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
-		book.book.Add(record.Side, incoming)
-	}
-
-	return domain.SubmitOrderResult{
+	result := domain.SubmitOrderResult{
 		Accepted: &domain.OrderAccepted{
 			EventID:       fmt.Sprintf("evt-order-modified-%s", cmd.OrderID),
 			OrderID:       cmd.OrderID,
@@ -235,6 +230,20 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 			OccurredAt:    now,
 		},
 	}
+
+	if record.RemainingQuantity > 0 {
+		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
+		if record.Side == domain.SideBuy {
+			s.matchBuy(book, incoming, &result, now)
+		} else {
+			s.matchSell(book, incoming, &result, now)
+		}
+		if record.RemainingQuantity > 0 {
+			book.book.Add(record.Side, incoming)
+		}
+	}
+
+	return result
 }
 
 func (s *Service) occurredAt(commandOccurredAt string) string {

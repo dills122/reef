@@ -1,5 +1,6 @@
 package com.reef.platform.infrastructure.persistence
 
+import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
@@ -674,8 +675,10 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     private fun jsonString(json: String, key: String): String {
-        val pattern = Regex(""""$key"\s*:\s*"([^"]*)"""")
-        return pattern.find(json)?.groupValues?.get(1).orEmpty()
+        val document = JsonCodec.parseObjectOrEmpty(json)
+        return document.string(key)
+            .ifBlank { document.obj("accepted").string(key) }
+            .ifBlank { document.obj("rejected").string(key) }
     }
 
     private fun String.isVenueEventBatchProjectionSource(): Boolean {

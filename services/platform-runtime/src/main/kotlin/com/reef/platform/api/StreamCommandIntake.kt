@@ -284,9 +284,11 @@ class PostgresStreamCommandIntakeStore(
 
     override fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
         if (commands.isEmpty()) return 0
-        val payload = commands.joinToString(prefix = "[", postfix = "]") { (commandId, streamSequence) ->
-            """{"commandId":"${escapeJson(commandId)}","streamSequence":$streamSequence}"""
-        }
+        val payload = JsonCodec.writeArray(
+            commands.map { (commandId, streamSequence) ->
+                mapOf("commandId" to commandId, "streamSequence" to streamSequence)
+            }
+        )
         dataSource.connection.use { conn ->
             conn.prepareStatement(
                 """
@@ -431,21 +433,6 @@ class AsyncStreamCommandPublicationMarker(
         if (queued) return true
         return HotPathMetrics.time("api.streamAck.markPublished.queueFullSync") {
             delegate.markPublishedByCommandId(commandId, streamSequence)
-        }
-    }
-}
-
-private fun escapeJson(value: String): String {
-    return buildString(value.length + 8) {
-        value.forEach { ch ->
-            when (ch) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(ch)
-            }
         }
     }
 }
