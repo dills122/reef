@@ -91,7 +91,30 @@ data class PublicTradeTapeEntry(
     val occurredAt: String
 )
 
+val SupportedIntradayBarIntervals: Set<String> = setOf("1m", "5m", "15m", "1h")
+
+data class IntradayBar(
+    val instrumentId: String,
+    val start: String,
+    val end: String,
+    val open: String,
+    val high: String,
+    val low: String,
+    val close: String,
+    val volume: String
+)
+
 val NonLifecycleRejectCodes: Set<String> = setOf("AUTHORIZATION_ERROR", "REFERENCE_DATA_ERROR")
+
+data class OwnOrderView(
+    val orderId: String,
+    val instrumentId: String,
+    val side: String,
+    val quantityUnits: String,
+    val remainingQuantityUnits: String,
+    val limitPrice: String,
+    val status: String
+)
 
 data class SubmitOrderResult(
     val accepted: EngineOrderAccepted? = null,

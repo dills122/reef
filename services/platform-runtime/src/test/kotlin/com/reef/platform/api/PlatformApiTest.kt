@@ -423,6 +423,168 @@ class PlatformApiTest {
     }
 
     @Test
+    fun intradayBarsApiAggregatesTradesIntoOhlcvBucketsForInstrument() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-t1",
+                    tradeId = "t1",
+                    executionId = "exec-1",
+                    buyOrderId = "b1",
+                    sellOrderId = "s1",
+                    instrumentId = "AAPL",
+                    quantityUnits = "10",
+                    price = "100",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:05Z"
+                ),
+                TradeCreated(
+                    eventId = "evt-t2",
+                    tradeId = "t2",
+                    executionId = "exec-2",
+                    buyOrderId = "b2",
+                    sellOrderId = "s2",
+                    instrumentId = "AAPL",
+                    quantityUnits = "5",
+                    price = "105",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:30Z"
+                ),
+                TradeCreated(
+                    eventId = "evt-t3",
+                    tradeId = "t3",
+                    executionId = "exec-3",
+                    buyOrderId = "b3",
+                    sellOrderId = "s3",
+                    instrumentId = "AAPL",
+                    quantityUnits = "20",
+                    price = "95",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:01:10Z"
+                ),
+                TradeCreated(
+                    eventId = "evt-t4",
+                    tradeId = "t4",
+                    executionId = "exec-4",
+                    buyOrderId = "b4",
+                    sellOrderId = "s4",
+                    instrumentId = "MSFT",
+                    quantityUnits = "1",
+                    price = "300",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:10Z"
+                )
+            )
+        )
+
+        val response = api.intradayBars(
+            "AAPL",
+            interval = "1m",
+            start = "2026-03-14T18:00:00Z",
+            end = "2026-03-14T18:02:00Z"
+        )
+
+        assertContains(response, "\"instrumentId\":\"AAPL\"")
+        assertContains(response, "\"interval\":\"1m\"")
+        // first bucket [18:00:00, 18:01:00): open=100 (t1 first), close=105 (t2 last), high=105, low=100, volume=15
+        assertContains(response, "\"start\":\"2026-03-14T18:00:00Z\"")
+        assertContains(response, "\"open\":\"100\"")
+        assertContains(response, "\"high\":\"105\"")
+        assertContains(response, "\"low\":\"100\"")
+        assertContains(response, "\"close\":\"105\"")
+        assertContains(response, "\"volume\":\"15\"")
+        // second bucket [18:01:00, 18:02:00): only t3
+        assertContains(response, "\"start\":\"2026-03-14T18:01:00Z\"")
+        assertContains(response, "\"volume\":\"20\"")
+        assert(!response.contains("\"300\"")) { "unrelated instrument leaked into bars" }
+
+        val badInterval = api.intradayBars("AAPL", interval = "3m", start = "2026-03-14T18:00:00Z", end = "2026-03-14T18:02:00Z")
+        assertContains(badInterval, "\"error\":\"unsupported interval\"")
+    }
+
+    @Test
+    fun ownOrdersApiScopesToParticipantAndOpenStatusOnly() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "mine-open",
+                engineOrderId = "eng-mine-open",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:00Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "mine-cancelled",
+                engineOrderId = "eng-mine-cancelled",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "50",
+                limitPrice = "151",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:01Z"
+            )
+        )
+        persistence.saveEvent(
+            RuntimeEvent(
+                eventId = "evt-mine-cancelled",
+                eventType = "OrderCancelled",
+                orderId = "mine-cancelled",
+                traceId = "trace-mine-cancelled",
+                causationId = "cmd-cancel",
+                correlationId = "corr-mine-cancelled",
+                actorId = "trader-1",
+                producer = "unit-test",
+                schemaVersion = "v1",
+                payloadJson = "{}",
+                occurredAt = "2026-03-14T18:00:02Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "someone-elses",
+                engineOrderId = "eng-someone-elses",
+                instrumentId = "AAPL",
+                participantId = "participant-2",
+                accountId = "account-2",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "10",
+                limitPrice = "150",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:03Z"
+            )
+        )
+        persistence.rebuildOrderLifecycleState()
+
+        val current = api.ownOrders("participant-1", openOnly = true)
+        assertContains(current, "\"mine-open\"")
+        assert(!current.contains("mine-cancelled")) { "cancelled order leaked into current" }
+        assert(!current.contains("someone-elses")) { "other participant's order leaked into current" }
+
+        val history = api.ownOrders("participant-1", openOnly = false)
+        assertContains(history, "\"mine-open\"")
+        assertContains(history, "\"mine-cancelled\"")
+        assert(!history.contains("someone-elses")) { "other participant's order leaked into history" }
+    }
+
+    @Test
     fun operationalProjectionSmokeReachesOrderAndMarketDataReads() {
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(

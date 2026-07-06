@@ -2,10 +2,13 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.domain.ExecutionCreated
+import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
+import com.reef.platform.domain.SupportedIntradayBarIntervals
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
@@ -334,6 +337,29 @@ class PlatformApi(
         )
     }
 
+    fun intradayBars(instrumentId: String, interval: String, start: String, end: String): String {
+        if (interval !in SupportedIntradayBarIntervals) {
+            return JsonCodec.writeObject(
+                "error" to "unsupported interval",
+                "instrumentId" to instrumentId,
+                "interval" to interval
+            )
+        }
+        val bars = orderService.intradayBars(instrumentId, interval, start, end)
+        return JsonCodec.writeObject(
+            "instrumentId" to instrumentId,
+            "interval" to interval,
+            "bars" to bars.map { it.toMap() }
+        )
+    }
+
+    fun ownOrders(participantId: String, openOnly: Boolean): String {
+        return JsonCodec.writeObject(
+            "participantId" to participantId,
+            "orders" to orderService.ordersForParticipant(participantId, openOnly).map { it.toMap() }
+        )
+    }
+
     private fun toJson(result: SubmitOrderResult): String {
         val accepted = result.accepted
         if (accepted != null) {
@@ -395,6 +421,27 @@ class PlatformApi(
         "price" to price,
         "currency" to currency,
         "occurredAt" to occurredAt
+    )
+
+    private fun IntradayBar.toMap(): Map<String, Any> = mapOf(
+        "instrumentId" to instrumentId,
+        "start" to start,
+        "end" to end,
+        "open" to open,
+        "high" to high,
+        "low" to low,
+        "close" to close,
+        "volume" to volume
+    )
+
+    private fun OwnOrderView.toMap(): Map<String, Any> = mapOf(
+        "orderId" to orderId,
+        "instrumentId" to instrumentId,
+        "side" to side,
+        "quantityUnits" to quantityUnits,
+        "remainingQuantityUnits" to remainingQuantityUnits,
+        "limitPrice" to limitPrice,
+        "status" to status
     )
 
     private fun MarketDataSnapshot.toMap(): Map<String, Any> = mapOf(

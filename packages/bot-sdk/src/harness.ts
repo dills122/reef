@@ -503,7 +503,7 @@ function isOrderAction(action: BotActionV1): boolean {
   return action.type !== "noop";
 }
 
-function safeModifyOrder(
+export function safeModifyOrder(
   order: Parameters<BotActionFactoryV1["modify"]>[0],
   currentOrders: readonly OwnOrderV1[],
   actions: BotActionFactoryV1,
@@ -516,7 +516,7 @@ function safeModifyOrder(
   return { ok: true, value: actions.modify(order) };
 }
 
-function safeCancelOrder(
+export function safeCancelOrder(
   order: Parameters<BotActionFactoryV1["cancel"]>[0],
   currentOrders: readonly OwnOrderV1[],
   actions: BotActionFactoryV1,
@@ -549,7 +549,7 @@ function validateOwnOrderAction(
   return undefined;
 }
 
-function createConfig(values: Record<string, string | number | boolean>): BotConfigV1 {
+export function createConfig(values: Record<string, string | number | boolean>): BotConfigV1 {
   return {
     string: (key) => requiredValue(values, key, "string"),
     number: (key) => requiredValue(values, key, "number"),
@@ -587,7 +587,7 @@ function optionalValue<T extends "string" | "number" | "boolean">(
   return value as T extends "string" ? string : T extends "number" ? number : boolean;
 }
 
-function createSeededRandom(seed: number): BotRandomV1 {
+export function createSeededRandom(seed: number): BotRandomV1 {
   let state = seed >>> 0;
   return {
     next() {
@@ -601,7 +601,7 @@ function createSeededRandom(seed: number): BotRandomV1 {
   };
 }
 
-function createLogger(logs: BotLogEntryV1[]): BotLoggerV1 {
+export function createLogger(logs: BotLogEntryV1[]): BotLoggerV1 {
   return {
     info: (message, fields) => logs.push(logEntry("info", message, fields)),
     warn: (message, fields) => logs.push(logEntry("warn", message, fields)),

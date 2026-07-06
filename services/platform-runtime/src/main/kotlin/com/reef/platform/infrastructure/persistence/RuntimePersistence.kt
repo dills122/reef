@@ -3,6 +3,8 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PublicTradeTapeEntry
@@ -290,6 +292,12 @@ interface RuntimePersistence {
     fun recentTrades(limit: Int): List<TradeCreated>
     fun tradesForOrder(orderId: String): List<TradeCreated>
     fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long? = null): List<PublicTradeTapeEntry> {
+        return emptyList()
+    }
+    fun intradayBars(instrumentId: String, interval: String, start: String, end: String): List<IntradayBar> {
+        return emptyList()
+    }
+    fun ordersForParticipant(participantId: String, openOnly: Boolean): List<OwnOrderView> {
         return emptyList()
     }
     fun eventsForOrder(orderId: String): List<RuntimeEvent>
