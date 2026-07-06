@@ -202,7 +202,7 @@ This slice is good for the current local persistence milestone:
 - The materializer had no failed, ack-failed, or unsupported records in either passing run.
 - Mixed submit/modify/cancel traffic works through the durable command stream and compact canonical persistence path.
 
-This does not prove the downstream UI/read-model projection layer is complete. Normalized `orders`, `trades`, `executions`, `runtime_events`, and UI tables remain downstream projections from compact canonical rows/events. Full order-table reconstruction from event batches still requires either submit command metadata in `VenueEventBatch` or an explicit durable command-payload join.
+This does not prove the downstream UI/read-model projection layer is complete. Normalized `orders`, `trades`, `executions`, `runtime_events`, and UI tables remain downstream projections from compact canonical rows/events. Follow-up work after this result moved the required submit order metadata into the durable event-batch outcome as a compact `acceptedOrder` fact, with the command-payload join kept as a fallback.
 
 ## Next Testing Gates
 

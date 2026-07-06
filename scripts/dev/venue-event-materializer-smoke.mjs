@@ -18,7 +18,7 @@ const materializerUrl = env(
 const waitTimeoutSeconds = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
 const materializerTimeoutMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_TIMEOUT_MS", "60000"));
 const materializerPollMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_POLL_MS", "1000"));
-const expectOrderRead = env("DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW", "0") === "1";
+const expectOrderRead = env("DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW", "1") !== "0";
 const projectionName = env("DEV_VENUE_EVENT_MATERIALIZER_PROJECTION_NAME", `runtime-normalized-venue-outcomes-${smokeId}`);
 const streamToken = smokeId.replace(/[^A-Za-z0-9_-]/g, "_");
 

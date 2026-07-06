@@ -136,7 +136,7 @@ Current important implementation pieces:
 - `/api/v1/commands/{commandId}` prefers canonical command outcomes when present and falls back to ingress/status surfaces while materialization catches up.
 - Compact command-outcome projection can materialize submit results and lifecycle runtime events from event-batch outcomes without returning Postgres to the matching-engine hot path.
 - Normalized orders, executions, trades, runtime events, UI views, metrics, and leaderboards remain downstream projections.
-- Full order-table projection from this path needs original submit command metadata in the event batch or a deliberate durable command-payload join.
+- Full order-table projection from this path uses compact submit command metadata carried in the event-batch outcome, with the durable command-payload join retained only as a fallback for older payloads.
 
 ## Target Direction
 

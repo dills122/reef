@@ -294,11 +294,13 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
 			return processedOutcome{DecodeError: fmt.Sprintf("decode submit command: %v", err)}, true
 		}
+		result := p.service.SubmitOrder(command)
+		result.AcceptedOrder = acceptedOrderFact(command, result)
 		return processedOutcome{
 			CommandID:    command.CommandID,
 			InstrumentID: command.InstrumentID,
 			OrderID:      command.OrderID,
-			Result:       p.service.SubmitOrder(command),
+			Result:       result,
 		}, true
 	case "ModifyOrder":
 		var command domain.ModifyOrder
@@ -324,6 +326,39 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 		}, true
 	default:
 		return processedOutcome{}, false
+	}
+}
+
+func acceptedOrderFact(command domain.SubmitOrder, result domain.SubmitOrderResult) *domain.AcceptedOrderFact {
+	if strings.TrimSpace(command.OrderID) == "" ||
+		strings.TrimSpace(command.InstrumentID) == "" ||
+		strings.TrimSpace(command.ParticipantID) == "" ||
+		strings.TrimSpace(command.AccountID) == "" {
+		return nil
+	}
+
+	engineOrderID := ""
+	occurredAt := command.OccurredAt
+	if result.Accepted != nil {
+		engineOrderID = result.Accepted.EngineOrderID
+		occurredAt = result.Accepted.OccurredAt
+	} else if result.Rejected != nil {
+		occurredAt = result.Rejected.OccurredAt
+	}
+
+	return &domain.AcceptedOrderFact{
+		OrderID:       command.OrderID,
+		EngineOrderID: engineOrderID,
+		InstrumentID:  command.InstrumentID,
+		ParticipantID: command.ParticipantID,
+		AccountID:     command.AccountID,
+		Side:          command.Side,
+		OrderType:     command.OrderType,
+		QuantityUnits: command.QuantityUnits,
+		LimitPrice:    command.LimitPrice,
+		Currency:      command.Currency,
+		TimeInForce:   command.TimeInForce,
+		AcceptedAt:    occurredAt,
 	}
 }
 

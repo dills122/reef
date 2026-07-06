@@ -65,6 +65,12 @@ Current design read:
 3. Named profile validation should run before throughput work so a no-op or unbounded in-memory diagnostic setting cannot be mistaken for a durable production-like result.
 4. Defer the next long soak until short durable gates are clean locally; run the longer soak on DO where CPU, network, disk, and container restart behavior match the intended deployment more closely.
 
+No-run cleanup after this checkpoint:
+
+- durable `VenueEventBatch` submit outcomes now carry the compact `acceptedOrder` projection fact needed to rebuild full order rows without `command_log.command_payloads`; the side-table join remains a compatibility fallback.
+- the materializer soak profile now requires direct-stream and materializer failure checks plus zero accepted/acked and accepted/materialized completion-gap tolerances.
+- the venue-event materializer smoke should now prove order read-model reconstruction by default; the follow-up hardware work is to rerun the smoke and then the same short failed materializer stress before any long DO soak.
+
 ## Aged-State Soak Learnings (May 26, 2026)
 
 From a 30-minute fixed-load soak (`capacity-baseline`, `capacity-heavy`, `2500 rps`, `workers=128`):

@@ -56,6 +56,16 @@ func TestProcessorPublishesEventBatchBeforeAck(t *testing.T) {
 	if batch.Outcomes[0].CommandID != "cmd-1" || batch.Outcomes[0].Status != "accepted" {
 		t.Fatalf("unexpected outcome %#v", batch.Outcomes[0])
 	}
+	acceptedOrder := batch.Outcomes[0].Result.AcceptedOrder
+	if acceptedOrder == nil {
+		t.Fatal("expected durable outcome to include acceptedOrder projection fact")
+	}
+	if acceptedOrder.InstrumentID != "STK001" ||
+		acceptedOrder.ParticipantID != "participant-1" ||
+		acceptedOrder.AccountID != "account-1" ||
+		acceptedOrder.QuantityUnits != "100" {
+		t.Fatalf("unexpected acceptedOrder projection fact %#v", acceptedOrder)
+	}
 	if delivery.acked != 1 {
 		t.Fatalf("expected delivery ack after event publish, got %d", delivery.acked)
 	}

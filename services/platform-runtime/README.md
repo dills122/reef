@@ -82,6 +82,7 @@ External boundary config:
 - `RUNTIME_PERSISTENCE=inmemory|postgres|noop` (`noop` is benchmark-only: keeps reference/auth setup data but drops command outcomes, orders, trades, events, canonical facts, and projections)
 - `STREAM_ACK_INTAKE_STORE=postgres|inmemory` selects stream-ack idempotency/intake reservation storage. For no-DB long soaks with `inmemory`, keep `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES` positive to bound replay-window memory and use `STREAM_ACK_INMEMORY_INTAKE_SHARDS` to reduce monitor contention.
 - `STREAM_ACK_PUBLISHER=stream|log|noop` selects the stream-ack publisher override. `noop` is benchmark-only and must not be used for durable acceptance claims because the response no longer proves broker append.
+- `PLATFORM_RUNTIME_ROLE=materializer` consumes durable venue-event batches and persists compact canonical command outcomes. Submit outcome payloads carry the `acceptedOrder` projection fact, so no-DB direct-consume projection can rebuild order rows without enabling `command_log.command_payloads`.
 - `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true|false` (code default `false`; local compose default `true`; legacy mutation and reference-data POST routes also require `X-Reef-Internal-Route: true`)
 - `RUNTIME_DB_BOOTSTRAP_MODE=compat|validate` (Docker/local default `validate`; use `compat` only for local repair/debug)
 

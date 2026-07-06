@@ -265,8 +265,8 @@ Short-run cleanup gates before another long soak:
 Smoke caveats:
 
 - `make dev-smoke-venue-event-materializer` uses isolated Redpanda command/event topics per run so retained local topic backlog does not hide the command under test.
-- The smoke proves durable API append, matching-engine direct consume/ack, venue-event batch publish, materializer canonical outcome persistence, and target-row projection idempotency.
-- The no-DB smoke does not require an order read-model row by default because `EXTERNAL_API_COMMAND_LOG_MODE=disabled` means command payload side-table data is unavailable to reconstruct full accepted order rows. Set `DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW=1` only when payload capture is intentionally enabled.
+- The smoke proves durable API append, matching-engine direct consume/ack, venue-event batch publish, materializer canonical outcome persistence, target-row projection idempotency, and order read-model reconstruction.
+- No-DB direct-consume projection does not depend on `command_log.command_payloads`: submit outcomes in the durable event batch carry a compact `acceptedOrder` projection fact. Set `DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW=0` only when intentionally debugging older payload shapes.
 
 ## Current Capacity Read
 

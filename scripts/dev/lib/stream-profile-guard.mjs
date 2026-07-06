@@ -48,7 +48,10 @@ export function validateStreamProfile(profileName, options = {}) {
     expect("VENUE_EVENT_MATERIALIZER_ENABLED", "true", issues);
     expect("DEV_STRESS_CAPTURE_STREAM_DIRECT", "1", issues);
     expect("DEV_STRESS_CAPTURE_VENUE_EVENT_MATERIALIZER", "1", issues);
+    expect("DEV_STRESS_FAIL_ON_STREAM_DIRECT_FAILURES", "1", issues);
     expect("DEV_STRESS_FAIL_ON_VENUE_EVENT_MATERIALIZER_FAILURES", "1", issues);
+    expect("DEV_STRESS_MAX_STREAM_DIRECT_COMPLETION_GAP", "0", issues);
+    expect("DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_COMPLETION_GAP", "0", issues);
     expectPositiveInt("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", issues);
     expectPositiveInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", issues);
   } else {
@@ -76,6 +79,10 @@ export function printStreamProfileSummary(profileName) {
     "MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS",
     "MATCHING_ENGINE_EVENT_STREAM",
     "VENUE_EVENT_MATERIALIZER_ENABLED",
+    "DEV_STRESS_FAIL_ON_STREAM_DIRECT_FAILURES",
+    "DEV_STRESS_MAX_STREAM_DIRECT_COMPLETION_GAP",
+    "DEV_STRESS_FAIL_ON_VENUE_EVENT_MATERIALIZER_FAILURES",
+    "DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_COMPLETION_GAP",
   ];
   console.log(`stream profile ${profile} validated settings:`);
   for (const key of keys) {
