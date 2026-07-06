@@ -12,6 +12,7 @@ class MarketDataProjectionWorker(
     private val projectionName: String = RuntimeEnv.string("MARKET_DATA_PROJECTOR_PROJECTION_NAME", "market-data-top-of-book"),
     private val sourceProjectionName: String = RuntimeEnv.string("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", "runtime-normalized-venue-outcomes"),
     private val pollIntervalMs: Long = RuntimeEnv.long("MARKET_DATA_PROJECTOR_POLL_MS", 250L, min = 1L),
+    private val batchSize: Int = RuntimeEnv.int("MARKET_DATA_PROJECTOR_BATCH_SIZE", 500, min = 1),
     private val workerName: String = "reef-market-data-projector"
 ) {
     private val running = AtomicBoolean(false)
@@ -39,10 +40,10 @@ class MarketDataProjectionWorker(
 
     fun processOnce(): Long {
         return try {
-            HotPathMetrics.time("marketDataProjector.refreshSnapshots") {
-                api.refreshMarketDataSnapshotsCount(projectionName, sourceProjectionName)
-            }.also { refreshed ->
-                MarketDataProjectionMetrics.recordRefreshed(refreshed)
+            HotPathMetrics.time("marketDataProjector.projectSnapshots") {
+                api.projectMarketDataSnapshotsCount(projectionName, sourceProjectionName, batchSize)
+            }.also { processed ->
+                MarketDataProjectionMetrics.recordProcessed(processed)
             }
         } catch (ex: Exception) {
             MarketDataProjectionMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
@@ -52,27 +53,27 @@ class MarketDataProjectionWorker(
 }
 
 data class MarketDataProjectionStats(
-    val refreshes: Long,
-    val refreshedRows: Long,
+    val cycles: Long,
+    val processedRows: Long,
     val failed: Long,
-    val lastRefreshedAt: String,
+    val lastProcessedAt: String,
     val lastFailedAt: String,
     val lastError: String
 )
 
 object MarketDataProjectionMetrics {
-    private val refreshes = AtomicLong(0)
-    private val refreshedRows = AtomicLong(0)
+    private val cycles = AtomicLong(0)
+    private val processedRows = AtomicLong(0)
     private val failed = AtomicLong(0)
-    private val lastRefreshedAtEpochMs = AtomicLong(0)
+    private val lastProcessedAtEpochMs = AtomicLong(0)
     private val lastFailedAtEpochMs = AtomicLong(0)
     @Volatile
     private var lastError: String = ""
 
-    fun recordRefreshed(rows: Long) {
-        refreshes.incrementAndGet()
-        refreshedRows.addAndGet(rows)
-        lastRefreshedAtEpochMs.set(System.currentTimeMillis())
+    fun recordProcessed(rows: Long) {
+        cycles.incrementAndGet()
+        processedRows.addAndGet(rows)
+        lastProcessedAtEpochMs.set(System.currentTimeMillis())
     }
 
     fun recordFailed(error: String) {
@@ -83,20 +84,20 @@ object MarketDataProjectionMetrics {
 
     fun snapshot(): MarketDataProjectionStats {
         return MarketDataProjectionStats(
-            refreshes = refreshes.get(),
-            refreshedRows = refreshedRows.get(),
+            cycles = cycles.get(),
+            processedRows = processedRows.get(),
             failed = failed.get(),
-            lastRefreshedAt = instantString(lastRefreshedAtEpochMs.get()),
+            lastProcessedAt = instantString(lastProcessedAtEpochMs.get()),
             lastFailedAt = instantString(lastFailedAtEpochMs.get()),
             lastError = lastError
         )
     }
 
     fun resetForTests() {
-        refreshes.set(0)
-        refreshedRows.set(0)
+        cycles.set(0)
+        processedRows.set(0)
         failed.set(0)
-        lastRefreshedAtEpochMs.set(0)
+        lastProcessedAtEpochMs.set(0)
         lastFailedAtEpochMs.set(0)
         lastError = ""
     }

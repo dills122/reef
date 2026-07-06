@@ -2714,6 +2714,36 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun projectMarketDataSnapshots(
+        projectionName: String,
+        sourceProjectionName: String,
+        batchSize: Int
+    ): Long {
+        if (batchSize <= 0) return 0
+        projectOrderLifecycleState(batchSize)
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val lastPartitionSequence = sourceStatus.watermarks
+            .filter { it.partitionId >= 0 }
+            .maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        projectionConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT ${names.projectMarketDataSnapshotsFunction}(?, ?, ?, ?, ?)
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, projectionName)
+                ps.setString(2, sourceProjectionName)
+                ps.setLong(3, lastPartitionSequence)
+                ps.setLong(4, sourceStatus.lag)
+                ps.setInt(5, batchSize)
+                ps.executeQuery().use { rs ->
+                    rs.next()
+                    return rs.getLong(1)
+                }
+            }
+        }
+    }
+
     override fun marketDataSnapshot(instrumentId: String, projectionName: String): MarketDataSnapshot? {
         return projectionQueryList(
             """

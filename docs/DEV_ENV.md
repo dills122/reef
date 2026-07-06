@@ -73,11 +73,12 @@ curl "http://127.0.0.1:8080/api/v1/market-data/depth/AAPL?levels=5"
 
 The snapshot refresh path rebuilds `runtime.order_lifecycle_state` before updating `runtime.market_data_snapshots`; the explicit lifecycle-state endpoint is useful for inspection and repair. Bounded depth reads aggregate remaining open lifecycle quantity by price at request time.
 
-An opt-in background market-data projector can refresh top-of-book snapshots on background-capable runtime roles:
+An opt-in background market-data projector can keep top-of-book snapshots current on background-capable runtime roles. It processes only instruments whose order book changed since the last cycle (bounded by the batch size), not a full recompute of every instrument:
 
 ```bash
 MARKET_DATA_PROJECTOR_ENABLED=true \
 MARKET_DATA_PROJECTOR_POLL_MS=250 \
+MARKET_DATA_PROJECTOR_BATCH_SIZE=500 \
 MARKET_DATA_PROJECTOR_PROJECTION_NAME=market-data-top-of-book \
 MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME=runtime-normalized-venue-outcomes \
 make dev-up

@@ -34,6 +34,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val marketDataSnapshots = linkedMapOf<String, MarketDataSnapshot>()
     private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
     private val orderLifecycleDirty = linkedSetOf<String>()
+    private val marketDataSnapshotDirty = linkedSetOf<String>()
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         submitResults[commandId] = result
@@ -330,6 +331,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         batch.forEach { orderId ->
             orders[orderId]?.let { order ->
                 orderLifecycleStates[orderId] = computeLifecycleState(order)
+                marketDataSnapshotDirty.add(order.instrumentId)
             }
             orderLifecycleDirty.remove(orderId)
         }
@@ -426,6 +428,55 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 )
             }
         return marketDataSnapshots.keys.count { it.startsWith("$projectionName:") }.toLong()
+    }
+
+    override fun projectMarketDataSnapshots(
+        projectionName: String,
+        sourceProjectionName: String,
+        batchSize: Int
+    ): Long {
+        if (batchSize <= 0) return 0
+        projectOrderLifecycleState(batchSize)
+        val batch = marketDataSnapshotDirty.take(batchSize)
+        val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
+        val sourceWatermarks = sourceStatus.watermarks.filter { it.partitionId >= 0 }
+        val lastPartitionSequence = sourceWatermarks.maxOfOrNull { it.lastPartitionSequence } ?: 0L
+        val updatedAt = sourceWatermarks.lastOrNull { it.updatedAt.isNotBlank() }?.updatedAt ?: Instant.now().toString()
+        batch.forEach { instrumentId ->
+            val instrumentOrders = orderLifecycleStates.values.filter {
+                it.instrumentId == instrumentId &&
+                    it.orderType == "LIMIT" &&
+                    it.limitPrice.toBigDecimalOrNull() != null &&
+                    it.remainingQuantityUnits.toBigDecimalOrNull() != null &&
+                    it.remainingQuantityUnits.toBigDecimalOrNull()!! > BigDecimal.ZERO &&
+                    it.status in OpenLifecycleStatuses
+            }
+            if (instrumentOrders.isEmpty()) {
+                marketDataSnapshots.remove("$projectionName:$instrumentId")
+            } else {
+                val bids = instrumentOrders.filter { it.side == "BUY" }
+                val asks = instrumentOrders.filter { it.side == "SELL" }
+                val bestBid = bids.maxByOrNull { it.limitPrice.toBigDecimalOrNull() ?: BigDecimal.ZERO }
+                val bestAsk = asks.minByOrNull { it.limitPrice.toBigDecimalOrNull() ?: BigDecimal.ZERO }
+                val bestBidPrice = bestBid?.limitPrice.orEmpty()
+                val bestAskPrice = bestAsk?.limitPrice.orEmpty()
+                marketDataSnapshots["$projectionName:$instrumentId"] = MarketDataSnapshot(
+                    projectionName = projectionName,
+                    sourceProjectionName = sourceProjectionName,
+                    instrumentId = instrumentId,
+                    bestBidPrice = bestBidPrice,
+                    bestBidQuantity = aggregateLifecycleQuantity(bids, bestBidPrice),
+                    bestAskPrice = bestAskPrice,
+                    bestAskQuantity = aggregateLifecycleQuantity(asks, bestAskPrice),
+                    currency = instrumentOrders.firstOrNull { it.currency.isNotBlank() }?.currency.orEmpty(),
+                    lastPartitionSequence = lastPartitionSequence,
+                    lag = sourceStatus.lag,
+                    updatedAt = updatedAt
+                )
+            }
+            marketDataSnapshotDirty.remove(instrumentId)
+        }
+        return batch.size.toLong()
     }
 
     override fun marketDataSnapshot(instrumentId: String, projectionName: String): MarketDataSnapshot? {

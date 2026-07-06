@@ -261,6 +261,13 @@ interface RuntimePersistence {
     ): Long {
         return 0
     }
+    fun projectMarketDataSnapshots(
+        projectionName: String = "market-data-top-of-book",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes",
+        batchSize: Int = 500
+    ): Long {
+        return refreshMarketDataSnapshots(projectionName, sourceProjectionName)
+    }
     fun marketDataSnapshot(
         instrumentId: String,
         projectionName: String = "market-data-top-of-book"
