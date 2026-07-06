@@ -90,13 +90,18 @@ fun CommandLogRecord.toStatusView(processingMode: CommandProcessingMode): Comman
 }
 
 fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
-    val responseStatus = if (resultStatus.equals("rejected", ignoreCase = true)) 422 else 200
+    val failed = resultStatus.equals("failed", ignoreCase = true)
+    val responseStatus = when {
+        failed -> 500
+        resultStatus.equals("rejected", ignoreCase = true) -> 422
+        else -> 200
+    }
     return CommandStatusView(
         commandId = commandId,
         clientId = "",
         route = "",
         idempotencyKey = "",
-        status = CommandLogStatus.COMPLETED,
+        status = if (failed) CommandLogStatus.FAILED else CommandLogStatus.COMPLETED,
         processingMode = CommandProcessingMode.StreamAck,
         responseStatus = responseStatus,
         responsePayloadJson = resultPayloadJson,

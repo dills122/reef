@@ -190,14 +190,10 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	p.stats.Fetched.Add(uint64(len(deliveries)))
 	p.stats.LastFetchedAt.Store(now)
 
-	batch, ackable, terminal, err := p.buildBatch(deliveries, now)
+	batch, ackable, err := p.buildBatch(deliveries, now)
 	if err != nil {
 		p.nakAll(ackable)
 		return len(deliveries), err
-	}
-	if len(ackable) == 0 {
-		p.termAll(terminal)
-		return len(deliveries), nil
 	}
 	if err := p.publisher.PublishEventBatch(ctx, batch); err != nil {
 		p.nakAll(ackable)
@@ -205,13 +201,11 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	}
 	p.stats.Published.Add(uint64(len(batch.Outcomes)))
 	p.ackAll(ackable)
-	p.termAll(terminal)
 	return len(deliveries), nil
 }
 
-func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, []CommandDelivery, error) {
+func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, error) {
 	ackable := make([]CommandDelivery, 0, len(deliveries))
-	terminal := make([]CommandDelivery, 0)
 	outcomes := make([]CommandOutcomeFact, 0, len(deliveries))
 	firstSeq := uint64(0)
 	lastSeq := uint64(0)
@@ -220,47 +214,47 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	for _, delivery := range deliveries {
 		commandType := commandTypeFromSubject(delivery.Subject())
 		outcome, supported := p.processDelivery(delivery, commandType)
-		if !supported {
-			terminal = append(terminal, delivery)
+
+		var fact CommandOutcomeFact
+		switch {
+		case !supported:
 			p.stats.Unsupported.Add(1)
-			continue
-		}
-		if outcome.DecodeError != "" {
-			terminal = append(terminal, delivery)
+			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "UNSUPPORTED_COMMAND_TYPE", fmt.Sprintf("unsupported command type: %s", commandType))
+		case outcome.DecodeError != "":
 			p.stats.Failed.Add(1)
 			p.stats.LastError.Store(outcome.DecodeError)
-			continue
+			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "POISON_COMMAND_DECODE_ERROR", outcome.DecodeError)
+		default:
+			status := "rejected"
+			if outcome.Result.Accepted != nil {
+				status = "accepted"
+			}
+			fact = CommandOutcomeFact{
+				CommandID:      outcome.CommandID,
+				CommandType:    commandType,
+				StreamSequence: delivery.StreamSequence(),
+				DeliveredCount: delivery.DeliveredCount(),
+				PayloadHash:    sha256Hex(delivery.Data()),
+				InstrumentID:   outcome.InstrumentID,
+				OrderID:        outcome.OrderID,
+				Status:         status,
+				Result:         outcome.Result,
+			}
 		}
 
-		status := "rejected"
-		if outcome.Result.Accepted != nil {
-			status = "accepted"
+		if firstSeq == 0 || fact.StreamSequence < firstSeq {
+			firstSeq = fact.StreamSequence
 		}
-		seq := delivery.StreamSequence()
-		if firstSeq == 0 || seq < firstSeq {
-			firstSeq = seq
+		if fact.StreamSequence > lastSeq {
+			lastSeq = fact.StreamSequence
 		}
-		if seq > lastSeq {
-			lastSeq = seq
-		}
-		payloadHash := sha256Hex(delivery.Data())
-		checksumInput.WriteString(fmt.Sprintf("%d:%s:%s;", seq, outcome.CommandID, payloadHash))
-		outcomes = append(outcomes, CommandOutcomeFact{
-			CommandID:      outcome.CommandID,
-			CommandType:    commandType,
-			StreamSequence: seq,
-			DeliveredCount: delivery.DeliveredCount(),
-			PayloadHash:    payloadHash,
-			InstrumentID:   outcome.InstrumentID,
-			OrderID:        outcome.OrderID,
-			Status:         status,
-			Result:         outcome.Result,
-		})
+		checksumInput.WriteString(fmt.Sprintf("%d:%s:%s;", fact.StreamSequence, fact.CommandID, fact.PayloadHash))
+		outcomes = append(outcomes, fact)
 		ackable = append(ackable, delivery)
 	}
 
 	if len(outcomes) == 0 {
-		return VenueEventBatch{}, ackable, terminal, nil
+		return VenueEventBatch{}, ackable, nil
 	}
 	batch := VenueEventBatch{
 		BatchID:         fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
@@ -276,7 +270,40 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		Outcomes:        outcomes,
 	}
 	p.stats.Processed.Add(uint64(len(outcomes)))
-	return batch, ackable, terminal, nil
+	return batch, ackable, nil
+}
+
+func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType string, commandID string, code string, reason string) CommandOutcomeFact {
+	if commandID == "" {
+		commandID = bestEffortCommandID(delivery.Data())
+	}
+	return CommandOutcomeFact{
+		CommandID:      commandID,
+		CommandType:    commandType,
+		StreamSequence: delivery.StreamSequence(),
+		DeliveredCount: delivery.DeliveredCount(),
+		PayloadHash:    sha256Hex(delivery.Data()),
+		InstrumentID:   instrumentIDFromSubject(delivery.Subject()),
+		Status:         "failed",
+		Result: domain.SubmitOrderResult{
+			Rejected: &domain.OrderRejected{
+				Code:   code,
+				Reason: reason,
+			},
+		},
+	}
+}
+
+type commandIdentity struct {
+	CommandID string `json:"commandId"`
+}
+
+func bestEffortCommandID(data []byte) string {
+	var identity commandIdentity
+	if err := json.Unmarshal(data, &identity); err == nil {
+		return identity.CommandID
+	}
+	return ""
 }
 
 type processedOutcome struct {
@@ -292,7 +319,10 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 	case "SubmitOrder":
 		var command domain.SubmitOrder
 		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
-			return processedOutcome{DecodeError: fmt.Sprintf("decode submit command: %v", err)}, true
+			return processedOutcome{
+				CommandID:   bestEffortCommandID(delivery.Data()),
+				DecodeError: fmt.Sprintf("decode submit command: %v", err),
+			}, true
 		}
 		result := p.service.SubmitOrder(command)
 		result.AcceptedOrder = acceptedOrderFact(command, result)
@@ -305,7 +335,10 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 	case "ModifyOrder":
 		var command domain.ModifyOrder
 		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
-			return processedOutcome{DecodeError: fmt.Sprintf("decode modify command: %v", err)}, true
+			return processedOutcome{
+				CommandID:   bestEffortCommandID(delivery.Data()),
+				DecodeError: fmt.Sprintf("decode modify command: %v", err),
+			}, true
 		}
 		return processedOutcome{
 			CommandID:    command.CommandID,
@@ -316,7 +349,10 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 	case "CancelOrder":
 		var command domain.CancelOrder
 		if err := json.Unmarshal(delivery.Data(), &command); err != nil {
-			return processedOutcome{DecodeError: fmt.Sprintf("decode cancel command: %v", err)}, true
+			return processedOutcome{
+				CommandID:   bestEffortCommandID(delivery.Data()),
+				DecodeError: fmt.Sprintf("decode cancel command: %v", err),
+			}, true
 		}
 		return processedOutcome{
 			CommandID:    command.CommandID,
@@ -325,7 +361,7 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 			Result:       p.service.CancelOrder(command),
 		}, true
 	default:
-		return processedOutcome{}, false
+		return processedOutcome{CommandID: bestEffortCommandID(delivery.Data())}, false
 	}
 }
 
@@ -391,15 +427,6 @@ func (p *Processor) ackAll(deliveries []CommandDelivery) {
 		}
 		p.stats.Acked.Add(1)
 		p.stats.LastAckedAt.Store(time.Now().UTC().Format(time.RFC3339Nano))
-	}
-}
-
-func (p *Processor) termAll(deliveries []CommandDelivery) {
-	for _, delivery := range deliveries {
-		if termErr := delivery.Term(); termErr != nil {
-			p.recordFailure(termErr)
-		}
-		p.stats.Termed.Add(1)
 	}
 }
 

@@ -625,7 +625,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     private fun CanonicalCommandOutcome.toSubmitOrderResult(): SubmitOrderResult {
-        return if (resultStatus == "rejected") {
+        return if (resultStatus == "rejected" || resultStatus == "failed") {
             SubmitOrderResult(
                 rejected = EngineOrderRejected(
                     eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
@@ -648,7 +648,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     private fun CanonicalCommandOutcome.toRuntimeEvent(): RuntimeEvent {
-        val rejected = resultStatus == "rejected"
+        val rejected = resultStatus == "rejected" || resultStatus == "failed"
         return RuntimeEvent(
             eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" },
             eventType = lifecycleEventType(commandType, rejected),

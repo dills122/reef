@@ -225,11 +225,9 @@ object StreamCommandResponse {
         return JsonCodec.writeObject(
             "commandId" to reference.commandId,
             "status" to "ACCEPTED",
-            "processingMode" to CommandProcessingMode.StreamAck.configValue,
-            "stream" to reference.streamName,
-            "subject" to reference.subject,
-            "partition" to reference.partition,
-            "streamSequence" to reference.streamSequence
+            "statusUrl" to "/api/v1/commands/${reference.commandId}",
+            "acceptedAt" to java.time.Instant.now().toString(),
+            "processingMode" to CommandProcessingMode.StreamAck.configValue
         )
     }
 }
