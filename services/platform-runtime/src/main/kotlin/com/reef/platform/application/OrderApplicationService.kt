@@ -1,5 +1,6 @@
 package com.reef.platform.application
 
+import com.reef.platform.api.JsonCodec
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -596,22 +597,7 @@ class OrderApplicationService(
     }
 
     private fun commandPayload(commandId: String): String {
-        return """{"commandId":"${escapeJson(commandId)}"}"""
-    }
-
-    private fun escapeJson(value: String): String {
-        return buildString(value.length + 8) {
-            value.forEach { ch ->
-                when (ch) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(ch)
-                }
-            }
-        }
+        return JsonCodec.writeObject("commandId" to commandId)
     }
 
     private fun traceId(traceId: String, orderId: String): String {

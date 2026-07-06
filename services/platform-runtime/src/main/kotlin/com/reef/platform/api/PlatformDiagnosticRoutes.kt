@@ -1,5 +1,8 @@
 package com.reef.platform.api
 
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 
 internal class PlatformDiagnosticRoutes(
@@ -189,9 +192,17 @@ internal fun queryValue(query: String?, key: String): String {
     val values = query.split("&")
     for (value in values) {
         val parts = value.split("=", limit = 2)
-        if (parts.size == 2 && parts[0] == key) {
-            return parts[1]
+        if (parts.size == 2 && urlDecode(parts[0]) == key) {
+            return urlDecode(parts[1])
         }
     }
     return ""
+}
+
+private fun urlDecode(value: String): String {
+    return try {
+        URLDecoder.decode(value, StandardCharsets.UTF_8)
+    } catch (_: IllegalArgumentException) {
+        value
+    }
 }

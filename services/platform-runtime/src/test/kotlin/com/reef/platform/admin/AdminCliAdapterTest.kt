@@ -17,6 +17,7 @@ import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
+import com.reef.platform.api.JsonCodec
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -93,6 +94,16 @@ class AdminCliAdapterTest {
 
         assertContains(cli.execute(listOf("price-collar-set", "AAPL", "bad", "151000000000")), "usage: price-collar-set")
         assertContains(cli.execute(listOf("price-collar-set", "AAPL", "151000000000", "150000000000")), "usage: price-collar-set")
+    }
+
+    @Test
+    fun cliJsonResponsesEscapeStringFieldsWithJsonCodec() {
+        val cli = AdminCliAdapter(AdminApplicationService(InMemoryRuntimePersistence()))
+        val response = cli.execute(listOf("actor-roles", "ops-\"quoted\"\nactor"))
+
+        val json = JsonCodec.parseObject(response)
+        assertContains(json.string("actorId"), "quoted")
+        assertContains(response, "\\n")
     }
 }
 

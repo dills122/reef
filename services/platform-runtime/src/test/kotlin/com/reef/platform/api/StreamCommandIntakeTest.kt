@@ -63,6 +63,21 @@ class StreamCommandIntakeTest {
     }
 
     @Test
+    fun envelopeBuilderRejectsMalformedJsonBeforeRoutingValidation() {
+        val result = StreamCommandEnvelopeBuilder.fromRequest(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            body = """{"commandId":"cmd-1""""
+        )
+
+        val error = assertIs<EitherBoundaryError.Error>(result).error
+        assertEquals("INVALID_JSON", error.code)
+        assertEquals(400, error.status)
+        assertEquals("invalid json payload", error.message)
+    }
+
+    @Test
     fun intakeStoreReplaysSamePayloadAndConflictsDifferentPayload() {
         val store = InMemoryStreamCommandIntakeStore()
         val envelope = assertIs<EitherBoundaryError.Envelope>(

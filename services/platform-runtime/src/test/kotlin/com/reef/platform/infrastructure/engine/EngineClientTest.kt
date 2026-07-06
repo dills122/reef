@@ -97,6 +97,18 @@ class EngineClientTest {
     }
 
     @Test
+    fun parseSubmitOrderResultRejectsMalformedOrUnexpectedPayloads() {
+        val client = EngineClient()
+
+        assertFailsWith<IllegalArgumentException> {
+            client.parseSubmitOrderResult("""{"accepted":""")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            client.parseSubmitOrderResult("""{"status":"ok"}""")
+        }
+    }
+
+    @Test
     fun submitOrderThrowsTransportExceptionWhenEngineIsUnavailable() {
         val client = EngineClient("http://127.0.0.1:1")
 

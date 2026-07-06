@@ -2515,6 +2515,37 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun streamAckRejectsMalformedJsonBeforeReserveOrPublish() {
+        val publisher = RecordingStreamCommandPublisher()
+        val intakeStore = InMemoryStreamCommandIntakeStore()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = intakeStore,
+            streamCommandPublisher = publisher
+        )
+        try {
+            val response = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-stream-malformed"
+                ),
+                body = """{"commandId":"cmd-stream-malformed""""
+            )
+
+            assertEquals(400, response.status)
+            assertContains(response.body, "\"code\":\"VALIDATION_ERROR\"")
+            assertContains(response.body, "\"message\":\"invalid json payload\"")
+            assertEquals(0, publisher.published.size)
+            assertEquals(null, intakeStore.findByCommandId("cmd-stream-malformed"))
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun streamAckReturnsUnavailableWhenPublishAckFails() {
         val publisher = RecordingStreamCommandPublisher(fail = true)
         val server = testServerWithGateway(

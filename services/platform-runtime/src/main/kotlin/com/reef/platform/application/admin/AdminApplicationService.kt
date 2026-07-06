@@ -2,6 +2,7 @@ package com.reef.platform.application.admin
 
 import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
+import com.reef.platform.api.JsonCodec
 import com.reef.platform.application.arena.ArenaBotRegistryStore
 import com.reef.platform.application.arena.ArenaBot
 import com.reef.platform.application.arena.ArenaBotMetadata
@@ -458,22 +459,7 @@ class AdminApplicationService(
     }
 
     private fun detailPayload(detail: String): String {
-        return """{"detail":"${escapeJson(detail)}"}"""
-    }
-
-    private fun escapeJson(value: String): String {
-        return buildString(value.length + 8) {
-            value.forEach { ch ->
-                when (ch) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(ch)
-                }
-            }
-        }
+        return JsonCodec.writeObject("detail" to detail)
     }
 
     private fun requirePermission(actor: AdminActor, permission: String) {

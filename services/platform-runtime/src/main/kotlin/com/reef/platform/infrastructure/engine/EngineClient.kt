@@ -117,7 +117,7 @@ class EngineClient : EngineGateway {
     }
 
     internal fun parseSubmitOrderResult(body: String): SubmitOrderResult {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = JsonCodec.parseObject(body)
         if (json.has("accepted")) {
             val accepted = json.obj("accepted")
             return SubmitOrderResult(
@@ -132,6 +132,9 @@ class EngineClient : EngineGateway {
             )
         }
 
+        if (!json.has("rejected")) {
+            throw IllegalArgumentException("engine response must contain accepted or rejected")
+        }
         val rejected = json.obj("rejected")
         return SubmitOrderResult(
             rejected = EngineOrderRejected(

@@ -52,7 +52,12 @@ class OpenBaoProvisioningService(
             .POST(HttpRequest.BodyPublishers.ofString(JsonCodec.writeObject("role" to config.jwtRole, "jwt" to jwt)))
             .build()
         val response = send(request)
-        val clientToken = JsonCodec.parseObjectOrEmpty(response.body()).obj("auth").string("client_token")
+        val json = try {
+            JsonCodec.parseObject(response.body())
+        } catch (ex: IllegalArgumentException) {
+            throw OpenBaoClientException("OpenBao jwt login response was invalid JSON: ${ex.message ?: "invalid json payload"}")
+        }
+        val clientToken = json.obj("auth").string("client_token")
         if (clientToken.isBlank()) {
             throw OpenBaoClientException("OpenBao jwt login response missing auth.client_token")
         }

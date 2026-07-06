@@ -95,6 +95,7 @@ export function scanBotSourceForSandboxViolationsV1(
   policy: BotSandboxPolicyV1 = reefBotHostedSandboxPolicyV1,
 ): readonly BotSandboxViolationV1[] {
   const violations: BotSandboxViolationV1[] = [];
+  const scan = scanSourceSyntax(source);
 
   for (const deniedGlobal of policy.deniedGlobals) {
     if ((deniedGlobal === "setTimeout" || deniedGlobal === "setInterval") && policy.allowTimers) {
@@ -104,8 +105,7 @@ export function scanBotSourceForSandboxViolationsV1(
       continue;
     }
 
-    const pattern = new RegExp(`\\b${escapeRegExp(deniedGlobal)}\\b`);
-    if (pattern.test(source)) {
+    if (scan.globalReferences.has(deniedGlobal)) {
       violations.push({
         code: "sandbox_denied_global",
         message: `Hosted bot source references denied global ${deniedGlobal}.`,
@@ -115,7 +115,7 @@ export function scanBotSourceForSandboxViolationsV1(
     }
   }
 
-  for (const specifier of moduleSpecifiers(source)) {
+  for (const specifier of scan.moduleSpecifiers) {
     if (policy.allowedImportSpecifiers.includes(specifier)) {
       continue;
     }
@@ -133,7 +133,7 @@ export function scanBotSourceForSandboxViolationsV1(
     }
   }
 
-  if (!policy.allowDynamicImport && /\bimport\s*\(/.test(source)) {
+  if (!policy.allowDynamicImport && scan.usesDynamicImport) {
     violations.push({
       code: "sandbox_dynamic_import",
       message: "Hosted bot source uses dynamic import.",
@@ -142,55 +142,113 @@ export function scanBotSourceForSandboxViolationsV1(
     });
   }
 
-  if (!policy.allowDynamicRequire) {
-    for (const expression of requireExpressions(source)) {
-      if (!/^\s*["'][^"']+["']\s*$/.test(expression)) {
-        violations.push({
-          code: "sandbox_dynamic_require",
-          message: "Hosted bot source uses dynamic require().",
-          severity: "error",
-          pattern: "require(",
-        });
-      }
-    }
+  if (!policy.allowDynamicRequire && scan.usesDynamicRequire) {
+    violations.push({
+      code: "sandbox_dynamic_require",
+      message: "Hosted bot source uses dynamic require().",
+      severity: "error",
+      pattern: "require(",
+    });
   }
 
   return violations;
 }
 
-function moduleSpecifiers(source: string): readonly string[] {
-  const specifiers: string[] = [];
+interface SandboxSourceSyntaxScan {
+  readonly moduleSpecifiers: readonly string[];
+  readonly globalReferences: ReadonlySet<string>;
+  readonly usesDynamicImport: boolean;
+  readonly usesDynamicRequire: boolean;
+}
+
+function scanSourceSyntax(source: string): SandboxSourceSyntaxScan {
+  const commentFreeSource = stripComments(source, false);
+  const executableSource = stripComments(source, true);
+  const moduleSpecifiers: string[] = [];
+  const globalReferences = new Set<string>();
+
   const importPattern = /\bimport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?["']([^"']+)["']/g;
-  for (const match of source.matchAll(importPattern)) {
+  for (const match of commentFreeSource.matchAll(importPattern)) {
     const specifier = match[1];
-    if (specifier !== undefined) {
-      specifiers.push(specifier);
-    }
+    if (specifier !== undefined) moduleSpecifiers.push(specifier);
+  }
+
+  const exportPattern = /\bexport\s+(?:type\s+)?(?:[^'"]+\s+from\s+)?["']([^"']+)["']/g;
+  for (const match of commentFreeSource.matchAll(exportPattern)) {
+    const specifier = match[1];
+    if (specifier !== undefined) moduleSpecifiers.push(specifier);
   }
 
   const requirePattern = /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g;
-  for (const match of source.matchAll(requirePattern)) {
+  for (const match of commentFreeSource.matchAll(requirePattern)) {
     const specifier = match[1];
-    if (specifier !== undefined) {
-      specifiers.push(specifier);
+    if (specifier !== undefined) moduleSpecifiers.push(specifier);
+  }
+
+  for (const match of executableSource.matchAll(/\b[A-Za-z_$][\w$]*\b/g)) {
+    const token = match[0];
+    if (!isLikelyPropertyName(executableSource, match.index, token.length)) {
+      globalReferences.add(token);
     }
   }
 
-  return specifiers;
+  return {
+    moduleSpecifiers,
+    globalReferences,
+    usesDynamicImport: /\bimport\s*\(/.test(executableSource),
+    usesDynamicRequire: /\brequire\s*\((?!\s*["'][^"']+["']\s*\))/.test(commentFreeSource),
+  };
 }
 
-function requireExpressions(source: string): readonly string[] {
-  const expressions: string[] = [];
-  const requirePattern = /\brequire\s*\(([^)]*)\)/g;
-  for (const match of source.matchAll(requirePattern)) {
-    const expression = match[1];
-    if (expression !== undefined) {
-      expressions.push(expression);
+function stripComments(source: string, blankStrings: boolean): string {
+  let output = "";
+  let index = 0;
+  while (index < source.length) {
+    const current = source[index];
+    const next = source[index + 1];
+    if (current === "/" && next === "/") {
+      const end = source.indexOf("\n", index + 2);
+      const stop = end === -1 ? source.length : end;
+      output += " ".repeat(stop - index);
+      index = stop;
+      continue;
     }
+    if (current === "/" && next === "*") {
+      const end = source.indexOf("*/", index + 2);
+      const stop = end === -1 ? source.length : end + 2;
+      output += source.slice(index, stop).replace(/[^\n]/g, " ");
+      index = stop;
+      continue;
+    }
+    if (blankStrings && (current === "\"" || current === "'" || current === "`")) {
+      const quote = current;
+      let stop = index + 1;
+      while (stop < source.length) {
+        const char = source[stop];
+        if (char === "\\") {
+          stop += 2;
+          continue;
+        }
+        stop += 1;
+        if (char === quote) break;
+      }
+      output += source.slice(index, stop).replace(/[^\n]/g, " ");
+      index = stop;
+      continue;
+    }
+    output += current;
+    index += 1;
   }
-  return expressions;
+  return output;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function isLikelyPropertyName(source: string, index: number | undefined, length: number): boolean {
+  if (index === undefined) return false;
+  let before = index - 1;
+  while (before >= 0 && /\s/.test(source[before] ?? "")) before -= 1;
+  if (source[before] === ".") return true;
+
+  let after = index + length;
+  while (after < source.length && /\s/.test(source[after] ?? "")) after += 1;
+  return source[after] === ":";
 }

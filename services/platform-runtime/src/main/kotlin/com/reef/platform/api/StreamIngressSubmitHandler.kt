@@ -32,7 +32,16 @@ internal class StreamIngressSubmitHandler(
         }
 
         val route = "/api/v1/orders/submit"
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = try {
+            JsonCodec.parseObject(body)
+        } catch (ex: IllegalArgumentException) {
+            return CompletableFuture.completedFuture(
+                PlatformHotPathResponse(
+                    400,
+                    JsonCodec.writeObject("error" to "INVALID_JSON", "message" to (ex.message ?: "invalid json payload"))
+                )
+            )
+        }
         val commandId = json.string("commandId")
         val traceId = json.string("traceId")
         val correlationId = json.string("correlationId").ifBlank { traceId }

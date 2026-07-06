@@ -11,6 +11,7 @@ import com.reef.platform.api.AccountRiskControlStore
 import com.reef.platform.api.AccountRiskDecision
 import com.reef.platform.api.CommandCircuitBreakerStore
 import com.reef.platform.api.InstrumentPriceCollarStore
+import com.reef.platform.api.JsonCodec
 import com.reef.platform.api.defaultAccountRiskControlStore
 import com.reef.platform.api.defaultCommandCircuitBreakerStore
 import com.reef.platform.api.defaultInstrumentPriceCollarStore
@@ -68,7 +69,7 @@ class AdminCliAdapter(
             "actor-roles" -> {
                 if (args.size < 2) return "usage: actor-roles <actorId>"
                 val roles = adminService.listActorRoles(args[1])
-                """{"rolesCount":${roles.size},"actorId":"${args[1]}"}"""
+                JsonCodec.writeObject("rolesCount" to roles.size, "actorId" to args[1])
             }
             "account-risk-set" -> {
                 if (args.size < 4) return "usage: account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]"
@@ -81,7 +82,13 @@ class AdminCliAdapter(
                     ?: return "usage: account-risk-set <account|bot> <id> <allow|reject|backpressure|disabled-bot> [reason]"
                 val reason = args.drop(4).joinToString(" ")
                 accountRiskControls().upsertControl(scopeType, args[2], decision, reason)
-                """{"status":"ok","command":"account-risk-set","scopeType":"$scopeType","scopeId":"${escapeJson(args[2])}","decision":"${decision.name}"}"""
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "account-risk-set",
+                    "scopeType" to scopeType,
+                    "scopeId" to args[2],
+                    "decision" to decision.name
+                )
             }
             "account-risk-list" -> {
                 val controls = accountRiskControls().listControls()
@@ -102,7 +109,13 @@ class AdminCliAdapter(
                 }
                 val reason = args.drop(4).joinToString(" ")
                 commandCircuitBreakers().setBreaker(scopeType, args[2], tripped, reason)
-                """{"status":"ok","command":"breaker-set","scopeType":"$scopeType","scopeId":"${escapeJson(args[2])}","tripped":$tripped}"""
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "breaker-set",
+                    "scopeType" to scopeType,
+                    "scopeId" to args[2],
+                    "tripped" to tripped
+                )
             }
             "breaker-list" -> {
                 val breakers = commandCircuitBreakers().listBreakers()
@@ -120,7 +133,13 @@ class AdminCliAdapter(
                 val currency = args.getOrNull(4).orEmpty()
                 val reason = args.drop(5).joinToString(" ")
                 instrumentPriceCollars().setCollar(args[1], minPrice, maxPrice, currency.uppercase(), reason)
-                """{"status":"ok","command":"price-collar-set","instrumentId":"${escapeJson(args[1])}","minPrice":"${escapeJson(minPrice)}","maxPrice":"${escapeJson(maxPrice)}"}"""
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "price-collar-set",
+                    "instrumentId" to args[1],
+                    "minPrice" to minPrice,
+                    "maxPrice" to maxPrice
+                )
             }
             "price-collar-list" -> {
                 val collars = instrumentPriceCollars().listCollars()
@@ -140,7 +159,13 @@ class AdminCliAdapter(
                         reason = reason
                     )
                 )
-                """{"status":"ok","command":"arena-bot-version-transition","botId":"${escapeJson(updated.botId)}","versionId":"${escapeJson(updated.versionId)}","botVersionStatus":"${updated.status.name}"}"""
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "arena-bot-version-transition",
+                    "botId" to updated.botId,
+                    "versionId" to updated.versionId,
+                    "botVersionStatus" to updated.status.name
+                )
             }
             "calendar-upsert" -> {
                 if (args.size < 4) return "usage: calendar-upsert <profileId> <timezone> <settlementCycle>"
@@ -247,18 +272,4 @@ class AdminCliAdapter(
         }
     }
 
-    private fun escapeJson(value: String): String {
-        return buildString(value.length + 8) {
-            value.forEach { ch ->
-                when (ch) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(ch)
-                }
-            }
-        }
-    }
 }

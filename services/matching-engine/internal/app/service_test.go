@@ -495,6 +495,52 @@ func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 	}
 }
 
+func TestModifyOrderMatchesWhenNewPriceCrossesBook(t *testing.T) {
+	service := NewService()
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150300000000",
+		Currency:      "USD",
+	})
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	result := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "100",
+		LimitPrice:    "150300000000",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted modify result, got %#v", result)
+	}
+	if len(result.Trades) != 1 {
+		t.Fatalf("expected marketable modify to trade, got %#v", result.Trades)
+	}
+	if result.Trades[0].BuyOrderID != "ord-buy-1" || result.Trades[0].SellOrderID != "ord-sell-1" {
+		t.Fatalf("unexpected trade parties after marketable modify: %#v", result.Trades[0])
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 || service.RestingOrders("AAPL", domain.SideSell) != 0 {
+		t.Fatalf("expected crossed orders to leave no resting liquidity")
+	}
+	buyState, ok := service.OrderState("ord-buy-1")
+	if !ok || buyState.Status != domain.OrderStatusFilled {
+		t.Fatalf("expected modified buy filled, got %#v", buyState)
+	}
+	sellState, ok := service.OrderState("ord-sell-1")
+	if !ok || sellState.Status != domain.OrderStatusFilled {
+		t.Fatalf("expected resting sell filled, got %#v", sellState)
+	}
+}
+
 func TestModifyOrderResetsPriorityAtSamePrice(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
