@@ -272,6 +272,8 @@ Smoke caveats:
 
 Current local evidence for durable materializer path:
 
+- Post-`acceptedOrder` smoke: `make dev-smoke-venue-event-materializer`, smoke id `materializer-smoke-1783354591266`, `materializedDelta=1`, `projectedDelta=1`, `projectedReplayDelta=0`; replay/checksum scoped to `REEF_MATERIALIZER_SMOKE_VENUE_EVENTS_MATERIALIZER-SMOKE-1783354591266` passed with `duplicateReplayInserted=0`, no checksum/hash/count mismatches, no stream gaps/overlaps, and no projection watermark lag.
+- Post-`acceptedOrder` short gate: `/tmp/reef-materializer-gate-10k-60s/materializer-10k-60s-rate-10000-workers-384.json`, `10k rps`, `60s`, `384` workers, `599950` requests, `599950` HTTP `202`, `0` failures, `9998.47 rps`, p95 `50.59ms`, p99 `89.72ms`; stream-direct acked `599950`, materializer persisted `599950`, direct/materializer failures and ack failures `0`. Replay/checksum scoped to `REEF_MATERIALIZER_STRESS_VENUE_EVENTS` passed with `599950` canonical outcomes and `duplicateReplayInserted=0`.
 - One materializer does not reliably drain to zero durable-canonical gap at 10k sustained load.
 - Four materializers drained accepted commands to zero durable gap at 10k for 60s and 180s validation runs.
 - Initial 15k/5m attempts exposed local memory pressure: first the API was OOM-killed by idle background JVM overhead, then the matching engine was OOM-killed by unbounded terminal order retention.

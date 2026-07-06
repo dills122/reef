@@ -36,6 +36,7 @@ setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "50");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer"]));
+const projectionEventStream = env("MATCHING_ENGINE_EVENT_STREAM");
 
 console.log("starting Redpanda direct-stream materializer smoke stack...");
 await import("./stream-direct-nodb-up.mjs");
@@ -183,7 +184,7 @@ async function projectCompactLifecycleRows(outcome) {
   }
 
   const replayed = Number(await queryRuntimeValue(`
-    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}])
+    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}], TRUE, '${sqlLiteral(projectionEventStream)}')
   `));
   const replaySubmitRows = await queryRuntimeRows(`
     SELECT command_id
@@ -198,12 +199,28 @@ async function projectCompactLifecycleRows(outcome) {
   if (replaySubmitRows.length !== 1 || replayEventRows.length !== 1) {
     throw new Error(`projection replay duplicated target rows: submitRows=${replaySubmitRows.length} eventRows=${replayEventRows.length}`);
   }
+  if (replayed !== 0) {
+    throw new Error(`projection replay was not idempotent for ${projectionEventStream}: replayed=${replayed}`);
+  }
 
-  let orderResponse = null;
+  let orderRow = null;
   if (expectOrderRead) {
-    orderResponse = JSON.parse(await getText(`${runtimeUrl}/orders/${encodeURIComponent(orderId)}`));
-    if (orderResponse.orderId !== orderId || orderResponse.instrumentId !== "AAPL") {
-      throw new Error(`projected order read API did not expose expected order state: ${JSON.stringify(orderResponse)}`);
+    const orderRows = await queryRuntimeRows(`
+      SELECT order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force
+      FROM runtime.orders
+      WHERE order_id = '${sqlLiteral(orderId)}'
+    `, ["order_id", "instrument_id", "participant_id", "account_id", "side", "order_type", "quantity_units", "limit_price", "currency", "time_in_force"]);
+    if (orderRows.length !== 1) {
+      throw new Error(`expected one projected order row for ${orderId}, got ${orderRows.length}`);
+    }
+    orderRow = orderRows[0];
+    if (
+      orderRow.instrument_id !== "AAPL" ||
+      orderRow.participant_id !== "participant-1" ||
+      orderRow.account_id !== "account-1" ||
+      orderRow.quantity_units !== "100"
+    ) {
+      throw new Error(`projected order row mismatch: ${JSON.stringify(orderRow)}`);
     }
   }
 
@@ -217,14 +234,14 @@ async function projectCompactLifecycleRows(outcome) {
     throw new Error(`projection watermark was not clean: ${JSON.stringify(watermarkRows)}`);
   }
 
-  return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0], orderResponse };
+  return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0], orderRow };
 }
 
 async function projectUntilSubmitResult(commandId, partition) {
   let projected = 0;
   for (let attempt = 0; attempt < 20; attempt += 1) {
     projected += Number(await queryRuntimeValue(`
-      SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}])
+      SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}], TRUE, '${sqlLiteral(projectionEventStream)}')
     `));
     const rows = await queryRuntimeRows(`
       SELECT command_id

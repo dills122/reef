@@ -4,6 +4,7 @@ import { env, loadDotEnv } from "./lib/dev-utils.mjs";
 loadDotEnv();
 
 const projectionName = env("DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME", "");
+const eventStream = env("DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM", "");
 const allowEmpty = env("DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY", "false").toLowerCase() === "true";
 
 const report = JSON.parse(await queryReplayReport());
@@ -12,6 +13,7 @@ const output = {
   pass: failures.length === 0,
   checkedAt: new Date().toISOString(),
   projectionName,
+  eventStream,
   report,
   failures,
 };
@@ -30,10 +32,20 @@ function replayCheckSql() {
   const projectionFilter = projectionName
     ? `WHERE watermark.projection_name = '${sqlLiteral(projectionName)}'`
     : "";
+  const batchFilter = eventStream
+    ? `WHERE batch.event_stream = '${sqlLiteral(eventStream)}'`
+    : "";
+  const outcomeFilter = eventStream
+    ? `WHERE outcome.event_stream = '${sqlLiteral(eventStream)}'`
+    : "";
+  const projectableEventStreamFilter = eventStream
+    ? `AND event_stream = '${sqlLiteral(eventStream)}'`
+    : "";
   return `
     WITH duplicate_replay AS (
       SELECT COALESCE(SUM(runtime.runtime_materialize_venue_event_batch(payload_json)), 0)::BIGINT AS inserted
-      FROM runtime.canonical_venue_event_batches
+      FROM runtime.canonical_venue_event_batches batch
+      ${batchFilter}
     ),
     batches AS (
       SELECT
@@ -51,6 +63,7 @@ function replayCheckSql() {
           ELSE 0
         END AS payload_outcome_count
       FROM runtime.canonical_venue_event_batches batch
+      ${batchFilter}
     ),
     expected_outcomes AS (
       SELECT
@@ -80,6 +93,7 @@ function replayCheckSql() {
         outcome.payload_hash,
         outcome.command_type
       FROM runtime.canonical_command_outcomes outcome
+      ${outcomeFilter}
     ),
     batch_actual_counts AS (
       SELECT
@@ -155,6 +169,7 @@ function replayCheckSql() {
       SELECT partition_id, MAX(stream_sequence)::BIGINT AS max_stream_sequence
       FROM runtime.canonical_command_outcomes
       WHERE command_type IN ('SubmitOrder', 'ModifyOrder', 'CancelOrder')
+        ${projectableEventStreamFilter}
       GROUP BY partition_id
     ),
     watermark_rows AS (
