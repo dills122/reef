@@ -124,13 +124,14 @@ destroyed.
 | Reverse proxy | `caddy` | Present, public profile | Publicly exposes only narrow bot-submission admin routes when enabled. |
 | Runtime Postgres | `postgres` | Present | Main lightweight runtime DB plus OpenBao storage DB in the Hetzner stack. |
 | Admin Postgres | `postgres-admin` | Present | Dedicated admin DB container for user accounts, game/meta config, non-runtime admin state. |
-| Analytics Postgres | `postgres-analytics` | Present | Dedicated analytics DB container for leaderboard/game/run aggregate data. |
+| Analytics Postgres | `postgres-analytics` | Present | Dedicated analytics DB container for leaderboard/game/run aggregate data and simulation-run export summaries. |
 | Matching engine | `matching-engine` | Present | Optional smoke/admin support on backbone; not the high-throughput run plane. |
 | Simulator | `simulator` | Manual profile | Operator/manual runs from backbone network when needed. |
 
-The analytics API/microservice itself is still a future slice. The DB container
-exists; the service that ingests and serves all simulation analytics is not yet
-complete.
+The first analytics API slice now exists inside `platform-runtime`: internal
+simulation-run export ingestion and reads at
+`/internal/admin/analytics/run-exports`. A dedicated analytics microservice is
+still a future split if this surface grows beyond backbone admin use.
 
 ## Admin API
 
@@ -142,8 +143,7 @@ process today. It owns or will own:
 - bot-submission registry checks
 - OpenBao provisioning route for bot secret slices
 - admin and clerical game operations
-- later analytics-export ingestion endpoints, unless split into a dedicated
-  analytics API
+- simulation-run export ingestion and lookup for run-plane evidence
 
 Default exposure:
 
@@ -278,6 +278,19 @@ Run-plane direction:
 - export results back to the backbone analytics/admin API
 - upload compressed debug artifacts to R2
 - destroy the droplet after artifacts are safe
+
+Current export command:
+
+```bash
+make dev-export-simulation-run \
+  REPORT=reports/path/stream-ack-stress-rate-10000-workers-256.json \
+  ARTIFACT_ROOT=reports/path \
+  ARGS="--post --api-url=http://127.0.0.1:8080"
+```
+
+Without `--post`, the exporter prints the payload only. With `--post`, it sends
+the compact run summary, counts, latency, and artifact hashes to the backbone
+admin API.
 
 Current implementation is still partly the older benchmark harness:
 
