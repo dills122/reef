@@ -523,6 +523,38 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
         }
 
+        server.createContext("/api/v1/market-data/bars/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/bars/").trimEnd('/')
+            val interval = queryValue(exchange, "interval")
+            val start = queryValue(exchange, "start")
+            val end = queryValue(exchange, "end")
+            val response = api.intradayBars(instrumentId, interval, start, end)
+            val status = if (response.contains("\"error\":\"unsupported interval\"")) 400 else 200
+            writeJson(exchange, status, response)
+        }
+
+        server.createContext("/api/v1/orders/current") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val participantId = queryValue(exchange, "participantId")
+            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true))
+        }
+
+        server.createContext("/api/v1/orders/history") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val participantId = queryValue(exchange, "participantId")
+            writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false))
+        }
+
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -736,6 +768,29 @@ class PlatformHttpServer(
                 )
                 PlatformHotPathResponse(status = 200, body = response)
             }
+            request.path.startsWith("/api/v1/market-data/bars/") && request.method == "GET" -> {
+                val instrumentId = request.path.removePrefix("/api/v1/market-data/bars/").trimEnd('/')
+                val response = api.intradayBars(
+                    instrumentId = instrumentId,
+                    interval = queryValue(request.query, "interval"),
+                    start = queryValue(request.query, "start"),
+                    end = queryValue(request.query, "end")
+                )
+                PlatformHotPathResponse(
+                    status = if (response.contains("\"error\":\"unsupported interval\"")) 400 else 200,
+                    body = response
+                )
+            }
+            request.path == "/api/v1/orders/current" && request.method == "GET" ->
+                PlatformHotPathResponse(
+                    status = 200,
+                    body = api.ownOrders(queryValue(request.query, "participantId"), openOnly = true)
+                )
+            request.path == "/api/v1/orders/history" && request.method == "GET" ->
+                PlatformHotPathResponse(
+                    status = 200,
+                    body = api.ownOrders(queryValue(request.query, "participantId"), openOnly = false)
+                )
             else -> legacySetupRoutes.handle(request)
         }
     }

@@ -6,7 +6,9 @@ import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.IntradayBar
 import com.reef.platform.domain.NonLifecycleRejectCodes
+import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PublicTradeTapeEntry
@@ -26,6 +28,13 @@ class PostgresRuntimePersistence(
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
     private val projectionDataSource: DataSource = dataSource
 ) : RuntimePersistence {
+    private val intradayBarIntervalText = mapOf(
+        "1m" to "1 minute",
+        "5m" to "5 minutes",
+        "15m" to "15 minutes",
+        "1h" to "1 hour"
+    )
+
     private val streamAckCanonicalEventRowsEnabled: Boolean =
         RuntimeEnv.bool("STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED", true)
     private val streamAckCanonicalQueryIndexesEnabled: Boolean =
@@ -3214,6 +3223,31 @@ class PostgresRuntimePersistence(
         )
     }
 
+    override fun ordersForParticipant(participantId: String, openOnly: Boolean): List<OwnOrderView> {
+        val statusFilter = if (openOnly) "AND ols.status IN ('OPEN', 'PARTIALLY_FILLED')" else ""
+        return projectionQueryList(
+            """
+            SELECT o.order_id, o.instrument_id, o.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
+            FROM ${names.orders} o
+            JOIN ${names.orderLifecycleState} ols ON ols.order_id = o.order_id
+            WHERE o.participant_id = ?
+            $statusFilter
+            ORDER BY o.accepted_at
+            """.trimIndent(),
+            participantId
+        ) {
+            OwnOrderView(
+                orderId = getString("order_id"),
+                instrumentId = getString("instrument_id"),
+                side = getString("side"),
+                quantityUnits = getString("original_quantity_units"),
+                remainingQuantityUnits = getString("remaining_quantity_units"),
+                limitPrice = getString("limit_price"),
+                status = getString("status")
+            )
+        }
+    }
+
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> = projectionQueryList(
         "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at",
         orderId
@@ -3314,6 +3348,52 @@ class PostgresRuntimePersistence(
                 instrumentId,
                 effectiveLimit.toString()
             ) { toPublicTradeTapeEntry() }
+        }
+    }
+
+    override fun intradayBars(instrumentId: String, interval: String, start: String, end: String): List<IntradayBar> {
+        val intervalText = intradayBarIntervalText[interval] ?: return emptyList()
+        return projectionQueryList(
+            """
+            WITH bucketed AS (
+              SELECT
+                date_bin(?::interval, occurred_at::timestamptz, TIMESTAMPTZ '2000-01-01') AS bucket_start,
+                price::numeric AS price_num,
+                quantity_units::numeric AS qty_num,
+                sequence
+              FROM ${names.trades}
+              WHERE instrument_id = ?
+                AND occurred_at::timestamptz >= ?::timestamptz
+                AND occurred_at::timestamptz < ?::timestamptz
+            )
+            SELECT
+              bucket_start::text AS bucket_start,
+              (bucket_start + ?::interval)::text AS bucket_end,
+              (array_agg(price_num ORDER BY sequence ASC))[1] AS open,
+              MAX(price_num) AS high,
+              MIN(price_num) AS low,
+              (array_agg(price_num ORDER BY sequence DESC))[1] AS close,
+              SUM(qty_num) AS volume
+            FROM bucketed
+            GROUP BY bucket_start
+            ORDER BY bucket_start
+            """.trimIndent(),
+            intervalText,
+            instrumentId,
+            start,
+            end,
+            intervalText
+        ) {
+            IntradayBar(
+                instrumentId = instrumentId,
+                start = getString("bucket_start"),
+                end = getString("bucket_end"),
+                open = getString("open"),
+                high = getString("high"),
+                low = getString("low"),
+                close = getString("close"),
+                volume = getString("volume")
+            )
         }
     }
 

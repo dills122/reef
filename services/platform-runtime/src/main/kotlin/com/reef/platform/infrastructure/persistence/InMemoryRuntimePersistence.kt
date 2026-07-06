@@ -3,6 +3,8 @@ package com.reef.platform.infrastructure.persistence
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PublicTradeTapeEntry
@@ -14,6 +16,7 @@ import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.Instant
 
 class InMemoryRuntimePersistence : RuntimePersistence {
@@ -36,6 +39,13 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val orderLifecycleStates = linkedMapOf<String, OrderLifecycleState>()
     private val orderLifecycleDirty = linkedSetOf<String>()
     private val marketDataSnapshotDirty = linkedSetOf<String>()
+    private val intradayBarIntervalDurations = mapOf(
+        "1m" to Duration.ofMinutes(1),
+        "5m" to Duration.ofMinutes(5),
+        "15m" to Duration.ofMinutes(15),
+        "1h" to Duration.ofHours(1)
+    )
+    private val intradayBarOrigin: Instant = Instant.parse("2000-01-01T00:00:00Z")
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {
         submitResults[commandId] = result
@@ -133,6 +143,24 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return orders.values.toList()
     }
 
+    override fun ordersForParticipant(participantId: String, openOnly: Boolean): List<OwnOrderView> {
+        return orders.values
+            .filter { it.participantId == participantId }
+            .mapNotNull { order ->
+                val state = orderLifecycleStates[order.orderId] ?: return@mapNotNull null
+                if (openOnly && state.status !in OpenLifecycleStatuses) return@mapNotNull null
+                OwnOrderView(
+                    orderId = order.orderId,
+                    instrumentId = order.instrumentId,
+                    side = order.side,
+                    quantityUnits = state.originalQuantityUnits,
+                    remainingQuantityUnits = state.remainingQuantityUnits,
+                    limitPrice = state.limitPrice,
+                    status = state.status
+                )
+            }
+    }
+
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> {
         return executions.filter { it.orderId == orderId }
     }
@@ -169,6 +197,50 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     price = trade.price,
                     currency = trade.currency,
                     occurredAt = trade.occurredAt
+                )
+            }
+    }
+
+    override fun intradayBars(instrumentId: String, interval: String, start: String, end: String): List<IntradayBar> {
+        val duration = intradayBarIntervalDurations[interval] ?: return emptyList()
+        val startInstant = runCatching { Instant.parse(start) }.getOrNull() ?: return emptyList()
+        val endInstant = runCatching { Instant.parse(end) }.getOrNull() ?: return emptyList()
+        val bucketMillis = duration.toMillis()
+
+        data class SequencedTrade(val instant: Instant, val price: BigDecimal, val quantity: BigDecimal, val sequence: Long)
+
+        val relevant = trades
+            .mapIndexed { index, trade -> trade to (index + 1).toLong() }
+            .filter { (trade, _) -> trade.instrumentId == instrumentId }
+            .mapNotNull { (trade, sequence) ->
+                val instant = runCatching { Instant.parse(trade.occurredAt) }.getOrNull() ?: return@mapNotNull null
+                if (instant.isBefore(startInstant) || !instant.isBefore(endInstant)) return@mapNotNull null
+                SequencedTrade(
+                    instant = instant,
+                    price = trade.price.toBigDecimalOrNull() ?: return@mapNotNull null,
+                    quantity = trade.quantityUnits.toBigDecimalOrNull() ?: BigDecimal.ZERO,
+                    sequence = sequence
+                )
+            }
+
+        return relevant
+            .groupBy { entry ->
+                val millisSinceOrigin = Duration.between(intradayBarOrigin, entry.instant).toMillis()
+                val bucketIndex = Math.floorDiv(millisSinceOrigin, bucketMillis)
+                intradayBarOrigin.plusMillis(bucketIndex * bucketMillis)
+            }
+            .toSortedMap()
+            .map { (bucketStart, entries) ->
+                val ordered = entries.sortedBy { it.sequence }
+                IntradayBar(
+                    instrumentId = instrumentId,
+                    start = bucketStart.toString(),
+                    end = bucketStart.plus(duration).toString(),
+                    open = decimalString(ordered.first().price),
+                    high = decimalString(ordered.maxOf { it.price }),
+                    low = decimalString(ordered.minOf { it.price }),
+                    close = decimalString(ordered.last().price),
+                    volume = decimalString(ordered.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.quantity })
                 )
             }
     }

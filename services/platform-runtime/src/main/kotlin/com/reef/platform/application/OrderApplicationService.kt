@@ -632,6 +632,12 @@ class OrderApplicationService(
     fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long?) =
         runtimePersistence.tradeTape(instrumentId, limit, beforeSequence)
 
+    fun intradayBars(instrumentId: String, interval: String, start: String, end: String) =
+        runtimePersistence.intradayBars(instrumentId, interval, start, end)
+
+    fun ordersForParticipant(participantId: String, openOnly: Boolean) =
+        runtimePersistence.ordersForParticipant(participantId, openOnly)
+
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
 
     fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)

@@ -45,6 +45,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-batch-clients.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-client.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-sdk-live-client.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-strategy-runner.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-hosted-runner.test.mjs
