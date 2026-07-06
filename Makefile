@@ -40,7 +40,7 @@ test-platform-runtime:
 
 test-bot-sdk:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	tsc -p packages/bot-sdk/tsconfig.json --noEmit
+	bunx tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-batch-clients.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs
