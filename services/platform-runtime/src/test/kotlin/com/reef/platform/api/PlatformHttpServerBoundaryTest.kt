@@ -1964,7 +1964,7 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(202, response.status)
             assertContains(response.body, "\"processingMode\":\"stream-ack\"")
-            assertContains(response.body, "\"streamSequence\":1")
+            assertContains(response.body, "\"statusUrl\":\"/api/v1/commands/cmd-netty-stream\"")
             assertEquals(1, publisher.published.size)
             assertEquals(200, health.status)
             assertContains(health.body, "\"publishMode\":\"partitioned-blocking-delegate:sync\"")
@@ -2231,9 +2231,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"commandId\":\"cmd-stream-1\"")
             assertContains(response.body, "\"status\":\"ACCEPTED\"")
             assertContains(response.body, "\"processingMode\":\"stream-ack\"")
-            assertContains(response.body, "\"stream\":\"REEF_COMMANDS\"")
-            assertContains(response.body, "\"subject\":\"reef.cmd.v1.")
-            assertContains(response.body, "\"streamSequence\":1")
+            assertContains(response.body, "\"statusUrl\":\"/api/v1/commands/cmd-stream-1\"")
             assertEquals(1, publisher.published.size)
             assertEquals("client-1|/api/v1/orders/submit|idem-stream-1", publisher.published.single().natsMessageId)
             assertEquals(0, gateway.submitCalls)
@@ -2300,7 +2298,9 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(202, first.status)
             assertEquals(202, second.status)
-            assertEquals(first.body, second.body)
+            assertContains(first.body, "\"commandId\":\"cmd-stream-replay\"")
+            assertContains(second.body, "\"commandId\":\"cmd-stream-replay\"")
+            assertContains(second.body, "\"statusUrl\":\"/api/v1/commands/cmd-stream-replay\"")
             assertEquals(1, publisher.published.size)
         } finally {
             server.stop(0)
@@ -2425,7 +2425,7 @@ class PlatformHttpServerBoundaryTest {
 
             val replay = post(server.address.port, "/api/v1/orders/submit", headers, body)
             assertEquals(202, replay.status)
-            assertContains(replay.body, "\"streamSequence\":123")
+            assertContains(replay.body, "\"commandId\":\"cmd-stream-late-ack\"")
             assertEquals(1, publisher.published.size)
         } finally {
             server.stop(0)
