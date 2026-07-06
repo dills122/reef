@@ -25,6 +25,7 @@ const runKind = env("DEV_INTAKE_RUN_KIND", "intake-bench");
 const scenarioId = env("DEV_INTAKE_SCENARIO_ID", "raw-intake");
 const captureDbDiagnostics = env("DEV_INTAKE_CAPTURE_DB_DIAGNOSTICS", "1") !== "0";
 const captureCommandAccounting = env("DEV_INTAKE_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
+const captureIntakeCounters = env("DEV_INTAKE_CAPTURE_INTAKE_COUNTERS", "1") !== "0";
 const commandDrainWaitMs = Number(env("DEV_INTAKE_COMMAND_DRAIN_WAIT_MS", "30000"));
 const commandDrainPollMs = Number(env("DEV_INTAKE_COMMAND_DRAIN_POLL_MS", "1000"));
 const failOnAccountingGap = env("DEV_INTAKE_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
@@ -48,6 +49,9 @@ let postDbDiagnostics = null;
 let beforeAccounting = null;
 let afterAccounting = null;
 let drainedAccounting = null;
+let beforeIntakeCounters = null;
+let afterIntakeCounters = null;
+let drainedIntakeCounters = null;
 if (captureDbDiagnostics) {
   preDbDiagnostics = await captureDbDiagnosticsSnapshot({
     diagnosticsDir,
@@ -60,6 +64,9 @@ if (captureDbDiagnostics) {
 }
 if (captureCommandAccounting) {
   beforeAccounting = await sampleCommandAccounting(runtimeUrl, runId);
+}
+if (captureIntakeCounters) {
+  beforeIntakeCounters = await sampleIntakeCounters(runtimeUrl);
 }
 
 try {
@@ -93,6 +100,9 @@ try {
     { cwd: "services/simulator" },
   );
 } finally {
+  if (captureIntakeCounters) {
+    afterIntakeCounters = await sampleIntakeCounters(runtimeUrl);
+  }
   if (captureCommandAccounting) {
     afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
     drainedAccounting = await waitForCommandDrain({
@@ -102,6 +112,9 @@ try {
       timeoutMs: commandDrainWaitMs,
       pollMs: commandDrainPollMs,
     });
+  }
+  if (captureIntakeCounters) {
+    drainedIntakeCounters = await sampleIntakeCounters(runtimeUrl);
   }
   if (captureDbDiagnostics) {
     postDbDiagnostics = await captureDbDiagnosticsSnapshot({
@@ -156,6 +169,23 @@ if (captureCommandAccounting && existsSync(reportOut)) {
   }
 }
 
+if (captureIntakeCounters && existsSync(reportOut)) {
+  const report = JSON.parse(readFileSync(reportOut, "utf8"));
+  const intakeCounters = buildIntakeCounters({
+    before: beforeIntakeCounters,
+    after: afterIntakeCounters,
+    drained: drainedIntakeCounters,
+  });
+  report.intakeCounters = intakeCounters;
+  writeFileSync(reportOut, JSON.stringify(report, null, 2));
+  const d = intakeCounters.drainedDelta ?? intakeCounters.afterDelta;
+  if (d) {
+    console.log(
+      `intake-counters engineFetchedDelta=${d.engineFetchedDelta} eventBatchMaterializedDelta=${d.eventBatchMaterializedDelta} canonicalOutcomesDelta=${d.canonicalOutcomesDelta} projectedDelta=${d.projectedDelta} projectorLag=${d.projectorLagFinal} brokerMessagesFinal=${d.brokerMessagesFinal}`,
+    );
+  }
+}
+
 console.log("intake bench complete. report:");
 console.log(`  ${reportOut}`);
 if (captureDbDiagnostics) {
@@ -171,6 +201,61 @@ function parseCsv(raw) {
 
 async function sampleCommandAccounting(runtimeUrl, runId) {
   return requestJson(`${runtimeUrl}/internal/commands/accounting?runId=${encodeURIComponent(runId)}`);
+}
+
+async function sampleIntakeCounters(runtimeUrl) {
+  const [streamHealth, materializerStats, canonicalProjectorStatus, orderLifecycleProjectorStatus] = await Promise.all([
+    requestJson(`${runtimeUrl}/internal/stream-ack/health`),
+    requestJson(`${runtimeUrl}/internal/venue-event-materializer/stats`),
+    requestJson(`${runtimeUrl}/internal/projector/status`),
+    requestJson(`${runtimeUrl}/internal/order-lifecycle/projector/status`),
+  ]);
+  return { streamHealth, materializerStats, canonicalProjectorStatus, orderLifecycleProjectorStatus };
+}
+
+function buildIntakeCounters({ before, after, drained }) {
+  return {
+    before: intakeCountersSummary(before),
+    after: intakeCountersSummary(after),
+    drained: intakeCountersSummary(drained),
+    afterDelta: intakeCountersDelta(before, after),
+    drainedDelta: intakeCountersDelta(before, drained),
+  };
+}
+
+function intakeCountersSummary(probe) {
+  if (!probe) return null;
+  return {
+    streamHealth: probe.streamHealth?.json ?? null,
+    materializerStats: probe.materializerStats?.json ?? null,
+    canonicalProjectorStatus: probe.canonicalProjectorStatus?.json ?? null,
+    orderLifecycleProjectorStatus: probe.orderLifecycleProjectorStatus?.json ?? null,
+  };
+}
+
+function intakeCountersDelta(before, sample) {
+  if (!before || !sample) return null;
+  const beforeMaterializer = before.materializerStats?.json?.metrics ?? {};
+  const sampleMaterializer = sample.materializerStats?.json?.metrics ?? {};
+  const beforeCanonicalProjector = before.canonicalProjectorStatus?.json ?? {};
+  const sampleCanonicalProjector = sample.canonicalProjectorStatus?.json ?? {};
+  const beforeOrderLifecycle = before.orderLifecycleProjectorStatus?.json ?? {};
+  const sampleOrderLifecycle = sample.orderLifecycleProjectorStatus?.json ?? {};
+  const streamHealth = sample.streamHealth?.json ?? {};
+  return {
+    engineFetchedDelta: Number(sampleMaterializer.fetched ?? 0) - Number(beforeMaterializer.fetched ?? 0),
+    eventBatchMaterializedDelta: Number(sampleMaterializer.materialized ?? 0) - Number(beforeMaterializer.materialized ?? 0),
+    canonicalOutcomesDelta:
+      Number(sampleMaterializer.materializedOutcomes ?? 0) - Number(beforeMaterializer.materializedOutcomes ?? 0),
+    projectedDelta:
+      Number(sampleCanonicalProjector.projectedCount ?? 0) - Number(beforeCanonicalProjector.projectedCount ?? 0),
+    orderLifecycleProjectedDelta:
+      Number(sampleOrderLifecycle.projectedCount ?? 0) - Number(beforeOrderLifecycle.projectedCount ?? 0),
+    materializerLastMaterializedAt: sampleMaterializer.lastMaterializedAt ?? "",
+    projectorLagFinal: Number(sampleCanonicalProjector.lag ?? 0),
+    orderLifecycleLagFinal: Number(sampleOrderLifecycle.lag ?? 0),
+    brokerMessagesFinal: Number(streamHealth.messages ?? 0),
+  };
 }
 
 async function waitForCommandDrain({ runtimeUrl, runId, initialProbe, timeoutMs, pollMs }) {
