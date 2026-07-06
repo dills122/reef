@@ -107,10 +107,14 @@ export interface DataAvailabilitySurfaceV1 {
   readonly endpoint: string;
   readonly source: string;
   readonly freshness: string;
+  readonly scope: string;
+  readonly requiredQuery: readonly string[];
+  readonly optionalQuery: readonly string[];
   readonly projectionName: string;
   readonly lag: number;
   readonly lastPartitionSequence: number;
   readonly lastUpdatedAt: string;
+  readonly notes: string;
 }
 
 export interface DataAvailabilityV1 {

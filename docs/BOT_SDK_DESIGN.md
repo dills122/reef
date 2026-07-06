@@ -378,6 +378,7 @@ Completed runtime bridge coverage:
 - Command-log capture persists bot client identity and run metadata.
 - Deterministic runtime tests cover stream-ack bot intake, worker processing, canonical outcome persistence, projection, and projector replay idempotency.
 - Local live smoke covers adapter-owned HTTP submission into a running Reef stack with `stream-ack` acceptance; see [`BOT_SDK_LIVE_SMOKE.md`](./BOT_SDK_LIVE_SMOKE.md).
+- `runner.ts`, `strategy-runner.ts`, and `hosted-runner.ts` accept opt-in live read clients. Hosted artifact runs report `readMode` and include `/api/v1/data/availability` evidence when live reads are enabled.
 - Internal operator read APIs expose persisted arena control-plane state:
   - `GET /internal/admin/arena/bots?botId=...`
   - `GET /internal/admin/arena/bot-versions?botId=...&versionId=...`

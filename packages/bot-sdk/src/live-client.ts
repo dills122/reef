@@ -79,6 +79,10 @@ function numberValue(value: unknown): number {
   return typeof value === "number" ? value : Number(value ?? 0);
 }
 
+function stringArrayValue(value: unknown): readonly string[] {
+  return arrayOrEmpty(value).map(stringValue).filter((item) => item.length > 0);
+}
+
 function parseAvailabilityWatermark(value: unknown): DataAvailabilityProjectionWatermarkV1 {
   const row = recordOrEmpty(value);
   return {
@@ -110,10 +114,14 @@ function parseAvailabilitySurface(value: unknown): DataAvailabilitySurfaceV1 {
     endpoint: stringValue(row.endpoint),
     source: stringValue(row.source),
     freshness: stringValue(row.freshness),
+    scope: stringValue(row.scope),
+    requiredQuery: stringArrayValue(row.requiredQuery),
+    optionalQuery: stringArrayValue(row.optionalQuery),
     projectionName: stringValue(row.projectionName),
     lag: numberValue(row.lag),
     lastPartitionSequence: numberValue(row.lastPartitionSequence),
     lastUpdatedAt: stringValue(row.lastUpdatedAt),
+    notes: stringValue(row.notes),
   };
 }
 

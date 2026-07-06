@@ -76,7 +76,7 @@ curl "http://127.0.0.1:8080/api/v1/orders/history?participantId=participant-1&in
 curl "http://127.0.0.1:8080/api/v1/data/availability"
 ```
 
-The snapshot refresh path rebuilds `runtime.order_lifecycle_state` before updating `runtime.market_data_snapshots`; the explicit lifecycle-state endpoint is useful for inspection and repair. Bounded depth reads aggregate remaining open lifecycle quantity by price at request time.
+The snapshot refresh path rebuilds `runtime.order_lifecycle_state` before updating `runtime.market_data_snapshots`; the explicit lifecycle-state endpoint is useful for inspection and repair. Bounded depth reads aggregate remaining open lifecycle quantity by price at request time. Depth is instrument-scoped today, not venue-session-scoped, because `runtime.orders`/`runtime.order_lifecycle_state` do not yet persist `venueSessionId`.
 
 The trade tape endpoint reads durable `runtime.trades` rows directly (no projector, no lag) ordered most-recent-first by a monotonic `sequence` column, bounded by `limit` (max 500). Pass `before=<sequence>` to page further back. Only public-safe fields are returned (`tradeId`, `price`, `quantityUnits`, `currency`, `occurredAt`, `sequence`) — no counterparty order/participant identity.
 
@@ -84,9 +84,15 @@ The intraday bars endpoint aggregates `runtime.trades` into OHLCV buckets (`inte
 
 `/api/v1/orders/current` and `/api/v1/orders/history` return only orders for the given `participantId` (own orders only, matching the bot visible-data policy) — `current` filters to `OPEN`/`PARTIALLY_FILLED`, `history` returns all statuses. Both accept optional `instrumentId` and `limit` query parameters to keep bot reads bounded. Backed by a join between `runtime.orders` and `runtime.order_lifecycle_state`.
 
-`/api/v1/data/availability` reports the current bot/user read surfaces, their source tables/projections, freshness model, and projection lag/watermark when available. Use it before simulator or bot runs when the run needs to prove projection freshness instead of only canonical command completion.
+`/api/v1/data/availability` reports the current bot/user read surfaces, their source tables/projections, freshness model, public/participant scope, required/optional query filters, and projection lag/watermark when available. Use it before simulator or bot runs when the run needs to prove projection freshness instead of only canonical command completion.
 
 `packages/bot-sdk/src/live-client.ts` provides `createLiveMarketDataClientV1`, `createLiveHistoricalDataClientV1`, `createLiveOwnOrdersReadClientV1`, and `createLiveBotContextV1` that call these endpoints over real HTTP instead of reading fixtures. `runner.ts` and `strategy-runner.ts` accept optional `readClients`, so fixture mode remains the default while live smoke can inject projection-backed market-data, historical, and own-order reads. When own-order live reads are supplied, runner reports use projection-owned order state instead of mutating local fixture state after accepted commands.
+
+For hosted artifacts, `scripts/dev/bot-sdk-hosted-run.mjs` supports explicit read selection:
+
+```bash
+bun scripts/dev/bot-sdk-hosted-run.mjs /tmp/simple-market-maker.bundle.js packages/bot-sdk/fixtures/aapl-multi-tick.json --venue-url=http://127.0.0.1:8080 --read-mode=live
+```
 
 An opt-in background market-data projector can keep top-of-book snapshots current on background-capable runtime roles. It processes only instruments whose order book changed since the last cycle (bounded by the batch size), not a full recompute of every instrument:
 

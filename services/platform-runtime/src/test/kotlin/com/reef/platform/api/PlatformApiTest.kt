@@ -18,6 +18,7 @@ import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class PlatformApiTest {
     @Test
@@ -672,6 +673,9 @@ class PlatformApiTest {
         assertEquals(1, materialized)
         assertEquals(1, projected)
         assertEquals(1, refreshed)
+        val canonical = assertNotNull(api.canonicalCommandOutcome("cmd-smoke-batch-1"))
+        assertEquals("accepted", canonical.resultStatus)
+        assertEquals(10, canonical.streamSequence)
         assertContains(api.order("ord-1"), "\"lifecycleState\"")
         assertContains(api.order("ord-1"), "\"status\":\"OPEN\"")
         assertContains(api.marketDataSnapshot("AAPL"), "\"bestBidPrice\":\"150250000000\"")
@@ -686,6 +690,10 @@ class PlatformApiTest {
         assertContains(availability, "\"name\":\"tradeTape\"")
         assertContains(availability, "\"freshness\":\"durable fact rows\"")
         assertContains(availability, "\"name\":\"currentOrders\"")
+        assertContains(availability, "\"scope\":\"participant-own-orders\"")
+        assertContains(availability, "\"requiredQuery\":[\"participantId\"]")
+        assertContains(availability, "\"optionalQuery\":[\"levels\",\"projectionName\",\"sourceProjectionName\"]")
+        assertContains(availability, "venueSessionId filtering is not exposed")
     }
 
     private fun validRequestBody(): String {

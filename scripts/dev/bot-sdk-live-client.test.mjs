@@ -125,10 +125,14 @@ function fakeFetch(routes) {
         endpoint: "/api/v1/market-data/trades/{instrumentId}",
         source: "runtime.trades",
         freshness: "durable fact rows",
+        scope: "public-market-data",
+        requiredQuery: [],
+        optionalQuery: ["limit", "before"],
         projectionName: "runtime-normalized-venue-outcomes",
         lag: 2,
         lastPartitionSequence: 8,
         lastUpdatedAt: "2026-07-06T00:00:01Z",
+        notes: "",
       }],
     }],
   ]);
@@ -140,6 +144,8 @@ function fakeFetch(routes) {
   assert.equal(result.value.projections[0].watermarks[0].lastPartitionSequence, 8);
   assert.equal(result.value.surfaces[0].name, "tradeTape");
   assert.equal(result.value.surfaces[0].freshness, "durable fact rows");
+  assert.equal(result.value.surfaces[0].scope, "public-market-data");
+  assert.deepEqual(result.value.surfaces[0].optionalQuery, ["limit", "before"]);
 }
 
 // createLiveBotContextV1 wires safe.cancel against live current-orders read

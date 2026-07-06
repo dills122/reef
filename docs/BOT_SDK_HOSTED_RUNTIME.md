@@ -51,6 +51,8 @@ Without `--unsafe-vm-for-local-dev`, the script uses the default SES-compatible 
 
 Add `--venue-url=http://127.0.0.1:8080` to submit approved actions through the adapter-owned venue client, just like the deterministic runner and live smoke wrapper.
 
+Add `--read-mode=live --venue-url=http://127.0.0.1:8080` to inject live market-data, historical, and own-order read clients into the hosted run. Fixture reads remain the default. Live read mode also queries `/api/v1/data/availability` before the bot ticks and includes the result in the hosted report as `dataAvailability`; an availability denial marks the run `do_not_merge` before bot execution.
+
 `scripts/dev/bot-sdk-hosted-ses-e2e.test.mjs` is the basic real SES E2E. It imports `ses`, runs lockdown, loads `hosted-simple-market-maker.bundle.js` through the default SES `Compartment` path, and executes the deterministic fixture to completion.
 
 To build a hosted artifact from a normal TypeScript bot entry file:

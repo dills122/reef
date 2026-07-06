@@ -682,7 +682,7 @@ Summary:
 - the first implemented market-data surface is projection-backed and conservative: `runtime.order_lifecycle_state` rebuilds open/filled/cancelled order state from projected runtime facts, `runtime.market_data_snapshots` stores top-of-book snapshots, and bounded depth reads aggregate remaining open lifecycle quantity by price.
 - `POST /api/v1/market-data/snapshots` rebuilds lifecycle state before refreshing top-of-book snapshots. `GET /api/v1/market-data/snapshots/{instrumentId}` and `GET /api/v1/market-data/depth/{instrumentId}` expose source projection and lag/freshness metadata.
 - `MARKET_DATA_PROJECTOR_ENABLED=true` enables an opt-in background loop for top-of-book refreshes on background-capable runtime roles. It is disabled by default until workload evidence justifies always-on refresh behavior.
-- bounded depth remains read-time aggregation over lifecycle state for now. A fully incremental market-data projector and venue-session-specific depth are follow-on work.
+- bounded depth remains read-time aggregation over lifecycle state for now. A fully incremental market-data projector and venue-session-specific depth are follow-on work. Venue-session-specific depth must first persist `venueSessionId` (or another durable session key) into projected order lifecycle facts; it should not be inferred ad hoc at read time from data that is not carried by the projection.
 
 Primary references:
 - [`docs/TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)

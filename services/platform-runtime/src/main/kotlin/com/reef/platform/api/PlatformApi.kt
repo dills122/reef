@@ -113,42 +113,61 @@ class PlatformApi(
                     endpoint = "/api/v1/market-data/snapshots/{instrumentId}",
                     source = "runtime.market_data_snapshots",
                     freshness = "projection-watermark",
-                    status = marketDataStatus
+                    status = marketDataStatus,
+                    scope = "public-market-data",
+                    requiredQuery = emptyList(),
+                    optionalQuery = listOf("projectionName")
                 ),
                 surfaceAvailability(
                     name = "marketDataDepth",
                     endpoint = "/api/v1/market-data/depth/{instrumentId}",
                     source = "runtime.order_lifecycle_state",
                     freshness = "read-time bounded aggregation",
-                    status = venueStatus
+                    status = venueStatus,
+                    scope = "public-market-data",
+                    requiredQuery = emptyList(),
+                    optionalQuery = listOf("levels", "projectionName", "sourceProjectionName"),
+                    notes = "venueSessionId filtering is not exposed until runtime.orders or order_lifecycle_state persist venue_session_id"
                 ),
                 surfaceAvailability(
                     name = "tradeTape",
                     endpoint = "/api/v1/market-data/trades/{instrumentId}",
                     source = "runtime.trades",
                     freshness = "durable fact rows",
-                    status = venueStatus
+                    status = venueStatus,
+                    scope = "public-market-data",
+                    requiredQuery = emptyList(),
+                    optionalQuery = listOf("limit", "before")
                 ),
                 surfaceAvailability(
                     name = "intradayBars",
                     endpoint = "/api/v1/market-data/bars/{instrumentId}",
                     source = "runtime.trades",
                     freshness = "durable fact row aggregation",
-                    status = venueStatus
+                    status = venueStatus,
+                    scope = "public-market-data",
+                    requiredQuery = listOf("interval", "start", "end"),
+                    optionalQuery = emptyList()
                 ),
                 surfaceAvailability(
                     name = "currentOrders",
                     endpoint = "/api/v1/orders/current",
                     source = "runtime.orders + runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
-                    status = venueStatus
+                    status = venueStatus,
+                    scope = "participant-own-orders",
+                    requiredQuery = listOf("participantId"),
+                    optionalQuery = listOf("instrumentId", "limit")
                 ),
                 surfaceAvailability(
                     name = "orderHistory",
                     endpoint = "/api/v1/orders/history",
                     source = "runtime.orders + runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
-                    status = venueStatus
+                    status = venueStatus,
+                    scope = "participant-own-orders",
+                    requiredQuery = listOf("participantId"),
+                    optionalQuery = listOf("instrumentId", "limit")
                 )
             )
         )
@@ -605,12 +624,19 @@ class PlatformApi(
         endpoint: String,
         source: String,
         freshness: String,
-        status: ProjectionStatus
+        status: ProjectionStatus,
+        scope: String,
+        requiredQuery: List<String>,
+        optionalQuery: List<String>,
+        notes: String = ""
     ): Map<String, Any> = mapOf(
         "name" to name,
         "endpoint" to endpoint,
         "source" to source,
         "freshness" to freshness,
+        "scope" to scope,
+        "requiredQuery" to requiredQuery,
+        "optionalQuery" to optionalQuery,
         "projectionName" to status.projectionName,
         "lag" to status.lag,
         "lastPartitionSequence" to (
@@ -622,7 +648,8 @@ class PlatformApi(
             status.watermarks
                 .filter { it.updatedAt.isNotBlank() }
                 .maxOfOrNull { it.updatedAt } ?: ""
-            )
+            ),
+        "notes" to notes
     )
 
     private fun RuntimeEvent.toMap(): Map<String, Any> = mapOf(
