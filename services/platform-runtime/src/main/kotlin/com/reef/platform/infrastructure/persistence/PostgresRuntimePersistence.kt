@@ -3238,7 +3238,7 @@ class PostgresRuntimePersistence(
         val statusFilter = if (openOnly) "AND ols.status IN ('OPEN', 'PARTIALLY_FILLED')" else ""
         val instrumentFilter = if (instrumentId.isBlank()) "" else "AND o.instrument_id = ?"
         val boundedLimit = limit.coerceIn(0, 500)
-        val limitClause = if (boundedLimit > 0) "LIMIT ?" else ""
+        val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
         val params = buildList {
             add(participantId)
             if (instrumentId.isNotBlank()) add(instrumentId)
@@ -3303,7 +3303,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?",
+        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?::integer",
         limit.coerceAtLeast(0).toString()
     ) {
         TradeCreated(
@@ -3349,9 +3349,9 @@ class PostgresRuntimePersistence(
                 """
                 SELECT sequence, trade_id, instrument_id, quantity_units, price, currency, occurred_at
                 FROM ${names.trades}
-                WHERE instrument_id = ? AND sequence < ?
+                WHERE instrument_id = ? AND sequence < ?::bigint
                 ORDER BY sequence DESC
-                LIMIT ?
+                LIMIT ?::integer
                 """.trimIndent(),
                 instrumentId,
                 beforeSequence.toString(),
@@ -3364,7 +3364,7 @@ class PostgresRuntimePersistence(
                 FROM ${names.trades}
                 WHERE instrument_id = ?
                 ORDER BY sequence DESC
-                LIMIT ?
+                LIMIT ?::integer
                 """.trimIndent(),
                 instrumentId,
                 effectiveLimit.toString()
@@ -3445,7 +3445,7 @@ class PostgresRuntimePersistence(
     )
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at DESC, event_id DESC LIMIT ?",
+        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at DESC, event_id DESC LIMIT ?::integer",
         limit.coerceAtLeast(0).toString()
     ).asReversed()
 

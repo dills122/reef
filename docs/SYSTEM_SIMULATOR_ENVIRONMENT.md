@@ -143,6 +143,7 @@ batch output, materialization, and replay checks.
 | Captured-ack stress | `make dev-stress-captured-ack` | Postgres command-log durable intake and async drain baseline. |
 | Stream-ack stress | `make dev-stress-stream-ack` | Durable stream-backed acceptance and worker/projector accounting. |
 | Stream-direct no-DB | `make dev-stress-stream-direct-nodb` | API durable append plus matching-engine direct stream consume, with DB removed from command completion. |
+| Projection proof | `make dev-smoke-projection-proof` | Direct engine consume, durable event batch publish, Postgres materialization, compact lifecycle projection, read APIs, and data availability metadata. |
 | Venue event materializer | `make dev-smoke-venue-event-materializer`, `make dev-stress-venue-event-materializer` | Direct engine consume, durable event batch publish, Postgres materialization, replay, and compact projection. |
 
 No-op publisher and no-DB modes are diagnostic isolation profiles. They do not

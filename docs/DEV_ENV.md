@@ -365,7 +365,9 @@ Run the local Redpanda direct-stream materializer smoke:
 make dev-smoke-venue-event-materializer
 ```
 
-This starts isolated Redpanda command/event topics, the direct matching-engine consumer, and `platform-materializer`. The smoke submits one stream-ack order, waits for `runtime.canonical_command_outcomes`, projects compact lifecycle/read-model rows from the durable event-batch payload, checks order read-model reconstruction by default, and verifies `/internal/venue-event-materializer/stats` advanced. It is a correctness smoke, not a throughput claim.
+`make dev-smoke-projection-proof` is an alias for the same smoke with a name focused on the assertion contract.
+
+This starts isolated Redpanda command/event topics, the direct matching-engine consumer, and `platform-materializer`. The smoke submits one stream-ack order through the no-DB intake API, waits for `runtime.canonical_command_outcomes`, projects compact lifecycle/read-model rows from the durable event-batch payload, checks order read-model reconstruction by default, verifies `runtime.order_lifecycle_state`, drains the dirty lifecycle and market-data projectors, then proves `/api/v1/orders/current`, `/api/v1/orders/history`, `/api/v1/market-data/snapshots/{instrumentId}`, `/api/v1/market-data/depth/{instrumentId}`, and `/api/v1/data/availability` through the persistent projector HTTP surface (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT`, default `8084`). It also verifies `/internal/venue-event-materializer/stats` advanced. It is a correctness smoke, not a throughput claim.
 
 For the higher-throughput front-door prototype, enable the long-lived stream transport:
 
