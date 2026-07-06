@@ -17,6 +17,7 @@
     "typescript": "^5.7.3"
   },
   "optionalDependencies": {
+    "@astrojs/compiler-binding-linux-x64-gnu": "^0.3.0",
     "@rolldown/binding-linux-x64-gnu": "^1.1.4"
   }
 }
