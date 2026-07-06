@@ -80,9 +80,10 @@ class PlatformApi(
         projectionName: String,
         batchSize: Int,
         partitions: List<Int> = emptyList(),
-        includeFills: Boolean = true
+        includeFills: Boolean = true,
+        eventStream: String = ""
     ): Long {
-        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills)
+        return orderService.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream)
     }
 
     fun projectionStatus(

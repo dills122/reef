@@ -232,7 +232,8 @@ interface RuntimePersistence {
         projectionName: String,
         batchSize: Int,
         partitions: List<Int> = emptyList(),
-        includeFills: Boolean = true
+        includeFills: Boolean = true,
+        eventStream: String = ""
     ): Long {
         return 0
     }

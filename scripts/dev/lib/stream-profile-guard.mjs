@@ -56,7 +56,11 @@ export function validateStreamProfile(profileName, options = {}) {
     expectPositiveInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", issues);
   } else {
     expect("STREAM_ACK_WORKER_ENABLED", "false", issues);
-    expect("STREAM_ACK_PROJECTOR_ENABLED", "false", issues);
+    if (env("DEV_STREAM_DIRECT_NODB_PROJECTOR_ENABLED", "0") === "1") {
+      warnings.push("stream-direct-nodb projector enabled for projection proof; do not use as no-DB throughput claim");
+    } else {
+      expect("STREAM_ACK_PROJECTOR_ENABLED", "false", issues);
+    }
   }
 
   return report(profile, issues, warnings, options);

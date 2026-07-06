@@ -45,16 +45,29 @@ setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "50");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer"]));
-setValue("RUNTIME_PROJECTION_POSTGRES_JDBC_URL", "jdbc:postgresql://postgres:5432/reef?currentSchema=runtime");
-const projectionEventStream = env("MATCHING_ENGINE_EVENT_STREAM");
+setValue("DEV_STREAM_DIRECT_NODB_PROJECTOR_ENABLED", "1");
+setValue("STREAM_ACK_PROJECTION_SOURCE", "venue-event-batch");
+setValue("STREAM_ACK_PROJECTION_NAME", projectionName);
+setValue("STREAM_ACK_PROJECTION_EVENT_STREAM", env("MATCHING_ENGINE_EVENT_STREAM"));
+setDefault("STREAM_ACK_PROJECTOR_BATCH_SIZE", "1000");
+setDefault("STREAM_ACK_PROJECTOR_POLL_MS", "10");
+setValue("ORDER_LIFECYCLE_PROJECTOR_ENABLED", "true");
+setDefault("ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE", "1000");
+setDefault("ORDER_LIFECYCLE_PROJECTOR_POLL_MS", "10");
+setValue("MARKET_DATA_PROJECTOR_ENABLED", "true");
+setValue("MARKET_DATA_PROJECTOR_PROJECTION_NAME", marketDataProjectionName);
+setValue("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", projectionName);
+setDefault("MARKET_DATA_PROJECTOR_BATCH_SIZE", "1000");
+setDefault("MARKET_DATA_PROJECTOR_POLL_MS", "10");
 
 console.log("starting Redpanda direct-stream materializer smoke stack...");
 await import("./stream-direct-nodb-up.mjs");
 
-console.log("waiting for platform-api, matching-engine, and materializer health...");
+console.log("waiting for platform-api, matching-engine, materializer, and read projector health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
+await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
 
 console.log("seeding API reference/auth state...");
 await seedReferenceData();
@@ -91,10 +104,8 @@ assertAccepted(submit);
 
 console.log("waiting for canonical command outcome row...");
 const outcome = await waitForCanonicalOutcome(commandId);
-console.log("projecting canonical command outcome into compact lifecycle rows...");
-const projection = await projectCompactLifecycleRows(outcome);
-console.log("proving projected read APIs...");
-const readApiProof = await proveProjectedReadApis(outcome);
+console.log("waiting for background projection and read APIs...");
+const readApiProof = await waitForProjectedReadApis(outcome);
 const afterStats = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
 const afterMaterialized = Number(afterStats.metrics?.materialized ?? 0);
 if (afterMaterialized <= beforeMaterialized) {
@@ -108,8 +119,6 @@ console.log(JSON.stringify({
   batchId: outcome.batch_id,
   resultStatus: outcome.result_status,
   materializedDelta: afterMaterialized - beforeMaterialized,
-  projectedDelta: projection.projected,
-  projectedReplayDelta: projection.replayed,
   readApiProof,
   projectionName,
   marketDataProjectionName,
@@ -159,7 +168,7 @@ async function waitForCanonicalOutcome(id) {
   throw new Error(`timeout waiting for canonical outcome (${last})`);
 }
 
-async function projectCompactLifecycleRows(outcome) {
+async function waitForProjectedReadApis(outcome) {
   const partition = Number(outcome.partition_id);
   if (!Number.isFinite(partition)) {
     throw new Error(`canonical outcome did not include a numeric partition_id: ${JSON.stringify(outcome)}`);
@@ -168,11 +177,21 @@ async function projectCompactLifecycleRows(outcome) {
   if (!Number.isFinite(streamSequence)) {
     throw new Error(`canonical outcome did not include a numeric stream_sequence: ${JSON.stringify(outcome)}`);
   }
-  await seedProjectionWatermark(partition, Math.max(0, streamSequence - 1));
+  const started = Date.now();
+  let last = "";
+  while (Date.now() - started < materializerTimeoutMs) {
+    try {
+      return await proveProjectedReadApisOnce(outcome, partition, streamSequence);
+    } catch (ex) {
+      last = ex.message || String(ex);
+      await sleep(materializerPollMs);
+    }
+  }
+  throw new Error(`timeout waiting for projected read APIs (${last})`);
+}
 
-  const projected = await projectUntilSubmitResult(outcome.command_id, partition);
-
-  const submitRows = await queryRuntimeRows(`
+async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
+  const submitRows = await queryProjectionRows(`
     SELECT command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at
     FROM runtime.submit_results
     WHERE command_id = '${sqlLiteral(outcome.command_id)}'
@@ -184,7 +203,7 @@ async function projectCompactLifecycleRows(outcome) {
     throw new Error(`projected submit_result type mismatch: ${JSON.stringify(submitRows[0])}`);
   }
 
-  const eventRows = await queryRuntimeRows(`
+  const eventRows = await queryProjectionRows(`
     SELECT event_id, event_type, order_id, trace_id, producer
     FROM runtime.runtime_events
     WHERE trace_id = '${sqlLiteral(outcome.command_id)}'
@@ -197,29 +216,8 @@ async function projectCompactLifecycleRows(outcome) {
     throw new Error(`projected runtime_event producer mismatch: ${JSON.stringify(eventRows[0])}`);
   }
 
-  const replayed = Number(await queryRuntimeValue(`
-    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}], TRUE, '${sqlLiteral(projectionEventStream)}')
-  `));
-  const replaySubmitRows = await queryRuntimeRows(`
-    SELECT command_id
-    FROM runtime.submit_results
-    WHERE command_id = '${sqlLiteral(outcome.command_id)}'
-  `, ["command_id"]);
-  const replayEventRows = await queryRuntimeRows(`
-    SELECT event_id
-    FROM runtime.runtime_events
-    WHERE trace_id = '${sqlLiteral(outcome.command_id)}'
-  `, ["event_id"]);
-  if (replaySubmitRows.length !== 1 || replayEventRows.length !== 1) {
-    throw new Error(`projection replay duplicated target rows: submitRows=${replaySubmitRows.length} eventRows=${replayEventRows.length}`);
-  }
-  if (replayed !== 0) {
-    throw new Error(`projection replay was not idempotent for ${projectionEventStream}: replayed=${replayed}`);
-  }
-
-  let orderRow = null;
   if (expectOrderRead) {
-    const orderRows = await queryRuntimeRows(`
+    const orderRows = await queryProjectionRows(`
       SELECT order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force
       FROM runtime.orders
       WHERE order_id = '${sqlLiteral(orderId)}'
@@ -227,7 +225,7 @@ async function projectCompactLifecycleRows(outcome) {
     if (orderRows.length !== 1) {
       throw new Error(`expected one projected order row for ${orderId}, got ${orderRows.length}`);
     }
-    orderRow = orderRows[0];
+    const orderRow = orderRows[0];
     if (
       orderRow.instrument_id !== instrumentId ||
       orderRow.participant_id !== participantId ||
@@ -238,7 +236,7 @@ async function projectCompactLifecycleRows(outcome) {
     }
   }
 
-  const watermarkRows = await queryRuntimeRows(`
+  const watermarkRows = await queryProjectionRows(`
     SELECT projection_name, partition_id, last_partition_seq, last_error
     FROM runtime.projection_watermarks
     WHERE projection_name = '${sqlLiteral(projectionName)}'
@@ -247,25 +245,11 @@ async function projectCompactLifecycleRows(outcome) {
   if (watermarkRows.length !== 1 || watermarkRows[0].last_error) {
     throw new Error(`projection watermark was not clean: ${JSON.stringify(watermarkRows)}`);
   }
+  if (Number(watermarkRows[0].last_partition_seq) < streamSequence) {
+    throw new Error(`projection watermark behind: ${JSON.stringify(watermarkRows[0])}`);
+  }
 
-  return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0], orderRow };
-}
-
-async function proveProjectedReadApis(outcome) {
-  await prioritizeDirtyOrder();
-  const lifecycleProjected = Number(await queryRuntimeValue("SELECT runtime.runtime_project_order_lifecycle_state(5000)"));
-  await prioritizeDirtyInstrument();
-  const marketDataProjected = Number(await queryRuntimeValue(`
-    SELECT runtime.runtime_project_market_data_snapshots(
-      '${sqlLiteral(marketDataProjectionName)}',
-      '${sqlLiteral(projectionName)}',
-      ${Number(outcome.stream_sequence)},
-      0,
-      1000
-    )
-  `));
-
-  const lifecycleRows = await queryRuntimeRows(`
+  const lifecycleRows = await queryProjectionRows(`
     SELECT order_id, instrument_id, participant_id, remaining_quantity_units, filled_quantity_units, status, limit_price
     FROM runtime.order_lifecycle_state
     WHERE order_id = '${sqlLiteral(orderId)}'
@@ -328,9 +312,16 @@ async function proveProjectedReadApis(outcome) {
     optionalQuery: ["levels", "projectionName", "sourceProjectionName"],
   });
 
+  const projectorStatus = await getJson(`${readApiUrl}/internal/projector/status`);
+  const lifecycleStatus = await getJson(`${readApiUrl}/internal/order-lifecycle/projector/status`);
+  const marketDataStatus = await getJson(`${readApiUrl}/internal/market-data/projector/status`);
+
   return {
-    lifecycleProjected,
-    marketDataProjected,
+    canonicalProjected: projectorStatus.metrics?.projected ?? 0,
+    lifecycleCycles: lifecycleStatus.metrics?.cycles ?? 0,
+    lifecycleProcessedRows: lifecycleStatus.metrics?.processedRows ?? 0,
+    marketDataCycles: marketDataStatus.metrics?.cycles ?? 0,
+    marketDataProcessedRows: marketDataStatus.metrics?.processedRows ?? 0,
     lifecycleStatus: lifecycle.status,
     currentOrders: currentOrders.orders.length,
     orderHistory: orderHistory.orders.length,
@@ -339,30 +330,6 @@ async function proveProjectedReadApis(outcome) {
     availabilitySurfaces: surfaces.length,
     readApiUrl,
   };
-}
-
-async function prioritizeDirtyOrder() {
-  await queryRuntimeValue(`
-    WITH prioritized AS (
-      UPDATE runtime.order_lifecycle_dirty
-      SET dirtied_at = to_timestamp(0)
-      WHERE order_id = '${sqlLiteral(orderId)}'
-      RETURNING 1
-    )
-    SELECT COUNT(*) FROM prioritized
-  `);
-}
-
-async function prioritizeDirtyInstrument() {
-  await queryRuntimeValue(`
-    WITH prioritized AS (
-      UPDATE runtime.market_data_snapshot_dirty
-      SET dirtied_at = to_timestamp(0)
-      WHERE instrument_id = '${sqlLiteral(instrumentId)}'
-      RETURNING 1
-    )
-    SELECT COUNT(*) FROM prioritized
-  `);
 }
 
 function assertOwnOrderResponse(label, response, expected) {
@@ -421,61 +388,17 @@ function assertAvailabilitySurface(surfaces, expected) {
   }
 }
 
-async function projectUntilSubmitResult(commandId, partition) {
-  let projected = 0;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    projected += Number(await queryRuntimeValue(`
-      SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}], TRUE, '${sqlLiteral(projectionEventStream)}')
-    `));
-    const rows = await queryRuntimeRows(`
-      SELECT command_id
-      FROM runtime.submit_results
-      WHERE command_id = '${sqlLiteral(commandId)}'
-    `, ["command_id"]);
-    if (rows.length === 1) return projected;
-    if (rows.length > 1) {
-      throw new Error(`projection duplicated submit_result for ${commandId}: ${rows.length}`);
-    }
-    await sleep(materializerPollMs);
-  }
-  throw new Error(`timeout waiting for compact projection of ${commandId}; projected=${projected}`);
-}
-
-async function seedProjectionWatermark(partition, lastPartitionSequence) {
-  await runRuntimePsql(`
-    INSERT INTO runtime.projection_watermarks(
-      projection_name,
-      partition_id,
-      last_partition_seq,
-      last_projected_at,
-      updated_at,
-      last_error
-    )
-    VALUES (
-      '${sqlLiteral(projectionName)}',
-      ${partition},
-      ${lastPartitionSequence},
-      now(),
-      now(),
-      ''
-    )
-    ON CONFLICT (projection_name, partition_id) DO UPDATE SET
-      last_partition_seq = GREATEST(
-        runtime.projection_watermarks.last_partition_seq,
-        EXCLUDED.last_partition_seq
-      ),
-      last_projected_at = EXCLUDED.last_projected_at,
-      updated_at = EXCLUDED.updated_at,
-      last_error = ''
-  `);
-}
-
-async function queryRuntimeValue(sql) {
-  return (await runRuntimePsql(sql)).trim();
-}
-
 async function queryRuntimeRows(sql, columns) {
   const output = await runRuntimePsql(sql);
+  return parsePsqlRows(output, columns);
+}
+
+async function queryProjectionRows(sql, columns) {
+  const output = await runProjectionPsql(sql);
+  return parsePsqlRows(output, columns);
+}
+
+function parsePsqlRows(output, columns) {
   return output
     .trim()
     .split(/\r?\n/)
@@ -484,11 +407,19 @@ async function queryRuntimeRows(sql, columns) {
 }
 
 async function runRuntimePsql(sql) {
+  return runPsql("postgres", sql);
+}
+
+async function runProjectionPsql(sql) {
+  return runPsql("projection-postgres", sql);
+}
+
+async function runPsql(service, sql) {
   const output = await runCapture("docker", [
     "compose",
     "exec",
     "-T",
-    "postgres",
+    service,
     "psql",
     "-U",
     env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
@@ -558,11 +489,15 @@ function request(method, url, payload, headers = {}, timeoutMs = 5000) {
   });
 }
 
-function runCapture(cmd, args) {
+function runCapture(cmd, args, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`${cmd} ${args.join(" ")} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -571,8 +506,12 @@ function runCapture(cmd, args) {
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
     child.on("close", (code) => {
+      clearTimeout(timeout);
       if (code === 0) {
         resolve(stdout);
       } else {
