@@ -5,7 +5,7 @@ description: API idempotency, roles/actor-roles, and policy/audit tables.
 
 ## Boundary Schema
 
-**`boundary.idempotency_records`** — `client_id text`, `route text`, `idempotency_key text`, `request_hash text`, `response_status int`, `response_body jsonb`, `created_at timestamptz`, `expires_at timestamptz`; primary key `(client_id, route, idempotency_key)`. Backs the `Idempotency-Key` contract on every `/api/v1` mutation — see [API Overview](/api/overview/).
+**`boundary.idempotency_records`** — `client_id text`, `route text`, `idempotency_key text`, `request_hash text`, `response_status int`, `response_body jsonb`, `created_at timestamptz`, `expires_at timestamptz`; primary key `(client_id, route, idempotency_key)`. Backs the `Idempotency-Key` contract on every `/api/v1` mutation — see [API Overview](../../api/overview/).
 
 ## Auth Schema
 
@@ -24,5 +24,5 @@ description: API idempotency, roles/actor-roles, and policy/audit tables.
 ## Learn More
 
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — full blueprint (source for this page)
-- [Runtime Schema](/schema/runtime-schema/) — canonical venue facts and lifecycle projections
-- [Planned Schema](/schema/planned-schema/) — account/settlement/market_data/analytics design targets
+- [Runtime Schema](../runtime-schema/) — canonical venue facts and lifecycle projections
+- [Planned Schema](../planned-schema/) — account/settlement/market_data/analytics design targets

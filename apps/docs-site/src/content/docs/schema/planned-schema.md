@@ -23,7 +23,7 @@ Candidate tables: `settlement.obligations`, `settlement.allocations`, `settlemen
 
 ## Market Data Schema (Partially Built)
 
-A separate query/read domain from order entry. The current slice (`runtime.order_lifecycle_state`, `runtime.market_data_snapshots`) covers top-of-book and bounded depth — see [Market Data API](/api/market-data/). Remaining candidate tables: `market_data.book_snapshots`, `market_data.depth_snapshots`, `market_data.recent_trades`, `market_data.intraday_bars`, `market_data.historical_bars`, `market_data.feed_watermarks`.
+A separate query/read domain from order entry. The current slice (`runtime.order_lifecycle_state`, `runtime.market_data_snapshots`) covers top-of-book and bounded depth — see [Market Data API](../../api/market-data/). Remaining candidate tables: `market_data.book_snapshots`, `market_data.depth_snapshots`, `market_data.recent_trades`, `market_data.intraday_bars`, `market_data.historical_bars`, `market_data.feed_watermarks`.
 
 ## Analytics Schema (Planned)
 
@@ -55,4 +55,4 @@ Manifest minimum: run id, source reconciliation counts, file list, per-file row 
 ## Learn More
 
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — full blueprint (source for this page)
-- [Overview](/schema/overview/) — what's built vs. planned across all schemas
+- [Overview](../overview/) — what's built vs. planned across all schemas

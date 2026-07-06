@@ -4,19 +4,19 @@ description: Simulation-first institutional trading venue and post-trade platfor
 template: splash
 banner:
   content: |
-    Pre-release, heavy development. APIs, schemas, and game mechanics change without notice — see <a href="/overview/status/">Current Status</a>.
+    Pre-release, heavy development. APIs, schemas, and game mechanics change without notice — see <a href="overview/status/">Current Status</a>.
 hero:
   tagline: A simulation-first institutional trading venue and post-trade platform, with a tournament-style Bot Arena taking shape on top of it.
   actions:
     - text: What Is Reef
-      link: /overview/what-is-reef/
+      link: overview/what-is-reef/
       icon: right-arrow
       variant: primary
     - text: Trading API
-      link: /api/overview/
+      link: api/overview/
       icon: document
     - text: Bot Arena (WIP)
-      link: /arena/overview/
+      link: arena/overview/
       icon: rocket
 ---
 
@@ -36,16 +36,16 @@ Reef models the lifecycle of privately matched institutional trades — order in
 
 <CardGrid>
 	<Card title="Project Overview" icon="open-book">
-		What Reef is, why it exists, and how the core platform and simulation control plane relate. Start at [What Is Reef](/overview/what-is-reef/).
+		What Reef is, why it exists, and how the core platform and simulation control plane relate. Start at [What Is Reef](overview/what-is-reef/).
 	</Card>
 	<Card title="Bot Arena & Bot SDK" icon="rocket">
-		The work-in-progress trading-bot game: how to author a bot, how a run works, how scoring works. Start at [Arena Overview](/arena/overview/).
+		The work-in-progress trading-bot game: how to author a bot, how a run works, how scoring works. Start at [Arena Overview](arena/overview/).
 	</Card>
 	<Card title="Trading API" icon="setting">
-		The external `/api/v1` surface: orders, market data, command status, headers, and error shape. Start at [API Overview](/api/overview/).
+		The external `/api/v1` surface: orders, market data, command status, headers, and error shape. Start at [API Overview](api/overview/).
 	</Card>
 	<Card title="Data Schema" icon="document">
-		Persistent schema (`runtime`, `boundary`, `auth`, `admin`, and planned domains) plus the protobuf wire contracts. Start at [Schema Overview](/schema/overview/).
+		Persistent schema (`runtime`, `boundary`, `auth`, `admin`, and planned domains) plus the protobuf wire contracts. Start at [Schema Overview](schema/overview/).
 	</Card>
 </CardGrid>
 
@@ -59,7 +59,7 @@ order intake -> hidden-book matching engine -> executions & trades
 ```
 
 <Card title="Read the full architecture" icon="puzzle">
-	Service boundaries, bounded contexts, and current deployment shape. See [Architecture](/overview/architecture/).
+	Service boundaries, bounded contexts, and current deployment shape. See [Architecture](overview/architecture/).
 </Card>
 
 ## Write A Trading Bot
@@ -94,7 +94,7 @@ export default class ExampleBot extends ReefBotV1 {
 ```
 
 <Card title="Write your first bot" icon="rocket">
-	Full lifecycle, limits, and local qualification checks. See [Bot SDK Quickstart](/arena/bot-sdk-quickstart/).
+	Full lifecycle, limits, and local qualification checks. See [Bot SDK Quickstart](arena/bot-sdk-quickstart/).
 </Card>
 
 ## Run It Locally
@@ -106,5 +106,5 @@ make dev-sim      # drive a seeded scenario
 ```
 
 <Aside type="caution" title="Pre-release">
-	Reef is under heavy development. Routes, schemas, and game mechanics described in these docs are the current target, not a stable release — see [Current Status](/overview/status/) for what's actually built today.
+	Reef is under heavy development. Routes, schemas, and game mechanics described in these docs are the current target, not a stable release — see [Current Status](overview/status/) for what's actually built today.
 </Aside>

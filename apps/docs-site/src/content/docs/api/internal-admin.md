@@ -30,9 +30,9 @@ Routes under `/internal/*` exist for operators, admin CLI, and diagnostics. They
 | `/internal/stream-ack/worker/stats` | Stream-ack worker stats |
 | `/internal/venue-event-materializer/stats` | Venue event batch materializer stats |
 
-Arena admin routes require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`) and `PLATFORM_ARENA_ADMIN_ENABLED=1` — see [How The Game Works](/arena/how-the-game-works/).
+Arena admin routes require the separate arena datasource (`ARENA_POSTGRES_JDBC_URL`, `ARENA_POSTGRES_USER`, `ARENA_POSTGRES_PASSWORD`) and `PLATFORM_ARENA_ADMIN_ENABLED=1` — see [How The Game Works](../../arena/how-the-game-works/).
 
 ## Learn More
 
-- [API Overview](/api/overview/) — the public `/api/v1` contract these routes are explicitly separate from
+- [API Overview](../overview/) — the public `/api/v1` contract these routes are explicitly separate from
 - `docs/BOT_ARENA_PLAN.md` — arena control-plane detail

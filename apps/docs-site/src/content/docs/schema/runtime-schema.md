@@ -9,7 +9,7 @@ description: Canonical venue facts and operational lifecycle projections.
 
 **`runtime.canonical_venue_event_batches`** — compact durable materialization of matching-engine `VenueEventBatch` output: batch identity, command/event stream identity, partition/offset or sequence, payload checksum, payload format/version, command count, replay-safe payload facts.
 
-**`runtime.canonical_command_outcomes`** — command-level lookup/replay rows projected from canonical event batches: command id, command type, result status, reject code, order/instrument identifiers, stream sequence/offset, result payload, payload hash. Backs the [Command Status API](/api/commands/).
+**`runtime.canonical_command_outcomes`** — command-level lookup/replay rows projected from canonical event batches: command id, command type, result status, reject code, order/instrument identifiers, stream sequence/offset, result payload, payload hash. Backs the [Command Status API](../../api/commands/).
 
 ## Operational Order Lifecycle Projections
 
@@ -30,5 +30,5 @@ These are query/read projections unless a decision explicitly promotes a field i
 ## Learn More
 
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — full blueprint (source for this page)
-- [API Orders](/api/orders/) — the request/response contract these tables back
-- [Wire Contracts](/schema/contracts/) — protobuf shapes materialized into these tables
+- [API Orders](../../api/orders/) — the request/response contract these tables back
+- [Wire Contracts](../contracts/) — protobuf shapes materialized into these tables

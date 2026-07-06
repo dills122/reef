@@ -53,5 +53,5 @@ Contracts are versioned and additive-first; `make check-proto-additive` verifies
 
 - `contracts/proto/order_execution.proto` — the full, current source of truth
 - `contracts/proto/README.md` — contract conventions
-- [Orders API](/api/orders/) — the public JSON shape this maps to/from
-- [Runtime Schema](/schema/runtime-schema/) — how these messages materialize into Postgres
+- [Orders API](../../api/orders/) — the public JSON shape this maps to/from
+- [Runtime Schema](../runtime-schema/) — how these messages materialize into Postgres

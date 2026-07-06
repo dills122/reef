@@ -12,7 +12,7 @@ description: Service boundaries, bounded contexts, and repository shape.
 | `services/simulator` | Go | Deterministic scenario execution, seeded participant/bot traffic, replay checks, stress/load tooling |
 | `apps/docs-site` | Astro | This site |
 | `contracts/proto` | Protobuf | Versioned cross-language contracts (order execution today) |
-| `packages/bot-sdk` | TypeScript | Public Bot SDK authoring surface — see [Bot Arena](/arena/overview/) |
+| `packages/bot-sdk` | TypeScript | Public Bot SDK authoring surface — see [Bot Arena](../../arena/overview/) |
 | `packages/scenario-definitions` | — | Reusable scenario/simulation input definitions |
 
 ## Deployment Shape (Current)
@@ -43,7 +43,7 @@ Reef's domain is organized around explicit contexts, most starting as modules in
 - simulation-control
 - audit-and-analytics
 
-Only orders-and-execution and market-data have meaningful implementation today; the rest are architecture targets. See [Current Status](/overview/status/) for the built/planned split.
+Only orders-and-execution and market-data have meaningful implementation today; the rest are architecture targets. See [Current Status](../status/) for the built/planned split.
 
 ## Core Rules
 
@@ -57,5 +57,5 @@ Only orders-and-execution and market-data have meaningful implementation today; 
 
 - `docs/steering/architecture.md` — full architecture steering
 - `docs/steering/external-api-boundary.md` — API boundary steering
-- `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — schema blueprint (see [Schema](/schema/overview/) on this site)
+- `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — schema blueprint (see [Schema](../../schema/overview/) on this site)
 - `docs/ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md` — infrastructure diagrams

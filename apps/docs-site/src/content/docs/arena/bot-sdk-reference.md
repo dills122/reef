@@ -78,4 +78,4 @@ Unique filename, required metadata, basic email syntax, semver-like version, for
 - `docs/BOT_SDK_DESIGN.md` — full SDK design contract (source for this page)
 - `docs/BOT_SDK_APPROVED_PACKAGES.md` — approval rules for dependencies
 - `docs/BOT_SDK_HOSTED_RUNTIME.md` — hosted sandbox direction
-- [Bot SDK Quickstart](/arena/bot-sdk-quickstart/) — minimal working example
+- [Bot SDK Quickstart](../bot-sdk-quickstart/) — minimal working example
