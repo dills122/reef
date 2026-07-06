@@ -15,5 +15,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "typescript": "^5.7.3"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "^1.1.4"
   }
 }
