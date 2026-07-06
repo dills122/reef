@@ -311,13 +311,16 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         projectionName: String,
         batchSize: Int,
         partitions: List<Int>,
-        includeFills: Boolean
+        includeFills: Boolean,
+        eventStream: String
     ): Long {
         if (batchSize <= 0) return 0
         val partitionSet = partitions.toSet()
+        val scopedEventStream = eventStream.trim()
         val watermarks = projectionWatermarks.computeIfAbsent(projectionName) { mutableMapOf() }
         val outcomes = commandOutcomes.values
             .filter { outcome -> outcome.commandType in ProjectableCommandTypes }
+            .filter { outcome -> scopedEventStream.isBlank() || outcome.eventStream == scopedEventStream }
             .filter { outcome -> partitionSet.isEmpty() || outcome.partition in partitionSet }
             .filter { outcome -> outcome.streamSequence > (watermarks[outcome.partition] ?: 0L) }
             .groupBy { it.partition }

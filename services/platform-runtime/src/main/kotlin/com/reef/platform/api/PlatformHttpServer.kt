@@ -160,6 +160,7 @@ class PlatformHttpServer(
     private val streamAckProjectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
     private val streamAckProjectionSource: CanonicalProjectionSource =
         CanonicalProjectionSource.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_SOURCE", CanonicalProjectionSource.CanonicalSubmit.configValue)),
+    private val streamAckProjectionEventStream: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_EVENT_STREAM", ""),
     private val streamAckProjectorPartitions: String = RuntimeEnv.string("STREAM_ACK_PROJECTOR_PARTITIONS", "all"),
     private val streamAckProjectorBatchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val streamAckProjectorPollMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
@@ -891,6 +892,7 @@ class PlatformHttpServer(
             "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
             "implementation" to "canonical-submit-projector",
             "source" to streamAckProjectionSource.configValue,
+            "eventStream" to streamAckProjectionEventStream,
             "projectionName" to status.projectionName,
             "partitions" to partitions,
             "projectedCount" to status.projectedCount,
@@ -3633,6 +3635,7 @@ class PlatformHttpServer(
             api = api,
             projectionName = streamAckProjectionName,
             projectionSource = streamAckProjectionSource,
+            eventStream = streamAckProjectionEventStream,
             partitions = partitions,
             batchSize = streamAckProjectorBatchSize,
             pollIntervalMs = streamAckProjectorPollMs,

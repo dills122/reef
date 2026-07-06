@@ -12,6 +12,7 @@ class CanonicalProjectionWorker(
     private val projectionName: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_NAME", "runtime-normalized-submit"),
     private val projectionSource: CanonicalProjectionSource =
         CanonicalProjectionSource.fromConfig(RuntimeEnv.string("STREAM_ACK_PROJECTION_SOURCE", CanonicalProjectionSource.CanonicalSubmit.configValue)),
+    private val eventStream: String = RuntimeEnv.string("STREAM_ACK_PROJECTION_EVENT_STREAM", ""),
     private val partitions: List<Int> = emptyList(),
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
@@ -42,7 +43,7 @@ class CanonicalProjectionWorker(
             HotPathMetrics.time("projector.${projectionSource.metricName}") {
                 when (projectionSource) {
                     CanonicalProjectionSource.CanonicalSubmit -> api.projectCanonicalSubmitOutcomes(projectionName, batchSize, partitions)
-                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills)
+                    CanonicalProjectionSource.VenueEventBatch -> api.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream)
                 }
             }.also { projected ->
                 if (projected > 0) {

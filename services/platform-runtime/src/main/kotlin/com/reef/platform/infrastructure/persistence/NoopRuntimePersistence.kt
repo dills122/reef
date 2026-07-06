@@ -96,7 +96,8 @@ class NoopRuntimePersistence : RuntimePersistence {
         projectionName: String,
         batchSize: Int,
         partitions: List<Int>,
-        includeFills: Boolean
+        includeFills: Boolean,
+        eventStream: String
     ): Long = 0
 
     override fun projectionStatus(projectionName: String, partitions: List<Int>, source: String): ProjectionStatus {

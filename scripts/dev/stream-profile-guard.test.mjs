@@ -15,6 +15,16 @@ try {
     assert.ok(result.issues.some((issue) => issue.includes("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES")));
   });
 
+  withEnv({
+    ...baseStreamEnv(),
+    STREAM_ACK_PROJECTOR_ENABLED: "true",
+    DEV_STREAM_DIRECT_NODB_PROJECTOR_ENABLED: "1",
+  }, () => {
+    const result = validateStreamProfile("stream-direct-nodb", { throwOnError: false });
+    assert.equal(result.ok, true);
+    assert.ok(result.warnings.some((warning) => warning.includes("projection proof")));
+  });
+
   withEnv({ ...baseStreamEnv(), STREAM_ACK_PUBLISHER: "noop" }, () => {
     assert.equal(validateStreamProfile("noop-ceiling", { throwOnError: false }).ok, true);
     assert.equal(validateStreamProfile("materializer-soak", { throwOnError: false }).ok, false);

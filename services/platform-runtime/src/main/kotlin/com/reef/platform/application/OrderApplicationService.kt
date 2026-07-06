@@ -287,11 +287,12 @@ class OrderApplicationService(
         projectionName: String,
         batchSize: Int,
         partitions: List<Int> = emptyList(),
-        includeFills: Boolean = true
+        includeFills: Boolean = true,
+        eventStream: String = ""
     ): Long {
         if (batchSize <= 0) return 0
         return HotPathMetrics.time("runtime.persistence.projectCanonicalCommandOutcomes") {
-            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills)
+            runtimePersistence.projectCanonicalCommandOutcomes(projectionName, batchSize, partitions, includeFills, eventStream)
         }
     }
 
