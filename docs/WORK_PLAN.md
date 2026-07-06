@@ -40,7 +40,6 @@ The current gaps are:
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and has local no-DB proof; it still needs longer remote promotion evidence and persistence reintroduction from durable venue event batches
-- persisted order lifecycle projections do not yet fully mirror submit/cancel/modify/fill engine state
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
 
