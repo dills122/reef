@@ -35,6 +35,43 @@ Immediate implications:
 
 Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 
+## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
+
+Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.
+
+Evidence:
+
+- heap dump from the failed `10k/sec`, `15m` API-front-door run retained millions of `StreamCommandReference` and `InMemoryStreamCommandIntakeStore.Entry` objects, plus matching `String` and map-node overhead.
+- `scripts/dev/stream-direct-nodb-up.mjs` already set `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`, but `docker-compose.yml` did not pass those values into platform-runtime containers. Runtime default `0` meant unlimited in-memory retention.
+- after compose pass-through and bounded sharded intake, local no-op publisher evidence recovered:
+  - `10k/sec`, `15m`, `448` workers: `8,999,952` requests, `8,999,952` success, `0` failures, `9999.89 rps`, p99 `47.40ms`, API `restartCount=0`, post-run API RSS about `1.17GiB`.
+  - `11k/sec`, `2m`, `448` workers: `1,320,000` requests, `0` failures, `10999.48 rps`, p99 `34.46ms`.
+  - `12.5k/sec`, `2m`, `448` workers: `1,499,983` requests, `0` failures, `12499.43 rps`, p99 `34.10ms`, API RSS about `1.205GiB`, publish queue single digits, API `restartCount=0`, `oomKilled=false`.
+- focused verification passed:
+  - platform-runtime tests: `StreamCommandIntakeTest` and `PlatformHttpServerBoundaryTest.streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference`
+  - simulator load-tester tests: `go test ./cmd/load-tester`
+
+Immediate implications:
+
+1. Bounded intake is required for long no-DB ceiling tests. Unlimited replay retention measures heap growth, not command-intake throughput.
+2. Compose env pass-through is part of the contract for benchmark profiles; setting defaults only in wrapper scripts is not enough.
+3. `STREAM_ACK_PUBLISHER=noop` evidence proves API boundary/intake/Netty ceiling only. It must not be used for durable-acceptance claims because `202` no longer proves broker append.
+4. The earlier apparent `~1k/sec` loss is closed for the no-op API-front-door profile. Next bottleneck hunt should move back to durable broker publish, direct matching-engine consumption, and materializer/projector drain.
+
+Current design read:
+
+1. The API front door and matching engine have local headroom above the near-term `10k/sec` venue target.
+2. The active proof risk is durable drain/accounting: append ack, direct matching consume, venue-event publish, canonical materialization, replay, and projection idempotency must agree under failure and restart.
+3. Named profile validation should run before throughput work so a no-op or unbounded in-memory diagnostic setting cannot be mistaken for a durable production-like result.
+4. Defer the next long soak until short durable gates are clean locally; run the longer soak on DO where CPU, network, disk, and container restart behavior match the intended deployment more closely.
+
+Cleanup and retest after this checkpoint:
+
+- durable `VenueEventBatch` submit outcomes now carry the compact `acceptedOrder` projection fact needed to rebuild full order rows without `command_log.command_payloads`; the side-table join remains a compatibility fallback.
+- the materializer soak profile now requires direct-stream and materializer failure checks plus zero accepted/acked and accepted/materialized completion-gap tolerances.
+- the venue-event materializer smoke now proves order read-model reconstruction and idempotent stream-scoped projection replay by default.
+- local follow-up passed the short durable gate: `10k/sec`, `60s`, `384` workers, `599950` accepted, `599950` stream-direct acked, `599950` materialized canonical outcomes, `0` failures, p99 `89.72ms`; scoped replay/checksum passed with no gaps, mismatches, or duplicate replay inserts.
+
 ## Aged-State Soak Learnings (May 26, 2026)
 
 From a 30-minute fixed-load soak (`capacity-baseline`, `capacity-heavy`, `2500 rps`, `workers=128`):
@@ -259,7 +296,7 @@ This points to Reef's API publisher/front-door call pattern rather than JetStrea
 
 The next implementation should not be more thread-count tuning. Build a dedicated bounded publish pipeline/front-door path that preserves `202` only after durable ack, exposes per-lane queue depth/in-flight/ack latency, and prevents request threads from becoming the concurrency-control mechanism.
 
-The follow-up implementation moved stream-ack submit intake onto the Netty hot path and added `STREAM_ACK_PUBLISH_PIPELINE_ENABLED=true`, which wraps the configured durable publisher in one bounded lane per command partition. The no-DB direct profile now enables this by default with `PLATFORM_HTTP_SERVER=netty`, `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY=8192`, and `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE=256`. The next benchmark should compare this path against the July 4 ceiling above and watch `/internal/stream-ack/health` for `publishQueueDepth`, `publishInFlight`, and `publishLaneCount` to distinguish load-generator limits, publish-lane saturation, and matching-engine drain limits.
+The follow-up implementation moved stream-ack submit intake onto the Netty hot path and added `STREAM_ACK_PUBLISH_PIPELINE_ENABLED=true`, which wraps the configured durable publisher in one bounded lane per command partition. The no-DB direct profile now enables this by default with `PLATFORM_HTTP_SERVER=netty`, `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY=1024`, and `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE=256`. The next benchmark should compare this path against the July 4 ceiling above and watch `/internal/stream-ack/health` for `publishQueueDepth`, `publishInFlight`, and `publishLaneCount` to distinguish load-generator limits, publish-lane saturation, and matching-engine drain limits.
 
 The first DO confirmation after enabling the publish pipeline held the same clean direct-engine behavior for a 3-minute `10000 rps` no-DB run, but throughput stayed near `7884/sec` with zero failures. Stream health samples showed low queue depth and no direct-engine drain problem, while `api.streamAck.publishAck` averaged about `19ms`. Follow-up telemetry now splits the publish pipeline into queue wait, in-flight slot wait, delegate durable ack, total pipeline time, and per-lane counters so the next run can distinguish JetStream ack latency, lane skew, and load-generator scheduling pressure without broad architecture churn.
 

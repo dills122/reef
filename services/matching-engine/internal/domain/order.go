@@ -74,6 +74,21 @@ type OrderRejected struct {
 	OccurredAt string `json:"occurredAt"`
 }
 
+type AcceptedOrderFact struct {
+	OrderID       string `json:"orderId"`
+	EngineOrderID string `json:"engineOrderId"`
+	InstrumentID  string `json:"instrumentId"`
+	ParticipantID string `json:"participantId"`
+	AccountID     string `json:"accountId"`
+	Side          Side   `json:"side"`
+	OrderType     string `json:"orderType"`
+	QuantityUnits string `json:"quantityUnits"`
+	LimitPrice    string `json:"limitPrice"`
+	Currency      string `json:"currency"`
+	TimeInForce   string `json:"timeInForce"`
+	AcceptedAt    string `json:"acceptedAt"`
+}
+
 type OrderState struct {
 	OrderID           string      `json:"orderId"`
 	InstrumentID      string      `json:"instrumentId"`
@@ -111,8 +126,9 @@ type TradeCreated struct {
 }
 
 type SubmitOrderResult struct {
-	Accepted   *OrderAccepted     `json:"accepted,omitempty"`
-	Rejected   *OrderRejected     `json:"rejected,omitempty"`
-	Executions []ExecutionCreated `json:"executions,omitempty"`
-	Trades     []TradeCreated     `json:"trades,omitempty"`
+	Accepted      *OrderAccepted     `json:"accepted,omitempty"`
+	Rejected      *OrderRejected     `json:"rejected,omitempty"`
+	AcceptedOrder *AcceptedOrderFact `json:"acceptedOrder,omitempty"`
+	Executions    []ExecutionCreated `json:"executions,omitempty"`
+	Trades        []TradeCreated     `json:"trades,omitempty"`
 }

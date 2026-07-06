@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 
 loadDotEnv();
 
@@ -15,6 +16,8 @@ setValue("EXTERNAL_API_IDEMPOTENCY_STORE", "inmemory");
 setValue("EXTERNAL_API_COMMAND_CAPTURE_MODE", "disabled");
 setValue("EXTERNAL_API_COMMAND_LOG_MODE", "disabled");
 setValue("STREAM_ACK_INTAKE_STORE", "inmemory");
+setDefault("STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES", "100000");
+setDefault("STREAM_ACK_INMEMORY_INTAKE_SHARDS", "256");
 setValue("PLATFORM_HTTP_SERVER", "netty");
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
 setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_MATERIALIZER_STRESS_COMMANDS");
@@ -59,12 +62,15 @@ setDefault("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "0");
 setDefault("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0");
 setDefault("DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR", "0");
 setDefault("DEV_STRESS_CAPTURE_STREAM_DIRECT", "1");
+setDefault("DEV_STRESS_FAIL_ON_STREAM_DIRECT_FAILURES", "1");
+setDefault("DEV_STRESS_MAX_STREAM_DIRECT_COMPLETION_GAP", "0");
 setDefault("DEV_STRESS_STREAM_DIRECT_DRAIN_WAIT_MS", "30000");
 setDefault("DEV_STRESS_STREAM_DIRECT_DRAIN_POLL_MS", "1000");
 setDefault("DEV_STRESS_STREAM_DIRECT_PROBE_TIMEOUT_MS", "15000");
 setDefault("DEV_STRESS_CAPTURE_VENUE_EVENT_MATERIALIZER", "1");
 setDefault("DEV_STRESS_VENUE_EVENT_MATERIALIZER_URLS", defaultMaterializerUrls());
 setDefault("DEV_STRESS_FAIL_ON_VENUE_EVENT_MATERIALIZER_FAILURES", "1");
+setDefault("DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_COMPLETION_GAP", "0");
 setDefault("DEV_STRESS_VENUE_EVENT_MATERIALIZER_DRAIN_WAIT_MS", "60000");
 setDefault("DEV_STRESS_VENUE_EVENT_MATERIALIZER_DRAIN_POLL_MS", "1000");
 setDefault("DEV_STRESS_VENUE_EVENT_MATERIALIZER_PROBE_TIMEOUT_MS", "15000");
@@ -89,6 +95,8 @@ console.log(`  terminalOrderRetentionLimit=${process.env.MATCHING_ENGINE_TERMINA
 console.log(`  dbDiagnostics=${process.env.DEV_STRESS_CAPTURE_DB_DIAGNOSTICS}`);
 console.log(`  artifactDir=${process.env.DEV_STRESS_ARTIFACT_DIR}`);
 console.log(`  stopIdleBackgroundServices=${process.env.DEV_STRESS_STOP_IDLE_BACKGROUND_SERVICES}`);
+validateStreamProfile("materializer-soak");
+printStreamProfileSummary("materializer-soak");
 
 await import("./stream-ack-up.mjs");
 await stopIdleBackgroundServices();

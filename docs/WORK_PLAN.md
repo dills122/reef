@@ -62,7 +62,7 @@ The current gaps are:
 3. Complete venue lifecycle projection.
    - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
    - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
-   - The durable command-payload join now exists (`command_log.command_payloads` joined by `command_id`), so `orders` rows are reconstructed at submit-accept time without extra `VenueEventBatch` metadata.
+   - No-DB direct-consume `VenueEventBatch` submit outcomes now carry the compact `acceptedOrder` fact needed to reconstruct `orders` rows; the durable `command_log.command_payloads` join remains a compatibility fallback.
    - Submit/cancel/modify/fill/reject state is queryable through `runtime.order_lifecycle_state` (derived from `orders`, `executions`, and `runtime_events`), kept live by the opt-in `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` background loop (status at `/internal/order-lifecycle/projector/status`) instead of manual/admin-triggered rebuild only.
    - Genuine engine-level `SubmitOrder` rejects (not boundary rejects like `AUTHORIZATION_ERROR`/`REFERENCE_DATA_ERROR`) now get an `orders` row and a `REJECTED` `order_lifecycle_state` status instead of being visible only through `submit_results`.
    - The background loop maintains `runtime.order_lifecycle_state` incrementally: every write path that touches `orders`/`executions`/`trades`/`runtime_events` marks affected order_ids in `runtime.order_lifecycle_dirty`, and `runtime.runtime_project_order_lifecycle_state(batchSize)` only recomputes those, bounded by `ORDER_LIFECYCLE_PROJECTOR_BATCH_SIZE`. Cost scales with recent activity, not total historical order count. The old full-table rebuild (`rebuildOrderLifecycleState`) is kept as a manual/admin repair tool.
@@ -115,7 +115,7 @@ Exit criteria:
 - hot-path matching does not block on Postgres materialization
 - venue event batches materialize into compact, batch-oriented canonical rows with measured rows/command, WAL/command, commits/command, lag, and drain behavior
 - compact command-outcome projections write downstream `submit_results` and `runtime_events` idempotently from canonical event-batch materialization
-- full order/execution/trade projection from event batches is added only after the event batch carries enough command metadata, or after a deliberate command-payload join is introduced
+- full order/execution/trade projection from event batches uses event-batch outcome facts where available, with deliberate command-payload joins only as compatibility fallback
 - local startup validates schema placement instead of silently bootstrapping drift
 
 ### C. Venue Lifecycle Completion

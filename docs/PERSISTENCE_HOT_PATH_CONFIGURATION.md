@@ -39,6 +39,14 @@ Default shape:
 - API publishes commands to Redpanda/Kafka.
 - Matching engine consumes the command stream directly.
 - Runtime persistence is `noop` unless a background role overrides it.
+- `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` bounds the no-DB idempotency window for long ceiling tests; set it to `0` for unlimited in-memory replay retention.
+- `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256` shards no-DB stream-intake reservation state so the ceiling profile does not serialize all accepted commands on one in-memory monitor.
+
+Isolation tools:
+
+- `make dev-stream-publish-bench` measures configured stream publisher capacity without HTTP, intake reservation, or matching-engine work.
+- `STREAM_ACK_PUBLISHER=noop make dev-up-stream-direct-nodb` keeps the API stream-ack front door active but replaces durable broker publish with an immediate ack. Use only to isolate HTTP/API ceiling; it is not a durable-acceptance profile.
+- `make dev-validate-stream-profile PROFILE=stream-direct-nodb` checks the intended profile environment without starting a load run. Use `PROFILE=noop-ceiling` for no-op API-front-door isolation and `PROFILE=materializer-soak` for durable canonical materializer runs.
 
 ### Venue Event Materializer
 
@@ -119,16 +127,22 @@ Current hot-path materializer profile uses 16 command partitions and matching-en
 
 ### API Publish Pipeline
 
+- `STREAM_ACK_PUBLISHER` (`noop` only for API isolation benchmarks)
+- `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES`
+- `STREAM_ACK_INMEMORY_INTAKE_SHARDS`
 - `STREAM_ACK_PUBLISH_PIPELINE_ENABLED`
 - `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY`
 - `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE`
 - `STREAM_ACK_PUBLISH_PIPELINE_BATCH_SIZE`
 - `STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS`
+- `PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS`
 - `STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT`
 - `STREAM_ACK_KAFKA_BATCH_SIZE`
 - `STREAM_ACK_KAFKA_COMPRESSION_TYPE`
+- `MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE`
 
 The materializer stress profile uses the publish pipeline with lz4 Kafka compression and high per-lane in-flight capacity.
+The direct no-DB Redpanda profile defaults matching-engine event publish compression to `none` because the current Sarama record batch encoder leaves compressed batch `max_timestamp` unset, which forces Redpanda to decompress produced batches for validation.
 
 ### Materializer Consumers
 
@@ -228,10 +242,38 @@ Projection runs also check:
 - `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`
 - `STREAM_ACK_MAX_PROJECTOR_LAG=0`
 
+## Durable Proof Gates
+
+No-op publisher evidence is useful only for front-door capacity. A production throughput claim needs all durable facts to line up:
+
+- API returned `202` only after durable command append ack.
+- command stream accepted count equals matching-engine direct consumed count after drain.
+- matching-engine command ack happens only after `VenueEventBatch` publish succeeds.
+- venue-event materializer consumes event batches and persists canonical command outcomes before committing offsets.
+- canonical command outcomes match accepted commands after any intentional restart window.
+- replay/projector pass can rebuild lifecycle rows without duplicates.
+- failure counters stay zero: publish failed/rejected, stream-direct failed/nacked/termed/unsupported, materializer failed/ackFailed.
+
+Short-run cleanup gates before another long soak:
+
+1. Validate the profile with `make dev-validate-stream-profile PROFILE=materializer-soak`.
+2. Run `make dev-smoke-venue-event-materializer` to prove one durable command reaches canonical outcome and compact projection replay is idempotent.
+3. Run a short durable materializer stress, not a long soak, with strict drain checks and small duration such as `DEV_STRESS_DURATION=60s`.
+4. Inspect report equality: accepted, stream-direct acked, and materialized outcomes should have zero unexplained gap after drain.
+5. Save the long `10k+` soak for DO once local short gates are clean.
+
+Smoke caveats:
+
+- `make dev-smoke-venue-event-materializer` uses isolated Redpanda command/event topics per run so retained local topic backlog does not hide the command under test.
+- The smoke proves durable API append, matching-engine direct consume/ack, venue-event batch publish, materializer canonical outcome persistence, target-row projection idempotency, and order read-model reconstruction.
+- No-DB direct-consume projection does not depend on `command_log.command_payloads`: submit outcomes in the durable event batch carry a compact `acceptedOrder` projection fact. Set `DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW=0` only when intentionally debugging older payload shapes.
+
 ## Current Capacity Read
 
-Current local evidence:
+Current local evidence for durable materializer path:
 
+- Post-`acceptedOrder` smoke: `make dev-smoke-venue-event-materializer`, smoke id `materializer-smoke-1783354591266`, `materializedDelta=1`, `projectedDelta=1`, `projectedReplayDelta=0`; replay/checksum scoped to `REEF_MATERIALIZER_SMOKE_VENUE_EVENTS_MATERIALIZER-SMOKE-1783354591266` passed with `duplicateReplayInserted=0`, no checksum/hash/count mismatches, no stream gaps/overlaps, and no projection watermark lag.
+- Post-`acceptedOrder` short gate: `/tmp/reef-materializer-gate-10k-60s/materializer-10k-60s-rate-10000-workers-384.json`, `10k rps`, `60s`, `384` workers, `599950` requests, `599950` HTTP `202`, `0` failures, `9998.47 rps`, p95 `50.59ms`, p99 `89.72ms`; stream-direct acked `599950`, materializer persisted `599950`, direct/materializer failures and ack failures `0`. Replay/checksum scoped to `REEF_MATERIALIZER_STRESS_VENUE_EVENTS` passed with `599950` canonical outcomes and `duplicateReplayInserted=0`.
 - One materializer does not reliably drain to zero durable-canonical gap at 10k sustained load.
 - Four materializers drained accepted commands to zero durable gap at 10k for 60s and 180s validation runs.
 - Initial 15k/5m attempts exposed local memory pressure: first the API was OOM-killed by idle background JVM overhead, then the matching engine was OOM-killed by unbounded terminal order retention.
@@ -258,3 +300,29 @@ Matching-engine terminal retention:
 - API status after run: healthy
 - matching-engine status after run: healthy
 - note: durable materialized outcomes are higher than accepted commands because this run drained backlog from earlier failed attempts.
+
+Current local evidence for API-front-door no-op isolation:
+
+- artifact root: `/tmp/reef-local-noop-10000-900s-intake-cap`
+- profile: `STREAM_ACK_PUBLISHER=noop`, `STREAM_ACK_INTAKE_STORE=inmemory`, Netty hot-path adapter, workers/projectors disabled
+- offered target: 10000 rps for 15m
+- completed/accepted throughput: 9999.89 rps
+- requests/success/failures: 8999952 / 8999952 / 0
+- p99: 47.40ms
+- API status after run: healthy, `restartCount=0`, post-run RSS about 1.17GiB
+
+Headroom probes after the 15m soak:
+
+- `/tmp/reef-local-noop-11000-120s-headroom`: 11000 rps for 2m, 1320000 / 1320000 / 0, p99 34.46ms
+- `/tmp/reef-local-noop-12500-120s-headroom`: 12500 rps for 2m, 1499983 / 1499983 / 0, p99 34.10ms, API RSS about 1.205GiB, publish queue single digits, `restartCount=0`, `oomKilled=false`
+
+Root-cause note:
+
+- The failed 10k/15m no-op soak retained unbounded in-memory intake entries because Compose did not pass `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES` into platform-runtime containers.
+- The current direct no-DB wrapper sets `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`; Compose now passes both through.
+- `STREAM_ACK_PUBLISHER=noop` remains an isolation tool only. It proves API validation, intake reservation, response handling, and load-generator accounting; it does not prove durable command-log acceptance.
+
+Verification status for the bounded-intake patch:
+
+- `GRADLE_USER_HOME=/tmp/reef-gradle-verify-1 ./gradlew test --tests com.reef.platform.api.StreamCommandIntakeTest --tests com.reef.platform.api.PlatformHttpServerBoundaryTest.streamAckLatePublishAckAfterResponseTimeoutReplaysAcceptedReference`
+- `go test ./cmd/load-tester` from `services/simulator`

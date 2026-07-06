@@ -40,7 +40,7 @@ Current decision anchors:
 - D-041 makes Kafka-compatible durable producer plus matching-engine direct consumer the active hot-ingress target, with JetStream retained as fallback/comparison.
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 - Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
-- The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events`. Accepted submit `orders` are reconstructed through the durable `command_log.command_payloads` join when the original command payload is available.
+- The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results`, `runtime_events`, and accepted submit `orders`. No-DB direct-consume batches carry the compact `acceptedOrder` projection fact; `command_log.command_payloads` is a fallback for older or command-log-backed batches.
 - Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
 - Account/bot risk pre-checks now have a boundary contract and allow-all/static implementation that can reject, backpressure, or disable bots before command-log append, stream intake reservation, or durable publish.
 - Market-data reads have a first conservative projection-backed slice: `runtime.order_lifecycle_state` tracks open/partially-filled/filled/cancelled/rejected order state, `runtime.market_data_snapshots` reads remaining open `LIMIT` quantity for `/api/v1/market-data/snapshots/{instrumentId}`, and `/api/v1/market-data/depth/{instrumentId}` exposes bounded lifecycle-backed depth. The opt-in `MARKET_DATA_PROJECTOR_ENABLED=true` loop keeps top-of-book snapshots current and reports status at `/internal/market-data/projector/status`. Maintenance is incremental, mirroring the order-lifecycle projector: it first advances `runtime.order_lifecycle_state` from `runtime.order_lifecycle_dirty`, which marks each touched order's instrument in `runtime.market_data_snapshot_dirty`, then `runtime.runtime_project_market_data_snapshots(...)` recomputes top-of-book for only those instruments, bounded by `MARKET_DATA_PROJECTOR_BATCH_SIZE`; instruments whose last open order leaves the book get their snapshot row removed instead of left stale.
@@ -67,7 +67,12 @@ Use these docs for active work:
 
 - Project framing: [`REEF_PROJECT_OVERVIEW.md`](../REEF_PROJECT_OVERVIEW.md)
 - Technical design: [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
+- System overview: [`SYSTEM_OVERVIEW.md`](./SYSTEM_OVERVIEW.md)
 - Current and target architecture diagrams: [`ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md`](./ARCHITECTURE_INFRASTRUCTURE_DIAGRAMS.md)
+- Infrastructure backbone server: [`SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- Venue runtime backbone services: [`SYSTEM_BACKBONE_SERVICES.md`](./SYSTEM_BACKBONE_SERVICES.md)
+- Simulator environment shape: [`SYSTEM_SIMULATOR_ENVIRONMENT.md`](./SYSTEM_SIMULATOR_ENVIRONMENT.md)
+- Combined backbone/simulator topology: [`SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md`](./SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md)
 - Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./archive/ROADMAP.md)

@@ -321,13 +321,15 @@ func main() {
 		close(results)
 	}()
 
-	all := make([]requestResult, 0, 1024)
+	accumulator := newSummaryAccumulator(1024)
+	completed := 0
 	for result := range results {
-		all = append(all, result)
+		accumulator.add(result)
+		completed++
 	}
 
 	finished := time.Now().UTC()
-	report := buildSummary(sessionID, started, finished, cfg, all, rateCounters.summary(cfg, len(all), finished.Sub(started).Seconds()))
+	report := accumulator.build(sessionID, started, finished, cfg, rateCounters.summary(cfg, completed, finished.Sub(started).Seconds()))
 	report.TraceChecks = runTraceChecks(client, cfg, &traceSeen)
 	printSummary(report)
 	if cfg.ReportOut != "" {
@@ -1085,154 +1087,186 @@ func (c *loadScheduleCounters) summary(cfg Config, completed int, durationSecond
 	return out
 }
 
-func buildSummary(sessionID string, started, finished time.Time, cfg Config, results []requestResult, loadSchedule loadScheduleSummary) summary {
-	report := summary{
-		SessionID:       sessionID,
-		StartedAt:       started,
-		FinishedAt:      finished,
-		DurationSeconds: finished.Sub(started).Seconds(),
-		Config:          cfg,
-		LoadSchedule:    loadSchedule,
-		ByAction: map[Action]actionSummary{
+type summaryAccumulator struct {
+	report                  summary
+	errorCounts             map[string]int64
+	rejectReasons           map[string]int64
+	rejectCodes             map[string]int64
+	totalRejects            int64
+	allLatencies            []float64
+	actionLatencies         map[Action][]float64
+	profileLatencies        map[string][]float64
+	actorLatencies          map[string][]float64
+	personaLatencies        map[string][]float64
+	strategyLatencies       map[string][]float64
+	profileActionLatencies  map[string]map[Action][]float64
+	actorActionLatencies    map[string]map[Action][]float64
+	personaActionLatencies  map[string]map[Action][]float64
+	strategyActionLatencies map[string]map[Action][]float64
+}
+
+func newSummaryAccumulator(initialCapacity int) *summaryAccumulator {
+	if initialCapacity < 0 {
+		initialCapacity = 0
+	}
+	return &summaryAccumulator{
+		report: summary{
+			ByAction: map[Action]actionSummary{
+				ActionSubmit: {},
+				ActionModify: {},
+				ActionCancel: {},
+			},
+			ByProfile:   map[string]profileSummary{},
+			ByActor:     map[string]profileSummary{},
+			ByPersona:   map[string]profileSummary{},
+			ByStrategy:  map[string]profileSummary{},
+			StatusCodes: make(map[int]int64),
+		},
+		errorCounts:   make(map[string]int64),
+		rejectReasons: make(map[string]int64),
+		rejectCodes:   make(map[string]int64),
+		allLatencies:  make([]float64, 0, initialCapacity),
+		actionLatencies: map[Action][]float64{
 			ActionSubmit: {},
 			ActionModify: {},
 			ActionCancel: {},
 		},
-		ByProfile:   map[string]profileSummary{},
-		ByActor:     map[string]profileSummary{},
-		ByPersona:   map[string]profileSummary{},
-		ByStrategy:  map[string]profileSummary{},
-		StatusCodes: make(map[int]int64),
+		profileLatencies:        map[string][]float64{},
+		actorLatencies:          map[string][]float64{},
+		personaLatencies:        map[string][]float64{},
+		strategyLatencies:       map[string][]float64{},
+		profileActionLatencies:  map[string]map[Action][]float64{},
+		actorActionLatencies:    map[string]map[Action][]float64{},
+		personaActionLatencies:  map[string]map[Action][]float64{},
+		strategyActionLatencies: map[string]map[Action][]float64{},
+	}
+}
+
+func (a *summaryAccumulator) add(r requestResult) {
+	latencyMs := r.Latency.Seconds() * 1000
+	a.report.TotalRequests++
+	a.report.StatusCodes[r.StatusCode]++
+	a.allLatencies = append(a.allLatencies, latencyMs)
+	a.actionLatencies[r.Action] = append(a.actionLatencies[r.Action], latencyMs)
+	a.profileLatencies[r.Profile] = append(a.profileLatencies[r.Profile], latencyMs)
+	appendActionLatency(a.profileActionLatencies, r.Profile, r.Action, latencyMs)
+	if r.ActorID != "" {
+		a.actorLatencies[r.ActorID] = append(a.actorLatencies[r.ActorID], latencyMs)
+		appendActionLatency(a.actorActionLatencies, r.ActorID, r.Action, latencyMs)
+	}
+	if r.Persona != "" {
+		a.personaLatencies[r.Persona] = append(a.personaLatencies[r.Persona], latencyMs)
+		appendActionLatency(a.personaActionLatencies, r.Persona, r.Action, latencyMs)
+	}
+	if r.StrategyID != "" {
+		a.strategyLatencies[r.StrategyID] = append(a.strategyLatencies[r.StrategyID], latencyMs)
+		appendActionLatency(a.strategyActionLatencies, r.StrategyID, r.Action, latencyMs)
 	}
 
-	errorCounts := make(map[string]int64)
-	rejectReasons := make(map[string]int64)
-	rejectCodes := make(map[string]int64)
-	totalRejects := int64(0)
-	allLatencies := make([]float64, 0, len(results))
-	actionLatencies := map[Action][]float64{
-		ActionSubmit: {},
-		ActionModify: {},
-		ActionCancel: {},
+	current := a.report.ByAction[r.Action]
+	current.Requests++
+	if r.Success {
+		a.report.TotalSuccess++
+		current.Success++
+	} else {
+		a.report.TotalFailures++
+		current.Failures++
+		if r.ErrorText != "" {
+			a.errorCounts[r.ErrorText]++
+		}
+		if r.RejectCode != "" {
+			a.rejectCodes[r.RejectCode]++
+			a.totalRejects++
+			key := r.RejectCode
+			if r.RejectReason != "" {
+				key = key + ": " + r.RejectReason
+			}
+			a.rejectReasons[key]++
+		}
 	}
-	profileLatencies := map[string][]float64{}
-	actorLatencies := map[string][]float64{}
-	personaLatencies := map[string][]float64{}
-	strategyLatencies := map[string][]float64{}
-	profileActionLatencies := map[string]map[Action][]float64{}
-	actorActionLatencies := map[string]map[Action][]float64{}
-	personaActionLatencies := map[string]map[Action][]float64{}
-	strategyActionLatencies := map[string]map[Action][]float64{}
+	a.report.ByAction[r.Action] = current
 
-	for _, r := range results {
-		latencyMs := r.Latency.Seconds() * 1000
-		report.TotalRequests++
-		report.StatusCodes[r.StatusCode]++
-		allLatencies = append(allLatencies, latencyMs)
-		actionLatencies[r.Action] = append(actionLatencies[r.Action], latencyMs)
-		profileLatencies[r.Profile] = append(profileLatencies[r.Profile], latencyMs)
-		appendActionLatency(profileActionLatencies, r.Profile, r.Action, latencyMs)
-		if r.ActorID != "" {
-			actorLatencies[r.ActorID] = append(actorLatencies[r.ActorID], latencyMs)
-			appendActionLatency(actorActionLatencies, r.ActorID, r.Action, latencyMs)
+	pCurrent, ok := a.report.ByProfile[r.Profile]
+	if !ok {
+		pCurrent = profileSummary{
+			ByAction: map[Action]actionSummary{
+				ActionSubmit: {},
+				ActionModify: {},
+				ActionCancel: {},
+			},
 		}
-		if r.Persona != "" {
-			personaLatencies[r.Persona] = append(personaLatencies[r.Persona], latencyMs)
-			appendActionLatency(personaActionLatencies, r.Persona, r.Action, latencyMs)
-		}
-		if r.StrategyID != "" {
-			strategyLatencies[r.StrategyID] = append(strategyLatencies[r.StrategyID], latencyMs)
-			appendActionLatency(strategyActionLatencies, r.StrategyID, r.Action, latencyMs)
-		}
-
-		current := report.ByAction[r.Action]
-		current.Requests++
-		if r.Success {
-			report.TotalSuccess++
-			current.Success++
-		} else {
-			report.TotalFailures++
-			current.Failures++
-			if r.ErrorText != "" {
-				errorCounts[r.ErrorText]++
-			}
-			if r.RejectCode != "" {
-				rejectCodes[r.RejectCode]++
-				totalRejects++
-				key := r.RejectCode
-				if r.RejectReason != "" {
-					key = key + ": " + r.RejectReason
-				}
-				rejectReasons[key]++
-			}
-		}
-		report.ByAction[r.Action] = current
-
-		pCurrent, ok := report.ByProfile[r.Profile]
-		if !ok {
-			pCurrent = profileSummary{
-				ByAction: map[Action]actionSummary{
-					ActionSubmit: {},
-					ActionModify: {},
-					ActionCancel: {},
-				},
-			}
-		}
-		pCurrent.Requests++
-		pAction := pCurrent.ByAction[r.Action]
-		pAction.Requests++
-		if r.Success {
-			pCurrent.Success++
-			pAction.Success++
-		} else {
-			pCurrent.Failures++
-			pAction.Failures++
-		}
-		pCurrent.ByAction[r.Action] = pAction
-		report.ByProfile[r.Profile] = pCurrent
-		updateDimensionSummary(report.ByActor, r.ActorID, r.Action, r.Success)
-		updateDimensionSummary(report.ByPersona, r.Persona, r.Action, r.Success)
-		updateDimensionSummary(report.ByStrategy, r.StrategyID, r.Action, r.Success)
 	}
+	pCurrent.Requests++
+	pAction := pCurrent.ByAction[r.Action]
+	pAction.Requests++
+	if r.Success {
+		pCurrent.Success++
+		pAction.Success++
+	} else {
+		pCurrent.Failures++
+		pAction.Failures++
+	}
+	pCurrent.ByAction[r.Action] = pAction
+	a.report.ByProfile[r.Profile] = pCurrent
+	updateDimensionSummary(a.report.ByActor, r.ActorID, r.Action, r.Success)
+	updateDimensionSummary(a.report.ByPersona, r.Persona, r.Action, r.Success)
+	updateDimensionSummary(a.report.ByStrategy, r.StrategyID, r.Action, r.Success)
+}
 
+func (a *summaryAccumulator) build(sessionID string, started, finished time.Time, cfg Config, loadSchedule loadScheduleSummary) summary {
+	report := a.report
+	report.SessionID = sessionID
+	report.StartedAt = started
+	report.FinishedAt = finished
+	report.DurationSeconds = finished.Sub(started).Seconds()
+	report.Config = cfg
+	report.LoadSchedule = loadSchedule
 	report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
 	report.AcceptedBusinessOpsRPS = float64(report.TotalSuccess) / report.DurationSeconds
 	report.Throughput = reporting.ComputeThroughput(report.TotalRequests, report.TotalSuccess, 0, report.DurationSeconds)
-	report.LatencyMs = computeLatency(allLatencies)
-	for action, values := range actionLatencies {
+	report.LatencyMs = computeLatency(a.allLatencies)
+	for action, values := range a.actionLatencies {
 		current := report.ByAction[action]
 		current.Latency = computeLatency(values)
 		report.ByAction[action] = current
 	}
-	for profile, values := range profileLatencies {
+	for profile, values := range a.profileLatencies {
 		pCurrent := report.ByProfile[profile]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencyBuckets(&pCurrent, profileActionLatencies[profile])
+		applyActionLatencyBuckets(&pCurrent, a.profileActionLatencies[profile])
 		report.ByProfile[profile] = pCurrent
 	}
-	for actorID, values := range actorLatencies {
+	for actorID, values := range a.actorLatencies {
 		pCurrent := report.ByActor[actorID]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencyBuckets(&pCurrent, actorActionLatencies[actorID])
+		applyActionLatencyBuckets(&pCurrent, a.actorActionLatencies[actorID])
 		report.ByActor[actorID] = pCurrent
 	}
-	for persona, values := range personaLatencies {
+	for persona, values := range a.personaLatencies {
 		pCurrent := report.ByPersona[persona]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencyBuckets(&pCurrent, personaActionLatencies[persona])
+		applyActionLatencyBuckets(&pCurrent, a.personaActionLatencies[persona])
 		report.ByPersona[persona] = pCurrent
 	}
-	for strategyID, values := range strategyLatencies {
+	for strategyID, values := range a.strategyLatencies {
 		pCurrent := report.ByStrategy[strategyID]
 		pCurrent.Latency = computeLatency(values)
-		applyActionLatencyBuckets(&pCurrent, strategyActionLatencies[strategyID])
+		applyActionLatencyBuckets(&pCurrent, a.strategyActionLatencies[strategyID])
 		report.ByStrategy[strategyID] = pCurrent
 	}
-	report.TopErrors = topErrors(errorCounts, 8)
-	report.RejectReasons = topErrors(rejectReasons, 12)
-	report.RejectTaxonomy = summarizeRejectTaxonomy(rejectCodes, report.TotalFailures, totalRejects, 12)
-	report.Quality = computeQuality(report.TotalRequests, report.TotalSuccess, report.TotalFailures, rejectCodes, defaultInvalidIntentRejectCodes)
+	report.TopErrors = topErrors(a.errorCounts, 8)
+	report.RejectReasons = topErrors(a.rejectReasons, 12)
+	report.RejectTaxonomy = summarizeRejectTaxonomy(a.rejectCodes, report.TotalFailures, a.totalRejects, 12)
+	report.Quality = computeQuality(report.TotalRequests, report.TotalSuccess, report.TotalFailures, a.rejectCodes, defaultInvalidIntentRejectCodes)
 	return report
+}
+
+func buildSummary(sessionID string, started, finished time.Time, cfg Config, results []requestResult, loadSchedule loadScheduleSummary) summary {
+	accumulator := newSummaryAccumulator(len(results))
+	for _, result := range results {
+		accumulator.add(result)
+	}
+	return accumulator.build(sessionID, started, finished, cfg, loadSchedule)
 }
 
 func summarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []rejectTaxonomySummary {

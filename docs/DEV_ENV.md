@@ -310,7 +310,7 @@ Run the engine-direct no-DB stress profile:
 make dev-stress-stream-direct-nodb
 ```
 
-This starts the stream-ack command intake profile with DB-backed hot-path persistence disabled, disables stream workers/projectors, enables `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`, uses the Netty hot-path adapter, enables the bounded partitioned command-publish pipeline, and runs submit-only stress steps at `5000,10000,15000,20000` rps for `90s` by default. Reports are written under `/tmp/reef-stream-direct-nodb-stress`. The profile uses isolated high-capacity JetStream defaults, `STREAM_ACK_COMMAND_STREAM=REEF_DIRECT_NODB_COMMANDS_V2`, `STREAM_ACK_SUBJECT_PREFIX=reef.direct.nodb.v2.cmd.v1`, `STREAM_ACK_COMMAND_STREAM_MAX_BYTES=34359738368`, `MATCHING_ENGINE_EVENT_STREAM=REEF_DIRECT_NODB_VENUE_EVENTS_V2`, and `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.direct.nodb.v2.venue.events.v1`, so retained local streams from older profiles do not overlap subjects or hit the older 1 GiB command-stream cap. Trace validation is disabled with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test.
+This starts the stream-ack command intake profile with DB-backed hot-path persistence disabled, disables stream workers/projectors, enables `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`, uses the Netty hot-path adapter, enables the bounded partitioned command-publish pipeline, and runs submit-only stress steps at `5000,10000,15000,20000` rps for `90s` by default. Reports are written under `/tmp/reef-stream-direct-nodb-stress`. The profile uses isolated high-capacity JetStream defaults, `STREAM_ACK_COMMAND_STREAM=REEF_DIRECT_NODB_COMMANDS_V2`, `STREAM_ACK_SUBJECT_PREFIX=reef.direct.nodb.v2.cmd.v1`, `STREAM_ACK_COMMAND_STREAM_MAX_BYTES=34359738368`, `MATCHING_ENGINE_EVENT_STREAM=REEF_DIRECT_NODB_VENUE_EVENTS_V2`, and `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.direct.nodb.v2.venue.events.v1`, so retained local streams from older profiles do not overlap subjects or hit the older 1 GiB command-stream cap. Trace validation is disabled with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test. The profile caps the in-memory stream-intake idempotency window with `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and shards it with `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256` by default so long no-DB soaks do not measure unbounded heap retention or a single in-memory monitor instead of command intake.
 
 Run the same no-DB direct profile against Redpanda/Kafka-compatible command and event topics:
 
@@ -320,13 +320,43 @@ STREAM_ACK_LOG_PROVIDER=redpanda make dev-stress-stream-direct-nodb
 
 In this mode the API still returns `202` only after the Kafka-compatible producer receives an `acks=all` broker acknowledgment. The matching engine consumes assigned Kafka topic partitions directly, publishes `VenueEventBatch` records to the configured event topic, and commits Kafka offsets only after the event batch publish succeeds. A platform runtime can then run `PLATFORM_RUNTIME_ROLE=materializer` with `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack` and `STREAM_ACK_LOG_PROVIDER=redpanda` to read those event batches, commit compact canonical Postgres rows, and commit its Kafka event-topic offsets only after the Postgres materialization call returns. This is the apples-to-apples path for the durable command-log boundary plus async canonical materialization; the older `STREAM_ACK_LOG_PROVIDER=redpanda make dev-up-stream-ack` path still exercises the DB-backed stream workers.
 
+Isolate publisher capacity without HTTP or matching-engine work:
+
+```bash
+STREAM_ACK_LOG_PROVIDER=redpanda \
+STREAM_ACK_COMMAND_STREAM=REEF_PUBLISH_BENCH \
+STREAM_PUBLISH_BENCH_RATE=12500 \
+STREAM_PUBLISH_BENCH_DURATION=180s \
+make dev-stream-publish-bench
+```
+
+For API-front-door ceiling tests only, set `STREAM_ACK_PUBLISHER=noop` when starting the direct no-DB profile. This keeps boundary validation, in-memory stream-intake reservation, Netty response handling, and stream-ack marker behavior in path, but replaces the durable broker append with an immediate monotonic ack. Do not use this for correctness or durability claims because `202` no longer proves command-log acceptance.
+
+Latest local no-op API-front-door evidence:
+
+- `/tmp/reef-local-noop-10000-900s-intake-cap`: `10k/sec` for `15m`, `8999952` requests, `0` failures, `9999.89 rps`, p99 `47.40ms`, API `restartCount=0`, RSS about `1.17GiB`.
+- `/tmp/reef-local-noop-11000-120s-headroom`: `11k/sec` for `2m`, `0` failures, `10999.48 rps`, p99 `34.46ms`.
+- `/tmp/reef-local-noop-12500-120s-headroom`: `12.5k/sec` for `2m`, `0` failures, `12499.43 rps`, p99 `34.10ms`, API `restartCount=0`, `oomKilled=false`.
+
+This evidence depends on bounded in-memory intake retention. The direct no-DB wrapper defaults `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`; keep those visible in the container environment when running long soaks. Set max entries to `0` only when intentionally measuring unlimited replay-window memory growth.
+
+Validate stream profile settings without starting a load run:
+
+```bash
+make dev-validate-stream-profile PROFILE=stream-direct-nodb
+make dev-validate-stream-profile PROFILE=noop-ceiling
+make dev-validate-stream-profile PROFILE=materializer-soak
+```
+
+These checks catch profile drift before a soak, including unbounded in-memory intake, accidental `STREAM_ACK_PUBLISHER=noop` on durable materializer paths, disabled publish pipeline, missing direct/materializer capture, nonzero direct/materializer completion-gap tolerances, or missing terminal-order retention bounds.
+
 Run the local Redpanda direct-stream materializer smoke:
 
 ```bash
 make dev-smoke-venue-event-materializer
 ```
 
-This starts isolated Redpanda command/event topics, the direct matching-engine consumer, and `platform-materializer`. The smoke submits one stream-ack order, waits for `runtime.canonical_command_outcomes`, and verifies `/internal/venue-event-materializer/stats` advanced. It is a correctness smoke, not a throughput claim.
+This starts isolated Redpanda command/event topics, the direct matching-engine consumer, and `platform-materializer`. The smoke submits one stream-ack order, waits for `runtime.canonical_command_outcomes`, projects compact lifecycle/read-model rows from the durable event-batch payload, checks order read-model reconstruction by default, and verifies `/internal/venue-event-materializer/stats` advanced. It is a correctness smoke, not a throughput claim.
 
 For the higher-throughput front-door prototype, enable the long-lived stream transport:
 
@@ -368,6 +398,7 @@ Kafka-compatible producer tuning is exposed with:
 - `STREAM_ACK_KAFKA_LINGER_MS`
 - `STREAM_ACK_KAFKA_BATCH_SIZE`
 - `STREAM_ACK_KAFKA_COMPRESSION_TYPE`
+- `MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE`
 - `STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES`
 - `STREAM_ACK_KAFKA_MAX_BLOCK_MS`
 - `STREAM_ACK_KAFKA_REQUEST_TIMEOUT_MS`
@@ -384,6 +415,8 @@ Stream-ack health is exposed at `/internal/stream-ack/health`. The first backpre
 JetStream command publishing supports `STREAM_ACK_PUBLISH_MODE=sync|async`. `sync` uses one synchronous durable publish call per accepted command. `async` uses JNATS async publish futures with a bounded in-flight limit from `STREAM_ACK_PUBLISH_MAX_IN_FLIGHT`, then waits for the specific command's publish ack before returning `202`.
 
 `STREAM_ACK_PUBLISH_PIPELINE_ENABLED=true` wraps the configured stream publisher in a bounded partitioned publish pipeline. Each command partition gets a lane with queue capacity `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY` and in-flight durable publish cap `STREAM_ACK_PUBLISH_PIPELINE_MAX_IN_FLIGHT_PER_LANE`. Netty stream-ack intake waits asynchronously for the durable publish future, so request threads no longer own JetStream concurrency. The stream-ack health response includes `publishMode`, `publishInFlight`, `publishMaxInFlight`, `publishQueueDepth`, `publishMaxQueueDepth`, `publishLaneCount`, publish accepted/completed/failed/rejected counters, phase timings for queue wait, slot wait, delegate ack, and per-lane snapshots for benchmark interpretation.
+
+The no-DB direct profile defaults `STREAM_ACK_PUBLISH_PIPELINE_QUEUE_CAPACITY=1024` so overload becomes publish backpressure instead of retaining a large per-partition command backlog.
 
 The deploy-shaped stream-ack profile enables venue-core drain-side backpressure by default. `STREAM_ACK_MAX_WORKER_STREAM_LAG` samples configured worker drain state; in JetStream mode it uses durable consumer snapshots from `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES`, while Redpanda mode reports assigned-partition offset lag. When the positive threshold is reached, the API rejects before publish with `429` instead of accepting work it cannot safely drain. Projection lag is still reported, but it only gates intake when `STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=control-room-fresh` and `STREAM_ACK_MAX_PROJECTOR_LAG` is positive.
 
@@ -447,9 +480,9 @@ make dev-smoke-protective-controls
 
 Stream-ack worker stats are exposed at `/internal/stream-ack/worker/stats`. The worker consumes `SubmitOrder` commands partition-by-partition, prepares a fetched batch, appends canonical command results/events, and acknowledges the durable log only after the canonical DB commit path returns. In JetStream mode this is a message ack; in Redpanda mode this is a manual Kafka offset commit. Unsupported stream command types are terminated until cancel/modify processing is added.
 
-Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. The default `STREAM_ACK_PROJECTION_SOURCE=canonical-submit` reads canonical submit outcomes from the runtime Postgres service and updates normalized order/execution/trade/runtime-event read tables in the projection Postgres service. `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch` reads materialized `runtime.canonical_command_outcomes`, projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` accepted/rejected lifecycle rows into `submit_results` and `runtime_events`, and reconstructs accepted submit `orders` through the durable `command_log.command_payloads` join when that payload is available. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
+Stream-ack projector status is exposed at `/internal/projector/status` on `platform-projector-0` through `platform-projector-3` (`REEF_PLATFORM_PROJECTOR_0_HOST_PORT` through `REEF_PLATFORM_PROJECTOR_3_HOST_PORT`, defaults `8084`, `8085`, `8088`, and `8089`). Projectors own explicit non-overlapping partition ranges, advance projection-local `runtime.projection_watermarks`, and report projection lag for their owned partitions. The default `STREAM_ACK_PROJECTION_SOURCE=canonical-submit` reads canonical submit outcomes from the runtime Postgres service and updates normalized order/execution/trade/runtime-event read tables in the projection Postgres service. `STREAM_ACK_PROJECTION_SOURCE=venue-event-batch` reads materialized `runtime.canonical_command_outcomes`, projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` accepted/rejected lifecycle rows into `submit_results` and `runtime_events`, and reconstructs accepted submit `orders` from the durable event-batch `acceptedOrder` projection fact with `command_log.command_payloads` as a fallback for older payloads. Stress reports capture all default endpoints when `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`; stream-ack worker capture enables it by default. Override custom layouts with `DEV_STRESS_STREAM_ACK_PROJECTOR_URLS`.
 
-Venue event replay/check evidence is exposed through `make dev-venue-event-replay-check`. The check replays stored `runtime.canonical_venue_event_batches.payload_json` through `runtime.runtime_materialize_venue_event_batch`, expects idempotent `0` inserts, compares batch command counts, payload checksums, command outcome payload hashes, missing/extra canonical rows, stream gaps/overlaps, and optionally projection watermarks. Set `DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME=<projection>` to fail on lag for a specific venue-event-batch projector watermark, or `DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY=true` for empty local databases.
+Venue event replay/check evidence is exposed through `make dev-venue-event-replay-check`. The check replays stored `runtime.canonical_venue_event_batches.payload_json` through `runtime.runtime_materialize_venue_event_batch`, expects idempotent `0` inserts, compares batch command counts, payload checksums, command outcome payload hashes, missing/extra canonical rows, stream gaps/overlaps, and optionally projection watermarks. Set `DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM=<event-stream>` to scope dirty local databases to one retained stream, `DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME=<projection>` to fail on lag for a specific venue-event-batch projector watermark, or `DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY=true` for empty local databases.
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`), `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`), and `arena-postgres` (`REEF_ARENA_POSTGRES_HOST_PORT`, default `5435`) services so command intake/idempotency, projection writes, and arena control-plane metadata can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, `projection-postgres`, and `arena-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
@@ -554,7 +587,7 @@ HTTP boundary comparison knobs:
 
 - `PLATFORM_HTTP_SERVER=jdk` keeps the default JDK `HttpServer` adapter and full local route surface.
 - `PLATFORM_HTTP_SERVER=netty` enables the measured Netty hot-path adapter. This adapter intentionally covers the no-DB ceiling-test surface first: setup POSTs for reference/auth seeding, `/health`, `/api/v1/orders/submit`, `/api/v1/commands/{commandId}`, `/internal/perf/hot-path`, `/internal/perf/db-pools`, `/internal/commands/async/stats`, stream-ack/projector status probes, and abuse stats.
-- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, and `PLATFORM_NETTY_APPLICATION_THREADS=64` tune the Netty adapter. A worker count of `0` uses Netty's default event-loop sizing, while application threads run the hot-path command handler off the IO event loop.
+- `PLATFORM_NETTY_BOSS_THREADS=1`, `PLATFORM_NETTY_WORKER_THREADS=0`, `PLATFORM_NETTY_APPLICATION_THREADS`, and `PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS=2048` tune the Netty adapter. A worker count of `0` uses Netty's default event-loop sizing, blank application threads use a CPU-aware runtime default, and max pending tasks bounds each application executor queue so overload fails fast instead of growing heap without limit.
 
 Accepted-async no-DB isolation knobs:
 

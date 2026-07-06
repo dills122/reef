@@ -109,6 +109,8 @@ Use these defaults for the first implementation unless a later decision explicit
 10. Fetch stress reports, telemetry, logs, and selected DB/NATS diagnostics.
 11. Destroy the Droplet unless we are actively iterating.
 
+For the Redpanda direct no-DB materializer track, run `make dev-validate-stream-profile PROFILE=materializer-soak` before starting the stack, then run `make dev-smoke-venue-event-materializer` before any measured soak. The smoke must prove durable command append, direct matching consume/ack, event-batch publish, canonical materialization, projection idempotency, and order read-model reconstruction from the event-batch payload. The first measured retry should be the previously failed short materializer stress shape with strict zero-gap direct/materializer guardrails before any 10k+ long soak.
+
 ## Harness Validation Gates
 
 The host-control script should fail the run, fetch artifacts, and keep or destroy the Droplet according to the requested command when any required gate fails.

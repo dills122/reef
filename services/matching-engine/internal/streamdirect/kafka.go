@@ -308,11 +308,16 @@ func (p *KafkaEventBatchPublisher) PublishEventBatch(ctx context.Context, batch 
 		return err
 	}
 	subject := fmt.Sprintf("%s.%s.%s", trimDot(p.config.EventSubjectPrefix), PartitionToken(p.config.PartitionCount, batch.Partition), "VenueEventBatch")
+	timestamp := time.Now().UTC()
+	if parsed, parseErr := time.Parse(time.RFC3339Nano, batch.CreatedAt); parseErr == nil {
+		timestamp = parsed
+	}
 	_, _, err = p.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     p.config.EventTopic,
 		Key:       sarama.StringEncoder(batch.BatchID),
 		Value:     sarama.ByteEncoder(payload),
 		Partition: int32(batch.Partition),
+		Timestamp: timestamp,
 		Headers: []sarama.RecordHeader{
 			{Key: []byte(kafkaStreamSubjectHeader), Value: []byte(subject)},
 		},
@@ -386,7 +391,7 @@ func newKafkaClientConfig(clientID string) *sarama.Config {
 	config.Producer.Retry.Max = envInt("STREAM_ACK_KAFKA_RETRIES", 10)
 	config.Producer.Flush.Frequency = time.Duration(envInt("STREAM_ACK_KAFKA_LINGER_MS", 1)) * time.Millisecond
 	config.Producer.Flush.Bytes = envInt("STREAM_ACK_KAFKA_BATCH_SIZE", 65536)
-	config.Producer.Compression = kafkaCompression(envString("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4"))
+	config.Producer.Compression = kafkaCompression(engineKafkaCompressionType())
 	config.Consumer.Return.Errors = true
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	return config
@@ -405,6 +410,13 @@ func kafkaCompression(value string) sarama.CompressionCodec {
 	default:
 		return sarama.CompressionLZ4
 	}
+}
+
+func engineKafkaCompressionType() string {
+	if value := envString("MATCHING_ENGINE_KAFKA_COMPRESSION_TYPE", ""); value != "" {
+		return value
+	}
+	return envString("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4")
 }
 
 func kafkaSubject(headers []*sarama.RecordHeader) string {

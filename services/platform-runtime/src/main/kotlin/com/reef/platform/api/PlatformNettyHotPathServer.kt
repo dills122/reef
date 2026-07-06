@@ -25,8 +25,13 @@ import io.grpc.netty.shaded.io.netty.handler.codec.http.HttpUtil
 import io.grpc.netty.shaded.io.netty.handler.codec.http.HttpVersion
 import io.grpc.netty.shaded.io.netty.handler.codec.http.QueryStringDecoder
 import io.grpc.netty.shaded.io.netty.util.concurrent.DefaultEventExecutorGroup
+import io.grpc.netty.shaded.io.netty.util.concurrent.RejectedExecutionHandlers
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
+import java.nio.channels.ClosedChannelException
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicInteger
 
 class PlatformNettyHotPathServer(
     private val delegate: PlatformHttpServer = PlatformHttpServer(),
@@ -36,13 +41,20 @@ class PlatformNettyHotPathServer(
     private val bossThreads: Int = RuntimeEnv.int("PLATFORM_NETTY_BOSS_THREADS", 1, min = 1),
     private val workerThreads: Int = RuntimeEnv.int("PLATFORM_NETTY_WORKER_THREADS", 0, min = 0),
     private val applicationThreads: Int =
-        RuntimeEnv.int("PLATFORM_NETTY_APPLICATION_THREADS", RuntimeEnv.int("PLATFORM_HTTP_THREADS", 64, min = 4), min = 1),
+        RuntimeEnv.int("PLATFORM_NETTY_APPLICATION_THREADS", defaultApplicationThreads(), min = 1),
+    private val applicationMaxPendingTasks: Int =
+        RuntimeEnv.int("PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS", defaultApplicationMaxPendingTasks(), min = 1),
     private val streamIngressEnabled: Boolean = RuntimeEnv.bool("STREAM_INGRESS_ENABLED", false)
 ) {
     fun start(): RunningPlatformNettyServer {
         val bossGroup = NioEventLoopGroup(bossThreads)
         val workerGroup = if (workerThreads > 0) NioEventLoopGroup(workerThreads) else NioEventLoopGroup()
-        val applicationGroup = DefaultEventExecutorGroup(applicationThreads)
+        val applicationGroup = DefaultEventExecutorGroup(
+            applicationThreads,
+            namedThreadFactory("reef-netty-app"),
+            applicationMaxPendingTasks,
+            RejectedExecutionHandlers.reject()
+        )
         var channelStarted = false
         try {
             val channel = ServerBootstrap()
@@ -118,6 +130,10 @@ class PlatformNettyHotPathServer(
         }
 
         override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+            if (isClientDisconnect(cause)) {
+                ctx.close()
+                return
+            }
             val response = if (cause is TooLongFrameException) {
                 PlatformHotPathResponse(413, JsonCodec.writeObject("error" to "request body too large"))
             } else {
@@ -163,6 +179,18 @@ class PlatformNettyHotPathServer(
     }
 }
 
+private fun isClientDisconnect(cause: Throwable): Boolean {
+    if (cause is ClosedChannelException) return true
+    if (cause is IOException) {
+        val message = cause.message?.lowercase() ?: return true
+        return "connection reset" in message ||
+            "broken pipe" in message ||
+            "forcibly closed" in message ||
+            "connection aborted" in message
+    }
+    return false
+}
+
 class RunningPlatformNettyServer internal constructor(
     private val channel: io.grpc.netty.shaded.io.netty.channel.Channel,
     private val bossGroup: EventLoopGroup,
@@ -186,4 +214,20 @@ private fun io.grpc.netty.shaded.io.netty.handler.codec.http.HttpHeaders.toSunHe
         headers.add(entry.key, entry.value)
     }
     return headers
+}
+
+private fun defaultApplicationThreads(): Int {
+    val processors = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+    return (processors * 2).coerceIn(4, 32)
+}
+
+private fun defaultApplicationMaxPendingTasks(): Int = 2_048
+
+private fun namedThreadFactory(prefix: String): ThreadFactory {
+    val counter = AtomicInteger(0)
+    return ThreadFactory { runnable ->
+        Thread(runnable, "$prefix-${counter.incrementAndGet()}").apply {
+            isDaemon = true
+        }
+    }
 }

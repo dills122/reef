@@ -37,7 +37,10 @@ import java.net.InetSocketAddress
 import java.security.MessageDigest
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 private data class CommandIntakeBackpressureSnapshot(
@@ -133,6 +136,12 @@ class PlatformHttpServer(
         RuntimeEnv.long("STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS", 500L, min = 0L),
     private val streamCommandBackpressureWorkerDurables: String =
         RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", ""),
+    private val streamCommandPublishResponseTimeoutMs: Long =
+        RuntimeEnv.long(
+            "STREAM_ACK_PUBLISH_RESPONSE_TIMEOUT_MS",
+            RuntimeEnv.long("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", 2_000L, min = 1L),
+            min = 1L
+        ),
     private val streamCommandWorkerEnabled: Boolean = RuntimeEnv.bool("STREAM_ACK_WORKER_ENABLED", false),
     private val streamCommandWorkerPartitions: String = RuntimeEnv.string("STREAM_ACK_WORKER_PARTITIONS", "0"),
     private val streamCommandWorkerBatchSize: Int = RuntimeEnv.int("STREAM_ACK_WORKER_BATCH_SIZE", 100, min = 1),
@@ -179,6 +188,16 @@ class PlatformHttpServer(
         RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
     private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
 ) {
+    companion object {
+        private val streamPublishTimeoutExecutor = ScheduledThreadPoolExecutor(1) { runnable ->
+            Thread(runnable, "reef-stream-publish-timeout").apply { isDaemon = true }
+        }.apply {
+            removeOnCancelPolicy = true
+        }
+        private val streamPublishFailureLogCount = AtomicLong(0L)
+        private val streamPublishFailureLastLogMs = AtomicLong(0L)
+    }
+
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
     @Volatile
@@ -1536,14 +1555,19 @@ class PlatformHttpServer(
 
         val publishStarted = System.nanoTime()
         val publishFuture = publishStreamCommand(publisher, envelope)
-        return publishFuture.handle { ack, failure ->
+        val responseTimedOut = AtomicBoolean(false)
+        val responseFuture = publishResponseFuture(publishFuture, responseTimedOut)
+        publishFuture.whenComplete { ack, failure ->
+            if (failure == null && responseTimedOut.get()) {
+                markStreamCommandPublished(envelope.commandId, ack.streamSequence)
+            }
+        }
+        return responseFuture.handle { ack, failure ->
             HotPathMetrics.record("api.streamAck.publishAck", System.nanoTime() - publishStarted)
             if (failure != null) {
                 val cause = rootCause(failure)
                 val errorMessage = cause.message ?: "unknown"
-                System.err.println(
-                    "stream_command_publish_failed route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=${envelope.subject} message=${JsonFields.escape(errorMessage)}"
-                )
+                logStreamCommandPublishFailure(route, clientId, idempotencyKey, correlationId, envelope.subject, errorMessage)
                 val status = if (cause is StreamCommandPublishBackpressureException) 429 else 503
                 val error = if (status == 429) "stream command publish backpressure" else "stream command publish unavailable"
                 PlatformHotPathResponse(status, simpleErrorJson(error, errorMessage))
@@ -1555,6 +1579,49 @@ class PlatformHttpServer(
         }.whenComplete { _, _ ->
             HotPathMetrics.record("api.streamAck.total", System.nanoTime() - started)
         }
+    }
+
+    private fun publishResponseFuture(
+        publishFuture: CompletableFuture<StreamPublishAck>,
+        responseTimedOut: AtomicBoolean
+    ): CompletableFuture<StreamPublishAck> {
+        if (streamCommandPublishResponseTimeoutMs <= 0L) return publishFuture
+        val bounded = CompletableFuture<StreamPublishAck>()
+        val timeoutTask = streamPublishTimeoutExecutor.schedule({
+            responseTimedOut.set(true)
+            bounded.completeExceptionally(
+                StreamCommandPublishTimeoutException("timed out waiting ${streamCommandPublishResponseTimeoutMs}ms for stream command publish ack")
+            )
+        }, streamCommandPublishResponseTimeoutMs, TimeUnit.MILLISECONDS)
+        publishFuture.whenComplete { ack, failure ->
+            timeoutTask.cancel(false)
+            if (failure != null) {
+                bounded.completeExceptionally(failure)
+            } else {
+                bounded.complete(ack)
+            }
+        }
+        return bounded
+    }
+
+    private fun logStreamCommandPublishFailure(
+        route: String,
+        clientId: String,
+        idempotencyKey: String,
+        correlationId: String,
+        subject: String,
+        errorMessage: String
+    ) {
+        val count = streamPublishFailureLogCount.incrementAndGet()
+        val now = System.currentTimeMillis()
+        val previous = streamPublishFailureLastLogMs.get()
+        val shouldLog = count <= 10L ||
+            count % 1_000L == 0L ||
+            (now - previous >= 1_000L && streamPublishFailureLastLogMs.compareAndSet(previous, now))
+        if (!shouldLog) return
+        System.err.println(
+            "stream_command_publish_failed count=$count route=$route clientId=$clientId idempotencyKey=$idempotencyKey correlationId=$correlationId subject=$subject message=${JsonFields.escape(errorMessage)}"
+        )
     }
 
     private fun publishStreamCommand(

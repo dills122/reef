@@ -1,7 +1,6 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.config.RuntimeEnv
-import java.nio.ByteBuffer
 import java.security.MessageDigest
 import kotlin.math.max
 
@@ -81,6 +80,15 @@ sealed class StreamCommandReservation {
 }
 
 object StreamCommandEnvelopeBuilder {
+    private val safeSubjectToken = Regex("[A-Za-z0-9_-]+")
+    private val sha256Digest = ThreadLocal.withInitial {
+        MessageDigest.getInstance("SHA-256")
+    }
+    private val partitionDigest = ThreadLocal.withInitial {
+        MessageDigest.getInstance("SHA-256")
+    }
+    private val hexDigits = "0123456789abcdef".toCharArray()
+
     fun fromRequest(
         clientId: String,
         route: String,
@@ -150,8 +158,14 @@ object StreamCommandEnvelopeBuilder {
 
     fun partition(runId: String, venueSessionId: String, instrumentId: String, partitionCount: Int): Int {
         val source = "$runId|$venueSessionId|$instrumentId"
-        val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray(Charsets.UTF_8))
-        val value = ByteBuffer.wrap(digest.copyOfRange(0, 8)).long and Long.MAX_VALUE
+        val digest = partitionDigest.get()
+        digest.reset()
+        val bytes = digest.digest(source.toByteArray(Charsets.UTF_8))
+        var value = 0L
+        for (index in 0 until 8) {
+            value = (value shl 8) or (bytes[index].toLong() and 0xffL)
+        }
+        value = value and Long.MAX_VALUE
         return (value % partitionCount).toInt()
     }
 
@@ -183,12 +197,21 @@ object StreamCommandEnvelopeBuilder {
     }
 
     private fun isSafeSubjectToken(value: String): Boolean {
-        return value.matches(Regex("[A-Za-z0-9_-]+"))
+        return safeSubjectToken.matches(value)
     }
 
     private fun sha256Hex(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
+        val digest = sha256Digest.get()
+        digest.reset()
+        val bytes = digest.digest(value.toByteArray(Charsets.UTF_8))
+        val chars = CharArray(bytes.size * 2)
+        var index = 0
+        for (byte in bytes) {
+            val value = byte.toInt() and 0xff
+            chars[index++] = hexDigits[value ushr 4]
+            chars[index++] = hexDigits[value and 0x0f]
+        }
+        return String(chars)
     }
 }
 
