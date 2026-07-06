@@ -20,6 +20,9 @@ import com.reef.platform.application.arena.ArenaRunBotVersionRef
 import com.reef.platform.application.arena.ArenaRunRecord
 import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.OpenBaoClientException
+import com.reef.platform.application.arena.OpenBaoProvisioningConfig
+import com.reef.platform.application.arena.OpenBaoProvisioningService
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
@@ -240,6 +243,7 @@ class PlatformHttpServer(
             arenaRunBotResultsJson = { query -> arenaRunBotResultsResponse(query) },
             recordArenaRunBotResultJson = { body -> recordArenaRunBotResultResponse(body) },
             arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
+            arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -2244,6 +2248,42 @@ class PlatformHttpServer(
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot version")))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot version registration failed")))
+        }
+    }
+
+    private fun arenaBotOpenBaoProvisionResponse(body: String): PlatformHotPathResponse {
+        if (arenaAdminService == null) {
+            return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        }
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val githubOidcToken = json.string("githubOidcToken")
+        val submitterIdentity = json.string("submitterIdentity")
+        val botId = json.string("botId")
+        val flow = json.string("flow")
+        if (githubOidcToken.isBlank() || submitterIdentity.isBlank() || botId.isBlank()) {
+            return PlatformHotPathResponse(
+                400,
+                JsonCodec.writeObject("error" to "githubOidcToken, submitterIdentity, and botId are required")
+            )
+        }
+        if (flow !in setOf("add", "update", "remove")) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "flow must be add, update, or remove"))
+        }
+        val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
+            .ifBlank { return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "BAO_ADDR is not configured")) }
+        val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig(baoAddr = baoAddr))
+        return try {
+            when (flow) {
+                "remove" -> service.revokeBotSecretSlice(githubOidcToken, submitterIdentity, botId)
+                "update" -> Unit // existing slice is reused; no new provisioning
+                else -> service.provisionBotSecretSlice(githubOidcToken, submitterIdentity, botId, emptyMap())
+            }
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "botId" to botId, "flow" to flow)
+            )
+        } catch (ex: OpenBaoClientException) {
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao provisioning failed")))
         }
     }
 
