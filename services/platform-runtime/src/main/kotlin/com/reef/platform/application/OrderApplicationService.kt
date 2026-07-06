@@ -224,6 +224,20 @@ class OrderApplicationService(
         } else {
             val rejected = result.rejected
             if (rejected != null) {
+                acceptedOrder = PersistedOrder(
+                    orderId = command.orderId,
+                    engineOrderId = "",
+                    instrumentId = command.instrumentId,
+                    participantId = command.participantId,
+                    accountId = command.accountId,
+                    side = command.side,
+                    orderType = command.orderType,
+                    quantityUnits = command.quantityUnits,
+                    limitPrice = command.limitPrice,
+                    currency = command.currency,
+                    timeInForce = command.timeInForce,
+                    acceptedAt = rejected.occurredAt
+                )
                 lifecycleEvents.add(
                     lifecycleEvent(
                         eventId = rejected.eventId,

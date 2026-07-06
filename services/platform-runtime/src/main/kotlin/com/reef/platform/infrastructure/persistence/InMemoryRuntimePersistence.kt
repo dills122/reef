@@ -323,7 +323,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             val quantity = currentQuantity.toBigDecimalOrNull() ?: BigDecimal.ZERO
             val remainingQuantity = (quantity - filledQuantity).coerceAtLeast(BigDecimal.ZERO)
             val cancelled = orderEvents.any { it.eventType == "OrderCancelled" }
+            val rejected = orderEvents.any { it.eventType == "OrderRejected" }
             val status = when {
+                rejected -> "REJECTED"
                 cancelled -> "CANCELLED"
                 quantity > BigDecimal.ZERO && remainingQuantity == BigDecimal.ZERO -> "FILLED"
                 filledQuantity > BigDecimal.ZERO -> "PARTIALLY_FILLED"
@@ -338,7 +340,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                 side = order.side,
                 orderType = order.orderType,
                 originalQuantityUnits = order.quantityUnits,
-                remainingQuantityUnits = if (cancelled) "0" else decimalString(remainingQuantity),
+                remainingQuantityUnits = if (cancelled || rejected) "0" else decimalString(remainingQuantity),
                 filledQuantityUnits = decimalString(filledQuantity),
                 limitPrice = currentLimitPrice,
                 currency = order.currency,

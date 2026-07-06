@@ -81,6 +81,8 @@ data class TradeCreated(
     val occurredAt: String
 )
 
+val NonLifecycleRejectCodes: Set<String> = setOf("AUTHORIZATION_ERROR", "REFERENCE_DATA_ERROR")
+
 data class SubmitOrderResult(
     val accepted: EngineOrderAccepted? = null,
     val rejected: EngineOrderRejected? = null,

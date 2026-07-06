@@ -6,6 +6,7 @@ import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
+import com.reef.platform.domain.NonLifecycleRejectCodes
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.RoleDefinition
@@ -2437,6 +2438,7 @@ class PostgresRuntimePersistence(
                       SELECT
                         order_id,
                         BOOL_OR(event_type = 'OrderCancelled') AS cancelled,
+                        BOOL_OR(event_type = 'OrderRejected') AS rejected,
                         COALESCE(MAX(NULLIF(occurred_at, '')), '') AS last_event_at
                       FROM ${names.runtimeEvents}
                       GROUP BY order_id
@@ -2458,6 +2460,7 @@ class PostgresRuntimePersistence(
                         orders.accepted_at,
                         COALESCE(execution_totals.filled_quantity_units, 0) AS filled_quantity_units,
                         COALESCE(order_event_state.cancelled, FALSE) AS cancelled,
+                        COALESCE(order_event_state.rejected, FALSE) AS rejected,
                         COALESCE(NULLIF(order_event_state.last_event_at, ''), orders.accepted_at) AS last_event_at
                       FROM ${names.orders} orders
                       LEFT JOIN execution_totals ON execution_totals.order_id = orders.order_id
@@ -2499,12 +2502,13 @@ class PostgresRuntimePersistence(
                       side,
                       order_type,
                       original_quantity_units,
-                      CASE WHEN cancelled THEN '0' ELSE remaining_quantity_units::TEXT END,
+                      CASE WHEN cancelled OR rejected THEN '0' ELSE remaining_quantity_units::TEXT END,
                       filled_quantity_units::TEXT,
                       current_limit_price,
                       currency,
                       time_in_force,
                       CASE
+                        WHEN rejected THEN 'REJECTED'
                         WHEN cancelled THEN 'CANCELLED'
                         WHEN current_quantity_units::NUMERIC > 0 AND remaining_quantity_units = 0 THEN 'FILLED'
                         WHEN filled_quantity_units > 0 THEN 'PARTIALLY_FILLED'
@@ -3413,10 +3417,15 @@ class PostgresRuntimePersistence(
                 trades = if (includeFills) tradesFromResultPayload(resultPayloadJson) else emptyList()
             )
         }
-        val acceptedOrder = if (commandType == "SubmitOrder" && !rejected && commandPayloadJson.isNotBlank()) {
+        val rejectCodeValue = rejectCode.ifBlank { jsonString(resultPayloadJson, "code") }
+        val acceptedOrder = if (
+            commandType == "SubmitOrder" &&
+            commandPayloadJson.isNotBlank() &&
+            (!rejected || rejectCodeValue !in NonLifecycleRejectCodes)
+        ) {
             PersistedOrder(
                 orderId = orderId,
-                engineOrderId = jsonString(resultPayloadJson, "engineOrderId"),
+                engineOrderId = if (rejected) "" else jsonString(resultPayloadJson, "engineOrderId"),
                 instrumentId = jsonString(commandPayloadJson, "instrumentId"),
                 participantId = jsonString(commandPayloadJson, "participantId"),
                 accountId = jsonString(commandPayloadJson, "accountId"),
