@@ -28,10 +28,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -39,7 +39,7 @@ jobs:
 
       - name: Install docs dependencies
         working-directory: apps/docs-site
-        run: npm ci
+        run: npm ci --include=optional
 
       - name: Build docs site
         working-directory: apps/docs-site
@@ -49,13 +49,13 @@ jobs:
         run: npm run build
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload docs site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: apps/docs-site/dist
 
       - name: Deploy docs site
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
