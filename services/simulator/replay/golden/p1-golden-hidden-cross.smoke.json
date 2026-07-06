@@ -1,0 +1,184 @@
+{
+  "mode": "dry-run",
+  "pass": true,
+  "pathId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+  "scenarioRunId": "p1-golden-hidden-cross-golden",
+  "seed": 424242,
+  "baseUrl": "http://localhost:8080",
+  "seedRequests": [
+    {
+      "method": "POST",
+      "path": "/reference/instruments",
+      "url": "http://localhost:8080/reference/instruments",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "instrumentId": "XYZ",
+        "symbol": "XYZ"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/reference/participants",
+      "url": "http://localhost:8080/reference/participants",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "name": "BUY_SIDE_1",
+        "participantId": "BUY_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/reference/participants",
+      "url": "http://localhost:8080/reference/participants",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "name": "SELL_SIDE_1",
+        "participantId": "SELL_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/reference/accounts",
+      "url": "http://localhost:8080/reference/accounts",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "accountId": "BUY_SIDE_1_MAIN",
+        "participantId": "BUY_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/reference/accounts",
+      "url": "http://localhost:8080/reference/accounts",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "accountId": "SELL_SIDE_1_MAIN",
+        "participantId": "SELL_SIDE_1"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/roles",
+      "url": "http://localhost:8080/auth/roles",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "permissions": "order.submit,order.cancel,order.modify",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/actor-roles",
+      "url": "http://localhost:8080/auth/actor-roles",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "actorId": "BUY_SIDE_1_MAIN",
+        "roleId": "order_trader"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/auth/actor-roles",
+      "url": "http://localhost:8080/auth/actor-roles",
+      "headers": {
+        "X-Reef-Internal-Route": "true"
+      },
+      "payload": {
+        "actorId": "SELL_SIDE_1_MAIN",
+        "roleId": "order_trader"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "sequence": 1,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://localhost:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-001",
+        "X-Client-Id": "scenario-smoke-1",
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-001"
+      },
+      "payload": {
+        "accountId": "BUY_SIDE_1_MAIN",
+        "actorId": "BUY_SIDE_1_MAIN",
+        "actorType": "BOT",
+        "causationId": "p1_golden_hidden_cross_t1-cause-001",
+        "clientOrderId": "p1_golden_hidden_cross_t1-ord-001",
+        "commandId": "p1_golden_hidden_cross_t1-cmd-001",
+        "correlationId": "p1_golden_hidden_cross_t1-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "150000000000",
+        "occurredAt": "2026-03-14T18:00:01Z",
+        "orderId": "p1_golden_hidden_cross_t1-ord-001",
+        "orderType": "LIMIT",
+        "participantId": "BUY_SIDE_1",
+        "quantityUnits": "1000",
+        "runId": "p1-golden-hidden-cross-golden",
+        "runKind": "scenario",
+        "scenarioId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+        "scenarioRunId": "p1-golden-hidden-cross-golden",
+        "seed": "424242",
+        "side": "BUY",
+        "timeInForce": "DAY",
+        "traceId": "p1_golden_hidden_cross_t1-trace-001",
+        "venueSessionId": "P1_GOLDEN_HIDDEN_CROSS_T1"
+      }
+    },
+    {
+      "sequence": 2,
+      "command": "SubmitOrder",
+      "method": "POST",
+      "path": "/api/v1/orders/submit",
+      "url": "http://localhost:8080/api/v1/orders/submit",
+      "headers": {
+        "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-002",
+        "X-Client-Id": "scenario-smoke-2",
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-002"
+      },
+      "payload": {
+        "accountId": "SELL_SIDE_1_MAIN",
+        "actorId": "SELL_SIDE_1_MAIN",
+        "actorType": "BOT",
+        "causationId": "p1_golden_hidden_cross_t1-cause-001",
+        "clientOrderId": "p1_golden_hidden_cross_t1-ord-002",
+        "commandId": "p1_golden_hidden_cross_t1-cmd-002",
+        "correlationId": "p1_golden_hidden_cross_t1-corr-001",
+        "currency": "USD",
+        "instrumentId": "XYZ",
+        "limitPrice": "150000000000",
+        "occurredAt": "2026-03-14T18:00:02Z",
+        "orderId": "p1_golden_hidden_cross_t1-ord-002",
+        "orderType": "LIMIT",
+        "participantId": "SELL_SIDE_1",
+        "quantityUnits": "1000",
+        "runId": "p1-golden-hidden-cross-golden",
+        "runKind": "scenario",
+        "scenarioId": "P1_GOLDEN_HIDDEN_CROSS_T1",
+        "scenarioRunId": "p1-golden-hidden-cross-golden",
+        "seed": "424242",
+        "side": "SELL",
+        "timeInForce": "DAY",
+        "traceId": "p1_golden_hidden_cross_t1-trace-002",
+        "venueSessionId": "P1_GOLDEN_HIDDEN_CROSS_T1"
+      }
+    }
+  ]
+}

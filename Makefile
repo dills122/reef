@@ -6,8 +6,11 @@ DEV_COMPOSE_PROFILES ?=
 JS_RUNTIME ?= bun
 CMD ?=
 ARGS ?=
+SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml
+SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
+SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-venue-event-materializer dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-sim-batch dev-scenario-drift-check dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
+.PHONY: test test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-venue-event-materializer dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-intake-bench dev-command-log-prune dev-command-log-pin dev-admin dev-sim dev-sim-batch dev-scenario-plan dev-scenario-smoke dev-scenario-drift-check dev-replay dev-throughput-campaign dev-throughput-compare do-benchmark simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
 
@@ -193,6 +196,12 @@ dev-sim:
 dev-sim-batch:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/sim-batch.mjs $(ARGS)
+
+dev-scenario-plan:
+	cd $(SIMULATOR_DIR) && GOCACHE=/tmp/reef-go-build-cache go run ./cmd/scenario-plan --scenario $(SCENARIO) --scenario-run-id $(SCENARIO_RUN_ID) --start $(SCENARIO_START) $(ARGS)
+
+dev-scenario-smoke:
+	cd $(SIMULATOR_DIR) && GOCACHE=/tmp/reef-go-build-cache go run ./cmd/scenario-smoke --scenario $(SCENARIO) --scenario-run-id $(SCENARIO_RUN_ID) --start $(SCENARIO_START) $(ARGS)
 
 docs-site-dev:
 	cd apps/docs-site && bun install && bun run dev

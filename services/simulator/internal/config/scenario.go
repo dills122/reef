@@ -10,15 +10,43 @@ import (
 )
 
 type ScenarioFile struct {
-	SchemaVersion         string                `yaml:"schemaVersion"`
-	PathID                string                `yaml:"pathId"`
-	Name                  string                `yaml:"name"`
-	Seed                  int64                 `yaml:"seed"`
-	RunContext            ScenarioRunContext    `yaml:"runContext"`
-	Steps                 []ScenarioStep        `yaml:"steps"`
-	ExpectedEvents        []string              `yaml:"expectedEvents"`
-	ExpectedEventTimeline ExpectedEventTimeline `yaml:"expectedEventTimeline"`
-	ReplayAssertions      []string              `yaml:"replayAssertions"`
+	SchemaVersion         string                 `yaml:"schemaVersion"`
+	PathID                string                 `yaml:"pathId"`
+	Name                  string                 `yaml:"name"`
+	Seed                  int64                  `yaml:"seed"`
+	Preconditions         ScenarioPreconditions  `yaml:"preconditions"`
+	RunContext            ScenarioRunContext     `yaml:"runContext"`
+	Steps                 []ScenarioStep         `yaml:"steps"`
+	ExpectedEvents        []string               `yaml:"expectedEvents"`
+	ExpectedEventTimeline ExpectedEventTimeline  `yaml:"expectedEventTimeline"`
+	ExpectedFinalStates   map[string]string      `yaml:"expectedFinalStates"`
+	Invariants            []string               `yaml:"invariants"`
+	ReplayAssertions      []string               `yaml:"replayAssertions"`
+	IdempotencyAssertions []IdempotencyAssertion `yaml:"idempotencyAssertions"`
+}
+
+type ScenarioPreconditions struct {
+	ReferenceData ScenarioReferenceData `yaml:"referenceData"`
+}
+
+type ScenarioReferenceData struct {
+	Instruments  []ScenarioInstrument  `yaml:"instruments"`
+	Participants []ScenarioParticipant `yaml:"participants"`
+	Accounts     []ScenarioAccount     `yaml:"accounts"`
+}
+
+type ScenarioInstrument struct {
+	InstrumentID string `yaml:"instrumentId"`
+	Symbol       string `yaml:"symbol"`
+}
+
+type ScenarioParticipant struct {
+	ParticipantID string `yaml:"participantId"`
+}
+
+type ScenarioAccount struct {
+	AccountID     string `yaml:"accountId"`
+	ParticipantID string `yaml:"participantId"`
 }
 
 type ScenarioRunContext struct {
@@ -30,8 +58,10 @@ type ScenarioRunMetadata struct {
 }
 
 type ScenarioStep struct {
-	Sequence int    `yaml:"sequence"`
-	Command  string `yaml:"command"`
+	Sequence    int                    `yaml:"sequence"`
+	Command     string                 `yaml:"command"`
+	Description string                 `yaml:"description"`
+	Payload     map[string]interface{} `yaml:"payload"`
 }
 
 type ExpectedEventTimeline struct {
@@ -40,8 +70,13 @@ type ExpectedEventTimeline struct {
 }
 
 type ExpectedTimelineEvent struct {
-	EventType               string `yaml:"eventType"`
-	OccurredAtOffsetSeconds int    `yaml:"occurredAtOffsetSeconds"`
+	EventType               string `json:"eventType" yaml:"eventType"`
+	OccurredAtOffsetSeconds int    `json:"occurredAtOffsetSeconds" yaml:"occurredAtOffsetSeconds"`
+}
+
+type IdempotencyAssertion struct {
+	Command   string `json:"command" yaml:"command"`
+	Assertion string `json:"assertion" yaml:"assertion"`
 }
 
 func LoadScenarioFile(path string) (ScenarioFile, error) {

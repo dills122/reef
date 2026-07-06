@@ -134,6 +134,41 @@ The aggregate report summarizes totals, canonical throughput fields, p95 latency
 
 ## Scenario Drift Checks
 
+`cmd/scenario-plan` compiles a scenario definition into deterministic executable command steps plus replay/final-state assertions. It does not require the local stack; it is the first P1 harness gate before live API/projection assertions.
+
+```bash
+make dev-scenario-plan
+```
+
+`cmd/scenario-smoke` builds on the same compiled plan. By default it is a dry-run that emits seed requests and executable `/api/v1/orders/submit` requests without sending them. Add `ARGS="--live --base-url http://127.0.0.1:8080"` to seed reference/auth data, send executable submit requests, and wait for command status visibility.
+
+```bash
+make dev-scenario-smoke ARGS="--pretty"
+make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --pretty"
+```
+
+The P1 dry-run golden report is checked in at [`replay/golden/p1-golden-hidden-cross.smoke.json`](replay/golden/p1-golden-hidden-cross.smoke.json). Refresh it only when the scenario contract intentionally changes:
+
+```bash
+make dev-scenario-smoke ARGS="--scenario-run-id p1-golden-hidden-cross-golden --pretty --report-out replay/golden/p1-golden-hidden-cross.smoke.json"
+```
+
+Direct use from `services/simulator`:
+
+```bash
+go run ./cmd/scenario-plan \
+  --scenario ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml \
+  --scenario-run-id p1-golden-hidden-cross-local \
+  --pretty
+```
+
+```bash
+go run ./cmd/scenario-smoke \
+  --scenario ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml \
+  --scenario-run-id p1-golden-hidden-cross-local \
+  --pretty
+```
+
 `make dev-scenario-drift-check` compares a report against either:
 
 - the existing replay threshold baseline shape used by `make dev-replay`
