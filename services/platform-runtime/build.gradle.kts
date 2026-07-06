@@ -50,8 +50,28 @@ tasks.jacocoTestReport {
             classDirectories.files.map {
                 fileTree(it) {
                     exclude("reef/contracts/**")
+                    exclude("com/reef/platform/tools/**")
+                    exclude("com/reef/platform/Main*.class")
                 }
             },
         ),
     )
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    classDirectories.setFrom(tasks.jacocoTestReport.get().classDirectories)
+
+    violationRules {
+        rule {
+            limit {
+                counter = "INSTRUCTION"
+                minimum = "0.53".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

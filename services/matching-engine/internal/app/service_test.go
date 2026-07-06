@@ -1,6 +1,7 @@
 package app
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -581,6 +582,27 @@ func TestParsePositiveInt(t *testing.T) {
 	value, ok := parsePositiveInt("42")
 	if !ok || value != 42 {
 		t.Fatalf("expected parsed value 42, got value=%d ok=%v", value, ok)
+	}
+}
+
+func TestEnvInt(t *testing.T) {
+	name := "MATCHING_ENGINE_TEST_ENV_INT"
+	os.Unsetenv(name)
+	if got := envInt(name, 5); got != 5 {
+		t.Errorf("envInt fallback = %d, want 5", got)
+	}
+	os.Setenv(name, "17")
+	defer os.Unsetenv(name)
+	if got := envInt(name, 5); got != 17 {
+		t.Errorf("envInt parsed = %d, want 17", got)
+	}
+	os.Setenv(name, "-1")
+	if got := envInt(name, 5); got != 5 {
+		t.Errorf("envInt negative fallback = %d, want 5", got)
+	}
+	os.Setenv(name, "not-a-number")
+	if got := envInt(name, 5); got != 5 {
+		t.Errorf("envInt invalid fallback = %d, want 5", got)
 	}
 }
 
