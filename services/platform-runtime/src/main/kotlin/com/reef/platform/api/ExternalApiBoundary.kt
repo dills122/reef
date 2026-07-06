@@ -1832,7 +1832,7 @@ fun defaultInstrumentPriceCollarStore(): InstrumentPriceCollarStore {
     )
 }
 
-private fun parseStaticTokens(raw: String?): Map<String, String> {
+internal fun parseStaticTokens(raw: String?): Map<String, String> {
     if (raw.isNullOrBlank()) return emptyMap()
     return raw.split(",")
         .mapNotNull { pair ->
@@ -1846,7 +1846,7 @@ private fun parseStaticTokens(raw: String?): Map<String, String> {
         .toMap()
 }
 
-private fun parseCsvSet(raw: String?): Set<String> {
+internal fun parseCsvSet(raw: String?): Set<String> {
     if (raw.isNullOrBlank()) return emptySet()
     return raw.split(",")
         .map { it.trim() }
@@ -1854,7 +1854,7 @@ private fun parseCsvSet(raw: String?): Set<String> {
         .toSet()
 }
 
-private fun parseRejectCodes(raw: String?): Set<String> {
+internal fun parseRejectCodes(raw: String?): Set<String> {
     val fallback = setOf("INVALID_STATE", "NOT_FOUND", "REFERENCE_DATA_ERROR", "VALIDATION_ERROR")
     if (raw.isNullOrBlank()) return fallback
     val values = raw.split(",")
@@ -1864,7 +1864,7 @@ private fun parseRejectCodes(raw: String?): Set<String> {
     return if (values.isEmpty()) fallback else values
 }
 
-private fun parseTrackedRoutes(raw: String?): Set<String> {
+internal fun parseTrackedRoutes(raw: String?): Set<String> {
     val fallback = setOf(
         "/api/v1/orders/submit",
         "/api/v1/orders/modify",
@@ -1878,7 +1878,7 @@ private fun parseTrackedRoutes(raw: String?): Set<String> {
     return if (values.isEmpty()) fallback else values
 }
 
-private fun parseRoutePolicies(raw: String?): Map<String, RejectRatePolicy> {
+internal fun parseRoutePolicies(raw: String?): Map<String, RejectRatePolicy> {
     if (raw.isNullOrBlank()) return emptyMap()
     val parsed = mutableMapOf<String, RejectRatePolicy>()
     for (entry in raw.split(",")) {
@@ -1898,7 +1898,7 @@ private fun parseRoutePolicies(raw: String?): Map<String, RejectRatePolicy> {
     return parsed
 }
 
-private fun envBool(raw: String?, defaultValue: Boolean): Boolean {
+internal fun envBool(raw: String?, defaultValue: Boolean): Boolean {
     if (raw.isNullOrBlank()) return defaultValue
     return when (raw.trim().lowercase()) {
         "1", "true", "yes", "on" -> true

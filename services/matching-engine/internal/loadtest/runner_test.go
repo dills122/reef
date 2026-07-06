@@ -111,6 +111,78 @@ func TestRunFailsWhenMinimumProcessedRateMisses(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfigAppliesDefaults(t *testing.T) {
+	cfg := normalizeConfig(Config{})
+	if cfg.RunID == "" {
+		t.Error("expected generated RunID")
+	}
+	if cfg.Scenario != ScenarioAlternatingCross {
+		t.Errorf("Scenario = %v, want %v", cfg.Scenario, ScenarioAlternatingCross)
+	}
+	if cfg.RatePerSecond != 10000 {
+		t.Errorf("RatePerSecond = %d, want 10000", cfg.RatePerSecond)
+	}
+	if cfg.Duration != 30*time.Second {
+		t.Errorf("Duration = %v, want 30s", cfg.Duration)
+	}
+	if cfg.Workers != 1 {
+		t.Errorf("Workers = %d, want 1", cfg.Workers)
+	}
+	if cfg.Instruments != 1 {
+		t.Errorf("Instruments = %d, want 1", cfg.Instruments)
+	}
+	if cfg.OutputDir == "" {
+		t.Error("expected default OutputDir")
+	}
+
+	explicit := normalizeConfig(Config{
+		RunID:         "explicit-run",
+		Scenario:      ScenarioRestingBook,
+		RatePerSecond: 5,
+		Duration:      time.Second,
+		Workers:       3,
+		Instruments:   2,
+		OutputDir:     "custom-dir",
+	})
+	if explicit.RunID != "explicit-run" || explicit.Scenario != ScenarioRestingBook ||
+		explicit.RatePerSecond != 5 || explicit.Duration != time.Second ||
+		explicit.Workers != 3 || explicit.Instruments != 2 || explicit.OutputDir != "custom-dir" {
+		t.Errorf("normalizeConfig overwrote explicit values: %#v", explicit)
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	base := Config{RatePerSecond: 10, Duration: time.Second, Workers: 1, Instruments: 1, Scenario: ScenarioAlternatingCross}
+
+	if err := validateConfig(base); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
+	}
+
+	cases := []struct {
+		name string
+		cfg  Config
+	}{
+		{"rate", Config{Duration: time.Second, Workers: 1, Instruments: 1, Scenario: ScenarioAlternatingCross}},
+		{"duration", Config{RatePerSecond: 10, Workers: 1, Instruments: 1, Scenario: ScenarioAlternatingCross}},
+		{"workers", Config{RatePerSecond: 10, Duration: time.Second, Instruments: 1, Scenario: ScenarioAlternatingCross}},
+		{"instruments", Config{RatePerSecond: 10, Duration: time.Second, Workers: 1, Scenario: ScenarioAlternatingCross}},
+		{"scenario", Config{RatePerSecond: 10, Duration: time.Second, Workers: 1, Instruments: 1, Scenario: "unknown"}},
+	}
+	for _, c := range cases {
+		if err := validateConfig(c.cfg); err == nil {
+			t.Errorf("%s: expected validation error", c.name)
+		}
+	}
+
+	for _, scenario := range []string{ScenarioAlternatingCross, ScenarioRestingBook, ScenarioLifecycle, ScenarioDeepLifecycle} {
+		cfg := base
+		cfg.Scenario = scenario
+		if err := validateConfig(cfg); err != nil {
+			t.Errorf("scenario %v: expected valid, got %v", scenario, err)
+		}
+	}
+}
+
 func assertFileExists(t *testing.T, path string) {
 	t.Helper()
 	info, err := os.Stat(path)

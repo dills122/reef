@@ -95,6 +95,99 @@ func TestSubmitOrder(t *testing.T) {
 	}
 }
 
+func TestCancelOrder(t *testing.T) {
+	server, err := NewServer("127.0.0.1:0", app.NewService())
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	go func() {
+		_ = server.Start()
+	}()
+	defer server.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	conn, err := gogrpc.NewClient(
+		server.Addr(),
+		gogrpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("failed to connect grpc client: %v", err)
+	}
+	defer conn.Close()
+
+	client := orderv1.NewOrderExecutionServiceClient(conn)
+	if _, err := client.SubmitOrder(ctx, validSubmitRequest("cmd-cancel-setup", "ord-cancel-1")); err != nil {
+		t.Fatalf("submit rpc failed: %v", err)
+	}
+
+	response, err := client.CancelOrder(ctx, &orderv1.CancelOrder{
+		Metadata: &orderv1.CommandMetadata{
+			CommandId:     "cmd-cancel-1",
+			CorrelationId: "corr-cancel-1",
+			ActorId:       "trader-1",
+			OccurredAt:    "2026-03-14T18:00:00Z",
+		},
+		OrderId: "ord-cancel-1",
+		Reason:  "user requested",
+	})
+	if err != nil {
+		t.Fatalf("cancel rpc failed: %v", err)
+	}
+	if response.GetAccepted() == nil {
+		t.Fatalf("expected accepted cancel response, got %#v", response)
+	}
+}
+
+func TestModifyOrder(t *testing.T) {
+	server, err := NewServer("127.0.0.1:0", app.NewService())
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	go func() {
+		_ = server.Start()
+	}()
+	defer server.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	conn, err := gogrpc.NewClient(
+		server.Addr(),
+		gogrpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("failed to connect grpc client: %v", err)
+	}
+	defer conn.Close()
+
+	client := orderv1.NewOrderExecutionServiceClient(conn)
+	if _, err := client.SubmitOrder(ctx, validSubmitRequest("cmd-modify-setup", "ord-modify-1")); err != nil {
+		t.Fatalf("submit rpc failed: %v", err)
+	}
+
+	response, err := client.ModifyOrder(ctx, &orderv1.ModifyOrder{
+		Metadata: &orderv1.CommandMetadata{
+			CommandId:     "cmd-modify-1",
+			CorrelationId: "corr-modify-1",
+			ActorId:       "trader-1",
+			OccurredAt:    "2026-03-14T18:00:00Z",
+		},
+		OrderId:    "ord-modify-1",
+		Quantity:   &orderv1.OrderQuantity{Units: "50"},
+		LimitPrice: &orderv1.Price{Nanos: "150250000000", Currency: "USD"},
+	})
+	if err != nil {
+		t.Fatalf("modify rpc failed: %v", err)
+	}
+	if response.GetAccepted() == nil {
+		t.Fatalf("expected accepted modify response, got %#v", response)
+	}
+}
+
 func TestSubmitOrdersStream(t *testing.T) {
 	server, err := NewServer("127.0.0.1:0", app.NewService())
 	if err != nil {

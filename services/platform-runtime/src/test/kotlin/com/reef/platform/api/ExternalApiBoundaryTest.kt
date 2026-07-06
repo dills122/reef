@@ -250,6 +250,63 @@ class ExternalApiBoundaryTest {
         assertEquals("ABUSE_BLOCKED", hook.allow("client-1", "/api/v1/orders/modify")?.code)
     }
 
+    @Test
+    fun parseStaticTokensParsesValidPairsAndSkipsMalformed() {
+        val parsed = parseStaticTokens("client-1:token-1,bad-entry,client-2: token-2 , :missing-client,client-3:")
+        assertEquals(mapOf("client-1" to "token-1", "client-2" to "token-2"), parsed)
+        assertEquals(emptyMap(), parseStaticTokens(null))
+        assertEquals(emptyMap(), parseStaticTokens("  "))
+    }
+
+    @Test
+    fun parseCsvSetTrimsAndFiltersBlanks() {
+        assertEquals(setOf("a", "b", "c"), parseCsvSet(" a, b ,,c"))
+        assertEquals(emptySet(), parseCsvSet(null))
+        assertEquals(emptySet(), parseCsvSet(""))
+    }
+
+    @Test
+    fun parseRejectCodesFallsBackWhenBlankOrEmpty() {
+        val fallback = setOf("INVALID_STATE", "NOT_FOUND", "REFERENCE_DATA_ERROR", "VALIDATION_ERROR")
+        assertEquals(fallback, parseRejectCodes(null))
+        assertEquals(fallback, parseRejectCodes(""))
+        assertEquals(fallback, parseRejectCodes(" , "))
+        assertEquals(setOf("CUSTOM_CODE"), parseRejectCodes("custom_code"))
+    }
+
+    @Test
+    fun parseTrackedRoutesFallsBackWhenBlankOrEmpty() {
+        val fallback = setOf("/api/v1/orders/submit", "/api/v1/orders/modify", "/api/v1/orders/cancel")
+        assertEquals(fallback, parseTrackedRoutes(null))
+        assertEquals(fallback, parseTrackedRoutes(" , "))
+        assertEquals(setOf("/custom/route"), parseTrackedRoutes("/custom/route"))
+    }
+
+    @Test
+    fun parseRoutePoliciesParsesValidEntriesAndSkipsMalformed() {
+        val parsed = parseRoutePolicies(
+            "/api/v1/orders/submit:5/30/60,malformed,/api/v1/orders/modify:0/30/60,/api/v1/orders/cancel:bad/30/60"
+        )
+        assertEquals(
+            mapOf("/api/v1/orders/submit" to RejectRatePolicy(5, 30, 60)),
+            parsed
+        )
+        assertEquals(emptyMap(), parseRoutePolicies(null))
+        assertEquals(emptyMap(), parseRoutePolicies(""))
+    }
+
+    @Test
+    fun envBoolParsesRecognizedValuesAndFallsBackOtherwise() {
+        assertEquals(true, envBool("true", false))
+        assertEquals(true, envBool("1", false))
+        assertEquals(true, envBool("YES", false))
+        assertEquals(false, envBool("false", true))
+        assertEquals(false, envBool("0", true))
+        assertEquals(false, envBool("off", true))
+        assertEquals(true, envBool(null, true))
+        assertEquals(false, envBool("garbage", false))
+    }
+
     private fun accountRiskRequest(
         accountId: String = "account-1",
         botId: String = "bot-1"
