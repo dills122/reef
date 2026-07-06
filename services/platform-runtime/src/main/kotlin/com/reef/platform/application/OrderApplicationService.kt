@@ -629,6 +629,9 @@ class OrderApplicationService(
 
     fun recentTrades(limit: Int) = runtimePersistence.recentTrades(limit)
 
+    fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long?) =
+        runtimePersistence.tradeTape(instrumentId, limit, beforeSequence)
+
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
 
     fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)

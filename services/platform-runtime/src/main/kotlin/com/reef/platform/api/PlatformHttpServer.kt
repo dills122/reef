@@ -512,6 +512,17 @@ class PlatformHttpServer(
             writeJson(exchange, status, response)
         }
 
+        server.createContext("/api/v1/market-data/trades/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/trades/").trimEnd('/')
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 50
+            val beforeSequence = queryValue(exchange, "before").toLongOrNull()
+            writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
+        }
+
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -715,6 +726,15 @@ class PlatformHttpServer(
                     status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200,
                     body = response
                 )
+            }
+            request.path.startsWith("/api/v1/market-data/trades/") && request.method == "GET" -> {
+                val instrumentId = request.path.removePrefix("/api/v1/market-data/trades/").trimEnd('/')
+                val response = api.tradeTape(
+                    instrumentId = instrumentId,
+                    limit = queryValue(request.query, "limit").toIntOrNull() ?: 50,
+                    beforeSequence = queryValue(request.query, "before").toLongOrNull()
+                )
+                PlatformHotPathResponse(status = 200, body = response)
             }
             else -> legacySetupRoutes.handle(request)
         }

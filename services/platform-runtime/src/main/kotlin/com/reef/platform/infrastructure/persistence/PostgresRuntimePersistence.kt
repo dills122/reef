@@ -9,6 +9,7 @@ import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.NonLifecycleRejectCodes
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
@@ -3278,6 +3279,48 @@ class PostgresRuntimePersistence(
             executionId = getString("execution_id"),
             buyOrderId = getString("buy_order_id"),
             sellOrderId = getString("sell_order_id"),
+            instrumentId = getString("instrument_id"),
+            quantityUnits = getString("quantity_units"),
+            price = getString("price"),
+            currency = getString("currency"),
+            occurredAt = getString("occurred_at")
+        )
+    }
+
+    override fun tradeTape(instrumentId: String, limit: Int, beforeSequence: Long?): List<PublicTradeTapeEntry> {
+        val effectiveLimit = limit.coerceIn(1, 500)
+        return if (beforeSequence != null) {
+            projectionQueryList(
+                """
+                SELECT sequence, trade_id, instrument_id, quantity_units, price, currency, occurred_at
+                FROM ${names.trades}
+                WHERE instrument_id = ? AND sequence < ?
+                ORDER BY sequence DESC
+                LIMIT ?
+                """.trimIndent(),
+                instrumentId,
+                beforeSequence.toString(),
+                effectiveLimit.toString()
+            ) { toPublicTradeTapeEntry() }
+        } else {
+            projectionQueryList(
+                """
+                SELECT sequence, trade_id, instrument_id, quantity_units, price, currency, occurred_at
+                FROM ${names.trades}
+                WHERE instrument_id = ?
+                ORDER BY sequence DESC
+                LIMIT ?
+                """.trimIndent(),
+                instrumentId,
+                effectiveLimit.toString()
+            ) { toPublicTradeTapeEntry() }
+        }
+    }
+
+    private fun java.sql.ResultSet.toPublicTradeTapeEntry(): PublicTradeTapeEntry {
+        return PublicTradeTapeEntry(
+            sequence = getLong("sequence"),
+            tradeId = getString("trade_id"),
             instrumentId = getString("instrument_id"),
             quantityUnits = getString("quantity_units"),
             price = getString("price"),

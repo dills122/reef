@@ -69,9 +69,12 @@ curl -X POST "http://127.0.0.1:8080/api/v1/orders/lifecycle-state"
 curl -X POST "http://127.0.0.1:8080/api/v1/market-data/snapshots"
 curl "http://127.0.0.1:8080/api/v1/market-data/snapshots/AAPL"
 curl "http://127.0.0.1:8080/api/v1/market-data/depth/AAPL?levels=5"
+curl "http://127.0.0.1:8080/api/v1/market-data/trades/AAPL?limit=50"
 ```
 
 The snapshot refresh path rebuilds `runtime.order_lifecycle_state` before updating `runtime.market_data_snapshots`; the explicit lifecycle-state endpoint is useful for inspection and repair. Bounded depth reads aggregate remaining open lifecycle quantity by price at request time.
+
+The trade tape endpoint reads durable `runtime.trades` rows directly (no projector, no lag) ordered most-recent-first by a monotonic `sequence` column, bounded by `limit` (max 500). Pass `before=<sequence>` to page further back. Only public-safe fields are returned (`tradeId`, `price`, `quantityUnits`, `currency`, `occurredAt`, `sequence`) — no counterparty order/participant identity.
 
 An opt-in background market-data projector can keep top-of-book snapshots current on background-capable runtime roles. It processes only instruments whose order book changed since the last cycle (bounded by the batch size), not a full recompute of every instrument:
 
