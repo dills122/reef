@@ -84,6 +84,42 @@ export interface OwnOrderV1 {
   readonly status: "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELED" | "REJECTED";
 }
 
+export interface DataAvailabilityProjectionWatermarkV1 {
+  readonly projectionName: string;
+  readonly partition: number;
+  readonly lastPartitionSequence: number;
+  readonly canonicalMaxPartitionSequence: number;
+  readonly lag: number;
+  readonly updatedAt: string;
+  readonly lastError: string;
+}
+
+export interface DataAvailabilityProjectionV1 {
+  readonly projectionName: string;
+  readonly role: string;
+  readonly projectedCount: number;
+  readonly lag: number;
+  readonly watermarks: readonly DataAvailabilityProjectionWatermarkV1[];
+}
+
+export interface DataAvailabilitySurfaceV1 {
+  readonly name: string;
+  readonly endpoint: string;
+  readonly source: string;
+  readonly freshness: string;
+  readonly projectionName: string;
+  readonly lag: number;
+  readonly lastPartitionSequence: number;
+  readonly lastUpdatedAt: string;
+}
+
+export interface DataAvailabilityV1 {
+  readonly generatedAt: string;
+  readonly source: string;
+  readonly projections: readonly DataAvailabilityProjectionV1[];
+  readonly surfaces: readonly DataAvailabilitySurfaceV1[];
+}
+
 export interface SubmitLimitOrderV1 {
   readonly instrumentId: string;
   readonly side: OrderSideV1;
@@ -179,6 +215,10 @@ export interface BotOrdersClientV1 {
 export interface BotSafeOrdersClientV1 {
   modify(order: ModifyOrderV1): Promise<BotResultV1<BotActionV1>>;
   cancel(order: CancelOrderV1): Promise<BotResultV1<BotActionV1>>;
+}
+
+export interface BotDataAvailabilityClientV1 {
+  availability(): Promise<BotResultV1<DataAvailabilityV1>>;
 }
 
 export interface BotConfigV1 {

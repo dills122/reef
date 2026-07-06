@@ -412,6 +412,9 @@ class PlatformApiTest {
         val response = api.tradeTape("AAPL")
 
         assertContains(response, "\"instrumentId\":\"AAPL\"")
+        assertContains(response, "\"meta\":{\"source\":\"runtime.trades\"")
+        assertContains(response, "\"freshness\":\"durable fact rows\"")
+        assertContains(response, "\"limit\":50")
         assertContains(response, "\"tradeId\":\"trade-3\"")
         assertContains(response, "\"tradeId\":\"trade-1\"")
         assert(!response.contains("\"tradeId\":\"trade-2\"")) { "unrelated instrument leaked into tape" }
@@ -488,6 +491,8 @@ class PlatformApiTest {
 
         assertContains(response, "\"instrumentId\":\"AAPL\"")
         assertContains(response, "\"interval\":\"1m\"")
+        assertContains(response, "\"meta\":{\"source\":\"runtime.trades\"")
+        assertContains(response, "\"freshness\":\"durable fact row aggregation\"")
         // first bucket [18:00:00, 18:01:00): open=100 (t1 first), close=105 (t2 last), high=105, low=100, volume=15
         assertContains(response, "\"start\":\"2026-03-14T18:00:00Z\"")
         assertContains(response, "\"open\":\"100\"")
@@ -575,12 +580,16 @@ class PlatformApiTest {
 
         val current = api.ownOrders("participant-1", openOnly = true)
         assertContains(current, "\"mine-open\"")
+        assertContains(current, "\"meta\":{\"source\":\"runtime.orders + runtime.order_lifecycle_state\"")
+        assertContains(current, "\"freshness\":\"dirty-tracked lifecycle projection\"")
+        assertContains(current, "\"openOnly\":true")
         assert(!current.contains("mine-cancelled")) { "cancelled order leaked into current" }
         assert(!current.contains("someone-elses")) { "other participant's order leaked into current" }
 
         val history = api.ownOrders("participant-1", openOnly = false)
         assertContains(history, "\"mine-open\"")
         assertContains(history, "\"mine-cancelled\"")
+        assertContains(history, "\"openOnly\":false")
         assert(!history.contains("someone-elses")) { "other participant's order leaked into history" }
     }
 
@@ -644,6 +653,16 @@ class PlatformApiTest {
         assertContains(api.order("ord-1"), "\"status\":\"OPEN\"")
         assertContains(api.marketDataSnapshot("AAPL"), "\"bestBidPrice\":\"150250000000\"")
         assertContains(api.marketDataDepthSnapshot("AAPL"), "\"bidLevels\":[{\"price\":\"150250000000\",\"quantity\":\"100\"}]")
+
+        val availability = api.dataAvailability()
+        assertContains(availability, "\"source\":\"venue-event-batch\"")
+        assertContains(availability, "\"name\":\"marketDataSnapshots\"")
+        assertContains(availability, "\"endpoint\":\"/api/v1/market-data/snapshots/{instrumentId}\"")
+        assertContains(availability, "\"projectionName\":\"runtime-normalized-venue-outcomes\"")
+        assertContains(availability, "\"projectionName\":\"market-data-top-of-book\"")
+        assertContains(availability, "\"name\":\"tradeTape\"")
+        assertContains(availability, "\"freshness\":\"durable fact rows\"")
+        assertContains(availability, "\"name\":\"currentOrders\"")
     }
 
     private fun validRequestBody(): String {

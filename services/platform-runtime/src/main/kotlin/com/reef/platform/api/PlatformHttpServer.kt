@@ -517,6 +517,17 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.refreshMarketDataSnapshots(projectionName, sourceProjectionName))
         }
 
+        server.createContext("/api/v1/data/availability") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val venueProjectionName = queryValue(exchange, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+            val marketDataProjectionName = queryValue(exchange, "marketDataProjectionName").ifBlank { "market-data-top-of-book" }
+            val source = queryValue(exchange, "source").ifBlank { "venue-event-batch" }
+            writeJson(exchange, 200, api.dataAvailability(venueProjectionName, marketDataProjectionName, source))
+        }
+
         server.createContext("/api/v1/market-data/depth/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -752,6 +763,15 @@ class PlatformHttpServer(
                     body = api.refreshMarketDataSnapshots(
                         queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" },
                         queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
+                    )
+                )
+            request.path == "/api/v1/data/availability" && request.method == "GET" ->
+                PlatformHotPathResponse(
+                    status = 200,
+                    body = api.dataAvailability(
+                        venueProjectionName = queryValue(request.query, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" },
+                        marketDataProjectionName = queryValue(request.query, "marketDataProjectionName").ifBlank { "market-data-top-of-book" },
+                        source = queryValue(request.query, "source").ifBlank { "venue-event-batch" }
                     )
                 )
             request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {

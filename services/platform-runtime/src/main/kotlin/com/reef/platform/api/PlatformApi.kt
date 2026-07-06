@@ -26,6 +26,10 @@ import java.util.concurrent.CompletableFuture
 class PlatformApi(
     private val orderService: OrderApplicationService = OrderApplicationService()
 ) {
+    private val defaultProjectionSource = "venue-event-batch"
+    private val defaultVenueProjectionName = "runtime-normalized-venue-outcomes"
+    private val defaultMarketDataProjectionName = "market-data-top-of-book"
+
     fun health(): String {
         return """{"service":"platform-runtime","status":"ok"}"""
     }
@@ -87,6 +91,67 @@ class PlatformApi(
         source: String = "canonical-submit"
     ): ProjectionStatus {
         return orderService.projectionStatus(projectionName, partitions, source)
+    }
+
+    fun dataAvailability(
+        venueProjectionName: String = defaultVenueProjectionName,
+        marketDataProjectionName: String = defaultMarketDataProjectionName,
+        source: String = defaultProjectionSource
+    ): String {
+        val venueStatus = projectionStatus(venueProjectionName, source = source)
+        val marketDataStatus = projectionStatus(marketDataProjectionName, source = source)
+        return JsonCodec.writeObject(
+            "generatedAt" to java.time.Instant.now().toString(),
+            "source" to source,
+            "projections" to listOf(
+                projectionStatusMap(venueStatus, "canonical venue outcome projection"),
+                projectionStatusMap(marketDataStatus, "top-of-book market data projection")
+            ),
+            "surfaces" to listOf(
+                surfaceAvailability(
+                    name = "marketDataSnapshots",
+                    endpoint = "/api/v1/market-data/snapshots/{instrumentId}",
+                    source = "runtime.market_data_snapshots",
+                    freshness = "projection-watermark",
+                    status = marketDataStatus
+                ),
+                surfaceAvailability(
+                    name = "marketDataDepth",
+                    endpoint = "/api/v1/market-data/depth/{instrumentId}",
+                    source = "runtime.order_lifecycle_state",
+                    freshness = "read-time bounded aggregation",
+                    status = venueStatus
+                ),
+                surfaceAvailability(
+                    name = "tradeTape",
+                    endpoint = "/api/v1/market-data/trades/{instrumentId}",
+                    source = "runtime.trades",
+                    freshness = "durable fact rows",
+                    status = venueStatus
+                ),
+                surfaceAvailability(
+                    name = "intradayBars",
+                    endpoint = "/api/v1/market-data/bars/{instrumentId}",
+                    source = "runtime.trades",
+                    freshness = "durable fact row aggregation",
+                    status = venueStatus
+                ),
+                surfaceAvailability(
+                    name = "currentOrders",
+                    endpoint = "/api/v1/orders/current",
+                    source = "runtime.orders + runtime.order_lifecycle_state",
+                    freshness = "dirty-tracked lifecycle projection",
+                    status = venueStatus
+                ),
+                surfaceAvailability(
+                    name = "orderHistory",
+                    endpoint = "/api/v1/orders/history",
+                    source = "runtime.orders + runtime.order_lifecycle_state",
+                    freshness = "dirty-tracked lifecycle projection",
+                    status = venueStatus
+                )
+            )
+        )
     }
 
     fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
@@ -333,6 +398,12 @@ class PlatformApi(
         val entries = orderService.tradeTape(instrumentId, limit, beforeSequence)
         return JsonCodec.writeObject(
             "instrumentId" to instrumentId,
+            "meta" to mapOf(
+                "source" to "runtime.trades",
+                "freshness" to "durable fact rows",
+                "limit" to limit.coerceIn(1, 500),
+                "before" to (beforeSequence?.toString() ?: "")
+            ),
             "trades" to entries.map { it.toMap() }
         )
     }
@@ -349,6 +420,12 @@ class PlatformApi(
         return JsonCodec.writeObject(
             "instrumentId" to instrumentId,
             "interval" to interval,
+            "meta" to mapOf(
+                "source" to "runtime.trades",
+                "freshness" to "durable fact row aggregation",
+                "start" to start,
+                "end" to end
+            ),
             "bars" to bars.map { it.toMap() }
         )
     }
@@ -356,6 +433,12 @@ class PlatformApi(
     fun ownOrders(participantId: String, openOnly: Boolean): String {
         return JsonCodec.writeObject(
             "participantId" to participantId,
+            "meta" to mapOf(
+                "source" to "runtime.orders + runtime.order_lifecycle_state",
+                "freshness" to "dirty-tracked lifecycle projection",
+                "scope" to "participant",
+                "openOnly" to openOnly
+            ),
             "orders" to orderService.ordersForParticipant(participantId, openOnly).map { it.toMap() }
         )
     }
@@ -494,6 +577,49 @@ class PlatformApi(
         "acceptedAt" to acceptedAt,
         "lastEventAt" to lastEventAt,
         "updatedAt" to updatedAt
+    )
+
+    private fun projectionStatusMap(status: ProjectionStatus, role: String): Map<String, Any> = mapOf(
+        "projectionName" to status.projectionName,
+        "role" to role,
+        "projectedCount" to status.projectedCount,
+        "lag" to status.lag,
+        "watermarks" to status.watermarks.map { watermark ->
+            mapOf(
+                "projectionName" to watermark.projectionName,
+                "partition" to watermark.partitionId,
+                "lastPartitionSequence" to watermark.lastPartitionSequence,
+                "canonicalMaxPartitionSequence" to watermark.canonicalMaxPartitionSequence,
+                "lag" to watermark.lag,
+                "updatedAt" to watermark.updatedAt,
+                "lastError" to watermark.lastError
+            )
+        }
+    )
+
+    private fun surfaceAvailability(
+        name: String,
+        endpoint: String,
+        source: String,
+        freshness: String,
+        status: ProjectionStatus
+    ): Map<String, Any> = mapOf(
+        "name" to name,
+        "endpoint" to endpoint,
+        "source" to source,
+        "freshness" to freshness,
+        "projectionName" to status.projectionName,
+        "lag" to status.lag,
+        "lastPartitionSequence" to (
+            status.watermarks
+                .filter { it.partitionId >= 0 }
+                .maxOfOrNull { it.lastPartitionSequence } ?: 0L
+            ),
+        "lastUpdatedAt" to (
+            status.watermarks
+                .filter { it.updatedAt.isNotBlank() }
+                .maxOfOrNull { it.updatedAt } ?: ""
+            )
     )
 
     private fun RuntimeEvent.toMap(): Map<String, Any> = mapOf(

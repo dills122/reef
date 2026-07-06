@@ -1,10 +1,15 @@
 import type {
   BotContextV1,
+  BotDataAvailabilityClientV1,
   BotHistoricalBarsRequestV1,
   BotHistoricalDataClientV1,
   BotMarketDataClientV1,
   BotOrdersClientV1,
   BotResultV1,
+  DataAvailabilityProjectionV1,
+  DataAvailabilityProjectionWatermarkV1,
+  DataAvailabilitySurfaceV1,
+  DataAvailabilityV1,
   HistoricalBarV1,
   MarketSnapshotV1,
   OwnOrderV1,
@@ -56,6 +61,60 @@ const PRICE_SCALE_NANOS = 1_000_000_000;
 function priceFromNanos(value: string | undefined): number | undefined {
   const parsed = numberOrUndefined(value);
   return parsed === undefined ? undefined : parsed / PRICE_SCALE_NANOS;
+}
+
+function recordOrEmpty(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function arrayOrEmpty(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" ? value : Number(value ?? 0);
+}
+
+function parseAvailabilityWatermark(value: unknown): DataAvailabilityProjectionWatermarkV1 {
+  const row = recordOrEmpty(value);
+  return {
+    projectionName: stringValue(row.projectionName),
+    partition: numberValue(row.partition),
+    lastPartitionSequence: numberValue(row.lastPartitionSequence),
+    canonicalMaxPartitionSequence: numberValue(row.canonicalMaxPartitionSequence),
+    lag: numberValue(row.lag),
+    updatedAt: stringValue(row.updatedAt),
+    lastError: stringValue(row.lastError),
+  };
+}
+
+function parseAvailabilityProjection(value: unknown): DataAvailabilityProjectionV1 {
+  const row = recordOrEmpty(value);
+  return {
+    projectionName: stringValue(row.projectionName),
+    role: stringValue(row.role),
+    projectedCount: numberValue(row.projectedCount),
+    lag: numberValue(row.lag),
+    watermarks: arrayOrEmpty(row.watermarks).map(parseAvailabilityWatermark),
+  };
+}
+
+function parseAvailabilitySurface(value: unknown): DataAvailabilitySurfaceV1 {
+  const row = recordOrEmpty(value);
+  return {
+    name: stringValue(row.name),
+    endpoint: stringValue(row.endpoint),
+    source: stringValue(row.source),
+    freshness: stringValue(row.freshness),
+    projectionName: stringValue(row.projectionName),
+    lag: numberValue(row.lag),
+    lastPartitionSequence: numberValue(row.lastPartitionSequence),
+    lastUpdatedAt: stringValue(row.lastUpdatedAt),
+  };
 }
 
 const OrderStatusFromPlatformV1: Record<string, OwnOrderV1["status"]> = {
@@ -221,6 +280,29 @@ export function createLiveOwnOrdersReadClientV1(
       const mapped = orders.map(toOwnOrder);
       const filtered = request?.instrumentId ? mapped.filter((order) => order.instrumentId === request.instrumentId) : mapped;
       return { ok: true, value: filtered.slice(0, request?.limit ?? filtered.length) };
+    },
+  };
+}
+
+export function createLiveDataAvailabilityClientV1(options: LiveVenueDataClientOptionsV1): BotDataAvailabilityClientV1 {
+  const fetchImpl = resolveFetch(options.fetch);
+  const baseUrl = options.baseUrl.replace(/\/$/, "");
+
+  return {
+    async availability() {
+      const result = await getJson(fetchImpl, `${baseUrl}/api/v1/data/availability`);
+      if (result.status < 200 || result.status >= 300 || result.json.error !== undefined) {
+        return unavailableDenial("Failed to load data availability.") as BotResultV1<DataAvailabilityV1>;
+      }
+      return {
+        ok: true,
+        value: {
+          generatedAt: stringValue(result.json.generatedAt),
+          source: stringValue(result.json.source),
+          projections: arrayOrEmpty(result.json.projections).map(parseAvailabilityProjection),
+          surfaces: arrayOrEmpty(result.json.surfaces).map(parseAvailabilitySurface),
+        },
+      };
     },
   };
 }
