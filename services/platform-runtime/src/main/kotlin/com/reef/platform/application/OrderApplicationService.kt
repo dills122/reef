@@ -622,6 +622,9 @@ class OrderApplicationService(
 
     fun persistedOrders() = runtimePersistence.acceptedOrders()
 
+    fun findOrderByClientOrderId(participantId: String, clientOrderId: String) =
+        runtimePersistence.findOrderByClientOrderId(participantId, clientOrderId)
+
     fun persistedExecutions(orderId: String) = runtimePersistence.executionsForOrder(orderId)
 
     fun persistedTrades(orderId: String) = runtimePersistence.tradesForOrder(orderId)

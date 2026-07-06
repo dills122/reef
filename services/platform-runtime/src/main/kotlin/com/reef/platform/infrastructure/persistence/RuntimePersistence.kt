@@ -288,6 +288,7 @@ interface RuntimePersistence {
     }
     fun acceptedOrder(orderId: String): PersistedOrder?
     fun acceptedOrders(): List<PersistedOrder>
+    fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? = null
     fun executionsForOrder(orderId: String): List<ExecutionCreated>
     fun trades(): List<TradeCreated>
     fun recentTrades(limit: Int): List<TradeCreated>

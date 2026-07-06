@@ -18,22 +18,25 @@ const (
 )
 
 type SubmitOrder struct {
-	CommandID     string `json:"commandId"`
-	TraceID       string `json:"traceId"`
-	CausationID   string `json:"causationId"`
-	CorrelationID string `json:"correlationId"`
-	ActorID       string `json:"actorId"`
-	OccurredAt    string `json:"occurredAt"`
-	OrderID       string `json:"orderId"`
-	InstrumentID  string `json:"instrumentId"`
-	ParticipantID string `json:"participantId"`
-	AccountID     string `json:"accountId"`
-	Side          Side   `json:"side"`
-	OrderType     string `json:"orderType"`
-	QuantityUnits string `json:"quantityUnits"`
-	LimitPrice    string `json:"limitPrice"`
-	Currency      string `json:"currency"`
-	TimeInForce   string `json:"timeInForce"`
+	CommandID      string `json:"commandId"`
+	TraceID        string `json:"traceId"`
+	CausationID    string `json:"causationId"`
+	CorrelationID  string `json:"correlationId"`
+	ActorID        string `json:"actorId"`
+	OccurredAt     string `json:"occurredAt"`
+	OrderID        string `json:"orderId"`
+	ClientOrderID  string `json:"clientOrderId"`
+	RunID          string `json:"runId"`
+	VenueSessionID string `json:"venueSessionId"`
+	InstrumentID   string `json:"instrumentId"`
+	ParticipantID  string `json:"participantId"`
+	AccountID      string `json:"accountId"`
+	Side           Side   `json:"side"`
+	OrderType      string `json:"orderType"`
+	QuantityUnits  string `json:"quantityUnits"`
+	LimitPrice     string `json:"limitPrice"`
+	Currency       string `json:"currency"`
+	TimeInForce    string `json:"timeInForce"`
 }
 
 type CancelOrder struct {
@@ -75,18 +78,21 @@ type OrderRejected struct {
 }
 
 type AcceptedOrderFact struct {
-	OrderID       string `json:"orderId"`
-	EngineOrderID string `json:"engineOrderId"`
-	InstrumentID  string `json:"instrumentId"`
-	ParticipantID string `json:"participantId"`
-	AccountID     string `json:"accountId"`
-	Side          Side   `json:"side"`
-	OrderType     string `json:"orderType"`
-	QuantityUnits string `json:"quantityUnits"`
-	LimitPrice    string `json:"limitPrice"`
-	Currency      string `json:"currency"`
-	TimeInForce   string `json:"timeInForce"`
-	AcceptedAt    string `json:"acceptedAt"`
+	OrderID        string `json:"orderId"`
+	EngineOrderID  string `json:"engineOrderId"`
+	ClientOrderID  string `json:"clientOrderId"`
+	RunID          string `json:"runId"`
+	VenueSessionID string `json:"venueSessionId"`
+	InstrumentID   string `json:"instrumentId"`
+	ParticipantID  string `json:"participantId"`
+	AccountID      string `json:"accountId"`
+	Side           Side   `json:"side"`
+	OrderType      string `json:"orderType"`
+	QuantityUnits  string `json:"quantityUnits"`
+	LimitPrice     string `json:"limitPrice"`
+	Currency       string `json:"currency"`
+	TimeInForce    string `json:"timeInForce"`
+	AcceptedAt     string `json:"acceptedAt"`
 }
 
 type OrderState struct {

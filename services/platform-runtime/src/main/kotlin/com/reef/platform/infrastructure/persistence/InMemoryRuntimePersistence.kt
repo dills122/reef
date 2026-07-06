@@ -143,6 +143,12 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return orders.values.toList()
     }
 
+    override fun findOrderByClientOrderId(participantId: String, clientOrderId: String): PersistedOrder? {
+        return orders.values
+            .filter { it.participantId == participantId && it.clientOrderId == clientOrderId }
+            .maxByOrNull { it.acceptedAt }
+    }
+
     override fun ordersForParticipant(
         participantId: String,
         openOnly: Boolean,
