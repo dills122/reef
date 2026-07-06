@@ -52,6 +52,14 @@ object JsonCodec {
 
     internal fun writeNode(node: JsonNode): String = mapper.writeValueAsString(node)
 
+    fun rawJsonOrText(value: String): JsonNode {
+        return try {
+            mapper.readTree(value) ?: JsonNodeFactory.instance.textNode(value)
+        } catch (_: Exception) {
+            JsonNodeFactory.instance.textNode(value)
+        }
+    }
+
     private fun toNode(value: Any?): JsonNode {
         val factory = JsonNodeFactory.instance
         return when (value) {

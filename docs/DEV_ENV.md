@@ -486,6 +486,21 @@ Venue event replay/check evidence is exposed through `make dev-venue-event-repla
 
 Local Docker includes separate `boundary-postgres` (`REEF_BOUNDARY_POSTGRES_HOST_PORT`, default `5434`), `projection-postgres` (`REEF_PROJECTION_POSTGRES_HOST_PORT`, default `5433`), and `arena-postgres` (`REEF_ARENA_POSTGRES_HOST_PORT`, default `5435`) services so command intake/idempotency, projection writes, and arena control-plane metadata can be measured independently from canonical worker commits. Startup applies the same forward migrations to `postgres`, `boundary-postgres`, `projection-postgres`, and `arena-postgres`. If a retained canonical DB is paired with a fresh projection DB, projectors will rebuild historical canonical submit outcomes before fresh stress numbers are comparable; use `make dev-reset` for clean A/B stress baselines.
 
+Simulation-run reports can be converted into backbone analytics export payloads
+without rerunning the load test:
+
+```bash
+make dev-export-simulation-run \
+  REPORT=reports/path/stream-ack-stress-rate-10000-workers-256.json \
+  ARTIFACT_ROOT=reports/path
+```
+
+The command is dry-run by default. Add
+`ARGS="--post --api-url=http://127.0.0.1:8080"` for tunnel/local posting. When
+posting through public Caddy, also pass `--token "$ANALYTICS_EXPORT_API_TOKEN"`.
+The public route only accepts `POST /internal/admin/analytics/run-exports`;
+reads stay tunnel-only.
+
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and durable-log consumer snapshots (`consumerMetrics`). JetStream snapshots include pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. Redpanda snapshots report committed offset, end offset, and lag for the assigned partition. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 
 Run the submit-only stream-ack stress profile:

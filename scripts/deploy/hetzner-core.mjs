@@ -55,6 +55,8 @@ Commands:
              build service images on the Hetzner host and use local tags
   restart    docker compose pull and restart runtime services
   stream-ack start JetStream-backed stream-ack runtime roles
+  backup-timer
+             install or update host-side encrypted DB backup timer
   verify     run host-side runtime verification checks
   soak       run host-side simulator soak; pass RATE/DURATION/WORKERS via env
   status     show docker compose service status
@@ -132,6 +134,9 @@ switch (command) {
     break;
   case "stream-ack":
     run("ssh", [target, `cd ${deployDir} && ./scripts/start-stream-ack.sh`]);
+    break;
+  case "backup-timer":
+    run("ssh", [target, `cd ${deployDir} && ./scripts/install-backup-timer.sh`]);
     break;
   case "verify":
     run("ssh", [target, `cd ${deployDir} && ./scripts/verify-runtime.sh`]);

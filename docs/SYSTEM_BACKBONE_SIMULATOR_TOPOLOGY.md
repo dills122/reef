@@ -276,6 +276,8 @@ Reef can currently claim:
   durable-drain proof point
 - direct matching-engine consume plus durable event-batch materialization has
   short local proof at `10k/sec` with canonical counts and replay checks clean
+- simulation-run export summaries can now be posted to the backbone admin API
+  at `/internal/admin/analytics/run-exports`
 - migration/schema placement and Node dev tooling CI are guarding the current
   DB layout and dev scripts
 

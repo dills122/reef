@@ -2,6 +2,8 @@ package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
+import com.reef.platform.application.analytics.SimulationRunExportService
 import com.reef.platform.application.arena.ArenaBotMetadata
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaControlPlaneService
@@ -1451,6 +1453,61 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun internalAdminAnalyticsRunExportsEndpointIngestsAndListsSimulationRunExports() {
+        val analyticsService = SimulationRunExportService(
+            InMemorySimulationRunExportStore()
+        ) { java.time.Instant.parse("2026-07-06T12:00:00Z") }
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            analyticsRunExportService = analyticsService
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/analytics/run-exports",
+                emptyMap(),
+                """
+                    {
+                      "runId":"run-export-1",
+                      "scenarioId":"stress-smoke",
+                      "runKind":"stream-ack-soak",
+                      "source":"local",
+                      "gitSha":"abc123",
+                      "profile":"10k-15m",
+                      "startedAt":"2026-07-06T11:45:00Z",
+                      "completedAt":"2026-07-06T12:00:00Z",
+                      "status":"passed",
+                      "counts":{
+                        "attempted":600000,
+                        "accepted":599900,
+                        "completed":599800,
+                        "materialized":599800,
+                        "projected":599800,
+                        "failed":100
+                      },
+                      "latencyMs":{"p50":4.2,"p95":12.5,"p99":25.1},
+                      "artifacts":[{"type":"report","path":"artifacts/run-export-1/report.json","sha256":"sha256:report"}],
+                      "summary":{"directConsumeMatched":true,"replayAuditClean":true}
+                    }
+                """.trimIndent()
+            )
+            val fetched = get(server.address.port, "/internal/admin/analytics/run-exports?runId=run-export-1")
+            val listed = get(server.address.port, "/internal/admin/analytics/run-exports?limit=5")
+
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"runId\":\"run-export-1\"")
+            assertContains(posted.body, "\"attempted\":600000")
+            assertContains(posted.body, "\"directConsumeMatched\":true")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"profile\":\"10k-15m\"")
+            assertEquals(200, listed.status)
+            assertContains(listed.body, "\"exportsCount\":1")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
         val breakerStore = RecordingCommandCircuitBreakerStore()
         val persistence = InMemoryRuntimePersistence()
@@ -2716,6 +2773,7 @@ class PlatformHttpServerBoundaryTest {
         instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
         instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService: AdminApplicationService? = null,
+        analyticsRunExportService: SimulationRunExportService? = null,
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
@@ -2764,6 +2822,7 @@ class PlatformHttpServerBoundaryTest {
             instrumentPriceCollarCheck = instrumentPriceCollarCheck,
             instrumentPriceCollarStore = instrumentPriceCollarStore,
             arenaAdminService = arenaAdminService,
+            analyticsRunExportService = analyticsRunExportService,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
