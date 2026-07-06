@@ -302,9 +302,10 @@ not the target architecture.
 
 ## Next Simulator Improvements
 
-- Wire Bot SDK live-read clients into the hosted/tick runner deliberately.
-- Add scenario-level assertions that span command status, canonical outcomes,
-  order projections, market-data projections, and replay output.
+- Extend hosted-runner/operator flows beyond the current `--read-mode=fixture|live`
+  local script into the full hosted-run operator service.
+- Add broader scenario-level assertions that span command status, canonical
+  outcomes, order projections, market-data projections, and replay output.
 - Expand deterministic settlement/break/repair scenarios after the venue-core
   durable path has longer soak evidence.
 - Add restart/recovery scripts for stream direct consume and materializer offset

@@ -4,9 +4,13 @@ import {
   ReefBotV1,
   type BotActionV1,
   type BotContextV1,
+  type BotDataAvailabilityClientV1,
+  type BotDenialV1,
+  type BotReadClientsV1,
   type BotSignalV1,
   type BotStrategyEventV1,
   type BotStrategyV1,
+  type DataAvailabilityV1,
 } from "./index";
 
 declare const setTimeout: (callback: () => void, delayMs: number) => unknown;
@@ -59,9 +63,19 @@ export interface BotHostedRunnerIssueV1 {
   readonly message: string;
 }
 
+export type BotHostedReadModeV1 = "fixture" | "live";
+
 export interface BotHostedScenarioOptionsV1 extends BotHostedLoadOptionsV1 {
   readonly fixture: BotScenarioFixtureV1;
   readonly venueTransport?: VenueCommandTransportV1;
+  readonly readMode?: BotHostedReadModeV1;
+  readonly readClients?: BotReadClientsV1;
+  readonly dataAvailabilityClient?: BotDataAvailabilityClientV1;
+}
+
+export interface BotHostedScenarioRunReportV1 extends BotStrategyScenarioRunReportV1 {
+  readonly readMode: BotHostedReadModeV1;
+  readonly dataAvailability?: DataAvailabilityV1;
 }
 
 export const defaultBotHostedExecutionLimitsV1: BotHostedExecutionLimitsV1 = {
@@ -122,51 +136,75 @@ export async function loadHostedBotClassV1(options: BotHostedLoadOptionsV1): Pro
   }
 }
 
-export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1): Promise<BotStrategyScenarioRunReportV1> {
+export async function runHostedBotScenarioV1(options: BotHostedScenarioOptionsV1): Promise<BotHostedScenarioRunReportV1> {
+  const readMode = options.readMode ?? (options.readClients === undefined ? "fixture" : "live");
   const loadResult = await loadHostedBotClassV1(options);
   if (!loadResult.ok) {
-    return {
-      status: "do_not_merge",
-      scenarioId: options.fixture.scenarioId,
-      runId: options.fixture.runId,
-      ticksRun: 0,
-      actionsProposed: 0,
-      orderActionsProposed: 0,
-      dataCalls: 0,
-      signalsGenerated: 0,
-      eventsProcessed: 0,
-      issues: loadResult.issues,
-      denials: [],
-      logs: [],
-      ticks: [],
-      finalOrders: [],
-    };
+    return hostedFailureReportV1(options.fixture, readMode, loadResult.issues);
+  }
+
+  let dataAvailability: DataAvailabilityV1 | undefined;
+  if (options.dataAvailabilityClient !== undefined) {
+    const availability = await options.dataAvailabilityClient.availability();
+    if (!availability.ok) {
+      return hostedFailureReportV1(
+        options.fixture,
+        readMode,
+        [{ code: "data_availability_denial", message: availability.denial.message }],
+        [availability.denial],
+      );
+    }
+    dataAvailability = availability.value;
   }
 
   try {
-    return await runBotStrategyScenarioV1({
+    const report = await runBotStrategyScenarioV1({
       BotClass: loadResult.BotClass,
       fixture: options.fixture,
       ...(options.venueTransport === undefined ? {} : { venueTransport: options.venueTransport }),
+      ...(options.readClients === undefined ? {} : { readClients: options.readClients }),
     });
-  } catch (error) {
     return {
-      status: "do_not_merge",
-      scenarioId: options.fixture.scenarioId,
-      runId: options.fixture.runId,
-      ticksRun: 0,
-      actionsProposed: 0,
-      orderActionsProposed: 0,
-      dataCalls: 0,
-      signalsGenerated: 0,
-      eventsProcessed: 0,
-      issues: [{ code: "hosted_execution_failed", message: error instanceof Error ? error.message : String(error) }],
-      denials: [],
-      logs: [],
-      ticks: [],
-      finalOrders: [],
+      ...report,
+      readMode,
+      ...(dataAvailability === undefined ? {} : { dataAvailability }),
     };
+  } catch (error) {
+    return hostedFailureReportV1(
+      options.fixture,
+      readMode,
+      [{ code: "hosted_execution_failed", message: error instanceof Error ? error.message : String(error) }],
+      [],
+      dataAvailability,
+    );
   }
+}
+
+function hostedFailureReportV1(
+  fixture: BotScenarioFixtureV1,
+  readMode: BotHostedReadModeV1,
+  issues: readonly BotHostedRunnerIssueV1[],
+  denials: readonly BotDenialV1[] = [],
+  dataAvailability?: DataAvailabilityV1,
+): BotHostedScenarioRunReportV1 {
+  return {
+    status: "do_not_merge",
+    scenarioId: fixture.scenarioId,
+    runId: fixture.runId,
+    ticksRun: 0,
+    actionsProposed: 0,
+    orderActionsProposed: 0,
+    dataCalls: 0,
+    signalsGenerated: 0,
+    eventsProcessed: 0,
+    issues,
+    denials,
+    logs: [],
+    ticks: [],
+    finalOrders: [],
+    readMode,
+    ...(dataAvailability === undefined ? {} : { dataAvailability }),
+  };
 }
 
 export function wrapHostedBotClassWithExecutionGuardsV1(

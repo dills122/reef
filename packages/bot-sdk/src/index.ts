@@ -107,10 +107,14 @@ export interface DataAvailabilitySurfaceV1 {
   readonly endpoint: string;
   readonly source: string;
   readonly freshness: string;
+  readonly scope: string;
+  readonly requiredQuery: readonly string[];
+  readonly optionalQuery: readonly string[];
   readonly projectionName: string;
   readonly lag: number;
   readonly lastPartitionSequence: number;
   readonly lastUpdatedAt: string;
+  readonly notes: string;
 }
 
 export interface DataAvailabilityV1 {
@@ -219,6 +223,12 @@ export interface BotSafeOrdersClientV1 {
 
 export interface BotDataAvailabilityClientV1 {
   availability(): Promise<BotResultV1<DataAvailabilityV1>>;
+}
+
+export interface BotReadClientsV1 {
+  readonly marketData?: BotMarketDataClientV1;
+  readonly historical?: BotHistoricalDataClientV1;
+  readonly orders?: Pick<BotOrdersClientV1, "current" | "history">;
 }
 
 export interface BotConfigV1 {

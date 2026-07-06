@@ -9,6 +9,8 @@ const fixture = JSON.parse(readFileSync(join(repoRoot, "packages/bot-sdk/fixture
 const hostedRunner = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/src/hosted-runner.ts")).href);
 
 await assertHostedScenarioRunsInCompartment();
+await assertHostedScenarioUsesLiveReadClients();
+await assertHostedScenarioReportsDataAvailabilityDenial();
 await assertDeniedNetworkSourceDoesNotEvaluate();
 await assertCompartmentOmitsAmbientProcess();
 await assertHostedTickTimeoutReturnsDoNotMerge();
@@ -47,6 +49,125 @@ module.exports.default = class HostedMarketMaker extends ReefBotV1 {
   assert.equal(report.orderActionsProposed, 3);
   assert.equal(report.dataCalls, 3);
   assert.equal(report.issues.length, 0);
+}
+
+async function assertHostedScenarioUsesLiveReadClients() {
+  const source = `
+const { ReefBotV1 } = __reefBotSdk;
+module.exports.default = class HostedLiveReadBot extends ReefBotV1 {
+  static metadata = {
+    name: "hosted-live-read-bot",
+    publisher: "Reef",
+    email: "bots@example.com",
+    version: "1.0.0",
+    sdkVersion: "1.5.0",
+    botApiVersion: "v1",
+  };
+
+  async onTick(ctx) {
+    const snapshot = await ctx.marketData.snapshot("AAPL");
+    const current = await ctx.orders.current();
+    if (!snapshot.ok || !current.ok) return [ctx.actions.noop("live data unavailable")];
+    return [ctx.orders.placeLimit({ instrumentId: "AAPL", side: "BUY", quantity: 1, limitPrice: snapshot.value.midPrice })];
+  }
+};`;
+
+  const currentOrders = [{
+    orderId: "hosted-live-open-1",
+    instrumentId: "AAPL",
+    side: "BUY",
+    quantity: 5,
+    remainingQuantity: 5,
+    limitPrice: 122,
+    status: "OPEN",
+  }];
+  const report = await hostedRunner.runHostedBotScenarioV1({
+    source,
+    fileName: "hosted-live-read-bot.js",
+    fixture: {
+      ...fixture,
+      ticks: fixture.ticks.slice(0, 1).map((tick) => ({ ...tick, marketSnapshots: {} })),
+      initialOrders: [],
+    },
+    compartmentFactory: createVmCompartmentFactory(),
+    readMode: "live",
+    readClients: {
+      marketData: {
+        async snapshot(instrumentId) {
+          assert.equal(instrumentId, "AAPL");
+          return { ok: true, value: { instrumentId, asOf: "2026-07-06T00:00:00Z", midPrice: 125 } };
+        },
+        async snapshots() {
+          throw new Error("not used");
+        },
+      },
+      orders: {
+        async current() {
+          return { ok: true, value: currentOrders };
+        },
+        async history() {
+          return { ok: true, value: currentOrders };
+        },
+      },
+    },
+    dataAvailabilityClient: {
+      async availability() {
+        return {
+          ok: true,
+          value: {
+            generatedAt: "2026-07-06T00:00:00Z",
+            source: "venue-event-batch",
+            projections: [],
+            surfaces: [{
+              name: "currentOrders",
+              endpoint: "/api/v1/orders/current",
+              source: "runtime.orders + runtime.order_lifecycle_state",
+              freshness: "dirty-tracked lifecycle projection",
+              scope: "participant-own-orders",
+              requiredQuery: ["participantId"],
+              optionalQuery: ["instrumentId", "limit"],
+              projectionName: "runtime-normalized-venue-outcomes",
+              lag: 0,
+              lastPartitionSequence: 1,
+              lastUpdatedAt: "2026-07-06T00:00:00Z",
+              notes: "",
+            }],
+          },
+        };
+      },
+    },
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.readMode, "live");
+  assert.equal(report.dataAvailability.surfaces[0].name, "currentOrders");
+  assert.equal(report.dataCalls, 2);
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "125000000000");
+  assert.equal(report.finalOrders[0].orderId, "hosted-live-open-1");
+}
+
+async function assertHostedScenarioReportsDataAvailabilityDenial() {
+  const source = `
+const { ReefBotV1 } = __reefBotSdk;
+module.exports.default = class HostedNeverRunsBot extends ReefBotV1 { async onTick(ctx) { return [ctx.actions.noop("never")]; } };`;
+
+  const report = await hostedRunner.runHostedBotScenarioV1({
+    source,
+    fileName: "hosted-never-runs-bot.js",
+    fixture,
+    compartmentFactory: createVmCompartmentFactory(),
+    readMode: "live",
+    dataAvailabilityClient: {
+      async availability() {
+        return { ok: false, denial: { code: "TEMPORARILY_UNAVAILABLE", message: "availability offline" } };
+      },
+    },
+  });
+
+  assert.equal(report.status, "do_not_merge");
+  assert.equal(report.readMode, "live");
+  assert.ok(report.issues.some((issue) => issue.code === "data_availability_denial"));
+  assert.equal(report.ticksRun, 0);
 }
 
 async function assertDeniedNetworkSourceDoesNotEvaluate() {
