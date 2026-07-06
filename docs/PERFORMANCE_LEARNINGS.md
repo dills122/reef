@@ -58,6 +58,13 @@ Immediate implications:
 3. `STREAM_ACK_PUBLISHER=noop` evidence proves API boundary/intake/Netty ceiling only. It must not be used for durable-acceptance claims because `202` no longer proves broker append.
 4. The earlier apparent `~1k/sec` loss is closed for the no-op API-front-door profile. Next bottleneck hunt should move back to durable broker publish, direct matching-engine consumption, and materializer/projector drain.
 
+Current design read:
+
+1. The API front door and matching engine have local headroom above the near-term `10k/sec` venue target.
+2. The active proof risk is durable drain/accounting: append ack, direct matching consume, venue-event publish, canonical materialization, replay, and projection idempotency must agree under failure and restart.
+3. Named profile validation should run before throughput work so a no-op or unbounded in-memory diagnostic setting cannot be mistaken for a durable production-like result.
+4. Defer the next long soak until short durable gates are clean locally; run the longer soak on DO where CPU, network, disk, and container restart behavior match the intended deployment more closely.
+
 ## Aged-State Soak Learnings (May 26, 2026)
 
 From a 30-minute fixed-load soak (`capacity-baseline`, `capacity-heavy`, `2500 rps`, `workers=128`):

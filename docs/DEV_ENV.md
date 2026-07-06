@@ -340,6 +340,16 @@ Latest local no-op API-front-door evidence:
 
 This evidence depends on bounded in-memory intake retention. The direct no-DB wrapper defaults `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`; keep those visible in the container environment when running long soaks. Set max entries to `0` only when intentionally measuring unlimited replay-window memory growth.
 
+Validate stream profile settings without starting a load run:
+
+```bash
+make dev-validate-stream-profile PROFILE=stream-direct-nodb
+make dev-validate-stream-profile PROFILE=noop-ceiling
+make dev-validate-stream-profile PROFILE=materializer-soak
+```
+
+These checks catch profile drift before a soak, including unbounded in-memory intake, accidental `STREAM_ACK_PUBLISHER=noop` on durable materializer paths, disabled publish pipeline, missing materializer capture, or missing terminal-order retention bounds.
+
 Run the local Redpanda direct-stream materializer smoke:
 
 ```bash

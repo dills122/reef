@@ -18,17 +18,20 @@ const materializerUrl = env(
 const waitTimeoutSeconds = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
 const materializerTimeoutMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_TIMEOUT_MS", "60000"));
 const materializerPollMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_POLL_MS", "1000"));
+const expectOrderRead = env("DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW", "0") === "1";
 const projectionName = env("DEV_VENUE_EVENT_MATERIALIZER_PROJECTION_NAME", `runtime-normalized-venue-outcomes-${smokeId}`);
+const streamToken = smokeId.replace(/[^A-Za-z0-9_-]/g, "_");
 
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
-setDefault("STREAM_ACK_COMMAND_STREAM", "REEF_MATERIALIZER_SMOKE_COMMANDS");
-setDefault("STREAM_ACK_SUBJECT_PREFIX", "reef.materializer.smoke.cmd.v1");
+setDefault("STREAM_ACK_COMMAND_STREAM", `REEF_MATERIALIZER_SMOKE_COMMANDS_${streamToken.toUpperCase()}`);
+setDefault("STREAM_ACK_SUBJECT_PREFIX", `reef.materializer.smoke.${streamToken}.cmd.v1`);
 setDefault("STREAM_ACK_PARTITION_COUNT", "4");
 setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..3");
-setDefault("MATCHING_ENGINE_EVENT_STREAM", "REEF_MATERIALIZER_SMOKE_VENUE_EVENTS");
-setDefault("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", "reef.materializer.smoke.venue.events.v1");
+setDefault("MATCHING_ENGINE_EVENT_STREAM", `REEF_MATERIALIZER_SMOKE_VENUE_EVENTS_${streamToken.toUpperCase()}`);
+setDefault("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", `reef.materializer.smoke.${streamToken}.venue.events.v1`);
 setDefault("VENUE_EVENT_MATERIALIZER_TOPIC", env("MATCHING_ENGINE_EVENT_STREAM"));
 setDefault("VENUE_EVENT_MATERIALIZER_GROUP_ID", `reef-venue-event-materializer-${smokeId}`);
+setValue("VENUE_EVENT_MATERIALIZER_ENABLED", "true");
 setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "50");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
@@ -152,15 +155,7 @@ async function projectCompactLifecycleRows(outcome) {
   }
   await seedProjectionWatermark(partition, Math.max(0, streamSequence - 1));
 
-  const projected = Number(await queryRuntimeValue(`
-    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 10, ARRAY[${partition}])
-  `));
-  const replayed = Number(await queryRuntimeValue(`
-    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 10, ARRAY[${partition}])
-  `));
-  if (projected !== 1 || replayed !== 0) {
-    throw new Error(`unexpected compact projection counts: projected=${projected} replayed=${replayed}`);
-  }
+  const projected = await projectUntilSubmitResult(outcome.command_id, partition);
 
   const submitRows = await queryRuntimeRows(`
     SELECT command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at
@@ -187,9 +182,29 @@ async function projectCompactLifecycleRows(outcome) {
     throw new Error(`projected runtime_event producer mismatch: ${JSON.stringify(eventRows[0])}`);
   }
 
-  const orderResponse = JSON.parse(await getText(`${runtimeUrl}/orders/${encodeURIComponent(orderId)}`));
-  if (orderResponse.orderId !== orderId || orderResponse.instrumentId !== "AAPL") {
-    throw new Error(`projected order read API did not expose expected order state: ${JSON.stringify(orderResponse)}`);
+  const replayed = Number(await queryRuntimeValue(`
+    SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}])
+  `));
+  const replaySubmitRows = await queryRuntimeRows(`
+    SELECT command_id
+    FROM runtime.submit_results
+    WHERE command_id = '${sqlLiteral(outcome.command_id)}'
+  `, ["command_id"]);
+  const replayEventRows = await queryRuntimeRows(`
+    SELECT event_id
+    FROM runtime.runtime_events
+    WHERE trace_id = '${sqlLiteral(outcome.command_id)}'
+  `, ["event_id"]);
+  if (replaySubmitRows.length !== 1 || replayEventRows.length !== 1) {
+    throw new Error(`projection replay duplicated target rows: submitRows=${replaySubmitRows.length} eventRows=${replayEventRows.length}`);
+  }
+
+  let orderResponse = null;
+  if (expectOrderRead) {
+    orderResponse = JSON.parse(await getText(`${runtimeUrl}/orders/${encodeURIComponent(orderId)}`));
+    if (orderResponse.orderId !== orderId || orderResponse.instrumentId !== "AAPL") {
+      throw new Error(`projected order read API did not expose expected order state: ${JSON.stringify(orderResponse)}`);
+    }
   }
 
   const watermarkRows = await queryRuntimeRows(`
@@ -202,7 +217,27 @@ async function projectCompactLifecycleRows(outcome) {
     throw new Error(`projection watermark was not clean: ${JSON.stringify(watermarkRows)}`);
   }
 
-  return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0] };
+  return { projected, replayed, submitResult: submitRows[0], runtimeEvent: eventRows[0], orderResponse };
+}
+
+async function projectUntilSubmitResult(commandId, partition) {
+  let projected = 0;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    projected += Number(await queryRuntimeValue(`
+      SELECT runtime.runtime_project_canonical_command_outcomes('${sqlLiteral(projectionName)}', 1000, ARRAY[${partition}])
+    `));
+    const rows = await queryRuntimeRows(`
+      SELECT command_id
+      FROM runtime.submit_results
+      WHERE command_id = '${sqlLiteral(commandId)}'
+    `, ["command_id"]);
+    if (rows.length === 1) return projected;
+    if (rows.length > 1) {
+      throw new Error(`projection duplicated submit_result for ${commandId}: ${rows.length}`);
+    }
+    await sleep(materializerPollMs);
+  }
+  throw new Error(`timeout waiting for compact projection of ${commandId}; projected=${projected}`);
 }
 
 async function seedProjectionWatermark(partition, lastPartitionSequence) {

@@ -1,4 +1,5 @@
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 
 loadDotEnv();
 
@@ -73,6 +74,8 @@ console.log(`  engineDirect=${env("MATCHING_ENGINE_DIRECT_STREAM_ENABLED")}`);
 console.log(`  engineDirectPartitions=${env("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS")}`);
 console.log(`  engineDirectBatchSize=${env("MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE")}`);
 console.log(`  engineDirectMaxAckPending=${env("MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING")}`);
+validateStreamProfile(env("STREAM_ACK_PUBLISHER", "").trim().toLowerCase() === "noop" ? "noop-ceiling" : "stream-direct-nodb");
+printStreamProfileSummary(env("STREAM_ACK_PUBLISHER", "").trim().toLowerCase() === "noop" ? "noop-ceiling" : "stream-direct-nodb");
 
 await import("./stream-ack-up.mjs");
 

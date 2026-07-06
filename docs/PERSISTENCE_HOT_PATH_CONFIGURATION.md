@@ -46,6 +46,7 @@ Isolation tools:
 
 - `make dev-stream-publish-bench` measures configured stream publisher capacity without HTTP, intake reservation, or matching-engine work.
 - `STREAM_ACK_PUBLISHER=noop make dev-up-stream-direct-nodb` keeps the API stream-ack front door active but replaces durable broker publish with an immediate ack. Use only to isolate HTTP/API ceiling; it is not a durable-acceptance profile.
+- `make dev-validate-stream-profile PROFILE=stream-direct-nodb` checks the intended profile environment without starting a load run. Use `PROFILE=noop-ceiling` for no-op API-front-door isolation and `PROFILE=materializer-soak` for durable canonical materializer runs.
 
 ### Venue Event Materializer
 
@@ -240,6 +241,32 @@ Projection runs also check:
 
 - `DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1`
 - `STREAM_ACK_MAX_PROJECTOR_LAG=0`
+
+## Durable Proof Gates
+
+No-op publisher evidence is useful only for front-door capacity. A production throughput claim needs all durable facts to line up:
+
+- API returned `202` only after durable command append ack.
+- command stream accepted count equals matching-engine direct consumed count after drain.
+- matching-engine command ack happens only after `VenueEventBatch` publish succeeds.
+- venue-event materializer consumes event batches and persists canonical command outcomes before committing offsets.
+- canonical command outcomes match accepted commands after any intentional restart window.
+- replay/projector pass can rebuild lifecycle rows without duplicates.
+- failure counters stay zero: publish failed/rejected, stream-direct failed/nacked/termed/unsupported, materializer failed/ackFailed.
+
+Short-run cleanup gates before another long soak:
+
+1. Validate the profile with `make dev-validate-stream-profile PROFILE=materializer-soak`.
+2. Run `make dev-smoke-venue-event-materializer` to prove one durable command reaches canonical outcome and compact projection replay is idempotent.
+3. Run a short durable materializer stress, not a long soak, with strict drain checks and small duration such as `DEV_STRESS_DURATION=60s`.
+4. Inspect report equality: accepted, stream-direct acked, and materialized outcomes should have zero unexplained gap after drain.
+5. Save the long `10k+` soak for DO once local short gates are clean.
+
+Smoke caveats:
+
+- `make dev-smoke-venue-event-materializer` uses isolated Redpanda command/event topics per run so retained local topic backlog does not hide the command under test.
+- The smoke proves durable API append, matching-engine direct consume/ack, venue-event batch publish, materializer canonical outcome persistence, and target-row projection idempotency.
+- The no-DB smoke does not require an order read-model row by default because `EXTERNAL_API_COMMAND_LOG_MODE=disabled` means command payload side-table data is unavailable to reconstruct full accepted order rows. Set `DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW=1` only when payload capture is intentionally enabled.
 
 ## Current Capacity Read
 
