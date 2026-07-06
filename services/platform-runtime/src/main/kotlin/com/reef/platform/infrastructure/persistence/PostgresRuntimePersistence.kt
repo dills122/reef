@@ -3583,7 +3583,7 @@ class PostgresRuntimePersistence(
     ): PersistableSubmitOutcome {
         val eventId = jsonString(resultPayloadJson, "eventId").ifBlank { "evt-$commandId" }
         val occurredAt = jsonString(resultPayloadJson, "occurredAt")
-        val rejected = resultStatus == "rejected"
+        val rejected = resultStatus == "rejected" || resultStatus == "failed"
         val result = if (rejected) {
             SubmitOrderResult(
                 rejected = EngineOrderRejected(

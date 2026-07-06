@@ -183,7 +183,7 @@ func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 	}
 }
 
-func TestProcessorTermsUnsupportedCommands(t *testing.T) {
+func TestProcessorPublishesFailedOutcomeForUnsupportedCommands(t *testing.T) {
 	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 12, map[string]string{
 		"commandId": "cmd-cancel-1",
 		"orderId":   "ord-1",
@@ -204,11 +204,60 @@ func TestProcessorTermsUnsupportedCommands(t *testing.T) {
 	if processed != 1 {
 		t.Fatalf("expected one processed delivery, got %d", processed)
 	}
-	if len(publisher.batches) != 0 {
-		t.Fatalf("expected no event batch for unsupported command, got %d", len(publisher.batches))
+	if len(publisher.batches) != 1 {
+		t.Fatalf("expected one published batch for unsupported command, got %d", len(publisher.batches))
 	}
-	if delivery.termed != 1 {
-		t.Fatalf("expected unsupported command to be termed, got %d", delivery.termed)
+	outcome := publisher.batches[0].Outcomes[0]
+	if outcome.Status != "failed" || outcome.CommandID != "cmd-cancel-1" {
+		t.Fatalf("unexpected outcome for unsupported command: %#v", outcome)
+	}
+	if outcome.Result.Rejected == nil || outcome.Result.Rejected.Code != "UNSUPPORTED_COMMAND_TYPE" {
+		t.Fatalf("expected UNSUPPORTED_COMMAND_TYPE reject code, got %#v", outcome.Result.Rejected)
+	}
+	if delivery.acked != 1 {
+		t.Fatalf("expected unsupported command to be acked (offset committed) after failed outcome publish, got %d", delivery.acked)
+	}
+	if delivery.termed != 0 || delivery.nacked != 0 {
+		t.Fatalf("unexpected term/nak counts: term=%d nak=%d", delivery.termed, delivery.nacked)
+	}
+}
+
+func TestProcessorPublishesFailedOutcomeForUndecodableCommand(t *testing.T) {
+	delivery := &fakeDelivery{
+		subject: "reef.cmd.v1.p00.session.STK001.SubmitOrder",
+		seq:     13,
+		data:    []byte(`{"commandId":"cmd-poison-1","quantityUnits":123}`),
+	}
+	source := &fakeSource{deliveries: []CommandDelivery{delivery}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	processed, err := processor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("expected one processed delivery, got %d", processed)
+	}
+	if len(publisher.batches) != 1 {
+		t.Fatalf("expected one published batch for undecodable command, got %d", len(publisher.batches))
+	}
+	outcome := publisher.batches[0].Outcomes[0]
+	if outcome.Status != "failed" || outcome.CommandID != "cmd-poison-1" {
+		t.Fatalf("unexpected outcome for undecodable command: %#v", outcome)
+	}
+	if outcome.Result.Rejected == nil || outcome.Result.Rejected.Code != "POISON_COMMAND_DECODE_ERROR" {
+		t.Fatalf("expected POISON_COMMAND_DECODE_ERROR reject code, got %#v", outcome.Result.Rejected)
+	}
+	if delivery.acked != 1 {
+		t.Fatalf("expected undecodable command to be acked (offset committed) after failed outcome publish, got %d", delivery.acked)
+	}
+	if delivery.termed != 0 || delivery.nacked != 0 {
+		t.Fatalf("unexpected term/nak counts: term=%d nak=%d", delivery.termed, delivery.nacked)
 	}
 }
 
