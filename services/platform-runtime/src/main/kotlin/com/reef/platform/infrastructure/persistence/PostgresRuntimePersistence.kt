@@ -3429,7 +3429,7 @@ class PostgresRuntimePersistence(
 
     override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
         "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?::integer",
-        limit.coerceAtLeast(0).toString()
+        limit.coerceIn(0, 500).toString()
     ) {
         TradeCreated(
             eventId = getString("event_id"),
@@ -3571,7 +3571,7 @@ class PostgresRuntimePersistence(
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
         "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at DESC, event_id DESC LIMIT ?::integer",
-        limit.coerceAtLeast(0).toString()
+        limit.coerceIn(0, 500).toString()
     ).asReversed()
 
     private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = projectionQueryList(sql, *params) {

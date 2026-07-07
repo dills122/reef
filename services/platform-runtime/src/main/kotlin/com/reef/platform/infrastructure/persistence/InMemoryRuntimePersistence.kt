@@ -190,7 +190,8 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun recentTrades(limit: Int): List<TradeCreated> {
         if (limit <= 0) return emptyList()
-        val from = (trades.size - limit).coerceAtLeast(0)
+        val boundedLimit = limit.coerceAtMost(500)
+        val from = (trades.size - boundedLimit).coerceAtLeast(0)
         return trades.subList(from, trades.size).toList()
     }
 
@@ -274,7 +275,8 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> {
         if (limit <= 0) return emptyList()
-        val from = (events.size - limit).coerceAtLeast(0)
+        val boundedLimit = limit.coerceAtMost(500)
+        val from = (events.size - boundedLimit).coerceAtLeast(0)
         return events.subList(from, events.size).toList()
     }
 
