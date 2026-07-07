@@ -341,7 +341,7 @@ function resolveActionMix(profileName) {
 async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
-  const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers(runtimeUrl) : null;
+  const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers() : null;
   const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
   const beforeStreamDirect = captureStreamDirectStats ? await sampleStreamDirect() : null;
   const beforeVenueEventMaterializer = captureVenueEventMaterializerStats ? await sampleVenueEventMaterializer() : null;
@@ -412,7 +412,8 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
         pollMs: streamAckDrainPollMs,
       });
       attachStreamAckWorkerStats({ reportOut, duration, beforeStreamWorkers, afterStreamWorkers });
-    }    if (captureStreamDirectStats) {
+    }
+    if (captureStreamDirectStats) {
       const afterStreamDirect = await waitForStreamDirectDrain({
         reportOut,
         beforeStreamDirect,

@@ -222,10 +222,7 @@ order by pg_total_relation_size(c.oid) desc, n.nspname, c.relname;`;
 async function queryDbRows({ service, dbUser, dbName, sql, columns }) {
   const { stdout } = await execFileAsync(
     "docker",
-    [
-      "compose",
-      "-f",
-      "docker-compose.yml",
+    composeArgs([
       "exec",
       "-T",
       service,
@@ -242,7 +239,7 @@ async function queryDbRows({ service, dbUser, dbName, sql, columns }) {
       "\t",
       "-c",
       sql,
-    ],
+    ]),
     { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 },
   );
   const rows = stdout

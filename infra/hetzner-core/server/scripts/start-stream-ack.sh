@@ -39,12 +39,20 @@ fi
   platform-projector-2 \
   platform-projector-3
 
+healthy=false
 for _ in $(seq 1 45); do
   if "${compose[@]}" exec -T platform-api curl -fsS http://127.0.0.1:8080/health | jq -e '.status == "ok"' >/dev/null; then
+    healthy=true
     break
   fi
   sleep 2
 done
+
+if [[ "$healthy" != "true" ]]; then
+  echo "platform-api did not report healthy status within timeout" >&2
+  "${compose[@]}" ps >&2
+  exit 1
+fi
 
 "${compose[@]}" exec -T platform-api curl -fsS http://127.0.0.1:8080/health | jq .
 "${compose[@]}" exec -T platform-api curl -fsS http://127.0.0.1:8080/internal/stream-ack/health | jq .

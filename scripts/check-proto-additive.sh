@@ -21,14 +21,15 @@ if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
 fi
 
 status=0
-for file in $(git diff --name-only "$base_ref"...HEAD -- contracts/proto/*.proto); do
+while IFS= read -r file; do
+  [[ -n "$file" ]] || continue
   removed=$(git diff --unified=0 "$base_ref"...HEAD -- "$file" | grep -E '^-.*= [0-9]+;' || true)
   if [[ -n "$removed" ]]; then
     echo "Proto compatibility violation in $file:"
     echo "$removed"
     status=1
   fi
-done
+done < <(git diff --name-only "$base_ref"...HEAD -- contracts/proto/*.proto)
 
 if [[ $status -ne 0 ]]; then
   echo "Detected removed protobuf fields. Policy is additive-first."

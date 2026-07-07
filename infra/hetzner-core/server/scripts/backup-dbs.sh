@@ -16,6 +16,13 @@ ENCRYPTED="$ARCHIVE.age"
 
 mkdir -p "$WORKDIR"
 
+# Ensure unencrypted dump files/archive never linger on disk if a later step
+# (encryption, upload) fails after dumps have already been written.
+cleanup() {
+  rm -rf "$WORKDIR" "$ARCHIVE"
+}
+trap cleanup EXIT
+
 echo "Dumping openbao..."
 docker compose exec -T postgres pg_dump \
   -U postgres \
@@ -63,8 +70,6 @@ else
     --endpoint-url "$R2_ENDPOINT" \
     s3 cp "/backups/$(basename "$ENCRYPTED")" "s3://$R2_BUCKET/db/reef-db-$TS.tar.age"
 fi
-
-rm -rf "$WORKDIR" "$ARCHIVE"
 
 # Keep local encrypted copies for 14 days.
 find "$BASE/backups" -name "*.tar.age" -type f -mtime +14 -delete

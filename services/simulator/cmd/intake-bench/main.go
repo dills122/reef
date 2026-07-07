@@ -198,12 +198,12 @@ func run(cfg config) report {
 		close(results)
 	}()
 
-	all := make([]requestResult, 0, 1024)
+	accumulator := newResultAccumulator()
 	for result := range results {
-		all = append(all, result)
+		accumulator.add(result)
 	}
 	finished := time.Now()
-	return buildReport(sessionID, cfg, started, finished, all)
+	return accumulator.build(sessionID, cfg, started, finished)
 }
 
 func runWorker(ctx context.Context, client *http.Client, cfg config, sessionID string, workerID int, counter *int64, rateCh <-chan struct{}, results chan<- requestResult) {
@@ -282,22 +282,48 @@ func buildSubmitPayload(cfg config, commandID, traceID, orderID string, workerID
 	return body
 }
 
-func buildReport(sessionID string, cfg config, started time.Time, finished time.Time, results []requestResult) report {
-	statusCodes := map[int]int64{}
-	errorsByText := map[string]int64{}
-	latencies := make([]float64, 0, len(results))
-	var success int64
+func buildReport(sessionID string, cfg config, started, finished time.Time, results []requestResult) report {
+	accumulator := newResultAccumulator()
 	for _, result := range results {
-		statusCodes[result.StatusCode]++
-		latencies = append(latencies, float64(result.Latency.Microseconds())/1000.0)
-		if result.Success {
-			success++
-		} else if result.ErrorText != "" {
-			errorsByText[result.ErrorText]++
-		}
+		accumulator.add(result)
 	}
-	total := int64(len(results))
-	failures := total - success
+	return accumulator.build(sessionID, cfg, started, finished)
+}
+
+// resultAccumulator aggregates request results as they arrive instead of
+// buffering every requestResult for the full run in memory. At sustained
+// high throughput over a long duration, retaining every result (and then
+// re-walking that slice to build the report) can use a lot of memory for
+// data that is only ever reduced to counts and a latency distribution.
+type resultAccumulator struct {
+	statusCodes  map[int]int64
+	errorsByText map[string]int64
+	latencies    []float64
+	total        int64
+	success      int64
+}
+
+func newResultAccumulator() *resultAccumulator {
+	return &resultAccumulator{
+		statusCodes:  make(map[int]int64),
+		errorsByText: make(map[string]int64),
+		latencies:    make([]float64, 0, 1024),
+	}
+}
+
+func (a *resultAccumulator) add(result requestResult) {
+	a.total++
+	a.statusCodes[result.StatusCode]++
+	a.latencies = append(a.latencies, float64(result.Latency.Microseconds())/1000.0)
+	if result.Success {
+		a.success++
+	} else if result.ErrorText != "" {
+		a.errorsByText[result.ErrorText]++
+	}
+}
+
+func (a *resultAccumulator) build(sessionID string, cfg config, started, finished time.Time) report {
+	failures := a.total - a.success
 	durationSeconds := finished.Sub(started).Seconds()
 	out := report{
 		SessionID:       sessionID,
@@ -305,19 +331,19 @@ func buildReport(sessionID string, cfg config, started time.Time, finished time.
 		FinishedAt:      finished,
 		DurationSeconds: durationSeconds,
 		Config:          cfg,
-		Requests:        total,
-		Success:         success,
+		Requests:        a.total,
+		Success:         a.success,
 		Failures:        failures,
-		LatencyMs:       reporting.ComputeLatency(latencies),
-		StatusCodes:     statusCodes,
-		TopErrors:       reporting.TopErrors(errorsByText, 10),
+		LatencyMs:       reporting.ComputeLatency(a.latencies),
+		StatusCodes:     a.statusCodes,
+		TopErrors:       reporting.TopErrors(a.errorsByText, 10),
 	}
 	if durationSeconds > 0 {
-		out.ThroughputRPS = float64(total) / durationSeconds
-		out.AcceptedRPS = float64(success) / durationSeconds
+		out.ThroughputRPS = float64(a.total) / durationSeconds
+		out.AcceptedRPS = float64(a.success) / durationSeconds
 	}
-	if total > 0 {
-		out.SuccessRatePct = (float64(success) / float64(total)) * 100
+	if a.total > 0 {
+		out.SuccessRatePct = (float64(a.success) / float64(a.total)) * 100
 	}
 	return out
 }
