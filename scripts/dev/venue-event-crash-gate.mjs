@@ -45,6 +45,10 @@ setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "false");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "false");
+setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", "false");
+setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", "false");
+setValue("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", "false");
+setValue("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", "false");
 setValue("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer"]));
 setValue("DEV_STREAM_DIRECT_NODB_PROJECTOR_ENABLED", "1");
 setValue("STREAM_ACK_PROJECTION_SOURCE", "venue-event-batch");
@@ -105,24 +109,52 @@ for (const command of engineStoppedCommands) {
   await submitOrder(command);
 }
 
-console.log("starting engine with one-shot materializer ack failure hook...");
+console.log("starting engine with one-shot command ack failure hook...");
+setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", "true");
+setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", "true");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "matching-engine"]);
+await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
+const engineAckFailureStats = await waitForEngineAckFailure({
+  minFailed: 1,
+  minPublished: 1,
+});
+
+console.log("restarting engine without command ack failure hook...");
+setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", "false");
+setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", "false");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "matching-engine"]);
+await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
+await waitForEnginePublishedAtLeast(engineStoppedCommands.length);
+
+console.log("starting materializer with one-shot event ack failure hook...");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "true");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "true");
-await dockerCompose(["up", "-d", "--wait", "matching-engine", "platform-materializer"]);
-await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
+await dockerCompose(["up", "-d", "--wait", "platform-materializer"]);
 await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
 const ackFailureStats = await waitForMaterializerAckFailedAtLeast(1);
 
-console.log("restarting materializer without ack failure hook, then starting projector...");
+console.log("restarting materializer without ack failure hook...");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "false");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "false");
-await dockerCompose(["up", "-d", "--force-recreate", "--wait", "platform-materializer", "platform-projector-0"]);
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "platform-materializer"]);
 await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
-await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
 const redeliveryStats = await waitForMaterializerFetchedAtLeast(1);
 
 const outcomes = await waitForCanonicalOutcomes(commands.map((command) => command.commandId));
 assertPartitionCoverage(outcomes);
+
+console.log("starting projector with one-shot row-before-watermark failure hook...");
+setValue("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", "true");
+setValue("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", "true");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "platform-projector-0"]);
+await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
+const projectorFailureStats = await waitForProjectorRowsBeforeWatermarkFailure(commands);
+
+console.log("restarting projector without failure hook...");
+setValue("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", "false");
+setValue("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", "false");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "platform-projector-0"]);
+await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
 await waitForProjection(commands, outcomes);
 
 console.log("running venue event replay/checksum gate...");
@@ -144,9 +176,23 @@ console.log(JSON.stringify({
   commands: commands.map((command) => command.commandId),
   partitionCoverage: partitionCoverage(outcomes),
   injectedAckFailure: {
+    engine: {
+      failed: engineAckFailureStats.failed,
+      published: engineAckFailureStats.published,
+      acked: engineAckFailureStats.acked,
+      ackLag: engineAckFailureStats.ackLag,
+      lastErrors: engineAckFailureStats.lastErrors,
+    },
+    materializer: {
     ackFailed: ackFailureStats.metrics?.ackFailed ?? 0,
     lastError: ackFailureStats.metrics?.lastError ?? "",
     redeliveredAfterRestart: redeliveryStats.metrics?.fetched ?? 0,
+    },
+    projector: {
+      failed: projectorFailureStats.metrics?.failed ?? 0,
+      lastError: projectorFailureStats.metrics?.lastError ?? "",
+      rowsCommittedBeforeWatermark: projectorFailureStats.rowsCommittedBeforeWatermark,
+    },
   },
   canonicalOutcomes: outcomes,
   engine: summarizeEngineStats(engineAfter),
@@ -268,6 +314,18 @@ async function enginePublished() {
   return summarizeEngineStats(stats).published;
 }
 
+async function waitForEngineAckFailure({ minFailed, minPublished }) {
+  let summary = {};
+  await waitForCondition(`engine ack failure failed >= ${minFailed}`, async () => {
+    const stats = await internalGetJson(`${engineUrl}/internal/stream-direct/stats`);
+    summary = summarizeEngineStats(stats);
+    return summary.failed >= minFailed &&
+      summary.published >= minPublished &&
+      summary.lastErrors.includes("injected matching-engine ack failure before command offset commit");
+  });
+  return summary;
+}
+
 function summarizeEngineStats(stats) {
   const partitions = Array.isArray(stats.partitions) ? stats.partitions : [];
   return {
@@ -280,6 +338,7 @@ function summarizeEngineStats(stats) {
     nacked: sum(partitions, "nacked"),
     ackLag: sum(partitions, "ackLag"),
     lastBatchIds: partitions.map((partition) => partition.lastBatchId).filter(Boolean),
+    lastErrors: partitions.map((partition) => partition.lastError).filter(Boolean),
   };
 }
 
@@ -305,6 +364,31 @@ async function waitForMaterializerFetchedAtLeast(target) {
     return Number(stats.metrics?.fetched ?? 0) >= target;
   });
   return stats;
+}
+
+async function waitForProjectorRowsBeforeWatermarkFailure(commands) {
+  let stats = {};
+  let rowCount = 0;
+  await waitForCondition("projector rows committed before watermark failure", async () => {
+    stats = await internalGetJson(`${readApiUrl}/internal/projector/status`);
+    const rows = await queryProjectionRows(`
+      SELECT command_id
+      FROM runtime.submit_results
+      WHERE command_id IN (${commands.map((command) => `'${sqlLiteral(command.commandId)}'`).join(",")})
+    `, ["command_id"]);
+    rowCount = rows.length;
+    const watermarkRows = await queryProjectionRows(`
+      SELECT partition_id
+      FROM runtime.projection_watermarks
+      WHERE projection_name = '${sqlLiteral(projectionName)}'
+        AND partition_id >= 0
+    `, ["partition_id"]);
+    return Number(stats.metrics?.failed ?? 0) >= 1 &&
+      String(stats.metrics?.lastError ?? "").includes("injected projector failure after read-model rows before watermark") &&
+      rowCount > 0 &&
+      watermarkRows.length === 0;
+  });
+  return { ...stats, rowsCommittedBeforeWatermark: rowCount };
 }
 
 async function waitForCanonicalOutcomes(commandIds) {

@@ -45,14 +45,15 @@ type Processor struct {
 }
 
 type ProcessorConfig struct {
-	ShardID         string
-	Partition       int
-	BatchSize       int
-	FetchTimeout    time.Duration
-	PollInterval    time.Duration
-	CommandStream   string
-	EventStreamName string
-	Source          string
+	ShardID          string
+	Partition        int
+	BatchSize        int
+	FetchTimeout     time.Duration
+	PollInterval     time.Duration
+	CommandStream    string
+	EventStreamName  string
+	Source           string
+	StopAfterAckFail bool
 }
 
 type Stats struct {
@@ -189,6 +190,9 @@ func (p *Processor) Run(ctx context.Context) error {
 		processed, err := p.ProcessOnce(ctx)
 		if err != nil {
 			p.recordFailure(err)
+			if p.config.StopAfterAckFail {
+				return err
+			}
 		}
 		if processed == 0 {
 			timer := time.NewTimer(p.config.PollInterval)
@@ -236,7 +240,9 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	}
 	p.stats.Published.Add(uint64(len(batch.Outcomes)))
 	p.stats.LastBatchID.Store(batch.BatchID)
-	p.ackAll(ackable)
+	if err := p.ackAll(ackable); err != nil && p.config.StopAfterAckFail {
+		return len(deliveries), err
+	}
 	return len(deliveries), nil
 }
 
@@ -466,7 +472,7 @@ func (p *Processor) nakAll(deliveries []CommandDelivery) {
 	}
 }
 
-func (p *Processor) ackAll(deliveries []CommandDelivery) {
+func (p *Processor) ackAll(deliveries []CommandDelivery) error {
 	if batchAcker, ok := p.source.(BatchCommandAcker); ok {
 		acked, err := batchAcker.AckBatch(deliveries)
 		p.stats.Acked.Add(uint64(acked))
@@ -477,17 +483,21 @@ func (p *Processor) ackAll(deliveries []CommandDelivery) {
 		if err != nil {
 			p.recordFailure(err)
 		}
-		return
+		return err
 	}
 	for _, delivery := range deliveries {
 		if err := delivery.Ack(); err != nil {
 			p.recordFailure(err)
+			if p.config.StopAfterAckFail {
+				return err
+			}
 			continue
 		}
 		p.stats.Acked.Add(1)
 		p.stats.LastAckedAt.Store(time.Now().UTC().Format(time.RFC3339Nano))
 		p.stats.LastAckedSequence.Store(delivery.StreamSequence())
 	}
+	return nil
 }
 
 func (p *Processor) recordFailure(err error) {

@@ -20,13 +20,15 @@ import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import java.sql.Connection
 import java.sql.PreparedStatement
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
 
 class PostgresRuntimePersistence(
     private val dataSource: DataSource,
     private val names: PostgresRuntimeSqlNames = PostgresRuntimeSqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv(),
-    private val projectionDataSource: DataSource = dataSource
+    private val projectionDataSource: DataSource = dataSource,
+    private val envLookup: (String) -> String? = { key -> System.getenv(key) }
 ) : RuntimePersistence {
     private val intradayBarIntervalText = mapOf(
         "1m" to "1 minute",
@@ -57,6 +59,8 @@ class PostgresRuntimePersistence(
 
     private companion object {
         const val CanonicalCommandOutcomeProjectionMaxBatchSize = 5000
+        const val StreamSequencePartitionShift = 48
+        val projectorRowsBeforeWatermarkFailureInjected = AtomicBoolean(false)
     }
 
     init {
@@ -1348,6 +1352,7 @@ class PostgresRuntimePersistence(
                           canonical.reject_code,
                           canonical.result_payload,
                           COALESCE(canonical.result_payload->'acceptedOrder', payloads.payload_json) AS order_payload,
+                          COALESCE(watermark.last_partition_seq, 0) AS previous_partition_seq,
                           row_number() OVER (
                             PARTITION BY canonical.partition_id
                             ORDER BY canonical.stream_sequence
@@ -1369,6 +1374,16 @@ class PostgresRuntimePersistence(
                         FROM ranked
                         CROSS JOIN partition_budget
                         WHERE partition_row <= partition_budget.per_partition_limit
+                          AND (
+                            NOT (
+                              partition_id = 0
+                              OR (stream_sequence / 281474976710656)::INTEGER = partition_id
+                            )
+                            OR stream_sequence = CASE
+                              WHEN previous_partition_seq > 0 THEN previous_partition_seq + partition_row
+                              ELSE (partition_id::BIGINT * 281474976710656) + partition_row
+                            END
+                          )
                         ORDER BY partition_row, partition_id, stream_sequence
                         LIMIT effective_batch_size
                       ),
@@ -1893,6 +1908,7 @@ class PostgresRuntimePersistence(
             try {
                 val payloadJson = candidates.joinToString(prefix = "[", postfix = "]") { it.resultPayload }
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+                maybeFailAfterProjectorRowsBeforeWatermark(conn)
                 updateProjectionWatermarks(conn, projectionName, candidates)
                 conn.commit()
                 return candidates.size.toLong()
@@ -1923,12 +1939,16 @@ class PostgresRuntimePersistence(
         val includeCommandPayload = commandPayloadSideTableAvailable()
         val candidates = ownedPartitions
             .flatMap { partitionId ->
-                canonicalCommandProjectionCandidates(
+                contiguousCommandProjectionCandidates(
                     partitionId = partitionId,
                     afterPartitionSequence = watermarks[partitionId] ?: 0L,
-                    limit = perPartitionLimit,
-                    includeCommandPayload = includeCommandPayload,
-                    eventStream = scopedEventStream
+                    candidates = canonicalCommandProjectionCandidates(
+                        partitionId = partitionId,
+                        afterPartitionSequence = watermarks[partitionId] ?: 0L,
+                        limit = perPartitionLimit,
+                        includeCommandPayload = includeCommandPayload,
+                        eventStream = scopedEventStream
+                    )
                 ).mapIndexed { index, candidate -> candidate.copy(partitionRow = index + 1) }
             }
             .sortedWith(
@@ -1945,6 +1965,7 @@ class PostgresRuntimePersistence(
             try {
                 val payloadJson = candidates.toJsonArray { it.outcome.toPersistableSubmitOutcome(it.commandPayloadJson, includeFills).toJsonObject() }
                 persistSubmitOutcomePayloads(conn, payloadJson, candidates.size)
+                maybeFailAfterProjectorRowsBeforeWatermark(conn)
                 updateProjectionWatermarks(
                     conn,
                     projectionName,
@@ -1967,6 +1988,17 @@ class PostgresRuntimePersistence(
                 conn.autoCommit = previousAutoCommit
             }
         }
+    }
+
+    private fun maybeFailAfterProjectorRowsBeforeWatermark(conn: Connection) {
+        if (!RuntimeEnv.bool("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", false, envLookup)) return
+        val internalMode = RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local", envLookup)
+        require(internalMode == "enabled") {
+            "STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE requires PLATFORM_INTERNAL_HTTP_MODE=enabled"
+        }
+        if (!projectorRowsBeforeWatermarkFailureInjected.compareAndSet(false, true)) return
+        conn.commit()
+        error("injected projector failure after read-model rows before watermark")
     }
 
     private fun ownedProjectionPartitions(partitions: List<Int>): List<Int> {
@@ -2147,16 +2179,54 @@ class PostgresRuntimePersistence(
                         out.add(
                             CommandProjectionCandidate(
                                 partitionId = outcome.partition,
-                            partitionSequence = outcome.streamSequence,
-                            outcome = outcome,
-                            commandPayloadJson = rs.getString("command_payload")
+                                partitionSequence = outcome.streamSequence,
+                                outcome = outcome,
+                                commandPayloadJson = rs.getString("command_payload")
+                            )
                         )
-                    )
                     }
                     return out
                 }
             }
         }
+    }
+
+    private fun contiguousCommandProjectionCandidates(
+        partitionId: Int,
+        afterPartitionSequence: Long,
+        candidates: List<CommandProjectionCandidate>
+    ): List<CommandProjectionCandidate> {
+        if (candidates.isEmpty()) return emptyList()
+        val firstSequence = candidates.first().partitionSequence
+        if (!usesEncodedPartitionSequence(partitionId, firstSequence)) {
+            return candidates
+        }
+        var expected = if (afterPartitionSequence > 0L) {
+            afterPartitionSequence + 1L
+        } else {
+            encodedPartitionBase(partitionId) + 1L
+        }
+        val out = mutableListOf<CommandProjectionCandidate>()
+        for (candidate in candidates.sortedBy { it.partitionSequence }) {
+            when {
+                candidate.partitionSequence < expected -> continue
+                candidate.partitionSequence == expected -> {
+                    out.add(candidate)
+                    expected += 1L
+                }
+                else -> break
+            }
+        }
+        return out
+    }
+
+    private fun usesEncodedPartitionSequence(partitionId: Int, streamSequence: Long): Boolean {
+        if (partitionId == 0) return true
+        return (streamSequence ushr StreamSequencePartitionShift).toInt() == partitionId
+    }
+
+    private fun encodedPartitionBase(partitionId: Int): Long {
+        return partitionId.toLong() shl StreamSequencePartitionShift
     }
 
     private fun commandPayloadSideTableAvailable(): Boolean {

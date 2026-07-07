@@ -184,6 +184,72 @@ func TestProcessorRecordsUnackedLagWhenAckFailsAfterEventPublish(t *testing.T) {
 	}
 }
 
+func TestLocalAckFailureHookFailsOnceAfterEventPublish(t *testing.T) {
+	payload := map[string]string{
+		"commandId":     "cmd-local-ack-fail",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-local-ack-fail",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	}
+	service := app.NewService()
+	publisher := &fakePublisher{}
+
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 15, payload)
+	firstSource := wrapCommandSourceWithLocalFaultHooks(&fakeBatchAckSource{
+		fakeSource: fakeSource{deliveries: []CommandDelivery{first}},
+	}, RuntimeConfig{
+		TestFailAckOnce:      true,
+		TestStopAfterAckFail: true,
+	})
+	firstProcessor := NewProcessor(service, firstSource, publisher, ProcessorConfig{
+		ShardID:          "engine-test",
+		Partition:        0,
+		BatchSize:        10,
+		StopAfterAckFail: true,
+	})
+	processed, err := firstProcessor.ProcessOnce(context.Background())
+	if err == nil {
+		t.Fatal("expected injected ack failure")
+	}
+	if processed != 1 || len(publisher.batches) != 1 {
+		t.Fatalf("expected event batch published before injected ack failure, processed=%d batches=%d", processed, len(publisher.batches))
+	}
+	if first.acked != 0 {
+		t.Fatalf("expected command offset not acked after injected failure, got %d", first.acked)
+	}
+	if got := firstProcessor.Stats(); got.Published != 1 || got.Acked != 0 || got.Failed != 1 || got.AckLag != 15 {
+		t.Fatalf("unexpected stats after injected ack failure %#v", got)
+	}
+
+	redelivered := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 15, payload)
+	redeliverySource := wrapCommandSourceWithLocalFaultHooks(&fakeBatchAckSource{
+		fakeSource: fakeSource{deliveries: []CommandDelivery{redelivered}},
+	}, RuntimeConfig{})
+	redeliveryProcessor := NewProcessor(service, redeliverySource, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := redeliveryProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("redelivery ProcessOnce returned error: %v", err)
+	}
+	if redelivered.acked != 0 {
+		t.Fatalf("expected fake batch source to commit through AckBatch, not delivery Ack, got %d", redelivered.acked)
+	}
+	if got := redeliveryProcessor.Stats(); got.Published != 1 || got.Acked != 1 || got.Failed != 0 || got.AckLag != 0 {
+		t.Fatalf("unexpected redelivery stats %#v", got)
+	}
+}
+
 func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 	submit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 20, map[string]string{
 		"commandId":     "cmd-submit",
