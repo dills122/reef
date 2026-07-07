@@ -31,7 +31,7 @@ jobs:
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
       - name: Run Go tests with coverage
         working-directory: .
-        run: ./scripts/ci/go-coverage.sh services/matching-engine matching-engine coverage/matching-engine 58 "cmd/matching-engine|pb/contracts/proto"
+        run: ./scripts/ci/go-coverage.sh services/matching-engine matching-engine coverage/matching-engine 64 "cmd/matching-engine|pb/contracts/proto"
       - name: Add coverage summary
         working-directory: .
         run: cat coverage/matching-engine/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
@@ -58,7 +58,7 @@ jobs:
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
       - name: Run simulator Go tests with coverage
         working-directory: .
-        run: ./scripts/ci/go-coverage.sh services/simulator simulator coverage/simulator 55
+        run: ./scripts/ci/go-coverage.sh services/simulator simulator coverage/simulator 59
       - name: Add coverage summary
         working-directory: .
         run: cat coverage/simulator/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"

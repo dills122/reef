@@ -21,6 +21,7 @@ import java.util.UUID
 import javax.sql.DataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -49,6 +50,46 @@ class CommandCaptureStoreTest {
         }
 
         assertIs<CommandLogCommandCaptureStore>(store)
+    }
+
+    @Test
+    fun defaultCaptureStoreIsNoopWhenCaptureModeDisabled() {
+        for (mode in listOf("disabled", "off", "none")) {
+            val store = defaultCommandCaptureStore(CommandProcessingMode.SyncResult) { key ->
+                when (key) {
+                    "EXTERNAL_API_COMMAND_CAPTURE_MODE" -> mode
+                    else -> null
+                }
+            }
+            assertIs<NoopCommandCaptureStore>(store)
+        }
+    }
+
+    @Test
+    fun defaultCaptureStoreCommandLogDisabledLeavesCaptureStoreUnwrapped() {
+        for (mode in listOf("disabled", "off", "none")) {
+            val store = defaultCommandCaptureStore(CommandProcessingMode.SyncResult) { key ->
+                when (key) {
+                    "EXTERNAL_API_COMMAND_CAPTURE_MODE" -> "inmemory"
+                    "EXTERNAL_API_COMMAND_LOG_MODE" -> mode
+                    else -> null
+                }
+            }
+            assertIs<InMemoryCommandCaptureStore>(store)
+        }
+    }
+
+    @Test
+    fun defaultCaptureStoreRejectsUnsupportedCommandLogMode() {
+        assertFailsWith<IllegalArgumentException> {
+            defaultCommandCaptureStore(CommandProcessingMode.SyncResult) { key ->
+                when (key) {
+                    "EXTERNAL_API_COMMAND_CAPTURE_MODE" -> "inmemory"
+                    "EXTERNAL_API_COMMAND_LOG_MODE" -> "not-a-real-mode"
+                    else -> null
+                }
+            }
+        }
     }
 
     @Test
