@@ -4015,6 +4015,7 @@ internal fun rootMessage(failure: Throwable): String {
 
 private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
+    PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
     val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
         StreamCommandIntakeFactory.defaultPublisher()
     } else {
