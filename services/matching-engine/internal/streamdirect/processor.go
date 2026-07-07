@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -223,9 +224,14 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	checksumInput := strings.Builder{}
 
 	instrumentIDs := make([]string, 0, len(deliveries))
+	deliveryInstrumentIDs := make([]string, len(deliveries))
+	deliveryCommandTypes := make([]string, len(deliveries))
 	seenInstruments := make(map[string]bool, len(deliveries))
-	for _, delivery := range deliveries {
-		instrumentID := instrumentIDFromSubject(delivery.Subject())
+	for i, delivery := range deliveries {
+		subject := delivery.Subject()
+		instrumentID := instrumentIDFromSubject(subject)
+		deliveryInstrumentIDs[i] = instrumentID
+		deliveryCommandTypes[i] = commandTypeFromSubject(subject)
 		if instrumentID == "" || seenInstruments[instrumentID] {
 			continue
 		}
@@ -237,19 +243,20 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	// roll the engine's live state back to exactly this point.
 	rollback := p.service.BeginBatch(instrumentIDs)
 
-	for _, delivery := range deliveries {
-		commandType := commandTypeFromSubject(delivery.Subject())
-		outcome, supported := p.processDelivery(delivery, commandType)
+	for i, delivery := range deliveries {
+		instrumentID := deliveryInstrumentIDs[i]
+		commandType := deliveryCommandTypes[i]
+		outcome, supported := p.processDelivery(delivery, commandType, instrumentID)
 
 		var fact CommandOutcomeFact
 		switch {
 		case !supported:
 			p.stats.Unsupported.Add(1)
-			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "UNSUPPORTED_COMMAND_TYPE", fmt.Sprintf("unsupported command type: %s", commandType))
+			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "UNSUPPORTED_COMMAND_TYPE", fmt.Sprintf("unsupported command type: %s", commandType), instrumentID)
 		case outcome.DecodeError != "":
 			p.stats.Failed.Add(1)
 			p.stats.LastError.Store(outcome.DecodeError)
-			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "POISON_COMMAND_DECODE_ERROR", outcome.DecodeError)
+			fact = p.poisonOutcomeFact(delivery, commandType, outcome.CommandID, "POISON_COMMAND_DECODE_ERROR", outcome.DecodeError, instrumentID)
 		default:
 			status := "rejected"
 			if outcome.Result.Accepted != nil {
@@ -274,7 +281,12 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		if fact.StreamSequence > lastSeq {
 			lastSeq = fact.StreamSequence
 		}
-		checksumInput.WriteString(fmt.Sprintf("%d:%s:%s;", fact.StreamSequence, fact.CommandID, fact.PayloadHash))
+		checksumInput.WriteString(strconv.FormatUint(fact.StreamSequence, 10))
+		checksumInput.WriteByte(':')
+		checksumInput.WriteString(fact.CommandID)
+		checksumInput.WriteByte(':')
+		checksumInput.WriteString(fact.PayloadHash)
+		checksumInput.WriteByte(';')
 		outcomes = append(outcomes, fact)
 		ackable = append(ackable, delivery)
 		if fact.OrderID != "" {
@@ -302,7 +314,7 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	return batch, ackable, rollback, touchedOrderIDs, nil
 }
 
-func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType string, commandID string, code string, reason string) CommandOutcomeFact {
+func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType string, commandID string, code string, reason string, instrumentID string) CommandOutcomeFact {
 	if commandID == "" {
 		commandID = bestEffortCommandID(delivery.Data())
 	}
@@ -312,7 +324,7 @@ func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType stri
 		StreamSequence: delivery.StreamSequence(),
 		DeliveredCount: delivery.DeliveredCount(),
 		PayloadHash:    sha256Hex(delivery.Data()),
-		InstrumentID:   instrumentIDFromSubject(delivery.Subject()),
+		InstrumentID:   instrumentID,
 		Status:         "failed",
 		Result: domain.SubmitOrderResult{
 			Rejected: &domain.OrderRejected{
@@ -343,7 +355,7 @@ type processedOutcome struct {
 	DecodeError  string
 }
 
-func (p *Processor) processDelivery(delivery CommandDelivery, commandType string) (processedOutcome, bool) {
+func (p *Processor) processDelivery(delivery CommandDelivery, commandType string, instrumentID string) (processedOutcome, bool) {
 	switch commandType {
 	case "SubmitOrder":
 		var command domain.SubmitOrder
@@ -371,7 +383,7 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 		}
 		return processedOutcome{
 			CommandID:    command.CommandID,
-			InstrumentID: instrumentIDFromSubject(delivery.Subject()),
+			InstrumentID: instrumentID,
 			OrderID:      command.OrderID,
 			Result:       p.service.ModifyOrder(command),
 		}, true
@@ -385,7 +397,7 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 		}
 		return processedOutcome{
 			CommandID:    command.CommandID,
-			InstrumentID: instrumentIDFromSubject(delivery.Subject()),
+			InstrumentID: instrumentID,
 			OrderID:      command.OrderID,
 			Result:       p.service.CancelOrder(command),
 		}, true
