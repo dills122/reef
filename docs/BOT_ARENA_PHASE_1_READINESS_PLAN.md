@@ -47,12 +47,19 @@ Ship one local arena run path that can:
 
 ### 1. Local Arena Orchestrator
 
-Add a thin orchestrator around the existing Bot SDK and simulator pieces.
+Add the first arena orchestration path around the existing Bot SDK and simulator
+pieces.
 
 Candidate home:
 
-- `scripts/dev/arena-local-run.mjs` for the first operator-facing wrapper.
-- Promote shared logic later only if the script becomes too large.
+- `services/simulator/internal/arena/config`
+- `services/simulator/internal/arena/catalog`
+- `services/simulator/internal/arena/orchestrator`
+- `services/simulator/internal/arena/enforcement`
+- `services/simulator/internal/arena/scoring`
+- `services/simulator/internal/arena/report`
+- `services/simulator/cmd/arena-local-run`
+- `scripts/dev/arena-local-run.mjs` as the repository ergonomics wrapper
 
 Responsibilities:
 
@@ -68,8 +75,9 @@ Responsibilities:
 - optionally post the score payload to the existing arena run-result ingestion
   route
 
-Phase 1 should keep the orchestrator boring. It should call existing scripts and
-helpers before introducing a new long-running service.
+Phase 1 should not become a throwaway script. Keep the first runnable surface
+small, but put the behavior in simulator-owned packages so the next slices can
+reuse it for hosted runs, scheduled runs, and smoke gates.
 
 ### 2. Built-In Bot Catalog
 
@@ -89,11 +97,17 @@ The catalog should capture:
 - bot ID
 - version
 - source/artifact path
-- role: market-maker, npc, benchmark, competitor
+- role: market-maker, npc, benchmark, competitor, or monitor
 - default config
 - expected fixture
 - action/risk limits
 - visible-data policy version
+- score eligibility
+- public leaderboard eligibility
+
+House bots are infrastructure actors, not public competitors. Their trading and
+P&L should be retained for diagnostics and operator tuning, but they should not
+appear on public leaderboards by default.
 
 ### 3. Local Custom Test Bots
 
@@ -143,6 +157,166 @@ Minimum fields:
 
 Keep the first mode narrow: one or two equities, fixed seed, short run, final
 equity headline score.
+
+## Enforcement Model
+
+### Run Freeze
+
+Run freeze is the first automatic containment layer.
+
+Behavior:
+
+- scoped to one arena run
+- stops the bot from receiving further ticks or submitting further actions
+- records `frozen=true`, `disqualified=true`, `reasonCode`, policy version, run
+  ID, bot ID, version ID, artifact hash, and timestamp
+- does not automatically change the persistent bot-version lifecycle state
+
+Initial freeze triggers:
+
+- malformed hosted output
+- repeated invalid actions
+- repeated command rejects attributable to bot behavior
+- timeout loop
+- crash loop
+- action count above policy
+- open-order count above policy
+- cancel/replace behavior above policy
+- order price outside collar
+- attempted instrument or order type outside mode policy
+
+### Persistent Ban Or Quarantine
+
+Persistent ban/quarantine is stored with arena-owned bot metadata, at the same
+storage boundary as bot identity, bot versions, qualification reports, operator
+decisions, and run records.
+
+Behavior:
+
+- applies to the exact `botId + versionId` by default
+- blocks that version before venue command acceptance
+- requires an admin/operator override or a newly submitted bot version
+- records operator actor, reason, correlation ID, timestamp, and policy version
+- must not be silently cleared by a later run
+
+Phase 1 should prefer version-level ban/quarantine. Principal-level bans are
+deferred until there is a clearer public-submission abuse model.
+
+Persistent ban/quarantine triggers should be stricter than run freeze:
+
+- sandbox/source policy bypass attempt
+- denied API/global usage in hosted mode
+- repeated severe run freezes across runs
+- operator-confirmed malicious behavior
+- artifact or manifest integrity mismatch
+
+## Initial Circuit Breakers
+
+The first breaker set should be deterministic and tick-aware. Most breakers
+should reject or freeze in Phase 1; persistent ban should remain an explicit
+operator or severe-policy action.
+
+Initial defaults to tune:
+
+- `maxActionsPerTick`: competitors `3-5`, house market makers `6-10`
+- `maxOrdersPerRun`: hard cap per bot/run
+- `maxOpenOrdersPerBotInstrument`: competitors `5-10`, house market makers
+  `20-50`
+- `maxInvalidActionsPerRun`: freeze at `3`
+- `maxConsecutiveInvalidTicks`: freeze at `2`
+- `maxTickTimeoutsPerRun`: freeze at `2`
+- `maxConsecutiveCrashes`: freeze at `1-2`
+- `maxRejectRateWindow`: freeze when more than half of the last `10` attempted
+  actions are bot-caused rejects
+- `maxCancelReplaceRatio`: warn first; freeze only on extreme behavior, with an
+  initial candidate threshold around `10` cancels per fill for competitors
+- `priceCollarBps`: reject orders too far from the mode reference price or
+  visible midpoint
+- `allowedInstruments`: strict mode-level allowlist
+- `allowedOrderTypes`: start with `LIMIT` only
+
+Every breaker decision should produce an arena enforcement event with:
+
+- `runId`
+- `botId`
+- `versionId`
+- `policyVersion`
+- `decision`: allow, reject, freeze, quarantine, ban
+- `reasonCode`
+- observed counters/window values
+- accepted command IDs if any action reached venue intake
+- timestamp
+
+## House Bot Risk Mode
+
+House bots may need privileged liquidity behavior so the market can function
+before enough competitor flow exists. Treat that as explicit mode config, not an
+implicit bypass.
+
+Example shape:
+
+```yaml
+riskProfile:
+  type: house_liquidity
+  assetLedgerMode: bypass
+  scoreEligible: false
+  publicLeaderboard: false
+  maxActionsPerTick: 10
+  maxOpenOrdersPerInstrument: 50
+```
+
+House bots may bypass cash/equity checks when configured with
+`assetLedgerMode: bypass`.
+
+House bots must still obey:
+
+- hosted sandbox restrictions
+- action schema validation
+- allowed instrument and order-type policy
+- price collars
+- max open-order limits
+- max actions per tick
+- kill switch and run freeze
+- market-wide safety breakers
+
+This lets a house market maker lose money without weakening venue integrity.
+
+## Healthy Market Target
+
+The first arena health goal:
+
+```text
+A competitor bot can reliably find visible liquidity, trade against it, and
+receive stable public market feedback without the book collapsing, crossing, or
+becoming stale.
+```
+
+Initial measurable targets:
+
+- top of book exists for primary instruments for at least `80-90%` of ticks
+  after warmup
+- median spread remains under the mode threshold, initially likely `10-25 bps`
+  for an equity sprint
+- at least a configured minimum number of trades completes during the run
+- visible depth exists on both sides for most ticks
+- crossed-book observations are zero
+- empty-book duration stays below a configured threshold
+- market-data and own-order projections drain by end of run
+- accepted/completed/materialized command accounting gap is zero
+- house market makers remain active and are not frozen by normal behavior
+
+The first bot mix should include:
+
+- at least one two-sided market maker
+- one refreshing/requote market maker
+- one passive background trader
+- one aggressive/taker flow bot
+- one value/noise flow bot
+- one market health monitor actor
+- deterministic reference price or regime model
+
+The market health monitor is not a trading competitor. It records health signals
+and can fail the smoke when the arena produced an unusable market.
 
 ### 5. Scoring V0
 
@@ -213,6 +387,36 @@ Expected proof:
 - full account ledger, buying power, or settlement expansion
 - broad tournament/season mechanics
 
+## Runner Isolation Discussion
+
+This section is intentionally not locked yet.
+
+Phase 1 should avoid one long-lived Docker container per bot if possible. Twenty
+extra local containers would add operational noise before the arena protocol is
+stable.
+
+Current preferred direction for discussion:
+
+1. Local Phase 1 uses hosted worker child processes or a small worker-process
+   pool.
+2. The orchestrator talks to workers through a stable bot-runtime protocol.
+3. The worker loads built artifacts, runs SES/hosted execution, and returns
+   proposed actions/resource reports.
+4. The orchestrator owns venue transport, risk/enforcement, scoring, and run
+   persistence.
+5. Hosted/public phases can put the same worker protocol behind a stronger
+   container or microVM boundary without rewriting arena orchestration.
+
+Open points to resolve before implementation:
+
+- whether Phase 1 workers are one process per bot, a fixed process pool, or a
+  hybrid
+- how often workers are recycled to clear retained bot state
+- what memory/CPU/output limits can be enforced locally without making dev setup
+  brittle
+- whether house bots can run in the same worker class as competitor bots
+- what outer boundary is required before public submissions are enabled
+
 ## Readiness Criteria
 
 Phase 1 is ready when a clean local stack can run:
@@ -233,13 +437,15 @@ and produce all of:
 
 ## Recommended Work Order
 
-1. Add the arena mode config and built-in bot catalog shape.
-2. Add local custom bot fixtures.
-3. Add `arena-local-run.mjs` around existing SDK/simulator paths.
-4. Add scoring v0 and report shape.
-5. Wire real run-result ingestion from the arena report.
-6. Add `make dev-smoke-bot-arena-local`.
-7. Add drift/replay checks once the first smoke report is stable.
+1. Add arena package skeleton under `services/simulator/internal/arena`.
+2. Add the arena mode config and built-in bot catalog shape.
+3. Add local custom bot fixtures.
+4. Add `cmd/arena-local-run` plus `scripts/dev/arena-local-run.mjs`.
+5. Add enforcement policy and run-freeze report fields.
+6. Add scoring v0 and report shape.
+7. Wire real run-result ingestion from the arena report.
+8. Add `make dev-smoke-bot-arena-local`.
+9. Add drift/replay checks once the first smoke report is stable.
 
 ## Follow-Up After Phase 1
 
