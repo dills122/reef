@@ -839,6 +839,7 @@ class PlatformHttpServer(
         val streamSnapshot = try {
             streamCommandHealthCheck?.snapshot()
         } catch (ex: Exception) {
+            System.err.println("readiness_stream_health_check_failed message=${ex.message ?: "unknown"}")
             null
         }
         val streamReady = streamCommandHealthCheck == null || streamSnapshot?.available == true
@@ -1395,26 +1396,27 @@ class PlatformHttpServer(
             }
         }
 
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null)
         val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
-            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+            commandCircuitBreakerViolation(riskRequest)
         }
         if (breakerViolation != null) {
-            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
             writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
             return
         }
 
         val collarViolation = HotPathMetrics.time("api.instrumentPriceCollar.check") {
-            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+            instrumentPriceCollarViolation(riskRequest)
         }
         if (collarViolation != null) {
-            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
             writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
-            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+            accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
             writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
@@ -1586,24 +1588,25 @@ class PlatformHttpServer(
             }
         }
 
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null)
         val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
-            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+            commandCircuitBreakerViolation(riskRequest)
         }
         if (breakerViolation != null) {
-            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
             return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
         }
 
         val collarViolation = HotPathMetrics.time("api.instrumentPriceCollar.check") {
-            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+            instrumentPriceCollarViolation(riskRequest)
         }
         if (collarViolation != null) {
-            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
             return PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.accountRisk.check") {
-            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+            accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
             return PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
@@ -1851,11 +1854,12 @@ class PlatformHttpServer(
             is EitherBoundaryError.Envelope -> envelopeResult.envelope
         }
 
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
         val breakerViolation = HotPathMetrics.time("api.streamAck.commandCircuitBreaker") {
-            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+            commandCircuitBreakerViolation(riskRequest)
         }
         if (breakerViolation != null) {
-            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation, envelope)
+            recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
             return completedStreamAckResponse(
                 started,
                 PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
@@ -1863,10 +1867,10 @@ class PlatformHttpServer(
         }
 
         val collarViolation = HotPathMetrics.time("api.streamAck.instrumentPriceCollar") {
-            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+            instrumentPriceCollarViolation(riskRequest)
         }
         if (collarViolation != null) {
-            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation, envelope)
+            recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
             return completedStreamAckResponse(
                 started,
                 PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
@@ -1874,7 +1878,7 @@ class PlatformHttpServer(
         }
 
         val riskViolation = HotPathMetrics.time("api.streamAck.accountRisk") {
-            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body, envelope)
+            accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
             return completedStreamAckResponse(
@@ -2042,75 +2046,45 @@ class PlatformHttpServer(
         return CompletableFuture.completedFuture(response)
     }
 
-    private fun accountRiskViolation(
-        clientId: String,
-        route: String,
-        idempotencyKey: String,
-        correlationId: String,
-        body: String,
-        envelope: StreamCommandEnvelope? = null
-    ): BoundaryError? {
-        val request = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+    private fun accountRiskViolation(request: AccountRiskCheckRequest): BoundaryError? {
         return accountRiskCheck.evaluate(request).toBoundaryError()
     }
 
-    private fun commandCircuitBreakerViolation(
-        clientId: String,
-        route: String,
-        idempotencyKey: String,
-        correlationId: String,
-        body: String,
-        envelope: StreamCommandEnvelope? = null
-    ): BoundaryError? {
-        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+    private fun commandCircuitBreakerViolation(request: AccountRiskCheckRequest): BoundaryError? {
         return commandCircuitBreakerCheck.evaluate(
             CommandCircuitBreakerRequest(
-                clientId = clientId,
-                route = route,
-                commandType = riskRequest.commandType,
-                commandId = riskRequest.commandId,
-                correlationId = correlationId,
-                venueSessionId = riskRequest.venueSessionId,
-                instrumentId = riskRequest.instrumentId
+                clientId = request.clientId,
+                route = request.route,
+                commandType = request.commandType,
+                commandId = request.commandId,
+                correlationId = request.correlationId,
+                venueSessionId = request.venueSessionId,
+                instrumentId = request.instrumentId
             )
         )
     }
 
-    private fun instrumentPriceCollarViolation(
-        clientId: String,
-        route: String,
-        idempotencyKey: String,
-        correlationId: String,
-        body: String,
-        envelope: StreamCommandEnvelope? = null
-    ): BoundaryError? {
-        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
+    private fun instrumentPriceCollarViolation(request: AccountRiskCheckRequest): BoundaryError? {
         return instrumentPriceCollarCheck.evaluate(
             InstrumentPriceCollarRequest(
-                clientId = clientId,
-                route = route,
-                commandType = riskRequest.commandType,
-                commandId = riskRequest.commandId,
-                correlationId = correlationId,
-                instrumentId = riskRequest.instrumentId,
-                limitPrice = riskRequest.limitPrice,
-                currency = riskRequest.currency
+                clientId = request.clientId,
+                route = request.route,
+                commandType = request.commandType,
+                commandId = request.commandId,
+                correlationId = request.correlationId,
+                instrumentId = request.instrumentId,
+                limitPrice = request.limitPrice,
+                currency = request.currency
             )
         )
     }
 
     private fun recordGuardrailRejection(
         guardrailType: String,
-        clientId: String,
-        route: String,
-        idempotencyKey: String,
-        correlationId: String,
-        body: String,
-        error: BoundaryError,
-        envelope: StreamCommandEnvelope? = null
+        request: AccountRiskCheckRequest,
+        error: BoundaryError
     ) {
         try {
-            val request = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, envelope)
             val scope = rejectionScope(guardrailType, request, error)
             boundaryRejectionLog.recordRejection(
                 guardrailType = guardrailType,
@@ -2121,7 +2095,7 @@ class PlatformHttpServer(
             )
         } catch (ex: Exception) {
             System.err.println(
-                "boundary_rejection_audit_failed guardrailType=$guardrailType route=$route clientId=$clientId commandId=${JsonFields.escape(JsonCodec.parseObjectOrEmpty(body).string("commandId"))} message=${JsonFields.escape(ex.message ?: "unknown")}"
+                "boundary_rejection_audit_failed guardrailType=$guardrailType route=${request.route} clientId=${request.clientId} commandId=${JsonFields.escape(request.commandId)} message=${JsonFields.escape(ex.message ?: "unknown")}"
             )
         }
     }
@@ -2212,26 +2186,27 @@ class PlatformHttpServer(
             return
         }
 
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null)
         val breakerViolation = HotPathMetrics.time("api.acceptedAsync.commandCircuitBreaker") {
-            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+            commandCircuitBreakerViolation(riskRequest)
         }
         if (breakerViolation != null) {
-            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
             writeJson(exchange, breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
             return
         }
 
         val collarViolation = HotPathMetrics.time("api.acceptedAsync.instrumentPriceCollar") {
-            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+            instrumentPriceCollarViolation(riskRequest)
         }
         if (collarViolation != null) {
-            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
             writeJson(exchange, collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
             return
         }
 
         val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
-            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+            accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
             writeJson(exchange, riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))
@@ -2300,24 +2275,25 @@ class PlatformHttpServer(
             return duplicateCommandReservationResponse(clientId, route, idempotencyKey, existing, correlationId)
         }
 
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null)
         val breakerViolation = HotPathMetrics.time("api.acceptedAsync.commandCircuitBreaker") {
-            commandCircuitBreakerViolation(clientId, route, idempotencyKey, correlationId, body)
+            commandCircuitBreakerViolation(riskRequest)
         }
         if (breakerViolation != null) {
-            recordGuardrailRejection("command-circuit-breaker", clientId, route, idempotencyKey, correlationId, body, breakerViolation)
+            recordGuardrailRejection("command-circuit-breaker", riskRequest, breakerViolation)
             return PlatformHotPathResponse(breakerViolation.status, boundary.toErrorJson(breakerViolation, correlationId))
         }
 
         val collarViolation = HotPathMetrics.time("api.acceptedAsync.instrumentPriceCollar") {
-            instrumentPriceCollarViolation(clientId, route, idempotencyKey, correlationId, body)
+            instrumentPriceCollarViolation(riskRequest)
         }
         if (collarViolation != null) {
-            recordGuardrailRejection("instrument-price-collar", clientId, route, idempotencyKey, correlationId, body, collarViolation)
+            recordGuardrailRejection("instrument-price-collar", riskRequest, collarViolation)
             return PlatformHotPathResponse(collarViolation.status, boundary.toErrorJson(collarViolation, correlationId))
         }
 
         val riskViolation = HotPathMetrics.time("api.acceptedAsync.accountRisk") {
-            accountRiskViolation(clientId, route, idempotencyKey, correlationId, body)
+            accountRiskViolation(riskRequest)
         }
         if (riskViolation != null) {
             return PlatformHotPathResponse(riskViolation.status, boundary.toErrorJson(riskViolation, correlationId))

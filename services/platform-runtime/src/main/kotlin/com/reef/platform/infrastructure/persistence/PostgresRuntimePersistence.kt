@@ -147,6 +147,21 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    ALTER TABLE ${names.orders}
+                    ADD COLUMN IF NOT EXISTS client_order_id TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS run_id TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS venue_session_id TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_orders_participant_client_order_id
+                    ON ${names.orders}(participant_id, client_order_id)
+                    WHERE client_order_id <> ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.executions} (
                       event_id TEXT PRIMARY KEY,
                       execution_id TEXT NOT NULL,
@@ -173,6 +188,18 @@ class PostgresRuntimePersistence(
                       currency TEXT NOT NULL,
                       occurred_at TEXT NOT NULL
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.trades}
+                    ADD COLUMN IF NOT EXISTS sequence BIGINT GENERATED ALWAYS AS IDENTITY
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_instrument_sequence
+                    ON ${names.trades}(instrument_id, sequence DESC)
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -1624,7 +1651,9 @@ class PostgresRuntimePersistence(
                                 orderId = orderId,
                                 engineOrderId = rs.getString("engine_order_id"),
                                 occurredAt = rs.getString("occurred_at")
-                            )
+                            ),
+                            executions = executionsForOrder(orderId),
+                            trades = tradesForOrder(orderId)
                         )
                     } else {
                         SubmitOrderResult(
@@ -3470,7 +3499,7 @@ class PostgresRuntimePersistence(
 
     override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
         "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?::integer",
-        limit.coerceAtLeast(0).toString()
+        limit.coerceIn(0, 500).toString()
     ) {
         TradeCreated(
             eventId = getString("event_id"),
@@ -3612,7 +3641,7 @@ class PostgresRuntimePersistence(
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
         "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at DESC, event_id DESC LIMIT ?::integer",
-        limit.coerceAtLeast(0).toString()
+        limit.coerceIn(0, 500).toString()
     ).asReversed()
 
     private fun queryEvents(sql: String, vararg params: String): List<RuntimeEvent> = projectionQueryList(sql, *params) {

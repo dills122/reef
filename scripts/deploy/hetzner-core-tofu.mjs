@@ -69,5 +69,11 @@ const result = spawnSync("tofu", args, {
   env: process.env,
 });
 
+if (result.error) {
+  console.error(`Failed to run "tofu": ${result.error.message}`);
+  console.error('Make sure OpenTofu ("tofu") is installed and on PATH.');
+  process.exit(1);
+}
+
 process.exit(result.status ?? 1);
 
