@@ -139,6 +139,37 @@ object PostgresSchemaRequirements {
         return PostgresSchemaRequirement(tables = listOf(PostgresSchemaObject.parse(idempotencyRecords)))
     }
 
+    fun settlementFacts(
+        obligations: String,
+        breaks: String,
+        repairs: String,
+        resolutions: String
+    ): PostgresSchemaRequirement {
+        val obligationTable = PostgresSchemaObject.parse(obligations)
+        val breakTable = PostgresSchemaObject.parse(breaks)
+        val repairTable = PostgresSchemaObject.parse(repairs)
+        val resolutionTable = PostgresSchemaObject.parse(resolutions)
+        return PostgresSchemaRequirement(
+            tables = listOf(obligationTable, breakTable, repairTable, resolutionTable),
+            columns = listOf(
+                PostgresSchemaColumn(obligationTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(obligationTable, "scenario_run_id", "text"),
+                PostgresSchemaColumn(obligationTable, "trade_id", "text"),
+                PostgresSchemaColumn(obligationTable, "occurred_at", "timestamp with time zone"),
+                PostgresSchemaColumn(breakTable, "settlement_break_id", "text"),
+                PostgresSchemaColumn(breakTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(breakTable, "reason", "text"),
+                PostgresSchemaColumn(repairTable, "settlement_repair_id", "text"),
+                PostgresSchemaColumn(repairTable, "settlement_break_id", "text"),
+                PostgresSchemaColumn(repairTable, "actor_id", "text"),
+                PostgresSchemaColumn(resolutionTable, "settlement_resolution_id", "text"),
+                PostgresSchemaColumn(resolutionTable, "settlement_repair_id", "text"),
+                PostgresSchemaColumn(resolutionTable, "settlement_state", "text"),
+                PostgresSchemaColumn(resolutionTable, "exception_state", "text")
+            )
+        )
+    }
+
     fun boundaryCommandCapture(commandCaptures: String): PostgresSchemaRequirement {
         val table = PostgresSchemaObject.parse(commandCaptures)
         return PostgresSchemaRequirement(

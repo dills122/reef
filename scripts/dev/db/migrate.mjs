@@ -8,7 +8,17 @@ import { env, loadDotEnv } from "../lib/dev-utils.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
 const defaultMigrationsRoot = path.join(repoRoot, "scripts/dev/db/migrations");
-const domainOrder = ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "arena", "analytics"];
+const domainOrder = [
+  "runtime",
+  "auth",
+  "admin",
+  "boundary",
+  "command_log",
+  "orchestration",
+  "settlement",
+  "arena",
+  "analytics",
+];
 
 export async function discoverMigrations(migrationsRoot = defaultMigrationsRoot) {
   const migrations = [];
@@ -146,7 +156,7 @@ function migrationTargets() {
       service: env("REEF_POSTGRES_SERVICE", "postgres"),
       user: env("REEF_POSTGRES_USER", "reef"),
       dbName: env("REEF_POSTGRES_DB", "reef"),
-      domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"],
+      domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "settlement", "analytics"],
     },
   ];
   if (env("REEF_PROJECTION_POSTGRES_MIGRATIONS", "1") !== "0") {

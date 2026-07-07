@@ -9,6 +9,7 @@ Domain folders:
 - `boundary/`
 - `command_log/`
 - `orchestration/`
+- `settlement/`
 - `analytics/` (planned)
 
 Current implementation note:
