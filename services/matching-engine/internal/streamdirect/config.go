@@ -26,6 +26,8 @@ type RuntimeConfig struct {
 	PollInterval         time.Duration
 	AckWait              time.Duration
 	MaxAckPending        int
+	TestFailAckOnce      bool
+	TestStopAfterAckFail bool
 }
 
 func RuntimeConfigFromEnv() RuntimeConfig {
@@ -49,6 +51,8 @@ func RuntimeConfigFromEnv() RuntimeConfig {
 		PollInterval:         time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_POLL_MS", 5)) * time.Millisecond,
 		AckWait:              time.Duration(envInt("MATCHING_ENGINE_DIRECT_STREAM_ACK_WAIT_MS", 60000)) * time.Millisecond,
 		MaxAckPending:        envInt("MATCHING_ENGINE_DIRECT_STREAM_MAX_ACK_PENDING", 4000),
+		TestFailAckOnce:      envBool("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", false),
+		TestStopAfterAckFail: envBool("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", false),
 	}
 }
 

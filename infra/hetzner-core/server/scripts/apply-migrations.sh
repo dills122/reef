@@ -19,6 +19,13 @@ if [[ ! -d "$MIGRATIONS_ROOT" ]]; then
   exit 1
 fi
 
+for domain in "${domains[@]}"; do
+  if [[ ! "$domain" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+    echo "invalid schema/domain name in REEF_MIGRATION_DOMAINS: $domain" >&2
+    exit 1
+  fi
+done
+
 run_psql() {
   docker compose exec -T "$POSTGRES_SERVICE" psql \
     -U "$POSTGRES_USER" \

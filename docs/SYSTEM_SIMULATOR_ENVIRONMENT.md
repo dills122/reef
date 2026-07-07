@@ -1,6 +1,6 @@
 # Reef Simulator Environment
 
-Last aligned: 2026-07-06.
+Last aligned: 2026-07-07.
 
 ## Purpose
 
@@ -290,8 +290,11 @@ operator/deploy script
 ```
 
 The export/cleanup service is planned. Until it exists, current harnesses still
-fetch or push artifacts through deploy scripts. That is an implementation gap,
-not the target architecture.
+fetch or push artifacts through deploy scripts. The current
+`make simulation-run` path wraps `scripts/dev/do-benchmark-host.sh`, which
+starts the root local stream-ack Compose profile on the disposable worker. That
+is bridge tooling and an implementation gap, not the target run-plane
+architecture.
 
 ## What The Simulator Should Not Claim
 

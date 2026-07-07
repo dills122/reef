@@ -24,12 +24,25 @@ interface VenueEventBatchSource {
     fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery>
 }
 
+fun venueEventBatchSourceWithLocalFaultHooks(
+    source: VenueEventBatchSource,
+    lookup: (String) -> String? = { key -> System.getenv(key) }
+): VenueEventBatchSource {
+    if (!RuntimeEnv.bool("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", false, lookup = lookup)) return source
+    val internalHttpMode = RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local", lookup).trim().lowercase()
+    require(internalHttpMode in setOf("enabled", "all", "raw-external")) {
+        "VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE requires PLATFORM_INTERNAL_HTTP_MODE=enabled"
+    }
+    return FailAckOnceVenueEventBatchSource(source)
+}
+
 class VenueEventBatchMaterializer(
     private val source: VenueEventBatchSource,
     private val api: PlatformApi,
     private val batchSize: Int = RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_POLL_MS", 25L, min = 1L),
     private val fetchTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", 200L, min = 1L)),
+    private val stopAfterAckFailure: Boolean = RuntimeEnv.bool("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", false),
     private val workerName: String = "reef-venue-event-batch-materializer"
 ) {
     private val running = AtomicBoolean(false)
@@ -71,8 +84,11 @@ class VenueEventBatchMaterializer(
         val deliveries = HotPathMetrics.time("venueEventMaterializer.fetch") {
             source.fetch(batchSize, fetchTimeout)
         }
-        VenueEventBatchMaterializerMetrics.recordFetched(deliveries.size.toLong())
-        deliveries.forEach { delivery -> processDelivery(delivery) }
+        VenueEventBatchMaterializerMetrics.recordFetched(
+            deliveries.size.toLong(),
+            deliveries.maxOfOrNull { it.streamSequence } ?: 0L
+        )
+        deliveries.sortedBy { it.streamSequence }.forEach { delivery -> processDelivery(delivery) }
         return deliveries.size
     }
 
@@ -101,12 +117,16 @@ class VenueEventBatchMaterializer(
             VenueEventBatchMaterializerMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
             return
         }
+        VenueEventBatchMaterializerMetrics.recordMaterialized(batch, delivery.streamSequence, materializedOutcomes)
 
         try {
             delivery.ack()
-            VenueEventBatchMaterializerMetrics.recordMaterialized(delivery.streamSequence, materializedOutcomes)
         } catch (ex: Exception) {
             VenueEventBatchMaterializerMetrics.recordAckFailed(ex.message ?: ex::class.simpleName ?: "unknown")
+            if (stopAfterAckFailure) {
+                running.set(false)
+                throw ex
+            }
         }
     }
 
@@ -169,6 +189,47 @@ class VenueEventBatchMaterializer(
     }
 }
 
+private class FailAckOnceVenueEventBatchSource(
+    private val delegate: VenueEventBatchSource
+) : VenueEventBatchSource {
+    private val failNextAck = AtomicBoolean(true)
+
+    override fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery> {
+        return delegate.fetch(batchSize, timeout).map { delivery ->
+            if (failNextAck.get()) {
+                FailAckOnceVenueEventBatchDelivery(delivery, failNextAck)
+            } else {
+                delivery
+            }
+        }
+    }
+}
+
+private class FailAckOnceVenueEventBatchDelivery(
+    private val delegate: VenueEventBatchDelivery,
+    private val failNextAck: AtomicBoolean
+) : VenueEventBatchDelivery {
+    override val subject: String get() = delegate.subject
+    override val payloadJson: String get() = delegate.payloadJson
+    override val streamSequence: Long get() = delegate.streamSequence
+    override val deliveredCount: Long get() = delegate.deliveredCount
+
+    override fun ack() {
+        if (failNextAck.compareAndSet(true, false)) {
+            error("injected materializer ack failure before offset commit")
+        }
+        delegate.ack()
+    }
+
+    override fun nak() {
+        delegate.nak()
+    }
+
+    override fun term() {
+        delegate.term()
+    }
+}
+
 data class VenueEventBatchMaterializerStats(
     val fetched: Long,
     val materialized: Long,
@@ -177,7 +238,13 @@ data class VenueEventBatchMaterializerStats(
     val ackFailed: Long,
     val unsupported: Long,
     val emptyPolls: Long,
+    val lastFetchedStreamSequence: Long,
     val lastMaterializedStreamSequence: Long,
+    val lastMaterializedBatchId: String,
+    val lastMaterializedPartition: Int,
+    val lastMaterializedFirstSequence: Long,
+    val lastMaterializedLastSequence: Long,
+    val materializerLag: Long,
     val lastMaterializedAt: String,
     val lastFailedAt: String,
     val lastError: String
@@ -191,19 +258,32 @@ object VenueEventBatchMaterializerMetrics {
     private val ackFailed = AtomicLong(0)
     private val unsupported = AtomicLong(0)
     private val emptyPolls = AtomicLong(0)
+    private val lastFetchedStreamSequence = AtomicLong(0)
     private val lastMaterializedStreamSequence = AtomicLong(0)
+    private val lastMaterializedPartition = AtomicLong(-1)
+    private val lastMaterializedFirstSequence = AtomicLong(0)
+    private val lastMaterializedLastSequence = AtomicLong(0)
     private val lastMaterializedAtEpochMs = AtomicLong(0)
     private val lastFailedAtEpochMs = AtomicLong(0)
     @Volatile
+    private var lastMaterializedBatchId: String = ""
+    @Volatile
     private var lastError: String = ""
 
-    fun recordFetched(count: Long) {
+    fun recordFetched(count: Long, maxStreamSequence: Long) {
         fetched.addAndGet(count)
+        if (maxStreamSequence > 0) {
+            lastFetchedStreamSequence.set(maxStreamSequence)
+        }
     }
 
-    fun recordMaterialized(streamSequence: Long, outcomeCount: Long) {
+    fun recordMaterialized(batch: VenueEventBatchFact, streamSequence: Long, outcomeCount: Long) {
         materialized.incrementAndGet()
         materializedOutcomes.addAndGet(outcomeCount)
+        lastMaterializedBatchId = batch.batchId
+        lastMaterializedPartition.set(batch.partition.toLong())
+        lastMaterializedFirstSequence.set(batch.firstSequence)
+        lastMaterializedLastSequence.set(batch.lastSequence)
         lastMaterializedStreamSequence.set(streamSequence)
         lastMaterializedAtEpochMs.set(System.currentTimeMillis())
     }
@@ -236,7 +316,13 @@ object VenueEventBatchMaterializerMetrics {
             ackFailed = ackFailed.get(),
             unsupported = unsupported.get(),
             emptyPolls = emptyPolls.get(),
+            lastFetchedStreamSequence = lastFetchedStreamSequence.get(),
             lastMaterializedStreamSequence = lastMaterializedStreamSequence.get(),
+            lastMaterializedBatchId = lastMaterializedBatchId,
+            lastMaterializedPartition = lastMaterializedPartition.get().toInt(),
+            lastMaterializedFirstSequence = lastMaterializedFirstSequence.get(),
+            lastMaterializedLastSequence = lastMaterializedLastSequence.get(),
+            materializerLag = sequenceLag(lastFetchedStreamSequence.get(), lastMaterializedStreamSequence.get()),
             lastMaterializedAt = instantString(lastMaterializedAtEpochMs.get()),
             lastFailedAt = instantString(lastFailedAtEpochMs.get()),
             lastError = lastError
@@ -251,10 +337,19 @@ object VenueEventBatchMaterializerMetrics {
         ackFailed.set(0)
         unsupported.set(0)
         emptyPolls.set(0)
+        lastFetchedStreamSequence.set(0)
         lastMaterializedStreamSequence.set(0)
+        lastMaterializedPartition.set(-1)
+        lastMaterializedFirstSequence.set(0)
+        lastMaterializedLastSequence.set(0)
         lastMaterializedAtEpochMs.set(0)
         lastFailedAtEpochMs.set(0)
+        lastMaterializedBatchId = ""
         lastError = ""
+    }
+
+    private fun sequenceLag(lastFetched: Long, lastMaterialized: Long): Long {
+        return if (lastFetched <= lastMaterialized) 0L else lastFetched - lastMaterialized
     }
 
     private fun instantString(epochMs: Long): String {

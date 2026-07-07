@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 )
@@ -229,13 +229,13 @@ func TestRunTraceChecksReportsPassAndFail(t *testing.T) {
 	}))
 	defer server.Close()
 
-	var seen sync.Map
-	seen.Store("trace-good", struct{}{})
-	seen.Store("trace-bad", struct{}{})
+	seen := newTraceSampler(10)
+	seen.offer("trace-good")
+	seen.offer("trace-bad")
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	cfg := Config{BaseURL: server.URL, TraceCheckLimit: 10}
-	checks := runTraceChecks(client, cfg, &seen)
+	checks := runTraceChecks(client, cfg, seen)
 	if checks.Checked != 2 {
 		t.Errorf("Checked = %d, want 2", checks.Checked)
 	}
@@ -248,10 +248,29 @@ func TestRunTraceChecksReportsPassAndFail(t *testing.T) {
 }
 
 func TestRunTraceChecksSkippedWhenLimitZero(t *testing.T) {
-	var seen sync.Map
-	seen.Store("trace-1", struct{}{})
-	checks := runTraceChecks(&http.Client{}, Config{TraceCheckLimit: 0}, &seen)
+	seen := newTraceSampler(10)
+	seen.offer("trace-1")
+	checks := runTraceChecks(&http.Client{}, Config{TraceCheckLimit: 0}, seen)
 	if checks.Checked != 0 {
 		t.Errorf("expected 0 checked when limit disabled, got %d", checks.Checked)
+	}
+}
+
+func TestTraceSamplerCapsStoredTraceIDs(t *testing.T) {
+	sampler := newTraceSampler(3)
+	for i := 0; i < 1000; i++ {
+		sampler.offer(fmt.Sprintf("trace-%d", i))
+	}
+	ids := sampler.ids(1000)
+	if len(ids) > 3 {
+		t.Fatalf("expected sampler to retain at most 3 trace ids, got %d", len(ids))
+	}
+}
+
+func TestTraceSamplerDisabledWhenLimitZero(t *testing.T) {
+	sampler := newTraceSampler(0)
+	sampler.offer("trace-1")
+	if len(sampler.ids(10)) != 0 {
+		t.Fatalf("expected no trace ids retained when limit is 0")
 	}
 }

@@ -110,10 +110,17 @@ func (s *orderExecutionRPCServer) HealthCheck(_ context.Context, _ *orderv1.Heal
 }
 
 func toDomainSide(side orderv1.OrderSide) domain.Side {
-	if side == orderv1.OrderSide_ORDER_SIDE_SELL {
+	switch side {
+	case orderv1.OrderSide_ORDER_SIDE_BUY:
+		return domain.SideBuy
+	case orderv1.OrderSide_ORDER_SIDE_SELL:
 		return domain.SideSell
+	default:
+		// Deliberately not coerced to a valid side: an unspecified/unknown
+		// enum value must fall through to app.Service's side validation
+		// (service.go) and be rejected, not silently accepted as BUY.
+		return domain.Side("")
 	}
-	return domain.SideBuy
 }
 
 func submitOrderFromProto(req *orderv1.SubmitOrder) domain.SubmitOrder {

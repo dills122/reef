@@ -92,6 +92,12 @@ object PlatformCommandParsers {
             enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return it }
             enumValidationError(json, "orderType", setOf("LIMIT"))?.let { return it }
             enumValidationError(json, "timeInForce", setOf("DAY", "IOC"))?.let { return it }
+            numericFieldValidationError(json, "quantityUnits")?.let { return it }
+            numericFieldValidationError(json, "limitPrice")?.let { return it }
+        }
+        if (route == "/api/v1/orders/modify") {
+            numericFieldValidationError(json, "quantityUnits")?.let { return it }
+            numericFieldValidationError(json, "limitPrice")?.let { return it }
         }
         return null
     }
@@ -102,6 +108,14 @@ object PlatformCommandParsers {
             return null
         }
         return "invalid ${fieldMessageName(field)}: $value"
+    }
+
+    private fun numericFieldValidationError(json: JsonDocument, field: String): String? {
+        val value = json.string(field)
+        if (value.isBlank()) {
+            return null
+        }
+        return if (value.toBigDecimalOrNull() == null) "invalid ${fieldMessageName(field)}: $value" else null
     }
 
     private fun fieldMessageName(field: String): String {

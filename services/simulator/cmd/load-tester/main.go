@@ -186,6 +186,42 @@ type traceChecks struct {
 	FailedTraceID []string `json:"failedTraceIds"`
 }
 
+// traceSampler retains at most `limit` trace IDs for later verification via
+// runTraceChecks. Without a cap, storing every successful trace ID for the
+// full run duration grows unbounded and can exhaust memory on long/high-rate
+// load tests, since only a small sample is ever actually checked.
+type traceSampler struct {
+	limit int
+	count int64
+	seen  sync.Map
+}
+
+func newTraceSampler(limit int) *traceSampler {
+	return &traceSampler{limit: limit}
+}
+
+func (t *traceSampler) offer(traceID string) {
+	if t == nil || t.limit <= 0 {
+		return
+	}
+	if atomic.AddInt64(&t.count, 1) > int64(t.limit) {
+		return
+	}
+	t.seen.Store(traceID, struct{}{})
+}
+
+func (t *traceSampler) ids(limit int) []string {
+	out := make([]string, 0, limit)
+	if t == nil {
+		return out
+	}
+	t.seen.Range(func(key, _ any) bool {
+		out = append(out, key.(string))
+		return len(out) < limit
+	})
+	return out
+}
+
 type runtimeEvent struct {
 	TraceID        string `json:"traceId"`
 	SequenceNumber int64  `json:"sequenceNumber"`
@@ -296,7 +332,7 @@ func main() {
 
 	results := make(chan requestResult, cfg.Workers*8)
 	var counter int64
-	traceSeen := sync.Map{}
+	traceSeen := newTraceSampler(cfg.TraceCheckLimit)
 	var wg sync.WaitGroup
 	rateCh := make(chan struct{}, rateChannelDepth(cfg))
 	rateCounters := &loadScheduleCounters{}
@@ -312,7 +348,7 @@ func main() {
 		profile := profileForWorker(workerID, cfg.Workers, cfg)
 		go func(id int, workerProfile string) {
 			defer wg.Done()
-			runWorker(ctx, client, cfg, sessionID, id, workerProfile, &counter, rateCh, results, &traceSeen)
+			runWorker(ctx, client, cfg, sessionID, id, workerProfile, &counter, rateCh, results, traceSeen)
 		}(workerID, profile)
 	}
 
@@ -330,7 +366,7 @@ func main() {
 
 	finished := time.Now().UTC()
 	report := accumulator.build(sessionID, started, finished, cfg, rateCounters.summary(cfg, completed, finished.Sub(started).Seconds()))
-	report.TraceChecks = runTraceChecks(client, cfg, &traceSeen)
+	report.TraceChecks = runTraceChecks(client, cfg, traceSeen)
 	printSummary(report)
 	if cfg.ReportOut != "" {
 		if err := writeReport(cfg.ReportOut, report); err != nil {
@@ -733,7 +769,7 @@ func runWorker(
 	counter *int64,
 	rateCh <-chan struct{},
 	results chan<- requestResult,
-	traceSeen *sync.Map,
+	traceSeen *traceSampler,
 ) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)*7919))
 	if cfg.Seed != 0 {
@@ -832,7 +868,7 @@ func runWorker(
 				state.orders = append(state.orders, trackedOrder{OrderID: orderID, InstrumentID: instrumentID})
 				state.orders = compactTrackedOrders(state.orders, cfg)
 				state.rejectStreak = 0
-				traceSeen.Store(traceID, struct{}{})
+				traceSeen.offer(traceID)
 			} else if isTerminalOrderRejection(result.RejectCode) {
 				updateRecoveryState(&state, cfg)
 			}
@@ -864,7 +900,7 @@ func runWorker(
 			fillResult(&result, status, body, err, start)
 			if result.Success {
 				state.rejectStreak = 0
-				traceSeen.Store(traceID, struct{}{})
+				traceSeen.offer(traceID)
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, order.OrderID)
 				state.orders = compactTrackedOrders(state.orders, cfg)
@@ -899,7 +935,7 @@ func runWorker(
 			if result.Success {
 				state.orders = append(state.orders[:idx], state.orders[idx+1:]...)
 				state.rejectStreak = 0
-				traceSeen.Store(traceID, struct{}{})
+				traceSeen.offer(traceID)
 			} else if shouldPruneTerminalOrder(cfg.Mode) && isTerminalOrderRejection(result.RejectCode) {
 				state.orders = removeOrder(state.orders, order.OrderID)
 				state.orders = compactTrackedOrders(state.orders, cfg)
@@ -1321,15 +1357,11 @@ func applyActionLatencyBuckets(current *profileSummary, buckets map[Action][]flo
 	}
 }
 
-func runTraceChecks(client *http.Client, cfg Config, seen *sync.Map) traceChecks {
+func runTraceChecks(client *http.Client, cfg Config, seen *traceSampler) traceChecks {
 	if cfg.TraceCheckLimit <= 0 {
 		return traceChecks{Checked: 0, FailedTraceID: make([]string, 0)}
 	}
-	traceIDs := make([]string, 0, cfg.TraceCheckLimit)
-	seen.Range(func(key, _ any) bool {
-		traceIDs = append(traceIDs, key.(string))
-		return len(traceIDs) < cfg.TraceCheckLimit
-	})
+	traceIDs := seen.ids(cfg.TraceCheckLimit)
 	sort.Strings(traceIDs)
 
 	checks := traceChecks{Checked: len(traceIDs), FailedTraceID: make([]string, 0, 8)}

@@ -24,6 +24,18 @@ compute tier. Use [`../simulation-runner`](../simulation-runner) for
 DigitalOcean workers that are created for a run, fetch/push debug artifacts,
 and then destroy themselves.
 
+## Compose Ownership
+
+The Hetzner backbone does not use the repository root local Compose files as a
+base. It owns server-local Compose files under
+[`server/`](./server/):
+
+- `docker-compose.yml` for the always-on backbone services
+- `docker-compose.stream-ack.yml` for the hosted stream-ack overlay
+
+Root `compose.base.yml` and `compose.local.yml` are for local developer
+workflows and for the current DigitalOcean bridge harness only.
+
 ## Provision
 
 ```bash

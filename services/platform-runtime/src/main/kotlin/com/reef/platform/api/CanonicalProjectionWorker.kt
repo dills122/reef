@@ -17,6 +17,7 @@ class CanonicalProjectionWorker(
     private val batchSize: Int = RuntimeEnv.int("STREAM_ACK_PROJECTOR_BATCH_SIZE", 250, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("STREAM_ACK_PROJECTOR_POLL_MS", 50L, min = 1L),
     private val includeFills: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_INCLUDE_FILLS", true),
+    private val stopAfterFailure: Boolean = RuntimeEnv.bool("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", false),
     private val workerName: String = "reef-canonical-projection-worker"
 ) {
     private val running = AtomicBoolean(false)
@@ -52,6 +53,7 @@ class CanonicalProjectionWorker(
             }
         } catch (ex: Exception) {
             CanonicalProjectionMetrics.recordFailed(ex.message ?: ex::class.simpleName ?: "unknown")
+            if (stopAfterFailure) throw ex
             0
         }
     }

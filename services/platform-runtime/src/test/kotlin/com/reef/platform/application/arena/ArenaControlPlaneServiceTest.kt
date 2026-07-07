@@ -317,6 +317,100 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
+    fun replacesRunBotResultForSameScoringPolicyOnRetry() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+        service.recordRunBotResult(
+            runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_026_500).copy(
+                realizedPnl = 26_500,
+                maxDrawdown = 750,
+                actionsProposed = 14,
+                orderActionsProposed = 9,
+                dataCalls = 22,
+                signalsGenerated = 5
+            )
+        )
+
+        val result = store.runBotResults("run-1").single()
+
+        assertEquals("score-v1", result.scoringPolicyVersion)
+        assertEquals(1_026_500, result.finalEquity)
+        assertEquals(26_500, result.realizedPnl)
+        assertEquals(750, result.maxDrawdown)
+        assertEquals(14, result.actionsProposed)
+        assertEquals(9, result.orderActionsProposed)
+        assertEquals(22, result.dataCalls)
+        assertEquals(5, result.signalsGenerated)
+    }
+
+    @Test
+    fun leaderboardExcludesDisqualifiedResultsAndUsesDeterministicTieBreaks() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        registerApprovedBotVersion(service, "tie-bot", "tie-bot.ts")
+        registerApprovedBotVersion(service, "drawdown-bot", "drawdown-bot.ts")
+        registerApprovedBotVersion(service, "disqualified-bot", "disqualified-bot.ts")
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(
+                    ArenaRunBotVersionRef("sample-bot", "v1"),
+                    ArenaRunBotVersionRef("tie-bot", "v1"),
+                    ArenaRunBotVersionRef("drawdown-bot", "v1"),
+                    ArenaRunBotVersionRef("disqualified-bot", "v1")
+                )
+            )
+        )
+        service.updateRunStatus("run-1", ArenaRunStatus.Running)
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
+
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+        service.recordRunBotResult(
+            runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000).copy(
+                botId = "tie-bot",
+                realizedPnl = 26_000,
+                maxDrawdown = 1_000
+            )
+        )
+        service.recordRunBotResult(
+            runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000).copy(
+                botId = "drawdown-bot",
+                realizedPnl = 26_000,
+                maxDrawdown = 750
+            )
+        )
+        service.recordRunBotResult(
+            runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 2_000_000).copy(
+                botId = "disqualified-bot",
+                realizedPnl = 1_000_000,
+                disqualified = true
+            )
+        )
+
+        val leaderboard = service.leaderboard("momentum", "score-v1")
+
+        assertEquals(listOf("drawdown-bot", "tie-bot", "sample-bot"), leaderboard.map { it.botId })
+        assertTrue(leaderboard.none { it.botId == "disqualified-bot" })
+        assertEquals(listOf(1, 2, 3), leaderboard.map { it.rank })
+    }
+
+    @Test
     fun rejectsInvalidRunBotResultCounters() {
         val service = approvedService(InMemoryArenaBotRegistryStore())
         service.registerRun(
@@ -728,6 +822,61 @@ class ArenaControlPlaneServiceTest {
             service.registerBot(registerBotCommand())
             service.registerVersion(registerVersionCommand())
         }
+    }
+
+    private fun registerApprovedBotVersion(
+        service: ArenaControlPlaneService,
+        botId: String,
+        fileName: String
+    ) {
+        service.registerBot(
+            RegisterArenaBotCommand(
+                botId = botId,
+                fileName = fileName,
+                metadata = ArenaBotMetadata(
+                    name = botId,
+                    publisher = "Sample Publisher",
+                    email = "$botId@example.com",
+                    description = "test bot",
+                    version = "1.0.0"
+                )
+            )
+        )
+        service.registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = botId,
+                versionId = "v1",
+                sourceHash = "sha256:source-$botId",
+                artifactHash = "sha256:artifact-$botId",
+                sdkVersion = "1.5.0",
+                apiVersion = "v1",
+                dependencyManifestHash = "sha256:deps-$botId"
+            )
+        )
+        service.transitionVersion(
+            botId,
+            "v1",
+            ArenaBotVersionStatus.Submitted,
+            "operator-1",
+            "submit",
+            "corr-$botId-1"
+        )
+        service.transitionVersion(
+            botId,
+            "v1",
+            ArenaBotVersionStatus.ChecksPassed,
+            "operator-1",
+            "checks passed",
+            "corr-$botId-2"
+        )
+        service.transitionVersion(
+            botId,
+            "v1",
+            ArenaBotVersionStatus.Approved,
+            "operator-2",
+            "approved",
+            "corr-$botId-3"
+        )
     }
 
     private fun registerBotCommand(
