@@ -357,14 +357,33 @@ class ExternalApiBoundaryTest {
     }
 
     @Test
+    fun parseRoutePoliciesSkipsBadShapesAndNonPositiveValues() {
+        assertEquals(emptyMap(), parseRoutePolicies(",,"))
+        assertEquals(emptyMap(), parseRoutePolicies("/route:5/30"))
+        assertEquals(emptyMap(), parseRoutePolicies(":5/30/60"))
+        assertEquals(emptyMap(), parseRoutePolicies("/route:5/0/60"))
+        assertEquals(emptyMap(), parseRoutePolicies("/route:5/30/0"))
+        assertEquals(emptyMap(), parseRoutePolicies("/route:5/bad/60"))
+        assertEquals(emptyMap(), parseRoutePolicies("/route:5/30/bad"))
+        assertEquals(
+            mapOf("/route" to RejectRatePolicy(5, 30, 60)),
+            parseRoutePolicies("/route:1/1/1,/route:5/30/60")
+        )
+    }
+
+    @Test
     fun envBoolParsesRecognizedValuesAndFallsBackOtherwise() {
         assertEquals(true, envBool("true", false))
         assertEquals(true, envBool("1", false))
         assertEquals(true, envBool("YES", false))
+        assertEquals(true, envBool("on", false))
         assertEquals(false, envBool("false", true))
         assertEquals(false, envBool("0", true))
         assertEquals(false, envBool("off", true))
+        assertEquals(false, envBool("no", true))
         assertEquals(true, envBool(null, true))
+        assertEquals(true, envBool("", true))
+        assertEquals(true, envBool("   ", true))
         assertEquals(false, envBool("garbage", false))
     }
 

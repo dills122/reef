@@ -358,6 +358,254 @@ class ArenaControlPlaneServiceTest {
         }
     }
 
+    @Test
+    fun rejectsRegisterBotWithBlankFieldsOrBadEmail() {
+        val service = ArenaControlPlaneService(InMemoryArenaBotRegistryStore()) { fixedNow }
+        assertFailsWith<IllegalArgumentException> { service.registerBot(registerBotCommand().copy(botId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerBot(registerBotCommand().copy(fileName = "")) }
+        assertFailsWith<IllegalArgumentException> {
+            service.registerBot(registerBotCommand().copy(metadata = registerBotCommand().metadata.copy(name = "")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.registerBot(registerBotCommand().copy(metadata = registerBotCommand().metadata.copy(publisher = "")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.registerBot(registerBotCommand().copy(metadata = registerBotCommand().metadata.copy(email = "not-an-email")))
+        }
+    }
+
+    @Test
+    fun rejectsRegisterBotWithDuplicateBotId() {
+        val service = ArenaControlPlaneService(InMemoryArenaBotRegistryStore()) { fixedNow }
+        service.registerBot(registerBotCommand())
+        assertFailsWith<IllegalArgumentException> { service.registerBot(registerBotCommand()) }
+    }
+
+    @Test
+    fun rejectsRegisterVersionWithUnknownBotOrBlankFieldsOrDuplicate() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = ArenaControlPlaneService(store) { fixedNow }
+
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand()) }
+
+        service.registerBot(registerBotCommand())
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand().copy(versionId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand().copy(sourceHash = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand().copy(artifactHash = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand().copy(sdkVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand().copy(apiVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand().copy(dependencyManifestHash = "")) }
+
+        service.registerVersion(registerVersionCommand())
+        assertFailsWith<IllegalArgumentException> { service.registerVersion(registerVersionCommand()) }
+    }
+
+    @Test
+    fun rejectsRecordQualificationReportWithBlankFieldsOrUnknownVersion() {
+        val service = seededService(InMemoryArenaBotRegistryStore())
+        assertFailsWith<IllegalStateException> {
+            service.recordQualificationReport("sample-bot", "missing", "r1", ArenaQualificationStatus.Passed, emptyList(), "p1")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.recordQualificationReport("sample-bot", "v1", "", ArenaQualificationStatus.Passed, emptyList(), "p1")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.recordQualificationReport("sample-bot", "v1", "r1", ArenaQualificationStatus.Passed, emptyList(), "")
+        }
+    }
+
+    @Test
+    fun rejectsTransitionVersionWithBlankActorOrReason() {
+        val service = seededService(InMemoryArenaBotRegistryStore())
+        assertFailsWith<IllegalArgumentException> {
+            service.transitionVersion("sample-bot", "v1", ArenaBotVersionStatus.Submitted, "", "submit", "corr-1")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.transitionVersion("sample-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "", "corr-1")
+        }
+    }
+
+    @Test
+    fun canTransitionCoversFullLifecycleMatrix() {
+        fun transition(from: ArenaBotVersionStatus, to: ArenaBotVersionStatus): Boolean {
+            val store = InMemoryArenaBotRegistryStore()
+            val svc = ArenaControlPlaneService(store) { fixedNow }
+            svc.registerBot(registerBotCommand())
+            svc.registerVersion(registerVersionCommand())
+            store.saveVersion(store.version("sample-bot", "v1")!!.copy(status = from))
+            return try {
+                svc.transitionVersion("sample-bot", "v1", to, "operator-1", "reason", "corr-1")
+                true
+            } catch (e: IllegalArgumentException) {
+                false
+            }
+        }
+
+        // same-state no-op always allowed
+        ArenaBotVersionStatus.entries.forEach { assertTrue(transition(it, it)) }
+        // any -> Archived allowed, any (non-Banned) -> Quarantined allowed, any -> Banned allowed
+        ArenaBotVersionStatus.entries.forEach { from ->
+            assertTrue(transition(from, ArenaBotVersionStatus.Archived))
+            assertTrue(transition(from, ArenaBotVersionStatus.Banned))
+        }
+        assertFalse(transition(ArenaBotVersionStatus.Banned, ArenaBotVersionStatus.Quarantined))
+        assertTrue(transition(ArenaBotVersionStatus.Active, ArenaBotVersionStatus.Quarantined))
+
+        assertTrue(transition(ArenaBotVersionStatus.Draft, ArenaBotVersionStatus.Submitted))
+        assertFalse(transition(ArenaBotVersionStatus.Draft, ArenaBotVersionStatus.ChecksPassed))
+        assertTrue(transition(ArenaBotVersionStatus.Submitted, ArenaBotVersionStatus.ChecksPassed))
+        assertFalse(transition(ArenaBotVersionStatus.Submitted, ArenaBotVersionStatus.Approved))
+        assertTrue(transition(ArenaBotVersionStatus.ChecksPassed, ArenaBotVersionStatus.Approved))
+        assertFalse(transition(ArenaBotVersionStatus.ChecksPassed, ArenaBotVersionStatus.Active))
+        assertTrue(transition(ArenaBotVersionStatus.Approved, ArenaBotVersionStatus.Active))
+        assertTrue(transition(ArenaBotVersionStatus.Approved, ArenaBotVersionStatus.Suspended))
+        assertFalse(transition(ArenaBotVersionStatus.Approved, ArenaBotVersionStatus.Draft))
+        assertTrue(transition(ArenaBotVersionStatus.Active, ArenaBotVersionStatus.Suspended))
+        assertFalse(transition(ArenaBotVersionStatus.Active, ArenaBotVersionStatus.Approved))
+        assertTrue(transition(ArenaBotVersionStatus.Suspended, ArenaBotVersionStatus.Active))
+        assertFalse(transition(ArenaBotVersionStatus.Suspended, ArenaBotVersionStatus.Draft))
+        assertTrue(transition(ArenaBotVersionStatus.Quarantined, ArenaBotVersionStatus.Suspended))
+        assertFalse(transition(ArenaBotVersionStatus.Quarantined, ArenaBotVersionStatus.Active))
+        assertFalse(transition(ArenaBotVersionStatus.Banned, ArenaBotVersionStatus.Suspended))
+        assertFalse(transition(ArenaBotVersionStatus.Archived, ArenaBotVersionStatus.Draft))
+    }
+
+    @Test
+    fun canTransitionRunCoversFullMatrix() {
+        fun transition(from: ArenaRunStatus, to: ArenaRunStatus): Boolean {
+            val store = InMemoryArenaBotRegistryStore()
+            val service = approvedService(store)
+            service.registerRun(
+                RegisterArenaRunCommand(
+                    runId = "run-1",
+                    modeId = "momentum",
+                    scenarioId = "scenario-a",
+                    seed = 42L,
+                    policyVersion = "policy-2026-07-05",
+                    botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+                )
+            )
+            store.saveRunRecord(store.runRecord("run-1")!!.copy(status = from))
+            return try {
+                service.updateRunStatus("run-1", to)
+                true
+            } catch (e: IllegalArgumentException) {
+                false
+            }
+        }
+
+        ArenaRunStatus.entries.forEach { assertTrue(transition(it, it)) }
+        assertTrue(transition(ArenaRunStatus.Planned, ArenaRunStatus.Running))
+        assertTrue(transition(ArenaRunStatus.Planned, ArenaRunStatus.Cancelled))
+        assertFalse(transition(ArenaRunStatus.Planned, ArenaRunStatus.Completed))
+        assertTrue(transition(ArenaRunStatus.Running, ArenaRunStatus.Completed))
+        assertTrue(transition(ArenaRunStatus.Running, ArenaRunStatus.Failed))
+        assertTrue(transition(ArenaRunStatus.Running, ArenaRunStatus.Cancelled))
+        assertFalse(transition(ArenaRunStatus.Running, ArenaRunStatus.Planned))
+        assertFalse(transition(ArenaRunStatus.Completed, ArenaRunStatus.Running))
+        assertFalse(transition(ArenaRunStatus.Failed, ArenaRunStatus.Running))
+        assertFalse(transition(ArenaRunStatus.Cancelled, ArenaRunStatus.Running))
+    }
+
+    @Test
+    fun updateRunStatusFailsForUnknownRun() {
+        val service = ArenaControlPlaneService(InMemoryArenaBotRegistryStore()) { fixedNow }
+        assertFailsWith<IllegalStateException> { service.updateRunStatus("missing-run", ArenaRunStatus.Running) }
+    }
+
+    @Test
+    fun rejectsRegisterRunWithBlankFieldsEmptyBotVersionsOrDuplicateId() {
+        val service = approvedService(InMemoryArenaBotRegistryStore())
+        val validCommand = RegisterArenaRunCommand(
+            runId = "run-1",
+            modeId = "momentum",
+            scenarioId = "scenario-a",
+            seed = 42L,
+            policyVersion = "policy-2026-07-05",
+            botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+        )
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(runId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(modeId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(scenarioId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(policyVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand.copy(botVersions = emptyList())) }
+
+        service.registerRun(validCommand)
+        assertFailsWith<IllegalArgumentException> { service.registerRun(validCommand) }
+    }
+
+    @Test
+    fun rejectsRecordRunBotResultWithBlankFieldsOrUnregisteredBotVersion() {
+        val service = approvedService(InMemoryArenaBotRegistryStore())
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+        val base = runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000)
+
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(runId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(botId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(versionId = "")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(scoringPolicyVersion = "")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(actionsProposed = -1)) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(orderActionsProposed = -1)) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(dataCalls = -1)) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(signalsGenerated = -1)) }
+        assertFailsWith<IllegalStateException> { service.recordRunBotResult(base.copy(runId = "missing-run")) }
+        assertFailsWith<IllegalArgumentException> { service.recordRunBotResult(base.copy(botId = "other-bot")) }
+    }
+
+    @Test
+    fun rejectsLeaderboardWithBlankFieldsAndClampsLimit() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        assertFailsWith<IllegalArgumentException> { service.leaderboard("", "score-v1") }
+        assertFailsWith<IllegalArgumentException> { service.leaderboard("momentum", "") }
+        assertEquals(emptyList(), service.leaderboard("momentum", "score-v1", limit = -5))
+        assertEquals(emptyList(), service.leaderboard("momentum", "score-v1", limit = 10_000))
+    }
+
+    @Test
+    fun rejectsReplaceRuntimeConfigDescriptorsWithMismatchedIdsDuplicateKeysOrBlankSecretPath() {
+        val service = seededService(InMemoryArenaBotRegistryStore())
+        val descriptor = ArenaRuntimeConfigDescriptor(
+            botId = "sample-bot",
+            versionId = "v1",
+            key = "apiKey",
+            provider = ArenaRuntimeConfigProvider.OpenBao,
+            secretPath = "secret/data/arena/sample-bot/v1/api-key",
+            required = true
+        )
+
+        assertFailsWith<IllegalStateException> {
+            service.replaceRuntimeConfigDescriptors("sample-bot", "missing", listOf(descriptor))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.replaceRuntimeConfigDescriptors("sample-bot", "v1", listOf(descriptor, descriptor))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.replaceRuntimeConfigDescriptors("sample-bot", "v1", listOf(descriptor.copy(botId = "other-bot")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.replaceRuntimeConfigDescriptors("sample-bot", "v1", listOf(descriptor.copy(versionId = "other-version")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.replaceRuntimeConfigDescriptors("sample-bot", "v1", listOf(descriptor.copy(secretPath = "")))
+        }
+    }
+
+    @Test
+    fun runBotResultsFailsForUnknownRun() {
+        val service = ArenaControlPlaneService(InMemoryArenaBotRegistryStore()) { fixedNow }
+        assertFailsWith<IllegalArgumentException> { service.runBotResults("") }
+    }
+
     private fun approvedService(store: InMemoryArenaBotRegistryStore): ArenaControlPlaneService {
         return seededService(store).also { service ->
             service.transitionVersion("sample-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-1")
