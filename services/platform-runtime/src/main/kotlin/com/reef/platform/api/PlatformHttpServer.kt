@@ -30,6 +30,15 @@ import com.reef.platform.application.arena.OpenBaoClientException
 import com.reef.platform.application.arena.OpenBaoProvisioningConfig
 import com.reef.platform.application.arena.OpenBaoProvisioningService
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
+import com.reef.platform.application.settlement.InMemorySettlementFactStore
+import com.reef.platform.application.settlement.PostgresSettlementFactStore
+import com.reef.platform.application.settlement.PostgresSettlementSqlNames
+import com.reef.platform.application.settlement.SettlementBreakOpenedFact
+import com.reef.platform.application.settlement.SettlementFactBundle
+import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.application.settlement.SettlementObligationCreatedFact
+import com.reef.platform.application.settlement.SettlementRepairPostedFact
+import com.reef.platform.application.settlement.SettlementResolvedFact
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
@@ -41,6 +50,7 @@ import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -113,6 +123,7 @@ class PlatformHttpServer(
     private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
     private val arenaAdminService: AdminApplicationService? = null,
     private val analyticsRunExportService: SimulationRunExportService? = null,
+    private val settlementFactStore: SettlementFactStore? = null,
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
@@ -310,6 +321,7 @@ class PlatformHttpServer(
         instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
         arenaAdminService = deps.arenaAdminService,
         analyticsRunExportService = deps.analyticsRunExportService,
+        settlementFactStore = deps.settlementFactStore,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
@@ -338,6 +350,15 @@ class PlatformHttpServer(
         server.executor = Executors.newFixedThreadPool(workerThreads)
 
         registerDiagnosticRoutes(server)
+
+        server.createContext("/internal/admin/settlement/facts") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+        }
 
         if (runtimeRole.publicHttpEnabled) {
         server.createContext("/api/v1/commands/") { exchange ->
@@ -541,6 +562,15 @@ class PlatformHttpServer(
             val marketDataProjectionName = queryValue(exchange, "marketDataProjectionName").ifBlank { "market-data-top-of-book" }
             val source = queryValue(exchange, "source").ifBlank { "venue-event-batch" }
             writeJson(exchange, 200, api.dataAvailability(venueProjectionName, marketDataProjectionName, source))
+        }
+
+        server.createContext("/api/v1/settlement/facts/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/facts/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementFactsResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
@@ -2831,6 +2861,189 @@ class PlatformHttpServer(
         )
     }
 
+    private fun appendSettlementFactsResponse(body: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        return try {
+            val facts = parseSettlementFactBundle(JsonCodec.parseObject(body))
+            store.appendFacts(facts)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement facts")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement fact append failed")))
+        }
+    }
+
+    private fun settlementFactsResponse(scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            PlatformHotPathResponse(200, settlementFactBundleBody(store.factsByScenarioRunId(scenarioRunId)))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement fact query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement fact query failed")))
+        }
+    }
+
+    private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
+        val scenarioRunId = json.string("scenarioRunId")
+        return SettlementFactBundle(
+            scenarioRunId = scenarioRunId,
+            obligations = json.objectDocuments("obligations").map { obligationFact(it, scenarioRunId) },
+            breaks = json.objectDocuments("breaks").map { breakFact(it, scenarioRunId) },
+            repairs = json.objectDocuments("repairs").map { repairFact(it, scenarioRunId) },
+            resolutions = json.objectDocuments("resolutions").map { resolutionFact(it, scenarioRunId) }
+        )
+    }
+
+    private fun obligationFact(json: JsonDocument, scenarioRunId: String): SettlementObligationCreatedFact {
+        return SettlementObligationCreatedFact(
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            tradeId = json.string("tradeId"),
+            buyerParticipantId = json.string("buyerParticipantId"),
+            sellerParticipantId = json.string("sellerParticipantId"),
+            instrumentId = json.string("instrumentId"),
+            quantity = json.string("quantity"),
+            cashAmount = json.string("cashAmount"),
+            currency = json.string("currency"),
+            state = json.string("state").ifBlank { "OBLIGATION_CREATED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun breakFact(json: JsonDocument, scenarioRunId: String): SettlementBreakOpenedFact {
+        return SettlementBreakOpenedFact(
+            settlementBreakId = json.string("settlementBreakId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            reason = json.string("reason").ifBlank { "CASH_LEG_FAILED" },
+            state = json.string("state").ifBlank { "BROKEN" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun repairFact(json: JsonDocument, scenarioRunId: String): SettlementRepairPostedFact {
+        return SettlementRepairPostedFact(
+            settlementRepairId = json.string("settlementRepairId"),
+            settlementBreakId = json.string("settlementBreakId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            repairAction = json.string("repairAction").ifBlank { "POST_CASH_LEG_REPAIR" },
+            actorType = json.string("actorType").ifBlank { "USER" },
+            actorId = json.string("actorId"),
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun resolutionFact(json: JsonDocument, scenarioRunId: String): SettlementResolvedFact {
+        return SettlementResolvedFact(
+            settlementResolutionId = json.string("settlementResolutionId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            settlementBreakId = json.string("settlementBreakId"),
+            settlementRepairId = json.string("settlementRepairId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            settlementState = json.string("settlementState").ifBlank { "RESOLVED" },
+            exceptionState = json.string("exceptionState").ifBlank { "RESOLVED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun requiredInstant(json: JsonDocument, key: String): Instant {
+        return try {
+            Instant.parse(json.string(key))
+        } catch (_: Exception) {
+            throw IllegalArgumentException("$key must be RFC3339")
+        }
+    }
+
+    private fun settlementFactBundleJson(facts: SettlementFactBundle): Map<String, Any?> {
+        return mapOf(
+            "scenarioRunId" to facts.scenarioRunId,
+            "obligations" to facts.obligations.map {
+                mapOf(
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "tradeId" to it.tradeId,
+                    "buyerParticipantId" to it.buyerParticipantId,
+                    "sellerParticipantId" to it.sellerParticipantId,
+                    "instrumentId" to it.instrumentId,
+                    "quantity" to it.quantity,
+                    "cashAmount" to it.cashAmount,
+                    "currency" to it.currency,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "breaks" to facts.breaks.map {
+                mapOf(
+                    "settlementBreakId" to it.settlementBreakId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "reason" to it.reason,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "repairs" to facts.repairs.map {
+                mapOf(
+                    "settlementRepairId" to it.settlementRepairId,
+                    "settlementBreakId" to it.settlementBreakId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "repairAction" to it.repairAction,
+                    "actorType" to it.actorType,
+                    "actorId" to it.actorId,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "resolutions" to facts.resolutions.map {
+                mapOf(
+                    "settlementResolutionId" to it.settlementResolutionId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "settlementBreakId" to it.settlementBreakId,
+                    "settlementRepairId" to it.settlementRepairId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "settlementState" to it.settlementState,
+                    "exceptionState" to it.exceptionState,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            }
+        )
+    }
+
+    private fun settlementFactBundleBody(facts: SettlementFactBundle): String {
+        return jsonObjectBody(settlementFactBundleJson(facts))
+    }
+
+    private fun jsonObjectBody(fields: Map<String, Any?>): String {
+        return JsonCodec.writeObject(*fields.map { it.key to it.value }.toTypedArray())
+    }
+
     private fun longValue(root: JsonDocument, nested: JsonDocument, rootKey: String, nestedKey: String): Long {
         return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toLongOrNull() ?: 0L
     }
@@ -3822,6 +4035,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService = defaultArenaAdminService(hooks),
         analyticsRunExportService = defaultAnalyticsRunExportService(),
+        settlementFactStore = defaultSettlementFactStore(),
         boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
@@ -3873,6 +4087,22 @@ private fun defaultAnalyticsRunExportService(): SimulationRunExportService? {
     return SimulationRunExportService(store)
 }
 
+private fun defaultSettlementFactStore(): SettlementFactStore? {
+    val explicitJdbcUrl = RuntimeEnv.string("SETTLEMENT_POSTGRES_JDBC_URL", "")
+    val runtimeJdbcUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "")
+    val jdbcUrl = explicitJdbcUrl.ifBlank { runtimeJdbcUrl }
+    val enabled = RuntimeEnv.bool("PLATFORM_SETTLEMENT_FACTS_ENABLED", jdbcUrl.isNotBlank())
+    if (!enabled) return null
+    if (jdbcUrl.isBlank()) return InMemorySettlementFactStore()
+    val dbUser = RuntimeEnv.string("SETTLEMENT_POSTGRES_USER", RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef"))
+    val dbPassword = RuntimeEnv.string("SETTLEMENT_POSTGRES_PASSWORD", RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef"))
+    val schema = RuntimeEnv.string("SETTLEMENT_POSTGRES_SCHEMA", "settlement")
+    return PostgresSettlementFactStore(
+        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "settlement-facts"),
+        names = PostgresSettlementSqlNames(schema)
+    )
+}
+
 internal fun JsonDocument.requiredLong(key: String): Long {
     return string(key).toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
 }
@@ -3897,6 +4127,7 @@ data class ServerBoundaryDeps(
     val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
     val arenaAdminService: AdminApplicationService? = null,
     val analyticsRunExportService: SimulationRunExportService? = null,
+    val settlementFactStore: SettlementFactStore? = null,
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,

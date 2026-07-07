@@ -106,10 +106,11 @@ Required fields:
 
 ## Assertion Source
 
-P2 needs one narrow assertion source before it can be locked:
+P2 uses one narrow assertion source before it can be locked:
 
-- a settlement assertion query
-- or a test-only assertion read
+- `GET /api/v1/settlement/facts/{scenarioRunId}` returns obligation, break, repair, and resolution facts for the run
+- `POST /internal/admin/settlement/facts` appends the same fact bundle for local/smoke seeding and evidence setup
+- `scenario-smoke --settlement-facts-report` remains an artifact fallback for offline test evidence
 
 The assertion source must return obligation, break, repair, and resolution facts by `scenarioRunId` and must expose enough ordering data to prove causation.
 
@@ -118,5 +119,5 @@ The assertion source must return obligation, break, repair, and resolution facts
 1. Add `settlement` schema migration or explicitly marked runtime-compatible tables.
 2. Add append-only fact writes for the four required events.
 3. Add a narrow assertion read by `scenarioRunId`.
-4. Add P2 live assertions under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+4. Wire P2 live assertions to the settlement fact read by default, with artifact fallback for offline tests.
 5. Keep account ledger, confirmation, clearing, and exception UI out of the first slice.

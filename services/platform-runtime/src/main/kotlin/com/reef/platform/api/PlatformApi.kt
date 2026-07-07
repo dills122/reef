@@ -169,6 +169,16 @@ class PlatformApi(
                     scope = "participant-own-orders",
                     requiredQuery = listOf("participantId"),
                     optionalQuery = listOf("instrumentId", "limit")
+                ),
+                surfaceAvailability(
+                    name = "settlementFacts",
+                    endpoint = "/api/v1/settlement/facts/{scenarioRunId}",
+                    source = "settlement append-only fact store",
+                    freshness = "durable fact rows",
+                    status = venueStatus,
+                    scope = "scenario-settlement-evidence",
+                    requiredQuery = emptyList(),
+                    optionalQuery = emptyList()
                 )
             )
         )

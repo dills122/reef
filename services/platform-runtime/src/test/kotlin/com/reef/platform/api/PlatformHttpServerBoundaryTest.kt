@@ -17,6 +17,8 @@ import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.application.arena.RegisterArenaRunCommand
+import com.reef.platform.application.settlement.InMemorySettlementFactStore
+import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -79,6 +81,8 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"freshness\":\"dirty-tracked lifecycle projection\"")
             assertContains(response.body, "\"name\":\"tradeTape\"")
             assertContains(response.body, "\"freshness\":\"durable fact rows\"")
+            assertContains(response.body, "\"name\":\"settlementFacts\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
         } finally {
             server.stop(0)
         }
@@ -1637,6 +1641,35 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun settlementFactsEndpointAppendsAndReadsP2FactsByScenarioRunId() {
+        val settlementStore = InMemorySettlementFactStore()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody("p2-run-api")
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-api")
+
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"status\":\"ok\"")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"scenarioRunId\":\"p2-run-api\"")
+            assertContains(fetched.body, "\"settlementObligationId\":\"obl-1\"")
+            assertContains(fetched.body, "\"reason\":\"CASH_LEG_FAILED\"")
+            assertContains(fetched.body, "\"repairAction\":\"POST_CASH_LEG_REPAIR\"")
+            assertContains(fetched.body, "\"settlementState\":\"RESOLVED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
         val breakerStore = RecordingCommandCircuitBreakerStore()
         val persistence = InMemoryRuntimePersistence()
@@ -2967,6 +3000,7 @@ class PlatformHttpServerBoundaryTest {
         instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService: AdminApplicationService? = null,
         analyticsRunExportService: SimulationRunExportService? = null,
+        settlementFactStore: SettlementFactStore? = null,
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
@@ -3016,6 +3050,7 @@ class PlatformHttpServerBoundaryTest {
             instrumentPriceCollarStore = instrumentPriceCollarStore,
             arenaAdminService = arenaAdminService,
             analyticsRunExportService = analyticsRunExportService,
+            settlementFactStore = settlementFactStore,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
@@ -3185,6 +3220,63 @@ class PlatformHttpServerBoundaryTest {
               "orderId":"$orderId",
               "quantityUnits":"100",
               "limitPrice":"150250000001"$extra
+            }
+        """.trimIndent()
+    }
+
+    private fun p2SettlementFactsBody(scenarioRunId: String): String {
+        return """
+            {
+              "scenarioRunId":"$scenarioRunId",
+              "obligations":[{
+                "settlementObligationId":"obl-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"trade-1",
+                "tradeId":"trade-1",
+                "buyerParticipantId":"buyer-1",
+                "sellerParticipantId":"seller-1",
+                "instrumentId":"AAPL",
+                "quantity":"100",
+                "cashAmount":"15000.00",
+                "currency":"USD",
+                "state":"OBLIGATION_CREATED",
+                "occurredAt":"2026-01-01T00:00:00Z"
+              }],
+              "breaks":[{
+                "settlementBreakId":"break-1",
+                "settlementObligationId":"obl-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"trade-1",
+                "reason":"CASH_LEG_FAILED",
+                "state":"BROKEN",
+                "occurredAt":"2026-01-01T00:00:01Z"
+              }],
+              "repairs":[{
+                "settlementRepairId":"repair-1",
+                "settlementBreakId":"break-1",
+                "settlementObligationId":"obl-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"repair-command-1",
+                "repairAction":"POST_CASH_LEG_REPAIR",
+                "actorType":"USER",
+                "actorId":"ops-user-1",
+                "occurredAt":"2026-01-01T00:00:02Z"
+              }],
+              "resolutions":[{
+                "settlementResolutionId":"resolution-1",
+                "settlementObligationId":"obl-1",
+                "settlementBreakId":"break-1",
+                "settlementRepairId":"repair-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"repair-command-1",
+                "settlementState":"RESOLVED",
+                "exceptionState":"RESOLVED",
+                "occurredAt":"2026-01-01T00:00:03Z"
+              }]
             }
         """.trimIndent()
     }

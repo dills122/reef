@@ -689,6 +689,8 @@ class PlatformApiTest {
         assertContains(availability, "\"projectionName\":\"market-data-top-of-book\"")
         assertContains(availability, "\"name\":\"tradeTape\"")
         assertContains(availability, "\"freshness\":\"durable fact rows\"")
+        assertContains(availability, "\"name\":\"settlementFacts\"")
+        assertContains(availability, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
         assertContains(availability, "\"name\":\"currentOrders\"")
         assertContains(availability, "\"scope\":\"participant-own-orders\"")
         assertContains(availability, "\"requiredQuery\":[\"participantId\"]")
