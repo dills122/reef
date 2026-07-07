@@ -729,6 +729,13 @@ make dev-smoke-bot-arena-local \
   ARGS="--extra-bots=custom-too-many-orders"
 ```
 
+Persisted variant:
+
+```bash
+make dev-smoke-bot-arena-local-persist \
+  ARGS="--extra-bots=custom-too-many-orders"
+```
+
 Observed:
 
 - status `completed_with_freezes`
@@ -736,10 +743,13 @@ Observed:
 - 16 ticks
 - 14 healthy venue command drafts
 - 14 submitted commands
+- 14 terminal commands in live submit mode
 - bad bot proposed 11 actions on its first tick
 - bad bot emitted 0 venue command drafts
 - 1 freeze event with `reasonCode` `tick_policy_violation`
 - bad bot result retained with `disqualified=true`
+- persisted raw results retained all 6 bots
+- persisted leaderboard for the run contained only `custom-technical-indicator`
 - bad bot excluded from public leaderboard and retained in `diagnosticLeaderboard`
 
 Local stack requirement: `platform-runtime` must run with

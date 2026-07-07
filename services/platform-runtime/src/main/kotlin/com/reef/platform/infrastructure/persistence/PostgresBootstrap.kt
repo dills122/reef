@@ -445,6 +445,8 @@ object PostgresSchemaRequirements {
                     PostgresSchemaColumn(runResultsTable, "scoring_policy_version", "text"),
                     PostgresSchemaColumn(runResultsTable, "final_equity", "bigint"),
                     PostgresSchemaColumn(runResultsTable, "disqualified", "boolean"),
+                    PostgresSchemaColumn(runResultsTable, "score_eligible", "boolean"),
+                    PostgresSchemaColumn(runResultsTable, "public_leaderboard", "boolean"),
                     PostgresSchemaColumn(configTable, "config_key", "text"),
                     PostgresSchemaColumn(configTable, "provider", "text"),
                     PostgresSchemaColumn(configTable, "secret_path", "text"),

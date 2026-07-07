@@ -3079,7 +3079,9 @@ class PlatformHttpServer(
                 orderActionsProposed = json.requiredInt("orderActionsProposed"),
                 dataCalls = json.requiredInt("dataCalls"),
                 signalsGenerated = json.requiredInt("signalsGenerated"),
-                disqualified = json.boolean("disqualified")
+                disqualified = json.boolean("disqualified"),
+                scoreEligible = json.booleanOrDefault("scoreEligible", true),
+                publicLeaderboard = json.booleanOrDefault("publicLeaderboard", true)
             )
             val result = service.recordArenaRunBotResult(arenaAdminActor(json), command)
             PlatformHotPathResponse(
@@ -3514,6 +3516,8 @@ class PlatformHttpServer(
             "dataCalls" to result.dataCalls,
             "signalsGenerated" to result.signalsGenerated,
             "disqualified" to result.disqualified,
+            "scoreEligible" to result.scoreEligible,
+            "publicLeaderboard" to result.publicLeaderboard,
             "createdAt" to result.createdAt.toString()
         )
     }
@@ -4457,6 +4461,10 @@ internal fun JsonDocument.requiredInt(key: String): Int {
 
 internal fun JsonDocument.boolean(key: String): Boolean {
     return string(key).equals("true", ignoreCase = true)
+}
+
+internal fun JsonDocument.booleanOrDefault(key: String, fallback: Boolean): Boolean {
+    return if (has(key)) boolean(key) else fallback
 }
 
 data class ServerBoundaryDeps(

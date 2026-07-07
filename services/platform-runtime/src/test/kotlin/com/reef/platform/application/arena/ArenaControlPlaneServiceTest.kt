@@ -234,7 +234,7 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
-    fun keepsDisqualifiedRunBotResultsOutOfLeaderboard() {
+    fun keepsNonPublicAndDisqualifiedRunBotResultsOutOfLeaderboard() {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
         service.registerBot(registerBotCommand(botId = "bad-bot", fileName = "bad-bot.ts", name = "Bad Bot"))
@@ -242,6 +242,11 @@ class ArenaControlPlaneServiceTest {
         service.transitionVersion("bad-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-4")
         service.transitionVersion("bad-bot", "v1", ArenaBotVersionStatus.ChecksPassed, "operator-1", "checks passed", "corr-5")
         service.transitionVersion("bad-bot", "v1", ArenaBotVersionStatus.Approved, "operator-2", "approved", "corr-6")
+        service.registerBot(registerBotCommand(botId = "house-bot", fileName = "house-bot.ts", name = "House Bot"))
+        service.registerVersion(registerVersionCommand(botId = "house-bot"))
+        service.transitionVersion("house-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-7")
+        service.transitionVersion("house-bot", "v1", ArenaBotVersionStatus.ChecksPassed, "operator-1", "checks passed", "corr-8")
+        service.transitionVersion("house-bot", "v1", ArenaBotVersionStatus.Approved, "operator-2", "approved", "corr-9")
         service.registerRun(
             RegisterArenaRunCommand(
                 runId = "run-1",
@@ -251,7 +256,8 @@ class ArenaControlPlaneServiceTest {
                 policyVersion = "policy-2026-07-05",
                 botVersions = listOf(
                     ArenaRunBotVersionRef("sample-bot", "v1"),
-                    ArenaRunBotVersionRef("bad-bot", "v1")
+                    ArenaRunBotVersionRef("bad-bot", "v1"),
+                    ArenaRunBotVersionRef("house-bot", "v1")
                 )
             )
         )
@@ -265,12 +271,20 @@ class ArenaControlPlaneServiceTest {
                 disqualified = true
             )
         )
+        service.recordRunBotResult(
+            runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 2_000_000).copy(
+                botId = "house-bot",
+                scoreEligible = false,
+                publicLeaderboard = false
+            )
+        )
 
         val results = store.runBotResults("run-1")
         val leaderboard = service.leaderboard("momentum", "score-v1")
 
-        assertEquals(2, results.size)
+        assertEquals(3, results.size)
         assertTrue(results.any { it.botId == "bad-bot" && it.disqualified })
+        assertTrue(results.any { it.botId == "house-bot" && !it.scoreEligible && !it.publicLeaderboard })
         assertEquals(listOf("sample-bot"), leaderboard.map { it.botId })
     }
 

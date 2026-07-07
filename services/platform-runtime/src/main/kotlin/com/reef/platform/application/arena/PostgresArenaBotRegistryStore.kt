@@ -148,6 +148,8 @@ class PostgresArenaBotRegistryStore(
                       data_calls INTEGER NOT NULL,
                       signals_generated INTEGER NOT NULL,
                       disqualified BOOLEAN NOT NULL DEFAULT false,
+                      score_eligible BOOLEAN NOT NULL DEFAULT true,
+                      public_leaderboard BOOLEAN NOT NULL DEFAULT true,
                       created_at TIMESTAMPTZ NOT NULL,
                       PRIMARY KEY (run_id, bot_id, version_id, scoring_policy_version),
                       FOREIGN KEY (run_id) REFERENCES ${names.runRecords}(run_id),
@@ -175,7 +177,7 @@ class PostgresArenaBotRegistryStore(
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_arena_run_bot_results_leaderboard
-                    ON ${names.runBotResults}(scoring_policy_version, disqualified, final_equity DESC, realized_pnl DESC, max_drawdown ASC)
+                    ON ${names.runBotResults}(scoring_policy_version, score_eligible, public_leaderboard, disqualified, final_equity DESC, realized_pnl DESC, max_drawdown ASC)
                     """.trimIndent()
                 )
             }
@@ -471,9 +473,9 @@ class PostgresArenaBotRegistryStore(
                 INSERT INTO ${names.runBotResults}(
                   run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
                   max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
-                  disqualified, created_at
+                  disqualified, score_eligible, public_leaderboard, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (run_id, bot_id, version_id, scoring_policy_version) DO UPDATE SET
                   final_equity = EXCLUDED.final_equity,
                   realized_pnl = EXCLUDED.realized_pnl,
@@ -483,6 +485,8 @@ class PostgresArenaBotRegistryStore(
                   data_calls = EXCLUDED.data_calls,
                   signals_generated = EXCLUDED.signals_generated,
                   disqualified = EXCLUDED.disqualified,
+                  score_eligible = EXCLUDED.score_eligible,
+                  public_leaderboard = EXCLUDED.public_leaderboard,
                   created_at = EXCLUDED.created_at
                 """.trimIndent()
             ).use { ps ->
@@ -498,7 +502,9 @@ class PostgresArenaBotRegistryStore(
                 ps.setInt(10, result.dataCalls)
                 ps.setInt(11, result.signalsGenerated)
                 ps.setBoolean(12, result.disqualified)
-                ps.setTimestamp(13, Timestamp.from(result.createdAt))
+                ps.setBoolean(13, result.scoreEligible)
+                ps.setBoolean(14, result.publicLeaderboard)
+                ps.setTimestamp(15, Timestamp.from(result.createdAt))
                 ps.executeUpdate()
             }
         }
@@ -510,7 +516,7 @@ class PostgresArenaBotRegistryStore(
                 """
                 SELECT run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
                        max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
-                       disqualified, created_at
+                       disqualified, score_eligible, public_leaderboard, created_at
                 FROM ${names.runBotResults}
                 WHERE run_id = ?
                 ORDER BY bot_id, version_id
@@ -541,6 +547,8 @@ class PostgresArenaBotRegistryStore(
                 WHERE r.mode_id = ?
                   AND r.status = ?
                   AND rb.scoring_policy_version = ?
+                  AND rb.score_eligible = true
+                  AND rb.public_leaderboard = true
                   AND rb.disqualified = false
                 ORDER BY rb.final_equity DESC, rb.realized_pnl DESC, rb.max_drawdown ASC,
                          rb.run_id ASC, rb.bot_id ASC
@@ -763,6 +771,8 @@ class PostgresArenaBotRegistryStore(
             dataCalls = getInt("data_calls"),
             signalsGenerated = getInt("signals_generated"),
             disqualified = getBoolean("disqualified"),
+            scoreEligible = getBoolean("score_eligible"),
+            publicLeaderboard = getBoolean("public_leaderboard"),
             createdAt = instant("created_at")
         )
     }

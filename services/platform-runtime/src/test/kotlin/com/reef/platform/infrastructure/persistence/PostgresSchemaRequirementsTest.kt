@@ -185,6 +185,8 @@ class PostgresSchemaRequirementsTest {
                         "arena.run_records.seed:bigint",
                         "arena.run_bot_results.final_equity:bigint",
                         "arena.run_bot_results.disqualified:boolean",
+                        "arena.run_bot_results.score_eligible:boolean",
+                        "arena.run_bot_results.public_leaderboard:boolean",
                         "arena.runtime_config_descriptors.secret_path:text",
                         "arena.runtime_config_descriptors.required:boolean"
                     )

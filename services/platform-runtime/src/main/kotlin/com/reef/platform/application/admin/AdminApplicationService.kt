@@ -126,7 +126,9 @@ data class ArenaRunBotResultIngestionCommand(
     val orderActionsProposed: Int,
     val dataCalls: Int,
     val signalsGenerated: Int,
-    val disqualified: Boolean
+    val disqualified: Boolean,
+    val scoreEligible: Boolean = true,
+    val publicLeaderboard: Boolean = true
 )
 
 class AdminApplicationService(
@@ -360,6 +362,8 @@ class AdminApplicationService(
                 dataCalls = command.dataCalls,
                 signalsGenerated = command.signalsGenerated,
                 disqualified = command.disqualified,
+                scoreEligible = command.scoreEligible,
+                publicLeaderboard = command.publicLeaderboard,
                 createdAt = now()
             )
         )

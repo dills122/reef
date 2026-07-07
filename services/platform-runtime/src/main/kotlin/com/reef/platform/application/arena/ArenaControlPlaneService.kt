@@ -97,6 +97,8 @@ data class ArenaRunBotResult(
     val dataCalls: Int,
     val signalsGenerated: Int,
     val disqualified: Boolean,
+    val scoreEligible: Boolean = true,
+    val publicLeaderboard: Boolean = true,
     val createdAt: Instant
 )
 

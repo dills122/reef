@@ -369,7 +369,7 @@ async function persistArenaResults(report) {
   }, { allowInvalidTransition: true }));
   operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/runs/status", {
     runId: config.runId,
-    status: report.status === "completed" ? "completed" : "failed",
+    status: report.status === "completed" || report.status === "completed_with_freezes" ? "completed" : "failed",
     actorId: config.actorId,
     correlationId,
   }, { allowInvalidTransition: true }));
@@ -388,6 +388,8 @@ async function persistArenaResults(report) {
       dataCalls: result.dataCalls ?? 0,
       signalsGenerated: 0,
       disqualified: result.disqualified,
+      scoreEligible: result.scoreEligible,
+      publicLeaderboard: result.publicLeaderboard,
       actorId: config.actorId,
       correlationId,
     }, { allowAlreadyExists: true }));
@@ -405,7 +407,8 @@ async function persistArenaResults(report) {
   if (leaderboard.statusCode < 200 || leaderboard.statusCode >= 300) {
     throw new Error(`arena leaderboard readback failed (${leaderboard.statusCode}): ${JSON.stringify(leaderboard.body)}`);
   }
-  if (leaderboardEntry === undefined && report.botResults.some((result) => result.scoreEligible)) {
+  const expectsLeaderboardEntry = report.botResults.some((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified);
+  if (leaderboardEntry === undefined && expectsLeaderboardEntry) {
     throw new Error(`arena leaderboard missing run ${config.runId}: ${JSON.stringify(leaderboard.body)}`);
   }
   return {
@@ -469,7 +472,7 @@ async function postArenaOk(baseUrl, path, payload, options = {}) {
   if (options.allowAlreadyExists && text.includes("already exists")) {
     return { path, statusCode: response.statusCode, ok: true, ignored: "already_exists" };
   }
-  if (options.allowInvalidTransition && (text.includes("invalid arena bot version transition") || text.includes("invalid arena run status transition"))) {
+  if (options.allowInvalidTransition && (text.includes("invalid bot version transition") || text.includes("invalid arena run transition"))) {
     return { path, statusCode: response.statusCode, ok: true, ignored: "invalid_transition" };
   }
   throw new Error(`arena admin POST ${path} failed (${response.statusCode}): ${response.body}`);

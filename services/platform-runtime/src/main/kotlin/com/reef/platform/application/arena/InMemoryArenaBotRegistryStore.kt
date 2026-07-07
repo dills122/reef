@@ -76,7 +76,7 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
         return runBotResults.values
             .flatten()
             .filter { it.runId in eligibleRunIds && it.scoringPolicyVersion == scoringPolicyVersion }
-            .filterNot { it.disqualified }
+            .filter { it.scoreEligible && it.publicLeaderboard && !it.disqualified }
             .sortedWith(
                 compareByDescending<ArenaRunBotResult> { it.finalEquity }
                     .thenByDescending { it.realizedPnl }
