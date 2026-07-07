@@ -12,11 +12,15 @@ loadDotEnv();
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const args = process.argv.slice(2);
 const config = {
+  runId: stringOption("--run-id", `arena-local-tick-${Date.now()}`),
   mode: stringOption("--mode", "packages/scenario-definitions/arena/equity-sprint.v1.json"),
   compartment: stringOption("--compartment", "ses"),
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
+  arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
   seedReference: args.includes("--seed-reference"),
+  persistResults: args.includes("--persist-results"),
+  actorId: stringOption("--actor-id", env("ADMIN_ACTOR_ID", "admin-cli")),
   commandTimeoutMs: numberOption("--command-timeout-ms", 15000),
   commandPollMs: numberOption("--command-poll-ms", 250),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
@@ -30,6 +34,9 @@ if (!["dry-run", "live"].includes(config.submitMode)) {
 }
 if (config.submitMode === "live" && config.venueUrl.length === 0) {
   throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
+}
+if (config.persistResults && config.arenaAdminUrl.length === 0) {
+  throw new Error("--arena-admin-url, ARENA_ADMIN_API_URL, --venue-url, or BOT_SDK_VENUE_URL is required when --persist-results is set");
 }
 
 const mode = readJson(config.mode);
@@ -88,6 +95,7 @@ try {
   const botResults = scoreBots(sessionReports, enforcementEvents);
   const venueReadback = await collectVenueReadback(botResults);
   const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
+  report.persistence = await persistArenaResults(report);
   mkdirSync(dirname(config.out), { recursive: true });
   writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`arena local tick run complete: ${resolve(config.out)}`);
@@ -179,6 +187,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       ticksRun: counters.ticks,
       actionsProposed: counters.actions,
       venueCommands: counters.venueCommands,
+      dataCalls: counters.dataCalls,
       failedTicks: counters.failedTicks,
       latencyP95Ms: counters.latencyP95Ms,
       freezeCount,
@@ -209,6 +218,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
     generatedAt: new Date().toISOString(),
+    runId: config.runId,
     mode: {
       modeId: mode.modeId,
       version: mode.version,
@@ -271,6 +281,154 @@ async function collectVenueReadback(botResults) {
       : availability.body.projections.every((projection) => Number(projection.lag ?? 0) === 0),
     snapshots,
     ownOrders,
+  };
+}
+
+async function persistArenaResults(report) {
+  if (!config.persistResults) {
+    return { enabled: false, skipped: true };
+  }
+  const baseUrl = config.arenaAdminUrl.replace(/\/$/, "");
+  const correlationId = `${config.runId}-persist`;
+  const botVersions = selectedBots.map((bot) => ({ botId: bot.botId, versionId: bot.versionId }));
+  const operations = [];
+  for (const bot of selectedBots) {
+    operations.push(await ensureArenaBot(baseUrl, bot, correlationId));
+    operations.push(await ensureArenaBotVersion(baseUrl, bot, correlationId));
+  }
+  operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/runs", {
+    runId: config.runId,
+    modeId: mode.modeId,
+    scenarioId: mode.scenarioId,
+    seed: Number(mode.seed ?? 0),
+    policyVersion: mode.riskPolicyVersion ?? "arena-risk-v0",
+    botVersions,
+    actorId: config.actorId,
+    correlationId,
+  }, { allowAlreadyExists: true }));
+  operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/runs/status", {
+    runId: config.runId,
+    status: "running",
+    actorId: config.actorId,
+    correlationId,
+  }, { allowInvalidTransition: true }));
+  operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/runs/status", {
+    runId: config.runId,
+    status: report.status === "completed" ? "completed" : "failed",
+    actorId: config.actorId,
+    correlationId,
+  }, { allowInvalidTransition: true }));
+
+  for (const result of report.botResults) {
+    operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/run-bot-results", {
+      runId: config.runId,
+      botId: result.botId,
+      versionId: result.versionId,
+      scoringPolicyVersion: mode.scoringPolicyVersion,
+      finalEquity: result.score,
+      realizedPnl: result.score - 1_000_000,
+      maxDrawdown: result.disqualified ? 250_000 : 0,
+      actionsProposed: result.actionsProposed,
+      orderActionsProposed: result.venueCommands,
+      dataCalls: result.dataCalls ?? 0,
+      signalsGenerated: 0,
+      disqualified: result.disqualified,
+      actorId: config.actorId,
+      correlationId,
+    }, { allowAlreadyExists: true }));
+  }
+
+  const rawResults = await getArenaJson(baseUrl, `/internal/admin/arena/run-bot-results?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
+  const leaderboard = await getArenaJson(
+    baseUrl,
+    `/internal/admin/arena/leaderboard?modeId=${encodeURIComponent(mode.modeId)}&scoringPolicyVersion=${encodeURIComponent(mode.scoringPolicyVersion)}&limit=50&actorId=${encodeURIComponent(config.actorId)}`,
+  );
+  const leaderboardEntry = leaderboard.body?.entries?.find((entry) => entry.runId === config.runId);
+  if (rawResults.statusCode < 200 || rawResults.statusCode >= 300) {
+    throw new Error(`arena run-bot-results readback failed (${rawResults.statusCode}): ${JSON.stringify(rawResults.body)}`);
+  }
+  if (leaderboard.statusCode < 200 || leaderboard.statusCode >= 300) {
+    throw new Error(`arena leaderboard readback failed (${leaderboard.statusCode}): ${JSON.stringify(leaderboard.body)}`);
+  }
+  if (leaderboardEntry === undefined && report.botResults.some((result) => result.scoreEligible)) {
+    throw new Error(`arena leaderboard missing run ${config.runId}: ${JSON.stringify(leaderboard.body)}`);
+  }
+  return {
+    enabled: true,
+    skipped: false,
+    operations,
+    rawResults,
+    leaderboard,
+    leaderboardEntry,
+  };
+}
+
+async function ensureArenaBot(baseUrl, bot, correlationId) {
+  return await postArenaOk(baseUrl, "/internal/admin/arena/bots", {
+    botId: bot.botId,
+    fileName: bot.entryPath,
+    name: bot.botId,
+    publisher: "Reef Built-In",
+    email: "arena-local@reef.local",
+    actorId: config.actorId,
+    correlationId,
+  }, { allowAlreadyExists: true });
+}
+
+async function ensureArenaBotVersion(baseUrl, bot, correlationId) {
+  const version = await postArenaOk(baseUrl, "/internal/admin/arena/bot-versions", {
+    botId: bot.botId,
+    versionId: bot.versionId,
+    sourceHash: `sha256:${bot.runnerKey}-source`,
+    artifactHash: `sha256:${bot.runnerKey}-artifact`,
+    sdkVersion: "1.5.0",
+    apiVersion: "v1",
+    dependencyManifestHash: `sha256:${bot.runnerKey}-deps`,
+    actorId: config.actorId,
+    correlationId,
+  }, { allowAlreadyExists: true });
+  for (const [status, reason] of [
+    ["submitted", "local arena persistence submitted"],
+    ["checks-passed", "local arena persistence checks passed"],
+    ["approved", "local arena persistence approved"],
+  ]) {
+    await postArenaOk(baseUrl, "/internal/admin/arena/bot-versions/transition", {
+      botId: bot.botId,
+      versionId: bot.versionId,
+      status,
+      reason,
+      actorId: config.actorId,
+      correlationId,
+    }, { allowInvalidTransition: true });
+  }
+  return version;
+}
+
+async function postArenaOk(baseUrl, path, payload, options = {}) {
+  const response = await postJson(`${baseUrl}${path}`, payload, adminHeaders(payload.correlationId));
+  const body = safeJson(response.body);
+  if (response.statusCode >= 200 && response.statusCode < 300) {
+    return { path, statusCode: response.statusCode, ok: true };
+  }
+  const text = JSON.stringify(body);
+  if (options.allowAlreadyExists && text.includes("already exists")) {
+    return { path, statusCode: response.statusCode, ok: true, ignored: "already_exists" };
+  }
+  if (options.allowInvalidTransition && (text.includes("invalid arena bot version transition") || text.includes("invalid arena run status transition"))) {
+    return { path, statusCode: response.statusCode, ok: true, ignored: "invalid_transition" };
+  }
+  throw new Error(`arena admin POST ${path} failed (${response.statusCode}): ${response.body}`);
+}
+
+async function getArenaJson(baseUrl, path) {
+  return await getJson(`${baseUrl}${path}`, adminHeaders(`${config.runId}-persist`));
+}
+
+function adminHeaders(correlationId) {
+  return {
+    "X-Reef-Internal-Route": "true",
+    "X-Reef-Actor-Id": config.actorId,
+    "X-Correlation-Id": correlationId,
   };
 }
 
@@ -521,7 +679,7 @@ function fixtureForBot(bot) {
   const fixture = {
     ...baseFixture,
     scenarioId: mode.scenarioId,
-    runId: `${mode.modeId}-${mode.version}-${bot.runnerKey}`,
+    runId: config.runId,
     venueSessionId: mode.venueSessionId,
     botId: bot.botId,
     botVersion: bot.versionId,

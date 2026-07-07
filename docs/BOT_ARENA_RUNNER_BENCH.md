@@ -672,6 +672,7 @@ The same report now includes:
 - `venueReadback.ownOrders`
 - `venueReadback.snapshots`
 - freeze events for bot-caused tick or command failures
+- optional `persistence` evidence when `--persist-results` is set
 
 Observed live smoke:
 
@@ -682,6 +683,35 @@ Observed live smoke:
 - 0 rejected commands
 - 0 timed-out commands
 - 0 freezes
+
+Persisted local smoke:
+
+```bash
+make dev-smoke-bot-arena-local-persist
+```
+
+This wraps:
+
+```bash
+bun run arena:local-tick-run --submit-mode=live \
+  --venue-url=http://127.0.0.1:8080 \
+  --arena-admin-url=http://127.0.0.1:8080 \
+  --seed-reference \
+  --persist-results \
+  --compartment=ses \
+  --out=/tmp/reef-arena-local-tick-run-persist.json
+```
+
+The persist path registers catalog bot metadata and versions when needed,
+registers the arena run, posts all `botResults` to
+`/internal/admin/arena/run-bot-results`, then reads back raw run results and
+`/internal/admin/arena/leaderboard` into the report.
+
+Local stack requirement: `platform-runtime` must run with
+`PLATFORM_ARENA_ADMIN_ENABLED=true`. Host-based smoke calls to raw
+`/internal/admin/*` routes also require an exposure mode that allows the caller,
+such as `PLATFORM_INTERNAL_HTTP_MODE=enabled` for local-only test runs. Keep the
+default fail-closed posture for non-local environments.
 
 Takeaway: the local arena now has a stable mode/catalog/report shape around the
 tick protocol and can route accepted venue command drafts through `/api/v1`.

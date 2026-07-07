@@ -6,6 +6,12 @@ const repoRoot = new URL("../../", import.meta.url).pathname;
 const commands = new Map();
 const receivedCommands = [];
 const referenceWrites = [];
+const arena = {
+  bots: new Map(),
+  versions: new Map(),
+  runs: new Map(),
+  results: [],
+};
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -48,6 +54,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && (url.pathname === "/api/v1/orders/current" || url.pathname === "/api/v1/orders/history")) {
     return json(res, 200, { orders: [] });
   }
+  if (url.pathname.startsWith("/internal/admin/arena/")) {
+    return await handleArenaAdmin(req, res, url);
+  }
   return json(res, 404, { error: "not found", path: url.pathname });
 });
 
@@ -61,16 +70,76 @@ try {
     "--compartment=vm",
     "--submit-mode=live",
     `--venue-url=${baseUrl}`,
+    `--arena-admin-url=${baseUrl}`,
     "--seed-reference",
+    "--persist-results",
     "--out=/tmp/reef-arena-local-tick-run-live-test.json",
   ]);
 
   assert.equal(referenceWrites.filter((write) => write.path === "/reference/instruments").length, 4);
   assert.equal(receivedCommands.length, 14);
   assert.ok(Array.from(commands.values()).every((command) => command.status === "COMPLETED"));
+  assert.equal(arena.bots.size, 5);
+  assert.equal(arena.versions.size, 5);
+  assert.equal(arena.runs.size, 1);
+  assert.equal(arena.results.length, 5);
   console.log("arena local tick live path checks passed");
 } finally {
   await new Promise((resolve) => server.close(resolve));
+}
+
+async function handleArenaAdmin(req, res, url) {
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bots") {
+    const body = await readJson(req);
+    if (arena.bots.has(body.botId)) return json(res, 400, { error: `botId already exists: ${body.botId}` });
+    arena.bots.set(body.botId, body);
+    return json(res, 200, { bot: body });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bot-versions") {
+    const body = await readJson(req);
+    const key = `${body.botId}/${body.versionId}`;
+    if (arena.versions.has(key)) return json(res, 400, { error: `versionId already exists for botId: ${key}` });
+    arena.versions.set(key, { ...body, status: "draft" });
+    return json(res, 200, { version: arena.versions.get(key) });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bot-versions/transition") {
+    const body = await readJson(req);
+    const key = `${body.botId}/${body.versionId}`;
+    const version = arena.versions.get(key);
+    if (version !== undefined) version.status = body.status;
+    return json(res, 200, { version });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/runs") {
+    const body = await readJson(req);
+    if (arena.runs.has(body.runId)) return json(res, 400, { error: `runId already exists: ${body.runId}` });
+    arena.runs.set(body.runId, { ...body, status: "planned" });
+    return json(res, 200, { run: arena.runs.get(body.runId) });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/runs/status") {
+    const body = await readJson(req);
+    const run = arena.runs.get(body.runId);
+    if (run !== undefined) run.status = body.status;
+    return json(res, 200, { run });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/run-bot-results") {
+    const body = await readJson(req);
+    arena.results.push(body);
+    return json(res, 200, { result: body });
+  }
+  if (req.method === "GET" && url.pathname === "/internal/admin/arena/run-bot-results") {
+    const runId = url.searchParams.get("runId");
+    return json(res, 200, { results: arena.results.filter((result) => result.runId === runId) });
+  }
+  if (req.method === "GET" && url.pathname === "/internal/admin/arena/leaderboard") {
+    const modeId = url.searchParams.get("modeId");
+    const scoringPolicyVersion = url.searchParams.get("scoringPolicyVersion");
+    const entries = arena.results
+      .filter((result) => arena.runs.get(result.runId)?.modeId === modeId && result.scoringPolicyVersion === scoringPolicyVersion)
+      .sort((left, right) => Number(left.disqualified) - Number(right.disqualified) || right.finalEquity - left.finalEquity)
+      .map((result, index) => ({ rank: index + 1, ...result }));
+    return json(res, 200, { entries });
+  }
+  return json(res, 404, { error: "not found", path: url.pathname });
 }
 
 function run(cmd, args) {
