@@ -24,12 +24,25 @@ interface VenueEventBatchSource {
     fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery>
 }
 
+fun venueEventBatchSourceWithLocalFaultHooks(
+    source: VenueEventBatchSource,
+    lookup: (String) -> String? = { key -> System.getenv(key) }
+): VenueEventBatchSource {
+    if (!RuntimeEnv.bool("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", false, lookup = lookup)) return source
+    val internalHttpMode = RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local", lookup).trim().lowercase()
+    require(internalHttpMode in setOf("enabled", "all", "raw-external")) {
+        "VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE requires PLATFORM_INTERNAL_HTTP_MODE=enabled"
+    }
+    return FailAckOnceVenueEventBatchSource(source)
+}
+
 class VenueEventBatchMaterializer(
     private val source: VenueEventBatchSource,
     private val api: PlatformApi,
     private val batchSize: Int = RuntimeEnv.int("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", 100, min = 1),
     private val pollIntervalMs: Long = RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_POLL_MS", 25L, min = 1L),
     private val fetchTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", 200L, min = 1L)),
+    private val stopAfterAckFailure: Boolean = RuntimeEnv.bool("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", false),
     private val workerName: String = "reef-venue-event-batch-materializer"
 ) {
     private val running = AtomicBoolean(false)
@@ -75,7 +88,7 @@ class VenueEventBatchMaterializer(
             deliveries.size.toLong(),
             deliveries.maxOfOrNull { it.streamSequence } ?: 0L
         )
-        deliveries.forEach { delivery -> processDelivery(delivery) }
+        deliveries.sortedBy { it.streamSequence }.forEach { delivery -> processDelivery(delivery) }
         return deliveries.size
     }
 
@@ -110,6 +123,10 @@ class VenueEventBatchMaterializer(
             delivery.ack()
         } catch (ex: Exception) {
             VenueEventBatchMaterializerMetrics.recordAckFailed(ex.message ?: ex::class.simpleName ?: "unknown")
+            if (stopAfterAckFailure) {
+                running.set(false)
+                throw ex
+            }
         }
     }
 
@@ -169,6 +186,47 @@ class VenueEventBatchMaterializer(
             delivery.term()
         } catch (_: Exception) {
         }
+    }
+}
+
+private class FailAckOnceVenueEventBatchSource(
+    private val delegate: VenueEventBatchSource
+) : VenueEventBatchSource {
+    private val failNextAck = AtomicBoolean(true)
+
+    override fun fetch(batchSize: Int, timeout: Duration): List<VenueEventBatchDelivery> {
+        return delegate.fetch(batchSize, timeout).map { delivery ->
+            if (failNextAck.get()) {
+                FailAckOnceVenueEventBatchDelivery(delivery, failNextAck)
+            } else {
+                delivery
+            }
+        }
+    }
+}
+
+private class FailAckOnceVenueEventBatchDelivery(
+    private val delegate: VenueEventBatchDelivery,
+    private val failNextAck: AtomicBoolean
+) : VenueEventBatchDelivery {
+    override val subject: String get() = delegate.subject
+    override val payloadJson: String get() = delegate.payloadJson
+    override val streamSequence: Long get() = delegate.streamSequence
+    override val deliveredCount: Long get() = delegate.deliveredCount
+
+    override fun ack() {
+        if (failNextAck.compareAndSet(true, false)) {
+            error("injected materializer ack failure before offset commit")
+        }
+        delegate.ack()
+    }
+
+    override fun nak() {
+        delegate.nak()
+    }
+
+    override fun term() {
+        delegate.term()
     }
 }
 

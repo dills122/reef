@@ -43,6 +43,8 @@ setValue("VENUE_EVENT_MATERIALIZER_ENABLED", "true");
 setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "20");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
+setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "false");
+setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "false");
 setValue("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer"]));
 setValue("DEV_STREAM_DIRECT_NODB_PROJECTOR_ENABLED", "1");
 setValue("STREAM_ACK_PROJECTION_SOURCE", "venue-event-batch");
@@ -103,14 +105,23 @@ for (const command of engineStoppedCommands) {
   await submitOrder(command);
 }
 
-console.log("starting engine, materializer, and projector to drain backlog...");
-await dockerCompose(["up", "-d", "--wait", "matching-engine", "platform-materializer", "platform-projector-0"]);
+console.log("starting engine with one-shot materializer ack failure hook...");
+setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "true");
+setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "true");
+await dockerCompose(["up", "-d", "--wait", "matching-engine", "platform-materializer"]);
 await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
+const ackFailureStats = await waitForMaterializerAckFailedAtLeast(1);
+
+console.log("restarting materializer without ack failure hook, then starting projector...");
+setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "false");
+setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "false");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "platform-materializer", "platform-projector-0"]);
+await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
+const redeliveryStats = await waitForMaterializerFetchedAtLeast(1);
 
 const outcomes = await waitForCanonicalOutcomes(commands.map((command) => command.commandId));
-await waitForMaterializedOutcomesAtLeast(materializerBefore + commands.length);
 assertPartitionCoverage(outcomes);
 await waitForProjection(commands, outcomes);
 
@@ -132,6 +143,11 @@ console.log(JSON.stringify({
   projectionName,
   commands: commands.map((command) => command.commandId),
   partitionCoverage: partitionCoverage(outcomes),
+  injectedAckFailure: {
+    ackFailed: ackFailureStats.metrics?.ackFailed ?? 0,
+    lastError: ackFailureStats.metrics?.lastError ?? "",
+    redeliveredAfterRestart: redeliveryStats.metrics?.fetched ?? 0,
+  },
   canonicalOutcomes: outcomes,
   engine: summarizeEngineStats(engineAfter),
   materializer: materializerAfter.metrics,
@@ -267,13 +283,28 @@ function summarizeEngineStats(stats) {
   };
 }
 
-async function waitForMaterializedOutcomesAtLeast(target) {
-  await waitForCondition(`materialized outcomes >= ${target}`, async () => (await materializedOutcomes()) >= target);
-}
-
 async function materializedOutcomes() {
   const stats = await internalGetJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
   return Number(stats.metrics?.materializedOutcomes ?? 0);
+}
+
+async function waitForMaterializerAckFailedAtLeast(target) {
+  let stats = {};
+  await waitForCondition(`materializer ackFailed >= ${target}`, async () => {
+    stats = await internalGetJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
+    return Number(stats.metrics?.ackFailed ?? 0) >= target &&
+      Number(stats.metrics?.materializedOutcomes ?? 0) > materializerBefore;
+  });
+  return stats;
+}
+
+async function waitForMaterializerFetchedAtLeast(target) {
+  let stats = {};
+  await waitForCondition(`materializer fetched >= ${target} after clean restart`, async () => {
+    stats = await internalGetJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
+    return Number(stats.metrics?.fetched ?? 0) >= target;
+  });
+  return stats;
 }
 
 async function waitForCanonicalOutcomes(commandIds) {

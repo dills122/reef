@@ -4304,7 +4304,7 @@ class PlatformHttpServer(
             return
         }
         VenueEventBatchMaterializer(
-            source = KafkaVenueEventBatchSource(),
+            source = venueEventBatchSourceWithLocalFaultHooks(KafkaVenueEventBatchSource()),
             api = api,
             batchSize = venueEventMaterializerBatchSize,
             pollIntervalMs = venueEventMaterializerPollMs,
