@@ -45,43 +45,55 @@ type Processor struct {
 }
 
 type ProcessorConfig struct {
-	ShardID         string
-	Partition       int
-	BatchSize       int
-	FetchTimeout    time.Duration
-	PollInterval    time.Duration
-	CommandStream   string
-	EventStreamName string
+	ShardID          string
+	Partition        int
+	BatchSize        int
+	FetchTimeout     time.Duration
+	PollInterval     time.Duration
+	CommandStream    string
+	EventStreamName  string
+	Source           string
+	StopAfterAckFail bool
 }
 
 type Stats struct {
-	Fetched       atomic.Uint64
-	Processed     atomic.Uint64
-	Published     atomic.Uint64
-	Acked         atomic.Uint64
-	Nacked        atomic.Uint64
-	Termed        atomic.Uint64
-	Failed        atomic.Uint64
-	Unsupported   atomic.Uint64
-	LastError     atomic.Value
-	LastFetchedAt atomic.Value
-	LastAckedAt   atomic.Value
+	Fetched             atomic.Uint64
+	Processed           atomic.Uint64
+	Published           atomic.Uint64
+	Acked               atomic.Uint64
+	Nacked              atomic.Uint64
+	Termed              atomic.Uint64
+	Failed              atomic.Uint64
+	Unsupported         atomic.Uint64
+	LastError           atomic.Value
+	LastFetchedAt       atomic.Value
+	LastAckedAt         atomic.Value
+	LastBatchID         atomic.Value
+	LastFetchedSequence atomic.Uint64
+	LastAckedSequence   atomic.Uint64
 }
 
 type Snapshot struct {
-	ShardID       string `json:"shardId"`
-	Partition     int    `json:"partition"`
-	Fetched       uint64 `json:"fetched"`
-	Processed     uint64 `json:"processed"`
-	Published     uint64 `json:"published"`
-	Acked         uint64 `json:"acked"`
-	Nacked        uint64 `json:"nacked"`
-	Termed        uint64 `json:"termed"`
-	Failed        uint64 `json:"failed"`
-	Unsupported   uint64 `json:"unsupported"`
-	LastError     string `json:"lastError"`
-	LastFetchedAt string `json:"lastFetchedAt"`
-	LastAckedAt   string `json:"lastAckedAt"`
+	ShardID             string `json:"shardId"`
+	Partition           int    `json:"partition"`
+	Source              string `json:"source"`
+	CommandStream       string `json:"commandStream"`
+	EventStream         string `json:"eventStream"`
+	Fetched             uint64 `json:"fetched"`
+	Processed           uint64 `json:"processed"`
+	Published           uint64 `json:"published"`
+	Acked               uint64 `json:"acked"`
+	Nacked              uint64 `json:"nacked"`
+	Termed              uint64 `json:"termed"`
+	Failed              uint64 `json:"failed"`
+	Unsupported         uint64 `json:"unsupported"`
+	LastError           string `json:"lastError"`
+	LastFetchedAt       string `json:"lastFetchedAt"`
+	LastAckedAt         string `json:"lastAckedAt"`
+	LastFetchedSequence uint64 `json:"lastFetchedSequence"`
+	LastAckedSequence   uint64 `json:"lastAckedSequence"`
+	LastBatchID         string `json:"lastBatchId"`
+	AckLag              uint64 `json:"ackLag"`
 }
 
 type VenueEventBatch struct {
@@ -123,10 +135,14 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 	if strings.TrimSpace(config.ShardID) == "" {
 		config.ShardID = "engine-0"
 	}
+	if strings.TrimSpace(config.Source) == "" {
+		config.Source = "stream-direct"
+	}
 	stats := &Stats{}
 	stats.LastError.Store("")
 	stats.LastFetchedAt.Store("")
 	stats.LastAckedAt.Store("")
+	stats.LastBatchID.Store("")
 	return &Processor{
 		service:   service,
 		source:    source,
@@ -137,20 +153,29 @@ func NewProcessor(service *app.Service, source CommandSource, publisher EventBat
 }
 
 func (p *Processor) Stats() Snapshot {
+	lastFetchedSequence := p.stats.LastFetchedSequence.Load()
+	lastAckedSequence := p.stats.LastAckedSequence.Load()
 	return Snapshot{
-		ShardID:       p.config.ShardID,
-		Partition:     p.config.Partition,
-		Fetched:       p.stats.Fetched.Load(),
-		Processed:     p.stats.Processed.Load(),
-		Published:     p.stats.Published.Load(),
-		Acked:         p.stats.Acked.Load(),
-		Nacked:        p.stats.Nacked.Load(),
-		Termed:        p.stats.Termed.Load(),
-		Failed:        p.stats.Failed.Load(),
-		Unsupported:   p.stats.Unsupported.Load(),
-		LastError:     p.stats.LastError.Load().(string),
-		LastFetchedAt: p.stats.LastFetchedAt.Load().(string),
-		LastAckedAt:   p.stats.LastAckedAt.Load().(string),
+		ShardID:             p.config.ShardID,
+		Partition:           p.config.Partition,
+		Source:              p.config.Source,
+		CommandStream:       p.config.CommandStream,
+		EventStream:         p.config.EventStreamName,
+		Fetched:             p.stats.Fetched.Load(),
+		Processed:           p.stats.Processed.Load(),
+		Published:           p.stats.Published.Load(),
+		Acked:               p.stats.Acked.Load(),
+		Nacked:              p.stats.Nacked.Load(),
+		Termed:              p.stats.Termed.Load(),
+		Failed:              p.stats.Failed.Load(),
+		Unsupported:         p.stats.Unsupported.Load(),
+		LastError:           p.stats.LastError.Load().(string),
+		LastFetchedAt:       p.stats.LastFetchedAt.Load().(string),
+		LastAckedAt:         p.stats.LastAckedAt.Load().(string),
+		LastFetchedSequence: lastFetchedSequence,
+		LastAckedSequence:   lastAckedSequence,
+		LastBatchID:         p.stats.LastBatchID.Load().(string),
+		AckLag:              sequenceLag(lastFetchedSequence, lastAckedSequence),
 	}
 }
 
@@ -165,6 +190,9 @@ func (p *Processor) Run(ctx context.Context) error {
 		processed, err := p.ProcessOnce(ctx)
 		if err != nil {
 			p.recordFailure(err)
+			if p.config.StopAfterAckFail {
+				return err
+			}
 		}
 		if processed == 0 {
 			timer := time.NewTimer(p.config.PollInterval)
@@ -189,6 +217,7 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	p.stats.Fetched.Add(uint64(len(deliveries)))
 	p.stats.LastFetchedAt.Store(now)
+	p.stats.LastFetchedSequence.Store(maxDeliverySequence(deliveries))
 
 	batch, ackable, rollback, touchedOrderIDs, err := p.buildBatch(deliveries, now)
 	if err != nil {
@@ -210,7 +239,10 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 		return len(deliveries), err
 	}
 	p.stats.Published.Add(uint64(len(batch.Outcomes)))
-	p.ackAll(ackable)
+	p.stats.LastBatchID.Store(batch.BatchID)
+	if err := p.ackAll(ackable); err != nil && p.config.StopAfterAckFail {
+		return len(deliveries), err
+	}
 	return len(deliveries), nil
 }
 
@@ -440,26 +472,32 @@ func (p *Processor) nakAll(deliveries []CommandDelivery) {
 	}
 }
 
-func (p *Processor) ackAll(deliveries []CommandDelivery) {
+func (p *Processor) ackAll(deliveries []CommandDelivery) error {
 	if batchAcker, ok := p.source.(BatchCommandAcker); ok {
 		acked, err := batchAcker.AckBatch(deliveries)
 		p.stats.Acked.Add(uint64(acked))
 		if acked > 0 {
 			p.stats.LastAckedAt.Store(time.Now().UTC().Format(time.RFC3339Nano))
+			p.stats.LastAckedSequence.Store(maxDeliverySequence(deliveries[:min(acked, len(deliveries))]))
 		}
 		if err != nil {
 			p.recordFailure(err)
 		}
-		return
+		return err
 	}
 	for _, delivery := range deliveries {
 		if err := delivery.Ack(); err != nil {
 			p.recordFailure(err)
+			if p.config.StopAfterAckFail {
+				return err
+			}
 			continue
 		}
 		p.stats.Acked.Add(1)
 		p.stats.LastAckedAt.Store(time.Now().UTC().Format(time.RFC3339Nano))
+		p.stats.LastAckedSequence.Store(delivery.StreamSequence())
 	}
+	return nil
 }
 
 func (p *Processor) recordFailure(err error) {
@@ -488,4 +526,21 @@ func instrumentIDFromSubject(subject string) string {
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func maxDeliverySequence(deliveries []CommandDelivery) uint64 {
+	var max uint64
+	for _, delivery := range deliveries {
+		if seq := delivery.StreamSequence(); seq > max {
+			max = seq
+		}
+	}
+	return max
+}
+
+func sequenceLag(lastFetched uint64, lastAcked uint64) uint64 {
+	if lastFetched <= lastAcked {
+		return 0
+	}
+	return lastFetched - lastAcked
 }

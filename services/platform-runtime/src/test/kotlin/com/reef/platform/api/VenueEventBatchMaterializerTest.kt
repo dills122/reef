@@ -7,6 +7,7 @@ import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.nio.charset.StandardCharsets
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class VenueEventBatchMaterializerTest {
@@ -42,7 +43,15 @@ class VenueEventBatchMaterializerTest {
         assertEquals(2, outcome.partition)
         assertEquals(100L, outcome.streamSequence)
         assertEquals("accepted", outcome.resultStatus)
-        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().materialized)
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(1, stats.materialized)
+        assertEquals(50L, stats.lastFetchedStreamSequence)
+        assertEquals(50L, stats.lastMaterializedStreamSequence)
+        assertEquals("batch-1", stats.lastMaterializedBatchId)
+        assertEquals(2, stats.lastMaterializedPartition)
+        assertEquals(100L, stats.lastMaterializedFirstSequence)
+        assertEquals(100L, stats.lastMaterializedLastSequence)
+        assertEquals(0L, stats.materializerLag)
     }
 
     @Test
@@ -230,7 +239,13 @@ class VenueEventBatchMaterializerTest {
         val outcomeAfterCrash = persistence.canonicalCommandOutcome("cmd-1")
         assertNotNull(outcomeAfterCrash)
         assertEquals("batch-offset-crash-1", outcomeAfterCrash.batchId)
-        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().ackFailed)
+        val statsAfterCrash = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(1, statsAfterCrash.ackFailed)
+        assertEquals(1, statsAfterCrash.materialized)
+        assertEquals("batch-offset-crash-1", statsAfterCrash.lastMaterializedBatchId)
+        assertEquals(70L, statsAfterCrash.lastFetchedStreamSequence)
+        assertEquals(70L, statsAfterCrash.lastMaterializedStreamSequence)
+        assertEquals(0L, statsAfterCrash.materializerLag)
 
         // "Restart": a brand new materializer instance over the same durable
         // persistence receives the redelivered (still-unacked) batch and must not
@@ -253,6 +268,103 @@ class VenueEventBatchMaterializerTest {
         // not a duplicate row.
         assertEquals(outcomeAfterCrash.batchId, outcomeAfterReplay.batchId)
         assertEquals(outcomeAfterCrash.streamSequence, outcomeAfterReplay.streamSequence)
+    }
+
+    @Test
+    fun localAckFailureHookRequiresInternalHttpEnabledAndFailsOneAckOnly() {
+        val source = FixedVenueEventBatchSource(
+            RecordingVenueEventBatchDelivery(payloadJson = venueEventBatchJson("batch-hook-1", "checksum-hook-1")),
+            RecordingVenueEventBatchDelivery(payloadJson = venueEventBatchJson("batch-hook-2", "checksum-hook-2"))
+        )
+        val unsafeLookup = mapOf(
+            "VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE" to "true",
+            "PLATFORM_INTERNAL_HTTP_MODE" to "local"
+        )::get
+
+        assertFailsWith<IllegalArgumentException> {
+            venueEventBatchSourceWithLocalFaultHooks(source, unsafeLookup)
+        }
+
+        val first = RecordingVenueEventBatchDelivery(payloadJson = venueEventBatchJson("batch-hook-3", "checksum-hook-3"))
+        val second = RecordingVenueEventBatchDelivery(payloadJson = venueEventBatchJson("batch-hook-4", "checksum-hook-4"))
+        val safeLookup = mapOf(
+            "VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE" to "true",
+            "PLATFORM_INTERNAL_HTTP_MODE" to "enabled"
+        )::get
+        val wrapped = venueEventBatchSourceWithLocalFaultHooks(FixedVenueEventBatchSource(first, second), safeLookup)
+        val deliveries = wrapped.fetch(10, java.time.Duration.ZERO)
+
+        assertFailsWith<IllegalStateException> {
+            deliveries[0].ack()
+        }
+        deliveries[0].ack()
+        deliveries[1].ack()
+
+        assertEquals(1, first.ackCalls)
+        assertEquals(1, second.ackCalls)
+    }
+
+    @Test
+    fun stopAfterAckFailureStopsProcessingAfterCanonicalCommit() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        val delivery = AckFailsOnceDelivery(
+            payloadJson = venueEventBatchJson("batch-stop-after-ack-failure", "checksum-stop-after-ack-failure"),
+            streamSequence = 90
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(delivery),
+            api = api,
+            stopAfterAckFailure = true
+        )
+
+        assertFailsWith<IllegalStateException> {
+            materializer.processOnce()
+        }
+
+        assertNotNull(persistence.canonicalCommandOutcome("cmd-1"))
+        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().ackFailed)
+    }
+
+    @Test
+    fun materializerProcessesFetchedDeliveriesByStreamSequence() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        val ackOrder = mutableListOf<String>()
+        val later = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-sort-later",
+                checksum = "checksum-sort-later",
+                commandId = "cmd-sort-later",
+                orderId = "ord-sort-later",
+                streamSequence = 101
+            ),
+            streamSequence = 101,
+            onAck = { ackOrder.add("later") }
+        )
+        val earlier = RecordingVenueEventBatchDelivery(
+            payloadJson = venueEventBatchJson(
+                batchId = "batch-sort-earlier",
+                checksum = "checksum-sort-earlier",
+                commandId = "cmd-sort-earlier",
+                orderId = "ord-sort-earlier",
+                streamSequence = 100
+            ),
+            streamSequence = 100,
+            onAck = { ackOrder.add("earlier") }
+        )
+        val materializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(later, earlier),
+            api = api
+        )
+
+        assertEquals(2, materializer.processOnce())
+
+        assertEquals(listOf("earlier", "later"), ackOrder)
+        assertNotNull(persistence.canonicalCommandOutcome("cmd-sort-earlier"))
+        assertNotNull(persistence.canonicalCommandOutcome("cmd-sort-later"))
     }
 
     private fun venueEventBatch(batchId: String, checksum: String): VenueEventBatchFact {
@@ -283,27 +395,33 @@ class VenueEventBatchMaterializerTest {
         )
     }
 
-    private fun venueEventBatchJson(batchId: String, checksum: String): String {
+    private fun venueEventBatchJson(
+        batchId: String,
+        checksum: String,
+        commandId: String = "cmd-1",
+        orderId: String = "ord-1",
+        streamSequence: Long = 100L
+    ): String {
         return JsonCodec.writeObject(
             "batchId" to batchId,
             "shardId" to "engine-0",
             "partition" to 2,
             "commandStream" to "REEF_COMMANDS",
             "eventStream" to "REEF_VENUE_EVENTS",
-            "firstSequence" to 100L,
-            "lastSequence" to 100L,
+            "firstSequence" to streamSequence,
+            "lastSequence" to streamSequence,
             "commandCount" to 1,
             "createdAt" to "2026-07-04T18:00:00Z",
             "payloadChecksum" to checksum,
             "outcomes" to listOf(
                 mapOf(
-                    "commandId" to "cmd-1",
+                    "commandId" to commandId,
                     "commandType" to "SubmitOrder",
-                    "streamSequence" to 100L,
+                    "streamSequence" to streamSequence,
                     "deliveredCount" to 1L,
-                    "payloadHash" to "payload-hash-1",
+                    "payloadHash" to "payload-hash-$commandId",
                     "instrumentId" to "AAPL",
-                    "orderId" to "ord-1",
+                    "orderId" to orderId,
                     "status" to "accepted",
                     "result" to mapOf("accepted" to mapOf("eventId" to "evt-1"))
                 )

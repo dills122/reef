@@ -77,11 +77,17 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - matching engine fails before event-batch publish, leaving command offset uncommitted.
    - materializer commits compact canonical rows then exits before event-batch offset commit.
    - projector exits mid-batch and replays idempotently.
+   - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, selects commands that cover all four direct-stream partitions, stops/restarts engine/materializer/projector roles around accepted commands, injects one engine command-ack failure after durable event-batch publish, injects one materializer ack/offset failure after canonical commit, injects one projector failure after read-model rows commit but before watermark commit, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
 
 4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
    - direct engine consumer fetches/processes/publishes/acks all accepted commands.
+   - direct engine coverage spans every configured partition in the crash gate.
+   - engine command ack/offset failure after event-batch publish redelivers and replays with no duplicate canonical inserts.
    - materializer writes canonical outcomes for all accepted commands after drain.
+   - materializer ack/offset failure after canonical commit redelivers and replays with no duplicate canonical inserts.
+   - projection watermarks do not advance over missing encoded stream sequences when canonical rows arrive out of order.
+   - projector failure after read-model rows but before watermark commit replays idempotently with no duplicate read-model rows.
    - replay/checksum reports `0` gaps, duplicate inserts, payload mismatches, stream gaps, or overlaps.
    - projection replay/idempotency applies no duplicate read-model rows.
    - bot/user read-surface claims match `/api/v1/data/availability` and the read-surface inventory in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
