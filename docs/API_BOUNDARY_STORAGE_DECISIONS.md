@@ -74,8 +74,8 @@ Decision:
 - operator/admin moderation and pre-trade limit state is stored in `boundary.account_risk_controls` and managed through `make dev-admin CMD="account-risk-set ..."` for local workflows.
 - `ALLOW` controls may carry bounded submit-order limits: `max_quantity_units`, `max_notional`, and optional `currency`.
 - max-quantity and max-notional violations reject before durable command acceptance and are audited with submit quantity, limit price, and currency context.
-- internal write endpoint `/internal/admin/account-risk/controls` supports local/admin set operations and emits admin audit events.
-- internal read endpoints expose current controls and recent non-allow decisions at `/internal/boundary/account-risk/controls` and `/internal/boundary/account-risk/decisions/recent`.
+- internal write endpoint `/internal/admin/account-risk/controls` supports local/migration set operations and emits admin audit events; externally reachable admin/data exposure must use a versioned gateway contract.
+- internal read endpoints expose current controls and recent non-allow decisions at `/internal/boundary/account-risk/controls` and `/internal/boundary/account-risk/decisions/recent` for local/operator diagnostics only.
 - settlement performs final enforcement after matching facts exist.
 - deep debt, exceeded risk thresholds, or settlement failures can block fulfillment and disable bots through account/admin facts.
 
@@ -121,8 +121,8 @@ Decision:
 - circuit breakers are hard pre-acceptance gates for operator halts and venue control.
 - tripped breakers reject before command-log append, stream-intake reservation, or durable publish.
 - account/bot moderation remains in account-risk controls; breaker scopes should stay focused on venue/session/instrument control unless a later design explicitly merges them.
-- internal write endpoint `/internal/admin/circuit-breakers` supports local/admin trip/reset operations and emits admin audit events.
-- internal read endpoint `/internal/boundary/circuit-breakers` exposes current breaker state for operator surfaces.
+- internal write endpoint `/internal/admin/circuit-breakers` supports local/migration trip/reset operations and emits admin audit events; externally reachable admin/data exposure must use a versioned gateway contract.
+- internal read endpoint `/internal/boundary/circuit-breakers` exposes current breaker state for local/operator diagnostics only.
 
 Configuration:
 - `EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=allow-all|postgres`
@@ -144,8 +144,8 @@ Decision:
 - collar checks run after hard circuit breakers and before account/bot risk checks.
 - low-side violations return `422 PRICE_COLLAR_LOW`; high-side violations return `422 PRICE_COLLAR_HIGH`.
 - rejected commands must not append command-log rows, reserve stream-intake rows, or publish command messages.
-- internal write endpoint `/internal/admin/price-collars` supports local/admin band updates and emits admin audit events.
-- internal read endpoint `/internal/boundary/price-collars` exposes current collar state for operator surfaces.
+- internal write endpoint `/internal/admin/price-collars` supports local/migration band updates and emits admin audit events; externally reachable admin/data exposure must use a versioned gateway contract.
+- internal read endpoint `/internal/boundary/price-collars` exposes current collar state for local/operator diagnostics only.
 
 Configuration:
 - `EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=allow-all|postgres`

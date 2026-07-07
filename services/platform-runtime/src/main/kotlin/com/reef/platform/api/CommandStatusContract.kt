@@ -24,6 +24,7 @@ data class CommandStatusView(
     val commandType: String = "",
     val payloadHash: String = "",
     val instrumentId: String = "",
+    val participantId: String = "",
     val orderId: String = "",
     val rejectCode: String = "",
     val resultPayloadJson: String = "",
@@ -60,6 +61,7 @@ object CommandStatusResponse {
             "commandType" to view.commandType,
             "payloadHash" to view.payloadHash,
             "instrumentId" to view.instrumentId,
+            "participantId" to view.participantId,
             "orderId" to view.orderId,
             "rejectCode" to view.rejectCode,
             "resultPayloadJson" to view.resultPayloadJson,
@@ -88,6 +90,7 @@ fun CommandLogRecord.toStatusView(processingMode: CommandProcessingMode): Comman
         responseStatus = responseStatus,
         responsePayloadJson = responsePayloadJson,
         lastError = lastError,
+        participantId = commandStatusParticipantId(payloadJson),
         source = "command_log"
     )
 }
@@ -152,9 +155,18 @@ fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
         commandType = commandType,
         payloadHash = payloadHash,
         instrumentId = instrumentId,
+        participantId = commandStatusParticipantId(resultPayloadJson),
         orderId = orderId,
         rejectCode = rejectCode,
         resultPayloadJson = resultPayloadJson,
         source = "canonical_outcome"
     )
+}
+
+private fun commandStatusParticipantId(payloadJson: String): String {
+    val root = JsonCodec.parseObjectOrEmpty(payloadJson)
+    return root.string("participantId")
+        .ifBlank { root.obj("acceptedOrder").string("participantId") }
+        .ifBlank { root.obj("accepted").string("participantId") }
+        .ifBlank { root.obj("rejected").string("participantId") }
 }

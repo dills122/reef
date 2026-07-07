@@ -77,12 +77,63 @@ Existing route categories:
 - `/internal/perf/*`: performance diagnostics
 - `/internal/*/projector/status`, `/internal/stream-ack/*`, `/internal/venue-event-materializer/*`: worker/materializer/projector health and lag
 
+Current implementation checkpoint:
+- raw `/internal/*` HTTP registration is controlled by `PLATFORM_INTERNAL_HTTP_MODE`
+- local development may use `PLATFORM_INTERNAL_HTTP_MODE=local` for loopback tooling
+- hosted/non-local profiles must set boundary modes explicitly and must not expose raw `/internal/*` externally
+- externally reachable admin/data routes use versioned gateway paths such as `/admin/v1/...`
+- hosted Caddy exposes only narrow `/admin/v1/arena/...` and `/admin/v1/analytics/...` paths, not `/internal/*`
+- admin HTTP actor identity is bound from request principal headers/token context, not request body or query fields
+- `/healthz` remains cheap liveness; `/readyz` reports runtime role, internal HTTP mode, DB pool pressure, and stream availability
+- remaining raw internal callers are tracked in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
+
 Migration target:
 1. Define protobuf contracts for internal control, health, diagnostics, and administration.
 2. Move internal callers and scripts to gRPC or durable-message contracts.
 3. Expose only required operator/user capabilities through admin/data gateway contracts.
 4. Block raw `/internal/*` access at reverse proxy, firewall, or service-binding level.
 5. Retire HTTP adapters once no local workflow or migration gate needs them.
+
+## API And Control-Plane Hardening Backlog
+
+This backlog is active work, not optional cleanup.
+
+1. Finish read/object authorization.
+   - participant-scoped order reads require the caller's participant scope
+   - command status and market-data reads pass through read boundary checks
+   - command status denies mismatched client/participant scopes when materialized status carries those fields
+   - account/client/object-id reads must enforce ownership or operator role per object
+   - market-data surfaces must stay classified as public, delayed, participant-scoped, or operator-scoped before broader external exposure
+   - every object-id endpoint should have a positive and negative authorization test
+
+2. Move remaining internal HTTP callers off raw `/internal/*`.
+   - local smoke scripts may keep loopback adapters while migration is active
+   - CI, hosted run-plane, bot-submission, and operator workflows should use `/admin/v1/...`, gRPC, or CLI adapters
+   - new external needs must start as gateway-backed contracts, not Caddy exceptions to `/internal/*`
+   - source inventory lives in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
+
+3. Replace direct engine HTTP fallback with explicit local/parity mode only.
+   - runtime-to-engine synchronous default is gRPC
+   - HTTP remains for local compatibility and parity debugging
+   - future engine admin/control operations should be protobuf-backed before any HTTP adapter is considered
+
+4. Add service identity for internal gRPC.
+   - single-host/private-network plaintext is a temporary hosted posture
+   - non-local multi-host deployments need TLS/mTLS or service-mesh identity
+   - service principals and authorization rules must be explicit for admin/control calls
+
+5. Tighten health/readiness.
+   - keep `/healthz` cheap and dependency-free
+   - make `/readyz` include DB, broker, engine, materializer, projector, and admin-store readiness where those dependencies are enabled
+   - expose standard gRPC health for internal service checks
+
+6. Complete deterministic stream lane identity.
+   - submit stream lanes should key by `runId + venueSessionId + instrumentId` once those fields are present in runtime command models
+   - until then, instrument-only lane hashing is a transitional compatibility shape
+
+7. Keep non-local boot fail-closed.
+   - non-local runtime profiles must fail if auth, rate limit, durable idempotency, or internal HTTP exposure mode are implicit or unsafe
+   - deployment docs and generated secret templates must carry those explicit settings
 
 ## Gateway Rule
 

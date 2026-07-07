@@ -44,23 +44,26 @@ import reef.contracts.orderexecution.v1.SubmitOrderResult as ProtoSubmitOrderRes
 import reef.contracts.orderexecution.v1.TimeInForce
 
 fun defaultEngineGateway(): EngineGateway {
-    val transport = (System.getenv("ENGINE_TRANSPORT") ?: "http").lowercase()
+    val transport = (System.getenv("ENGINE_TRANSPORT") ?: "grpc").lowercase()
     val httpBaseUrl = System.getenv("MATCHING_ENGINE_BASE_URL") ?: "http://localhost:8081"
     val grpcTarget = System.getenv("MATCHING_ENGINE_GRPC_TARGET") ?: "localhost:9081"
     val grpcDeadline = Duration.ofMillis(RuntimeEnv.long("ENGINE_GRPC_DEADLINE_MS", 2_000, min = 1))
 
     return when (transport) {
+        "http", "legacy-http" -> EngineClient(httpBaseUrl)
         "grpc" -> GrpcEngineClient(grpcTarget, grpcDeadline)
         "grpc-stream", "grpcstream", "stream" -> GrpcStreamEngineClient(grpcTarget, grpcDeadline)
-        else -> EngineClient(httpBaseUrl)
+        else -> GrpcEngineClient(grpcTarget, grpcDeadline)
     }
 }
 
 class GrpcEngineClient(
     private val grpcTarget: String,
-    private val requestDeadline: Duration = Duration.ofMillis(RuntimeEnv.long("ENGINE_GRPC_DEADLINE_MS", 2_000, min = 1))
+    private val requestDeadline: Duration = Duration.ofMillis(RuntimeEnv.long("ENGINE_GRPC_DEADLINE_MS", 2_000, min = 1)),
+    managedChannel: ManagedChannel? = null,
+    private val closeManagedChannel: Boolean = true
 ) : EngineGateway, AutoCloseable {
-    private val channel: ManagedChannel = ManagedChannelBuilder.forTarget(grpcTarget).usePlaintext().build()
+    private val channel: ManagedChannel = managedChannel ?: buildGrpcChannel(grpcTarget)
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         val response = blockingEngineCall("SubmitOrder", submitMethod, command.toProtoSubmitOrder())
@@ -93,7 +96,7 @@ class GrpcEngineClient(
     fun target(): String = grpcTarget
 
     override fun close() {
-        channel.shutdown()
+        if (closeManagedChannel) channel.shutdown()
     }
 
     internal fun isShutdown(): Boolean = channel.isShutdown
@@ -156,8 +159,8 @@ class GrpcStreamEngineClient(
     laneCount: Int = RuntimeEnv.int("ENGINE_GRPC_STREAM_LANES", 16, min = 1),
     queueCapacity: Int = RuntimeEnv.int("ENGINE_GRPC_STREAM_QUEUE_CAPACITY", 100_000, min = 1)
 ) : EngineGateway, AsyncSubmitEngineGateway, AutoCloseable {
-    private val channel: ManagedChannel = ManagedChannelBuilder.forTarget(grpcTarget).usePlaintext().build()
-    private val unaryFallback = GrpcEngineClient(grpcTarget, requestDeadline)
+    private val channel: ManagedChannel = buildGrpcChannel(grpcTarget)
+    private val unaryFallback = GrpcEngineClient(grpcTarget, requestDeadline, channel, closeManagedChannel = false)
     private val lanes = Array(laneCount) {
         SubmitStreamLane(
             channel = channel,
@@ -196,6 +199,64 @@ class GrpcStreamEngineClient(
         val key = command.instrumentId
         return lanes[PartitionLaneHash.laneFor(key, lanes.size)]
     }
+}
+
+private enum class EngineGrpcSecurityMode {
+    Plaintext,
+    Tls,
+    ServiceMesh;
+
+    companion object {
+        fun fromEnv(): EngineGrpcSecurityMode {
+            return when ((System.getenv("ENGINE_GRPC_SECURITY") ?: "plaintext").trim().lowercase()) {
+                "tls", "transport-security" -> Tls
+                "service-mesh", "mesh", "mtls-mesh" -> ServiceMesh
+                else -> Plaintext
+            }
+        }
+    }
+}
+
+private fun buildGrpcChannel(grpcTarget: String): ManagedChannel {
+    validateEngineGrpcSecurityMode()
+    val keepAliveTimeMs = RuntimeEnv.long("ENGINE_GRPC_KEEPALIVE_TIME_MS", 30_000L, min = 1L)
+    val keepAliveTimeoutMs = RuntimeEnv.long("ENGINE_GRPC_KEEPALIVE_TIMEOUT_MS", 10_000L, min = 1L)
+    val idleTimeoutMs = RuntimeEnv.long("ENGINE_GRPC_IDLE_TIMEOUT_MS", 300_000L, min = 1L)
+    val builder = ManagedChannelBuilder.forTarget(grpcTarget)
+        .keepAliveTime(keepAliveTimeMs, TimeUnit.MILLISECONDS)
+        .keepAliveTimeout(keepAliveTimeoutMs, TimeUnit.MILLISECONDS)
+        .keepAliveWithoutCalls(RuntimeEnv.bool("ENGINE_GRPC_KEEPALIVE_WITHOUT_CALLS", true))
+        .idleTimeout(idleTimeoutMs, TimeUnit.MILLISECONDS)
+
+    return when (EngineGrpcSecurityMode.fromEnv()) {
+        EngineGrpcSecurityMode.Tls -> builder.useTransportSecurity().build()
+        EngineGrpcSecurityMode.ServiceMesh,
+        EngineGrpcSecurityMode.Plaintext -> builder.usePlaintext().build()
+    }
+}
+
+private fun validateEngineGrpcSecurityMode() {
+    if (isLocalEngineProfile()) return
+    val raw = System.getenv("ENGINE_GRPC_SECURITY")
+        ?: error("non-local runtime requires ENGINE_GRPC_SECURITY=tls or service-mesh")
+    require(raw.trim().lowercase() in setOf("tls", "transport-security", "service-mesh", "mesh", "mtls-mesh")) {
+        "non-local runtime requires ENGINE_GRPC_SECURITY=tls or service-mesh"
+    }
+}
+
+private fun isLocalEngineProfile(): Boolean {
+    val profile = listOf(
+        "ENGINE_DEPLOYMENT_PROFILE",
+        "REEF_ENV",
+        "REEF_DEPLOYMENT_ENV",
+        "DEPLOYMENT_ENV",
+        "ENVIRONMENT",
+        "APP_ENV",
+        "PROFILE"
+    ).firstNotNullOfOrNull { key -> System.getenv(key)?.trim()?.takeIf { it.isNotBlank() } }
+        ?.lowercase()
+        ?: return true
+    return profile in setOf("local", "dev", "development", "test", "ci", "single-host", "hosted-single-host")
 }
 
 private data class StreamSubmit(

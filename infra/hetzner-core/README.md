@@ -128,11 +128,11 @@ If a public API is intentionally needed later, set `enable_public_web = true`,
 set `api_domain`, open the matching host UFW ports, and run Compose with the
 `public` profile so Caddy starts.
 
-When public Caddy is enabled, only narrow bearer-token routes are exposed:
+When public Caddy is enabled, only narrow bearer-token admin gateway routes are exposed:
 
-- `GET|POST /internal/admin/arena/bots`
-- `POST /internal/admin/arena/bots/openbao-provision`
-- `POST /internal/admin/analytics/run-exports`
+- `GET|POST /admin/v1/arena/bots`
+- `POST /admin/v1/arena/bots/openbao-provision`
+- `POST /admin/v1/analytics/run-exports`
 
 The analytics export route uses `ANALYTICS_EXPORT_API_TOKEN` from
 `/opt/reef/secrets/caddy.env`. Keep read/list access tunnel-only.

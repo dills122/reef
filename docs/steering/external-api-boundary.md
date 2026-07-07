@@ -144,6 +144,16 @@ Keep write command handling and read/query models distinct to avoid coupling UI-
 
 Internal control, health, diagnostics, and administration should default to gRPC/protobuf or durable messaging between trusted services. HTTP may remain as a temporary local development, smoke-test, or migration adapter, but deployment must block raw access unless a gateway deliberately maps the underlying operation to a versioned public or admin/data contract.
 
+Current hardening checkpoint:
+
+- `/admin/v1/...` is the public HTTP family for hosted admin/data gateway operations
+- `/internal/*` HTTP is local/migration only and must be disabled or loopback-only in non-local profiles
+- non-local profiles must fail closed unless auth, rate limit, durable idempotency, and internal HTTP exposure mode are explicit
+- admin HTTP actor identity must come from the authenticated principal, peer/service identity, or request headers bound by the gateway, never body/query fields
+- participant-scoped order reads, command status, and market-data reads pass through read boundary checks; remaining object-id read endpoints must enforce object authorization before public-ready status
+- remaining raw internal callers in [`../INTERNAL_HTTP_CALLER_INVENTORY.md`](../INTERNAL_HTTP_CALLER_INVENTORY.md) should migrate to `/admin/v1/...`, CLI, gRPC, or durable-message contracts
+- canonical backlog: [`../API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog`](../API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
+
 ## Incremental Rollout
 
 1. Add `/api/v1` boundary routes and DTOs.
@@ -151,3 +161,4 @@ Internal control, health, diagnostics, and administration should default to gRPC
 3. Add idempotency-key requirement for writes.
 4. Add rate limiter and client quota config.
 5. Add API contract tests and compatibility checks.
+6. Complete object authorization and gateway migration before broadening public read/admin exposure.

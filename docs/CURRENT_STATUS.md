@@ -4,7 +4,7 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-06.
+Last aligned: 2026-07-07.
 
 ## Current Project State
 
@@ -34,6 +34,7 @@ Keep these distinctions explicit:
 - The current command intake contract is captured in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit and cancel are the first hot-path scope, modify is deferred, hot cancel requires routing metadata, and accepted-but-not-completed means durable pending work, never a possible drop.
 - Order-entry APIs, market-data/history APIs, account/bot ledgers, settlement, and analytics are separate planes. See [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
 - Product-facing surfaces are limited to venue intake/trading information and admin/data. Raw `/internal/*` HTTP routes are local/migration tooling only and must not be exposed as public, partner, bot, SDK, or stable operator contracts. See [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md) and D-048.
+- Current boundary hardening checkpoint: hosted public admin/data uses `/admin/v1/...` gateway routes, raw `/internal/*` HTTP is controlled by `PLATFORM_INTERNAL_HTTP_MODE`, non-local boundary defaults fail closed unless auth/rate-limit/durable-idempotency/internal-exposure modes are explicit, admin HTTP actor identity is principal/header-bound rather than body/query-bound, command/order/market-data reads pass through read boundary checks, and `/healthz` plus `/readyz` are distinct runtime surfaces.
 
 Current decision anchors:
 
@@ -43,6 +44,7 @@ Current decision anchors:
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 - D-047 defines the current command intake process: public `202` responses expose stable command references, provider details stay diagnostic, idempotency scopes by `clientId + route + idempotencyKey`, and canonical materialization closes accepted-command accounting after drain.
 - D-048 defines the internal interface and external surface hardline: internal service/control capabilities default to gRPC/protobuf or durable messaging, while externally reachable admin/data capabilities must be gateway-backed, authenticated, authorized, audited, and versioned.
+- D-049 tracks the active API/control-plane hardening backlog: finish remaining account/object authorization, migrate remaining hosted/CI/operator callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) off raw `/internal/*`, add internal gRPC service identity, expand readiness, and make stream lane identity deterministic by run/session/instrument when command models support it.
 - Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 - The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results`, `runtime_events`, and accepted submit `orders`. No-DB direct-consume batches carry the compact `acceptedOrder` projection fact; `command_log.command_payloads` is a fallback for older or command-log-backed batches.
 - Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
@@ -58,13 +60,14 @@ Current decision anchors:
 Work should follow this order unless a new decision supersedes it. The active checkpoint is durable direct path hardening: prove the path from API durable publish ack through matching-engine direct consumption, durable venue event batch, canonical materialization, and projection/replay verification before longer remote soaks.
 
 1. Keep the current durable-acceptance contracts stable while promoting the D-041 Redpanda/Kafka-compatible hot-ingress path from local proof to longer remote evidence.
-2. Implement the command intake contract in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit/cancel first, hot cancel metadata enforcement, stable `202` response, provider-neutral status, duplicate idempotency tests, and accepted/materialized drain accounting.
-3. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
-4. Harden canonical persistence through venue event batch materialization with crash/restart tests, deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
-5. Prove compact persistence projection end to end under the same gate: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
-6. Order-lifecycle-state and market-data top-of-book snapshot maintenance are both now incremental (dirty-tracked, not full-table rebuild). Public trade tape and intraday bars are now live (`/api/v1/market-data/trades/{instrumentId}`, `/api/v1/market-data/bars/{instrumentId}`), and the Bot SDK live-read clients can be injected into `runner.ts`/`strategy-runner.ts`/`hosted-runner.ts` through `readClients`, plus participant-scoped own-order reads (`/api/v1/orders/current`, `/api/v1/orders/history`). Depth reads (`/api/v1/market-data/depth/{instrumentId}`) still aggregate remaining open lifecycle quantity at request time rather than from a maintained projection; venue-session-specific depth needs a projected session key on order lifecycle facts before it can be truthfully exposed.
-7. Lock the first deterministic lifecycle scenarios against [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md) and [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md): `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
-8. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
+2. Complete the API/control-plane hardening backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): remaining account/object authorization, `/internal/*` caller migration from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, richer readiness, deterministic stream lane keys, and fail-closed non-local profiles.
+3. Implement the command intake contract in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit/cancel first, hot cancel metadata enforcement, stable `202` response, provider-neutral status, duplicate idempotency tests, and accepted/materialized drain accounting.
+4. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
+5. Harden canonical persistence through venue event batch materialization with crash/restart tests, deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
+6. Prove compact persistence projection end to end under the same gate: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
+7. Order-lifecycle-state and market-data top-of-book snapshot maintenance are both now incremental (dirty-tracked, not full-table rebuild). Public trade tape and intraday bars are now live (`/api/v1/market-data/trades/{instrumentId}`, `/api/v1/market-data/bars/{instrumentId}`), and the Bot SDK live-read clients can be injected into `runner.ts`/`strategy-runner.ts`/`hosted-runner.ts` through `readClients`, plus participant-scoped own-order reads (`/api/v1/orders/current`, `/api/v1/orders/history`). Depth reads (`/api/v1/market-data/depth/{instrumentId}`) still aggregate remaining open lifecycle quantity at request time rather than from a maintained projection; venue-session-specific depth needs a projected session key on order lifecycle facts before it can be truthfully exposed.
+8. Lock the first deterministic lifecycle scenarios against [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md) and [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md): `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+9. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 
 ## Documentation Map
 

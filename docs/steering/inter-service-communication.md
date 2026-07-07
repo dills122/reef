@@ -48,17 +48,19 @@ Retries must not create duplicate business effects.
 ## Current and Target State
 
 Current state:
-- runtime and engine support HTTP/JSON and gRPC adapter paths behind transport configuration
+- runtime and engine support HTTP/JSON and gRPC adapter paths behind transport configuration; gRPC is the runtime-to-engine default, while HTTP is a local/parity fallback
 - protobuf contracts cover submit, cancel, modify, and health-check paths
 - HTTP remains useful for local fallback and parity comparisons
 - stream-backed command intake can durably accept commands before asynchronous downstream processing
 - some operator and diagnostic HTTP routes still exist as migration/local tooling surface
+- matching engine exposes standard gRPC health in addition to the custom order-execution `HealthCheck`
 
 Target state:
 - synchronous compatibility, admin, and direct benchmark paths communicate via gRPC + Protobuf contracts
 - HTTP/JSON path remains optional fallback until parity is verified
 - raw internal HTTP routes are not reachable from public clients or third-party integrations
 - any externally reachable admin/data capability is exposed through a gateway-backed, versioned, authenticated, audited contract
+- non-local internal gRPC uses TLS/mTLS or service-mesh identity with explicit service principals; single-host plaintext is only a temporary private-network posture
 - high-throughput matching paths avoid generic workers issuing one unary engine request per command
 - the preferred venue-core shape is command stream/topic -> partition-owning engine shard -> canonical venue event batch -> command ack or offset commit
 
@@ -96,6 +98,7 @@ Target state:
   - batch RPC per deterministic partition lane
   - bidirectional stream per deterministic partition lane
 - generic workers issuing one unary `SubmitOrder` call per command are transitional scaffolding, not the target hot path.
+- bidirectional submit stream lane identity should include `runId + venueSessionId + instrumentId` once runtime command models expose those fields; instrument-only lanes are a compatibility bridge.
 
 ### Health and readiness
 

@@ -509,7 +509,7 @@ make dev-export-simulation-run \
 The command is dry-run by default. Add
 `ARGS="--post --api-url=http://127.0.0.1:8080"` for tunnel/local posting. When
 posting through public Caddy, also pass `--token "$ANALYTICS_EXPORT_API_TOKEN"`.
-The public route only accepts `POST /internal/admin/analytics/run-exports`;
+The public route only accepts `POST /admin/v1/analytics/run-exports`;
 reads stay tunnel-only.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and durable-log consumer snapshots (`consumerMetrics`). JetStream snapshots include pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. Redpanda snapshots report committed offset, end offset, and lag for the assigned partition. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.

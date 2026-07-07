@@ -8,18 +8,16 @@
     -Server
   }
 
-  # CI/run-plane callers reach the otherwise loopback-only admin API through
-  # narrow bearer-token-gated routes only - not the full /internal/admin
-  # surface. See D-046 in docs/DECISIONS.md and docs/BOT_ARENA_PLAN.md's
-  # "Resolved Slice: Bot Submission Workflow And OpenBao Provisioning".
+  # CI/run-plane callers use versioned admin gateway paths. Raw /internal/*
+  # HTTP routes remain private to the runtime container.
   @ci_admin {
-    path /internal/admin/arena/bots
-    path /internal/admin/arena/bots/openbao-provision
+    path /admin/v1/arena/bots
+    path /admin/v1/arena/bots/openbao-provision
   }
 
   @analytics_export {
     method POST
-    path /internal/admin/analytics/run-exports
+    path /admin/v1/analytics/run-exports
   }
 
   handle @ci_admin {

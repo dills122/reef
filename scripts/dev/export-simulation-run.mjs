@@ -133,10 +133,10 @@ export function parseArgs(args) {
 async function postExport(apiUrl, payload, token) {
   const headers = {
     "content-type": "application/json",
-    "X-Reef-Internal-Route": "true",
+    "X-Reef-Actor-Id": "simulation-run-exporter",
   };
   if (token) headers.authorization = `Bearer ${token}`;
-  const response = await fetch(`${apiUrl.replace(/\/$/, "")}/internal/admin/analytics/run-exports`, {
+  const response = await fetch(`${apiUrl.replace(/\/$/, "")}/admin/v1/analytics/run-exports`, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -269,7 +269,7 @@ function numberOrZero(value) {
 function usage(code) {
   console.log(`usage: scripts/dev/export-simulation-run.mjs --report <path> [--artifact-root <dir>] [--post] [--api-url <url>]
 
-Defaults to dry-run JSON output. Use --post to send to /internal/admin/analytics/run-exports.`);
+Defaults to dry-run JSON output. Use --post to send to /admin/v1/analytics/run-exports.`);
   process.exit(code);
 }
 

@@ -25,7 +25,7 @@ name: Bot Submission
 # infra/hetzner-core/server/README.md). Reaching it from GitHub Actions
 # requires exposing a narrowly-scoped route through the existing Caddy reverse
 # proxy (bearer-token-gated, e.g. just
-# /internal/admin/arena/bots/openbao-provision and the registry read route -
+# /admin/v1/arena/bots/openbao-provision and the registry read route -
 # not the full admin surface) rather than opening loopback broadly. That Caddy
 # route plus the server-side OpenBao client (a new auth/jwt backend alongside
 # the existing AppRole backend - see docs/BOT_ARENA_PLAN.md) are still

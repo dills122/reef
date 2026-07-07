@@ -18,7 +18,7 @@
 // Once built, this becomes a plain HTTP client (no JVM/Gradle in CI) calling
 // a new route on the real, always-on hosted admin API
 // (ARENA_ADMIN_API_URL, same var as bot-submission-registry-diff.mjs), e.g.
-// POST /internal/admin/arena/bots/openbao-provision. The Kotlin OpenBao
+// POST /admin/v1/arena/bots/openbao-provision. The Kotlin OpenBao
 // client and the GitHub OIDC -> auth/jwt exchange both run server-side; this
 // script never talks to OpenBao directly.
 

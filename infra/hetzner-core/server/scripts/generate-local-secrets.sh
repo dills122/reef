@@ -65,8 +65,7 @@ fi
 # shellcheck disable=SC1091
 source "$SECRETS/postgres-analytics.env"
 
-# Bearer token gating the two narrow CI-facing admin routes Caddy exposes
-# publicly (registry read + OpenBao provisioning). See Caddyfile and D-046.
+# Bearer token gating narrow CI/run-plane admin gateway routes.
 if [[ ! -s "$SECRETS/caddy.env" ]]; then
   ARENA_ADMIN_API_TOKEN="$(rand_hex)"
   ANALYTICS_EXPORT_API_TOKEN="$(rand_hex)"
@@ -78,7 +77,7 @@ EOF
 
   chmod 600 "$SECRETS/caddy.env"
   echo "Generated ARENA_ADMIN_API_TOKEN - set this as the ARENA_ADMIN_API_TOKEN GitHub Actions secret for the bot-submission workflow."
-  echo "Generated ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /internal/admin/analytics/run-exports."
+  echo "Generated ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
 fi
 
 if ! grep -q '^ANALYTICS_EXPORT_API_TOKEN=' "$SECRETS/caddy.env"; then
@@ -86,7 +85,7 @@ if ! grep -q '^ANALYTICS_EXPORT_API_TOKEN=' "$SECRETS/caddy.env"; then
   cat >> "$SECRETS/caddy.env" <<EOF
 ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
-  echo "Generated missing ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /internal/admin/analytics/run-exports."
+  echo "Generated missing ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
 fi
 
 # shellcheck disable=SC1091
@@ -100,7 +99,14 @@ chmod 600 "$SECRETS/openbao.env"
 
 cat > "$SECRETS/platform-runtime.env" <<EOF
 PLATFORM_RUNTIME_PORT=8080
-ENGINE_TRANSPORT=http
+EXTERNAL_API_DEPLOYMENT_PROFILE=production
+ENGINE_DEPLOYMENT_PROFILE=hosted-single-host
+PLATFORM_INTERNAL_HTTP_MODE=disabled
+EXTERNAL_API_AUTH_MODE=static-token
+EXTERNAL_API_RATE_LIMIT_MODE=fixed-window
+EXTERNAL_API_IDEMPOTENCY_STORE=postgres
+ENGINE_TRANSPORT=grpc
+ENGINE_GRPC_SECURITY=plaintext
 MATCHING_ENGINE_BASE_URL=http://matching-engine:8081
 MATCHING_ENGINE_GRPC_TARGET=matching-engine:9081
 RUNTIME_PERSISTENCE=postgres
@@ -108,7 +114,6 @@ RUNTIME_DB_BOOTSTRAP_MODE=validate
 RUNTIME_POSTGRES_JDBC_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=public
 RUNTIME_POSTGRES_USER=reef_app
 RUNTIME_POSTGRES_PASSWORD=${REEF_DB_PASSWORD}
-EXTERNAL_API_IDEMPOTENCY_STORE=postgres
 RUNTIME_DB_URL=jdbc:postgresql://postgres:5432/reef?currentSchema=public
 RUNTIME_DB_USER=reef_app
 RUNTIME_DB_PASSWORD=${REEF_DB_PASSWORD}
@@ -125,6 +130,8 @@ ADMIN_POSTGRES_PASSWORD=${ADMIN_APP_DB_PASSWORD}
 ANALYTICS_POSTGRES_JDBC_URL=jdbc:postgresql://postgres-analytics:5432/analytics?currentSchema=analytics
 ANALYTICS_POSTGRES_USER=analytics_app
 ANALYTICS_POSTGRES_PASSWORD=${ANALYTICS_APP_DB_PASSWORD}
+ARENA_ADMIN_API_TOKEN=${ARENA_ADMIN_API_TOKEN}
+ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
 chmod 600 "$SECRETS/platform-runtime.env"
 

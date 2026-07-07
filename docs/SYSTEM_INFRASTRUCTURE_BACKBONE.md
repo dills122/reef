@@ -128,10 +128,12 @@ destroyed.
 | Matching engine | `matching-engine` | Present | Optional smoke/admin support on backbone; not the high-throughput run plane. |
 | Simulator | `simulator` | Manual profile | Operator/manual runs from backbone network when needed. |
 
-The first analytics API slice now exists inside `platform-runtime`: internal
-simulation-run export ingestion and reads at
-`/internal/admin/analytics/run-exports`. A dedicated analytics microservice is
-still a future split if this surface grows beyond backbone admin use.
+The first analytics API slice now exists inside `platform-runtime`: public
+ingestion through the versioned admin gateway at
+`/admin/v1/analytics/run-exports`, with internal loopback/migration access still
+available under `/internal/admin/analytics/run-exports` for local tooling. A
+dedicated analytics microservice is still a future split if this surface grows
+beyond backbone admin use.
 
 ## Admin API
 
@@ -152,8 +154,8 @@ Default exposure:
 ```
 
 Optional public Caddy exposure is intentionally narrow. It can forward only
-bot-submission CI routes and `POST /internal/admin/analytics/run-exports`, each
-behind bearer tokens from `/opt/reef/secrets/caddy.env`. Analytics reads remain
+bot-submission CI routes and `POST /admin/v1/analytics/run-exports`, each behind
+bearer tokens from `/opt/reef/secrets/caddy.env`. Analytics reads remain
 tunnel-only.
 
 Operator access normally uses SSH tunneling:
@@ -214,8 +216,8 @@ profile and should expose only explicit routes.
 Current Caddy route intent:
 
 ```text
-/internal/admin/arena/bots
-/internal/admin/arena/bots/openbao-provision
+/admin/v1/arena/bots
+/admin/v1/arena/bots/openbao-provision
 ```
 
 These are bearer-token gated with `ARENA_ADMIN_API_TOKEN` and reverse-proxy to
@@ -344,10 +346,16 @@ HTTP routes with scoped credentials.
 - Export/cleanup service on the DO run plane is not complete.
 - Simulation-runner infra still needs to fully mirror the Hetzner
   OpenTofu/compose/deploy-script pattern.
+- Public admin/data must stay on `/admin/v1/...`; do not add Caddy exceptions for raw `/internal/*`.
+- Remaining CI/operator scripts that still call raw `/internal/*` should migrate to `/admin/v1/...`, CLI, gRPC, or durable-message adapters when their workflows become hosted or public-facing.
+- The current single-host engine gRPC posture is private-network plaintext; multi-host non-local deployment needs TLS/mTLS or service-mesh identity before it is promoted.
+- `/readyz` needs deeper enabled-dependency checks for DBs, broker, engine, materializers, projectors, and admin stores before it becomes a deployment gate.
 - OpenBao runtime config preflight needs continued integration with hosted bot
   runs.
 - Backup restore drills need to be run and documented before treating backups
   as proven.
+
+Control-plane hardening checklist: [`API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog).
 
 ## Operator Commands
 

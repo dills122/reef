@@ -99,6 +99,8 @@ function requestJson(url, method, payload = undefined) {
       method,
       headers: {
         "content-type": "application/json",
+        "X-Reef-Actor-Id": payload.actorId,
+        "X-Correlation-Id": payload.correlationId,
         ...(body === undefined ? {} : { "content-length": Buffer.byteLength(body) }),
       },
     }, (response) => {
