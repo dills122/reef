@@ -239,14 +239,14 @@ Exit criteria:
 
 ## Immediate Implementation Slice
 
+The hot-book replacement slice is complete locally: `services/matching-engine/internal/book` owns ordered price levels, FIFO queues, and direct order-id unlinking, and the July 4 engine-only benchmarks show the book is no longer the active limiter.
+
 The next implementation slice should be:
 
-1. Document the persistence pivot: durable command log/topic, engine-owned ordered partitions, durable venue event batches, compact canonical append/materialization, and async projections.
-2. Replace the heap-backed hot book internals with the shard-ready `internal/book` abstraction.
-3. Preserve the existing service API and stream-direct processor behavior while changing only the book storage internals.
-4. Add focused tests for price-time priority, direct remove/unlink, and existing submit/cancel/modify behavior.
-5. Run `go test ./...` in `services/matching-engine`.
-6. Add or run benchmarks for deep resting-book growth, cancel-heavy, modify-heavy, alternating-cross, hot single-instrument, and many-instrument workloads.
-7. Scope snapshot plus replay checksum as the next recovery slice.
+1. Keep named stream profiles honest with profile validation before throughput runs, especially no-op publisher, bounded in-memory intake retention, direct-stream, Redpanda/Kafka-compatible, and materializer profiles.
+2. Add broader crash/restart integration coverage for API publish-before-marker enqueue, matching-engine direct consumption, worker repair, projector replay, and materializer offset commit.
+3. Run short durable gates before long soaks: durable publish ack, direct engine consume, venue event batch publish, compact canonical materialization, projection replay/idempotency, and replay/checksum with `0` accepted/materialized gaps.
+4. Promote only clean short gates to the DigitalOcean/OpenTofu harness and compare actual attempted, accepted, direct-acked, materialized, projected, p95/p99, lag, and restart behavior against local evidence.
+5. Scope snapshot plus replay checksum as the next matching-engine recovery slice, not as a prerequisite for the current materializer proof.
 
-Only after this slice should Reef treat deeper engine sharding, snapshot recovery, or canonical event-log promotion as capacity improvements.
+Only after this slice should Reef treat longer DO soaks, deeper engine sharding, or production-shaped snapshot recovery as capacity improvements.

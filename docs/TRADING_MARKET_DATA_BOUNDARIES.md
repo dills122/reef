@@ -120,6 +120,38 @@ They own:
 
 Settlement must not mutate matching history. It can create settlement facts, exceptions, holds, repairs, and account ledger entries that reference canonical venue facts.
 
+## Post-Trade Re-Entry Criteria
+
+Post-trade work remains gated until the venue-core path can prove causation and replay. Do not restart broad allocation, confirmation, settlement, clearing, account-ledger, or UI work until all of these are true:
+
+1. `P1_GOLDEN_HIDDEN_CROSS_T1` is aligned with [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md), golden artifacts are refreshed, replay is stable, hidden-liquidity visibility assertions pass, and order lifecycle states match the contract.
+2. `P2_SETTLEMENT_BREAK_REPAIR` is aligned with [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md) at least at the scenario-contract level, with stubbed/manual repair clearly marked and no fake account-ledger side effects.
+3. The `direct-materializer-short` gate passes with final accepted/materialized/projected gap `0`, worker/materializer/projector lag draining to `0`, and replay/checksum clean.
+4. Bot/user read surfaces are classified by `/api/v1/data/availability` and the read-surface inventory in this document, so scenario assertions know which reads prove durable facts versus projection freshness.
+5. Any post-trade facts introduced by the first slice reference canonical venue facts and do not mutate matching history.
+
+The first allowed post-trade slice is P2-only settlement exception facts:
+
+- settlement obligation facts
+- cash-leg break facts
+- manual repair facts
+- resolved/closed exception facts
+- state-transition tests for `trade -> obligation -> break -> repair -> resolved`
+
+The fact shape for this slice lives in [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md).
+
+Explicitly out of scope for the first re-entry slice:
+
+- full allocation workflow
+- full confirmation/affirmation workflow
+- clearing/netting
+- real account ledger mutation
+- buying-power/hold enforcement after match
+- operator exception workbench UI
+- broad settlement analytics
+
+Those modules can start only after the P2-only facts prove causation through real canonical trade references.
+
 ## Market Data / History API
 
 The market-data API is separate from the order API.
@@ -146,6 +178,45 @@ The initial implemented snapshot is `runtime.market_data_snapshots`, kept live f
 `packages/bot-sdk/src/live-client.ts` is the first Bot SDK client that calls these market-data/order-read endpoints over real HTTP rather than fixtures. `runner.ts`, `strategy-runner.ts`, and `hosted-runner.ts` accept optional `readClients`, so operators can keep deterministic fixture mode by default or inject live market-data, historical, and own-order clients for live smoke or hosted artifact runs.
 
 Later, real-time feeds can be added from event streams or specialized market-data publishers. They should still consume canonical or event-stream facts, not the engine's mutable book internals directly.
+
+## Read Surface Inventory
+
+`/api/v1/data/availability` is the canonical runtime inventory for bot/user read surfaces. Documentation should mirror that endpoint rather than invent a second source of truth.
+
+| Endpoint | Audience | Source | Source type | Freshness model | Lag/watermark | Visibility | Gate status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `/api/v1/data/availability` | bot/user/test harness | runtime availability report | diagnostic/internal contract | live diagnostic snapshot | includes projection lag/watermarks where available | public diagnostic | active |
+| `/api/v1/market-data/snapshots/{instrumentId}` | bot/user | `runtime.market_data_snapshots` | projection-backed read | top-of-book projection watermark | market-data projector status | public market data | active |
+| `/api/v1/market-data/depth/{instrumentId}` | bot/user | `runtime.order_lifecycle_state` | projection-backed read-time aggregation | bounded aggregation over lifecycle projection | source lifecycle projection watermark | public market data | active but conservative |
+| `/api/v1/market-data/trades/{instrumentId}` | bot/user | `runtime.trades` | durable fact read | durable trade rows | none beyond trade persistence completeness | public market data | active |
+| `/api/v1/market-data/bars/{instrumentId}` | bot/user | `runtime.trades` | durable fact aggregation | bounded aggregation over durable trade rows | none beyond trade persistence completeness | public market data | active |
+| `/api/v1/orders/current` | bot/user | `runtime.orders + runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
+| `/api/v1/orders/history` | bot/user | `runtime.orders + runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
+| `/orders`, `/trades`, `/events`, `/traces` legacy/internal surfaces | admin/test | runtime tables | direct runtime-table read | current local runtime state | varies by source | internal/admin | diagnostic |
+| venue-session-specific depth | bot/user | planned projected lifecycle facts with session key | not built | not available | not available | public market data | deferred |
+| account balances, holds, buying power | bot/user | planned account ledger/projection | not built | not available | not available | participant/account scope | deferred |
+| settlement obligations/breaks/repairs | user/admin | planned settlement facts/projections | not built | not available | not available | participant/admin | deferred |
+
+Read source definitions:
+
+- durable fact read: reads canonical or durable domain rows and has no projection lag contract, though it still depends on the write path being complete.
+- projection-backed read: reads rebuilt state and must expose lag/watermark metadata through response `meta` or `/api/v1/data/availability`.
+- direct runtime-table read: useful for local/admin diagnostics but not a long-term bot/user contract unless promoted deliberately.
+- not built/planned: documented target surface with no live API guarantee.
+- diagnostic/internal only: usable for operators/tests, not public product readiness evidence.
+
+Projection lag policy:
+
+- Bot/user reads return data with `meta` freshness/lag information by default. Stale projection data is visible, not silently presented as fresh.
+- `venue-core` mode reports projection lag but does not reject order intake solely because read models are behind.
+- `control-room-fresh` mode may reject or throttle workflows when projection freshness is part of the operator contract.
+- A promotion gate does not pass with final projection lag remaining after the configured drain window, even if projection lag was non-gating during intake.
+
+Current known limitations:
+
+- Own-order reads are treated as projection-backed contract surfaces even though they currently join `runtime.orders` and `runtime.order_lifecycle_state`; future implementation should preserve projection semantics, not expose unscoped runtime tables to bots.
+- Depth is active but conservative. It is instrument-scoped, aggregates remaining lifecycle quantity at read time, and must not be used for venue-session-specific depth claims until projected lifecycle facts carry a durable session key.
+- Trade tape and bars are durable fact reads from `runtime.trades`; they have no projector lag, but they only prove facts that have reached trade persistence.
 
 ## Analytics and Mirrored Settlement Data
 

@@ -24,7 +24,8 @@ Reef has moved past a repository skeleton, but most of the platform is still ear
 ## Not Yet Built (Planned)
 
 - Platform UI and most post-trade lifecycle (allocation, confirmation, settlement, exceptions) — still early
-- `account`, `settlement`, `market_data` (beyond the current slice), and `analytics` schemas — designed, not implemented (see [Planned Schema](../../schema/planned-schema/))
+- Dedicated `account`, `settlement`, and `market_data` schemas beyond the current runtime-backed read slice — designed, not implemented (see [Planned Schema](../../schema/planned-schema/))
+- Analytics has an initial simulation-run export slice, but broader analytics facts/views remain planned
 - Public bot submissions and hosted sandbox execution at scale — arena is still built-in-bots/control-plane stage
 - Leaderboards and scoring beyond the control-plane source facts
 - Kafka-compatible durable command log as the default hot-ingress path — proven locally, not yet the default

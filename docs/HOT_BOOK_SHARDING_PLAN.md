@@ -136,19 +136,89 @@ latest shard/book snapshot
 
 Snapshots are recovery accelerators, not the source of truth. Start with local compressed snapshot files before considering object storage or embedded KV stores.
 
+The first snapshot/replay plan deliberately borrows proven patterns without adopting heavy state-store dependencies:
+
+- exchange order-book feeds use snapshot plus ordered incremental replay and fail/rebuild on sequence gaps; Reef should snapshot at sequence `N`, replay `N+1`, and fail the recovery check on any gap or overlap.
+- exchange checksum feeds validate local reconstructed book state with deterministic sorted book checksums; Reef should checksum the full internal book for recovery, not only top-of-book client depth.
+- stream-processing systems restore local state from durable changelog replay before resuming processing; Reef should treat durable command/event streams as truth and snapshots as restore accelerators.
+
+Use Reef-owned Go code first:
+
+- `encoding/json` for the first artifact format
+- `compress/gzip` for local compressed files
+- `crypto/sha256` for stable full-book recovery checksums
+- existing `github.com/tidwall/btree` only for the in-memory ordered price-level index
+
+Do not introduce RocksDB, Pebble, object storage, Kafka Streams, or a second book-storage engine for the first snapshot proof. Those are options only after local snapshot/replay correctness and restore timing show a real need.
+
 Minimum snapshot metadata:
 
 - `runId`
 - `venueSessionId`
 - `instrumentId`
+- `bookKey`
 - `partitionId`
 - `shardId`
+- `routingEpoch` (start at `1`; dynamic routing epochs are deferred)
 - `bookSequence`
-- command stream/topic sequence or offset
-- event stream/topic sequence or offset
+- command stream/topic name, partition, sequence or offset
+- event stream/topic name, partition, sequence or offset
 - open orders and price levels
 - checksum
 - engine version and contract version
+
+Snapshot cadence is configurable and uses both count and time:
+
+- default event cadence: every `100000` applied book events
+- default time cadence: every `60s`
+- write a snapshot when either threshold is reached
+- keep cadence profile-specific so high-throughput probes can increase cadence without changing recovery semantics
+
+The first snapshot artifact is a local compressed JSON file:
+
+```text
+reports/book-snapshots/<runId>/<bookKey>/<bookSequence>.json.gz
+```
+
+Minimum snapshot body:
+
+- metadata listed above
+- full visible and hidden book state
+- open-order index by order id
+- price levels with FIFO order ids
+- per-order remaining quantity, priority sequence, side, price, participant/account owner where needed for own-order recovery
+- checksum inputs version
+
+Checksum inputs:
+
+- book key
+- book sequence
+- side
+- price
+- FIFO order IDs
+- remaining quantities
+- priority sequence
+
+Exclude timestamps unless a future priority policy depends on them.
+
+Recovery failure cases:
+
+- missing snapshot metadata
+- routing epoch mismatch
+- command/event stream mismatch
+- replay starts before or after `N+1`
+- sequence gap
+- sequence overlap
+- duplicate replay outcome
+- checksum mismatch
+- restored open-order index does not match price-level queues
+
+First snapshot test:
+
+1. Run a deterministic mixed submit/modify/cancel sequence without interruption and record the final checksum.
+2. Run the same sequence, write a local `.json.gz` snapshot at sequence `N`, stop the book, restore from the snapshot, and replay commands/events from `N+1`.
+3. Assert the final checksum matches the uninterrupted run.
+4. Fail on sequence gaps, overlaps, duplicate replay outcomes, or checksum mismatch.
 
 ## Benchmark Gates
 

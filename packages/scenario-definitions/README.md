@@ -47,3 +47,4 @@ Each scenario file should include:
 - `expectedEventTimeline` uses scenario-start-relative `occurredAtOffsetSeconds`
   values and must match `expectedEvents` order when present.
 - `scenarioRunId`, `seed`, `correlationId`, and `causationId` are required metadata in scenario-driven events.
+- First-wave target contracts are defined in [`../../docs/SCENARIO_CONTRACTS.md`](../../docs/SCENARIO_CONTRACTS.md). Live lock criteria are defined in [`../../docs/SCENARIO_ASSERTION_PLAN.md`](../../docs/SCENARIO_ASSERTION_PLAN.md). When YAML fixtures differ from those documents, update fixtures and golden artifacts deliberately before treating a scenario as locked.

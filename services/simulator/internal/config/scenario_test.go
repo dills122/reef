@@ -30,15 +30,15 @@ func TestFirstWaveScenariosDefineOrderedMonotonicEventTimelines(t *testing.T) {
 			file:         "P1_GOLDEN_HIDDEN_CROSS_T1.yaml",
 			beforeEvent:  "ExecutionCreated",
 			afterEvent:   "TradeCreated",
-			beforeEvent2: "TradeAffirmed",
-			afterEvent2:  "SettlementObligationCreated",
+			beforeEvent2: "OrderPartiallyFilled",
+			afterEvent2:  "OrderFilled",
 		},
 		"P2 settlement break": {
 			file:         "P2_SETTLEMENT_BREAK_REPAIR.yaml",
-			beforeEvent:  "SettlementFailed",
+			beforeEvent:  "CashLegFailed",
 			afterEvent:   "ExceptionOpened",
 			beforeEvent2: "ExceptionRepairApplied",
-			afterEvent2:  "SettlementRetried",
+			afterEvent2:  "SettlementResolved",
 		},
 	}
 
@@ -79,20 +79,21 @@ func TestCompileP1GoldenHiddenCrossScenarioPlan(t *testing.T) {
 	if plan.PathID != "P1_GOLDEN_HIDDEN_CROSS_T1" || plan.ScenarioRunID != "p1-run-001" || plan.Seed != 424242 {
 		t.Fatalf("unexpected plan identity: %+v", plan)
 	}
-	if got, want := len(plan.Steps), 10; got != want {
+	if got, want := len(plan.Steps), 4; got != want {
 		t.Fatalf("steps: got %d want %d", got, want)
 	}
 	apiSteps := executableSteps(plan)
-	if got, want := len(apiSteps), 2; got != want {
+	if got, want := len(apiSteps), 3; got != want {
 		t.Fatalf("api executable steps: got %d want %d", got, want)
 	}
 
-	buy := apiSteps[0]
-	sell := apiSteps[1]
-	if buy.Route != apiV1SubmitRoute || sell.Route != apiV1SubmitRoute {
-		t.Fatalf("submit route mismatch: %s %s", buy.Route, sell.Route)
+	hiddenSell := apiSteps[0]
+	firstBuy := apiSteps[1]
+	secondBuy := apiSteps[2]
+	if hiddenSell.Route != apiV1SubmitRoute || firstBuy.Route != apiV1SubmitRoute || secondBuy.Route != apiV1SubmitRoute {
+		t.Fatalf("submit route mismatch: %s %s %s", hiddenSell.Route, firstBuy.Route, secondBuy.Route)
 	}
-	assertPayload(t, buy.Payload, map[string]string{
+	assertPayload(t, hiddenSell.Payload, map[string]string{
 		"commandId":      "p1_golden_hidden_cross_t1-cmd-001",
 		"traceId":        "p1_golden_hidden_cross_t1-trace-001",
 		"correlationId":  "p1_golden_hidden_cross_t1-corr-001",
@@ -106,36 +107,47 @@ func TestCompileP1GoldenHiddenCrossScenarioPlan(t *testing.T) {
 		"orderId":        "p1_golden_hidden_cross_t1-ord-001",
 		"clientOrderId":  "p1_golden_hidden_cross_t1-ord-001",
 		"instrumentId":   "XYZ",
-		"participantId":  "BUY_SIDE_1",
-		"accountId":      "BUY_SIDE_1_MAIN",
-		"side":           "BUY",
+		"participantId":  "HIDDEN_SELLER_A",
+		"accountId":      "HIDDEN_SELLER_A_MAIN",
+		"side":           "SELL",
 		"orderType":      "LIMIT",
-		"quantityUnits":  "1000",
-		"limitPrice":     "150000000000",
+		"quantityUnits":  "100",
+		"limitPrice":     "100000000000",
 		"currency":       "USD",
 		"timeInForce":    "DAY",
 	})
-	assertPayload(t, sell.Payload, map[string]string{
+	assertPayload(t, firstBuy.Payload, map[string]string{
 		"commandId":     "p1_golden_hidden_cross_t1-cmd-002",
 		"occurredAt":    "2026-03-14T18:00:02Z",
 		"orderId":       "p1_golden_hidden_cross_t1-ord-002",
-		"participantId": "SELL_SIDE_1",
-		"accountId":     "SELL_SIDE_1_MAIN",
-		"side":          "SELL",
-		"quantityUnits": "1000",
+		"participantId": "VISIBLE_BUYER_B",
+		"accountId":     "VISIBLE_BUYER_B_MAIN",
+		"side":          "BUY",
+		"quantityUnits": "40",
+		"limitPrice":    "101000000000",
+	})
+	assertPayload(t, secondBuy.Payload, map[string]string{
+		"commandId":     "p1_golden_hidden_cross_t1-cmd-003",
+		"occurredAt":    "2026-03-14T18:00:03Z",
+		"orderId":       "p1_golden_hidden_cross_t1-ord-003",
+		"participantId": "VISIBLE_BUYER_C",
+		"accountId":     "VISIBLE_BUYER_C_MAIN",
+		"side":          "BUY",
+		"quantityUnits": "60",
+		"limitPrice":    "100000000000",
 	})
 
 	if got, want := plan.ExpectedFinalStates["scenarioRun"], "COMPLETED"; got != want {
 		t.Fatalf("scenarioRun final state: got %s want %s", got, want)
 	}
-	if !containsExact(plan.ExpectedEvents, "SettlementCompleted") {
-		t.Fatal("expected SettlementCompleted in P1 event sequence")
+	if !containsExact(plan.ExpectedEvents, "OrderPartiallyFilled") || !containsExact(plan.ExpectedEvents, "OrderFilled") {
+		t.Fatal("expected partial and full fill events in P1 event sequence")
 	}
 	if !containsReplayAssertion(plan.ReplayAssertions, "expectedEvents sequence is identical") {
 		t.Fatal("expected replay assertion for stable expectedEvents sequence")
 	}
-	if len(plan.IdempotencyAssertions) != 3 {
-		t.Fatalf("idempotency assertions: got %d want 3", len(plan.IdempotencyAssertions))
+	if len(plan.IdempotencyAssertions) != 2 {
+		t.Fatalf("idempotency assertions: got %d want 2", len(plan.IdempotencyAssertions))
 	}
 }
 

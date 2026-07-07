@@ -1,7 +1,7 @@
 schemaVersion: "1.0"
 pathId: "P1_GOLDEN_HIDDEN_CROSS_T1"
-name: "Golden Hidden Midpoint Cross T+1"
-businessGoal: "Prove baseline order-to-settlement lifecycle correctness with deterministic replay."
+name: "Golden Hidden Resting Cross"
+businessGoal: "Prove hidden-liquidity partial fill, full fill, public visibility, and deterministic replay."
 seed: 424242
 
 preconditions:
@@ -15,13 +15,16 @@ preconditions:
       - instrumentId: "XYZ"
         symbol: "XYZ"
     participants:
-      - participantId: "BUY_SIDE_1"
-      - participantId: "SELL_SIDE_1"
+      - participantId: "HIDDEN_SELLER_A"
+      - participantId: "VISIBLE_BUYER_B"
+      - participantId: "VISIBLE_BUYER_C"
     accounts:
-      - accountId: "BUY_SIDE_1_MAIN"
-        participantId: "BUY_SIDE_1"
-      - accountId: "SELL_SIDE_1_MAIN"
-        participantId: "SELL_SIDE_1"
+      - accountId: "HIDDEN_SELLER_A_MAIN"
+        participantId: "HIDDEN_SELLER_A"
+      - accountId: "VISIBLE_BUYER_B_MAIN"
+        participantId: "VISIBLE_BUYER_B"
+      - accountId: "VISIBLE_BUYER_C_MAIN"
+        participantId: "VISIBLE_BUYER_C"
 
 runContext:
   clock:
@@ -43,40 +46,38 @@ faultInjection:
 steps:
   - sequence: 1
     command: "SubmitOrder"
-    description: "Submit hidden buy order."
-    payload:
-      side: "BUY"
-      instrumentId: "XYZ"
-      quantity: 1000
-      orderType: "LIMIT_HIDDEN"
-      limitPrice: "MIDPOINT"
-      accountId: "BUY_SIDE_1_MAIN"
-  - sequence: 2
-    command: "SubmitOrder"
-    description: "Submit hidden sell order."
+    description: "Participant A submits hidden resting sell order."
     payload:
       side: "SELL"
       instrumentId: "XYZ"
-      quantity: 1000
+      quantity: 100
       orderType: "LIMIT_HIDDEN"
-      limitPrice: "MIDPOINT"
-      accountId: "SELL_SIDE_1_MAIN"
+      limitPrice: "100000000000"
+      visibility: "HIDDEN"
+      accountId: "HIDDEN_SELLER_A_MAIN"
+  - sequence: 2
+    command: "SubmitOrder"
+    description: "Participant B submits visible buy that partially fills hidden sell."
+    payload:
+      side: "BUY"
+      instrumentId: "XYZ"
+      quantity: 40
+      orderType: "LIMIT"
+      limitPrice: "101000000000"
+      visibility: "VISIBLE"
+      accountId: "VISIBLE_BUYER_B_MAIN"
   - sequence: 3
-    command: "MatchOrders"
-    description: "Engine matches orders and emits execution."
+    command: "SubmitOrder"
+    description: "Participant C submits visible buy that fills the hidden sell remainder."
+    payload:
+      side: "BUY"
+      instrumentId: "XYZ"
+      quantity: 60
+      orderType: "LIMIT"
+      limitPrice: "100000000000"
+      visibility: "VISIBLE"
+      accountId: "VISIBLE_BUYER_C_MAIN"
   - sequence: 4
-    command: "CreateTrade"
-  - sequence: 5
-    command: "AllocateTrade"
-  - sequence: 6
-    command: "GenerateConfirmation"
-  - sequence: 7
-    command: "AffirmTrade"
-  - sequence: 8
-    command: "CreateSettlementObligation"
-  - sequence: 9
-    command: "CompleteSettlement"
-  - sequence: 10
     command: "CompleteScenarioRun"
 
 expectedEvents:
@@ -87,11 +88,15 @@ expectedEvents:
   - "OrderAccepted"
   - "ExecutionCreated"
   - "TradeCreated"
-  - "TradeAllocated"
-  - "ConfirmationGenerated"
-  - "TradeAffirmed"
-  - "SettlementObligationCreated"
-  - "SettlementCompleted"
+  - "OrderPartiallyFilled"
+  - "PublicDepthChecked"
+  - "OrderSubmitted"
+  - "OrderAccepted"
+  - "ExecutionCreated"
+  - "TradeCreated"
+  - "OrderFilled"
+  - "TradeTapeChecked"
+  - "OwnOrderVisibilityChecked"
   - "ScenarioRunCompleted"
 
 expectedEventTimeline:
@@ -111,44 +116,58 @@ expectedEventTimeline:
       occurredAtOffsetSeconds: 3
     - eventType: "TradeCreated"
       occurredAtOffsetSeconds: 3
-    - eventType: "TradeAllocated"
+    - eventType: "OrderPartiallyFilled"
       occurredAtOffsetSeconds: 4
-    - eventType: "ConfirmationGenerated"
+    - eventType: "PublicDepthChecked"
       occurredAtOffsetSeconds: 5
-    - eventType: "TradeAffirmed"
+    - eventType: "OrderSubmitted"
       occurredAtOffsetSeconds: 6
-    - eventType: "SettlementObligationCreated"
+    - eventType: "OrderAccepted"
+      occurredAtOffsetSeconds: 6
+    - eventType: "ExecutionCreated"
       occurredAtOffsetSeconds: 7
-    - eventType: "SettlementCompleted"
+    - eventType: "TradeCreated"
+      occurredAtOffsetSeconds: 7
+    - eventType: "OrderFilled"
       occurredAtOffsetSeconds: 8
-    - eventType: "ScenarioRunCompleted"
+    - eventType: "TradeTapeChecked"
       occurredAtOffsetSeconds: 9
+    - eventType: "OwnOrderVisibilityChecked"
+      occurredAtOffsetSeconds: 9
+    - eventType: "ScenarioRunCompleted"
+      occurredAtOffsetSeconds: 10
 
 expectedFinalStates:
-  trade: "AFFIRMED"
-  settlement: "SETTLED"
-  exception: "NONE"
+  hiddenSellOrder: "FILLED"
+  firstVisibleBuy: "FILLED"
+  secondVisibleBuy: "FILLED"
+  executions: "2"
+  trades: "2"
+  totalExecutedQuantity: "100"
   scenarioRun: "COMPLETED"
 
 invariants:
-  - "No settlement before trade is AFFIRMED."
-  - "Exactly one trade is created for the matched execution pair."
+  - "Hidden sell order transitions OPEN -> PARTIALLY_FILLED -> FILLED."
+  - "First visible buy fills 40 at resting price 100.00."
+  - "Second visible buy fills 60 at resting price 100.00."
+  - "Public top-of-book/depth never exposes hidden resting size before execution."
+  - "Trade tape shows two trades without counterparty identity."
+  - "Hidden seller own-order read can see its own hidden order and lifecycle state."
   - "All scenario-driven events contain scenarioRunId/correlationId/causationId."
 
 uiAssertions:
-  - "Timeline shows complete order -> settlement chain for one tradeId."
-  - "No open exceptions shown in exception workbench."
+  - "Timeline shows hidden rest -> partial fill -> full fill for one hidden order."
+  - "Public market-data view hides resting hidden size."
+  - "Own-order view shows hidden seller lifecycle state."
   - "Scenario run detail shows seed=424242 and status=COMPLETED."
 
 replayAssertions:
   - "Given seed=424242 and same preconditions, expectedEvents sequence is identical."
   - "Given seed=424242 and same preconditions, expectedEventTimeline occurredAt offsets are identical and monotonic."
-  - "Event payload identity fields are stable across replay for business entities."
+  - "Replay produces identical command outcome order, execution/trade facts, lifecycle states, and checksums."
 
 idempotencyAssertions:
   - command: "SubmitOrder"
     assertion: "Duplicate commandId does not create a second order."
-  - command: "CreateTrade"
-    assertion: "Duplicate commandId does not create a second trade."
-  - command: "CompleteSettlement"
-    assertion: "Duplicate commandId does not produce duplicate settlement completion transitions."
+  - command: "CompleteScenarioRun"
+    assertion: "Duplicate commandId does not produce duplicate scenario completion transitions."

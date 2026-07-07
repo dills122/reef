@@ -142,11 +142,11 @@ Drain-accounted worker sweep:
 | A3 | Command log schema and interface | Not started | feature | First DB slice to add |
 | A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
 | A5 | Command processing mode flags | Done | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
-| A6 | Async batched runtime persistence | Not started | architecture | Biggest likely throughput lever |
+| A6 | Async batched runtime persistence | In progress | architecture | Captured-ack and stream/direct paths have profile-specific batched submit persistence; generic `RuntimePersistenceMode=async-batched` remains open |
 | A7 | Runtime event/table partitioning | Not started | architecture | Long-soak stability |
-| A8 | Read-model schema/projection isolation | Not started | architecture | Remove projection writes from hot path |
+| A8 | Read-model schema/projection isolation | In progress | architecture | Stream-ack submit and venue-event-batch projections moved behind projector watermarks; generic `read_model` schema and full UI/query split remain open |
 | A9 | Postgres outbox publisher | Deferred | architecture | Still needed for event distribution; no longer a precondition for stream-ack ingress |
-| A10 | NATS JetStream stream-ack ingress | Planned | architecture | Durable accepted-command log with publish-ack-before-202 and retained replay window |
+| A10 | NATS JetStream stream-ack ingress | Done | architecture | Opt-in durable accepted-command log with publish-ack-before-202 and retained replay window exists; JetStream remains fallback/comparison |
 | A11 | Physical DB split evaluation | In progress | architecture | Local stream-ack now separates boundary intake, canonical runtime facts, and submit projections across three Postgres containers |
 | A12 | Boundary capture hot-path reduction | In progress | architecture | Captured-ack dev profile now disables duplicate legacy boundary command capture; command-log append remains the canonical durable capture path |
 | A13 | Runtime table lifecycle/partitioning | Not started | architecture | Loaded stack has multi-GB `runtime_events` and boundary tables |
@@ -165,9 +165,9 @@ Drain-accounted worker sweep:
 | A26 | Kubernetes lifecycle readiness | Not started | architecture | Readiness, liveness, graceful drain, lease reclaim, and per-pod metric labeling for a basic cluster |
 | A27 | Bot-arena venue-path readiness | Not started | architecture | Built-in and user bots must use the same command/API path with run/bot attribution and guardrails |
 | A28 | Recoverable active command queue | In progress | performance | `command_work_queue` is derived active state and can be unlogged/reconstructed while accepted commands and terminal outcomes stay durable; quick loaded-stack run recovered `3945.78 accepted rps` with eventual `0` gap |
-| A29 | Stream-ack command contract and partitioning | Planned | contract | Command envelope must include run/session/instrument routing metadata and deterministic subject partitioning |
-| A30 | Stream-ack idempotency guard | Planned | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
-| A31 | Stream partition worker and ack rule | In progress | architecture | Submit workers append canonical command results and venue events before JetStream ack; cancel/modify still need stream-worker support |
+| A29 | Stream-ack command contract and partitioning | Done | contract | Command envelope includes run/session/instrument routing metadata and deterministic subject/topic partitioning |
+| A30 | Stream-ack idempotency guard | Done | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
+| A31 | Stream partition worker and ack rule | In progress | architecture | Platform stream workers still process submit only; matching-engine direct consumers process submit/modify/cancel and publish durable event batches before offset commit |
 | A32 | Canonical event log and projection watermarks | In progress | architecture | Submit projection watermarks and lag are exposed through partition-owned projectors; broader leaderboard/UI projections remain follow-up |
 | A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
 | A34 | Stream-ack role split and partition ownership | Done | architecture | Local deploy-shaped profile starts separate API, worker, and projector containers; workers own explicit non-overlapping partition ranges |
@@ -329,12 +329,14 @@ Exit criteria:
 
 ### M6: Read Model Isolation
 
+Scope note: this milestone is partially complete for stream-ack submit and venue-event-batch projections, but the generic `read_model` schema and full UI/query projection split remain open.
+
 - [ ] Add `read_model` schema.
-- [ ] Identify query APIs that can read from projections.
-- [ ] Add projection worker interface.
-- [ ] Add projection lag metric.
-- [ ] Add rebuild command for local dev.
-- [ ] Remove projection writes from order command hot path.
+- [x] Identify first query APIs that can read from projections.
+- [x] Add projection worker interface for canonical submit and venue-event-batch projection.
+- [x] Add projection lag metric and watermarks for stream-ack projectors.
+- [x] Add replay/rebuild check for venue event batch materialization.
+- [ ] Remove all projection writes from every order command hot path.
 
 Exit criteria:
 - Command hot path writes only command/runtime canonical state, not UI-specific projection tables.
@@ -354,7 +356,8 @@ Exit criteria:
 - [x] Move normalized SubmitOrder order/execution/trade/runtime-event writes behind partition-owned projector watermarks.
 - [ ] Extend partition worker processing to cancel/modify commands.
 - [x] Add projection watermarks and lag snapshots for normalized submit projection.
-- [ ] Add publish retry, redelivery, deterministic replay, and projection rebuild tests.
+- [x] Add deterministic event-batch replay and projection idempotency tests.
+- [ ] Add broader publish retry and crash/redelivery integration tests.
 
 Latest stream-ack notes:
 - Redpanda/Kafka-compatible stream-ack is now available behind `STREAM_ACK_LOG_PROVIDER=redpanda`. It keeps the same command envelope, partition key, scoped idempotency guard, canonical Postgres completion boundary, and worker ack rule, but maps the command stream to a Kafka topic and commits offsets after canonical persistence. Treat this as an A/B provider path until soak evidence justifies a decision change.

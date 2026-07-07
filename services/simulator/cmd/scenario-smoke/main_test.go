@@ -30,11 +30,11 @@ func TestScenarioSmokeDryRunPrintsExecutableRequests(t *testing.T) {
 	if report.Mode != "dry-run" || !report.Pass {
 		t.Fatalf("unexpected dry-run report: %+v", report)
 	}
-	if len(report.Requests) != 2 {
-		t.Fatalf("requests: got %d want 2", len(report.Requests))
+	if len(report.Requests) != 3 {
+		t.Fatalf("requests: got %d want 3", len(report.Requests))
 	}
-	if len(report.SeedRequests) != 8 {
-		t.Fatalf("seed requests: got %d want 8", len(report.SeedRequests))
+	if len(report.SeedRequests) != 11 {
+		t.Fatalf("seed requests: got %d want 11", len(report.SeedRequests))
 	}
 	first := report.Requests[0]
 	if first.Path != "/api/v1/orders/submit" || first.Payload["scenarioRunId"] != "p1-smoke-dry" {
@@ -117,8 +117,8 @@ func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
 			submits++
 		}
 	}
-	if submits != 2 {
-		t.Fatalf("submit posts: got %d want 2; posts=%v", submits, posts)
+	if submits != 3 {
+		t.Fatalf("submit posts: got %d want 3; posts=%v", submits, posts)
 	}
 }
 
