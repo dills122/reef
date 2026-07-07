@@ -26,6 +26,10 @@ go tool cover -func="${absolute_artifact_dir}/coverage.out" | tee "${absolute_ar
 popd >/dev/null
 
 total="$(awk '/^total:/ { print $3 }' "${absolute_artifact_dir}/coverage.txt")"
+if [ -z "${total}" ]; then
+  echo "FAIL: could not parse total coverage from ${absolute_artifact_dir}/coverage.txt" >&2
+  exit 1
+fi
 
 gated_pct="${total%\%}"
 gated_label="${module_dir}"

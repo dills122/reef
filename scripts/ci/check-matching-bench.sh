@@ -35,6 +35,8 @@ extract_col() {
   awk -v c="$col" '{print $c}' <<<"$line"
 }
 
+failed=0
+
 check_leq() {
   local metric="$1"
   local value="$2"
@@ -42,9 +44,8 @@ check_leq() {
   local bench="$4"
   if ! awk -v v="$value" -v l="$limit" 'BEGIN { exit !(v <= l) }'; then
     echo "FAIL: $bench $metric=$value exceeds limit=$limit" >&2
-    return 1
+    failed=1
   fi
-  return 0
 }
 
 check_benchmark() {
@@ -56,7 +57,8 @@ check_benchmark() {
   line="$(extract_bench_line "$bench")"
   if [[ -z "$line" ]]; then
     echo "FAIL: benchmark output missing for $bench" >&2
-    return 1
+    failed=1
+    return
   fi
 
   local ns allocs
@@ -72,5 +74,10 @@ check_benchmark() {
 check_benchmark "BenchmarkSubmitOrderResting" "$LIMIT_SUBMIT_NS" "$LIMIT_SUBMIT_ALLOCS"
 check_benchmark "BenchmarkSubmitOrderMatchAgainstResting" "$LIMIT_MATCH_NS" "$LIMIT_MATCH_ALLOCS"
 check_benchmark "BenchmarkModifyOrder" "$LIMIT_MODIFY_NS" "$LIMIT_MODIFY_ALLOCS"
+
+if [[ "$failed" -ne 0 ]]; then
+  echo "Benchmark guardrail failed." >&2
+  exit 1
+fi
 
 echo "Benchmark guardrail passed."
