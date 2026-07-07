@@ -144,7 +144,10 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"sequence":2,"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"},{"sequence":1,"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"}]}`))
@@ -179,11 +182,14 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 	if len(report.Commands) != 3 {
 		t.Fatalf("commands: got %d want 3", len(report.Commands))
 	}
-	if len(report.Reads) != 5 {
-		t.Fatalf("reads: got %d want 5", len(report.Reads))
+	if len(report.Reads) != 6 {
+		t.Fatalf("reads: got %d want 6", len(report.Reads))
 	}
-	if len(report.Assertions) != 11 {
-		t.Fatalf("assertions: got %d want 11", len(report.Assertions))
+	if len(report.Assertions) != 18 {
+		t.Fatalf("assertions: got %d want 18", len(report.Assertions))
+	}
+	if len(report.ProjectionLag) == 0 {
+		t.Fatalf("expected projection lag rows")
 	}
 	for _, assertion := range report.Assertions {
 		if assertion.Status != "pass" {
@@ -210,7 +216,10 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicTradeIdentityLeak(t *testing.T) 
 				"VISIBLE_BUYER_C": "p1_golden_hidden_cross_t1-ord-003",
 			}[participantID]
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","buyOrderId":"p1_golden_hidden_cross_t1-ord-002"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
@@ -260,7 +269,10 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
 				"VISIBLE_BUYER_C": "p1_golden_hidden_cross_t1-ord-003",
 			}[participantID]
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
@@ -319,7 +331,10 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
@@ -390,7 +405,10 @@ func TestScenarioSmokeLiveAssertionsFailOnReplayChecksumEvidence(t *testing.T) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
@@ -662,6 +680,31 @@ func TestScenarioSmokeReplayCheckReportRequiresAssertions(t *testing.T) {
 	if !strings.Contains(err.Error(), "--replay-check-report requires --assertions") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func p1OwnOrderHistoryJSON(orderID string) string {
+	filled := map[string]string{
+		"p1_golden_hidden_cross_t1-ord-001": "100",
+		"p1_golden_hidden_cross_t1-ord-002": "40",
+		"p1_golden_hidden_cross_t1-ord-003": "60",
+	}[orderID]
+	return `{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED","filledQuantityUnits":"` + filled + `"}]}`
+}
+
+func p1DataAvailabilityJSON() string {
+	return `{
+		"generatedAt":"2026-03-14T18:00:30Z",
+		"source":"venue-event-batch",
+		"projections":[
+			{"projectionName":"runtime-normalized-venue-outcomes","role":"canonical venue outcome projection","projectedCount":3,"lag":0,"watermarks":[{"lastPartitionSequence":3,"lag":0,"updatedAt":"2026-03-14T18:00:30Z"}]},
+			{"projectionName":"market-data-top-of-book","role":"top-of-book market data projection","projectedCount":1,"lag":0,"watermarks":[{"lastPartitionSequence":3,"lag":0,"updatedAt":"2026-03-14T18:00:30Z"}]}
+		],
+		"surfaces":[
+			{"name":"marketDataDepth","endpoint":"/api/v1/market-data/depth/{instrumentId}","source":"runtime.order_lifecycle_state","freshness":"read-time bounded aggregation","scope":"public-market-data","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"},
+			{"name":"tradeTape","endpoint":"/api/v1/market-data/trades/{instrumentId}","source":"runtime.trades","freshness":"durable fact rows","scope":"public-market-data","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"},
+			{"name":"orderHistory","endpoint":"/api/v1/orders/history","source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection","scope":"participant-own-orders","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"}
+		]
+	}`
 }
 
 func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
