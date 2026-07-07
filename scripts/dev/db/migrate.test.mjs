@@ -64,6 +64,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0011_unlogged_active_queue.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0012_command_payloads.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0013_drop_hot_path_foreign_keys.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
 });
@@ -85,12 +86,13 @@ test("routes arena migrations only to arena database target", async () => {
   const migrations = await discoverMigrations(migrationsRoot);
 
   const operationalTargetMigrations = migrationsForTarget(
-    { domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "analytics"] },
+    { domains: ["runtime", "auth", "admin", "boundary", "command_log", "orchestration", "settlement", "analytics"] },
     migrations,
   );
   const arenaTargetMigrations = migrationsForTarget({ domains: ["arena"] }, migrations);
 
   assert.ok(operationalTargetMigrations.some((migration) => migration.id === "runtime/0001_runtime_init.sql"));
+  assert.ok(operationalTargetMigrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(!operationalTargetMigrations.some((migration) => migration.id.startsWith("arena/")));
   assert.deepEqual(
     arenaTargetMigrations.map((migration) => migration.id),
