@@ -41,6 +41,7 @@
     "arena:runner-realworld-bench": "bun scripts/dev/arena-runner-realworld-bench.mjs",
     "arena:runner-tick-smoke": "bun scripts/dev/arena-runner-tick-smoke.mjs",
     "arena:local-run": "bun scripts/dev/arena-local-run.mjs",
+    "arena:local-tick-run": "bun scripts/dev/arena-local-tick-run.mjs",
     "arena:smoke:run-results": "bun scripts/dev/arena-run-result-ingestion-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs",

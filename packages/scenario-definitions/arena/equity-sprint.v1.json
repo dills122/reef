@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "reef.arena.mode.v1",
+  "modeId": "equity-sprint",
+  "version": "v1",
+  "seed": 170707,
+  "scenarioId": "arena-equity-sprint-v1",
+  "venueSessionId": "arena-equity-sprint-local",
+  "instruments": ["AAPL", "MSFT", "NVDA", "TSLA"],
+  "ticks": 3,
+  "visibleDataPolicyVersion": "visible-data-v0",
+  "actionPolicyVersion": "arena-action-v0",
+  "riskPolicyVersion": "arena-risk-v0",
+  "scoringPolicyVersion": "score-v0",
+  "catalogPath": "packages/scenario-definitions/arena/bot-catalog.v1.json",
+  "botRefs": [
+    "builtin-mm-simple",
+    "builtin-mm-lifecycle-safe",
+    "builtin-mm-refreshing",
+    "builtin-npc-momentum",
+    "custom-technical-indicator"
+  ],
+  "healthTargets": {
+    "minTicksWithVenueCommandsPct": 80,
+    "maxFailedTicks": 0,
+    "maxFreezeCount": 0
+  }
+}

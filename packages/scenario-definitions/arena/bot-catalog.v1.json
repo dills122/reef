@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "reef.arena.botCatalog.v1",
+  "catalogId": "builtin-phase-1",
+  "version": "2026-07-07",
+  "bots": [
+    {
+      "botId": "builtin-mm-simple",
+      "versionId": "local-1",
+      "runnerKey": "simple",
+      "role": "market-maker",
+      "entryPath": "packages/bot-sdk/examples/simple-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-mm-lifecycle-safe",
+      "versionId": "local-1",
+      "runnerKey": "lifecycle",
+      "role": "market-maker",
+      "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-mm-refreshing",
+      "versionId": "local-1",
+      "runnerKey": "refreshing",
+      "role": "market-maker",
+      "entryPath": "packages/bot-sdk/examples/refreshing-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-momentum",
+      "versionId": "local-1",
+      "runnerKey": "multi-symbol",
+      "role": "npc",
+      "entryPath": "packages/bot-sdk/examples/multi-symbol-strategy-bot.ts",
+      "riskProfile": "npc_standard",
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "custom-technical-indicator",
+      "versionId": "local-1",
+      "runnerKey": "technical",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/technical-indicator-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    }
+  ],
+  "riskProfiles": {
+    "house_liquidity": {
+      "assetLedgerMode": "bypass",
+      "maxActionsPerTick": 10,
+      "maxOpenOrdersPerInstrument": 50,
+      "maxTickLatencyMs": 50
+    },
+    "npc_standard": {
+      "assetLedgerMode": "tracked",
+      "maxActionsPerTick": 5,
+      "maxOpenOrdersPerInstrument": 10,
+      "maxTickLatencyMs": 50
+    },
+    "competitor_standard": {
+      "assetLedgerMode": "tracked",
+      "maxActionsPerTick": 5,
+      "maxOpenOrdersPerInstrument": 10,
+      "maxTickLatencyMs": 50
+    }
+  }
+}

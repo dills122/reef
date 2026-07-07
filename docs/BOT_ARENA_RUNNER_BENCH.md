@@ -609,6 +609,42 @@ Observed:
 - disqualified bot result retained in the leaderboard payload
 
 Takeaway: the runner pool can now feed an arena report shape with scoring and
-freeze events. The next implementation step is replacing fixture-only runner
-jobs with orchestrator-owned ticks and then routing accepted venue command
+freeze events.
+
+## Local Arena Tick Wrapper
+
+The next wrapper replaces fixture-only runner jobs with orchestrator-owned ticks
+and mode/catalog inputs:
+
+```bash
+bun run arena:local-tick-run
+```
+
+It reads:
+
+- `packages/scenario-definitions/arena/equity-sprint.v1.json`
+- `packages/scenario-definitions/arena/bot-catalog.v1.json`
+
+The wrapper loads hosted artifacts into the runner worker, starts one session per
+catalog bot, feeds deterministic ticks, applies first-pass freeze checks from
+the catalog risk profile, scores eligible bots, and writes one arena report with
+per-bot results plus a deterministic leaderboard.
+
+Useful command:
+
+```bash
+bun run arena:local-tick-run --compartment=ses \
+  --out=/tmp/reef-arena-local-tick-run-ses.json
+```
+
+Observed:
+
+- 5 catalog bots
+- 15 orchestrator-owned ticks
+- 14 venue command drafts
+- 0 freezes
+- status `completed`
+
+Takeaway: the local arena now has a stable mode/catalog/report shape around the
+tick protocol. The next implementation step is routing accepted venue command
 drafts through `/api/v1`.
