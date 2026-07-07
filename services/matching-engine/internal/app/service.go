@@ -73,6 +73,9 @@ func NewService(options ...Option) *Service {
 }
 
 func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
+	if !validOccurredAt(cmd.OccurredAt) {
+		return rejectedResult("evt-reject-invalid-occurred-at", cmd.OrderID, "VALIDATION_ERROR", "occurredAt must be RFC3339", s.nowFormatted())
+	}
 	now := s.occurredAt(cmd.OccurredAt)
 
 	if cmd.OrderID == "" {
@@ -137,6 +140,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
+	if !validOccurredAt(cmd.OccurredAt) {
+		return rejectedResult("evt-reject-invalid-occurred-at", cmd.OrderID, "VALIDATION_ERROR", "occurredAt must be RFC3339", s.nowFormatted())
+	}
 	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
@@ -167,6 +173,9 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 }
 
 func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
+	if !validOccurredAt(cmd.OccurredAt) {
+		return rejectedResult("evt-reject-invalid-occurred-at", cmd.OrderID, "VALIDATION_ERROR", "occurredAt must be RFC3339", s.nowFormatted())
+	}
 	now := s.occurredAt(cmd.OccurredAt)
 	if cmd.OrderID == "" {
 		return rejectedResult("evt-reject-missing-order-id", cmd.OrderID, "VALIDATION_ERROR", "orderId is required", now)
@@ -228,10 +237,28 @@ func (s *Service) occurredAt(commandOccurredAt string) string {
 	if strings.TrimSpace(commandOccurredAt) != "" {
 		return commandOccurredAt
 	}
+	return s.nowFormatted()
+}
+
+func (s *Service) nowFormatted() string {
 	if s.now == nil {
 		return time.Now().UTC().Format(time.RFC3339)
 	}
 	return s.now().UTC().Format(time.RFC3339)
+}
+
+// validOccurredAt reports whether a caller-supplied occurredAt is either
+// blank (the engine will stamp its own clock) or a well-formed RFC3339
+// timestamp. A non-blank, malformed value is never coerced or defaulted -
+// it must be rejected, otherwise it would silently propagate through
+// matches/trades/order state as an unparseable string.
+func validOccurredAt(commandOccurredAt string) bool {
+	trimmed := strings.TrimSpace(commandOccurredAt)
+	if trimmed == "" {
+		return true
+	}
+	_, err := time.Parse(time.RFC3339, trimmed)
+	return err == nil
 }
 
 func (s *Service) RestingOrders(instrumentID string, side domain.Side) int {
