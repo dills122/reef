@@ -122,16 +122,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	}
 	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 
-	if record.Side == domain.SideBuy {
-		s.matchBuy(book, incoming, &result, now)
-		if record.RemainingQuantity > 0 {
-			book.book.Add(record.Side, incoming)
-		}
-	} else {
-		s.matchSell(book, incoming, &result, now)
-		if record.RemainingQuantity > 0 {
-			book.book.Add(record.Side, incoming)
-		}
+	s.match(book, incoming, record.Side, &result, now)
+	if record.RemainingQuantity > 0 {
+		book.book.Add(record.Side, incoming)
 	}
 
 	s.refreshOrderStatus(record)
@@ -220,11 +213,7 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 
 	if record.RemainingQuantity > 0 {
 		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
-		if record.Side == domain.SideBuy {
-			s.matchBuy(book, incoming, &result, now)
-		} else {
-			s.matchSell(book, incoming, &result, now)
-		}
+		s.match(book, incoming, record.Side, &result, now)
 		if record.RemainingQuantity > 0 {
 			book.book.Add(record.Side, incoming)
 		}
@@ -394,29 +383,47 @@ func (rb *BatchRollback) Rollback(touchedOrderIDs map[string][]string) {
 	}
 }
 
-func (s *Service) matchBuy(book *orderBook, incoming restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
+// match executes incoming against the resting book on the opposite side.
+// Buy and sell only differ in which side of the book they cross and the
+// direction of the price-improvement comparison; encoding both sides in one
+// function avoids the two implementations drifting when one is patched and
+// the other isn't.
+func (s *Service) match(book *orderBook, incoming restingOrder, side domain.Side, result *domain.SubmitOrderResult, occurredAt string) {
 	incomingRecord, ok := s.loadOrder(incoming.OrderID)
 	if !ok {
 		return
 	}
 
-	for incomingRecord.RemainingQuantity > 0 && book.book.Len(domain.SideSell) > 0 {
-		resting, ok := book.book.Best(domain.SideSell)
+	opposite := domain.SideSell
+	if side == domain.SideSell {
+		opposite = domain.SideBuy
+	}
+
+	for incomingRecord.RemainingQuantity > 0 && book.book.Len(opposite) > 0 {
+		resting, ok := book.book.Best(opposite)
 		if !ok {
 			return
 		}
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok {
-			book.book.PopBest(domain.SideSell)
+			book.book.PopBest(opposite)
 			continue
 		}
-		if incomingRecord.LimitPrice < restingRecord.LimitPrice {
+		if side == domain.SideBuy {
+			if incomingRecord.LimitPrice < restingRecord.LimitPrice {
+				return
+			}
+		} else if incomingRecord.LimitPrice > restingRecord.LimitPrice {
 			return
 		}
 
 		matchedUnits := minInt64(incomingRecord.RemainingQuantity, restingRecord.RemainingQuantity)
 		executionPrice := restingRecord.LimitPrice
-		s.appendMatch(result, incomingRecord, restingRecord, matchedUnits, executionPrice, occurredAt)
+		if side == domain.SideBuy {
+			s.appendMatch(result, incomingRecord, restingRecord, matchedUnits, executionPrice, occurredAt)
+		} else {
+			s.appendMatch(result, restingRecord, incomingRecord, matchedUnits, executionPrice, occurredAt)
+		}
 
 		incomingRecord.RemainingQuantity -= matchedUnits
 		restingRecord.RemainingQuantity -= matchedUnits
@@ -425,43 +432,7 @@ func (s *Service) matchBuy(book *orderBook, incoming restingOrder, result *domai
 		s.refreshOrderStatus(incomingRecord)
 		s.refreshOrderStatus(restingRecord)
 		if restingRecord.RemainingQuantity == 0 {
-			book.book.PopBest(domain.SideSell)
-		}
-	}
-}
-
-func (s *Service) matchSell(book *orderBook, incoming restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
-	incomingRecord, ok := s.loadOrder(incoming.OrderID)
-	if !ok {
-		return
-	}
-
-	for incomingRecord.RemainingQuantity > 0 && book.book.Len(domain.SideBuy) > 0 {
-		resting, ok := book.book.Best(domain.SideBuy)
-		if !ok {
-			return
-		}
-		restingRecord, ok := s.loadOrder(resting.OrderID)
-		if !ok {
-			book.book.PopBest(domain.SideBuy)
-			continue
-		}
-		if incomingRecord.LimitPrice > restingRecord.LimitPrice {
-			return
-		}
-
-		matchedUnits := minInt64(incomingRecord.RemainingQuantity, restingRecord.RemainingQuantity)
-		executionPrice := restingRecord.LimitPrice
-		s.appendMatch(result, restingRecord, incomingRecord, matchedUnits, executionPrice, occurredAt)
-
-		incomingRecord.RemainingQuantity -= matchedUnits
-		restingRecord.RemainingQuantity -= matchedUnits
-		incomingRecord.LastUpdatedAt = occurredAt
-		restingRecord.LastUpdatedAt = occurredAt
-		s.refreshOrderStatus(incomingRecord)
-		s.refreshOrderStatus(restingRecord)
-		if restingRecord.RemainingQuantity == 0 {
-			book.book.PopBest(domain.SideBuy)
+			book.book.PopBest(opposite)
 		}
 	}
 }
