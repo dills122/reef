@@ -40,6 +40,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0023_project_orders_from_event_batch_payload.sql",
       "runtime/0024_scope_command_outcome_projection_stream.sql",
       "runtime/0025_orders_client_order_lookup.sql",
+      "runtime/0026_contiguous_command_outcome_projection_watermarks.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
