@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
@@ -24,14 +25,16 @@ const projectionName = env("DEV_VENUE_EVENT_CRASH_GATE_PROJECTION_NAME", `runtim
 const marketDataProjectionName = env("DEV_VENUE_EVENT_CRASH_GATE_MARKET_DATA_PROJECTION_NAME", `market-data-crash-gate-${gateId}`);
 const commandStream = env("STREAM_ACK_COMMAND_STREAM", `REEF_CRASH_GATE_COMMANDS_${streamToken.toUpperCase()}`);
 const eventStream = env("MATCHING_ENGINE_EVENT_STREAM", `REEF_CRASH_GATE_VENUE_EVENTS_${streamToken.toUpperCase()}`);
+const partitionCount = 4;
+const venueSessionId = `session-${gateId}`;
 const internalHeaders = { "X-Reef-Internal-Route": "true" };
 
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
 setValue("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("STREAM_ACK_COMMAND_STREAM", commandStream);
 setDefault("STREAM_ACK_SUBJECT_PREFIX", `reef.crash.gate.${streamToken}.cmd.v1`);
-setDefault("STREAM_ACK_PARTITION_COUNT", "4");
-setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..3");
+setValue("STREAM_ACK_PARTITION_COUNT", String(partitionCount));
+setValue("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..3");
 setDefault("MATCHING_ENGINE_EVENT_STREAM", eventStream);
 setDefault("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", `reef.crash.gate.${streamToken}.venue.events.v1`);
 setDefault("VENUE_EVENT_MATERIALIZER_TOPIC", eventStream);
@@ -68,7 +71,15 @@ await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
 
 console.log("seeding reference/auth state...");
-await seedReferenceData();
+const partitionInstruments = selectPartitionInstruments();
+const materializerStoppedCommands = partitionInstruments.map((instrument, index) =>
+  commandSpec(`materializer-stopped-p${instrument.partition}`, index % 2 === 0 ? "BUY" : "SELL", "150250000000", instrument.instrumentId),
+);
+const engineStoppedCommands = partitionInstruments.map((instrument, index) =>
+  commandSpec(`engine-stopped-p${instrument.partition}`, index % 2 === 0 ? "BUY" : "SELL", "150260000000", instrument.instrumentId),
+);
+const commands = [...materializerStoppedCommands, ...engineStoppedCommands];
+await seedReferenceData(commands);
 
 const engineBefore = await enginePublished();
 const materializerBefore = await materializedOutcomes();
@@ -76,19 +87,21 @@ const materializerBefore = await materializedOutcomes();
 console.log("stopping materializer and projector to build durable backlog...");
 await dockerCompose(["stop", "platform-materializer", "platform-projector-0"]);
 
-console.log("submitting command while materializer is stopped...");
-const first = commandSpec("materializer-stopped", "BUY", "150250000000");
-await submitOrder(first);
-await waitForEnginePublishedAtLeast(engineBefore + 1);
+console.log(`submitting ${materializerStoppedCommands.length} commands while materializer is stopped...`);
+for (const command of materializerStoppedCommands) {
+  await submitOrder(command);
+}
+await waitForEnginePublishedAtLeast(engineBefore + materializerStoppedCommands.length);
 
 console.log("restarting matching-engine after event-batch publication...");
 await dockerCompose(["restart", "matching-engine"]);
 await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
 
-console.log("stopping engine, then submitting command into durable broker backlog...");
+console.log(`stopping engine, then submitting ${engineStoppedCommands.length} commands into durable broker backlog...`);
 await dockerCompose(["stop", "matching-engine"]);
-const second = commandSpec("engine-stopped", "SELL", "150260000000");
-await submitOrder(second);
+for (const command of engineStoppedCommands) {
+  await submitOrder(command);
+}
 
 console.log("starting engine, materializer, and projector to drain backlog...");
 await dockerCompose(["up", "-d", "--wait", "matching-engine", "platform-materializer", "platform-projector-0"]);
@@ -96,9 +109,10 @@ await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${materializerUrl}/health`, waitTimeoutSeconds);
 await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
 
-const outcomes = await waitForCanonicalOutcomes([first.commandId, second.commandId]);
-await waitForMaterializedOutcomesAtLeast(materializerBefore + 2);
-await waitForProjection([first, second], outcomes);
+const outcomes = await waitForCanonicalOutcomes(commands.map((command) => command.commandId));
+await waitForMaterializedOutcomesAtLeast(materializerBefore + commands.length);
+assertPartitionCoverage(outcomes);
+await waitForProjection(commands, outcomes);
 
 console.log("running venue event replay/checksum gate...");
 const replay = JSON.parse(await runCapture(env("JS_RUNTIME", "bun"), ["scripts/dev/venue-event-replay-check.mjs"], 60000));
@@ -116,7 +130,8 @@ console.log(JSON.stringify({
   commandStream,
   eventStream,
   projectionName,
-  commands: [first.commandId, second.commandId],
+  commands: commands.map((command) => command.commandId),
+  partitionCoverage: partitionCoverage(outcomes),
   canonicalOutcomes: outcomes,
   engine: summarizeEngineStats(engineAfter),
   materializer: materializerAfter.metrics,
@@ -127,13 +142,13 @@ console.log(JSON.stringify({
   },
 }, null, 2));
 
-function commandSpec(label, side, limitPrice) {
+function commandSpec(label, side, limitPrice, instrumentId) {
   const suffix = `${gateId}-${label}`;
   return {
     commandId: `cmd-${suffix}`,
     traceId: `trace-${suffix}`,
     orderId: `ord-${suffix}`,
-    instrumentId: `AAPL-${gateId}`,
+    instrumentId,
     participantId: `participant-${gateId}`,
     accountId: `account-${gateId}`,
     actorId: "venue-crash-gate-user",
@@ -143,22 +158,24 @@ function commandSpec(label, side, limitPrice) {
   };
 }
 
-async function seedReferenceData() {
+async function seedReferenceData(commands) {
   const internal = { "X-Reef-Internal-Route": "true" };
-  const sample = commandSpec("seed", "BUY", "150250000000");
-  await postJson(`${runtimeUrl}/reference/instruments`, {
-    instrumentId: sample.instrumentId,
-    symbol: sample.instrumentId,
-    assetClass: "US_EQ",
-    currency: "USD",
-  }, internal);
+  const instrumentIds = [...new Set(commands.map((command) => command.instrumentId))];
+  for (const instrumentId of instrumentIds) {
+    await postJson(`${runtimeUrl}/reference/instruments`, {
+      instrumentId,
+      symbol: instrumentId,
+      assetClass: "US_EQ",
+      currency: "USD",
+    }, internal);
+  }
   await postJson(`${runtimeUrl}/reference/participants`, {
-    participantId: sample.participantId,
+    participantId: `participant-${gateId}`,
     name: "Venue Crash Gate Participant",
   }, internal);
   await postJson(`${runtimeUrl}/reference/accounts`, {
-    accountId: sample.accountId,
-    participantId: sample.participantId,
+    accountId: `account-${gateId}`,
+    participantId: `participant-${gateId}`,
     accountType: "HOUSE",
   }, internal);
   await postJson(`${runtimeUrl}/auth/roles`, {
@@ -181,7 +198,7 @@ async function submitOrder(command) {
       correlationId: `corr-${gateId}`,
       actorId: command.actorId,
       runId: gateId,
-      venueSessionId: `session-${gateId}`,
+      venueSessionId,
       occurredAt: "2026-07-04T18:00:00Z",
       orderId: command.orderId,
       instrumentId: command.instrumentId,
@@ -199,6 +216,31 @@ async function submitOrder(command) {
   if (!response.includes(`"commandId":"${command.commandId}"`) || !response.includes('"statusUrl"')) {
     throw new Error(`unexpected submit response for ${command.commandId}: ${response}`);
   }
+}
+
+function selectPartitionInstruments() {
+  const byPartition = new Map();
+  for (let index = 0; byPartition.size < partitionCount && index < 1000; index += 1) {
+    const instrumentId = `AAPL${String(index).padStart(3, "0")}-${gateId}`;
+    const partition = streamPartition(gateId, venueSessionId, instrumentId, partitionCount);
+    if (!byPartition.has(partition)) {
+      byPartition.set(partition, { instrumentId, partition });
+    }
+  }
+  if (byPartition.size < partitionCount) {
+    throw new Error(`could not find instruments for ${partitionCount} partitions`);
+  }
+  return [...byPartition.values()].sort((left, right) => left.partition - right.partition);
+}
+
+function streamPartition(runId, sessionId, instrumentId, count) {
+  const digest = crypto.createHash("sha256").update(`${runId}|${sessionId}|${instrumentId}`, "utf8").digest();
+  let value = 0n;
+  for (let index = 0; index < 8; index += 1) {
+    value = (value << 8n) | BigInt(digest[index]);
+  }
+  value &= 0x7fffffffffffffffn;
+  return Number(value % BigInt(count));
 }
 
 async function waitForEnginePublishedAtLeast(target) {
@@ -246,6 +288,18 @@ async function waitForCanonicalOutcomes(commandIds) {
     return rows.length === commandIds.length;
   });
   return rows;
+}
+
+function assertPartitionCoverage(outcomes) {
+  const coverage = partitionCoverage(outcomes);
+  if (coverage.count < partitionCount) {
+    throw new Error(`expected outcomes across ${partitionCount} partitions, got ${coverage.count}: ${coverage.partitions.join(",")}`);
+  }
+}
+
+function partitionCoverage(outcomes) {
+  const partitions = [...new Set(outcomes.map((outcome) => Number(outcome.partition_id)))].sort((left, right) => left - right);
+  return { count: partitions.length, partitions };
 }
 
 async function waitForProjection(commands, outcomes) {

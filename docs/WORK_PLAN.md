@@ -77,11 +77,12 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - matching engine fails before event-batch publish, leaving command offset uncommitted.
    - materializer commits compact canonical rows then exits before event-batch offset commit.
    - projector exits mid-batch and replays idempotently.
-   - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, stops/restarts engine/materializer/projector roles around accepted commands, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
+   - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, selects commands that cover all four direct-stream partitions, stops/restarts engine/materializer/projector roles around accepted commands, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
 
 4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
    - direct engine consumer fetches/processes/publishes/acks all accepted commands.
+   - direct engine coverage spans every configured partition in the crash gate.
    - materializer writes canonical outcomes for all accepted commands after drain.
    - replay/checksum reports `0` gaps, duplicate inserts, payload mismatches, stream gaps, or overlaps.
    - projection replay/idempotency applies no duplicate read-model rows.
