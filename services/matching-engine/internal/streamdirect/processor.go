@@ -190,12 +190,22 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	p.stats.Fetched.Add(uint64(len(deliveries)))
 	p.stats.LastFetchedAt.Store(now)
 
-	batch, ackable, err := p.buildBatch(deliveries, now)
+	batch, ackable, rollback, touchedOrderIDs, err := p.buildBatch(deliveries, now)
 	if err != nil {
+		if rollback != nil {
+			rollback.Rollback(touchedOrderIDs)
+		}
 		p.nakAll(ackable)
 		return len(deliveries), err
 	}
 	if err := p.publisher.PublishEventBatch(ctx, batch); err != nil {
+		// The batch was never durably published: undo the engine-side
+		// mutations (order reservations, matches, cancels/modifies) that
+		// processing this batch made, so the book does not diverge from the
+		// canonical record and a redelivered retry reprocesses cleanly
+		// instead of being rejected as a duplicate (WORK_PLAN.md crash/
+		// restart scenario 3).
+		rollback.Rollback(touchedOrderIDs)
 		p.nakAll(ackable)
 		return len(deliveries), err
 	}
@@ -204,12 +214,28 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	return len(deliveries), nil
 }
 
-func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, error) {
+func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, *app.BatchRollback, map[string][]string, error) {
 	ackable := make([]CommandDelivery, 0, len(deliveries))
 	outcomes := make([]CommandOutcomeFact, 0, len(deliveries))
+	touchedOrderIDs := make(map[string][]string)
 	firstSeq := uint64(0)
 	lastSeq := uint64(0)
 	checksumInput := strings.Builder{}
+
+	instrumentIDs := make([]string, 0, len(deliveries))
+	seenInstruments := make(map[string]bool, len(deliveries))
+	for _, delivery := range deliveries {
+		instrumentID := instrumentIDFromSubject(delivery.Subject())
+		if instrumentID == "" || seenInstruments[instrumentID] {
+			continue
+		}
+		seenInstruments[instrumentID] = true
+		instrumentIDs = append(instrumentIDs, instrumentID)
+	}
+	// Snapshot every touched instrument's book/order records *before* any
+	// command in this batch mutates them, so a subsequent failed publish can
+	// roll the engine's live state back to exactly this point.
+	rollback := p.service.BeginBatch(instrumentIDs)
 
 	for _, delivery := range deliveries {
 		commandType := commandTypeFromSubject(delivery.Subject())
@@ -251,10 +277,13 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		checksumInput.WriteString(fmt.Sprintf("%d:%s:%s;", fact.StreamSequence, fact.CommandID, fact.PayloadHash))
 		outcomes = append(outcomes, fact)
 		ackable = append(ackable, delivery)
+		if fact.OrderID != "" {
+			touchedOrderIDs[fact.InstrumentID] = append(touchedOrderIDs[fact.InstrumentID], fact.OrderID)
+		}
 	}
 
 	if len(outcomes) == 0 {
-		return VenueEventBatch{}, ackable, nil
+		return VenueEventBatch{}, ackable, rollback, touchedOrderIDs, nil
 	}
 	batch := VenueEventBatch{
 		BatchID:         fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
@@ -270,7 +299,7 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		Outcomes:        outcomes,
 	}
 	p.stats.Processed.Add(uint64(len(outcomes)))
-	return batch, ackable, nil
+	return batch, ackable, rollback, touchedOrderIDs, nil
 }
 
 func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType string, commandID string, code string, reason string) CommandOutcomeFact {

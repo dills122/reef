@@ -299,6 +299,96 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 	return actual.(*orderBook)
 }
 
+// BatchRollback captures a pre-mutation snapshot of the order book(s) and
+// order records that a batch of commands is about to touch, so the
+// direct-consume pipeline can undo those mutations if the batch's durable
+// VenueEventBatch publish subsequently fails. Without this, a publish
+// failure would leave the book holding a live reservation or match that was
+// never durably recorded, and a redelivered retry of the same command would
+// be rejected as a duplicate even though nothing was ever published for it
+// (see docs/WORK_PLAN.md crash/restart scenario 3).
+//
+// Callers must take the snapshot via BeginBatch before processing any
+// command in the batch, and must not process commands for the same
+// instrument concurrently from another goroutine until the batch is either
+// committed (published successfully, snapshot discarded) or rolled back -
+// true today since a given instrument's commands are only ever processed by
+// one direct-consume shard/partition at a time.
+type BatchRollback struct {
+	orders      *sync.Map
+	instruments map[string]*instrumentRollback
+}
+
+type instrumentRollback struct {
+	book     *orderBook
+	snapshot hotbook.Snapshot
+	existing map[string]orderRecord
+}
+
+// BeginBatch snapshots the order book and the order records resting in it
+// for each distinct instrument ID.
+func (s *Service) BeginBatch(instrumentIDs []string) *BatchRollback {
+	rollback := &BatchRollback{orders: &s.orders, instruments: make(map[string]*instrumentRollback)}
+	for _, instrumentID := range instrumentIDs {
+		if instrumentID == "" {
+			continue
+		}
+		if _, ok := rollback.instruments[instrumentID]; ok {
+			continue
+		}
+		book := s.bookFor(instrumentID)
+		book.mu.Lock()
+		snapshot := book.book.Snapshot()
+		existing := make(map[string]orderRecord)
+		captureExisting := func(orderID string) {
+			if _, already := existing[orderID]; already {
+				return
+			}
+			if record, ok := s.loadOrder(orderID); ok {
+				existing[orderID] = *record
+			}
+		}
+		for _, o := range snapshot.Buys {
+			captureExisting(o.OrderID)
+		}
+		for _, o := range snapshot.Sells {
+			captureExisting(o.OrderID)
+		}
+		book.mu.Unlock()
+		rollback.instruments[instrumentID] = &instrumentRollback{
+			book:     book,
+			snapshot: snapshot,
+			existing: existing,
+		}
+	}
+	return rollback
+}
+
+// Rollback restores every snapshotted instrument's book and order records to
+// their pre-batch state, and deletes any order record newly created during
+// the batch. touchedOrderIDs maps instrumentID to every orderID a command in
+// the batch referenced (including ones ultimately rejected), so newly
+// reserved orders that never existed before the batch are removed rather
+// than left behind. It is only valid to call once per BeginBatch snapshot.
+func (rb *BatchRollback) Rollback(touchedOrderIDs map[string][]string) {
+	for instrumentID, snap := range rb.instruments {
+		snap.book.mu.Lock()
+		if restored, ok := hotbook.Restore(snap.snapshot); ok {
+			snap.book.book = restored
+		}
+		for orderID, record := range snap.existing {
+			recordCopy := record
+			rb.orders.Store(orderID, &recordCopy)
+		}
+		for _, orderID := range touchedOrderIDs[instrumentID] {
+			if _, existed := snap.existing[orderID]; !existed {
+				rb.orders.Delete(orderID)
+			}
+		}
+		snap.book.mu.Unlock()
+	}
+}
+
 func (s *Service) matchBuy(book *orderBook, incoming restingOrder, result *domain.SubmitOrderResult, occurredAt string) {
 	incomingRecord, ok := s.loadOrder(incoming.OrderID)
 	if !ok {

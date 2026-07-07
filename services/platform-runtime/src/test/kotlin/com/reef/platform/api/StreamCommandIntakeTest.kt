@@ -118,6 +118,61 @@ class StreamCommandIntakeTest {
         assertEquals(0L, assertIs<StreamCommandReservation.Replay>(replay).reference.streamSequence)
     }
 
+    /**
+     * WORK_PLAN.md crash/restart scenario 1: "API publishes then exits before boundary
+     * published-marker update." The intake row is reserved (published=false,
+     * streamSequence=0), the durable broker ack for the publish arrives, but the
+     * process exits before `markPublished`/`markPublishedByCommandId` records it. This
+     * proves the recovery path is safe: on "restart" (a retried request with the same
+     * idempotency key), the intake store still reports the command as unconfirmed
+     * (streamSequence == 0), so the boundary knows it must republish rather than
+     * silently trusting a stale, unmarked reservation. Once the repair publish
+     * succeeds and the marker is recorded, further replays converge on that single
+     * durable stream sequence - no duplicate row, no lost command reference.
+     */
+    @Test
+    fun apiExitsAfterPublishAckBeforeBoundaryMarkerUpdate_retryRepublishesAndConverges() {
+        val store = InMemoryStreamCommandIntakeStore()
+        val envelope = assertIs<EitherBoundaryError.Envelope>(
+            StreamCommandEnvelopeBuilder.fromRequest(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-crash-before-mark",
+                body = validStreamSubmitBody()
+            )
+        ).envelope
+
+        val reservation = store.reserve(envelope, envelope.reference("REEF_COMMANDS"))
+        assertIs<StreamCommandReservation.Reserved>(reservation)
+
+        // Durable publish is acknowledged by the broker (sequence 55 in a real system)
+        // but the process exits here, before markPublished ever executes - the intake
+        // row is left with streamSequence=0/published=false despite the command
+        // already being durable in the stream.
+
+        // "Restart": a client retry (or a boundary reconciliation sweep) reserves the
+        // same idempotency key again. It must NOT be told the command is durably
+        // confirmed, because the local marker never recorded that.
+        val afterCrashRetry = store.reserve(envelope, envelope.reference("REEF_COMMANDS"))
+        val unmarkedReplay = assertIs<StreamCommandReservation.Replay>(afterCrashRetry)
+        assertEquals(0L, unmarkedReplay.reference.streamSequence)
+
+        // Recovery republishes (a new broker ack, sequence 56) and this time the
+        // marker update completes before any further crash.
+        assertTrue(store.markPublishedByCommandId(envelope.commandId, 56L))
+
+        // Subsequent replays now observe the durable marker and stop retrying.
+        val stable = store.reserve(envelope, envelope.reference("REEF_COMMANDS"))
+        assertEquals(56L, assertIs<StreamCommandReservation.Replay>(stable).reference.streamSequence)
+        assertEquals(56L, store.findByCommandId(envelope.commandId)?.streamSequence)
+
+        // A late duplicate mark-published call (e.g. the original, pre-crash async
+        // marker flush finally landing after recovery already repaired it) must not
+        // regress the recorded sequence.
+        assertTrue(store.markPublishedByCommandId(envelope.commandId, 56L))
+        assertEquals(56L, store.findByCommandId(envelope.commandId)?.streamSequence)
+    }
+
     @Test
     fun asyncPublicationMarkerEventuallyMarksReservedCommandPublished() {
         val store = InMemoryStreamCommandIntakeStore()

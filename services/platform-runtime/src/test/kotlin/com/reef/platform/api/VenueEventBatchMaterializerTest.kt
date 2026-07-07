@@ -197,6 +197,64 @@ class VenueEventBatchMaterializerTest {
         assertEquals(1L, VenueEventBatchMaterializerMetrics.snapshot().materializedOutcomes)
     }
 
+    /**
+     * WORK_PLAN.md crash/restart scenario 4: "materializer commits compact canonical
+     * rows then exits before event-batch offset commit." `materializerCommitsBatchBeforeAckingDelivery`
+     * above already proves the ordering (canonical commit happens before ack/offset
+     * commit); this test proves the other half - that when the process genuinely
+     * exits before the offset commit lands (ack throws/never completes) and the
+     * broker redelivers the same un-acked batch, replay is idempotent: the canonical
+     * row is not duplicated and the redelivered attempt still converges on a
+     * successful ack this time.
+     */
+    @Test
+    fun materializerExitsBeforeOffsetCommitAndRedeliveryReplaysIdempotently() {
+        VenueEventBatchMaterializerMetrics.resetForTests()
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        val payload = venueEventBatchJson("batch-offset-crash-1", "checksum-offset-crash-1")
+
+        // First delivery: canonical commit succeeds, but the process exits before the
+        // offset/ack commit completes (simulated by an ack() that throws, i.e. the
+        // broker never receives confirmation and will redeliver).
+        val crashingDelivery = AckFailsOnceDelivery(payloadJson = payload, streamSequence = 70)
+        val firstMaterializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(crashingDelivery),
+            api = api
+        )
+        firstMaterializer.processOnce()
+
+        assertEquals(1, crashingDelivery.ackAttempts)
+        assertEquals(0, crashingDelivery.nakCalls)
+        assertEquals(0, crashingDelivery.termCalls)
+        val outcomeAfterCrash = persistence.canonicalCommandOutcome("cmd-1")
+        assertNotNull(outcomeAfterCrash)
+        assertEquals("batch-offset-crash-1", outcomeAfterCrash.batchId)
+        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().ackFailed)
+
+        // "Restart": a brand new materializer instance over the same durable
+        // persistence receives the redelivered (still-unacked) batch and must not
+        // duplicate the canonical row, but must still converge on a successful ack.
+        val redelivered = RecordingVenueEventBatchDelivery(payloadJson = payload, streamSequence = 70, deliveredCount = 2)
+        val restartedMaterializer = VenueEventBatchMaterializer(
+            source = FixedVenueEventBatchSource(redelivered),
+            api = api
+        )
+        restartedMaterializer.processOnce()
+
+        assertEquals(1, redelivered.ackCalls)
+        assertEquals(0, redelivered.nakCalls)
+        val outcomeAfterReplay = persistence.canonicalCommandOutcome("cmd-1")
+        assertNotNull(outcomeAfterReplay)
+        assertEquals("batch-offset-crash-1", outcomeAfterReplay.batchId)
+        assertEquals("accepted", outcomeAfterReplay.resultStatus)
+        // Same canonical row identity (batchId/streamSequence) survives the
+        // redelivery unchanged - the replay was a checksum-matched no-op insert,
+        // not a duplicate row.
+        assertEquals(outcomeAfterCrash.batchId, outcomeAfterReplay.batchId)
+        assertEquals(outcomeAfterCrash.streamSequence, outcomeAfterReplay.streamSequence)
+    }
+
     private fun venueEventBatch(batchId: String, checksum: String): VenueEventBatchFact {
         return VenueEventBatchFact(
             batchId = batchId,
@@ -286,6 +344,37 @@ private class RecordingVenueEventBatchDelivery(
     override fun ack() {
         onAck()
         ackCalls++
+    }
+
+    override fun nak() {
+        nakCalls++
+    }
+
+    override fun term() {
+        termCalls++
+    }
+}
+
+/**
+ * Simulates the process exiting right at ack()/offset-commit time: the canonical
+ * materialization already ran (processDelivery calls api.materializeVenueEventBatch
+ * before ack), but the delivery's ack throws every time, standing in for "the process
+ * crashed before the broker ever received the offset commit" so the broker will
+ * redeliver this exact message.
+ */
+private class AckFailsOnceDelivery(
+    override val subject: String = "reef.venue.events.v1.p00.VenueEventBatch",
+    override val payloadJson: String,
+    override val streamSequence: Long = 1,
+    override val deliveredCount: Long = 1
+) : VenueEventBatchDelivery {
+    var ackAttempts = 0
+    var nakCalls = 0
+    var termCalls = 0
+
+    override fun ack() {
+        ackAttempts++
+        error("simulated process exit before offset commit")
     }
 
     override fun nak() {
