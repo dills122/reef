@@ -20,17 +20,18 @@ import (
 const defaultScenarioStart = "2026-03-14T18:00:00Z"
 
 type config struct {
-	scenarioPath  string
-	scenarioRunID string
-	start         string
-	baseURL       string
-	live          bool
-	assertions    bool
-	seedReference bool
-	timeout       time.Duration
-	statusTimeout time.Duration
-	reportOut     string
-	pretty        bool
+	scenarioPath          string
+	scenarioRunID         string
+	start                 string
+	baseURL               string
+	live                  bool
+	assertions            bool
+	replayCheckReportPath string
+	seedReference         bool
+	timeout               time.Duration
+	statusTimeout         time.Duration
+	reportOut             string
+	pretty                bool
 }
 
 type smokeReport struct {
@@ -197,6 +198,9 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 			client = http.DefaultClient
 		}
 		runLive(cfg, client, &report)
+		if cfg.replayCheckReportPath != "" {
+			attachReplayChecksumEvidence(cfg, &report)
+		}
 		report.Pass = len(report.Errors) == 0
 	}
 	body, err := encodeReport(report, cfg.pretty)
@@ -233,6 +237,7 @@ func parseConfig(args []string) (config, error) {
 	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "platform runtime base URL for live mode")
 	fs.BoolVar(&cfg.live, "live", false, "send executable scenario requests to base-url")
 	fs.BoolVar(&cfg.assertions, "assertions", false, "run first-wave live scenario assertions after command submission")
+	fs.StringVar(&cfg.replayCheckReportPath, "replay-check-report", "", "optional JSON output from dev-venue-event-replay-check to attach to assertion report")
 	fs.BoolVar(&cfg.seedReference, "seed-reference", cfg.seedReference, "seed scenario reference/auth data in live mode")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP request timeout")
 	fs.DurationVar(&cfg.statusTimeout, "status-timeout", cfg.statusTimeout, "command status polling timeout")
@@ -246,6 +251,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if cfg.assertions && !cfg.live {
 		return cfg, errors.New("--assertions requires --live")
+	}
+	if cfg.replayCheckReportPath != "" && !cfg.assertions {
+		return cfg, errors.New("--replay-check-report requires --assertions")
 	}
 	if cfg.timeout <= 0 {
 		return cfg, errors.New("timeout must be > 0")
@@ -422,6 +430,46 @@ func runAssertions(cfg config, client *http.Client, report *smokeReport) {
 		runP1OwnOrderAssertions(cfg, client, report)
 		runP1MarketDataAssertions(cfg, client, report)
 	}
+}
+
+func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
+	body, err := os.ReadFile(cfg.replayCheckReportPath)
+	if err != nil {
+		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "readable replay check report", err.Error(), cfg.replayCheckReportPath)
+		return
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "valid replay check JSON", err.Error(), cfg.replayCheckReportPath)
+		return
+	}
+	report.ReplayChecksum = parsed
+	report.ArtifactPaths = append(report.ArtifactPaths, cfg.replayCheckReportPath)
+	pass, _ := parsed["pass"].(bool)
+	failures := replayFailures(parsed)
+	if pass && len(failures) == 0 {
+		passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+		return
+	}
+	observed := "pass false"
+	if len(failures) > 0 {
+		observed = strings.Join(failures, "; ")
+	}
+	failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
+}
+
+func replayFailures(parsed map[string]any) []string {
+	raw, ok := parsed["failures"].([]any)
+	if !ok {
+		return nil
+	}
+	failures := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if text, ok := item.(string); ok {
+			failures = append(failures, text)
+		}
+	}
+	return failures
 }
 
 func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeReport) {
