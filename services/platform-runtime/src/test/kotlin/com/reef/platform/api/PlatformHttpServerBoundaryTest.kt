@@ -1633,6 +1633,25 @@ class PlatformHttpServerBoundaryTest {
                     }
                 """.trimIndent()
             )
+            val postedEnforcementEvent = post(
+                server.address.port,
+                "/internal/admin/arena/run-enforcement-events",
+                emptyMap(),
+                """
+                    {
+                      "actorId":"admin-cli",
+                      "correlationId":"corr-run-enforcement",
+                      "runId":"run-1",
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "decision":"freeze",
+                      "reasonCode":"tick_policy_violation",
+                      "reason":"max actions exceeded",
+                      "policyVersion":"arena-risk-v0",
+                      "countersJson":"{\"maxActionsPerTick\":11}"
+                    }
+                """.trimIndent()
+            )
             val bot = get(server.address.port, "/internal/admin/arena/bots?botId=bot-1")
             val version = get(server.address.port, "/internal/admin/arena/bot-versions?botId=bot-1&versionId=v1")
             val reports = get(server.address.port, "/internal/admin/arena/qualification-reports?botId=bot-1&versionId=v1")
@@ -1640,6 +1659,7 @@ class PlatformHttpServerBoundaryTest {
             val descriptors = get(server.address.port, "/internal/admin/arena/runtime-config-descriptors?botId=bot-1&versionId=v1")
             val run = get(server.address.port, "/internal/admin/arena/runs?runId=run-1")
             val runResults = get(server.address.port, "/internal/admin/arena/run-bot-results?runId=run-1")
+            val runEnforcementEvents = get(server.address.port, "/internal/admin/arena/run-enforcement-events?runId=run-1")
             val leaderboard = get(server.address.port, "/internal/admin/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2")
 
             assertEquals(200, registeredRun.status)
@@ -1651,6 +1671,9 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, postedResult.status)
             assertContains(postedResult.body, "\"scoringPolicyVersion\":\"score-v2\"")
             assertContains(postedResult.body, "\"finalEquity\":1030000")
+            assertEquals(200, postedEnforcementEvent.status)
+            assertContains(postedEnforcementEvent.body, "\"decision\":\"freeze\"")
+            assertContains(postedEnforcementEvent.body, "\"reasonCode\":\"tick_policy_violation\"")
             assertEquals(200, bot.status)
             assertContains(bot.body, "\"fileName\":\"bot-1.ts\"")
             assertEquals(200, version.status)
@@ -1670,6 +1693,9 @@ class PlatformHttpServerBoundaryTest {
             assertContains(runResults.body, "\"results\":[")
             assertContains(runResults.body, "\"scoringPolicyVersion\":\"score-v2\"")
             assertContains(runResults.body, "\"finalEquity\":1030000")
+            assertEquals(200, runEnforcementEvents.status)
+            assertContains(runEnforcementEvents.body, "\"events\":[")
+            assertContains(runEnforcementEvents.body, "\"countersJson\":\"{\\\"maxActionsPerTick\\\":11}\"")
             assertEquals(200, leaderboard.status)
             assertContains(leaderboard.body, "\"rank\":1")
             assertContains(leaderboard.body, "\"finalEquity\":1030000")
@@ -1699,6 +1725,10 @@ class PlatformHttpServerBoundaryTest {
             )
             assertEquals(400, invalidResult.status)
             assertContains(invalidResult.body, "orderActionsProposed must be less than or equal to actionsProposed")
+
+            val invalidEnforcementQuery = get(server.address.port, "/internal/admin/arena/run-enforcement-events")
+            assertEquals(400, invalidEnforcementQuery.status)
+            assertContains(invalidEnforcementQuery.body, "runId is required")
         } finally {
             server.stop(0)
         }
