@@ -325,12 +325,35 @@ func TestProcessorRedeliveredSubmitAfterCrashIsRejectedNotReexecuted(t *testing.
 
 type fakeSource struct {
 	deliveries []CommandDelivery
+	fetchErr   error
+	fetchCalls int
 }
 
 func (s *fakeSource) Fetch(_ context.Context, _ int, _ time.Duration) ([]CommandDelivery, error) {
+	s.fetchCalls++
+	if s.fetchErr != nil {
+		return nil, s.fetchErr
+	}
 	out := s.deliveries
 	s.deliveries = nil
 	return out, nil
+}
+
+// fakeBatchAckSource is a distinct type (rather than adding AckBatch to
+// fakeSource) so existing tests that rely on fakeSource NOT implementing
+// BatchCommandAcker keep exercising the per-delivery ack path.
+type fakeBatchAckSource struct {
+	fakeSource
+	ackBatchFn    func([]CommandDelivery) (int, error)
+	ackBatchCalls int
+}
+
+func (s *fakeBatchAckSource) AckBatch(deliveries []CommandDelivery) (int, error) {
+	s.ackBatchCalls++
+	if s.ackBatchFn != nil {
+		return s.ackBatchFn(deliveries)
+	}
+	return len(deliveries), nil
 }
 
 type fakePublisher struct {
@@ -353,6 +376,8 @@ type fakeDelivery struct {
 	acked   int
 	nacked  int
 	termed  int
+	ackErr  error
+	nakErr  error
 }
 
 func newFakeDelivery(subject string, seq uint64, payload map[string]string) *fakeDelivery {
@@ -380,11 +405,17 @@ func (d *fakeDelivery) DeliveredCount() uint64 {
 }
 
 func (d *fakeDelivery) Ack() error {
+	if d.ackErr != nil {
+		return d.ackErr
+	}
 	d.acked++
 	return nil
 }
 
 func (d *fakeDelivery) Nak() error {
+	if d.nakErr != nil {
+		return d.nakErr
+	}
 	d.nacked++
 	return nil
 }
@@ -392,4 +423,166 @@ func (d *fakeDelivery) Nak() error {
 func (d *fakeDelivery) Term() error {
 	d.termed++
 	return nil
+}
+
+func TestProcessorRecordFailureIgnoresNilError(t *testing.T) {
+	processor := NewProcessor(app.NewService(), &fakeSource{}, &fakePublisher{}, ProcessorConfig{})
+	processor.recordFailure(nil)
+	stats := processor.Stats()
+	if stats.Failed != 0 || stats.LastError != "" {
+		t.Fatalf("expected no-op for nil error, got %#v", stats)
+	}
+}
+
+func TestProcessorRecordFailureTracksLastError(t *testing.T) {
+	processor := NewProcessor(app.NewService(), &fakeSource{}, &fakePublisher{}, ProcessorConfig{})
+	processor.recordFailure(errors.New("boom"))
+	stats := processor.Stats()
+	if stats.Failed != 1 || stats.LastError != "boom" {
+		t.Fatalf("unexpected stats after recordFailure: %#v", stats)
+	}
+}
+
+func TestProcessorNakAllRecordsFailureOnNakError(t *testing.T) {
+	delivery := &fakeDelivery{subject: "reef.cmd.v1.p00.session.STK001.CancelOrder", seq: 1, nakErr: errors.New("nak failed")}
+	processor := NewProcessor(app.NewService(), &fakeSource{}, &fakePublisher{}, ProcessorConfig{})
+
+	processor.nakAll([]CommandDelivery{delivery})
+
+	stats := processor.Stats()
+	if stats.Nacked != 0 {
+		t.Fatalf("expected no successful nacks, got %d", stats.Nacked)
+	}
+	if stats.Failed != 1 || stats.LastError != "nak failed" {
+		t.Fatalf("expected recordFailure to capture nak error, got %#v", stats)
+	}
+}
+
+func TestProcessorAckAllRecordsFailureOnAckError(t *testing.T) {
+	delivery := &fakeDelivery{subject: "reef.cmd.v1.p00.session.STK001.CancelOrder", seq: 1, ackErr: errors.New("ack failed")}
+	processor := NewProcessor(app.NewService(), &fakeSource{}, &fakePublisher{}, ProcessorConfig{})
+
+	processor.ackAll([]CommandDelivery{delivery})
+
+	stats := processor.Stats()
+	if stats.Acked != 0 {
+		t.Fatalf("expected no successful acks, got %d", stats.Acked)
+	}
+	if stats.Failed != 1 || stats.LastError != "ack failed" {
+		t.Fatalf("expected recordFailure to capture ack error, got %#v", stats)
+	}
+	if stats.LastAckedAt != "" {
+		t.Fatalf("expected LastAckedAt to remain unset when ack fails, got %q", stats.LastAckedAt)
+	}
+}
+
+func TestProcessorAckAllUsesBatchAckerWhenAvailable(t *testing.T) {
+	delivery := &fakeDelivery{subject: "reef.cmd.v1.p00.session.STK001.CancelOrder", seq: 1}
+	source := &fakeBatchAckSource{}
+	processor := NewProcessor(app.NewService(), source, &fakePublisher{}, ProcessorConfig{})
+
+	processor.ackAll([]CommandDelivery{delivery})
+
+	if source.ackBatchCalls != 1 {
+		t.Fatalf("expected AckBatch to be called once, got %d", source.ackBatchCalls)
+	}
+	stats := processor.Stats()
+	if stats.Acked != 1 {
+		t.Fatalf("expected batch ack count to be reflected in stats, got %d", stats.Acked)
+	}
+	if stats.LastAckedAt == "" {
+		t.Fatal("expected LastAckedAt to be set after batch ack")
+	}
+	// Per-delivery Ack() must not be called when a batch acker is used.
+	if delivery.acked != 0 {
+		t.Fatalf("expected delivery.Ack() not to be called when batch acker is present, got %d", delivery.acked)
+	}
+}
+
+func TestProcessorAckAllBatchAckerPropagatesError(t *testing.T) {
+	delivery := &fakeDelivery{subject: "reef.cmd.v1.p00.session.STK001.CancelOrder", seq: 1}
+	source := &fakeBatchAckSource{
+		ackBatchFn: func(deliveries []CommandDelivery) (int, error) {
+			return 0, errors.New("batch ack failed")
+		},
+	}
+	processor := NewProcessor(app.NewService(), source, &fakePublisher{}, ProcessorConfig{})
+
+	processor.ackAll([]CommandDelivery{delivery})
+
+	stats := processor.Stats()
+	if stats.Acked != 0 {
+		t.Fatalf("expected zero acked on batch failure, got %d", stats.Acked)
+	}
+	if stats.Failed != 1 || stats.LastError != "batch ack failed" {
+		t.Fatalf("expected recordFailure to capture batch ack error, got %#v", stats)
+	}
+}
+
+func TestProcessorRunProcessesUntilContextCancelled(t *testing.T) {
+	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 1, map[string]string{
+		"commandId": "cmd-run-1",
+		"orderId":   "ord-run-1",
+	})
+	source := &fakeSource{deliveries: []CommandDelivery{delivery}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{
+		PollInterval: time.Millisecond,
+		BatchSize:    10,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+
+	err := processor.Run(ctx)
+	if err == nil {
+		t.Fatal("expected Run to return an error when the context is done")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got %v", err)
+	}
+	if source.fetchCalls < 2 {
+		t.Fatalf("expected Run to poll fetch multiple times (once with data, then empty), got %d calls", source.fetchCalls)
+	}
+	if len(publisher.batches) != 1 {
+		t.Fatalf("expected the single delivery to be processed exactly once, got %d batches", len(publisher.batches))
+	}
+}
+
+func TestProcessorRunReturnsImmediatelyWhenContextAlreadyCancelled(t *testing.T) {
+	source := &fakeSource{}
+	processor := NewProcessor(app.NewService(), source, &fakePublisher{}, ProcessorConfig{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := processor.Run(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if source.fetchCalls != 0 {
+		t.Fatalf("expected no fetch calls once context is already cancelled, got %d", source.fetchCalls)
+	}
+}
+
+func TestProcessorRunRecordsFailureOnFetchErrorAndKeepsPolling(t *testing.T) {
+	source := &fakeSource{fetchErr: errors.New("fetch failed")}
+	processor := NewProcessor(app.NewService(), source, &fakePublisher{}, ProcessorConfig{
+		PollInterval: time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	err := processor.Run(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got %v", err)
+	}
+	stats := processor.Stats()
+	if stats.Failed == 0 {
+		t.Fatal("expected fetch errors to be recorded as failures")
+	}
+	if stats.LastError != "fetch failed" {
+		t.Fatalf("expected last error to be fetch failed, got %q", stats.LastError)
+	}
 }

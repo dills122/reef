@@ -464,6 +464,85 @@ func TestScenarioSmokeLiveAssertionsFailOnMissingOwnOrderState(t *testing.T) {
 	}
 }
 
+func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
+	settlementPath := filepath.Join(t.TempDir(), "settlement-facts.json")
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","state":"OBLIGATION_CREATED"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"CASH_LEG_FAILED","state":"BROKEN"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_CASH_LEG_REPAIR"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED"}]
+	}`
+	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
+		t.Fatalf("write settlement facts: %v", err)
+	}
+	server := p2SettlementServer(t)
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+		"--settlement-facts-report", settlementPath,
+	}, &stdout, server.Client())
+	if err != nil {
+		t.Fatalf("run error: %v\n%s", err, stdout.String())
+	}
+
+	var report smokeReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", err, stdout.String())
+	}
+	if !report.Pass || len(report.Failures) != 0 || len(report.Errors) != 0 {
+		t.Fatalf("unexpected failed assertion report: %+v", report)
+	}
+	if !hasAssertion(report, "p2-no-direct-resolution-without-repair", "pass") {
+		t.Fatalf("missing settlement causation assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-settlement-causation-fields", "pass") {
+		t.Fatalf("missing settlement causation field assertion: %+v", report.Assertions)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnP2SettlementFactsWithoutRepairLink(t *testing.T) {
+	settlementPath := filepath.Join(t.TempDir(), "settlement-facts.json")
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","state":"OBLIGATION_CREATED"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"CASH_LEG_FAILED","state":"BROKEN"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_CASH_LEG_REPAIR"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED"}]
+	}`
+	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
+		t.Fatalf("write settlement facts: %v", err)
+	}
+	server := p2SettlementServer(t)
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+		"--settlement-facts-report", settlementPath,
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected settlement fact causation failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p2-no-direct-resolution-without-repair") {
+		t.Fatalf("expected repair linkage failure: %+v", report.Failures)
+	}
+}
+
 func TestScenarioSmokeLiveFailsWhenCommandStatusMissing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -562,6 +641,20 @@ func TestScenarioSmokeAssertionsRequireLive(t *testing.T) {
 	}
 }
 
+func TestScenarioSmokeSettlementFactsReportRequiresAssertions(t *testing.T) {
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--live",
+		"--settlement-facts-report", filepath.Join(t.TempDir(), "settlement.json"),
+	}, &bytes.Buffer{}, nil)
+	if err == nil {
+		t.Fatal("expected --settlement-facts-report without --assertions to fail")
+	}
+	if !strings.Contains(err.Error(), "--settlement-facts-report requires --assertions") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestScenarioSmokeReplayCheckReportRequiresAssertions(t *testing.T) {
 	err := run([]string{
 		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
@@ -574,6 +667,23 @@ func TestScenarioSmokeReplayCheckReportRequiresAssertions(t *testing.T) {
 	if !strings.Contains(err.Error(), "--replay-check-report requires --assertions") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func p2SettlementServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/commands/"):
+			commandID := strings.TrimPrefix(r.URL.Path, "/api/v1/commands/")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"commandId":"` + commandID + `","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
 }
 
 func hasAssertion(report smokeReport, assertionID string, status string) bool {

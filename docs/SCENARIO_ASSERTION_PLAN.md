@@ -139,8 +139,8 @@ Required field meaning:
 2. Add P1 command completion and own-order lifecycle assertions. Initial implementation records command status proof from `GET /api/v1/commands/{commandId}` and participant-scoped order history proof from `/api/v1/orders/history`.
 3. Add P1 trade tape and public depth assertions. Initial implementation records public trade tape proof from `/api/v1/market-data/trades/{instrumentId}` and current public depth non-leak proof from `/api/v1/market-data/depth/{instrumentId}`; historical pre-execution hidden-depth proof still needs timeline/replay evidence because the current depth endpoint is not time-travel capable.
 4. Attach replay/checksum evidence to the P1 report. Initial implementation accepts a `--replay-check-report` JSON artifact from `make dev-venue-event-replay-check`, stores it in `replayChecksum`, records its path, and fails the live assertion report when the replay check reports failures.
-5. Add narrow P2 settlement fact assertion source.
-6. Add P2 obligation, `CASH_LEG_FAILED`, repair, and resolved-state assertions.
+5. Add narrow P2 settlement fact assertion source. Initial implementation accepts `--settlement-facts-report` as a test-only assertion artifact by `scenarioRunId`, with obligation, break, repair, and resolution facts shaped by [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md).
+6. Add P2 obligation, `CASH_LEG_FAILED`, repair, and resolved-state assertions. Initial implementation checks one obligation with `tradeId`, one `CASH_LEG_FAILED` break, one `POST_CASH_LEG_REPAIR`, final settlement/exception `RESOLVED`, no resolution without repair linkage, and causation fields on every settlement fact.
 7. Promote passing reports into the active evidence docs.
 
 ## Non-Goals

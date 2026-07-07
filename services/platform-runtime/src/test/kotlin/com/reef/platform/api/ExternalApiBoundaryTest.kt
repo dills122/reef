@@ -77,6 +77,67 @@ class ExternalApiBoundaryTest {
     }
 
     @Test
+    fun idempotencyStoreDoesNotOverwriteExistingEntry() {
+        val store = InMemoryIdempotencyStore()
+        store.save(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            result = IdempotencyResult(200, """{"ok":true}"""),
+            ttlClass = IdempotencyTtlClass.STANDARD
+        )
+        // A second save with the same key must not replace the first result,
+        // matching putIfAbsent semantics for idempotent replay.
+        store.save(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            result = IdempotencyResult(500, """{"ok":false}"""),
+            ttlClass = IdempotencyTtlClass.STANDARD
+        )
+
+        val found = store.find("client-1", "/api/v1/orders/submit", "idem-1")
+        assertNotNull(found)
+        assertEquals(200, found.status)
+    }
+
+    @Test
+    fun idempotencyStoreCleanupExpiredRemovesStaleEntries() {
+        val store = InMemoryIdempotencyStore()
+        store.save(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            result = IdempotencyResult(200, """{"ok":true}"""),
+            ttlClass = IdempotencyTtlClass.SHORT
+        )
+
+        // Cleanup with a "now" far in the future should evict the entry even
+        // though real time hasn't elapsed, exercising the removeIf branch.
+        store.cleanupExpired(Instant.now().plusSeconds(365L * 24 * 60 * 60))
+
+        assertNull(store.find("client-1", "/api/v1/orders/submit", "idem-1"))
+    }
+
+    @Test
+    fun idempotencyStoreCleanupExpiredKeepsFreshEntries() {
+        val store = InMemoryIdempotencyStore()
+        store.save(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            result = IdempotencyResult(200, """{"ok":true}"""),
+            ttlClass = IdempotencyTtlClass.LONG
+        )
+
+        store.cleanupExpired(Instant.now())
+
+        val found = store.find("client-1", "/api/v1/orders/submit", "idem-1")
+        assertNotNull(found)
+        assertEquals(200, found.status)
+    }
+
+    @Test
     fun staticTokenAuthHookRequiresMatchingClientToken() {
         val hook = StaticTokenAuthHook(mapOf("client-1" to "token-1"))
         assertNull(hook.authorize("client-1", "Bearer token-1"))
