@@ -12,15 +12,12 @@ import (
 )
 
 type Service struct {
-	booksMu                sync.RWMutex
-	books                  map[string]*orderBook
-	ordersMu               sync.RWMutex
-	orders                 map[string]*orderRecord
-	now                    func() time.Time
-	terminalRetentionLimit int
-	terminalRetentionMu    sync.Mutex
-	terminalRetentionOrder []string
-	terminalRetentionHead  int
+	booksMu           sync.RWMutex
+	books             map[string]*orderBook
+	ordersMu          sync.RWMutex
+	orders            map[string]*orderRecord
+	now               func() time.Time
+	terminalRetention terminalOrderRetention
 }
 
 type restingOrder = hotbook.RestingOrder
@@ -56,16 +53,18 @@ func WithClock(clock func() time.Time) Option {
 func WithTerminalOrderRetentionLimit(limit int) Option {
 	return func(s *Service) {
 		if limit > 0 {
-			s.terminalRetentionLimit = limit
+			s.terminalRetention.limit = limit
 		}
 	}
 }
 
 func NewService(options ...Option) *Service {
 	service := &Service{
-		books:                  make(map[string]*orderBook),
-		orders:                 make(map[string]*orderRecord),
-		terminalRetentionLimit: envInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", 0),
+		books:  make(map[string]*orderBook),
+		orders: make(map[string]*orderRecord),
+		terminalRetention: terminalOrderRetention{
+			limit: envInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", 0),
+		},
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -509,40 +508,17 @@ func (s *Service) refreshOrderStatus(record *orderRecord) {
 }
 
 func (s *Service) trackTerminalOrder(record *orderRecord) {
-	if s.terminalRetentionLimit <= 0 || record.terminalTracked {
-		return
-	}
-	if record.Status != domain.OrderStatusFilled && record.Status != domain.OrderStatusCancelled {
-		return
-	}
-
-	s.terminalRetentionMu.Lock()
-	defer s.terminalRetentionMu.Unlock()
-	if record.terminalTracked {
-		return
-	}
-	record.terminalTracked = true
-	s.terminalRetentionOrder = append(s.terminalRetentionOrder, record.OrderID)
-	for len(s.terminalRetentionOrder)-s.terminalRetentionHead > s.terminalRetentionLimit {
-		evictID := s.terminalRetentionOrder[s.terminalRetentionHead]
-		s.terminalRetentionHead++
-		if evictID == record.OrderID {
-			continue
-		}
+	s.terminalRetention.track(record, func(evictID string) {
 		evictRecord, ok := s.loadOrder(evictID)
 		if !ok {
-			continue
+			return
 		}
 		if evictRecord.Status == domain.OrderStatusFilled || evictRecord.Status == domain.OrderStatusCancelled {
 			s.ordersMu.Lock()
 			delete(s.orders, evictID)
 			s.ordersMu.Unlock()
 		}
-	}
-	if s.terminalRetentionHead > 0 && s.terminalRetentionHead*2 >= len(s.terminalRetentionOrder) {
-		s.terminalRetentionOrder = append([]string(nil), s.terminalRetentionOrder[s.terminalRetentionHead:]...)
-		s.terminalRetentionHead = 0
-	}
+	})
 }
 
 func minInt64(a int64, b int64) int64 {
