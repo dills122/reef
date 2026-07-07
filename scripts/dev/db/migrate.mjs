@@ -4,6 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { env, loadDotEnv } from "../lib/dev-utils.mjs";
+import { composeArgs } from "../lib/compose-utils.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
@@ -199,10 +200,7 @@ function sqlString(value) {
 
 function runPsql(sql, options = {}) {
   const { capture = false, target = migrationTargets()[0] } = options;
-  const args = [
-    "compose",
-    "-f",
-    "docker-compose.yml",
+  const args = composeArgs([
     "exec",
     "-T",
     target.service,
@@ -217,7 +215,7 @@ function runPsql(sql, options = {}) {
     "-q",
     "-t",
     "-A",
-  ];
+  ]);
 
   return new Promise((resolve, reject) => {
     const child = spawn("docker", args, {

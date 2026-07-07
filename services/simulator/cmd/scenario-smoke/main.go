@@ -135,8 +135,9 @@ type ownOrdersBody struct {
 }
 
 type ownOrderBody struct {
-	OrderID string `json:"orderId"`
-	Status  string `json:"status"`
+	OrderID             string `json:"orderId"`
+	Status              string `json:"status"`
+	FilledQuantityUnits string `json:"filledQuantityUnits"`
 }
 
 type settlementFactsReport struct {
@@ -216,6 +217,29 @@ type marketDepthSnapshot struct {
 type marketDepthLevel struct {
 	Price    string `json:"price"`
 	Quantity string `json:"quantity"`
+}
+
+type dataAvailabilityBody struct {
+	GeneratedAt string                 `json:"generatedAt"`
+	Surfaces    []dataSurfaceStatus    `json:"surfaces"`
+	Projections []dataProjectionStatus `json:"projections"`
+}
+
+type dataSurfaceStatus struct {
+	Name                  string `json:"name"`
+	Endpoint              string `json:"endpoint"`
+	Source                string `json:"source"`
+	Freshness             string `json:"freshness"`
+	ProjectionName        string `json:"projectionName"`
+	Lag                   int64  `json:"lag"`
+	LastPartitionSequence int64  `json:"lastPartitionSequence"`
+	LastUpdatedAt         string `json:"lastUpdatedAt"`
+}
+
+type dataProjectionStatus struct {
+	ProjectionName string `json:"projectionName"`
+	Role           string `json:"role"`
+	Lag            int64  `json:"lag"`
 }
 
 func main() {
@@ -727,24 +751,28 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		participantID string
 		orderID       string
 		status        string
+		filled        string
 	}{
 		{
 			assertionID:   "p1-hidden-sell-filled",
 			participantID: "HIDDEN_SELLER_A",
 			orderID:       "p1_golden_hidden_cross_t1-ord-001",
 			status:        "FILLED",
+			filled:        "100",
 		},
 		{
 			assertionID:   "p1-first-visible-buy-filled",
 			participantID: "VISIBLE_BUYER_B",
 			orderID:       "p1_golden_hidden_cross_t1-ord-002",
 			status:        "FILLED",
+			filled:        "40",
 		},
 		{
 			assertionID:   "p1-second-visible-buy-filled",
 			participantID: "VISIBLE_BUYER_C",
 			orderID:       "p1_golden_hidden_cross_t1-ord-003",
 			status:        "FILLED",
+			filled:        "60",
 		},
 	}
 	for _, want := range expected {
@@ -760,16 +788,42 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 			})
 			continue
 		}
-		observed := findOwnOrderStatus(orders, want.orderID)
-		if observed == want.status {
-			passAssertion(report, want.assertionID, want.status, observed, read.Endpoint)
+		order, found := findOwnOrder(orders, want.orderID)
+		observedStatus := ""
+		observedFilled := ""
+		if found {
+			observedStatus = order.Status
+			observedFilled = order.FilledQuantityUnits
+		}
+		if observedStatus == want.status {
+			passAssertion(report, want.assertionID, want.status, observedStatus, read.Endpoint)
 		} else {
-			failAssertion(report, want.assertionID, "own_order_lifecycle", want.status, observed, read.Endpoint)
+			failAssertion(report, want.assertionID, "own_order_lifecycle", want.status, observedStatus, read.Endpoint)
+		}
+		filledAssertionID := strings.TrimSuffix(want.assertionID, "-filled") + "-filled-quantity"
+		if observedFilled == want.filled {
+			passAssertion(report, filledAssertionID, want.filled, observedFilled, read.Endpoint)
+		} else {
+			failAssertion(report, filledAssertionID, "own_order_filled_quantity", want.filled, observedFilled, read.Endpoint)
 		}
 	}
 }
 
 func runP1MarketDataAssertions(cfg config, client *http.Client, report *smokeReport) {
+	availabilityRead, availability, err := readDataAvailability(cfg, client)
+	report.Reads = append(report.Reads, availabilityRead)
+	if err != nil {
+		report.Errors = append(report.Errors, "p1-read-surface-inventory failed")
+		report.Failures = append(report.Failures, scenarioFailure{
+			AssertionID: "p1-read-surface-inventory",
+			Category:    "read_surface_inventory",
+			Message:     err.Error(),
+			ProofSource: availabilityRead.Endpoint,
+		})
+	} else {
+		assertP1DataAvailability(report, availabilityRead.Endpoint, availability)
+	}
+
 	tradeRead, trades, err := readTradeTape(cfg, client, "XYZ")
 	report.Reads = append(report.Reads, tradeRead)
 	if err != nil {
@@ -804,6 +858,71 @@ func runP1MarketDataAssertions(cfg config, client *http.Client, report *smokeRep
 		passAssertion(report, "p1-public-depth-hidden-size-not-visible", "no ask level 100000000000/100", observed, depthRead.Endpoint)
 	} else {
 		failAssertion(report, "p1-public-depth-hidden-size-not-visible", "public_depth_visibility", "no ask level 100000000000/100", "ask level 100000000000/100 visible", depthRead.Endpoint)
+	}
+}
+
+func assertP1DataAvailability(report *smokeReport, endpoint string, availability dataAvailabilityBody) {
+	required := map[string]struct {
+		assertionID string
+		source      string
+		freshness   string
+	}{
+		"orderHistory": {
+			assertionID: "p1-order-history-source-declared",
+			source:      "runtime.orders + runtime.order_lifecycle_state",
+			freshness:   "dirty-tracked lifecycle projection",
+		},
+		"marketDataDepth": {
+			assertionID: "p1-market-depth-source-declared",
+			source:      "runtime.order_lifecycle_state",
+			freshness:   "read-time bounded aggregation",
+		},
+		"tradeTape": {
+			assertionID: "p1-trade-tape-source-declared",
+			source:      "runtime.trades",
+			freshness:   "durable fact rows",
+		},
+	}
+	surfaces := map[string]dataSurfaceStatus{}
+	for _, surface := range availability.Surfaces {
+		surfaces[surface.Name] = surface
+		if surface.ProjectionName != "" {
+			measuredAt := surface.LastUpdatedAt
+			if measuredAt == "" {
+				measuredAt = availability.GeneratedAt
+			}
+			report.ProjectionLag = append(report.ProjectionLag, projectionLag{
+				Projection: surface.ProjectionName,
+				Lag:        fmt.Sprint(surface.Lag),
+				Watermark:  fmt.Sprint(surface.LastPartitionSequence),
+				MeasuredAt: measuredAt,
+			})
+		}
+	}
+	missing := make([]string, 0)
+	for name := range required {
+		if _, ok := surfaces[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) == 0 {
+		passAssertion(report, "p1-read-surface-inventory", "orderHistory/marketDataDepth/tradeTape", "read surfaces available", endpoint)
+	} else {
+		failAssertion(report, "p1-read-surface-inventory", "read_surface_inventory", "orderHistory/marketDataDepth/tradeTape", "missing "+strings.Join(missing, ","), endpoint)
+	}
+	for name, want := range required {
+		surface, ok := surfaces[name]
+		observed := ""
+		if ok {
+			observed = surface.Source + "|" + surface.Freshness
+		}
+		expected := want.source + "|" + want.freshness
+		if observed == expected {
+			passAssertion(report, want.assertionID, expected, observed, endpoint)
+		} else {
+			failAssertion(report, want.assertionID, "read_surface_source", expected, observed, endpoint)
+		}
 	}
 }
 
@@ -880,6 +999,24 @@ func readMarketDepth(cfg config, client *http.Client, instrumentID string) (asse
 		return read, parsed.Depth, false, fmt.Errorf("market depth returned %d", read.StatusCode)
 	}
 	return read, parsed.Depth, true, nil
+}
+
+func readDataAvailability(cfg config, client *http.Client) (assertionRead, dataAvailabilityBody, error) {
+	endpoint := "/api/v1/data/availability"
+	read, body, err := executeRead(client, absoluteURL(cfg.baseURL, endpoint), endpoint, nil)
+	if err != nil {
+		return read, dataAvailabilityBody{}, err
+	}
+	read.SourceType = "runtime availability report"
+	read.FreshnessModel = "live diagnostic snapshot"
+	var parsed dataAvailabilityBody
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return read, dataAvailabilityBody{}, err
+	}
+	if read.StatusCode != 200 {
+		return read, parsed, fmt.Errorf("data availability returned %d", read.StatusCode)
+	}
+	return read, parsed, nil
 }
 
 func executeRead(client *http.Client, requestURL string, endpoint string, filters map[string]string) (assertionRead, []byte, error) {
@@ -990,13 +1127,13 @@ func commandIDForResult(requests []smokeRequest, result smokeResult) string {
 	return ""
 }
 
-func findOwnOrderStatus(orders []ownOrderBody, orderID string) string {
+func findOwnOrder(orders []ownOrderBody, orderID string) (ownOrderBody, bool) {
 	for _, order := range orders {
 		if order.OrderID == orderID {
-			return order.Status
+			return order, true
 		}
 	}
-	return ""
+	return ownOrderBody{}, false
 }
 
 func passAssertion(report *smokeReport, id string, expected string, observed string, proofSource string) {

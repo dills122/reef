@@ -1,4 +1,5 @@
 import { deriveDevUrls, env, loadDotEnv, run, waitForHttp } from "./lib/dev-utils.mjs";
+import { composeArgs } from "./lib/compose-utils.mjs";
 
 loadDotEnv();
 const { runtimeUrl } = deriveDevUrls();
@@ -16,7 +17,7 @@ if (commandProcessingMode) {
     process.env.EXTERNAL_API_COMMAND_LOG_MODE = commandLogMode;
   }
   try {
-    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-api"]);
+    await run("docker", composeArgs(["up", "-d", "platform-api"]));
     await waitForHttp(`${runtimeUrl}/health`, 90, 2000);
   } finally {
     if (previousProcessingMode == null) {

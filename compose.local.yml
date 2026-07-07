@@ -1,0 +1,310 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reef-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_PG_MAX_CONNECTIONS:-200}"
+      - "-c"
+      - "max_wal_size=${REEF_PG_MAX_WAL_SIZE:-16GB}"
+      - "-c"
+      - "min_wal_size=${REEF_PG_MIN_WAL_SIZE:-4GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_PG_LOG_CHECKPOINTS:-on}"
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - reef-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  projection-postgres:
+    image: postgres:16-alpine
+    container_name: reef-projection-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_PROJECTION_PG_MAX_CONNECTIONS:-160}"
+      - "-c"
+      - "max_wal_size=${REEF_PROJECTION_PG_MAX_WAL_SIZE:-16GB}"
+      - "-c"
+      - "min_wal_size=${REEF_PROJECTION_PG_MIN_WAL_SIZE:-4GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_PROJECTION_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_PROJECTION_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_PROJECTION_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_PROJECTION_PG_LOG_CHECKPOINTS:-on}"
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_PROJECTION_POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - reef-projection-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  boundary-postgres:
+    image: postgres:16-alpine
+    container_name: reef-boundary-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_BOUNDARY_PG_MAX_CONNECTIONS:-160}"
+      - "-c"
+      - "max_wal_size=${REEF_BOUNDARY_PG_MAX_WAL_SIZE:-16GB}"
+      - "-c"
+      - "min_wal_size=${REEF_BOUNDARY_PG_MIN_WAL_SIZE:-4GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_BOUNDARY_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_BOUNDARY_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_BOUNDARY_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_BOUNDARY_PG_LOG_CHECKPOINTS:-on}"
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_BOUNDARY_POSTGRES_HOST_PORT:-5434}:5432"
+    volumes:
+      - reef-boundary-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  arena-postgres:
+    image: postgres:16-alpine
+    container_name: reef-arena-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=${REEF_ARENA_PG_MAX_CONNECTIONS:-80}"
+      - "-c"
+      - "max_wal_size=${REEF_ARENA_PG_MAX_WAL_SIZE:-4GB}"
+      - "-c"
+      - "min_wal_size=${REEF_ARENA_PG_MIN_WAL_SIZE:-1GB}"
+      - "-c"
+      - "checkpoint_timeout=${REEF_ARENA_PG_CHECKPOINT_TIMEOUT:-15min}"
+      - "-c"
+      - "checkpoint_completion_target=${REEF_ARENA_PG_CHECKPOINT_COMPLETION_TARGET:-0.9}"
+      - "-c"
+      - "wal_compression=${REEF_ARENA_PG_WAL_COMPRESSION:-on}"
+      - "-c"
+      - "log_checkpoints=${REEF_ARENA_PG_LOG_CHECKPOINTS:-on}"
+    environment:
+      POSTGRES_DB: reef
+      POSTGRES_USER: reef
+      POSTGRES_PASSWORD: reef
+    ports:
+      - "${REEF_ARENA_POSTGRES_HOST_PORT:-5435}:5432"
+    volumes:
+      - reef-arena-postgres-data:/var/lib/postgresql/data
+      - ./scripts/dev/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reef -d reef"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: reef-redis
+    profiles: ["redis"]
+    ports:
+      - "${REEF_REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats:
+    image: nats:2.11-alpine
+    container_name: reef-nats
+    command: ["-js", "-sd", "/data/jetstream", "-m", "8222"]
+    ports:
+      - "${REEF_NATS_HOST_PORT:-4222}:4222"
+      - "${REEF_NATS_MONITOR_HOST_PORT:-8222}:8222"
+    volumes:
+      - reef-nats-data:/data/jetstream
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats-box:
+    image: natsio/nats-box:0.18.0
+    profiles: ["stream-ack-tools"]
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  redpanda:
+    image: redpandadata/redpanda:v26.1.1
+    container_name: reef-redpanda
+    profiles: ["redpanda"]
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "${REEF_REDPANDA_SMP:-2}"
+      - --memory
+      - "${REEF_REDPANDA_MEMORY:-2G}"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - "PLAINTEXT://0.0.0.0:9092"
+      - --advertise-kafka-addr
+      - "PLAINTEXT://redpanda:9092"
+      - --pandaproxy-addr
+      - "0.0.0.0:8082"
+      - --advertise-pandaproxy-addr
+      - "redpanda:8082"
+      - --schema-registry-addr
+      - "0.0.0.0:8081"
+    ports:
+      - "${REEF_REDPANDA_KAFKA_HOST_PORT:-9092}:9092"
+      - "${REEF_REDPANDA_PROXY_HOST_PORT:-18082}:8082"
+      - "${REEF_REDPANDA_SCHEMA_REGISTRY_HOST_PORT:-18083}:8081"
+      - "${REEF_REDPANDA_ADMIN_HOST_PORT:-19644}:9644"
+    volumes:
+      - reef-redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info --brokers=localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: reef-jaeger
+    profiles: ["observability"]
+    ports:
+      - "${REEF_JAEGER_UI_HOST_PORT:-16686}:16686"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.105.0
+    container_name: reef-otel-collector
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./scripts/dev/otel/collector-config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+    ports:
+      - "${REEF_OTEL_GRPC_HOST_PORT:-4317}:4317"
+      - "${REEF_OTEL_HTTP_HOST_PORT:-4318}:4318"
+
+  matching-engine:
+    container_name: reef-matching-engine
+    ports:
+      - "${REEF_MATCHING_ENGINE_HOST_PORT:-8081}:8081"
+      - "${REEF_MATCHING_ENGINE_GRPC_HOST_PORT:-9081}:9081"
+
+  platform-api:
+    container_name: reef-platform-api
+    ports:
+      - "${REEF_PLATFORM_API_HOST_PORT:-8080}:8080"
+      - "${REEF_STREAM_INGRESS_HOST_PORT:-8090}:8090"
+
+  platform-worker-0:
+    container_name: reef-platform-worker-0
+    ports:
+      - "${REEF_PLATFORM_WORKER_0_HOST_PORT:-8082}:8080"
+
+  platform-worker-1:
+    container_name: reef-platform-worker-1
+    ports:
+      - "${REEF_PLATFORM_WORKER_1_HOST_PORT:-8083}:8080"
+
+  platform-worker-2:
+    container_name: reef-platform-worker-2
+    ports:
+      - "${REEF_PLATFORM_WORKER_2_HOST_PORT:-8086}:8080"
+
+  platform-worker-3:
+    container_name: reef-platform-worker-3
+    ports:
+      - "${REEF_PLATFORM_WORKER_3_HOST_PORT:-8087}:8080"
+
+  platform-projector-0:
+    container_name: reef-platform-projector-0
+    ports:
+      - "${REEF_PLATFORM_PROJECTOR_0_HOST_PORT:-8084}:8080"
+
+  platform-projector-1:
+    container_name: reef-platform-projector-1
+    ports:
+      - "${REEF_PLATFORM_PROJECTOR_1_HOST_PORT:-8085}:8080"
+
+  platform-projector-2:
+    container_name: reef-platform-projector-2
+    ports:
+      - "${REEF_PLATFORM_PROJECTOR_2_HOST_PORT:-8088}:8080"
+
+  platform-projector-3:
+    container_name: reef-platform-projector-3
+    ports:
+      - "${REEF_PLATFORM_PROJECTOR_3_HOST_PORT:-8089}:8080"
+
+  platform-materializer:
+    container_name: reef-platform-materializer
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_HOST_PORT:-8091}:8080"
+
+  platform-materializer-1:
+    container_name: reef-platform-materializer-1
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_1_HOST_PORT:-8092}:8080"
+
+  platform-materializer-2:
+    container_name: reef-platform-materializer-2
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_2_HOST_PORT:-8093}:8080"
+
+  platform-materializer-3:
+    container_name: reef-platform-materializer-3
+    ports:
+      - "${REEF_PLATFORM_MATERIALIZER_3_HOST_PORT:-8094}:8080"
+
+volumes:
+  reef-postgres-data:
+  reef-boundary-postgres-data:
+  reef-projection-postgres-data:
+  reef-arena-postgres-data:
+  reef-nats-data:
+  reef-redpanda-data:
