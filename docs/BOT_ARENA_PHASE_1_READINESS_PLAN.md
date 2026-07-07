@@ -452,6 +452,11 @@ bots. Custom bots should consume the remaining budget. If a runner saturates, th
 correct first response is not to let latency compound; the arena should mark
 late ticks, drop stale work, and freeze bots that repeatedly exceed their budget.
 
+The first implementation slice for validating these assumptions is the isolated
+runner benchmark in `docs/BOT_ARENA_RUNNER_BENCH.md`. That bench intentionally
+measures Deno runner processes, Deno workers, synthetic bot ticks, RSS, tick
+latency, and proposed-action throughput without involving the Reef venue API.
+
 For a rough first sizing model, a bot at 500 actions per second with 5 actions
 per tick requires 100 ticks per second. Ten bots at that rate means 1,000
 bot-ticks per second before validation and command submission. That is plausible

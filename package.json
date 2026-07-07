@@ -35,6 +35,7 @@
     "bot-sdk:smoke:live": "bun scripts/dev/bot-sdk-live-smoke.mjs",
     "bot-sdk:smoke:live:check": "node --check scripts/dev/bot-sdk-live-smoke.mjs",
     "bot-sdk:smoke:hosted-ses-container": "bun scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs",
+    "arena:runner-bench": "bun scripts/dev/arena-runner-bench.mjs",
     "arena:smoke:run-results": "bun scripts/dev/arena-run-result-ingestion-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs",
