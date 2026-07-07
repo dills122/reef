@@ -106,6 +106,7 @@ class PlatformNettyHotPathServer(
                     path = decoded.path(),
                     query = rawQuery(request.uri()),
                     headers = request.headers().toSunHeaders(),
+                    remoteAddress = (ctx.channel().remoteAddress() as? InetSocketAddress)?.address?.hostAddress,
                     body = request.content().toString(StandardCharsets.UTF_8)
                 )
                 delegate.handleHotPathRequestAsync(hotPathRequest)

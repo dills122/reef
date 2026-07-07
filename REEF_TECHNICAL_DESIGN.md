@@ -474,10 +474,12 @@ Near-term architecture:
 
 Boundary requirements:
 - authentication hook (token/API key)
+- object-level authorization for object-id and participant/account/client scoped reads
 - idempotency key requirement for writes
 - rate limiting at client scope
 - structured error envelope with correlation IDs
 - audit-safe structured logging
+- non-local profiles fail closed unless auth, rate-limit, durable idempotency, and internal HTTP exposure modes are explicit
 
 ### 11.3 Admin layer
 
@@ -485,14 +487,27 @@ Direction:
 - application-layer admin use cases first
 - CLI adapter first
 - internal admin/control interfaces use gRPC/protobuf by default
-- admin/data HTTP APIs may be added later only as gateway-backed, versioned, authenticated, audited adapters reusing the same modules
+- admin/data HTTP APIs use gateway-backed, versioned, authenticated, authorized, audited adapters reusing the same modules; current hosted HTTP gateway paths use `/admin/v1/...`
 - raw `/internal/*` HTTP access is local/migration tooling, not a deployable user surface
+- admin actor identity comes from the authenticated principal, service identity, peer certificate/token claims, or gateway-bound headers, not body/query fields
 
 Admin command requirements:
 - actor context
 - authorization checks
 - audit event emission
 - idempotency for mutating operations
+
+### 11.4 API/control-plane hardening backlog
+
+Active follow-up work is tracked in [`docs/API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog`](./docs/API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog).
+
+Required direction:
+- finish remaining account/client/object-id authorization; participant-scoped order reads, command status, and market-data reads now pass through read boundary checks
+- migrate hosted/CI/operator flows from raw `/internal/*` to `/admin/v1/...`, CLI, gRPC, or durable-message contracts using [`docs/INTERNAL_HTTP_CALLER_INVENTORY.md`](./docs/INTERNAL_HTTP_CALLER_INVENTORY.md)
+- keep runtime-to-engine gRPC as the default; keep HTTP only as explicit local/parity fallback
+- add TLS/mTLS or service-mesh identity before multi-host non-local internal gRPC deployments
+- keep `/healthz` cheap and grow `/readyz` beyond current DB pool pressure and stream availability checks into full enabled-dependency readiness
+- key submit stream lanes by `runId + venueSessionId + instrumentId` once runtime command models carry those fields
 
 Early admin priorities for post-match realism:
 - calendar profile management (country-agnostic with U.S. defaults)

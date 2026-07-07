@@ -49,6 +49,16 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
 class PlatformHttpServerBoundaryTest {
+    private fun apiReadHeaders(
+        clientId: String = "client-1",
+        participantId: String = "participant-1"
+    ): Map<String, String> {
+        return mapOf(
+            "X-Client-Id" to clientId,
+            "X-Participant-Id" to participantId
+        )
+    }
+
     @Test
     fun apiV1SubmitReturnsBoundaryErrorEnvelopeWhenClientIdMissing() {
         val server = testServer()
@@ -71,7 +81,7 @@ class PlatformHttpServerBoundaryTest {
     fun apiV1DataAvailabilityReportsReadSurfaceFreshness() {
         val server = testServer()
         try {
-            val response = get(server.address.port, "/api/v1/data/availability")
+            val response = get(server.address.port, "/api/v1/data/availability", headers = apiReadHeaders())
 
             assertEquals(200, response.status)
             assertContains(response.body, "\"source\":\"venue-event-batch\"")
@@ -83,6 +93,70 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"freshness\":\"durable fact rows\"")
             assertContains(response.body, "\"name\":\"settlementFacts\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1ReadEndpointsRequireClientPrincipal() {
+        val server = testServer()
+        try {
+            val availability = get(server.address.port, "/api/v1/data/availability")
+            val marketData = get(server.address.port, "/api/v1/market-data/trades/AAPL")
+
+            assertEquals(401, availability.status)
+            assertContains(availability.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+            assertEquals(401, marketData.status)
+            assertContains(marketData.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun healthzAndReadyzExposeCheapRuntimeStatus() {
+        val server = testServer()
+        try {
+            val health = get(server.address.port, "/healthz")
+            val readiness = get(server.address.port, "/readyz")
+
+            assertEquals(200, health.status)
+            assertContains(health.body, "\"status\":\"ok\"")
+            assertEquals(200, readiness.status)
+            assertContains(readiness.body, "\"status\":\"ok\"")
+            assertContains(readiness.body, "\"internalHttpMode\":\"localonly\"")
+            assertContains(readiness.body, "\"dependencies\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1ParticipantOrderReadsRequireMatchingParticipantPrincipal() {
+        val server = testServer()
+        try {
+            val denied = get(
+                server.address.port,
+                "/api/v1/orders/current?participantId=participant-2",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1"
+                )
+            )
+            val allowed = get(
+                server.address.port,
+                "/api/v1/orders/current?participantId=participant-1",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1"
+                )
+            )
+
+            assertEquals(403, denied.status)
+            assertContains(denied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertEquals(200, allowed.status)
+            assertContains(allowed.body, "\"orders\"")
         } finally {
             server.stop(0)
         }
@@ -620,7 +694,7 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-status-1", "trace-status-1", "ord-status-1")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-status-1")
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-1", headers = apiReadHeaders())
 
             assertEquals(200, response.status)
             assertEquals(200, status.status)
@@ -665,7 +739,7 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-status-canonical", "trace-status-canonical", "ord-cmd-status-canonical")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-status-canonical")
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-canonical", headers = apiReadHeaders())
 
             assertEquals(200, submit.status)
             assertEquals(200, status.status)
@@ -677,8 +751,53 @@ class PlatformHttpServerBoundaryTest {
             assertContains(status.body, "\"resultStatus\":\"accepted\"")
             assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
             assertContains(status.body, "\"instrumentId\":\"AAPL\"")
+            assertContains(status.body, "\"participantId\":\"participant-1\"")
             assertContains(status.body, "\"orderId\":\"ord-cmd-status-canonical\"")
-            assertFalse(status.body.contains("\"clientId\":\"client-1\""))
+            assertContains(status.body, "\"clientId\":\"client-1\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusRejectsMismatchedReadPrincipal() {
+        val commandLogStore = InMemoryCommandLogStore()
+        val captureStore = CommandLogCommandCaptureStore(
+            delegate = NoopCommandCaptureStore(),
+            commandLogStore = commandLogStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore,
+            commandProcessingMode = CommandProcessingMode.CapturedSyncEngine
+        )
+        try {
+            val submit = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "Idempotency-Key" to "idem-status-scope"
+                ),
+                body = validSubmitBody("cmd-status-scope", "trace-status-scope", "ord-status-scope")
+            )
+            val deniedClient = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-scope",
+                headers = apiReadHeaders(clientId = "client-2")
+            )
+            val deniedParticipant = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-scope",
+                headers = apiReadHeaders(participantId = "participant-2")
+            )
+
+            assertEquals(200, submit.status)
+            assertEquals(403, deniedClient.status)
+            assertContains(deniedClient.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertEquals(403, deniedParticipant.status)
+            assertContains(deniedParticipant.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
         } finally {
             server.stop(0)
         }
@@ -701,7 +820,7 @@ class PlatformHttpServerBoundaryTest {
             runtimePersistence = persistence
         )
         try {
-            val status = get(server.address.port, "/api/v1/commands/cmd-status-rejected")
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-rejected", headers = apiReadHeaders())
 
             assertEquals(200, status.status)
             assertContains(status.body, "\"canonicalMaterialized\":true")
@@ -1043,7 +1162,7 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-ack-1", "trace-ack-1", "ord-ack-1")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-ack-1")
+            val status = get(server.address.port, "/api/v1/commands/cmd-ack-1", headers = apiReadHeaders())
 
             assertEquals(202, response.status)
             assertContains(response.body, "\"commandId\":\"cmd-ack-1\"")
@@ -1083,7 +1202,7 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-risk-reject", "trace-risk-reject", "ord-risk-reject")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-risk-reject")
+            val status = get(server.address.port, "/api/v1/commands/cmd-risk-reject", headers = apiReadHeaders("client-risk-reject"))
 
             assertEquals(403, response.status)
             assertContains(response.body, "\"code\":\"ACCOUNT_RISK_REJECTED\"")
@@ -1131,7 +1250,7 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-risk-limit", "trace-risk-limit", "ord-risk-limit")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-risk-limit")
+            val status = get(server.address.port, "/api/v1/commands/cmd-risk-limit", headers = apiReadHeaders("client-risk-limit"))
 
             assertEquals(403, response.status)
             assertContains(response.body, "\"code\":\"ACCOUNT_RISK_MAX_NOTIONAL_EXCEEDED\"")
@@ -1170,7 +1289,7 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-breaker-reject", "trace-breaker-reject", "ord-breaker-reject")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-breaker-reject")
+            val status = get(server.address.port, "/api/v1/commands/cmd-breaker-reject", headers = apiReadHeaders("client-breaker-reject"))
 
             assertEquals(503, response.status)
             assertContains(response.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
@@ -1268,7 +1387,7 @@ class PlatformHttpServerBoundaryTest {
             val response = post(
                 port = server.address.port,
                 path = "/internal/admin/account-risk/controls",
-                headers = emptyMap(),
+                headers = mapOf("X-Reef-Actor-Id" to "ops-1", "X-Correlation-Id" to "corr-admin-risk"),
                 body = """
                     {
                       "scopeType":"bot",
@@ -1278,8 +1397,8 @@ class PlatformHttpServerBoundaryTest {
                       "maxQuantityUnits":"100",
                       "maxNotional":"15025000000000",
                       "currency":"usd",
-                      "actorId":"ops-1",
-                      "correlationId":"corr-admin-risk"
+                      "actorId":"spoofed-ops",
+                      "correlationId":"spoofed-corr"
                     }
                 """.trimIndent()
             )
@@ -1341,7 +1460,7 @@ class PlatformHttpServerBoundaryTest {
             val registeredVersion = post(
                 port = server.address.port,
                 path = "/internal/admin/arena/bot-versions",
-                headers = emptyMap(),
+                headers = mapOf("X-Reef-Actor-Id" to "admin-cli", "X-Correlation-Id" to "corr-admin-arena"),
                 body = """
                     {
                       "botId":"bot-1",
@@ -1351,23 +1470,23 @@ class PlatformHttpServerBoundaryTest {
                       "sdkVersion":"1.5.0",
                       "apiVersion":"v1",
                       "dependencyManifestHash":"sha256:deps",
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-admin-arena"
+                      "actorId":"spoofed-admin",
+                      "correlationId":"spoofed-corr"
                     }
                 """.trimIndent()
             )
             val response = post(
                 port = server.address.port,
                 path = "/internal/admin/arena/bot-versions/transition",
-                headers = emptyMap(),
+                headers = mapOf("X-Reef-Actor-Id" to "admin-cli", "X-Correlation-Id" to "corr-admin-arena"),
                 body = """
                     {
                       "botId":"bot-1",
                       "versionId":"v1",
                       "status":"quarantined",
                       "reason":"scanner regression",
-                      "actorId":"admin-cli",
-                      "correlationId":"corr-admin-arena"
+                      "actorId":"spoofed-admin",
+                      "correlationId":"spoofed-corr"
                     }
                 """.trimIndent()
             )
@@ -1682,15 +1801,15 @@ class PlatformHttpServerBoundaryTest {
             val response = post(
                 port = server.address.port,
                 path = "/internal/admin/circuit-breakers",
-                headers = emptyMap(),
+                headers = mapOf("X-Reef-Actor-Id" to "ops-2", "X-Correlation-Id" to "corr-admin-breaker"),
                 body = """
                     {
                       "scopeType":"instrument",
                       "scopeId":"AAPL",
                       "action":"trip",
                       "reason":"operator halt",
-                      "actorId":"ops-2",
-                      "correlationId":"corr-admin-breaker"
+                      "actorId":"spoofed-ops",
+                      "correlationId":"spoofed-corr"
                     }
                 """.trimIndent()
             )
@@ -1724,7 +1843,7 @@ class PlatformHttpServerBoundaryTest {
             val response = post(
                 port = server.address.port,
                 path = "/internal/admin/price-collars",
-                headers = emptyMap(),
+                headers = mapOf("X-Reef-Actor-Id" to "ops-3", "X-Correlation-Id" to "corr-admin-collar"),
                 body = """
                     {
                       "instrumentId":"AAPL",
@@ -1732,8 +1851,8 @@ class PlatformHttpServerBoundaryTest {
                       "maxPrice":"151000000000",
                       "currency":"usd",
                       "reason":"regular band",
-                      "actorId":"ops-3",
-                      "correlationId":"corr-admin-collar"
+                      "actorId":"spoofed-ops",
+                      "correlationId":"spoofed-corr"
                     }
                 """.trimIndent()
             )
@@ -1789,7 +1908,14 @@ class PlatformHttpServerBoundaryTest {
             )
             assertEquals(403, rejected.status)
             assertContains(rejected.body, "\"code\":\"BOT_DISABLED\"")
-            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-reject").status)
+            assertEquals(
+                404,
+                get(
+                    server.address.port,
+                    "/api/v1/commands/cmd-risk-smoke-reject",
+                    headers = apiReadHeaders("client-risk-smoke")
+                ).status
+            )
 
             accountRiskStore.upsertControl("BOT", "bot-1", AccountRiskDecision.ALLOW, "cleared", "", "", "")
             val accepted = post(
@@ -1810,7 +1936,14 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(202, accepted.status)
             assertContains(accepted.body, "\"commandId\":\"cmd-risk-smoke-accept\"")
             assertEquals(0, gateway.submitCalls)
-            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-risk-smoke-accept").status)
+            assertEquals(
+                200,
+                get(
+                    server.address.port,
+                    "/api/v1/commands/cmd-risk-smoke-accept",
+                    headers = apiReadHeaders("client-risk-smoke")
+                ).status
+            )
         } finally {
             server.stop(0)
         }
@@ -1847,7 +1980,14 @@ class PlatformHttpServerBoundaryTest {
             )
             assertEquals(503, rejected.status)
             assertContains(rejected.body, "\"code\":\"COMMAND_CIRCUIT_BREAKER_TRIPPED\"")
-            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-reject").status)
+            assertEquals(
+                404,
+                get(
+                    server.address.port,
+                    "/api/v1/commands/cmd-breaker-smoke-reject",
+                    headers = apiReadHeaders("client-breaker-smoke")
+                ).status
+            )
             assertEquals(1, rejectionLog.records.size)
             assertEquals("command-circuit-breaker", rejectionLog.records.single().guardrailType)
             assertEquals("INSTRUMENT", rejectionLog.records.single().scopeType)
@@ -1867,7 +2007,14 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(202, accepted.status)
             assertContains(accepted.body, "\"commandId\":\"cmd-breaker-smoke-accept\"")
             assertEquals(0, gateway.submitCalls)
-            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-breaker-smoke-accept").status)
+            assertEquals(
+                200,
+                get(
+                    server.address.port,
+                    "/api/v1/commands/cmd-breaker-smoke-accept",
+                    headers = apiReadHeaders("client-breaker-smoke")
+                ).status
+            )
         } finally {
             server.stop(0)
         }
@@ -1909,7 +2056,14 @@ class PlatformHttpServerBoundaryTest {
             )
             assertEquals(422, rejected.status)
             assertContains(rejected.body, "\"code\":\"PRICE_COLLAR_LOW\"")
-            assertEquals(404, get(server.address.port, "/api/v1/commands/cmd-collar-smoke-reject").status)
+            assertEquals(
+                404,
+                get(
+                    server.address.port,
+                    "/api/v1/commands/cmd-collar-smoke-reject",
+                    headers = apiReadHeaders("client-collar-smoke")
+                ).status
+            )
             assertEquals(1, rejectionLog.records.size)
             assertEquals("instrument-price-collar", rejectionLog.records.single().guardrailType)
             assertEquals("INSTRUMENT", rejectionLog.records.single().scopeType)
@@ -1930,7 +2084,14 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(202, accepted.status)
             assertContains(accepted.body, "\"commandId\":\"cmd-collar-smoke-accept\"")
             assertEquals(0, gateway.submitCalls)
-            assertEquals(200, get(server.address.port, "/api/v1/commands/cmd-collar-smoke-accept").status)
+            assertEquals(
+                200,
+                get(
+                    server.address.port,
+                    "/api/v1/commands/cmd-collar-smoke-accept",
+                    headers = apiReadHeaders("client-collar-smoke")
+                ).status
+            )
         } finally {
             server.stop(0)
         }
@@ -1992,7 +2153,11 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-accepted-async", "trace-accepted-async", "ord-accepted-async")
             )
-            val status = get(server.address.port, "/api/v1/commands/cmd-accepted-async")
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-accepted-async",
+                headers = apiReadHeaders("client-accepted-async")
+            )
 
             assertEquals(202, response.status)
             assertContains(response.body, "\"commandId\":\"cmd-accepted-async\"")
@@ -2003,7 +2168,12 @@ class PlatformHttpServerBoundaryTest {
             assertTrue(status.body.contains("\"status\":\"RECEIVED\"") || status.body.contains("\"status\":\"PROCESSING\""))
 
             gateway.release()
-            val completed = waitForCommandStatus(server.address.port, "cmd-accepted-async", "COMPLETED")
+            val completed = waitForCommandStatus(
+                server.address.port,
+                "cmd-accepted-async",
+                "COMPLETED",
+                headers = apiReadHeaders("client-accepted-async")
+            )
             assertContains(completed.body, "\"status\":\"COMPLETED\"")
             assertContains(completed.body, "\"responseStatus\":200")
         } finally {
@@ -2028,7 +2198,12 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-accepted-async-stats", "trace-accepted-async-stats", "ord-accepted-async-stats")
             )
-            waitForCommandStatus(server.address.port, "cmd-accepted-async-stats", "COMPLETED")
+            waitForCommandStatus(
+                server.address.port,
+                "cmd-accepted-async-stats",
+                "COMPLETED",
+                headers = apiReadHeaders("client-accepted-async-stats")
+            )
             val stats = get(server.address.port, "/internal/commands/async/stats")
 
             assertEquals(202, response.status)
@@ -2062,7 +2237,12 @@ class PlatformHttpServerBoundaryTest {
                 ),
                 body = validSubmitBody("cmd-netty-accepted-async", "trace-netty-accepted-async", "ord-netty-accepted-async")
             )
-            val completed = waitForCommandStatus(server.port, "cmd-netty-accepted-async", "COMPLETED")
+            val completed = waitForCommandStatus(
+                server.port,
+                "cmd-netty-accepted-async",
+                "COMPLETED",
+                headers = apiReadHeaders("client-netty-accepted-async")
+            )
             val stats = get(server.port, "/internal/commands/async/stats")
 
             assertEquals(200, health.status)
@@ -2411,7 +2591,11 @@ class PlatformHttpServerBoundaryTest {
             )
             assertEquals(202, submit.status)
 
-            val status = get(server.address.port, "/api/v1/commands/cmd-stream-status-pending")
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-stream-status-pending",
+                headers = apiReadHeaders()
+            )
 
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-stream-status-pending\"")
@@ -2832,7 +3016,7 @@ class PlatformHttpServerBoundaryTest {
             captureStore = captureStore
         )
         try {
-            val response = get(server.address.port, "/api/v1/commands/missing-command")
+            val response = get(server.address.port, "/api/v1/commands/missing-command", headers = apiReadHeaders())
 
             assertEquals(404, response.status)
             assertContains(response.body, "\"error\":\"command not found\"")
@@ -3150,22 +3334,28 @@ class PlatformHttpServerBoundaryTest {
         return HttpResponse(connection.responseCode, text)
     }
 
-    private fun get(port: Int, path: String): HttpResponse {
+    private fun get(port: Int, path: String, headers: Map<String, String> = emptyMap()): HttpResponse {
         val connection = java.net.URI.create("http://localhost:$port$path").toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
+        headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
         val text = stream.bufferedReader().readText()
         return HttpResponse(connection.responseCode, text)
     }
 
-    private fun waitForCommandStatus(port: Int, commandId: String, status: String): HttpResponse {
-        var last = get(port, "/api/v1/commands/$commandId")
+    private fun waitForCommandStatus(
+        port: Int,
+        commandId: String,
+        status: String,
+        headers: Map<String, String> = apiReadHeaders()
+    ): HttpResponse {
+        var last = get(port, "/api/v1/commands/$commandId", headers = headers)
         repeat(50) {
             if (last.status == 200 && last.body.contains("\"status\":\"$status\"")) {
                 return last
             }
             Thread.sleep(20)
-            last = get(port, "/api/v1/commands/$commandId")
+            last = get(port, "/api/v1/commands/$commandId", headers = headers)
         }
         return last
     }

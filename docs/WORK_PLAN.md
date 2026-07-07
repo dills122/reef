@@ -36,6 +36,8 @@ Current deployment assumptions:
 - simulator/load tools driving the same public command paths as manual users
 - post-trade modules added only after command/event causation is stable enough to inspect
 - command intake work follows [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) for the current submit/cancel hot-path contract, accepted-but-not-completed semantics, and readiness gates
+- API/control-plane hardening follows [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): raw `/internal/*` remains local/migration only, external admin/data must use versioned gateway contracts, and non-local runtime profiles must fail closed on unsafe boundary defaults
+- raw internal HTTP caller status is inventoried in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 
 ## Current Execution Checkpoint
 
@@ -57,18 +59,26 @@ This checkpoint is done only when Reef can prove, with named local gates and the
 
 ### Active Now
 
-1. Lock profile validation before any throughput claim.
+1. Keep the API/control-plane hardening backlog moving alongside durable-path work.
+   - finish remaining account/client/object-id authorization after command, participant order, and market-data reads now pass boundary checks
+   - migrate hosted/CI/operator callers listed in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) off raw `/internal/*` and onto `/admin/v1/...`, gRPC, or CLI adapters
+   - add service identity for internal gRPC beyond single-host plaintext/private-network posture
+   - expand `/readyz` from lightweight runtime status to enabled-dependency readiness
+   - make submit stream lanes use `runId + venueSessionId + instrumentId` once command models carry those fields
+   - keep non-local boot fail-closed for auth, rate limit, durable idempotency, and internal HTTP exposure mode
+
+2. Lock profile validation before any throughput claim.
    - no-op publisher, stream-direct no-DB, JetStream stream-ack, Redpanda/Kafka-compatible stream-ack, and materializer profiles must reject unsafe settings before runs.
    - bounded in-memory intake retention is required for no-DB ceiling profiles.
 
-2. Add named crash/restart tests for the direct durable path.
+3. Add named crash/restart tests for the direct durable path.
    - API publishes then exits before boundary published-marker update.
    - matching engine publishes `VenueEventBatch` then exits before command offset commit.
    - matching engine fails before event-batch publish, leaving command offset uncommitted.
    - materializer commits compact canonical rows then exits before event-batch offset commit.
    - projector exits mid-batch and replays idempotently.
 
-3. Run short local durable gates before any long soak.
+4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
    - direct engine consumer fetches/processes/publishes/acks all accepted commands.
    - materializer writes canonical outcomes for all accepted commands after drain.
@@ -76,7 +86,7 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - projection replay/idempotency applies no duplicate read-model rows.
    - bot/user read-surface claims match `/api/v1/data/availability` and the read-surface inventory in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
 
-4. Promote only clean local gates to the DigitalOcean/OpenTofu harness.
+5. Promote only clean local gates to the DigitalOcean/OpenTofu harness.
    - first remote tier is `2000` completed/sec for at least `5m`.
    - next tiers are `5000`, then `7500`, only after the lower tier is stable.
    - reports must include attempted, accepted, direct-acked, materialized, projected, lag, p95/p99, restart counts, and artifact paths.
@@ -146,6 +156,7 @@ The current gaps are:
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; it still needs crash/restart coverage and longer remote promotion evidence
 - the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and provider-neutral status lookup
+- API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
 
@@ -157,7 +168,15 @@ The current gaps are:
    - Use [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) as the implementation contract: `SubmitOrder` and `CancelOrder` first, `ModifyOrder` deferred, hot cancel without routing metadata rejected, and provider metadata kept diagnostic rather than public-contract required.
    - Keep JetStream as fallback and comparison until evidence says otherwise.
 
-2. Implement venue event batch materialization.
+2. Complete API/control-plane hardening.
+   - Treat [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog) as the active checklist.
+   - Keep `/api/v1` and `/admin/v1` as the only externally reachable HTTP product families.
+   - Keep raw `/internal/*` for loopback/local migration only; every hosted caller must use a gateway, gRPC, or CLI adapter.
+   - Use [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) as the migration source of truth.
+   - Require object authorization tests for each object-id read endpoint before calling that read surface public-ready.
+   - Move from single-host plaintext gRPC to TLS/mTLS or service-mesh identity before multi-host non-local deployment.
+
+3. Implement venue event batch materialization.
    - Start from the matching engine's durable `VenueEventBatch` output, not runtime workers calling the engine.
    - Commit command offsets after durable venue event-batch publication.
    - Commit materializer offsets only after compact canonical Postgres batch rows commit.
@@ -166,7 +185,7 @@ The current gaps are:
    - Event-batch replay/checksum tests now gate the materializer contract before throughput claims.
    - `/api/v1/commands/{commandId}` now prefers materialized canonical command outcomes and falls back to existing status surfaces while materialization catches up.
 
-3. Complete venue lifecycle projection.
+4. Complete venue lifecycle projection.
    - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
    - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
    - No-DB direct-consume `VenueEventBatch` submit outcomes now carry the compact `acceptedOrder` fact needed to reconstruct `orders` rows; the durable `command_log.command_payloads` join remains a compatibility fallback.
@@ -179,13 +198,13 @@ The current gaps are:
    - `packages/bot-sdk/src/live-client.ts` wires `marketData`/`historical`/`orders.current()`/`history()` plus data availability to real HTTP instead of fixtures; `runner.ts`, `strategy-runner.ts`, and `hosted-runner.ts` accept those clients through opt-in `readClients` while fixture mode remains the default. The hosted artifact CLI exposes this as `--read-mode=fixture|live`; live mode records `dataAvailability` in the hosted report. The venue adapter converts bot dollar-denominated `limitPrice` values to fixed-point nanos before submit/modify commands.
    - Runtime state, engine state, events, and traces should agree under deterministic tests.
 
-4. Lock first lifecycle scenarios.
+5. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
    - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures now encode the target scenario shape; they are locked only after live replay, lifecycle, visibility, trade-tape, and settlement-fact assertions pass against platform facts.
    - Assert ordered events, final state, replay consistency, and visible timeline causation.
 
-5. Start post-trade expansion.
+6. Start post-trade expansion.
    - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
    - First allowed slice is P2-only settlement exception facts from [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md): obligation, cash-leg break, manual repair, resolved exception, and transition tests.
    - Full allocation, confirmation, clearing, account-ledger mutation, and UI work stay deferred until P2-only facts prove causation.

@@ -851,3 +851,25 @@ Primary references:
 - [`docs/steering/external-api-boundary.md`](./steering/external-api-boundary.md)
 - [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
+
+### D-049: API And Control-Plane Hardening Backlog
+
+Status: accepted
+
+Summary:
+- D-048 is the hardline policy. D-049 is the active implementation backlog needed to make that policy complete across deployed, CI, operator, and local workflows.
+- Raw `/internal/*` HTTP remains local/migration tooling. Deployed profiles must block raw external access through service config, binding, firewall, and reverse-proxy policy.
+- Externally reachable admin/data capabilities use versioned gateway contracts such as `/admin/v1/...`; they authenticate, authorize, bind actor identity from the authenticated principal or request headers/token context, and audit mutating or sensitive operations.
+- Non-local runtime boot must fail unless authentication mode, rate-limit mode, durable idempotency store, and internal HTTP exposure mode are explicit and safe.
+- `/api/v1` read endpoints need object-level authorization. Participant-scoped order reads, command status, and market-data reads pass through read boundary checks now; remaining account/client/object-id reads must be classified and tested by object visibility before broader external exposure.
+- Runtime-to-engine synchronous calls default to gRPC. HTTP is only a local/parity fallback. Internal gRPC on single-host private networks may be plaintext temporarily, but multi-host non-local deployments require TLS/mTLS or service-mesh identity plus explicit service principals.
+- Health and readiness are separate: `/healthz` stays cheap; `/readyz` reports DB pool pressure and stream availability now, and must grow broker, engine, materializer, projector, and admin-store checks where those dependencies are enabled. Internal services should expose standard gRPC health.
+- Submit stream lane identity should become `runId + venueSessionId + instrumentId` once runtime command models carry those fields; instrument-only stream lane hashing is transitional.
+- Remaining scripts and operator flows in [`docs/INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) should migrate from raw `/internal/*` to `/admin/v1/...`, CLI, gRPC, or durable-message contracts over time.
+
+Primary references:
+- [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog)
+- [`docs/INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
+- [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
+- [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)

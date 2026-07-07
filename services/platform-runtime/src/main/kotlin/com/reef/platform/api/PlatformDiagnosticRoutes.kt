@@ -7,6 +7,7 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 
 internal class PlatformDiagnosticRoutes(
     private val healthJson: () -> String,
+    private val readinessJson: () -> String,
     private val abuseStatsJson: () -> String,
     private val accountRiskControlsJson: () -> String,
     private val accountRiskDecisionsJson: (Int) -> String,
@@ -44,6 +45,8 @@ internal class PlatformDiagnosticRoutes(
 ) {
     val paths: List<String> = listOf(
         "/health",
+        "/healthz",
+        "/readyz",
         "/internal/boundary/abuse/stats",
         "/internal/boundary/account-risk/controls",
         "/internal/boundary/account-risk/decisions/recent",
@@ -79,6 +82,8 @@ internal class PlatformDiagnosticRoutes(
     fun handle(method: String, path: String, query: String?, body: String = ""): PlatformHotPathResponse? {
         return when (path) {
             "/health" -> getOnly(method) { healthJson() }
+            "/healthz" -> getOnly(method) { healthJson() }
+            "/readyz" -> getOnly(method) { readinessJson() }
             "/internal/boundary/abuse/stats" -> getOnly(method) { abuseStatsJson() }
             "/internal/boundary/account-risk/controls" -> getOnly(method) { accountRiskControlsJson() }
             "/internal/boundary/account-risk/decisions/recent" -> getOnly(method) {

@@ -49,6 +49,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
+import java.net.InetAddress
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -86,6 +87,30 @@ private data class PreparedApiV1Mutation(
 private sealed class PreparedApiV1MutationResult {
     data class Prepared(val request: PreparedApiV1Mutation) : PreparedApiV1MutationResult()
     data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
+}
+
+private data class AdminRequestPrincipal(
+    val actorId: String,
+    val correlationId: String,
+    val occurredAt: String
+)
+
+private val adminRequestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
+
+private enum class InternalHttpExposureMode {
+    Disabled,
+    LocalOnly,
+    Enabled;
+
+    companion object {
+        fun fromEnv(): InternalHttpExposureMode {
+            return when (RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local").trim().lowercase()) {
+                "disabled", "off", "false", "0" -> Disabled
+                "enabled", "all", "raw-external" -> Enabled
+                else -> LocalOnly
+            }
+        }
+    }
 }
 
 internal val apiV1OrderMutationRoutes = setOf(
@@ -219,6 +244,7 @@ class PlatformHttpServer(
 
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
+    private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv()
     @Volatile
     private var backpressureSnapshot: CommandIntakeBackpressureSnapshot? = null
     private val backpressureSnapshotLock = Any()
@@ -266,6 +292,7 @@ class PlatformHttpServer(
     private val diagnosticRoutes: PlatformDiagnosticRoutes by lazy {
         PlatformDiagnosticRoutes(
             healthJson = { api.health() },
+            readinessJson = { readinessJson() },
             abuseStatsJson = { abuseStatsJson(abuseProtectionHook.stats()) },
             accountRiskControlsJson = { accountRiskControlsJson() },
             accountRiskDecisionsJson = { limit -> accountRiskDecisionsJson(limit) },
@@ -352,12 +379,27 @@ class PlatformHttpServer(
         registerDiagnosticRoutes(server)
 
         server.createContext("/internal/admin/settlement/facts") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
                 methodNotAllowed(exchange)
                 return@createContext
             }
             val body = readRequestBody(exchange) ?: return@createContext
-            writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+            }
+        }
+
+        server.createContext("/admin/v1/arena/bots") { exchange ->
+            handleAdminGatewayRoute(exchange, "arena")
+        }
+
+        server.createContext("/admin/v1/arena/bots/openbao-provision") { exchange ->
+            handleAdminGatewayRoute(exchange, "arena")
+        }
+
+        server.createContext("/admin/v1/analytics/run-exports") { exchange ->
+            handleAdminGatewayRoute(exchange, "analytics")
         }
 
         if (runtimeRole.publicHttpEnabled) {
@@ -536,6 +578,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/market-data/snapshots/{instrumentId}")) {
+                return@createContext
+            }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
             val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
             val response = api.marketDataSnapshot(instrumentId, projectionName)
@@ -558,6 +603,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/data/availability")) {
+                return@createContext
+            }
             val venueProjectionName = queryValue(exchange, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
             val marketDataProjectionName = queryValue(exchange, "marketDataProjectionName").ifBlank { "market-data-top-of-book" }
             val source = queryValue(exchange, "source").ifBlank { "venue-event-batch" }
@@ -578,6 +626,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/market-data/depth/{instrumentId}")) {
+                return@createContext
+            }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
             val levels = queryValue(exchange, "levels").toIntOrNull() ?: 5
             val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-depth" }
@@ -592,6 +643,9 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (!allowApiV1Read(exchange, "/api/v1/market-data/trades/{instrumentId}")) {
+                return@createContext
+            }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/trades/").trimEnd('/')
             val limit = queryValue(exchange, "limit").toIntOrNull() ?: 50
             val beforeSequence = queryValue(exchange, "before").toLongOrNull()
@@ -601,6 +655,9 @@ class PlatformHttpServer(
         server.createContext("/api/v1/market-data/bars/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Read(exchange, "/api/v1/market-data/bars/{instrumentId}")) {
                 return@createContext
             }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/bars/").trimEnd('/')
@@ -618,6 +675,11 @@ class PlatformHttpServer(
                 return@createContext
             }
             val participantId = queryValue(exchange, "participantId")
+            val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/current", participantId)
+            if (boundaryError != null) {
+                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                return@createContext
+            }
             val instrumentId = queryValue(exchange, "instrumentId")
             val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
             writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
@@ -629,6 +691,11 @@ class PlatformHttpServer(
                 return@createContext
             }
             val participantId = queryValue(exchange, "participantId")
+            val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/history", participantId)
+            if (boundaryError != null) {
+                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                return@createContext
+            }
             val instrumentId = queryValue(exchange, "instrumentId")
             val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
             writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
@@ -766,6 +833,40 @@ class PlatformHttpServer(
         }
     }
 
+    private fun readinessJson(): String {
+        val dbPoolSnapshots = RuntimeDataSources.snapshots()
+        val dbPoolsReady = dbPoolSnapshots.all { it.threadsAwaitingConnection == 0 }
+        val streamSnapshot = try {
+            streamCommandHealthCheck?.snapshot()
+        } catch (ex: Exception) {
+            null
+        }
+        val streamReady = streamCommandHealthCheck == null || streamSnapshot?.available == true
+        val status = if (dbPoolsReady && streamReady) "ok" else "degraded"
+        return JsonCodec.writeObject(
+            "status" to status,
+            "role" to runtimeRole.configValue,
+            "internalHttpMode" to internalHttpExposureMode.name.lowercase(),
+            "dependencies" to mapOf(
+                "dbPoolsReady" to dbPoolsReady,
+                "dbPoolCount" to dbPoolSnapshots.size,
+                "dbPoolWaiters" to dbPoolSnapshots.sumOf { it.threadsAwaitingConnection },
+                "streamReady" to streamReady,
+                "streamAvailable" to (streamSnapshot?.available ?: false),
+                "accountRiskControlStore" to (accountRiskControlStore != null),
+                "commandCircuitBreakerStore" to (commandCircuitBreakerStore != null),
+                "instrumentPriceCollarStore" to (instrumentPriceCollarStore != null),
+                "arenaAdminService" to (arenaAdminService != null),
+                "analyticsRunExportService" to (analyticsRunExportService != null),
+                "settlementFactStore" to (settlementFactStore != null),
+                "commandStatusLookup" to (commandStatusLookup != null),
+                "streamCommandIntakeStore" to (streamCommandIntakeStore != null),
+                "streamCommandPublisher" to (streamCommandPublisher != null),
+                "streamCommandHealthCheck" to (streamCommandHealthCheck != null)
+            )
+        )
+    }
+
     private fun methodNotAllowed(exchange: HttpExchange) {
         exchange.sendResponseHeaders(405, -1)
         exchange.close()
@@ -774,29 +875,184 @@ class PlatformHttpServer(
     private fun registerDiagnosticRoutes(server: HttpServer) {
         diagnosticRoutes.paths.forEach { path ->
             server.createContext(path) { exchange ->
+                if (exchange.requestURI.path.startsWith("/internal/") && !allowInternalHttpRoute(exchange)) {
+                    return@createContext
+                }
                 val body = if (exchange.requestMethod == "POST") {
                     readRequestBody(exchange) ?: return@createContext
                 } else {
                     ""
                 }
-                val response = diagnosticRoutes.handle(
-                    method = exchange.requestMethod,
-                    path = exchange.requestURI.path,
-                    query = exchange.requestURI.query,
-                    body = body
-                )
-                if (response == null) {
-                    exchange.sendResponseHeaders(404, -1)
-                    exchange.close()
-                } else {
-                    writeHotPathResponse(exchange, response)
+                withAdminRequestPrincipal(exchange) {
+                    val response = diagnosticRoutes.handle(
+                        method = exchange.requestMethod,
+                        path = exchange.requestURI.path,
+                        query = exchange.requestURI.query,
+                        body = body
+                    )
+                    if (response == null) {
+                        exchange.sendResponseHeaders(404, -1)
+                        exchange.close()
+                    } else {
+                        writeHotPathResponse(exchange, response)
+                    }
                 }
             }
         }
     }
 
+    private fun allowInternalHttpRoute(exchange: HttpExchange): Boolean {
+        return when (internalHttpExposureMode) {
+            InternalHttpExposureMode.Disabled -> {
+                exchange.sendResponseHeaders(404, -1)
+                exchange.close()
+                false
+            }
+            InternalHttpExposureMode.LocalOnly -> {
+                if (isLoopback(exchange.remoteAddress.address)) {
+                    true
+                } else {
+                    writeHotPathResponse(
+                        exchange,
+                        PlatformHotPathResponse(
+                            403,
+                            JsonCodec.writeObject(
+                                "error" to "internal HTTP route requires loopback access",
+                                "mode" to "local"
+                            )
+                        )
+                    )
+                    false
+                }
+            }
+            InternalHttpExposureMode.Enabled -> true
+        }
+    }
+
+    private fun isLoopback(address: InetAddress?): Boolean {
+        return address?.isLoopbackAddress ?: false
+    }
+
+    private fun isLoopback(address: String?): Boolean {
+        if (address.isNullOrBlank()) return true
+        return try {
+            InetAddress.getByName(address).isLoopbackAddress
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun withAdminRequestPrincipal(exchange: HttpExchange, block: () -> Unit) {
+        withAdminRequestPrincipal(adminPrincipal(exchange.requestHeaders), block)
+    }
+
+    private fun <T> withAdminRequestPrincipal(principal: AdminRequestPrincipal, block: () -> T): T {
+        val prior = adminRequestPrincipal.get()
+        adminRequestPrincipal.set(principal)
+        try {
+            return block()
+        } finally {
+            adminRequestPrincipal.set(prior)
+        }
+    }
+
+    private fun adminPrincipal(exchange: HttpExchange): AdminRequestPrincipal {
+        return adminPrincipal(exchange.requestHeaders)
+    }
+
+    private fun adminPrincipal(headers: Headers): AdminRequestPrincipal {
+        return AdminRequestPrincipal(
+            actorId = headerValue(headers, "X-Reef-Actor-Id").ifBlank { "admin-cli" },
+            correlationId = headerValue(headers, "X-Correlation-Id").ifBlank {
+                headerValue(headers, "X-Reef-Correlation-Id").ifBlank { "internal-admin" }
+            },
+            occurredAt = headerValue(headers, "X-Reef-Occurred-At").ifBlank { Instant.now().toString() }
+        )
+    }
+
+    private fun headerValue(exchange: HttpExchange, name: String): String {
+        return headerValue(exchange.requestHeaders, name)
+    }
+
+    private fun headerValue(headers: Headers, name: String): String {
+        return headers[name]?.firstOrNull().orEmpty()
+    }
+
+    private fun currentAdminPrincipal(): AdminRequestPrincipal {
+        return adminRequestPrincipal.get() ?: AdminRequestPrincipal(
+            actorId = "admin-cli",
+            correlationId = "internal-admin",
+            occurredAt = Instant.now().toString()
+        )
+    }
+
+    private fun handleAdminGatewayRoute(exchange: HttpExchange, tokenFamily: String) {
+        if (!authorizeAdminGateway(exchange, tokenFamily)) return
+        val internalPath = when (exchange.requestURI.path) {
+            "/admin/v1/arena/bots" -> "/internal/admin/arena/bots"
+            "/admin/v1/arena/bots/openbao-provision" -> "/internal/admin/arena/bots/openbao-provision"
+            "/admin/v1/analytics/run-exports" -> "/internal/admin/analytics/run-exports"
+            else -> ""
+        }
+        if (internalPath.isBlank()) {
+            exchange.sendResponseHeaders(404, -1)
+            exchange.close()
+            return
+        }
+        val body = if (exchange.requestMethod == "POST") {
+            readRequestBody(exchange) ?: return
+        } else {
+            ""
+        }
+        withAdminRequestPrincipal(exchange) {
+            val response = diagnosticRoutes.handle(
+                method = exchange.requestMethod,
+                path = internalPath,
+                query = exchange.requestURI.query,
+                body = body
+            ) ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
+            writeHotPathResponse(exchange, response)
+        }
+    }
+
+    private fun authorizeAdminGateway(exchange: HttpExchange, tokenFamily: String): Boolean {
+        val envName = when (tokenFamily) {
+            "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
+            else -> "ARENA_ADMIN_API_TOKEN"
+        }
+        val token = RuntimeEnv.string(envName, "")
+        if (token.isBlank()) {
+            writeHotPathResponse(exchange, PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "$envName is not configured")))
+            return false
+        }
+        val expected = "Bearer $token"
+        if (headerValue(exchange, "Authorization") != expected) {
+            writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
+            return false
+        }
+        return true
+    }
+
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
-        return diagnosticRoutes.handle(request.method, request.path, request.query, request.body) ?: when {
+        if (request.path.startsWith("/internal/")) {
+            when (internalHttpExposureMode) {
+                InternalHttpExposureMode.Disabled -> return PlatformHotPathResponse(404, "")
+                InternalHttpExposureMode.LocalOnly -> if (!isLoopback(request.remoteAddress)) {
+                    return PlatformHotPathResponse(
+                        403,
+                        JsonCodec.writeObject(
+                            "error" to "internal HTTP route requires loopback access",
+                            "mode" to "local"
+                        )
+                    )
+                }
+                InternalHttpExposureMode.Enabled -> Unit
+            }
+        }
+        val diagnosticResponse = withAdminRequestPrincipal(adminPrincipal(request.headers)) {
+            diagnosticRoutes.handle(request.method, request.path, request.query, request.body)
+        }
+        return diagnosticResponse ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
             request.path == "/api/v1/orders/submit" ->
                 handleApiV1MutationResponse(request, "/api/v1/orders/submit") { body -> api.submitOrder(body) }
@@ -814,8 +1070,9 @@ class PlatformHttpServer(
                         queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
                     )
                 )
-            request.path == "/api/v1/data/availability" && request.method == "GET" ->
-                PlatformHotPathResponse(
+            request.path == "/api/v1/data/availability" && request.method == "GET" -> {
+                val readError = apiV1ReadErrorResponse(request, "/api/v1/data/availability")
+                if (readError != null) readError else PlatformHotPathResponse(
                     status = 200,
                     body = api.dataAvailability(
                         venueProjectionName = queryValue(request.query, "venueProjectionName").ifBlank { "runtime-normalized-venue-outcomes" },
@@ -823,7 +1080,12 @@ class PlatformHttpServer(
                         source = queryValue(request.query, "source").ifBlank { "venue-event-batch" }
                     )
                 )
+            }
             request.path.startsWith("/api/v1/market-data/snapshots/") && request.method == "GET" -> {
+                val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/snapshots/{instrumentId}")
+                if (readError != null) {
+                    return readError
+                }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
                 val response = api.marketDataSnapshot(
                     instrumentId,
@@ -835,6 +1097,10 @@ class PlatformHttpServer(
                 )
             }
             request.path.startsWith("/api/v1/market-data/depth/") && request.method == "GET" -> {
+                val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/depth/{instrumentId}")
+                if (readError != null) {
+                    return readError
+                }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
                 val response = api.marketDataDepthSnapshot(
                     instrumentId = instrumentId,
@@ -848,6 +1114,10 @@ class PlatformHttpServer(
                 )
             }
             request.path.startsWith("/api/v1/market-data/trades/") && request.method == "GET" -> {
+                val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/trades/{instrumentId}")
+                if (readError != null) {
+                    return readError
+                }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/trades/").trimEnd('/')
                 val response = api.tradeTape(
                     instrumentId = instrumentId,
@@ -857,6 +1127,10 @@ class PlatformHttpServer(
                 PlatformHotPathResponse(status = 200, body = response)
             }
             request.path.startsWith("/api/v1/market-data/bars/") && request.method == "GET" -> {
+                val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/bars/{instrumentId}")
+                if (readError != null) {
+                    return readError
+                }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/bars/").trimEnd('/')
                 val response = api.intradayBars(
                     instrumentId = instrumentId,
@@ -870,27 +1144,31 @@ class PlatformHttpServer(
                 )
             }
             request.path == "/api/v1/orders/current" && request.method == "GET" ->
-                PlatformHotPathResponse(
-                    status = 200,
-                    body = api.ownOrders(
-                        participantId = queryValue(request.query, "participantId"),
-                        openOnly = true,
-                        instrumentId = queryValue(request.query, "instrumentId"),
-                        limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
-                    )
-                )
+                readOrdersResponse(request, "/api/v1/orders/current", openOnly = true)
             request.path == "/api/v1/orders/history" && request.method == "GET" ->
-                PlatformHotPathResponse(
-                    status = 200,
-                    body = api.ownOrders(
-                        participantId = queryValue(request.query, "participantId"),
-                        openOnly = false,
-                        instrumentId = queryValue(request.query, "instrumentId"),
-                        limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
-                    )
-                )
+                readOrdersResponse(request, "/api/v1/orders/history", openOnly = false)
             else -> legacySetupRoutes.handle(request)
         }
+    }
+
+    private fun readOrdersResponse(request: PlatformHotPathRequest, route: String, openOnly: Boolean): PlatformHotPathResponse {
+        val participantId = queryValue(request.query, "participantId")
+        val boundaryError = boundary.checkParticipantRead(request.headers, route, participantId)
+        if (boundaryError != null) {
+            return PlatformHotPathResponse(
+                boundaryError.status,
+                boundary.toErrorJson(boundaryError, correlationId(request.headers))
+            )
+        }
+        return PlatformHotPathResponse(
+            status = 200,
+            body = api.ownOrders(
+                participantId = participantId,
+                openOnly = openOnly,
+                instrumentId = queryValue(request.query, "instrumentId"),
+                limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+            )
+        )
     }
 
     internal fun handleHotPathRequestAsync(request: PlatformHotPathRequest): CompletableFuture<PlatformHotPathResponse?> {
@@ -990,6 +1268,41 @@ class PlatformHttpServer(
 
     private fun correlationId(headers: Headers): String {
         return headers["X-Correlation-Id"]?.firstOrNull() ?: ""
+    }
+
+    private fun allowApiV1Read(exchange: HttpExchange, route: String): Boolean {
+        val boundaryError = boundary.checkRead(exchange.requestHeaders, route)
+        if (boundaryError != null) {
+            writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+            return false
+        }
+        return true
+    }
+
+    private fun apiV1ReadErrorResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse? {
+        val boundaryError = boundary.checkRead(request.headers, route) ?: return null
+        return PlatformHotPathResponse(
+            boundaryError.status,
+            boundary.toErrorJson(boundaryError, correlationId(request.headers))
+        )
+    }
+
+    private fun commandStatusReadScopeError(headers: Headers, status: CommandStatusView): BoundaryError? {
+        val clientId = boundary.clientId(headers).orEmpty()
+        if (status.clientId.isNotBlank() && status.clientId != clientId) {
+            return BoundaryError(403, "OBJECT_AUTH_DENIED", "command scope does not match authenticated client")
+        }
+        if (status.participantId.isBlank()) {
+            return null
+        }
+        val principalParticipant = headerValue(headers, "X-Participant-Id")
+        if (principalParticipant.isBlank()) {
+            return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "missing X-Participant-Id header")
+        }
+        if (status.participantId != principalParticipant) {
+            return BoundaryError(403, "OBJECT_AUTH_DENIED", "command participant does not match authenticated principal")
+        }
+        return null
     }
 
     private fun allowLegacyMutationRoute(exchange: HttpExchange): Boolean {
@@ -2195,6 +2508,9 @@ class PlatformHttpServer(
             methodNotAllowed(exchange)
             return
         }
+        if (!allowApiV1Read(exchange, "/api/v1/commands/{commandId}")) {
+            return
+        }
         val commandId = exchange.requestURI.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
             writeJson(exchange, 404, simpleErrorJson("command not found"))
@@ -2205,6 +2521,11 @@ class PlatformHttpServer(
             writeJson(exchange, 404, simpleErrorJson("command not found"))
             return
         }
+        val scopeError = commandStatusReadScopeError(exchange.requestHeaders, status)
+        if (scopeError != null) {
+            writeJson(exchange, scopeError.status, boundary.toErrorJson(scopeError, correlationId(exchange.requestHeaders)))
+            return
+        }
         writeJson(exchange, 200, CommandStatusResponse.statusJson(status))
     }
 
@@ -2212,31 +2533,53 @@ class PlatformHttpServer(
         if (request.method != "GET") {
             return methodNotAllowedResponse()
         }
+        val readError = apiV1ReadErrorResponse(request, "/api/v1/commands/{commandId}")
+        if (readError != null) {
+            return readError
+        }
         val commandId = request.path.removePrefix("/api/v1/commands/").trim('/')
         if (commandId.isBlank()) {
             return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
         }
         val status = commandStatus(commandId)
             ?: return PlatformHotPathResponse(404, simpleErrorJson("command not found"))
+        val scopeError = commandStatusReadScopeError(request.headers, status)
+        if (scopeError != null) {
+            return PlatformHotPathResponse(
+                scopeError.status,
+                boundary.toErrorJson(scopeError, correlationId(request.headers))
+            )
+        }
         return PlatformHotPathResponse(200, CommandStatusResponse.statusJson(status))
     }
 
     private fun commandStatus(commandId: String): CommandStatusView? {
+        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
+        val capturedStatus = lookup?.findCommandStatus(commandId)
         try {
             api.canonicalCommandOutcome(commandId)?.let { outcome ->
-                return outcome.toStatusView()
+                return outcome.toStatusView().withReadScopeFrom(capturedStatus)
             }
         } catch (ex: Exception) {
             System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
         }
-        val lookup = acceptedAsyncCommandIntake ?: commandStatusLookup
-        lookup?.findCommandStatus(commandId)?.let { return it }
+        capturedStatus?.let { return it }
         if (commandProcessingMode == CommandProcessingMode.StreamAck) {
             streamCommandIntakeStore?.findByCommandId(commandId)?.let { reference ->
                 return reference.toStatusView()
             }
         }
         return null
+    }
+
+    private fun CommandStatusView.withReadScopeFrom(fallback: CommandStatusView?): CommandStatusView {
+        if (fallback == null) return this
+        return copy(
+            clientId = clientId.ifBlank { fallback.clientId },
+            route = route.ifBlank { fallback.route },
+            idempotencyKey = idempotencyKey.ifBlank { fallback.idempotencyKey },
+            participantId = participantId.ifBlank { fallback.participantId }
+        )
     }
 
     private fun rememberIdempotentResult(exchange: HttpExchange, route: String, status: Int, payload: String) {
@@ -2381,8 +2724,9 @@ class PlatformHttpServer(
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxNotional"))
         }
         val currency = json.string("currency").uppercase()
-        val actorId = json.string("actorId").ifBlank { "internal-admin" }
-        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val principal = currentAdminPrincipal()
+        val actorId = principal.actorId
+        val correlationId = principal.correlationId
         val previous = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
 
         store.upsertControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
@@ -2440,11 +2784,7 @@ class PlatformHttpServer(
         if (botId.isBlank() || versionId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
-        val actor = AdminActor(
-            actorId = json.string("actorId").ifBlank { "internal-admin" },
-            correlationId = json.string("correlationId").ifBlank { "internal-admin" },
-            occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
-        )
+        val actor = arenaAdminActor()
         return try {
             val updated = service.transitionArenaBotVersion(
                 actor,
@@ -3062,19 +3402,20 @@ class PlatformHttpServer(
     }
 
     private fun arenaAdminActor(json: JsonDocument): AdminActor {
+        return arenaAdminActor()
+    }
+
+    private fun arenaAdminActor(): AdminActor {
+        val principal = currentAdminPrincipal()
         return AdminActor(
-            actorId = json.string("actorId").ifBlank { "internal-admin" },
-            correlationId = json.string("correlationId").ifBlank { "internal-admin" },
-            occurredAt = json.string("occurredAt").ifBlank { java.time.Instant.now().toString() }
+            actorId = principal.actorId,
+            correlationId = principal.correlationId,
+            occurredAt = principal.occurredAt
         )
     }
 
     private fun arenaAdminActor(query: String?): AdminActor {
-        return AdminActor(
-            actorId = queryValue(query, "actorId").ifBlank { "admin-cli" },
-            correlationId = queryValue(query, "correlationId").ifBlank { "internal-admin" },
-            occurredAt = queryValue(query, "occurredAt").ifBlank { java.time.Instant.now().toString() }
-        )
+        return arenaAdminActor()
     }
 
     private fun arenaBotJson(bot: ArenaBot): Map<String, Any?> {
@@ -3208,8 +3549,9 @@ class PlatformHttpServer(
         val tripped = normalizeBreakerTripState(json.string("tripped").ifBlank { json.string("action") })
             ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker action"))
         val reason = json.string("reason")
-        val actorId = json.string("actorId").ifBlank { "internal-admin" }
-        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val principal = currentAdminPrincipal()
+        val actorId = principal.actorId
+        val correlationId = principal.correlationId
         val normalizedScopeId = if (scopeType == "GLOBAL") "*" else scopeId
         val previous = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
 
@@ -3270,8 +3612,9 @@ class PlatformHttpServer(
         }
         val currency = json.string("currency").uppercase()
         val reason = json.string("reason")
-        val actorId = json.string("actorId").ifBlank { "internal-admin" }
-        val correlationId = json.string("correlationId").ifBlank { "internal-admin" }
+        val principal = currentAdminPrincipal()
+        val actorId = principal.actorId
+        val correlationId = principal.correlationId
         val previous = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
 
         store.setCollar(instrumentId, minPrice, maxPrice, currency, reason)

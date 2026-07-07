@@ -17,6 +17,8 @@ async function request(method, path, payload = undefined, headers = {}) {
     method,
     headers: {
       "content-type": "application/json",
+      "X-Reef-Actor-Id": actorId,
+      "X-Correlation-Id": `arena-risk-smoke-${suffix}`,
       ...headers,
     },
     body: payload === undefined ? undefined : JSON.stringify(payload),

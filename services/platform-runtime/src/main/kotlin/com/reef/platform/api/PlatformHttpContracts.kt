@@ -7,6 +7,7 @@ internal data class PlatformHotPathRequest(
     val path: String,
     val query: String?,
     val headers: Headers,
+    val remoteAddress: String? = null,
     val body: String = ""
 )
 

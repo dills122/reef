@@ -172,6 +172,8 @@ function requestJson(url, method, payload = undefined) {
       method,
       headers: {
         "content-type": "application/json",
+        "X-Reef-Actor-Id": actorId,
+        "X-Correlation-Id": `arena-result-smoke-${suffix}`,
         ...(body === undefined ? {} : { "content-length": Buffer.byteLength(body) }),
       },
     }, (response) => {

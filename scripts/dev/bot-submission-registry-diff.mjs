@@ -22,10 +22,10 @@ const actorId = env("ADMIN_ACTOR_ID", "bot-submission-ci");
 
 async function lookupBot(id) {
   const response = await fetch(
-    `${adminApiUrl}/internal/admin/arena/bots?botId=${encodeURIComponent(id)}&actorId=${encodeURIComponent(actorId)}`,
+    `${adminApiUrl}/admin/v1/arena/bots?botId=${encodeURIComponent(id)}`,
     {
       headers: {
-        "X-Reef-Internal-Route": "true",
+        "X-Reef-Actor-Id": actorId,
         ...(adminApiToken ? { authorization: `Bearer ${adminApiToken}` } : {}),
       },
     },
@@ -37,7 +37,7 @@ async function lookupBot(id) {
     throw new Error("arena admin service unavailable (set PLATFORM_ARENA_ADMIN_ENABLED=1 on the runtime)");
   }
   if (response.status < 200 || response.status >= 300) {
-    throw new Error(`GET /internal/admin/arena/bots failed (${response.status}): ${await response.text()}`);
+    throw new Error(`GET /admin/v1/arena/bots failed (${response.status}): ${await response.text()}`);
   }
   return response.json();
 }

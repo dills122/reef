@@ -1614,6 +1614,30 @@ class ExternalApiBoundary(
         return idempotencyPolicy.validate(clientId, route, idempotencyKey(headers))
     }
 
+    fun checkRead(headers: Headers, route: String): BoundaryError? {
+        val clientId = clientId(headers)
+            ?: return BoundaryError(401, "CLIENT_ID_REQUIRED", "missing X-Client-Id header")
+
+        val authError = authHook.authorize(clientId, headers.firstValue("Authorization"))
+        if (authError != null) return authError
+
+        return rateLimitHook.allow(clientId, route)
+    }
+
+    fun checkParticipantRead(headers: Headers, route: String, participantId: String): BoundaryError? {
+        val baseError = checkRead(headers, route)
+        if (baseError != null) return baseError
+
+        val principalParticipant = headers.firstValue("X-Participant-Id").orEmpty()
+        if (principalParticipant.isBlank()) {
+            return BoundaryError(403, "OBJECT_AUTH_REQUIRED", "missing X-Participant-Id header")
+        }
+        if (participantId.isBlank() || participantId != principalParticipant) {
+            return BoundaryError(403, "OBJECT_AUTH_DENIED", "participant scope does not match authenticated principal")
+        }
+        return null
+    }
+
     fun toErrorJson(error: BoundaryError, correlationId: String): String {
         return """
             {
@@ -1646,39 +1670,81 @@ data class BoundaryHooks(
     val commandProcessingMode: CommandProcessingMode
 )
 
-fun defaultBoundaryHooks(): BoundaryHooks {
+internal fun validateBoundaryDeploymentModes(lookup: (String) -> String? = System::getenv) {
+    if (isLocalBoundaryProfile(lookup)) return
+
+    val missingExplicit = listOf(
+        "EXTERNAL_API_AUTH_MODE",
+        "EXTERNAL_API_RATE_LIMIT_MODE",
+        "EXTERNAL_API_IDEMPOTENCY_STORE",
+        "PLATFORM_INTERNAL_HTTP_MODE"
+    ).filter { lookup(it).isNullOrBlank() }
+    require(missingExplicit.isEmpty()) {
+        "non-local runtime requires explicit boundary modes: ${missingExplicit.joinToString(",")}"
+    }
+
+    val authMode = lookup("EXTERNAL_API_AUTH_MODE").orEmpty().lowercase()
+    val rateMode = lookup("EXTERNAL_API_RATE_LIMIT_MODE").orEmpty().lowercase()
+    val idempotencyMode = lookup("EXTERNAL_API_IDEMPOTENCY_STORE").orEmpty().lowercase()
+    val internalHttpMode = lookup("PLATFORM_INTERNAL_HTTP_MODE").orEmpty().lowercase()
+
+    require(authMode != "allow-all") { "non-local runtime requires EXTERNAL_API_AUTH_MODE other than allow-all" }
+    require(rateMode != "allow-all") { "non-local runtime requires EXTERNAL_API_RATE_LIMIT_MODE other than allow-all" }
+    require(idempotencyMode == "postgres") { "non-local runtime requires EXTERNAL_API_IDEMPOTENCY_STORE=postgres" }
+    require(internalHttpMode in setOf("disabled", "off", "false", "0", "local", "local-only", "loopback")) {
+        "non-local runtime must not expose raw internal HTTP routes externally"
+    }
+}
+
+private fun isLocalBoundaryProfile(lookup: (String) -> String?): Boolean {
+    val profile = listOf(
+        "EXTERNAL_API_DEPLOYMENT_PROFILE",
+        "REEF_ENV",
+        "REEF_DEPLOYMENT_ENV",
+        "DEPLOYMENT_ENV",
+        "ENVIRONMENT",
+        "APP_ENV",
+        "PROFILE"
+    ).firstNotNullOfOrNull { key -> lookup(key)?.trim()?.takeIf { it.isNotBlank() } }
+        ?.lowercase()
+        ?: return true
+    return profile in setOf("local", "dev", "development", "test", "ci")
+}
+
+fun defaultBoundaryHooks(lookup: (String) -> String? = System::getenv): BoundaryHooks {
     val commandProcessingMode = CommandProcessingMode.fromEnv()
-    val authMode = (System.getenv("EXTERNAL_API_AUTH_MODE") ?: "allow-all").lowercase()
+    validateBoundaryDeploymentModes(lookup)
+    val authMode = (lookup("EXTERNAL_API_AUTH_MODE") ?: "allow-all").lowercase()
     val authHook = when (authMode) {
-        "static-token" -> StaticTokenAuthHook(parseStaticTokens(System.getenv("EXTERNAL_API_TOKENS")))
+        "static-token" -> StaticTokenAuthHook(parseStaticTokens(lookup("EXTERNAL_API_TOKENS")))
         else -> AllowAllAuthHook()
     }
 
-    val rateMode = (System.getenv("EXTERNAL_API_RATE_LIMIT_MODE") ?: "allow-all").lowercase()
+    val rateMode = (lookup("EXTERNAL_API_RATE_LIMIT_MODE") ?: "allow-all").lowercase()
     val rateLimitHook = when (rateMode) {
         "fixed-window" -> {
-            val max = System.getenv("EXTERNAL_API_RATE_LIMIT_MAX")?.toIntOrNull() ?: 120
-            val window = System.getenv("EXTERNAL_API_RATE_LIMIT_WINDOW_SECONDS")?.toLongOrNull() ?: 60L
+            val max = lookup("EXTERNAL_API_RATE_LIMIT_MAX")?.toIntOrNull() ?: 120
+            val window = lookup("EXTERNAL_API_RATE_LIMIT_WINDOW_SECONDS")?.toLongOrNull() ?: 60L
             FixedWindowRateLimitHook(InMemoryRateLimitStore(), max, window)
         }
         else -> AllowAllRateLimitHook()
     }
 
-    val abuseMode = (System.getenv("EXTERNAL_API_ABUSE_BREAKER_MODE") ?: "off").lowercase()
+    val abuseMode = (lookup("EXTERNAL_API_ABUSE_BREAKER_MODE") ?: "off").lowercase()
     val abuseProtectionHook = when (abuseMode) {
         "reject-rate" -> {
-            val enabled = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ENABLED"), true)
-            val rejectRateEnabled = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED"), true)
+            val enabled = envBool(lookup("EXTERNAL_API_ABUSE_BREAKER_ENABLED"), true)
+            val rejectRateEnabled = envBool(lookup("EXTERNAL_API_ABUSE_BREAKER_REJECT_RATE_ENABLED"), true)
             if (!enabled || !rejectRateEnabled) {
                 AllowAllAbuseProtectionHook()
             } else {
-                val maxRejects = System.getenv("EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS")?.toIntOrNull() ?: 50
-                val windowSeconds = System.getenv("EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS")?.toLongOrNull() ?: 30L
-                val blockSeconds = System.getenv("EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS")?.toLongOrNull() ?: 60L
-                val warningOnly = envBool(System.getenv("EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY"), false)
-                val codes = parseRejectCodes(System.getenv("EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES"))
-                val routes = parseTrackedRoutes(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ROUTES"))
-                val routePolicies = parseRoutePolicies(System.getenv("EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES"))
+                val maxRejects = lookup("EXTERNAL_API_ABUSE_BREAKER_MAX_REJECTS")?.toIntOrNull() ?: 50
+                val windowSeconds = lookup("EXTERNAL_API_ABUSE_BREAKER_WINDOW_SECONDS")?.toLongOrNull() ?: 30L
+                val blockSeconds = lookup("EXTERNAL_API_ABUSE_BREAKER_BLOCK_SECONDS")?.toLongOrNull() ?: 60L
+                val warningOnly = envBool(lookup("EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY"), false)
+                val codes = parseRejectCodes(lookup("EXTERNAL_API_ABUSE_BREAKER_REJECT_CODES"))
+                val routes = parseTrackedRoutes(lookup("EXTERNAL_API_ABUSE_BREAKER_ROUTES"))
+                val routePolicies = parseRoutePolicies(lookup("EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES"))
                 RejectRateAbuseProtectionHook(
                     maxRejects = maxRejects,
                     windowSeconds = windowSeconds,
@@ -1693,18 +1759,18 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllAbuseProtectionHook()
     }
 
-    val accountRiskMode = (System.getenv("EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE") ?: "allow-all").lowercase()
+    val accountRiskMode = (lookup("EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE") ?: "allow-all").lowercase()
     val baseAccountRiskCheck = when (accountRiskMode) {
         "static", "cached-static" -> StaticAccountRiskCheck(
-            rejectedAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS")),
-            backpressuredAccounts = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS")),
-            disabledBots = parseCsvSet(System.getenv("EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS"))
+            rejectedAccounts = parseCsvSet(lookup("EXTERNAL_API_ACCOUNT_RISK_REJECT_ACCOUNTS")),
+            backpressuredAccounts = parseCsvSet(lookup("EXTERNAL_API_ACCOUNT_RISK_BACKPRESSURE_ACCOUNTS")),
+            disabledBots = parseCsvSet(lookup("EXTERNAL_API_ACCOUNT_RISK_DISABLED_BOTS"))
         )
         "postgres", "cached-postgres" -> {
-            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
-            val cacheTtlMillis = System.getenv("EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
+            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
+            val cacheTtlMillis = lookup("EXTERNAL_API_ACCOUNT_RISK_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
             PostgresAccountRiskCheck(
                 dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "account-risk"),
                 cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
@@ -1712,11 +1778,11 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         }
         else -> AllowAllAccountRiskCheck()
     }
-    val accountRiskCheck = if (envBool(System.getenv("EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED"), false)) {
-        val jdbcUrl = System.getenv("ARENA_POSTGRES_JDBC_URL")
+    val accountRiskCheck = if (envBool(lookup("EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED"), false)) {
+        val jdbcUrl = lookup("ARENA_POSTGRES_JDBC_URL")
             ?: error("ARENA_POSTGRES_JDBC_URL is required when EXTERNAL_API_ARENA_BOT_VERSION_RISK_ENABLED=true")
-        val dbUser = System.getenv("ARENA_POSTGRES_USER") ?: "reef"
-        val dbPassword = System.getenv("ARENA_POSTGRES_PASSWORD") ?: "reef"
+        val dbUser = lookup("ARENA_POSTGRES_USER") ?: "reef"
+        val dbPassword = lookup("ARENA_POSTGRES_PASSWORD") ?: "reef"
         ArenaBotVersionRiskCheck(
             store = PostgresArenaBotRegistryStore(
                 dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-bot-version-risk")
@@ -1727,13 +1793,13 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         baseAccountRiskCheck
     }
 
-    val circuitBreakerMode = (System.getenv("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()
+    val circuitBreakerMode = (lookup("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE") ?: "allow-all").lowercase()
     val commandCircuitBreakerCheck = when (circuitBreakerMode) {
         "postgres", "cached-postgres" -> {
-            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
-            val cacheTtlMillis = System.getenv("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
+            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
+            val cacheTtlMillis = lookup("EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
             PostgresCommandCircuitBreakerStore(
                 dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "command-circuit-breaker"),
                 cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
@@ -1742,13 +1808,13 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllCommandCircuitBreakerCheck()
     }
 
-    val instrumentPriceCollarMode = (System.getenv("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE") ?: "allow-all").lowercase()
+    val instrumentPriceCollarMode = (lookup("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE") ?: "allow-all").lowercase()
     val instrumentPriceCollarCheck = when (instrumentPriceCollarMode) {
         "postgres", "cached-postgres" -> {
-            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
-            val cacheTtlMillis = System.getenv("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
+            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
+            val cacheTtlMillis = lookup("EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_CACHE_TTL_MS")?.toLongOrNull() ?: 1_000L
             PostgresInstrumentPriceCollarStore(
                 dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "instrument-price-collar"),
                 cacheTtlMillis = cacheTtlMillis.coerceAtLeast(0L)
@@ -1757,12 +1823,12 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         else -> AllowAllInstrumentPriceCollarCheck()
     }
 
-    val idempotencyMode = (System.getenv("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
+    val idempotencyMode = (lookup("EXTERNAL_API_IDEMPOTENCY_STORE") ?: "inmemory").lowercase()
     val retentionPolicy = DefaultIdempotencyRetentionPolicy()
     val idempotencyStore = if (idempotencyMode == "postgres") {
-        val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-        val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-        val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+        val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+        val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+        val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
         PostgresIdempotencyStore(
             RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "idempotency"),
             retentionPolicy
@@ -1771,15 +1837,15 @@ fun defaultBoundaryHooks(): BoundaryHooks {
         InMemoryIdempotencyStore()
     }
 
-    val rejectionLogMode = (System.getenv("EXTERNAL_API_BOUNDARY_REJECTION_LOG") ?: "auto").lowercase()
+    val rejectionLogMode = (lookup("EXTERNAL_API_BOUNDARY_REJECTION_LOG") ?: "auto").lowercase()
     val boundaryRejectionLog = when {
         rejectionLogMode == "postgres" || (
             rejectionLogMode == "auto" &&
                 listOf(accountRiskMode, circuitBreakerMode, instrumentPriceCollarMode).any { it == "postgres" || it == "cached-postgres" }
             ) -> {
-            val jdbcUrl = System.getenv("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
-            val dbUser = System.getenv("RUNTIME_DB_USER") ?: "reef"
-            val dbPassword = System.getenv("RUNTIME_DB_PASSWORD") ?: "reef"
+            val jdbcUrl = lookup("RUNTIME_DB_URL") ?: "jdbc:postgresql://localhost:5432/reef"
+            val dbUser = lookup("RUNTIME_DB_USER") ?: "reef"
+            val dbPassword = lookup("RUNTIME_DB_PASSWORD") ?: "reef"
             PostgresBoundaryRejectionLog(
                 dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "boundary-rejection-log")
             )

@@ -148,6 +148,7 @@ x-platform-runtime-environment: &platform-runtime-environment
   EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY: "${EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY:-false}"
   PLATFORM_HTTP_SERVER: "${PLATFORM_HTTP_SERVER:-jdk}"
   PLATFORM_HTTP_THREADS: "${PLATFORM_HTTP_THREADS:-64}"
+  PLATFORM_INTERNAL_HTTP_MODE: "${PLATFORM_INTERNAL_HTTP_MODE:-local}"
   PLATFORM_NETTY_BOSS_THREADS: "${PLATFORM_NETTY_BOSS_THREADS:-1}"
   PLATFORM_NETTY_WORKER_THREADS: "${PLATFORM_NETTY_WORKER_THREADS:-0}"
   PLATFORM_NETTY_APPLICATION_THREADS: "${PLATFORM_NETTY_APPLICATION_THREADS:-}"
@@ -193,7 +194,7 @@ x-platform-runtime-service: &platform-runtime-service
     nats:
       condition: service_healthy
   healthcheck:
-    test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health >/dev/null || exit 1"]
+    test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
     interval: 5s
     timeout: 1s
     retries: 20

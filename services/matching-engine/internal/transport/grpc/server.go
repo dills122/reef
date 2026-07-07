@@ -9,6 +9,8 @@ import (
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 	orderv1 "github.com/dills122/reef/services/matching-engine/internal/transport/grpc/pb/contracts/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type Server struct {
@@ -45,6 +47,10 @@ func NewServer(addr string, service *app.Service) (*Server, error) {
 	grpcServer.RegisterService(&orderExecutionServiceDesc, &orderExecutionRPCServer{
 		service: service,
 	})
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("reef.contracts.orderexecution.v1.OrderExecutionService", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(grpcServer, healthServer)
 
 	return &Server{
 		grpcServer: grpcServer,

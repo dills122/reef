@@ -4,6 +4,7 @@ import com.sun.net.httpserver.Headers
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import java.time.Instant
@@ -320,6 +321,48 @@ class ExternalApiBoundaryTest {
     }
 
     @Test
+    fun nonLocalBoundaryValidationRequiresExplicitSafeModes() {
+        val ex = assertFailsWith<IllegalArgumentException> {
+            validateBoundaryDeploymentModes(mapLookup("EXTERNAL_API_DEPLOYMENT_PROFILE" to "production"))
+        }
+
+        assertContains(ex.message.orEmpty(), "EXTERNAL_API_AUTH_MODE")
+        assertContains(ex.message.orEmpty(), "EXTERNAL_API_RATE_LIMIT_MODE")
+        assertContains(ex.message.orEmpty(), "EXTERNAL_API_IDEMPOTENCY_STORE")
+        assertContains(ex.message.orEmpty(), "PLATFORM_INTERNAL_HTTP_MODE")
+    }
+
+    @Test
+    fun nonLocalBoundaryValidationAcceptsFailClosedModes() {
+        validateBoundaryDeploymentModes(
+            mapLookup(
+                "EXTERNAL_API_DEPLOYMENT_PROFILE" to "production",
+                "EXTERNAL_API_AUTH_MODE" to "static-token",
+                "EXTERNAL_API_RATE_LIMIT_MODE" to "fixed-window",
+                "EXTERNAL_API_IDEMPOTENCY_STORE" to "postgres",
+                "PLATFORM_INTERNAL_HTTP_MODE" to "disabled"
+            )
+        )
+    }
+
+    @Test
+    fun nonLocalBoundaryValidationRejectsRawInternalHttpExposure() {
+        val ex = assertFailsWith<IllegalArgumentException> {
+            validateBoundaryDeploymentModes(
+                mapLookup(
+                    "EXTERNAL_API_DEPLOYMENT_PROFILE" to "production",
+                    "EXTERNAL_API_AUTH_MODE" to "static-token",
+                    "EXTERNAL_API_RATE_LIMIT_MODE" to "fixed-window",
+                    "EXTERNAL_API_IDEMPOTENCY_STORE" to "postgres",
+                    "PLATFORM_INTERNAL_HTTP_MODE" to "enabled"
+                )
+            )
+        }
+
+        assertContains(ex.message.orEmpty(), "must not expose raw internal HTTP")
+    }
+
+    @Test
     fun parseCsvSetTrimsAndFiltersBlanks() {
         assertEquals(setOf("a", "b", "c"), parseCsvSet(" a, b ,,c"))
         assertEquals(emptySet(), parseCsvSet(null))
@@ -408,5 +451,10 @@ class ExternalApiBoundaryTest {
             orderId = "ord-1",
             payloadHash = "hash-1"
         )
+    }
+
+    private fun mapLookup(vararg pairs: Pair<String, String>): (String) -> String? {
+        val values = pairs.toMap()
+        return { key -> values[key] }
     }
 }
