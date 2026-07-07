@@ -75,4 +75,28 @@ class PlatformHttpServerHelpersTest {
         assertEquals(false, doc.boolean("d"))
         assertEquals(false, doc.boolean("missing"))
     }
+
+    @Test
+    fun serverBoundaryDepsDerivesDefaultsFromMinimalConstructorArgs() {
+        val deps = ServerBoundaryDeps(
+            boundary = ExternalApiBoundary(),
+            abuseProtectionHook = AllowAllAbuseProtectionHook(),
+            idempotencyStore = InMemoryIdempotencyStore(),
+            idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
+            commandCaptureStore = InMemoryCommandCaptureStore()
+        )
+
+        assertEquals(null, deps.accountRiskControlStore)
+        assertEquals(null, deps.accountRiskDecisionLog)
+        assertEquals(null, deps.commandCircuitBreakerStore)
+        assertEquals(null, deps.instrumentPriceCollarStore)
+        assertEquals(null, deps.streamCommandIntakeStore)
+        assertEquals(null, deps.streamCommandPublisher)
+        assertEquals(null, deps.streamCommandHealthCheck)
+        assertEquals(0.95, deps.streamCommandMaxStorageUtilization)
+        assertEquals(100L, deps.streamCommandBackpressureSampleMs)
+        assertEquals(CommandProcessingMode.SyncResult, deps.commandProcessingMode)
+        assertEquals(null, deps.commandStatusLookup)
+        assertEquals(null, deps.capturedCommandQueue)
+    }
 }

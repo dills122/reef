@@ -326,6 +326,60 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
+    fun settlementFactsRequirementsCoverAllFourTables() {
+        val requirements = PostgresSchemaRequirements.settlementFacts(
+            obligations = "settlement.obligations",
+            breaks = "settlement.breaks",
+            repairs = "settlement.repairs",
+            resolutions = "settlement.resolutions"
+        )
+
+        assertEquals(
+            setOf("settlement.obligations", "settlement.breaks", "settlement.repairs", "settlement.resolutions"),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.trade_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.reason" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.repairs.actor_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.resolutions.settlement_state" })
+    }
+
+    @Test
+    fun boundaryStreamCommandIntakeRequirementsCoverIntakeTable() {
+        val requirements = PostgresSchemaRequirements.boundaryStreamCommandIntake("boundary.stream_command_intake")
+
+        assertEquals(setOf("boundary.stream_command_intake"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertEquals(
+            setOf(
+                "boundary.stream_command_intake.scope",
+                "boundary.stream_command_intake.idempotency_key",
+                "boundary.stream_command_intake.payload_hash",
+                "boundary.stream_command_intake.command_id",
+                "boundary.stream_command_intake.route",
+                "boundary.stream_command_intake.subject",
+                "boundary.stream_command_intake.stream_name",
+                "boundary.stream_command_intake.partition",
+                "boundary.stream_command_intake.stream_sequence",
+                "boundary.stream_command_intake.published",
+                "boundary.stream_command_intake.first_seen_at",
+                "boundary.stream_command_intake.published_at"
+            ),
+            requirements.columns.map { it.qualifiedName }.toSet()
+        )
+    }
+
+    @Test
+    fun analyticsRunExportsRequirementsCoverExportTable() {
+        val requirements = PostgresSchemaRequirements.analyticsRunExports("analytics.simulation_run_exports")
+
+        assertEquals(setOf("analytics.simulation_run_exports"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.simulation_run_exports.run_id" && it.expectedDataType == "text" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.simulation_run_exports.attempted_count" && it.expectedDataType == "bigint" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.simulation_run_exports.artifact_manifest" && it.expectedDataType == "jsonb" })
+        assertEquals(21, requirements.columns.size)
+    }
+
+    @Test
     fun commandLogRequirementsCoverAppendOnlyCommandTable() {
         val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
 

@@ -109,6 +109,29 @@ class InMemoryRuntimePersistenceTest {
     }
 
     @Test
+    fun recentTradesClampsAndReturnsMostRecent() {
+        val persistence = InMemoryRuntimePersistence()
+        fun trade(id: String) = TradeCreated(
+            eventId = "evt-$id",
+            tradeId = id,
+            executionId = "exec-$id",
+            buyOrderId = "ord-1",
+            sellOrderId = "ord-2",
+            instrumentId = "AAPL",
+            quantityUnits = "100",
+            price = "150250000000",
+            currency = "USD",
+            occurredAt = "2026-03-14T18:00:00Z"
+        )
+        persistence.saveTrades(listOf(trade("trade-1"), trade("trade-2"), trade("trade-3")))
+
+        assertEquals(emptyList(), persistence.recentTrades(0))
+        assertEquals(emptyList(), persistence.recentTrades(-1))
+        assertEquals(listOf("trade-3"), persistence.recentTrades(1).map { it.tradeId })
+        assertEquals(listOf("trade-1", "trade-2", "trade-3"), persistence.recentTrades(100).map { it.tradeId })
+    }
+
+    @Test
     fun refreshesMarketDataSnapshotsFromOpenLifecycleState() {
         val persistence = InMemoryRuntimePersistence()
         persistence.saveAcceptedOrder(
