@@ -67,7 +67,8 @@ writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(JSON.stringify(manifest, null, 2));
 
 async function bundleHostedArtifactJavaScript(sourceText, entryPathValue) {
-  const buildDir = mkdtempSync(resolve(repoRoot, ".bot-sdk-build-"));
+  const buildTmpRoot = process.env.BOT_SDK_BUILD_TMP_ROOT;
+  const buildDir = mkdtempSync(buildTmpRoot === undefined ? resolve(repoRoot, ".bot-sdk-build-") : join(buildTmpRoot, "reef-bot-sdk-build-"));
   const buildEntry = join(buildDir, `${relativeToRepo(entryPathValue).replace(/[^a-zA-Z0-9_.-]/g, "_")}.ts`);
   writeFileSync(buildEntry, sourceText);
 

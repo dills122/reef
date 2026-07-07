@@ -160,3 +160,108 @@ Takeaway: grouped workers look cheap enough for Phase 1 in this synthetic
 baseline. The next evidence gap is Deno worker overhead, SES compartment
 overhead with dependencies installed or baked into a runner image, and then an
 outer container run with CPU and memory caps.
+
+## Real-World Hosted Bot Bench
+
+The synthetic runner bench isolates worker overhead. The next bench exercises
+real Bot SDK examples through the existing hosted artifact and hosted-runner
+path while still keeping the Reef venue API out of the loop.
+
+```bash
+bun run arena:runner-realworld-bench
+```
+
+Useful knobs:
+
+```bash
+bun scripts/dev/arena-runner-realworld-bench.mjs \
+  --bots=simple,lifecycle,refreshing,multi-symbol \
+  --iterations=25 \
+  --concurrency=4 \
+  --compartment=vm \
+  --build-tmp-root=tmp \
+  --out=/tmp/reef-arena-runner-realworld-bench.json
+```
+
+The default `vm` compartment uses the same local-only unsafe test compartment
+already used by hosted-runner regression tests. It measures real artifact
+building, hosted-runner loading, SDK context behavior, fixture reads, strategy
+logic, command-shaping, and report generation. It is not a security boundary.
+
+When dependencies are installed or baked into a runner image, run the same bench
+with SES or include dependency-bearing examples such as the technical-indicator
+bot:
+
+```bash
+bun scripts/dev/arena-runner-realworld-bench.mjs --compartment=ses
+bun scripts/dev/arena-runner-realworld-bench.mjs --bots=technical
+```
+
+This real-world bench reports:
+
+- artifact build time
+- run throughput and action/data-call throughput
+- per-run latency p50/p95/max
+- completed versus failed runs
+- per-bot-case summaries
+- process memory and CPU usage
+
+The evidence target is not maximum throughput. The target is whether real hosted
+bot execution remains comfortably under the Phase 1 tick budgets before adding
+venue transport and command-status waiting.
+
+### Initial Real-World Evidence
+
+Default hosted-bot bench:
+
+```bash
+bun scripts/dev/arena-runner-realworld-bench.mjs \
+  --iterations=25 \
+  --concurrency=4 \
+  --out=/tmp/reef-arena-runner-realworld-default.json
+```
+
+Observed with the local `vm` compartment:
+
+- 4 example bots: simple, lifecycle-safe, refreshing, multi-symbol
+- 100 hosted scenario runs
+- 48.49 ms elapsed
+- 2,062.39 scenario runs/sec
+- 9,280.73 proposed actions/sec
+- 7,218.35 data calls/sec
+- p50 1.00 ms, p95 5.05 ms, max 7.32 ms per hosted scenario run
+- about 101.45 MiB process RSS
+
+Expanded hosted-bot bench:
+
+```bash
+bun scripts/dev/arena-runner-realworld-bench.mjs \
+  --iterations=50 \
+  --concurrency=8 \
+  --out=/tmp/reef-arena-runner-realworld-expanded.json
+```
+
+Observed with the local `vm` compartment:
+
+- 4 example bots: simple, lifecycle-safe, refreshing, multi-symbol
+- 200 hosted scenario runs
+- 78.06 ms elapsed
+- 2,562.01 scenario runs/sec
+- 11,529.05 proposed actions/sec
+- 8,967.04 data calls/sec
+- p50 1.75 ms, p95 7.17 ms, max 11.30 ms per hosted scenario run
+- about 105.45 MiB process RSS
+
+The technical-indicator bot is still a useful real-world package case, but this
+worktree does not currently have `trading-signals` installed. Run it after
+dependencies are present or inside a runner image that bakes approved packages.
+Use repo-local build temp when package resolution needs the repository install:
+
+```bash
+bun scripts/dev/arena-runner-realworld-bench.mjs --bots=technical --build-tmp-root=repo
+```
+
+Takeaway: real hosted Bot SDK execution is still comfortably under the initial
+25-50 ms per-bot tick budget in the local VM-compartment path. The remaining
+evidence gap is SES compartment overhead, Deno worker/process overhead, and then
+the same test under container CPU/memory caps.

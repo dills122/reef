@@ -456,6 +456,8 @@ The first implementation slice for validating these assumptions is the isolated
 runner benchmark in `docs/BOT_ARENA_RUNNER_BENCH.md`. That bench intentionally
 measures Deno runner processes, Deno workers, synthetic bot ticks, RSS, tick
 latency, and proposed-action throughput without involving the Reef venue API.
+The same doc also tracks the follow-on hosted-bot bench that uses real Bot SDK
+examples and hosted artifacts while still keeping venue transport out of scope.
 
 For a rough first sizing model, a bot at 500 actions per second with 5 actions
 per tick requires 100 ticks per second. Ten bots at that rate means 1,000
