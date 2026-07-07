@@ -270,13 +270,19 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
     venueReadback,
     enforcementEvents,
     botResults,
-    leaderboard: botResults
-      .filter((result) => result.scoreEligible)
-      .slice()
-      .sort((left, right) => Number(left.disqualified) - Number(right.disqualified) || right.score - left.score || left.botId.localeCompare(right.botId))
-      .map((result, index) => ({ rank: index + 1, ...result })),
+    leaderboard: rankBotResults(
+      botResults.filter((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified),
+    ),
+    diagnosticLeaderboard: rankBotResults(botResults.filter((result) => result.scoreEligible)),
     sessionReports,
   };
+}
+
+function rankBotResults(results) {
+  return results
+    .slice()
+    .sort((left, right) => Number(left.disqualified) - Number(right.disqualified) || right.score - left.score || left.botId.localeCompare(right.botId))
+    .map((result, index) => ({ rank: index + 1, ...result }));
 }
 
 async function collectVenueReadback(botResults) {

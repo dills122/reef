@@ -606,7 +606,7 @@ Observed:
 
 - status `completed_with_freezes`
 - 1 enforcement event with decision `freeze`
-- disqualified bot result retained in the leaderboard payload
+- disqualified bot result retained in diagnostic output, excluded from public leaderboard
 
 Takeaway: the runner pool can now feed an arena report shape with scoring and
 freeze events.
@@ -740,6 +740,7 @@ Observed:
 - bad bot emitted 0 venue command drafts
 - 1 freeze event with `reasonCode` `tick_policy_violation`
 - bad bot result retained with `disqualified=true`
+- bad bot excluded from public leaderboard and retained in `diagnosticLeaderboard`
 
 Local stack requirement: `platform-runtime` must run with
 `PLATFORM_ARENA_ADMIN_ENABLED=true`. Host-based smoke calls to raw

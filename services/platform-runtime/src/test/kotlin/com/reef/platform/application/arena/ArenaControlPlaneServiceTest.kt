@@ -234,6 +234,47 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
+    fun keepsDisqualifiedRunBotResultsOutOfLeaderboard() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        service.registerBot(registerBotCommand(botId = "bad-bot", fileName = "bad-bot.ts", name = "Bad Bot"))
+        service.registerVersion(registerVersionCommand(botId = "bad-bot"))
+        service.transitionVersion("bad-bot", "v1", ArenaBotVersionStatus.Submitted, "operator-1", "submit", "corr-4")
+        service.transitionVersion("bad-bot", "v1", ArenaBotVersionStatus.ChecksPassed, "operator-1", "checks passed", "corr-5")
+        service.transitionVersion("bad-bot", "v1", ArenaBotVersionStatus.Approved, "operator-2", "approved", "corr-6")
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(
+                    ArenaRunBotVersionRef("sample-bot", "v1"),
+                    ArenaRunBotVersionRef("bad-bot", "v1")
+                )
+            )
+        )
+        service.updateRunStatus("run-1", ArenaRunStatus.Running)
+        service.updateRunStatus("run-1", ArenaRunStatus.Completed)
+
+        service.recordRunBotResult(runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_025_000))
+        service.recordRunBotResult(
+            runBotResult(scoringPolicyVersion = "score-v1", finalEquity = 1_500_000).copy(
+                botId = "bad-bot",
+                disqualified = true
+            )
+        )
+
+        val results = store.runBotResults("run-1")
+        val leaderboard = service.leaderboard("momentum", "score-v1")
+
+        assertEquals(2, results.size)
+        assertTrue(results.any { it.botId == "bad-bot" && it.disqualified })
+        assertEquals(listOf("sample-bot"), leaderboard.map { it.botId })
+    }
+
+    @Test
     fun keepsRunBotResultsSeparateByScoringPolicyVersion() {
         val store = InMemoryArenaBotRegistryStore()
         val service = approvedService(store)
@@ -637,11 +678,12 @@ class ArenaControlPlaneServiceTest {
 
     private fun registerBotCommand(
         botId: String = "sample-bot",
+        fileName: String = "sample-bot.ts",
         name: String = "Sample Bot"
     ): RegisterArenaBotCommand {
         return RegisterArenaBotCommand(
             botId = botId,
-            fileName = "sample-bot.ts",
+            fileName = fileName,
             metadata = ArenaBotMetadata(
                 name = name,
                 publisher = "Sample Publisher",
@@ -652,9 +694,9 @@ class ArenaControlPlaneServiceTest {
         )
     }
 
-    private fun registerVersionCommand(): RegisterArenaBotVersionCommand {
+    private fun registerVersionCommand(botId: String = "sample-bot"): RegisterArenaBotVersionCommand {
         return RegisterArenaBotVersionCommand(
-            botId = "sample-bot",
+            botId = botId,
             versionId = "v1",
             sourceHash = "sha256:source",
             artifactHash = "sha256:artifact",

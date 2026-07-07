@@ -541,8 +541,9 @@ class PostgresArenaBotRegistryStore(
                 WHERE r.mode_id = ?
                   AND r.status = ?
                   AND rb.scoring_policy_version = ?
-                ORDER BY rb.disqualified ASC, rb.final_equity DESC, rb.realized_pnl DESC,
-                         rb.max_drawdown ASC, rb.run_id ASC, rb.bot_id ASC
+                  AND rb.disqualified = false
+                ORDER BY rb.final_equity DESC, rb.realized_pnl DESC, rb.max_drawdown ASC,
+                         rb.run_id ASC, rb.bot_id ASC
                 LIMIT ?
                 """.trimIndent()
             ).use { ps ->
