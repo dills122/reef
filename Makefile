@@ -77,6 +77,7 @@ test-bot-sdk:
 	node --check scripts/dev/arena-run-result-ingestion-smoke.mjs
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
 	node scripts/dev/report-taxonomy.test.mjs
+	node scripts/dev/do-benchmark-check.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
 
 fmt-go:

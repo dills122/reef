@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 
 const target = process.argv[2];
 if (!target) {
@@ -14,6 +15,7 @@ const minAttemptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ATTEMPTED_RP
 const minAcceptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ACCEPTED_RPS);
 const minWorkerCompletedRps = parseOptionalNumber(process.env.REEF_DO_MIN_WORKER_COMPLETED_RPS);
 const failures = [];
+const evidenceRows = [];
 
 if (!existsSync(target)) {
   failures.push(`artifact directory does not exist: ${target}`);
@@ -45,6 +47,11 @@ finish();
 
 function validateReport(path, report) {
   const label = `${path} rate=${reportRatePerSecond(report) ?? "unknown"}`;
+  evidenceRows.push({
+    path,
+    rate: reportRatePerSecond(report) ?? 0,
+    evidence: canonicalEvidenceSummary(report),
+  });
   const total = Number(report.totalRequests ?? 0);
   const success = Number(report.totalSuccess ?? 0);
   const failuresCount = Number(report.totalFailures ?? 0);
@@ -241,12 +248,58 @@ function parseCsvInts(raw) {
 }
 
 function finish() {
+  writeEvidenceSummary();
   if (failures.length > 0) {
     console.error("DO benchmark report gates failed:");
     for (const failure of failures) {
       console.error(`  - ${failure}`);
     }
+    printEvidenceSummary(console.error);
     process.exit(1);
   }
+  printEvidenceSummary(console.log);
   console.log(`DO benchmark report gates passed for ${target}`);
+}
+
+function printEvidenceSummary(write) {
+  if (evidenceRows.length === 0) return;
+  write("DO benchmark evidence summary:");
+  for (const row of evidenceRows) {
+    const evidence = row.evidence;
+    write(
+      [
+        `  - rate=${row.rate}`,
+        `attempted=${evidence.attempted}`,
+        `accepted=${evidence.accepted}`,
+        `directAcked=${evidence.directAcked}`,
+        `materialized=${evidence.materialized}`,
+        `projected=${evidence.projected}`,
+        `lag=${evidence.lag}`,
+        `p95=${formatNumber(evidence.p95LatencyMs)}ms`,
+        `p99=${formatNumber(evidence.p99LatencyMs)}ms`,
+        `acceptedMaterializedGap=${evidence.gaps.acceptedToMaterialized}`,
+      ].join(" "),
+    );
+  }
+}
+
+function writeEvidenceSummary() {
+  if (evidenceRows.length === 0) return;
+  try {
+    if (statSync(target).isDirectory()) {
+      writeFileSync(
+        join(target, "do-benchmark-evidence-summary.json"),
+        JSON.stringify(
+          {
+            generatedAt: new Date().toISOString(),
+            reports: evidenceRows,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+  } catch {
+    // Evidence summary is diagnostic; validation failures above remain authoritative.
+  }
 }
