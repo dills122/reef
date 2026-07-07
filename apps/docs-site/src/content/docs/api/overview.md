@@ -7,6 +7,13 @@ banner:
 
 External clients integrate with a stable `/api/v1` boundary, implemented today in the Kotlin platform runtime, kept separate from internal service transport (engine gRPC/HTTP, stream ingress). Internal contracts can evolve independently; the public boundary changes deliberately and stays versioned.
 
+Reef exposes two product-facing API families:
+
+- venue intake and trading information for orders, command status, participant order state, executions, trade tape, and current market data
+- admin/data for operator-approved administration plus intraday and historical data access
+
+Internal service/control interfaces are not product APIs. They should sit behind gRPC/protobuf, durable messaging, or a gateway-backed admin/data adapter with auth, authorization, audit, and versioning. Canonical policy: `docs/API_SURFACE_POLICY.md`.
+
 ## Required Headers (Writes)
 
 | Header | Required | Purpose |
@@ -56,7 +63,7 @@ The runtime supports multiple internal processing modes behind the same external
 | [`/api/v1/data/availability`](../market-data/) | GET | Read-surface availability and freshness inventory |
 | [`/api/v1/commands/{commandId}`](../commands/) | GET | Command status lookup |
 
-`/internal/*` routes exist for operator/admin tooling and diagnostics only — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract.
+`/internal/*` routes exist only as local/migration operator tooling and diagnostics — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract and must not be exposed raw outside private operator networks.
 
 ## Learn More
 

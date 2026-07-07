@@ -27,6 +27,15 @@ Reef is expected to grow into these primary surfaces:
 - Kafka-compatible durable command/event streams for high-throughput venue ingress and matching event batches, with NATS JetStream retained where it fits workflow or comparison use cases
 - Protobuf as the preferred inter-service contract format once contracts stabilize
 
+Externally reachable runtime APIs must stay in explicit product-facing families:
+
+- venue intake and trading information for orders, command status, participant order state, executions, trade tape, and current market data
+- admin/data for operator-approved administration plus intraday and historical data access
+
+Raw internal HTTP routes are not a supported third surface. Internal control, health, diagnostics, and service administration should use gRPC/protobuf or durable messaging, with HTTP kept only as local/migration tooling unless a gateway deliberately exposes a versioned, authenticated, audited contract.
+
+Canonical surface policy: [`../API_SURFACE_POLICY.md`](../API_SURFACE_POLICY.md).
+
 ## Architectural Rules
 
 ### 1. Simulation uses real platform paths
@@ -212,11 +221,12 @@ At minimum, plan for:
 ## Integration Guidance
 
 - start with the simplest interface that preserves service boundaries
-- synchronous HTTP or gRPC between runtime and engine is acceptable early on
+- synchronous HTTP between runtime and engine is acceptable only as an early migration/parity fallback; gRPC/protobuf is the default synchronous internal transport
 - introduce NATS when async workflows materially improve the design
 - use JetStream stream-backed command intake when the goal is durable accepted-command throughput under bot/simulator load
 - return `202 Accepted` only after the configured durable ingress mechanism has acknowledged acceptance
 - reject before durable acceptance when backpressure, stream health, partition lag, worker health, or DB flush lag indicates the platform cannot safely drain
+- do not expose raw `/internal/*` HTTP routes to users, bots, SDKs, or third-party integrations
 - never let transport concerns define the domain model
 
 For communication and API specifics, treat these as normative companions:

@@ -13,6 +13,7 @@ Active execution planning starts from:
 - this file
 - [`CURRENT_STATUS.md`](./CURRENT_STATUS.md)
 - [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
+- [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md)
 - [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
@@ -120,6 +121,7 @@ Plan the failure matrix as subsystem slices, not as disconnected one-off tests:
 - no UI/control-room freshness as a blocker for venue-core command intake
 - no more API intake tuning unless durable drain/accounting proof is already clean
 - no treating no-op publisher, raw accepted/sec, or accepted-but-unmaterialized counts as release evidence
+- no exposing raw `/internal/*` HTTP routes as product, bot, partner, public, or stable operator APIs
 - no snapshot/recovery claim until snapshot format, routing epoch metadata, and replay checksum inputs are specified
 
 ## Completed Baseline
@@ -199,6 +201,7 @@ Primary references:
 - [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 - [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 - [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
+- [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 

@@ -28,6 +28,14 @@ For the current project phase:
 - implement boundary logic in the Kotlin runtime first
 - preserve a clean module boundary so this can be extracted into a dedicated gateway later
 
+External interaction is limited to two product-facing API families:
+- venue intake and trading information: order entry, command status, participant-scoped order state, executions, trade tape, and current market-data views
+- admin/data: operator-approved administration plus intraday and historical data access exposed through explicit gateway-backed contracts
+
+Raw internal routes are not a third product surface. Anything that must remain internal should use gRPC/protobuf service contracts, durable streams, or a private operator transport. If an external user, UI, CLI, or integration needs a capability, expose it through an explicit public or admin/data contract with auth, authorization, audit, and versioning.
+
+Canonical detail: [`../API_SURFACE_POLICY.md`](../API_SURFACE_POLICY.md).
+
 Current implementation checkpoint:
 - `/api/v1/orders/submit`, `/api/v1/orders/cancel`, and `/api/v1/orders/modify` exist
 - writes require `X-Client-Id` and `Idempotency-Key`
@@ -128,8 +136,13 @@ Keep write command handling and read/query models distinct to avoid coupling UI-
 ## Architecture Constraints
 
 - do not expose engine endpoints directly to users
+- do not expose raw `/internal/*` HTTP routes outside private local/operator networks
+- do not treat `/internal/*` HTTP routes as product APIs, SDK targets, or stable integration contracts
+- do not create new externally reachable internal HTTP routes as a substitute for service contracts
 - do not bypass boundary for client-originated writes
 - do not hard-wire auth logic deep into domain modules
+
+Internal control, health, diagnostics, and administration should default to gRPC/protobuf or durable messaging between trusted services. HTTP may remain as a temporary local development, smoke-test, or migration adapter, but deployment must block raw access unless a gateway deliberately maps the underlying operation to a versioned public or admin/data contract.
 
 ## Incremental Rollout
 
