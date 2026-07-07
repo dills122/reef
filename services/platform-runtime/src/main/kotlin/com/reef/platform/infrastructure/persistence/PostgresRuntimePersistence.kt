@@ -143,6 +143,21 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    ALTER TABLE ${names.orders}
+                    ADD COLUMN IF NOT EXISTS client_order_id TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS run_id TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS venue_session_id TEXT NOT NULL DEFAULT ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_orders_participant_client_order_id
+                    ON ${names.orders}(participant_id, client_order_id)
+                    WHERE client_order_id <> ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.executions} (
                       event_id TEXT PRIMARY KEY,
                       execution_id TEXT NOT NULL,
@@ -169,6 +184,18 @@ class PostgresRuntimePersistence(
                       currency TEXT NOT NULL,
                       occurred_at TEXT NOT NULL
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.trades}
+                    ADD COLUMN IF NOT EXISTS sequence BIGINT GENERATED ALWAYS AS IDENTITY
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_instrument_sequence
+                    ON ${names.trades}(instrument_id, sequence DESC)
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -1609,7 +1636,9 @@ class PostgresRuntimePersistence(
                                 orderId = orderId,
                                 engineOrderId = rs.getString("engine_order_id"),
                                 occurredAt = rs.getString("occurred_at")
-                            )
+                            ),
+                            executions = executionsForOrder(orderId),
+                            trades = tradesForOrder(orderId)
                         )
                     } else {
                         SubmitOrderResult(
