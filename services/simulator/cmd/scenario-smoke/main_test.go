@@ -465,18 +465,14 @@ func TestScenarioSmokeLiveAssertionsFailOnMissingOwnOrderState(t *testing.T) {
 }
 
 func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
-	settlementPath := filepath.Join(t.TempDir(), "settlement-facts.json")
 	settlementJSON := `{
 		"scenarioRunId":"p2-settlement-live",
-		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","state":"OBLIGATION_CREATED"}],
-		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"CASH_LEG_FAILED","state":"BROKEN"}],
-		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_CASH_LEG_REPAIR"}],
-		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED"}]
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","buyerParticipantId":"buyer-1","sellerParticipantId":"seller-1","instrumentId":"XYZ","quantity":"100","cashAmount":"10000.00","currency":"USD","state":"OBLIGATION_CREATED","occurredAt":"2026-03-14T18:00:04Z"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"CASH_LEG_FAILED","state":"BROKEN","occurredAt":"2026-03-14T18:00:05Z"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_CASH_LEG_REPAIR","actorType":"USER","actorId":"ops-1","occurredAt":"2026-03-14T18:00:06Z"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED","occurredAt":"2026-03-14T18:00:07Z"}]
 	}`
-	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
-		t.Fatalf("write settlement facts: %v", err)
-	}
-	server := p2SettlementServer(t)
+	server := p2SettlementServer(t, settlementJSON)
 	defer server.Close()
 
 	var stdout bytes.Buffer
@@ -486,7 +482,6 @@ func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
 		"--base-url", server.URL,
 		"--live",
 		"--assertions",
-		"--settlement-facts-report", settlementPath,
 	}, &stdout, server.Client())
 	if err != nil {
 		t.Fatalf("run error: %v\n%s", err, stdout.String())
@@ -519,7 +514,7 @@ func TestScenarioSmokeLiveAssertionsFailOnP2SettlementFactsWithoutRepairLink(t *
 	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
 		t.Fatalf("write settlement facts: %v", err)
 	}
-	server := p2SettlementServer(t)
+	server := p2SettlementServer(t, "")
 	defer server.Close()
 
 	var stdout bytes.Buffer
@@ -669,7 +664,7 @@ func TestScenarioSmokeReplayCheckReportRequiresAssertions(t *testing.T) {
 	}
 }
 
-func p2SettlementServer(t *testing.T) *httptest.Server {
+func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -680,6 +675,9 @@ func p2SettlementServer(t *testing.T) *httptest.Server {
 			commandID := strings.TrimPrefix(r.URL.Path, "/api/v1/commands/")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"commandId":"` + commandID + `","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/settlement/facts/p2-settlement-live" && settlementFacts != "":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(settlementFacts))
 		default:
 			http.NotFound(w, r)
 		}

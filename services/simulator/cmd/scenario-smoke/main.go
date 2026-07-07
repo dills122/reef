@@ -248,8 +248,12 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 			client = http.DefaultClient
 		}
 		runLive(cfg, client, &report)
-		if cfg.settlementFactsReportPath != "" {
-			attachSettlementFactAssertions(cfg, &report)
+		if cfg.assertions && len(report.Errors) == 0 {
+			if cfg.settlementFactsReportPath != "" {
+				attachSettlementFactArtifactAssertions(cfg, &report)
+			} else if report.PathID == "P2_SETTLEMENT_BREAK_REPAIR" {
+				attachSettlementFactAPIAssertions(cfg, client, &report)
+			}
 		}
 		if cfg.replayCheckReportPath != "" {
 			attachReplayChecksumEvidence(cfg, &report)
@@ -489,7 +493,7 @@ func runAssertions(cfg config, client *http.Client, report *smokeReport) {
 	}
 }
 
-func attachSettlementFactAssertions(cfg config, report *smokeReport) {
+func attachSettlementFactArtifactAssertions(cfg config, report *smokeReport) {
 	body, err := os.ReadFile(cfg.settlementFactsReportPath)
 	read := assertionRead{
 		Endpoint:       cfg.settlementFactsReportPath,
@@ -515,6 +519,29 @@ func attachSettlementFactAssertions(cfg config, report *smokeReport) {
 		return
 	}
 	assertP2SettlementFacts(report, facts, cfg.settlementFactsReportPath)
+}
+
+func attachSettlementFactAPIAssertions(cfg config, client *http.Client, report *smokeReport) {
+	endpoint := "/api/v1/settlement/facts/" + url.PathEscape(report.ScenarioRunID)
+	read, body, err := executeRead(client, absoluteURL(cfg.baseURL, endpoint), endpoint, map[string]string{"scenarioRunId": report.ScenarioRunID})
+	read.SourceType = "settlement facts"
+	read.FreshnessModel = "append-only settlement fact store"
+	if err != nil {
+		report.Reads = append(report.Reads, read)
+		failAssertion(report, "p2-settlement-facts-readable", "settlement_fact_read", "readable settlement facts API", err.Error(), endpoint)
+		return
+	}
+	report.Reads = append(report.Reads, read)
+	if read.StatusCode != 200 {
+		failAssertion(report, "p2-settlement-facts-readable", "settlement_fact_read", "HTTP 200 settlement facts API", fmt.Sprint(read.StatusCode), endpoint)
+		return
+	}
+	var facts settlementFactsReport
+	if err := json.Unmarshal(body, &facts); err != nil {
+		failAssertion(report, "p2-settlement-facts-readable", "settlement_fact_read", "valid settlement facts JSON", err.Error(), endpoint)
+		return
+	}
+	assertP2SettlementFacts(report, facts, endpoint)
 }
 
 func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, proofSource string) {

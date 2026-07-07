@@ -147,6 +147,14 @@ make dev-scenario-smoke ARGS="--pretty"
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --pretty"
 ```
 
+For the P2 settlement assertion path, seed the narrow settlement fact bundle before the assertion smoke so the report reads the runtime API rather than an offline artifact:
+
+```bash
+make dev-scenario-smoke SCENARIO=../../packages/scenario-definitions/scenarios/v1/P2_SETTLEMENT_BREAK_REPAIR.yaml SCENARIO_RUN_ID=p2-settlement-live ARGS="--live --base-url http://127.0.0.1:8080"
+make dev-seed-p2-settlement-facts SCENARIO_RUN_ID=p2-settlement-live
+make dev-scenario-smoke SCENARIO=../../packages/scenario-definitions/scenarios/v1/P2_SETTLEMENT_BREAK_REPAIR.yaml SCENARIO_RUN_ID=p2-settlement-live ARGS="--live --base-url http://127.0.0.1:8080 --assertions --seed-reference=false --pretty"
+```
+
 The P1 dry-run golden report is checked in at [`replay/golden/p1-golden-hidden-cross.smoke.json`](replay/golden/p1-golden-hidden-cross.smoke.json). Refresh it only when the scenario contract intentionally changes:
 
 ```bash
