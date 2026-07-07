@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import http from "node:http";
 import { env, loadDotEnv, run, waitForHttp } from "./lib/dev-utils.mjs";
+import { composeArgs } from "./lib/compose-utils.mjs";
 
 loadDotEnv();
 
@@ -187,7 +188,7 @@ async function configureRuntimeBoundary(overrides) {
     process.env[key] = value;
   }
   try {
-    await run("docker", ["compose", "-f", "docker-compose.yml", "up", "-d", "platform-api"]);
+    await run("docker", composeArgs(["up", "-d", "platform-api"]));
     await waitForHttp("http://127.0.0.1:8080/health", 90, 2000);
   } finally {
     for (const key of Object.keys(overrides)) {

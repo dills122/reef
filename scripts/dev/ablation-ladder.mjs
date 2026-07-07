@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { composeArgs } from "./lib/compose-utils.mjs";
 
 loadDotEnv();
 
@@ -60,7 +61,7 @@ for (const rung of rungs) {
   console.log(`  ${rung.label}`);
 
   console.log("  resetting stack (fresh Postgres/canonical state) for a clean baseline...");
-  await run("docker", ["compose", "down", "--volumes", "--remove-orphans"]);
+  await run("docker", composeArgs(["down", "--volumes", "--remove-orphans"]));
 
   for (const [key, value] of Object.entries(rung.rungEnv)) {
     process.env[key] = value;

@@ -24,6 +24,25 @@ Recommended first step for configuration:
 cp .env.example .env
 ```
 
+Local automation now uses layered Compose files by default:
+
+- `compose.base.yml` defines the shared platform runtime and matching-engine service shape.
+- `compose.local.yml` adds local data services, observability services, host ports, container names, and volumes.
+- `docker-compose.yml` remains as a compatibility monolith while the split settles.
+
+Inspect the resolved stack before starting containers:
+
+```bash
+make dev-compose-config ARGS="--services"
+make dev-compose-parity
+```
+
+Use the compatibility monolith only when debugging the migration:
+
+```bash
+REEF_COMPOSE_FILES=docker-compose.yml make dev-compose-config ARGS="--services"
+```
+
 If Bun is not available locally yet, you can temporarily run with Node:
 
 ```bash

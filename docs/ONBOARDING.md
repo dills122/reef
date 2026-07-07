@@ -71,6 +71,12 @@ make dev-smoke
 
 `make dev-up` starts Postgres first, applies DB migrations, then starts the full stack.
 
+The default local stack is resolved from `compose.base.yml` plus `compose.local.yml`. To inspect it without starting containers:
+
+```bash
+make dev-compose-config ARGS="--services"
+```
+
 If Bun is missing locally:
 
 ```bash

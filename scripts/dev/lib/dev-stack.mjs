@@ -1,4 +1,5 @@
 import { env as readEnv, run as runCommand } from "./dev-utils.mjs";
+import { composeArgs } from "./compose-utils.mjs";
 
 export async function devUp(options = {}) {
   const context = createContext(options);
@@ -14,7 +15,7 @@ export async function devReset(options = {}) {
   configureComposeProfiles(context);
 
   context.log("stopping stack and removing volumes...");
-  await context.run("docker", ["compose", "down", "--volumes", "--remove-orphans"]);
+  await context.run("docker", composeArgs(["down", "--volumes", "--remove-orphans"], context.processEnv));
 
   context.log("starting postgres...");
   await startPostgres(context);
@@ -57,8 +58,7 @@ function configureComposeProfiles(context) {
 }
 
 async function startPostgres(context) {
-  await context.run("docker", [
-    "compose",
+  await context.run("docker", composeArgs([
     "up",
     "-d",
     "--remove-orphans",
@@ -69,7 +69,7 @@ async function startPostgres(context) {
     "boundary-postgres",
     "projection-postgres",
     "arena-postgres",
-  ]);
+  ], context.processEnv));
 }
 
 async function runMigrations(context) {
@@ -78,7 +78,6 @@ async function runMigrations(context) {
 
 async function startFullStack(context) {
   const args = [
-    "compose",
     "up",
     "-d",
     "--remove-orphans",
@@ -87,7 +86,7 @@ async function startFullStack(context) {
     context.waitTimeoutSeconds,
   ];
   if (context.buildImages) {
-    args.splice(3, 0, "--build");
+    args.splice(2, 0, "--build");
   }
-  await context.run("docker", args);
+  await context.run("docker", composeArgs(args, context.processEnv));
 }

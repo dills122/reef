@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { promisify } from "node:util";
 import { deriveDevUrls, env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { composeArgs } from "./lib/compose-utils.mjs";
 import {
   captureDbDiagnosticsLogs,
   captureDbDiagnosticsSnapshot,
@@ -1735,7 +1736,7 @@ async function requestAppProbe(probe) {
 
 async function sampleDockerStats(sampledAt) {
   try {
-    const { stdout } = await execFileAsync("docker", ["compose", "-f", "docker-compose.yml", "ps", "--services"], {
+    const { stdout } = await execFileAsync("docker", composeArgs(["ps", "--services"]), {
       cwd: process.cwd(),
     });
     const services = stdout
@@ -1750,7 +1751,7 @@ async function sampleDockerStats(sampledAt) {
       try {
         const { stdout: statOut } = await execFileAsync(
           "docker",
-          ["compose", "-f", "docker-compose.yml", "stats", svc, "--no-stream", "--format", "json"],
+          composeArgs(["stats", svc, "--no-stream", "--format", "json"]),
           { cwd: process.cwd() },
         );
         const line = statOut.trim();
