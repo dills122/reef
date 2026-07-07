@@ -1,5 +1,6 @@
 import { devUp } from "./lib/dev-stack.mjs";
 import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { composeArgs } from "./lib/compose-utils.mjs";
 
 loadDotEnv();
 
@@ -132,8 +133,7 @@ async function bootstrapCommandStream() {
     return;
   }
   try {
-    await run("docker", [
-      "compose",
+    await run("docker", composeArgs([
       "run",
       "-T",
       "--rm",
@@ -157,7 +157,7 @@ async function bootstrapCommandStream() {
       "--dupe-window",
       env("STREAM_ACK_COMMAND_STREAM_DUPE_WINDOW", "2m"),
       "--defaults",
-    ]);
+    ]));
   } catch (error) {
     if (await streamExists(stream)) {
       console.warn(`JetStream stream ${stream} exists after create returned nonzero; continuing.`);
@@ -185,8 +185,7 @@ async function streamExists(stream) {
   try {
     await run(
       "docker",
-      [
-        "compose",
+      composeArgs([
         "run",
         "-T",
         "--rm",
@@ -198,7 +197,7 @@ async function streamExists(stream) {
         "info",
         stream,
         "--json",
-      ],
+      ]),
       { passthrough: false },
     );
     return true;

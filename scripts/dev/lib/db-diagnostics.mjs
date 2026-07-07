@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { composeArgs } from "./compose-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -145,7 +146,7 @@ export async function captureDbDiagnosticsLogs({ diagnosticsDir, service = "post
   try {
     const { stdout, stderr } = await execFileAsync(
       "docker",
-      ["compose", "-f", "docker-compose.yml", "logs", "--since", since, service],
+      composeArgs(["logs", "--since", since, service]),
       { cwd: process.cwd(), maxBuffer: 50 * 1024 * 1024 },
     );
     writeFileSync(join(diagnosticsDir, "postgres-logs.txt"), `${stdout}${stderr}`);

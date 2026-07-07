@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { composeArgs } from "./lib/compose-utils.mjs";
 import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 
 loadDotEnv();
@@ -154,7 +155,7 @@ async function stopIdleBackgroundServices() {
   if (services.length === 0) return;
 
   console.log(`stopping idle background services before stress: ${services.join(",")}`);
-  await run("docker", ["compose", "stop", ...services]);
+  await run("docker", composeArgs(["stop", ...services]));
 }
 
 function setDefaultGeneratedSessionConfig() {
