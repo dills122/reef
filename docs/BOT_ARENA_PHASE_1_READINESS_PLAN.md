@@ -459,11 +459,14 @@ latency, and proposed-action throughput without involving the Reef venue API.
 The same doc also tracks the follow-on hosted-bot bench that uses real Bot SDK
 examples and hosted artifacts while still keeping venue transport out of scope.
 The first pooled runner smoke now adds a JSON-line worker protocol with
-`loadBot`, `runScenario`, `freezeBot`, `heartbeat`, and `shutdown`; that protocol
-is the preferred handoff boundary for the arena orchestrator.
+`loadBot`, `runScenario`, `startSession`, `runTick`, `stopSession`, `freezeBot`,
+`heartbeat`, and `shutdown`; that protocol is the preferred handoff boundary for
+the arena orchestrator.
 `scripts/dev/arena-local-run.mjs` is the first pre-venue arena wrapper around
 that pool: it runs hosted fixture jobs, scores bot results, emits freeze events,
 and writes a deterministic local leaderboard.
+`scripts/dev/arena-runner-tick-smoke.mjs` proves the same worker can accept
+orchestrator-owned ticks and return per-tick actions plus venue command drafts.
 
 For a rough first sizing model, a bot at 500 actions per second with 5 actions
 per tick requires 100 ticks per second. Ten bots at that rate means 1,000
@@ -518,7 +521,7 @@ and produce all of:
 ## Recommended Work Order
 
 1. Promote the pooled runner protocol into the arena package boundary.
-2. Replace fixture-only runner jobs with orchestrator-owned ticks.
+2. Wire `startSession`/`runTick`/`stopSession` into `arena-local-run`.
 3. Add arena package skeleton under `services/simulator/internal/arena`.
 4. Add the arena mode config and built-in bot catalog shape.
 5. Add local custom bot fixtures.

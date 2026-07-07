@@ -6,10 +6,13 @@ import { performance } from "node:perf_hooks";
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const hostedRunner = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/hosted-runner.ts`).href);
 const strategyRunner = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/strategy-runner.ts`).href);
+const harness = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/harness.ts`).href);
+const venueAdapter = await import(pathToFileURL(`${repoRoot}packages/bot-sdk/src/venue-adapter.ts`).href);
 const args = process.argv.slice(2);
 const workerId = stringOption("--worker-id", "worker-0");
 const compartment = stringOption("--compartment", "vm");
 const loadedBots = new Map();
+const sessions = new Map();
 let startedAt = Date.now();
 
 if (!["vm", "ses"].includes(compartment)) {
@@ -76,6 +79,15 @@ async function handleMessage(message) {
       return;
     case "runScenario":
       await handleRunScenario(message);
+      return;
+    case "startSession":
+      await handleStartSession(message);
+      return;
+    case "runTick":
+      await handleRunTick(message);
+      return;
+    case "stopSession":
+      await handleStopSession(message);
       return;
     case "freezeBot":
       handleFreezeBot(message);
@@ -203,8 +215,225 @@ async function handleRunScenario(message) {
   }
 }
 
+async function handleStartSession(message) {
+  const loaded = loadedBots.get(message.botKey);
+  if (loaded === undefined) {
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "startSessionResult",
+      workerId,
+      sessionId: message.sessionId,
+      botKey: message.botKey,
+      error: { code: "bot_not_loaded", message: `bot ${message.botKey} is not loaded in ${workerId}` },
+      resourceReport: resourceReport(),
+    });
+    return;
+  }
+  const started = performance.now();
+  const bot = new loaded.BotClass();
+  const orderState = new Map();
+  const orderHistory = new Map();
+  for (const order of message.fixture?.initialOrders ?? []) {
+    orderState.set(order.orderId, order);
+    orderHistory.set(order.orderId, order);
+  }
+  const session = {
+    sessionId: message.sessionId,
+    botKey: message.botKey,
+    bot,
+    fixture: message.fixture,
+    policy: { ...harness.defaultBotRuntimePolicyV1, ...(message.fixture?.policy ?? {}) },
+    logs: [],
+    denials: [],
+    orderState,
+    orderHistory,
+    commandSequence: 1,
+    tickIndex: 0,
+    counters: {
+      ticksRun: 0,
+      actionsProposed: 0,
+      orderActionsProposed: 0,
+      dataCalls: 0,
+      venueCommands: 0,
+      issues: [],
+    },
+  };
+  try {
+    await bot.onStart(contextForSession(session));
+    sessions.set(message.sessionId, session);
+    writeResponse({
+      id: message.id,
+      ok: true,
+      type: "startSessionResult",
+      workerId,
+      sessionId: message.sessionId,
+      botKey: message.botKey,
+      elapsedMs: performance.now() - started,
+      resourceReport: resourceReport(),
+    });
+  } catch (error) {
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "startSessionResult",
+      workerId,
+      sessionId: message.sessionId,
+      botKey: message.botKey,
+      elapsedMs: performance.now() - started,
+      error: { code: "session_start_failed", message: error instanceof Error ? error.message : String(error) },
+      resourceReport: resourceReport(),
+    });
+  }
+}
+
+async function handleRunTick(message) {
+  const session = sessions.get(message.sessionId);
+  if (session === undefined) {
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "runTickResult",
+      workerId,
+      sessionId: message.sessionId,
+      error: { code: "session_not_started", message: `session ${message.sessionId} is not active in ${workerId}` },
+      resourceReport: resourceReport(),
+    });
+    return;
+  }
+  const started = performance.now();
+  const beforeCpu = process.cpuUsage();
+  const tick = message.tick;
+  const tickIndex = session.tickIndex;
+  const tickCounters = { dataCalls: 0, dataCallsThisTick: 0 };
+  const context = contextForSession(session, tick, tickCounters);
+  try {
+    const actions = Array.from(await session.bot.onTick(context));
+    const expandedActions = Array.from(venueAdapter.expandCancelAllActionsV1(actions, Array.from(session.orderState.values())));
+    const orderActions = expandedActions.filter((action) => action.type !== "noop").length;
+    const venueResult = venueAdapter.toVenueCommandRequestsV1(
+      expandedActions,
+      venueContextForSession(session, tick, session.commandSequence),
+    );
+    const venueCommands = venueResult.ok ? Array.from(venueResult.value) : [];
+    const tickIssues = [];
+    if (!venueResult.ok) {
+      session.denials.push(venueResult.denial);
+      tickIssues.push({ code: "venue_adapter_denial", message: venueResult.denial.message, tick: tickIndex });
+    } else {
+      applyActionsToOrderState(expandedActions, session, tickIndex);
+      session.commandSequence += expandedActions.filter((action) => action.type !== "noop").length;
+    }
+
+    session.tickIndex += 1;
+    session.counters.ticksRun += 1;
+    session.counters.actionsProposed += actions.length;
+    session.counters.orderActionsProposed += orderActions;
+    session.counters.dataCalls += tickCounters.dataCalls;
+    session.counters.venueCommands += venueCommands.length;
+    session.counters.issues.push(...tickIssues);
+    const elapsedMs = performance.now() - started;
+    const cpuUsage = process.cpuUsage(beforeCpu);
+    writeResponse({
+      id: message.id,
+      ok: tickIssues.length === 0,
+      type: "runTickResult",
+      workerId,
+      sessionId: session.sessionId,
+      botKey: session.botKey,
+      tick: tickIndex,
+      elapsedMs,
+      cpuUsageMicros: cpuUsage.user + cpuUsage.system,
+      actions: expandedActions,
+      venueCommands,
+      denials: tickIssues.length === 0 ? [] : session.denials.slice(-tickIssues.length),
+      issues: tickIssues,
+      dataCalls: tickCounters.dataCalls,
+      ordersAfterTick: Array.from(session.orderState.values()),
+      resourceReport: resourceReport(),
+    });
+  } catch (error) {
+    const elapsedMs = performance.now() - started;
+    const cpuUsage = process.cpuUsage(beforeCpu);
+    const issue = { code: "tick_execution_failed", message: error instanceof Error ? error.message : String(error), tick: tickIndex };
+    session.counters.issues.push(issue);
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "runTickResult",
+      workerId,
+      sessionId: session.sessionId,
+      botKey: session.botKey,
+      tick: tickIndex,
+      elapsedMs,
+      cpuUsageMicros: cpuUsage.user + cpuUsage.system,
+      actions: [],
+      venueCommands: [],
+      denials: [],
+      issues: [issue],
+      dataCalls: 0,
+      ordersAfterTick: Array.from(session.orderState.values()),
+      resourceReport: resourceReport(),
+    });
+  }
+}
+
+async function handleStopSession(message) {
+  const session = sessions.get(message.sessionId);
+  if (session === undefined) {
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "stopSessionResult",
+      workerId,
+      sessionId: message.sessionId,
+      error: { code: "session_not_started", message: `session ${message.sessionId} is not active in ${workerId}` },
+      resourceReport: resourceReport(),
+    });
+    return;
+  }
+  const started = performance.now();
+  try {
+    await session.bot.onStop(contextForSession(session));
+    sessions.delete(message.sessionId);
+    writeResponse({
+      id: message.id,
+      ok: true,
+      type: "stopSessionResult",
+      workerId,
+      sessionId: session.sessionId,
+      botKey: session.botKey,
+      elapsedMs: performance.now() - started,
+      summary: {
+        ...session.counters,
+        finalOrders: Array.from(session.orderState.values()),
+      },
+      resourceReport: resourceReport(),
+    });
+  } catch (error) {
+    sessions.delete(message.sessionId);
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "stopSessionResult",
+      workerId,
+      sessionId: session.sessionId,
+      botKey: session.botKey,
+      elapsedMs: performance.now() - started,
+      error: { code: "session_stop_failed", message: error instanceof Error ? error.message : String(error) },
+      summary: session.counters,
+      resourceReport: resourceReport(),
+    });
+  }
+}
+
 function handleFreezeBot(message) {
   const wasLoaded = loadedBots.delete(message.botKey);
+  for (const [sessionId, session] of sessions.entries()) {
+    if (session.botKey === message.botKey) {
+      sessions.delete(sessionId);
+    }
+  }
   writeResponse({
     id: message.id,
     ok: true,
@@ -240,8 +469,93 @@ function resourceReport() {
     compartment,
     uptimeMs: Date.now() - startedAt,
     loadedBotCount: loadedBots.size,
+    activeSessionCount: sessions.size,
     memoryUsage: process.memoryUsage(),
   };
+}
+
+function contextForSession(session, tick, counters = { dataCalls: 0, dataCallsThisTick: 0 }) {
+  return harness.createFixtureBotContextV1({
+    policy: session.policy,
+    fixtureData: {
+      marketSnapshots: tick?.marketSnapshots,
+      historicalBars: {
+        ...(session.fixture?.historicalBars ?? {}),
+        ...(tick?.historicalBarsClosed ?? {}),
+      },
+      currentOrders: Array.from(session.orderState.values()),
+      orderHistory: Array.from(session.orderHistory.values()),
+      config: session.fixture?.config ?? {},
+    },
+    logs: session.logs,
+    denials: session.denials,
+    counters,
+  });
+}
+
+function venueContextForSession(session, tick, startingSequence) {
+  return {
+    scenarioId: session.fixture?.scenarioId,
+    runId: session.fixture?.runId ?? session.sessionId,
+    runKind: session.fixture?.runKind ?? "arena-local",
+    venueSessionId: session.fixture?.venueSessionId ?? "arena-local-session",
+    clientId: session.fixture?.clientId,
+    actorId: session.fixture?.actorId ?? `actor-${session.botKey}`,
+    participantId: session.fixture?.participantId ?? `participant-${session.botKey}`,
+    accountId: session.fixture?.accountId ?? `account-${session.botKey}`,
+    botId: session.fixture?.botId ?? session.botKey,
+    botVersion: session.fixture?.botVersion ?? "local-fixture",
+    correlationId: session.fixture?.correlationId ?? `${session.sessionId}-corr`,
+    occurredAt: tick?.occurredAt ?? new Date().toISOString(),
+    commandIdPrefix: `${session.sessionId}-cmd`,
+    traceIdPrefix: `${session.sessionId}-trace`,
+    idempotencyKeyPrefix: `${session.sessionId}-idem`,
+    startingSequence,
+  };
+}
+
+function applyActionsToOrderState(actions, session, tickIndex) {
+  let sequence = session.commandSequence;
+  for (const action of actions) {
+    if (action.type === "noop") {
+      sequence += 1;
+      continue;
+    }
+    if (action.type === "submit_limit") {
+      const orderId = action.order.clientOrderId ?? `${session.sessionId}-cmd-order-${sequence}`;
+      const order = {
+        orderId,
+        instrumentId: action.order.instrumentId,
+        side: action.order.side,
+        quantity: action.order.quantity,
+        remainingQuantity: action.order.quantity,
+        limitPrice: action.order.limitPrice,
+        status: "OPEN",
+      };
+      session.orderState.set(orderId, order);
+      session.orderHistory.set(orderId, order);
+    } else if (action.type === "cancel_order") {
+      const existing = session.orderState.get(action.order.orderId);
+      if (existing !== undefined) {
+        const updated = { ...existing, remainingQuantity: 0, status: "CANCELED" };
+        session.orderState.delete(action.order.orderId);
+        session.orderHistory.set(action.order.orderId, updated);
+      }
+    } else if (action.type === "modify_order") {
+      const existing = session.orderState.get(action.order.orderId);
+      if (existing !== undefined) {
+        const updated = {
+          ...existing,
+          quantity: action.order.quantity ?? existing.quantity,
+          remainingQuantity: action.order.quantity ?? existing.remainingQuantity,
+          limitPrice: action.order.limitPrice ?? existing.limitPrice,
+        };
+        session.orderState.set(action.order.orderId, updated);
+        session.orderHistory.set(action.order.orderId, updated);
+      }
+    }
+    sequence += 1;
+  }
 }
 
 function writeResponse(response) {

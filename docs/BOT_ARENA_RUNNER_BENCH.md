@@ -468,6 +468,9 @@ It uses a small worker-process pool and a JSON-line protocol. Each worker can:
 
 - `loadBot`: load and cache a hosted artifact as a guarded `BotClass`
 - `runScenario`: run a fixture/scenario through the cached bot class
+- `startSession`: create a per-run bot instance for orchestrator-owned ticks
+- `runTick`: execute one market tick and return actions plus venue command drafts
+- `stopSession`: stop the per-run bot instance and return a session summary
 - `freezeBot`: unload a bot from the worker
 - `heartbeat`: return loaded bot count and resource usage
 - `shutdown`: stop the worker
@@ -514,6 +517,38 @@ scenario jobs is materially cheaper than repeatedly loading artifacts. This is
 the right shape for the first arena orchestrator integration: orchestrator owns
 policy and venue transport; runner workers own isolated bot execution and return
 proposed actions, venue command drafts, summaries, and resource reports.
+
+## Orchestrator-Owned Tick Smoke
+
+The session/tick protocol smoke proves the runner can accept ticks owned by an
+arena orchestrator instead of only running complete fixture scenarios:
+
+```bash
+bun run arena:runner-tick-smoke
+```
+
+Useful command:
+
+```bash
+bun scripts/dev/arena-runner-tick-smoke.mjs \
+  --bots=simple,lifecycle,refreshing \
+  --compartment=ses \
+  --out=/tmp/reef-arena-runner-tick-smoke-ses.json
+```
+
+Observed:
+
+- 3 hosted bots
+- 9 orchestrator-supplied ticks
+- 16 proposed actions
+- 14 venue command drafts
+- 0 failures
+- p95 0.62 ms
+
+The tick path maintains simple local order state across ticks, so lifecycle-aware
+bots can read current orders and emit cancel actions against prior submitted
+drafts. It does not submit to the venue; it returns command drafts for the
+orchestrator to risk-check and route through `/api/v1`.
 
 ## Local Arena Run Wrapper
 
