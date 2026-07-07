@@ -138,7 +138,7 @@ Required field meaning:
 1. Add assertion report types and dry-run JSON shape. Initial implementation extends `scenario-smoke` with `--live --assertions`, preserving dry-run smoke output unless assertions are requested.
 2. Add P1 command completion and own-order lifecycle assertions. Initial implementation records command status proof from `GET /api/v1/commands/{commandId}` and participant-scoped order history proof from `/api/v1/orders/history`.
 3. Add P1 trade tape and public depth assertions.
-4. Attach replay/checksum evidence to the P1 report.
+4. Attach replay/checksum evidence to the P1 report. Initial implementation accepts a `--replay-check-report` JSON artifact from `make dev-venue-event-replay-check`, stores it in `replayChecksum`, records its path, and fails the live assertion report when the replay check reports failures.
 5. Add narrow P2 settlement fact assertion source.
 6. Add P2 obligation, `CASH_LEG_FAILED`, repair, and resolved-state assertions.
 7. Promote passing reports into the active evidence docs.
