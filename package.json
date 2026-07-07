@@ -39,6 +39,7 @@
     "arena:runner-container-bench": "bun scripts/dev/arena-runner-container-bench.mjs",
     "arena:runner-pool-smoke": "bun scripts/dev/arena-runner-pool-smoke.mjs",
     "arena:runner-realworld-bench": "bun scripts/dev/arena-runner-realworld-bench.mjs",
+    "arena:local-run": "bun scripts/dev/arena-local-run.mjs",
     "arena:smoke:run-results": "bun scripts/dev/arena-run-result-ingestion-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs",

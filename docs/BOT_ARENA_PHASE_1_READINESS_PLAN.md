@@ -461,6 +461,9 @@ examples and hosted artifacts while still keeping venue transport out of scope.
 The first pooled runner smoke now adds a JSON-line worker protocol with
 `loadBot`, `runScenario`, `freezeBot`, `heartbeat`, and `shutdown`; that protocol
 is the preferred handoff boundary for the arena orchestrator.
+`scripts/dev/arena-local-run.mjs` is the first pre-venue arena wrapper around
+that pool: it runs hosted fixture jobs, scores bot results, emits freeze events,
+and writes a deterministic local leaderboard.
 
 For a rough first sizing model, a bot at 500 actions per second with 5 actions
 per tick requires 100 ticks per second. Ten bots at that rate means 1,000
@@ -515,15 +518,16 @@ and produce all of:
 ## Recommended Work Order
 
 1. Promote the pooled runner protocol into the arena package boundary.
-2. Add arena package skeleton under `services/simulator/internal/arena`.
-3. Add the arena mode config and built-in bot catalog shape.
-4. Add local custom bot fixtures.
-5. Add `cmd/arena-local-run` plus `scripts/dev/arena-local-run.mjs`.
-6. Add enforcement policy and run-freeze report fields.
-7. Add scoring v0 and report shape.
-8. Wire real run-result ingestion from the arena report.
-9. Add `make dev-smoke-bot-arena-local`.
-10. Add drift/replay checks once the first smoke report is stable.
+2. Replace fixture-only runner jobs with orchestrator-owned ticks.
+3. Add arena package skeleton under `services/simulator/internal/arena`.
+4. Add the arena mode config and built-in bot catalog shape.
+5. Add local custom bot fixtures.
+6. Route accepted venue command drafts through `/api/v1`.
+7. Harden enforcement policy and run-freeze report fields.
+8. Harden scoring v0 and report shape.
+9. Wire real run-result ingestion from the arena report.
+10. Add `make dev-smoke-bot-arena-local`.
+11. Add drift/replay checks once the first smoke report is stable.
 
 ## Follow-Up After Phase 1
 

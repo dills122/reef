@@ -514,3 +514,66 @@ scenario jobs is materially cheaper than repeatedly loading artifacts. This is
 the right shape for the first arena orchestrator integration: orchestrator owns
 policy and venue transport; runner workers own isolated bot execution and return
 proposed actions, venue command drafts, summaries, and resource reports.
+
+## Local Arena Run Wrapper
+
+The first local arena-style wrapper now drives the pooled runner and produces an
+arena report:
+
+```bash
+bun run arena:local-run
+```
+
+The wrapper is still pre-venue. It uses the runner pool to execute hosted bot
+fixtures, then applies a minimal local scoring/enforcement pass and writes:
+
+- `schemaVersion`
+- `runId`, `modeId`, and `scoringPolicyVersion`
+- runner profile and runner report path
+- runner timing and aggregate counters
+- per-bot results
+- enforcement events
+- deterministic local leaderboard
+
+Useful command:
+
+```bash
+bun scripts/dev/arena-local-run.mjs \
+  --workers=2 \
+  --bots=simple,lifecycle,refreshing,multi-symbol \
+  --iterations=10 \
+  --concurrency=4 \
+  --compartment=ses \
+  --out=/tmp/reef-arena-local-run-default.json
+```
+
+Observed:
+
+- 4 bots, 40 runner scenario jobs
+- runner p95 3.15 ms
+- 0 freezes
+- leaderboard: refreshing, simple, lifecycle, multi-symbol
+
+Forced-freeze validation:
+
+```bash
+bun scripts/dev/arena-local-run.mjs \
+  --workers=1 \
+  --bots=simple \
+  --iterations=1 \
+  --concurrency=1 \
+  --compartment=vm \
+  --max-scenario-p95-ms=1 \
+  --out=/tmp/reef-arena-local-run-freeze.json
+```
+
+Observed:
+
+- status `completed_with_freezes`
+- 1 enforcement event with decision `freeze`
+- disqualified bot result retained in the leaderboard payload
+
+Takeaway: the runner pool can now feed an arena report shape with scoring and
+freeze events. The next implementation step is replacing fixture-only runner
+jobs with orchestrator-owned ticks and then routing accepted venue command
+drafts through `/api/v1`.
