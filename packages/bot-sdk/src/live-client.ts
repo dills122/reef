@@ -184,14 +184,15 @@ export function createLiveMarketDataClientV1(options: LiveVenueDataClientOptions
     async snapshots(instrumentIds) {
       const values: Record<string, MarketSnapshotV1> = {};
       const missing: string[] = [];
-      for (const instrumentId of instrumentIds) {
-        const result = await fetchSnapshot(instrumentId);
+      const results = await Promise.all(instrumentIds.map((instrumentId) => fetchSnapshot(instrumentId)));
+      instrumentIds.forEach((instrumentId, index) => {
+        const result = results[index]!;
         if (result.ok) {
           values[instrumentId] = result.value;
         } else {
           missing.push(instrumentId);
         }
-      }
+      });
       if (missing.length > 0) {
         return notFoundDenial(`No market snapshot for ${missing.join(", ")}.`) as BotResultV1<Record<string, MarketSnapshotV1>>;
       }
@@ -233,14 +234,15 @@ export function createLiveHistoricalDataClientV1(options: LiveVenueDataClientOpt
     async intradayBarsBatch(requests) {
       const result: Record<string, readonly HistoricalBarV1[]> = {};
       const missing: string[] = [];
-      for (const request of requests) {
-        const barsResult = await fetchBars(request);
+      const barsResults = await Promise.all(requests.map((request) => fetchBars(request)));
+      requests.forEach((request, index) => {
+        const barsResult = barsResults[index]!;
         if (barsResult.ok) {
           result[request.instrumentId] = barsResult.value;
         } else {
           missing.push(request.instrumentId);
         }
-      }
+      });
       if (missing.length > 0) {
         return unavailableDenial(`Failed to load bars for ${missing.join(", ")}.`) as BotResultV1<Record<string, readonly HistoricalBarV1[]>>;
       }
