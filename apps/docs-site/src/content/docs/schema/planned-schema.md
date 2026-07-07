@@ -2,7 +2,7 @@
 title: Planned Schema
 description: account, settlement, market_data, and analytics — design targets, not built yet.
 banner:
-  content: Nothing on this page is implemented yet. This is a design baseline for future work.
+  content: Mostly design baseline. Current runtime-backed read slices exist; dedicated account/settlement/market_data schemas remain future work.
 ---
 
 These schemas are candidate table lists from the data blueprint. Names and columns will shift during implementation.
@@ -21,9 +21,11 @@ Consumes canonical venue facts and creates post-trade facts. Must not mutate mat
 
 Candidate tables: `settlement.obligations`, `settlement.allocations`, `settlement.confirmations`, `settlement.fulfillment_steps`, `settlement.breaks`, `settlement.repairs`, `settlement.exception_cases`.
 
+The first allowed settlement slice is narrower than the full table list: `SettlementObligationCreated`, `SettlementBreakOpened` with `CASH_LEG_FAILED`, `SettlementRepairPosted`, and `SettlementResolved`. No account-ledger mutation, allocation, confirmation, clearing, or exception UI is part of that first slice.
+
 ## Market Data Schema (Partially Built)
 
-A separate query/read domain from order entry. The current slice (`runtime.order_lifecycle_state`, `runtime.market_data_snapshots`) covers top-of-book and bounded depth — see [Market Data API](../../api/market-data/). Remaining candidate tables: `market_data.book_snapshots`, `market_data.depth_snapshots`, `market_data.recent_trades`, `market_data.intraday_bars`, `market_data.historical_bars`, `market_data.feed_watermarks`.
+A separate query/read domain from order entry. The current runtime-backed slice covers order lifecycle, top-of-book, bounded depth, public trade tape, intraday OHLCV bars, participant-scoped own-order reads, and data availability — see [Market Data API](../../api/market-data/). Remaining candidate tables: `market_data.book_snapshots`, `market_data.depth_snapshots`, `market_data.recent_trades`, `market_data.intraday_bars`, `market_data.historical_bars`, `market_data.feed_watermarks`.
 
 ## Analytics Schema (Planned)
 
@@ -55,4 +57,5 @@ Manifest minimum: run id, source reconciliation counts, file list, per-file row 
 ## Learn More
 
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — full blueprint (source for this page)
+- `docs/SETTLEMENT_EXCEPTION_FACTS.md` — scoped P2 settlement facts before broader post-trade expansion
 - [Overview](../overview/) — what's built vs. planned across all schemas

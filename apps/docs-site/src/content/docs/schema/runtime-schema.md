@@ -21,6 +21,8 @@ These are query/read projections unless a decision explicitly promotes a field i
 
 **`runtime.trades`** — `trade_id uuid pk`, `event_id uuid unique`, `execution_id uuid`, `buy_order_id uuid`, `sell_order_id uuid`, `instrument_id uuid`, `quantity numeric(20,0)`, `price numeric(20,8)`, `currency char(3)`, `occurred_at timestamptz`.
 
+Current read APIs use these runtime facts/projections for public trade tape, intraday bars, top-of-book/depth, and participant-scoped own-order reads. Dedicated `market_data` schema objects remain a planned extraction target.
+
 ## Event & Outbox
 
 **`runtime.runtime_events`** — `event_id uuid pk`, `event_type text`, `order_id uuid`, `trace_id uuid`, `causation_id uuid`, `correlation_id uuid`, `actor_id text`, `producer text`, `schema_version text`, `sequence_number bigint`, `payload_json jsonb`, `occurred_at timestamptz`, `created_at timestamptz`. Indexes: `(occurred_at)`, `(trace_id, sequence_number)`, `(order_id, occurred_at)`.
