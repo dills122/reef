@@ -77,6 +77,7 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - matching engine fails before event-batch publish, leaving command offset uncommitted.
    - materializer commits compact canonical rows then exits before event-batch offset commit.
    - projector exits mid-batch and replays idempotently.
+   - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, stops/restarts engine/materializer/projector roles around accepted commands, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
 
 4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
