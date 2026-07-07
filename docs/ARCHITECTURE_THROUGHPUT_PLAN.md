@@ -10,6 +10,9 @@ Detailed execution plan:
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
 
+Future post-arena platform-shape follow-up:
+- [`docs/POST_ARENA_PLATFORM_FINALIZATION_PLAN.md`](./POST_ARENA_PLATFORM_FINALIZATION_PLAN.md)
+
 ## Current Baseline
 
 Live measured baselines, worker/rate sweeps, and evidence-dated benchmark history live in [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md) (this plan does not duplicate those numbers).

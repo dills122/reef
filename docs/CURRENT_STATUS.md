@@ -87,6 +87,7 @@ Use these docs for active work:
 - Performance evidence and next implications: [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)
 - Persistence materializer evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md)
 - Stream/direct throughput context: [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md)
+- Future post-arena platform finalization: [`POST_ARENA_PLATFORM_FINALIZATION_PLAN.md`](./POST_ARENA_PLATFORM_FINALIZATION_PLAN.md)
 - Local setup and commands: [`ONBOARDING.md`](./ONBOARDING.md), [`DEV_ENV.md`](./DEV_ENV.md)
 - Steering index: [`steering/README.md`](./steering/README.md)
 
