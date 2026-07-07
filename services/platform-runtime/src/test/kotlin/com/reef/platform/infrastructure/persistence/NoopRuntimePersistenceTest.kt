@@ -108,4 +108,80 @@ class NoopRuntimePersistenceTest {
         assertTrue(validation.accountExists)
         assertFalse(validation.accountBelongsToParticipant)
     }
+
+    @Test
+    fun listsSavedReferenceDataAndReportsExistence() {
+        val persistence = NoopRuntimePersistence()
+        persistence.saveInstrument(Instrument("AAPL", "AAPL"))
+        persistence.saveParticipant(Participant("participant-1", "Participant 1"))
+        persistence.saveAccount(Account("account-1", "participant-1"))
+        persistence.saveRole(RoleDefinition("order_trader", listOf("order.submit")))
+
+        assertEquals(listOf("AAPL"), persistence.instruments().map { it.instrumentId })
+        assertEquals(listOf("participant-1"), persistence.participants().map { it.participantId })
+        assertEquals(listOf("account-1"), persistence.accounts().map { it.accountId })
+        assertEquals(listOf("order_trader"), persistence.roles().map { it.roleId })
+
+        assertTrue(persistence.hasInstrument("AAPL"))
+        assertFalse(persistence.hasInstrument("MSFT"))
+        assertTrue(persistence.hasParticipant("participant-1"))
+        assertFalse(persistence.hasParticipant("participant-2"))
+        assertTrue(persistence.hasAccount("account-1"))
+        assertFalse(persistence.hasAccount("account-2"))
+    }
+
+    @Test
+    fun dropsExecutionsTradesAndEventsWithoutError() {
+        val persistence = NoopRuntimePersistence()
+
+        // These are no-ops that must not throw and must not retain state.
+        persistence.saveExecutions(emptyList())
+        persistence.saveTrades(emptyList())
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ord-1",
+                engineOrderId = "eng-ord-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150000000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-07-03T00:00:00Z"
+            )
+        )
+        val event = RuntimeEvent(
+            eventId = "evt-1",
+            eventType = "OrderAccepted",
+            orderId = "ord-1",
+            traceId = "trace-1",
+            causationId = "cmd-1",
+            correlationId = "corr-1",
+            producer = "test",
+            schemaVersion = "v1",
+            occurredAt = "2026-07-03T00:00:00Z"
+        )
+        persistence.saveEvent(event)
+        persistence.saveEvents(listOf(event))
+        persistence.saveSubmitResult("cmd-1", SubmitOrderResult())
+        persistence.persistSubmitOutcomes(emptyList())
+        persistence.appendCanonicalSubmitOutcomes(emptyList())
+
+        assertEquals(0L, persistence.projectCanonicalSubmitOutcomes("proj", 10, emptyList()))
+        assertEquals(0L, persistence.projectCanonicalCommandOutcomes("proj", 10, emptyList(), includeFills = true, eventStream = "stream"))
+
+        assertNull(persistence.acceptedOrder("ord-1"))
+        assertTrue(persistence.acceptedOrders().isEmpty())
+        assertTrue(persistence.executionsForOrder("ord-1").isEmpty())
+        assertTrue(persistence.trades().isEmpty())
+        assertTrue(persistence.recentTrades(10).isEmpty())
+        assertTrue(persistence.tradesForOrder("ord-1").isEmpty())
+        assertTrue(persistence.eventsForOrder("ord-1").isEmpty())
+        assertTrue(persistence.eventsForTrace("trace-1").isEmpty())
+        assertTrue(persistence.events().isEmpty())
+        assertTrue(persistence.recentEvents(10).isEmpty())
+    }
 }
