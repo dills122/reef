@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -135,10 +134,10 @@ func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
 }
 
 func TestRunTraceChecksSkipsWhenLimitDisabled(t *testing.T) {
-	seen := sync.Map{}
-	seen.Store("trace-1", struct{}{})
+	seen := newTraceSampler(10)
+	seen.offer("trace-1")
 
-	checks := runTraceChecks(&http.Client{}, Config{TraceCheckLimit: 0}, &seen)
+	checks := runTraceChecks(&http.Client{}, Config{TraceCheckLimit: 0}, seen)
 
 	if checks.Checked != 0 || checks.Pass != 0 || checks.Fail != 0 {
 		t.Fatalf("expected trace checks to be disabled, got %+v", checks)
