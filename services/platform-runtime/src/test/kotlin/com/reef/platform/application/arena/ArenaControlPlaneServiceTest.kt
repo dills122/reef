@@ -367,6 +367,46 @@ class ArenaControlPlaneServiceTest {
     }
 
     @Test
+    fun recordsRunEnforcementEventsForRegisteredRun() {
+        val store = InMemoryArenaBotRegistryStore()
+        val service = approvedService(store)
+        service.registerRun(
+            RegisterArenaRunCommand(
+                runId = "run-1",
+                modeId = "momentum",
+                scenarioId = "scenario-a",
+                seed = 42L,
+                policyVersion = "policy-2026-07-05",
+                botVersions = listOf(ArenaRunBotVersionRef("sample-bot", "v1"))
+            )
+        )
+
+        service.recordRunEnforcementEvent(
+            ArenaRunEnforcementEvent(
+                runId = "run-1",
+                botId = "sample-bot",
+                versionId = "v1",
+                decision = "freeze",
+                reasonCode = "tick_policy_violation",
+                reason = "max actions exceeded",
+                policyVersion = "arena-risk-v0",
+                countersJson = """{"maxActionsPerTick":11}""",
+                occurredAt = fixedNow
+            )
+        )
+
+        val events = service.runEnforcementEvents("run-1")
+
+        assertEquals(1, events.size)
+        assertEquals("freeze", events.single().decision)
+        assertEquals("tick_policy_violation", events.single().reasonCode)
+        assertFailsWith<IllegalArgumentException> { service.runEnforcementEvents("") }
+        assertFailsWith<IllegalStateException> {
+            service.recordRunEnforcementEvent(events.single().copy(runId = "missing-run"))
+        }
+    }
+
+    @Test
     fun replacesRuntimeConfigDescriptorsWithoutSecretValues() {
         val store = InMemoryArenaBotRegistryStore()
         val service = seededService(store)

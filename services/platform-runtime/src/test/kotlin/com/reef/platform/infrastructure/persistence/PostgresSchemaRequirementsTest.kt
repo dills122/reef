@@ -159,6 +159,7 @@ class PostgresSchemaRequirementsTest {
             runRecords = names.runRecords,
             runBotVersions = names.runBotVersions,
             runBotResults = names.runBotResults,
+            runEnforcementEvents = names.runEnforcementEvents,
             runtimeConfigDescriptors = names.runtimeConfigDescriptors
         )
 
@@ -172,6 +173,7 @@ class PostgresSchemaRequirementsTest {
                 "arena.run_records",
                 "arena.run_bot_versions",
                 "arena.run_bot_results",
+                "arena.run_enforcement_events",
                 "arena.runtime_config_descriptors"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
@@ -187,6 +189,8 @@ class PostgresSchemaRequirementsTest {
                         "arena.run_bot_results.disqualified:boolean",
                         "arena.run_bot_results.score_eligible:boolean",
                         "arena.run_bot_results.public_leaderboard:boolean",
+                        "arena.run_enforcement_events.reason_code:text",
+                        "arena.run_enforcement_events.counters_json:text",
                         "arena.runtime_config_descriptors.secret_path:text",
                         "arena.runtime_config_descriptors.required:boolean"
                     )

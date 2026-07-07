@@ -402,6 +402,7 @@ object PostgresSchemaRequirements {
         runRecords: String,
         runBotVersions: String,
         runBotResults: String,
+        runEnforcementEvents: String,
         runtimeConfigDescriptors: String
     ): PostgresSchemaRequirement {
         val botsTable = PostgresSchemaObject.parse(bots)
@@ -412,6 +413,7 @@ object PostgresSchemaRequirements {
         val runsTable = PostgresSchemaObject.parse(runRecords)
         val runBotsTable = PostgresSchemaObject.parse(runBotVersions)
         val runResultsTable = PostgresSchemaObject.parse(runBotResults)
+        val enforcementEventsTable = PostgresSchemaObject.parse(runEnforcementEvents)
         val configTable = PostgresSchemaObject.parse(runtimeConfigDescriptors)
         return PostgresSchemaRequirement(
             tables = listOf(
@@ -423,6 +425,7 @@ object PostgresSchemaRequirements {
                 runsTable,
                 runBotsTable,
                 runResultsTable,
+                enforcementEventsTable,
                 configTable
             ),
             columns = listOf(
@@ -447,6 +450,9 @@ object PostgresSchemaRequirements {
                     PostgresSchemaColumn(runResultsTable, "disqualified", "boolean"),
                     PostgresSchemaColumn(runResultsTable, "score_eligible", "boolean"),
                     PostgresSchemaColumn(runResultsTable, "public_leaderboard", "boolean"),
+                    PostgresSchemaColumn(enforcementEventsTable, "decision", "text"),
+                    PostgresSchemaColumn(enforcementEventsTable, "reason_code", "text"),
+                    PostgresSchemaColumn(enforcementEventsTable, "counters_json", "text"),
                     PostgresSchemaColumn(configTable, "config_key", "text"),
                     PostgresSchemaColumn(configTable, "provider", "text"),
                     PostgresSchemaColumn(configTable, "secret_path", "text"),

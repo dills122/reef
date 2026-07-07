@@ -395,7 +395,33 @@ async function persistArenaResults(report) {
     }, { allowAlreadyExists: true }));
   }
 
+  for (const event of report.enforcementEvents) {
+    operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/run-enforcement-events", {
+      runId: config.runId,
+      botId: event.botId,
+      versionId: event.versionId,
+      decision: event.decision,
+      reasonCode: event.reasonCode,
+      reason: event.reason,
+      policyVersion: event.policyVersion,
+      countersJson: JSON.stringify(event.counters ?? {}),
+      actorId: config.actorId,
+      correlationId,
+    }, { allowAlreadyExists: true }));
+    if (event.decision === "freeze") {
+      operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/bot-versions/transition", {
+        botId: event.botId,
+        versionId: event.versionId,
+        status: "quarantine",
+        reason: `arena freeze ${config.runId}: ${event.reasonCode}`,
+        actorId: config.actorId,
+        correlationId,
+      }, { allowInvalidTransition: true }));
+    }
+  }
+
   const rawResults = await getArenaJson(baseUrl, `/internal/admin/arena/run-bot-results?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
+  const rawEnforcementEvents = await getArenaJson(baseUrl, `/internal/admin/arena/run-enforcement-events?runId=${encodeURIComponent(config.runId)}&actorId=${encodeURIComponent(config.actorId)}`);
   const leaderboard = await getArenaJson(
     baseUrl,
     `/internal/admin/arena/leaderboard?modeId=${encodeURIComponent(mode.modeId)}&scoringPolicyVersion=${encodeURIComponent(mode.scoringPolicyVersion)}&limit=50&actorId=${encodeURIComponent(config.actorId)}`,
@@ -403,6 +429,9 @@ async function persistArenaResults(report) {
   const leaderboardEntry = leaderboard.body?.entries?.find((entry) => entry.runId === config.runId);
   if (rawResults.statusCode < 200 || rawResults.statusCode >= 300) {
     throw new Error(`arena run-bot-results readback failed (${rawResults.statusCode}): ${JSON.stringify(rawResults.body)}`);
+  }
+  if (rawEnforcementEvents.statusCode < 200 || rawEnforcementEvents.statusCode >= 300) {
+    throw new Error(`arena run-enforcement-events readback failed (${rawEnforcementEvents.statusCode}): ${JSON.stringify(rawEnforcementEvents.body)}`);
   }
   if (leaderboard.statusCode < 200 || leaderboard.statusCode >= 300) {
     throw new Error(`arena leaderboard readback failed (${leaderboard.statusCode}): ${JSON.stringify(leaderboard.body)}`);
@@ -416,6 +445,7 @@ async function persistArenaResults(report) {
     skipped: false,
     operations,
     rawResults,
+    rawEnforcementEvents,
     leaderboard,
     leaderboardEntry,
   };

@@ -8,6 +8,7 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
     private val decisions = linkedMapOf<String, MutableList<ArenaOperatorDecision>>()
     private val runs = linkedMapOf<String, ArenaRunRecord>()
     private val runBotResults = linkedMapOf<String, MutableList<ArenaRunBotResult>>()
+    private val runEnforcementEvents = linkedMapOf<String, MutableList<ArenaRunEnforcementEvent>>()
     private val runtimeConfigDescriptors = linkedMapOf<String, List<ArenaRuntimeConfigDescriptor>>()
 
     override fun saveBot(bot: ArenaBot) {
@@ -62,6 +63,21 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
 
     override fun runBotResults(runId: String): List<ArenaRunBotResult> {
         return runBotResults[runId]?.toList() ?: emptyList()
+    }
+
+    override fun saveRunEnforcementEvent(event: ArenaRunEnforcementEvent) {
+        val events = runEnforcementEvents.getOrPut(event.runId) { mutableListOf() }
+        events.removeIf {
+            it.botId == event.botId &&
+                it.versionId == event.versionId &&
+                it.decision == event.decision &&
+                it.reasonCode == event.reasonCode
+        }
+        events.add(event)
+    }
+
+    override fun runEnforcementEvents(runId: String): List<ArenaRunEnforcementEvent> {
+        return runEnforcementEvents[runId]?.toList() ?: emptyList()
     }
 
     override fun leaderboard(

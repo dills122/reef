@@ -749,8 +749,14 @@ Observed:
 - 1 freeze event with `reasonCode` `tick_policy_violation`
 - bad bot result retained with `disqualified=true`
 - persisted raw results retained all 6 bots
+- persisted enforcement events retained the freeze event with counters
+- frozen bot version transitioned to `Quarantined`
 - persisted leaderboard for the run contained only `custom-technical-indicator`
 - bad bot excluded from public leaderboard and retained in `diagnosticLeaderboard`
+
+Once a persisted bot version is quarantined, rerunning that same bot version is
+expected to fail run registration until an admin override is recorded or a new
+bot version is submitted.
 
 Local stack requirement: `platform-runtime` must run with
 `PLATFORM_ARENA_ADMIN_ENABLED=true`. Host-based smoke calls to raw
