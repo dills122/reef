@@ -24,8 +24,10 @@ const projectionName = env("DEV_VENUE_EVENT_CRASH_GATE_PROJECTION_NAME", `runtim
 const marketDataProjectionName = env("DEV_VENUE_EVENT_CRASH_GATE_MARKET_DATA_PROJECTION_NAME", `market-data-crash-gate-${gateId}`);
 const commandStream = env("STREAM_ACK_COMMAND_STREAM", `REEF_CRASH_GATE_COMMANDS_${streamToken.toUpperCase()}`);
 const eventStream = env("MATCHING_ENGINE_EVENT_STREAM", `REEF_CRASH_GATE_VENUE_EVENTS_${streamToken.toUpperCase()}`);
+const internalHeaders = { "X-Reef-Internal-Route": "true" };
 
 setValue("STREAM_ACK_LOG_PROVIDER", "redpanda");
+setValue("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("STREAM_ACK_COMMAND_STREAM", commandStream);
 setDefault("STREAM_ACK_SUBJECT_PREFIX", `reef.crash.gate.${streamToken}.cmd.v1`);
 setDefault("STREAM_ACK_PARTITION_COUNT", "4");
@@ -53,7 +55,6 @@ setValue("MARKET_DATA_PROJECTOR_PROJECTION_NAME", marketDataProjectionName);
 setValue("MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME", projectionName);
 setDefault("MARKET_DATA_PROJECTOR_BATCH_SIZE", "1000");
 setDefault("MARKET_DATA_PROJECTOR_POLL_MS", "10");
-setValue("DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME", projectionName);
 setValue("DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM", eventStream);
 process.env.COMPOSE_PROFILES = env("DEV_COMPOSE_PROFILES");
 
@@ -69,11 +70,11 @@ await waitForHttp(`${readApiUrl}/health`, waitTimeoutSeconds);
 console.log("seeding reference/auth state...");
 await seedReferenceData();
 
-console.log("stopping materializer and projector to build durable backlog...");
-await dockerCompose(["stop", "platform-materializer", "platform-projector-0"]);
-
 const engineBefore = await enginePublished();
 const materializerBefore = await materializedOutcomes();
+
+console.log("stopping materializer and projector to build durable backlog...");
+await dockerCompose(["stop", "platform-materializer", "platform-projector-0"]);
 
 console.log("submitting command while materializer is stopped...");
 const first = commandSpec("materializer-stopped", "BUY", "150250000000");
@@ -105,9 +106,9 @@ if (!replay.pass) {
   throw new Error(`replay/checksum gate failed: ${JSON.stringify(replay.failures)}`);
 }
 
-const engineAfter = await getJson(`${engineUrl}/internal/stream-direct/stats`);
-const materializerAfter = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
-const projectorAfter = await getJson(`${readApiUrl}/internal/projector/status`);
+const engineAfter = await internalGetJson(`${engineUrl}/internal/stream-direct/stats`);
+const materializerAfter = await internalGetJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
+const projectorAfter = await internalGetJson(`${readApiUrl}/internal/projector/status`);
 
 console.log("venue event crash gate passed");
 console.log(JSON.stringify({
@@ -205,7 +206,7 @@ async function waitForEnginePublishedAtLeast(target) {
 }
 
 async function enginePublished() {
-  const stats = await getJson(`${engineUrl}/internal/stream-direct/stats`);
+  const stats = await internalGetJson(`${engineUrl}/internal/stream-direct/stats`);
   return summarizeEngineStats(stats).published;
 }
 
@@ -229,7 +230,7 @@ async function waitForMaterializedOutcomesAtLeast(target) {
 }
 
 async function materializedOutcomes() {
-  const stats = await getJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
+  const stats = await internalGetJson(`${materializerUrl}/internal/venue-event-materializer/stats`);
   return Number(stats.metrics?.materializedOutcomes ?? 0);
 }
 
@@ -330,8 +331,13 @@ async function getJson(url) {
   return JSON.parse(body || "{}");
 }
 
-async function getText(url) {
-  const response = await request("GET", url, null, {}, 5000);
+async function internalGetJson(url) {
+  const body = await getText(url, internalHeaders);
+  return JSON.parse(body || "{}");
+}
+
+async function getText(url, headers = {}) {
+  const response = await request("GET", url, null, headers, 5000);
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new Error(`GET ${url} failed (${response.statusCode}): ${response.body}`);
   }
