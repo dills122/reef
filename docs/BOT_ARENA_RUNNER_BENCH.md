@@ -645,6 +645,33 @@ Observed:
 - 0 freezes
 - status `completed`
 
+Live submit mode routes accepted command drafts through `/api/v1`, waits for
+terminal command status, records rejected/failed/timed-out commands, and captures
+readback evidence from data availability, own orders, and market snapshots:
+
+```bash
+make dev-smoke-bot-arena-local
+```
+
+Useful direct command:
+
+```bash
+bun run arena:local-tick-run --submit-mode=live \
+  --venue-url=http://127.0.0.1:8080 \
+  --seed-reference \
+  --compartment=ses \
+  --out=/tmp/reef-arena-local-tick-run-live.json
+```
+
+The same report now includes:
+
+- `commandAccounting`
+- per-tick `submission` records
+- terminal command status bodies
+- `venueReadback.availability`
+- `venueReadback.ownOrders`
+- `venueReadback.snapshots`
+- freeze events for bot-caused tick or command failures
+
 Takeaway: the local arena now has a stable mode/catalog/report shape around the
-tick protocol. The next implementation step is routing accepted venue command
-drafts through `/api/v1`.
+tick protocol and can route accepted venue command drafts through `/api/v1`.
