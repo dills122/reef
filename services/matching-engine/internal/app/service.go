@@ -12,8 +12,10 @@ import (
 )
 
 type Service struct {
-	books                  sync.Map // map[string]*orderBook
-	orders                 sync.Map // map[string]*orderRecord
+	booksMu                sync.RWMutex
+	books                  map[string]*orderBook
+	ordersMu               sync.RWMutex
+	orders                 map[string]*orderRecord
 	now                    func() time.Time
 	terminalRetentionLimit int
 	terminalRetentionMu    sync.Mutex
@@ -61,6 +63,8 @@ func WithTerminalOrderRetentionLimit(limit int) Option {
 
 func NewService(options ...Option) *Service {
 	service := &Service{
+		books:                  make(map[string]*orderBook),
+		orders:                 make(map[string]*orderRecord),
 		terminalRetentionLimit: envInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", 0),
 		now: func() time.Time {
 			return time.Now().UTC()
@@ -285,12 +289,21 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 }
 
 func (s *Service) bookFor(instrumentID string) *orderBook {
-	if existing, ok := s.books.Load(instrumentID); ok {
-		return existing.(*orderBook)
+	s.booksMu.RLock()
+	existing, ok := s.books[instrumentID]
+	s.booksMu.RUnlock()
+	if ok {
+		return existing
+	}
+
+	s.booksMu.Lock()
+	defer s.booksMu.Unlock()
+	if existing, ok := s.books[instrumentID]; ok {
+		return existing
 	}
 	book := newOrderBook()
-	actual, _ := s.books.LoadOrStore(instrumentID, book)
-	return actual.(*orderBook)
+	s.books[instrumentID] = book
+	return book
 }
 
 // BatchRollback captures a pre-mutation snapshot of the order book(s) and
@@ -309,7 +322,7 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 // true today since a given instrument's commands are only ever processed by
 // one direct-consume shard/partition at a time.
 type BatchRollback struct {
-	orders      *sync.Map
+	service     *Service
 	instruments map[string]*instrumentRollback
 }
 
@@ -322,7 +335,7 @@ type instrumentRollback struct {
 // BeginBatch snapshots the order book and the order records resting in it
 // for each distinct instrument ID.
 func (s *Service) BeginBatch(instrumentIDs []string) *BatchRollback {
-	rollback := &BatchRollback{orders: &s.orders, instruments: make(map[string]*instrumentRollback)}
+	rollback := &BatchRollback{service: s, instruments: make(map[string]*instrumentRollback)}
 	for _, instrumentID := range instrumentIDs {
 		if instrumentID == "" {
 			continue
@@ -370,15 +383,17 @@ func (rb *BatchRollback) Rollback(touchedOrderIDs map[string][]string) {
 		if restored, ok := hotbook.Restore(snap.snapshot); ok {
 			snap.book.book = restored
 		}
+		rb.service.ordersMu.Lock()
 		for orderID, record := range snap.existing {
 			recordCopy := record
-			rb.orders.Store(orderID, &recordCopy)
+			rb.service.orders[orderID] = &recordCopy
 		}
 		for _, orderID := range touchedOrderIDs[instrumentID] {
 			if _, existed := snap.existing[orderID]; !existed {
-				rb.orders.Delete(orderID)
+				delete(rb.service.orders, orderID)
 			}
 		}
+		rb.service.ordersMu.Unlock()
 		snap.book.mu.Unlock()
 	}
 }
@@ -514,16 +529,14 @@ func (s *Service) trackTerminalOrder(record *orderRecord) {
 		if evictID == record.OrderID {
 			continue
 		}
-		value, ok := s.orders.Load(evictID)
-		if !ok {
-			continue
-		}
-		evictRecord, ok := value.(*orderRecord)
+		evictRecord, ok := s.loadOrder(evictID)
 		if !ok {
 			continue
 		}
 		if evictRecord.Status == domain.OrderStatusFilled || evictRecord.Status == domain.OrderStatusCancelled {
-			s.orders.Delete(evictID)
+			s.ordersMu.Lock()
+			delete(s.orders, evictID)
+			s.ordersMu.Unlock()
 		}
 	}
 	if s.terminalRetentionHead > 0 && s.terminalRetentionHead*2 >= len(s.terminalRetentionOrder) {
@@ -581,17 +594,20 @@ func (s *Service) removeRestingOrder(book *orderBook, record *orderRecord) {
 }
 
 func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {
-	value, ok := s.orders.Load(orderID)
-	if !ok {
-		return nil, false
-	}
-	record, castOk := value.(*orderRecord)
-	return record, castOk
+	s.ordersMu.RLock()
+	defer s.ordersMu.RUnlock()
+	record, ok := s.orders[orderID]
+	return record, ok
 }
 
 func (s *Service) reserveOrder(record *orderRecord) bool {
-	_, loaded := s.orders.LoadOrStore(record.OrderID, record)
-	return !loaded
+	s.ordersMu.Lock()
+	defer s.ordersMu.Unlock()
+	if _, exists := s.orders[record.OrderID]; exists {
+		return false
+	}
+	s.orders[record.OrderID] = record
+	return true
 }
 
 func envInt(name string, fallback int) int {
