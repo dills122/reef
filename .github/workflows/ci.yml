@@ -58,7 +58,7 @@ jobs:
         run: test -z "$(find . -name '*.go' -print | xargs gofmt -l)"
       - name: Run simulator Go tests with coverage
         working-directory: .
-        run: ./scripts/ci/go-coverage.sh services/simulator simulator coverage/simulator 68
+        run: ./scripts/ci/go-coverage.sh services/simulator simulator coverage/simulator 71
       - name: Add coverage summary
         working-directory: .
         run: cat coverage/simulator/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"

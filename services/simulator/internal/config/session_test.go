@@ -247,6 +247,111 @@ func TestLoadSessionFileRejectsUnsupportedFaultType(t *testing.T) {
 	}
 }
 
+func TestValidateActorGroupsRequiresID(t *testing.T) {
+	err := validateActorGroups([]ActorGroup{{ActorType: "retail", Count: 1}}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "id is required") {
+		t.Fatalf("expected id-required error, got: %v", err)
+	}
+}
+
+func TestValidateActorGroupsRejectsDuplicateID(t *testing.T) {
+	groups := []ActorGroup{
+		{ID: "g1", ActorType: "retail", Count: 1},
+		{ID: "g1", ActorType: "retail", Count: 1},
+	}
+	err := validateActorGroups(groups, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "duplicate actorGroup id") {
+		t.Fatalf("expected duplicate id error, got: %v", err)
+	}
+}
+
+func TestValidateActorGroupsRequiresActorType(t *testing.T) {
+	err := validateActorGroups([]ActorGroup{{ID: "g1", Count: 1}}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "actorType is required") {
+		t.Fatalf("expected actorType-required error, got: %v", err)
+	}
+}
+
+func TestValidateActorGroupsRejectsNonPositiveCount(t *testing.T) {
+	err := validateActorGroups([]ActorGroup{{ID: "g1", ActorType: "retail", Count: 0}}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "count must be > 0") {
+		t.Fatalf("expected count error, got: %v", err)
+	}
+}
+
+func TestValidateActorGroupsRejectsUnknownSymbol(t *testing.T) {
+	groups := []ActorGroup{{ID: "g1", ActorType: "retail", Count: 1, Symbols: []string{"MSFT"}}}
+	err := validateActorGroups(groups, map[string]struct{}{"AAPL": {}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "unknown symbol") {
+		t.Fatalf("expected unknown symbol error, got: %v", err)
+	}
+}
+
+func TestValidateActorGroupsRejectsUnknownStrategyProfile(t *testing.T) {
+	groups := []ActorGroup{{
+		ID: "g1", ActorType: "retail", Count: 1,
+		StrategyProfileDistribution: map[string]float64{"not_a_strategy": 1.0},
+	}}
+	err := validateActorGroups(groups, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "unknown strategy profile") {
+		t.Fatalf("expected unknown strategy error, got: %v", err)
+	}
+}
+
+func TestValidateActorGroupsAcceptsKnownProfileID(t *testing.T) {
+	groups := []ActorGroup{{
+		ID: "g1", ActorType: "retail", Count: 1,
+		StrategyProfileDistribution: map[string]float64{"custom_profile": 1.0},
+	}}
+	profiles := map[string]StrategyProfile{"custom_profile": {Strategy: "dip_buyer"}}
+	if err := validateActorGroups(groups, nil, profiles); err != nil {
+		t.Fatalf("expected no error for known profile id, got: %v", err)
+	}
+}
+
+func TestValidateDistributionSumRejectsNegativeValue(t *testing.T) {
+	err := validateDistributionSum("g1", "personaDistribution", map[string]float64{"a": -0.1, "b": 1.1})
+	if err == nil || !strings.Contains(err.Error(), "must be >= 0") {
+		t.Fatalf("expected negative-value error, got: %v", err)
+	}
+}
+
+func TestValidateDistributionSumRejectsBadSum(t *testing.T) {
+	err := validateDistributionSum("g1", "personaDistribution", map[string]float64{"a": 0.3, "b": 0.3})
+	if err == nil || !strings.Contains(err.Error(), "must sum to 1.0") {
+		t.Fatalf("expected sum error, got: %v", err)
+	}
+}
+
+func TestValidateFaultRulesRequiresID(t *testing.T) {
+	err := validateFaultRules([]FaultRule{{Type: "reject_submit"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "id is required") {
+		t.Fatalf("expected fault id-required error, got: %v", err)
+	}
+}
+
+func TestValidateFaultRulesRequiresType(t *testing.T) {
+	err := validateFaultRules([]FaultRule{{ID: "f1"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "type is required") {
+		t.Fatalf("expected fault type-required error, got: %v", err)
+	}
+}
+
+func TestValidateFaultRulesRejectsUnknownSymbol(t *testing.T) {
+	rules := []FaultRule{{ID: "f1", Type: "reject_cancel", Symbol: "MSFT"}}
+	err := validateFaultRules(rules, map[string]struct{}{"AAPL": {}})
+	if err == nil || !strings.Contains(err.Error(), "unknown symbol") {
+		t.Fatalf("expected unknown symbol error, got: %v", err)
+	}
+}
+
+func TestValidateFaultRulesAcceptsKnownSymbol(t *testing.T) {
+	rules := []FaultRule{{ID: "f1", Type: "reject_modify", Symbol: "AAPL", Probability: 0.5}}
+	if err := validateFaultRules(rules, map[string]struct{}{"AAPL": {}}); err != nil {
+		t.Fatalf("expected no error for known symbol, got: %v", err)
+	}
+}
+
 func writeFile(t *testing.T, name, content string) string {
 	t.Helper()
 	d := t.TempDir()

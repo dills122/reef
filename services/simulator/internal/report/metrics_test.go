@@ -12,6 +12,13 @@ func TestComputeLatency(t *testing.T) {
 	}
 }
 
+func TestComputeLatencyEmpty(t *testing.T) {
+	s := ComputeLatency(nil)
+	if s.Min != 0 || s.Max != 0 || s.P50 != 0 || s.P95 != 0 || s.P99 != 0 {
+		t.Fatalf("expected zero-value summary for empty input, got %+v", s)
+	}
+}
+
 func TestComputeThroughputUsesCanonicalNames(t *testing.T) {
 	row := ComputeThroughput(100, 90, 80, 10)
 	if row.AttemptedPerSecond != 10 {
@@ -32,6 +39,36 @@ func TestSummarizeRejectTaxonomy(t *testing.T) {
 	}
 	if rows[0].Code != "INVALID_STATE" || rows[0].Count != 3 {
 		t.Fatalf("unexpected first row: %+v", rows[0])
+	}
+}
+
+func TestTopErrorsSortsByCountThenName(t *testing.T) {
+	rows := TopErrors(map[string]int64{"B_ERR": 2, "A_ERR": 2, "C_ERR": 5}, 10)
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
+	}
+	if rows[0].Error != "C_ERR" || rows[0].Count != 5 {
+		t.Fatalf("expected highest count first, got %+v", rows[0])
+	}
+	if rows[1].Error != "A_ERR" || rows[2].Error != "B_ERR" {
+		t.Fatalf("expected tie broken alphabetically, got %+v", rows[1:])
+	}
+}
+
+func TestTopErrorsAppliesLimit(t *testing.T) {
+	rows := TopErrors(map[string]int64{"A": 1, "B": 2, "C": 3}, 2)
+	if len(rows) != 2 {
+		t.Fatalf("expected limit of 2 rows, got %d", len(rows))
+	}
+	if rows[0].Error != "C" || rows[1].Error != "B" {
+		t.Fatalf("expected top-2 by count, got %+v", rows)
+	}
+}
+
+func TestTopErrorsEmptyMap(t *testing.T) {
+	rows := TopErrors(map[string]int64{}, 10)
+	if len(rows) != 0 {
+		t.Fatalf("expected no rows for empty map, got %+v", rows)
 	}
 }
 
