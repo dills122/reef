@@ -2,10 +2,18 @@
 title: Internal & Admin Routes
 description: Operator/diagnostic routes under /internal — not part of the public client contract.
 banner:
-  content: Internal-only. These routes are operator/diagnostic tooling, not a stable public API — do not build client integrations against them.
+  content: Internal-only migration/local tooling. Do not expose these routes raw, and do not build client integrations against them.
 ---
 
-Routes under `/internal/*` exist for operators, admin CLI, and diagnostics. They are not versioned like `/api/v1` and can change without notice.
+Routes under `/internal/*` exist for local operators, admin CLI migration tooling, smoke tests, and diagnostics. They are not versioned like `/api/v1`, can change without notice, and must not be exposed raw as a public or partner-facing surface.
+
+Hardline policy:
+- internal service/control capabilities should be gRPC/protobuf or durable-message interfaces
+- externally reachable admin/data capabilities must be gateway-backed, authenticated, authorized, audited, and versioned
+- product-facing simulation access uses two API families: venue intake/trading information and admin/data
+- `/internal/*` is not a product API, SDK target, or stable integration contract
+
+Canonical policy: `docs/API_SURFACE_POLICY.md`.
 
 | Route | Purpose |
 |---|---|

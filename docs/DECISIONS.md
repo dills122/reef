@@ -39,7 +39,7 @@ Primary references:
 
 ### D-003: Admin Surface Direction
 
-Status: accepted
+Status: accepted, amended by D-048
 
 Summary:
 - Admin capabilities are implemented in application-layer modules first.
@@ -832,3 +832,22 @@ Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
+
+### D-048: Internal Interface And External Surface Hardline
+
+Status: accepted
+
+Summary:
+- Reef exposes two product-facing API families: venue intake/trading information, and admin/data.
+- Venue intake/trading information covers order entry, command status, participant order state, executions, trade tape, and current market data.
+- Admin/data covers operator-approved administration plus intraday and historical data access through explicit contracts.
+- Raw `/internal/*` HTTP routes are not product APIs, SDK targets, partner surfaces, or stable integration contracts.
+- Internal service/control capabilities should use gRPC/protobuf or durable messaging by default.
+- HTTP adapters for internal operations may remain temporarily for local development, smoke tests, and migration parity, but deploys must block raw access outside private operator networks.
+- Any externally reachable admin/data capability must be gateway-backed, authenticated, authorized, audited, and versioned.
+
+Primary references:
+- [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
+- [`docs/steering/external-api-boundary.md`](./steering/external-api-boundary.md)
+- [`docs/steering/inter-service-communication.md`](./steering/inter-service-communication.md)
+- [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)

@@ -33,6 +33,7 @@ Keep these distinctions explicit:
 - `202 Accepted` still means the configured durable ingress/log producer has acknowledged the command. Do not weaken that contract.
 - The current command intake contract is captured in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit and cancel are the first hot-path scope, modify is deferred, hot cancel requires routing metadata, and accepted-but-not-completed means durable pending work, never a possible drop.
 - Order-entry APIs, market-data/history APIs, account/bot ledgers, settlement, and analytics are separate planes. See [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
+- Product-facing surfaces are limited to venue intake/trading information and admin/data. Raw `/internal/*` HTTP routes are local/migration tooling only and must not be exposed as public, partner, bot, SDK, or stable operator contracts. See [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md) and D-048.
 
 Current decision anchors:
 
@@ -41,6 +42,7 @@ Current decision anchors:
 - D-041 makes Kafka-compatible durable producer plus matching-engine direct consumer the active hot-ingress target, with JetStream retained as fallback/comparison.
 - D-043 makes venue event batch materialization the next persistence boundary: event batches are the durable matching handoff, and Postgres materializer offsets commit only after compact canonical rows commit.
 - D-047 defines the current command intake process: public `202` responses expose stable command references, provider details stay diagnostic, idempotency scopes by `clientId + route + idempotencyKey`, and canonical materialization closes accepted-command accounting after drain.
+- D-048 defines the internal interface and external surface hardline: internal service/control capabilities default to gRPC/protobuf or durable messaging, while externally reachable admin/data capabilities must be gateway-backed, authenticated, authorized, audited, and versioned.
 - Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 - The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results`, `runtime_events`, and accepted submit `orders`. No-DB direct-consume batches carry the compact `acceptedOrder` projection fact; `command_log.command_payloads` is a fallback for older or command-log-backed batches.
 - Local replay/check tooling now verifies stored venue event batch payload replay is idempotent and compares command counts, payload checksums, command outcome payload hashes, stream gaps/overlaps, and optional projection watermarks with `make dev-venue-event-replay-check`.
@@ -77,6 +79,7 @@ Use these docs for active work:
 - Simulator environment shape: [`SYSTEM_SIMULATOR_ENVIRONMENT.md`](./SYSTEM_SIMULATOR_ENVIRONMENT.md)
 - Combined backbone/simulator topology: [`SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md`](./SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md)
 - Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
+- API surface policy: [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
 - Scenario contracts: [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md)
 - Scenario live assertion plan: [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - Minimal settlement exception facts: [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)

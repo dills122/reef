@@ -466,6 +466,11 @@ Near-term architecture:
 - implement the public boundary in Kotlin runtime
 - keep API routes versioned under `/api/v1`
 - preserve clean module seams to allow later gateway extraction
+- expose only explicit product-facing API families:
+  - venue intake and trading information for order entry, command status, participant order state, executions, trade tape, and current market data
+  - admin/data for operator-approved administration plus intraday and historical data access
+- never expose raw internal HTTP routes as product APIs
+- canonical surface policy: [`docs/API_SURFACE_POLICY.md`](./docs/API_SURFACE_POLICY.md)
 
 Boundary requirements:
 - authentication hook (token/API key)
@@ -479,7 +484,9 @@ Boundary requirements:
 Direction:
 - application-layer admin use cases first
 - CLI adapter first
-- admin HTTP adapter later, reusing the same modules
+- internal admin/control interfaces use gRPC/protobuf by default
+- admin/data HTTP APIs may be added later only as gateway-backed, versioned, authenticated, audited adapters reusing the same modules
+- raw `/internal/*` HTTP access is local/migration tooling, not a deployable user surface
 
 Admin command requirements:
 - actor context

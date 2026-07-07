@@ -12,6 +12,7 @@ These documents define how Reef should be built as the repository grows into the
 - [Data Platform](./data-platform.md): canonical persistence posture, datatype standards, write-path rules, retention, and data pitfalls
 - [Inter-Service Communication](./inter-service-communication.md): service transport, protobuf/gRPC direction, metadata/idempotency standards
 - [External API Boundary](./external-api-boundary.md): user-facing API architecture, versioning, auth/idempotency/rate-limit standards
+- [API Surface Policy](../API_SURFACE_POLICY.md): product-facing API families, internal-interface hardline, `/internal/*` exposure ban, and gateway requirements
 - [Repository](./repository.md): top-level folder conventions, naming, and documentation expectations
 - [Go](./go.md): matching engine and systems-side coding guidance
 - [Kotlin](./kotlin.md): platform runtime and workflow orchestration guidance

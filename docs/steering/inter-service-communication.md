@@ -20,6 +20,8 @@ Do not allow ad hoc JSON payloads to become the long-term source of truth.
 
 Use gRPC for synchronous backend service interactions, admin/control surfaces, health checks, parity tests, and fallback paths.
 HTTP/JSON adapters may exist during migration.
+Internal-only capabilities should not be modeled as raw HTTP routes. If a capability is for service-to-service, operator control, health, diagnostics, or private administration, define it as a protobuf-backed interface or durable message flow first. HTTP adapters may exist during migration or local tooling, but they are not the internal contract.
+Canonical API-surface policy: [`../API_SURFACE_POLICY.md`](../API_SURFACE_POLICY.md).
 
 For high-throughput matching ingestion, do not treat per-command unary gRPC calls as the steady-state architecture. Prefer partition-owned batch/stream processing, and where durable stream/topic ingress is active, prefer matching-engine shards that consume assigned command partitions, publish canonical venue event batches, and ack or commit consumed commands after durable event publication.
 
@@ -50,10 +52,13 @@ Current state:
 - protobuf contracts cover submit, cancel, modify, and health-check paths
 - HTTP remains useful for local fallback and parity comparisons
 - stream-backed command intake can durably accept commands before asynchronous downstream processing
+- some operator and diagnostic HTTP routes still exist as migration/local tooling surface
 
 Target state:
 - synchronous compatibility, admin, and direct benchmark paths communicate via gRPC + Protobuf contracts
 - HTTP/JSON path remains optional fallback until parity is verified
+- raw internal HTTP routes are not reachable from public clients or third-party integrations
+- any externally reachable admin/data capability is exposed through a gateway-backed, versioned, authenticated, audited contract
 - high-throughput matching paths avoid generic workers issuing one unary engine request per command
 - the preferred venue-core shape is command stream/topic -> partition-owning engine shard -> canonical venue event batch -> command ack or offset commit
 
