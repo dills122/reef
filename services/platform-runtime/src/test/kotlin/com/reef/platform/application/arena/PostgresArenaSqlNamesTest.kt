@@ -18,6 +18,7 @@ class PostgresArenaSqlNamesTest {
         assertEquals("arena.run_records", names.runRecords)
         assertEquals("arena.run_bot_versions", names.runBotVersions)
         assertEquals("arena.run_bot_results", names.runBotResults)
+        assertEquals("arena.run_enforcement_events", names.runEnforcementEvents)
         assertEquals("arena.runtime_config_descriptors", names.runtimeConfigDescriptors)
     }
 

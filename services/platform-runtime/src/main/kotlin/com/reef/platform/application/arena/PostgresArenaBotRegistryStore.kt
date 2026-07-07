@@ -28,6 +28,7 @@ class PostgresArenaBotRegistryStore(
                         runRecords = names.runRecords,
                         runBotVersions = names.runBotVersions,
                         runBotResults = names.runBotResults,
+                        runEnforcementEvents = names.runEnforcementEvents,
                         runtimeConfigDescriptors = names.runtimeConfigDescriptors
                     )
                 )
@@ -148,8 +149,28 @@ class PostgresArenaBotRegistryStore(
                       data_calls INTEGER NOT NULL,
                       signals_generated INTEGER NOT NULL,
                       disqualified BOOLEAN NOT NULL DEFAULT false,
+                      score_eligible BOOLEAN NOT NULL DEFAULT true,
+                      public_leaderboard BOOLEAN NOT NULL DEFAULT true,
                       created_at TIMESTAMPTZ NOT NULL,
                       PRIMARY KEY (run_id, bot_id, version_id, scoring_policy_version),
+                      FOREIGN KEY (run_id) REFERENCES ${names.runRecords}(run_id),
+                      FOREIGN KEY (bot_id, version_id) REFERENCES ${names.botVersions}(bot_id, version_id)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runEnforcementEvents} (
+                      run_id TEXT NOT NULL,
+                      bot_id TEXT NOT NULL,
+                      version_id TEXT NOT NULL,
+                      decision TEXT NOT NULL,
+                      reason_code TEXT NOT NULL,
+                      reason TEXT NOT NULL,
+                      policy_version TEXT NOT NULL,
+                      counters_json TEXT NOT NULL,
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      PRIMARY KEY (run_id, bot_id, version_id, decision, reason_code),
                       FOREIGN KEY (run_id) REFERENCES ${names.runRecords}(run_id),
                       FOREIGN KEY (bot_id, version_id) REFERENCES ${names.botVersions}(bot_id, version_id)
                     )
@@ -175,9 +196,10 @@ class PostgresArenaBotRegistryStore(
                 stmt.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_arena_run_bot_results_leaderboard
-                    ON ${names.runBotResults}(scoring_policy_version, disqualified, final_equity DESC, realized_pnl DESC, max_drawdown ASC)
+                    ON ${names.runBotResults}(scoring_policy_version, score_eligible, public_leaderboard, disqualified, final_equity DESC, realized_pnl DESC, max_drawdown ASC)
                     """.trimIndent()
                 )
+                stmt.execute("CREATE INDEX IF NOT EXISTS idx_arena_run_enforcement_events_run ON ${names.runEnforcementEvents}(run_id, occurred_at DESC)")
             }
         }
     }
@@ -471,9 +493,9 @@ class PostgresArenaBotRegistryStore(
                 INSERT INTO ${names.runBotResults}(
                   run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
                   max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
-                  disqualified, created_at
+                  disqualified, score_eligible, public_leaderboard, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (run_id, bot_id, version_id, scoring_policy_version) DO UPDATE SET
                   final_equity = EXCLUDED.final_equity,
                   realized_pnl = EXCLUDED.realized_pnl,
@@ -483,6 +505,8 @@ class PostgresArenaBotRegistryStore(
                   data_calls = EXCLUDED.data_calls,
                   signals_generated = EXCLUDED.signals_generated,
                   disqualified = EXCLUDED.disqualified,
+                  score_eligible = EXCLUDED.score_eligible,
+                  public_leaderboard = EXCLUDED.public_leaderboard,
                   created_at = EXCLUDED.created_at
                 """.trimIndent()
             ).use { ps ->
@@ -498,7 +522,9 @@ class PostgresArenaBotRegistryStore(
                 ps.setInt(10, result.dataCalls)
                 ps.setInt(11, result.signalsGenerated)
                 ps.setBoolean(12, result.disqualified)
-                ps.setTimestamp(13, Timestamp.from(result.createdAt))
+                ps.setBoolean(13, result.scoreEligible)
+                ps.setBoolean(14, result.publicLeaderboard)
+                ps.setTimestamp(15, Timestamp.from(result.createdAt))
                 ps.executeUpdate()
             }
         }
@@ -510,7 +536,7 @@ class PostgresArenaBotRegistryStore(
                 """
                 SELECT run_id, bot_id, version_id, scoring_policy_version, final_equity, realized_pnl,
                        max_drawdown, actions_proposed, order_actions_proposed, data_calls, signals_generated,
-                       disqualified, created_at
+                       disqualified, score_eligible, public_leaderboard, created_at
                 FROM ${names.runBotResults}
                 WHERE run_id = ?
                 ORDER BY bot_id, version_id
@@ -521,6 +547,57 @@ class PostgresArenaBotRegistryStore(
                     val results = mutableListOf<ArenaRunBotResult>()
                     while (rs.next()) results.add(rs.toRunBotResult())
                     return results
+                }
+            }
+        }
+    }
+
+    override fun saveRunEnforcementEvent(event: ArenaRunEnforcementEvent) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.runEnforcementEvents}(
+                  run_id, bot_id, version_id, decision, reason_code, reason,
+                  policy_version, counters_json, occurred_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (run_id, bot_id, version_id, decision, reason_code) DO UPDATE SET
+                  reason = EXCLUDED.reason,
+                  policy_version = EXCLUDED.policy_version,
+                  counters_json = EXCLUDED.counters_json,
+                  occurred_at = EXCLUDED.occurred_at
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, event.runId)
+                ps.setString(2, event.botId)
+                ps.setString(3, event.versionId)
+                ps.setString(4, event.decision)
+                ps.setString(5, event.reasonCode)
+                ps.setString(6, event.reason)
+                ps.setString(7, event.policyVersion)
+                ps.setString(8, event.countersJson)
+                ps.setTimestamp(9, Timestamp.from(event.occurredAt))
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun runEnforcementEvents(runId: String): List<ArenaRunEnforcementEvent> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT run_id, bot_id, version_id, decision, reason_code, reason,
+                       policy_version, counters_json, occurred_at
+                FROM ${names.runEnforcementEvents}
+                WHERE run_id = ?
+                ORDER BY occurred_at, bot_id, version_id, decision, reason_code
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, runId)
+                ps.executeQuery().use { rs ->
+                    val events = mutableListOf<ArenaRunEnforcementEvent>()
+                    while (rs.next()) events.add(rs.toRunEnforcementEvent())
+                    return events
                 }
             }
         }
@@ -541,9 +618,11 @@ class PostgresArenaBotRegistryStore(
                 WHERE r.mode_id = ?
                   AND r.status = ?
                   AND rb.scoring_policy_version = ?
+                  AND rb.score_eligible = true
+                  AND rb.public_leaderboard = true
                   AND rb.disqualified = false
-                ORDER BY rb.final_equity DESC, rb.realized_pnl DESC,
-                         rb.max_drawdown ASC, rb.run_id ASC, rb.bot_id ASC
+                ORDER BY rb.final_equity DESC, rb.realized_pnl DESC, rb.max_drawdown ASC,
+                         rb.run_id ASC, rb.bot_id ASC
                 LIMIT ?
                 """.trimIndent()
             ).use { ps ->
@@ -763,7 +842,23 @@ class PostgresArenaBotRegistryStore(
             dataCalls = getInt("data_calls"),
             signalsGenerated = getInt("signals_generated"),
             disqualified = getBoolean("disqualified"),
+            scoreEligible = getBoolean("score_eligible"),
+            publicLeaderboard = getBoolean("public_leaderboard"),
             createdAt = instant("created_at")
+        )
+    }
+
+    private fun ResultSet.toRunEnforcementEvent(): ArenaRunEnforcementEvent {
+        return ArenaRunEnforcementEvent(
+            runId = getString("run_id"),
+            botId = getString("bot_id"),
+            versionId = getString("version_id"),
+            decision = getString("decision"),
+            reasonCode = getString("reason_code"),
+            reason = getString("reason"),
+            policyVersion = getString("policy_version"),
+            countersJson = getString("counters_json"),
+            occurredAt = instant("occurred_at")
         )
     }
 

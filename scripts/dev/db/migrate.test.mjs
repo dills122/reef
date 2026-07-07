@@ -100,6 +100,8 @@ test("routes arena migrations only to arena database target", async () => {
     [
       "arena/0001_arena_registry.sql",
       "arena/0002_arena_run_bot_results.sql",
+      "arena/0003_arena_run_bot_result_visibility.sql",
+      "arena/0004_arena_run_enforcement_events.sql",
     ],
   );
 });

@@ -13,6 +13,7 @@ import com.reef.platform.application.arena.ArenaLeaderboardEntry
 import com.reef.platform.application.arena.ArenaOperatorDecision
 import com.reef.platform.application.arena.ArenaQualificationReport
 import com.reef.platform.application.arena.ArenaRunBotResult
+import com.reef.platform.application.arena.ArenaRunEnforcementEvent
 import com.reef.platform.application.arena.ArenaRunRecord
 import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRunBotVersionRef
@@ -126,7 +127,20 @@ data class ArenaRunBotResultIngestionCommand(
     val orderActionsProposed: Int,
     val dataCalls: Int,
     val signalsGenerated: Int,
-    val disqualified: Boolean
+    val disqualified: Boolean,
+    val scoreEligible: Boolean = true,
+    val publicLeaderboard: Boolean = true
+)
+
+data class ArenaRunEnforcementEventIngestionCommand(
+    val runId: String,
+    val botId: String,
+    val versionId: String,
+    val decision: String,
+    val reasonCode: String,
+    val reason: String,
+    val policyVersion: String,
+    val countersJson: String
 )
 
 class AdminApplicationService(
@@ -341,6 +355,11 @@ class AdminApplicationService(
         return arenaControlPlane().runBotResults(runId)
     }
 
+    fun arenaRunEnforcementEvents(actor: AdminActor, runId: String): List<ArenaRunEnforcementEvent> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaControlPlane().runEnforcementEvents(runId)
+    }
+
     fun recordArenaRunBotResult(
         actor: AdminActor,
         command: ArenaRunBotResultIngestionCommand
@@ -360,6 +379,8 @@ class AdminApplicationService(
                 dataCalls = command.dataCalls,
                 signalsGenerated = command.signalsGenerated,
                 disqualified = command.disqualified,
+                scoreEligible = command.scoreEligible,
+                publicLeaderboard = command.publicLeaderboard,
                 createdAt = now()
             )
         )
@@ -370,6 +391,33 @@ class AdminApplicationService(
             "scoringPolicyVersion=${command.scoringPolicyVersion},finalEquity=${command.finalEquity}"
         )
         return result
+    }
+
+    fun recordArenaRunEnforcementEvent(
+        actor: AdminActor,
+        command: ArenaRunEnforcementEventIngestionCommand
+    ): ArenaRunEnforcementEvent {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        val event = arenaControlPlane().recordRunEnforcementEvent(
+            ArenaRunEnforcementEvent(
+                runId = command.runId,
+                botId = command.botId,
+                versionId = command.versionId,
+                decision = command.decision,
+                reasonCode = command.reasonCode,
+                reason = command.reason,
+                policyVersion = command.policyVersion,
+                countersJson = command.countersJson,
+                occurredAt = now()
+            )
+        )
+        emitAudit(
+            actor,
+            "AdminArenaRunEnforcementEventIngested",
+            "${command.runId}/${command.botId}/${command.versionId}",
+            "decision=${command.decision},reasonCode=${command.reasonCode}"
+        )
+        return event
     }
 
     fun arenaRuntimeConfigDescriptors(

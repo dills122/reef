@@ -97,7 +97,21 @@ data class ArenaRunBotResult(
     val dataCalls: Int,
     val signalsGenerated: Int,
     val disqualified: Boolean,
+    val scoreEligible: Boolean = true,
+    val publicLeaderboard: Boolean = true,
     val createdAt: Instant
+)
+
+data class ArenaRunEnforcementEvent(
+    val runId: String,
+    val botId: String,
+    val versionId: String,
+    val decision: String,
+    val reasonCode: String,
+    val reason: String,
+    val policyVersion: String,
+    val countersJson: String,
+    val occurredAt: Instant
 )
 
 data class ArenaLeaderboardEntry(
@@ -173,6 +187,8 @@ interface ArenaBotRegistryStore {
     fun runRecord(runId: String): ArenaRunRecord?
     fun saveRunBotResult(result: ArenaRunBotResult)
     fun runBotResults(runId: String): List<ArenaRunBotResult>
+    fun saveRunEnforcementEvent(event: ArenaRunEnforcementEvent)
+    fun runEnforcementEvents(runId: String): List<ArenaRunEnforcementEvent>
     fun leaderboard(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry>
     fun replaceRuntimeConfigDescriptors(
         botId: String,
@@ -366,6 +382,28 @@ class ArenaControlPlaneService(
         require(runId.isNotBlank()) { "runId is required" }
         require(store.runRecord(runId) != null) { "unknown arena run: $runId" }
         return store.runBotResults(runId)
+    }
+
+    fun recordRunEnforcementEvent(event: ArenaRunEnforcementEvent): ArenaRunEnforcementEvent {
+        require(event.runId.isNotBlank()) { "runId is required" }
+        require(event.botId.isNotBlank()) { "botId is required" }
+        require(event.versionId.isNotBlank()) { "versionId is required" }
+        require(event.decision.isNotBlank()) { "decision is required" }
+        require(event.reasonCode.isNotBlank()) { "reasonCode is required" }
+        require(event.reason.isNotBlank()) { "reason is required" }
+        require(event.policyVersion.isNotBlank()) { "policyVersion is required" }
+        val run = store.runRecord(event.runId) ?: error("unknown arena run: ${event.runId}")
+        require(run.botVersions.any { it.botId == event.botId && it.versionId == event.versionId }) {
+            "bot version is not registered for arena run: ${event.botId}/${event.versionId}"
+        }
+        store.saveRunEnforcementEvent(event)
+        return event
+    }
+
+    fun runEnforcementEvents(runId: String): List<ArenaRunEnforcementEvent> {
+        require(runId.isNotBlank()) { "runId is required" }
+        require(store.runRecord(runId) != null) { "unknown arena run: $runId" }
+        return store.runEnforcementEvents(runId)
     }
 
     fun leaderboard(modeId: String, scoringPolicyVersion: String, limit: Int = 50): List<ArenaLeaderboardEntry> {

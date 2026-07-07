@@ -6,6 +6,7 @@ import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.ArenaBotRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
+import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionCommand
 import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
 import com.reef.platform.application.admin.ArenaRunRegistrationCommand
 import com.reef.platform.application.admin.ArenaRunStatusCommand
@@ -22,6 +23,7 @@ import com.reef.platform.application.arena.ArenaLeaderboardEntry
 import com.reef.platform.application.arena.ArenaOperatorDecision
 import com.reef.platform.application.arena.ArenaQualificationReport
 import com.reef.platform.application.arena.ArenaRunBotResult
+import com.reef.platform.application.arena.ArenaRunEnforcementEvent
 import com.reef.platform.application.arena.ArenaRunBotVersionRef
 import com.reef.platform.application.arena.ArenaRunRecord
 import com.reef.platform.application.arena.ArenaRunStatus
@@ -314,6 +316,8 @@ class PlatformHttpServer(
             updateArenaRunStatusJson = { body -> updateArenaRunStatusResponse(body) },
             arenaRunBotResultsJson = { query -> arenaRunBotResultsResponse(query) },
             recordArenaRunBotResultJson = { body -> recordArenaRunBotResultResponse(body) },
+            arenaRunEnforcementEventsJson = { query -> arenaRunEnforcementEventsResponse(query) },
+            recordArenaRunEnforcementEventJson = { body -> recordArenaRunEnforcementEventResponse(body) },
             arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
             analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
@@ -3055,7 +3059,9 @@ class PlatformHttpServer(
                 orderActionsProposed = json.requiredInt("orderActionsProposed"),
                 dataCalls = json.requiredInt("dataCalls"),
                 signalsGenerated = json.requiredInt("signalsGenerated"),
-                disqualified = json.boolean("disqualified")
+                disqualified = json.boolean("disqualified"),
+                scoreEligible = json.booleanOrDefault("scoreEligible", true),
+                publicLeaderboard = json.booleanOrDefault("publicLeaderboard", true)
             )
             val result = service.recordArenaRunBotResult(arenaAdminActor(json), command)
             PlatformHotPathResponse(
@@ -3066,6 +3072,53 @@ class PlatformHttpServer(
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run bot result")))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run bot result ingestion failed")))
+        }
+    }
+
+    private fun arenaRunEnforcementEventsResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val runId = queryValue(query, "runId")
+        if (runId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
+        }
+        return try {
+            val events = service.arenaRunEnforcementEvents(arenaAdminActor(query), runId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "events" to events.map { arenaRunEnforcementEventJson(it) })
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run enforcement query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run enforcement query failed")))
+        }
+    }
+
+    private fun recordArenaRunEnforcementEventResponse(body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        return try {
+            val command = ArenaRunEnforcementEventIngestionCommand(
+                runId = json.string("runId"),
+                botId = json.string("botId"),
+                versionId = json.string("versionId"),
+                decision = json.string("decision"),
+                reasonCode = json.string("reasonCode"),
+                reason = json.string("reason"),
+                policyVersion = json.string("policyVersion"),
+                countersJson = json.string("countersJson")
+            )
+            val event = service.recordArenaRunEnforcementEvent(arenaAdminActor(json), command)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "event" to arenaRunEnforcementEventJson(event))
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run enforcement event")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run enforcement event ingestion failed")))
         }
     }
 
@@ -3490,7 +3543,23 @@ class PlatformHttpServer(
             "dataCalls" to result.dataCalls,
             "signalsGenerated" to result.signalsGenerated,
             "disqualified" to result.disqualified,
+            "scoreEligible" to result.scoreEligible,
+            "publicLeaderboard" to result.publicLeaderboard,
             "createdAt" to result.createdAt.toString()
+        )
+    }
+
+    private fun arenaRunEnforcementEventJson(event: ArenaRunEnforcementEvent): Map<String, Any?> {
+        return mapOf(
+            "runId" to event.runId,
+            "botId" to event.botId,
+            "versionId" to event.versionId,
+            "decision" to event.decision,
+            "reasonCode" to event.reasonCode,
+            "reason" to event.reason,
+            "policyVersion" to event.policyVersion,
+            "countersJson" to event.countersJson,
+            "occurredAt" to event.occurredAt.toString()
         )
     }
 
@@ -4439,6 +4508,10 @@ internal fun JsonDocument.requiredInt(key: String): Int {
 
 internal fun JsonDocument.boolean(key: String): Boolean {
     return string(key).equals("true", ignoreCase = true)
+}
+
+internal fun JsonDocument.booleanOrDefault(key: String, fallback: Boolean): Boolean {
+    return if (has(key)) boolean(key) else fallback
 }
 
 data class ServerBoundaryDeps(

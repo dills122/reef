@@ -1,0 +1,186 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import http from "node:http";
+
+const repoRoot = new URL("../../", import.meta.url).pathname;
+const commands = new Map();
+const receivedCommands = [];
+const referenceWrites = [];
+const arena = {
+  bots: new Map(),
+  versions: new Map(),
+  runs: new Map(),
+  results: [],
+};
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (req.method === "GET" && url.pathname === "/health") {
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === "POST" && ["/reference/instruments", "/reference/participants", "/reference/accounts", "/auth/roles", "/auth/actor-roles"].includes(url.pathname)) {
+    referenceWrites.push({ path: url.pathname, body: await readJson(req) });
+    return json(res, 200, { ok: true });
+  }
+  if (req.method === "POST" && ["/api/v1/orders/submit", "/api/v1/orders/modify", "/api/v1/orders/cancel"].includes(url.pathname)) {
+    const body = await readJson(req);
+    receivedCommands.push({ path: url.pathname, body });
+    commands.set(body.commandId, {
+      commandId: body.commandId,
+      status: "COMPLETED",
+      responseStatus: 200,
+      responsePayloadJson: "{}",
+      resultStatus: "accepted",
+      canonicalMaterialized: true,
+    });
+    return json(res, 202, { commandId: body.commandId, status: "RECEIVED", statusUrl: `/api/v1/commands/${body.commandId}` });
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/api/v1/commands/")) {
+    const commandId = decodeURIComponent(url.pathname.slice("/api/v1/commands/".length));
+    return json(res, commands.has(commandId) ? 200 : 404, commands.get(commandId) ?? { error: "not found" });
+  }
+  if (req.method === "GET" && url.pathname === "/api/v1/data/availability") {
+    return json(res, 200, {
+      generatedAt: "2026-07-07T00:00:00.000Z",
+      source: "mock",
+      projections: [{ projectionName: "runtime-normalized-venue-outcomes", role: "venue", projectedCount: receivedCommands.length, lag: 0, watermarks: [] }],
+      surfaces: [{ name: "currentOrders", endpoint: "/api/v1/orders/current", source: "mock", freshness: "mock", scope: "participant-own-orders" }],
+    });
+  }
+  if (req.method === "GET" && url.pathname.startsWith("/api/v1/market-data/snapshots/")) {
+    const instrumentId = decodeURIComponent(url.pathname.slice("/api/v1/market-data/snapshots/".length));
+    return json(res, 200, { snapshot: { instrumentId, bestBidPrice: "100000000000", bestAskPrice: "101000000000", updatedAt: "2026-07-07T00:00:00.000Z" } });
+  }
+  if (req.method === "GET" && (url.pathname === "/api/v1/orders/current" || url.pathname === "/api/v1/orders/history")) {
+    return json(res, 200, { orders: [] });
+  }
+  if (url.pathname.startsWith("/internal/admin/arena/")) {
+    return await handleArenaAdmin(req, res, url);
+  }
+  return json(res, 404, { error: "not found", path: url.pathname });
+});
+
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const address = server.address();
+const baseUrl = `http://127.0.0.1:${address.port}`;
+
+try {
+  await run("bun", [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=live",
+    `--venue-url=${baseUrl}`,
+    `--arena-admin-url=${baseUrl}`,
+    "--seed-reference",
+    "--persist-results",
+    "--out=/tmp/reef-arena-local-tick-run-live-test.json",
+  ]);
+
+  assert.equal(referenceWrites.filter((write) => write.path === "/reference/instruments").length, 4);
+  assert.equal(receivedCommands.length, 14);
+  assert.ok(Array.from(commands.values()).every((command) => command.status === "COMPLETED"));
+  assert.equal(arena.bots.size, 5);
+  assert.equal(arena.versions.size, 5);
+  assert.equal(arena.runs.size, 1);
+  assert.equal(arena.results.length, 5);
+  console.log("arena local tick live path checks passed");
+} finally {
+  await new Promise((resolve) => server.close(resolve));
+}
+
+async function handleArenaAdmin(req, res, url) {
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bots") {
+    const body = await readJson(req);
+    if (arena.bots.has(body.botId)) return json(res, 400, { error: `botId already exists: ${body.botId}` });
+    arena.bots.set(body.botId, body);
+    return json(res, 200, { bot: body });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bot-versions") {
+    const body = await readJson(req);
+    const key = `${body.botId}/${body.versionId}`;
+    if (arena.versions.has(key)) return json(res, 400, { error: `versionId already exists for botId: ${key}` });
+    arena.versions.set(key, { ...body, status: "draft" });
+    return json(res, 200, { version: arena.versions.get(key) });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/bot-versions/transition") {
+    const body = await readJson(req);
+    const key = `${body.botId}/${body.versionId}`;
+    const version = arena.versions.get(key);
+    if (version !== undefined) version.status = body.status;
+    return json(res, 200, { version });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/runs") {
+    const body = await readJson(req);
+    if (arena.runs.has(body.runId)) return json(res, 400, { error: `runId already exists: ${body.runId}` });
+    arena.runs.set(body.runId, { ...body, status: "planned" });
+    return json(res, 200, { run: arena.runs.get(body.runId) });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/runs/status") {
+    const body = await readJson(req);
+    const run = arena.runs.get(body.runId);
+    if (run !== undefined) run.status = body.status;
+    return json(res, 200, { run });
+  }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/run-bot-results") {
+    const body = await readJson(req);
+    arena.results.push(body);
+    return json(res, 200, { result: body });
+  }
+  if (req.method === "GET" && url.pathname === "/internal/admin/arena/run-bot-results") {
+    const runId = url.searchParams.get("runId");
+    return json(res, 200, { results: arena.results.filter((result) => result.runId === runId) });
+  }
+  if (req.method === "GET" && url.pathname === "/internal/admin/arena/leaderboard") {
+    const modeId = url.searchParams.get("modeId");
+    const scoringPolicyVersion = url.searchParams.get("scoringPolicyVersion");
+    const entries = arena.results
+      .filter((result) => arena.runs.get(result.runId)?.modeId === modeId && result.scoringPolicyVersion === scoringPolicyVersion)
+      .sort((left, right) => Number(left.disqualified) - Number(right.disqualified) || right.finalEquity - left.finalEquity)
+      .map((result, index) => ({ rank: index + 1, ...result }));
+    return json(res, 200, { entries });
+  }
+  return json(res, 404, { error: "not found", path: url.pathname });
+}
+
+function run(cmd, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      reject(new Error(`${cmd} ${args.join(" ")} failed with code ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+    });
+  });
+}
+
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      raw += chunk;
+    });
+    req.on("end", () => {
+      resolve(raw.length === 0 ? {} : JSON.parse(raw));
+    });
+    req.on("error", reject);
+  });
+}
+
+function json(res, status, body) {
+  const raw = JSON.stringify(body);
+  res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(raw) });
+  res.end(raw);
+}
