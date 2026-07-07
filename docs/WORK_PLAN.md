@@ -6,6 +6,22 @@ This is the active execution plan. It deliberately stays short and points to det
 
 For the current snapshot, read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) first.
 
+## Source Of Truth
+
+Active execution planning starts from:
+
+- this file
+- [`CURRENT_STATUS.md`](./CURRENT_STATUS.md)
+- [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
+- [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md)
+- [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
+- [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
+- [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
+- [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
+- [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
+
+Topic-specific architecture and steering docs remain active inputs when linked from this set. Older sprint, benchmark, and research documents remain evidence or design context unless one of the active docs explicitly reactivates them.
+
 ## Planning Posture
 
 Reef remains a simulation-first institutional trading venue and post-trade platform. The near-term work is not broad feature expansion. It is proving a durable, replayable, high-throughput venue core while preserving the API, audit, and simulation contracts that later post-trade modules need.
@@ -19,6 +35,92 @@ Current deployment assumptions:
 - simulator/load tools driving the same public command paths as manual users
 - post-trade modules added only after command/event causation is stable enough to inspect
 - command intake work follows [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) for the current submit/cancel hot-path contract, accepted-but-not-completed semantics, and readiness gates
+
+## Current Execution Checkpoint
+
+Active checkpoint: durable direct path hardening.
+
+Target path:
+
+```text
+API publish ack
+  -> matching-engine direct consume
+  -> durable VenueEventBatch
+  -> command offset commit
+  -> materializer canonical Postgres commit
+  -> event-batch offset commit
+  -> projection/replay verification
+```
+
+This checkpoint is done only when Reef can prove, with named local gates and then remote evidence, that an accepted command cannot disappear between durable publish, engine direct consumption, event-batch publication, canonical materialization, and projection/replay checks.
+
+### Active Now
+
+1. Lock profile validation before any throughput claim.
+   - no-op publisher, stream-direct no-DB, JetStream stream-ack, Redpanda/Kafka-compatible stream-ack, and materializer profiles must reject unsafe settings before runs.
+   - bounded in-memory intake retention is required for no-DB ceiling profiles.
+
+2. Add named crash/restart tests for the direct durable path.
+   - API publishes then exits before boundary published-marker update.
+   - matching engine publishes `VenueEventBatch` then exits before command offset commit.
+   - matching engine fails before event-batch publish, leaving command offset uncommitted.
+   - materializer commits compact canonical rows then exits before event-batch offset commit.
+   - projector exits mid-batch and replays idempotently.
+
+3. Run short local durable gates before any long soak.
+   - durable publish acknowledgement succeeds before `202`.
+   - direct engine consumer fetches/processes/publishes/acks all accepted commands.
+   - materializer writes canonical outcomes for all accepted commands after drain.
+   - replay/checksum reports `0` gaps, duplicate inserts, payload mismatches, stream gaps, or overlaps.
+   - projection replay/idempotency applies no duplicate read-model rows.
+   - bot/user read-surface claims match `/api/v1/data/availability` and the read-surface inventory in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
+
+4. Promote only clean local gates to the DigitalOcean/OpenTofu harness.
+   - first remote tier is `2000` completed/sec for at least `5m`.
+   - next tiers are `5000`, then `7500`, only after the lower tier is stable.
+   - reports must include attempted, accepted, direct-acked, materialized, projected, lag, p95/p99, restart counts, and artifact paths.
+
+### Implementation Slices
+
+Plan the failure matrix as subsystem slices, not as disconnected one-off tests:
+
+1. API intake and publish marker.
+   - idempotency replay/conflict
+   - publish timeout, broker unavailable, producer saturation
+   - API exit after publish ack before boundary marker update
+   - hot cancel metadata rejection
+
+2. Matching-engine direct consumer.
+   - engine exit before `VenueEventBatch` publish
+   - engine exit after `VenueEventBatch` publish before command offset commit
+   - event-batch publisher failure
+   - poison command terminal `FAILED` outcome
+
+3. Venue event materializer.
+   - event-batch redelivery after Postgres commit
+   - idempotent canonical inserts
+   - accepted/materialized accounting closure
+   - provider-neutral status authority from canonical outcomes
+
+4. Projection and replay.
+   - projector restart mid-batch
+   - projection watermark replay
+   - no duplicate read-model rows
+   - `make dev-venue-event-replay-check` as promotion gate
+
+5. Promotion harness.
+   - profile validation
+   - short local durable gate
+   - pre-DO admission gate
+   - artifact fetch and report validation before destroy
+
+### Explicit Non-Goals
+
+- no post-trade expansion until command/event causation is proven end to end
+- no UI/control-room freshness as a blocker for venue-core command intake
+- no more API intake tuning unless durable drain/accounting proof is already clean
+- no treating no-op publisher, raw accepted/sec, or accepted-but-unmaterialized counts as release evidence
+- no snapshot/recovery claim until snapshot format, routing epoch metadata, and replay checksum inputs are specified
 
 ## Completed Baseline
 
@@ -40,7 +142,7 @@ The current gaps are:
 
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
-- direct matching-engine command consumption exists and has local no-DB proof; it still needs longer remote promotion evidence and persistence reintroduction from durable venue event batches
+- direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; it still needs crash/restart coverage and longer remote promotion evidence
 - the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and provider-neutral status lookup
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
@@ -78,10 +180,13 @@ The current gaps are:
 4. Lock first lifecycle scenarios.
    - `P1_GOLDEN_HIDDEN_CROSS_T1`
    - `P2_SETTLEMENT_BREAK_REPAIR`
+   - Scenario contracts live in [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md). Live lock criteria and report shape live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md). P1/P2 fixtures now encode the target scenario shape; they are locked only after live replay, lifecycle, visibility, trade-tape, and settlement-fact assertions pass against platform facts.
    - Assert ordered events, final state, replay consistency, and visible timeline causation.
 
 5. Start post-trade expansion.
-   - Add allocation, confirmation, settlement, and exception behavior only after the scenario/replay path can prove causation.
+   - Re-entry criteria live in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
+   - First allowed slice is P2-only settlement exception facts from [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md): obligation, cash-leg break, manual repair, resolved exception, and transition tests.
+   - Full allocation, confirmation, clearing, account-ledger mutation, and UI work stay deferred until P2-only facts prove causation.
 
 ## Active Workstreams
 

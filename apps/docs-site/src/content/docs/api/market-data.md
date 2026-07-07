@@ -1,11 +1,11 @@
 ---
-title: Market Data API
-description: /api/v1/market-data/snapshots and depth — top-of-book and bounded depth reads.
+title: Market Data & Read APIs
+description: Market-data, history, own-order, and data-availability reads.
 banner:
-  content: First conservative slice only. Backed by a lifecycle-state projection, not live matching-engine order-book streaming.
+  content: First conservative slice only. Reads are runtime-backed or projection-backed, not live matching-engine order-book streaming.
 ---
 
-Market data is a read/query plane, separate from order-entry command paths. Reads are backed by `runtime.order_lifecycle_state` (rebuilds open/filled/cancelled order state) and `runtime.market_data_snapshots`.
+Market data is a read/query plane, separate from order-entry command paths. Current reads are backed by runtime facts and projections such as `runtime.order_lifecycle_state`, `runtime.market_data_snapshots`, and `runtime.trades`.
 
 ## GET /api/v1/market-data/snapshots/{instrumentId}
 
@@ -30,6 +30,34 @@ Returns bounded lifecycle-backed depth.
 Query params: `levels` (default `5`), `projectionName` (default `market-data-depth`), `sourceProjectionName` (default `runtime-normalized-venue-outcomes`).
 
 `404` with `{"error": "market data depth not found"}` if depth cannot be computed for the instrument.
+
+## GET /api/v1/market-data/trades/{instrumentId}
+
+Returns public trade tape rows for one instrument, most recent first. The response exposes trade id, price, quantity, currency, occurred-at time, and a monotonic sequence cursor.
+
+The public tape deliberately excludes counterparty, order, and participant identity.
+
+Query params: `limit` (max `500`), `before` sequence cursor.
+
+## GET /api/v1/market-data/bars/{instrumentId}
+
+Returns intraday OHLCV bars aggregated from durable runtime trades.
+
+Query params: `interval` (`1m`, `5m`, `15m`, `1h`), `start`, `end`.
+
+## GET /api/v1/orders/current
+
+Returns participant-scoped current own-order state. Supports bounded reads for bot/user contexts.
+
+Query params: optional `instrumentId`, optional `limit`.
+
+## GET /api/v1/orders/history
+
+Returns participant-scoped own-order history. Supports optional `instrumentId` and bounded `limit`.
+
+## GET /api/v1/data/availability
+
+Returns the current read-surface inventory: endpoint, source type, freshness model, visibility scope, required/optional filters, projection lag, and watermark where available. Scenario and bot reports use this to distinguish durable fact reads from projection freshness.
 
 ## Learn More
 

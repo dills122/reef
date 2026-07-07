@@ -19,22 +19,27 @@ Reef has moved past a repository skeleton, but most of the platform is still ear
 - Go simulator/load tester: persona/session support, deterministic replay checks, stress reports, intake benchmarks
 - Docker-first local setup, reset, smoke, stress, replay, and benchmark automation
 - First arena control-plane slice: bot registry, bot-version approval lifecycle, operator decisions, run records (see [Arena Overview](../../arena/overview/))
-- First conservative market-data read slice: order lifecycle projection, top-of-book snapshots, bounded depth
+- First conservative bot/user read slice: order lifecycle projection, top-of-book snapshots, bounded depth, public trade tape, intraday OHLCV bars, participant-scoped own-order reads, and data-availability inventory
 
 ## Not Yet Built (Planned)
 
 - Platform UI and most post-trade lifecycle (allocation, confirmation, settlement, exceptions) — still early
-- `account`, `settlement`, `market_data` (beyond the current slice), and `analytics` schemas — designed, not implemented (see [Planned Schema](../../schema/planned-schema/))
+- Dedicated `account`, `settlement`, and `market_data` schemas beyond the current runtime-backed read slice — designed, not broadly implemented (see [Planned Schema](../../schema/planned-schema/))
+- Analytics has an initial simulation-run export slice, but broader analytics facts/views remain planned
 - Public bot submissions and hosted sandbox execution at scale — arena is still built-in-bots/control-plane stage
 - Leaderboards and scoring beyond the control-plane source facts
 - Kafka-compatible durable command log as the default hot-ingress path — proven locally, not yet the default
+- Scenario live assertion harness and minimal P2 settlement exception facts — planned next locking gates
 
 ## Active Architecture Direction
 
 The high-throughput venue-ingress path is moving toward: durable command log → matching-engine direct partition consumer → durable venue event batch → command offset commit after batch publish → async Postgres materialization. `202 Accepted` means the durable ingress/log producer acknowledged the command — this contract does not weaken as throughput work continues.
+
+The first deterministic scenario fixtures now encode the target `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR` shapes. They are not fully locked until live assertions prove lifecycle, visibility, trade-tape, replay, and settlement-fact checks against platform facts.
 
 ## Learn More
 
 - `docs/CURRENT_STATUS.md` — the full, most current snapshot (source of truth for this page)
 - `docs/DECISIONS.md` — accepted architecture decisions
 - `docs/WORK_PLAN.md` — active execution ladder
+- `docs/SCENARIO_CONTRACTS.md` and `docs/SCENARIO_ASSERTION_PLAN.md` — first-wave scenario gates

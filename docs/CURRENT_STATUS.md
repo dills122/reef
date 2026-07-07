@@ -53,15 +53,15 @@ Current decision anchors:
 
 ## Current Forward Path
 
-Work should follow this order unless a new decision supersedes it:
+Work should follow this order unless a new decision supersedes it. The active checkpoint is durable direct path hardening: prove the path from API durable publish ack through matching-engine direct consumption, durable venue event batch, canonical materialization, and projection/replay verification before longer remote soaks.
 
 1. Keep the current durable-acceptance contracts stable while promoting the D-041 Redpanda/Kafka-compatible hot-ingress path from local proof to longer remote evidence.
 2. Implement the command intake contract in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md): submit/cancel first, hot cancel metadata enforcement, stable `202` response, provider-neutral status, duplicate idempotency tests, and accepted/materialized drain accounting.
 3. Preserve the proven direct engine ingestion shape: command log/topic -> engine shard -> durable venue event batch -> command offset commit.
-4. Reintroduce canonical persistence through venue event batch materialization, preserving deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
-5. Prove compact persistence projection end to end: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
+4. Harden canonical persistence through venue event batch materialization with crash/restart tests, deterministic command ordering, compact canonical facts, idempotent replay, and checksum evidence.
+5. Prove compact persistence projection end to end under the same gate: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
 6. Order-lifecycle-state and market-data top-of-book snapshot maintenance are both now incremental (dirty-tracked, not full-table rebuild). Public trade tape and intraday bars are now live (`/api/v1/market-data/trades/{instrumentId}`, `/api/v1/market-data/bars/{instrumentId}`), and the Bot SDK live-read clients can be injected into `runner.ts`/`strategy-runner.ts`/`hosted-runner.ts` through `readClients`, plus participant-scoped own-order reads (`/api/v1/orders/current`, `/api/v1/orders/history`). Depth reads (`/api/v1/market-data/depth/{instrumentId}`) still aggregate remaining open lifecycle quantity at request time rather than from a maintained projection; venue-session-specific depth needs a projected session key on order lifecycle facts before it can be truthfully exposed.
-7. Lock the first deterministic lifecycle scenarios: `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+7. Lock the first deterministic lifecycle scenarios against [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md) and [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md): `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
 8. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 
 ## Documentation Map
@@ -77,6 +77,9 @@ Use these docs for active work:
 - Simulator environment shape: [`SYSTEM_SIMULATOR_ENVIRONMENT.md`](./SYSTEM_SIMULATOR_ENVIRONMENT.md)
 - Combined backbone/simulator topology: [`SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md`](./SYSTEM_BACKBONE_SIMULATOR_TOPOLOGY.md)
 - Trading, market-data, account, settlement, and analytics boundaries: [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
+- Scenario contracts: [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md)
+- Scenario live assertion plan: [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
+- Minimal settlement exception facts: [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
 - Command intake process: [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./archive/ROADMAP.md)

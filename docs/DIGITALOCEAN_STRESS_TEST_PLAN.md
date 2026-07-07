@@ -97,6 +97,8 @@ Use these defaults for the first implementation unless a later decision explicit
 
 ## Benchmark Sequence
 
+Do not start this sequence until the local admission gates in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) pass for the active profile.
+
 1. Provision the Droplet with OpenTofu.
 2. Install Docker, Docker Compose plugin, Git, Make, Node.js, `jq`, `curl`, `rsync`, and basic IO/CPU tools through cloud-init.
 3. Sync the current Reef checkout to the Droplet.
@@ -110,6 +112,19 @@ Use these defaults for the first implementation unless a later decision explicit
 11. Destroy the Droplet unless we are actively iterating.
 
 For the Redpanda direct no-DB materializer track, run `make dev-validate-stream-profile PROFILE=materializer-soak` before starting the stack, then run `make dev-smoke-venue-event-materializer` before any measured soak. The smoke must prove durable command append, direct matching consume/ack, event-batch publish, canonical materialization, projection idempotency, and order read-model reconstruction from the event-batch payload. The first measured retry should be the previously failed short materializer stress shape with strict zero-gap direct/materializer guardrails before any 10k+ long soak.
+
+## Pre-DO Admission Gates
+
+Required local evidence before spending remote time:
+
+- profile validation passes for the exact profile to be promoted
+- `make dev-smoke-venue-event-materializer` passes for materializer-backed direct-stream promotion
+- `make dev-venue-event-replay-check` passes with the intended event stream/projection scope
+- local report proves `202` after durable publish ack, direct engine event-batch publish before command offset commit, materializer Postgres commit before event offset commit, and final accepted/materialized gap `0`
+- local artifacts record provider, stream/topic names, partition count, worker/projector/materializer roles, backpressure mode, p95/p99, lag, and restart counts
+- any failed local gate has a written diagnosis before rerunning on DO
+
+Remote runs are for hardware-shaped capacity discovery, not for finding basic correctness or profile configuration failures.
 
 ## Harness Validation Gates
 
@@ -166,18 +181,76 @@ Run artifacts should be fetched into a stable local directory such as:
 reports/do-benchmark/<timestamp-or-run-name>/
 ```
 
+## Benchmark Artifact Contract
+
+Use one report schema for local and DigitalOcean gates. Local reports are admission evidence; DigitalOcean reports are promotion evidence. A no-DB ceiling run may emit the same shape, but it is warning/diagnostic only and cannot promote a durable tier.
+
+Minimum JSON shape:
+
+```json
+{
+  "schemaVersion": "reef.benchmark.v1",
+  "profile": "direct-materializer-short",
+  "environment": "local",
+  "startedAt": "2026-07-06T00:00:00Z",
+  "durationSeconds": 60,
+  "targetRatePerSecond": 10000,
+  "attempted": 0,
+  "accepted": 0,
+  "directAcked": 0,
+  "materialized": 0,
+  "projected": 0,
+  "rejected": 0,
+  "failed": 0,
+  "latency": {
+    "p50Ms": 0,
+    "p95Ms": 0,
+    "p99Ms": 0
+  },
+  "lag": {
+    "worker": 0,
+    "materializer": 0,
+    "projector": 0
+  },
+  "gaps": {
+    "acceptedMinusDirectAcked": 0,
+    "acceptedMinusMaterialized": 0,
+    "acceptedMinusProjected": 0,
+    "streamGaps": 0,
+    "streamOverlaps": 0,
+    "duplicateCanonicalRows": 0,
+    "missingCanonicalRows": 0,
+    "extraCanonicalRows": 0
+  },
+  "restartCount": 0,
+  "backpressureMode": "venue-core",
+  "pass": true,
+  "artifactPaths": []
+}
+```
+
+Required promotion rules:
+
+- DO promotion requires a passing local artifact from the same profile family.
+- `nodb-ceiling` artifacts are useful for headroom but are warning-only.
+- durable profile artifacts must include p95 and p99 latency.
+- missing report fields fail the gate.
+- final lag and gaps must be numeric, not inferred from logs.
+- intentional pre-acceptance `429` backpressure must be reported separately from failures.
+- p99 above `500ms` fails promotion unless the profile is explicitly exploratory.
+
 ## Success Criteria
 
 Minimum for each promotion tier:
 
 - The tier holds its target completed throughput for at least `5m`.
 - `2000 completed/sec` is the first required stable target; after that, promote to `5000/sec`, then `7500/sec`.
-- Accepted throughput is within `5-10%` of worker completed throughput unless the difference is explained by intentional pre-acceptance backpressure.
+- Accepted throughput is within `5%` of materialized canonical outcome throughput unless the difference is explained by intentional pre-acceptance backpressure. Wider `<=10%` gaps are exploratory only and do not promote the tier.
 - The tier has `100%` success or only intentional pre-acceptance `429` backpressure.
 - A run that barely holds `2000/sec` with saturated CPU/IO, rapidly growing lag, poor post-run drain, or no credible path to `5000/sec` is a failed capacity result even if the process stays alive for `5m`.
 - No unexpected `5xx`.
 - Worker `failed=0` and `ackFailed=0`.
-- Accepted commands are either completed/projected during the window or have visible lag that drains afterward.
+- Accepted commands are either completed/materialized/projected during the window or have visible lag that drains to `0` inside the configured drain window.
 - DB pool waiters stay at `0` or are clearly isolated to a known pool with an explanation.
 - `202` semantics remain unchanged.
 - Stress artifacts are fetched locally before destroying the Droplet.
@@ -188,6 +261,7 @@ Healthy promotion target:
 - the current tier sustains the target completed/sec rate for `5m`
 - the observed bottleneck has enough headroom that the next tier looks like tuning/provisioning, not another architecture phase
 - p95 roughly under `150ms`
+- p99 roughly under `300ms`; p99 over `500ms` fails promotion unless the run is explicitly exploratory
 - worker completed throughput materially close to accepted throughput, or clear evidence of the next limiting subsystem
 - projection lag visible and bounded, not silent
 

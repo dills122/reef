@@ -1,7 +1,7 @@
 schemaVersion: "1.0"
 pathId: "P2_SETTLEMENT_BREAK_REPAIR"
-name: "Settlement Break and Repair"
-businessGoal: "Prove deterministic fail -> exception -> repair -> retry settlement lifecycle."
+name: "Settlement Cash-Leg Break and Repair"
+businessGoal: "Prove deterministic trade -> obligation -> cash-leg break -> repair -> resolved lifecycle."
 seed: 424243
 
 preconditions:
@@ -23,7 +23,7 @@ preconditions:
       - accountId: "SELL_SIDE_1_MAIN"
         participantId: "SELL_SIDE_1"
   policyProfiles:
-    settlementFailureType: "SSI_MISMATCH"
+    settlementFailureType: "CASH_LEG_FAILED"
 
 runContext:
   clock:
@@ -42,10 +42,10 @@ runContext:
 faultInjection:
   enabled: true
   faults:
-    - faultId: "FAULT_SETTLEMENT_SSI_MISMATCH"
-      triggerStepSequence: 9
-      action: "FAIL_SETTLEMENT"
-      expectedFailureEvent: "SettlementFailed"
+    - faultId: "FAULT_SETTLEMENT_CASH_LEG_FAILED"
+      triggerStepSequence: 6
+      action: "FAIL_CASH_LEG"
+      expectedFailureEvent: "CashLegFailed"
       expectedExceptionEvent: "ExceptionOpened"
 
 steps:
@@ -74,28 +74,20 @@ steps:
   - sequence: 4
     command: "CreateTrade"
   - sequence: 5
-    command: "AllocateTrade"
-  - sequence: 6
-    command: "GenerateConfirmation"
-  - sequence: 7
-    command: "AffirmTrade"
-  - sequence: 8
     command: "CreateSettlementObligation"
-  - sequence: 9
+  - sequence: 6
     command: "AdvanceSettlement"
-    description: "Fault injector forces settlement failure."
-  - sequence: 10
+    description: "Fault injector forces cash-leg failure."
+  - sequence: 7
     command: "OpenException"
-  - sequence: 11
+  - sequence: 8
     command: "ResolveException"
-    description: "Operator repairs settlement data."
+    description: "Operator posts manual cash-leg repair."
     payload:
-      repairAction: "UPDATE_SSI"
-  - sequence: 12
-    command: "RetrySettlement"
-  - sequence: 13
-    command: "CompleteSettlement"
-  - sequence: 14
+      repairAction: "POST_CASH_LEG_REPAIR"
+  - sequence: 9
+    command: "ResolveSettlement"
+  - sequence: 10
     command: "CompleteScenarioRun"
 
 expectedEvents:
@@ -106,15 +98,11 @@ expectedEvents:
   - "OrderAccepted"
   - "ExecutionCreated"
   - "TradeCreated"
-  - "TradeAllocated"
-  - "ConfirmationGenerated"
-  - "TradeAffirmed"
   - "SettlementObligationCreated"
-  - "SettlementFailed"
+  - "CashLegFailed"
   - "ExceptionOpened"
   - "ExceptionRepairApplied"
-  - "SettlementRetried"
-  - "SettlementCompleted"
+  - "SettlementResolved"
   - "ScenarioRunCompleted"
 
 expectedEventTimeline:
@@ -134,42 +122,34 @@ expectedEventTimeline:
       occurredAtOffsetSeconds: 3
     - eventType: "TradeCreated"
       occurredAtOffsetSeconds: 3
-    - eventType: "TradeAllocated"
-      occurredAtOffsetSeconds: 4
-    - eventType: "ConfirmationGenerated"
-      occurredAtOffsetSeconds: 5
-    - eventType: "TradeAffirmed"
-      occurredAtOffsetSeconds: 6
     - eventType: "SettlementObligationCreated"
-      occurredAtOffsetSeconds: 7
-    - eventType: "SettlementFailed"
-      occurredAtOffsetSeconds: 8
+      occurredAtOffsetSeconds: 4
+    - eventType: "CashLegFailed"
+      occurredAtOffsetSeconds: 5
     - eventType: "ExceptionOpened"
-      occurredAtOffsetSeconds: 8
+      occurredAtOffsetSeconds: 5
     - eventType: "ExceptionRepairApplied"
-      occurredAtOffsetSeconds: 9
-    - eventType: "SettlementRetried"
-      occurredAtOffsetSeconds: 10
-    - eventType: "SettlementCompleted"
-      occurredAtOffsetSeconds: 11
+      occurredAtOffsetSeconds: 6
+    - eventType: "SettlementResolved"
+      occurredAtOffsetSeconds: 7
     - eventType: "ScenarioRunCompleted"
-      occurredAtOffsetSeconds: 12
+      occurredAtOffsetSeconds: 8
 
 expectedFinalStates:
-  trade: "AFFIRMED"
-  settlement: "SETTLED"
-  exception: "CLOSED"
+  trade: "CREATED"
+  settlement: "RESOLVED"
+  exception: "RESOLVED"
   scenarioRun: "COMPLETED"
 
 invariants:
-  - "Exception must open after settlement failure in this path."
-  - "Exception cannot close before successful settlement retry."
-  - "No direct settlement-complete transition from failed state without repair action."
+  - "Exception must open after cash-leg failure in this path."
+  - "Exception cannot resolve before manual repair is posted."
+  - "No direct failed-to-resolved transition without repair action."
   - "All scenario-driven events contain scenarioRunId/correlationId/causationId."
 
 uiAssertions:
-  - "Timeline clearly shows fail -> exception open -> repair -> retry -> settled chain."
-  - "Exception workbench shows one opened and then resolved case."
+  - "Timeline clearly shows trade -> obligation -> cash-leg break -> repair -> resolved chain."
+  - "Exception view shows one opened and then resolved case."
   - "Scenario run detail shows seed=424243 and status=COMPLETED."
 
 replayAssertions:
@@ -182,5 +162,5 @@ idempotencyAssertions:
     assertion: "Duplicate commandId does not create duplicate exception cases."
   - command: "ResolveException"
     assertion: "Duplicate commandId does not apply duplicate repair actions."
-  - command: "RetrySettlement"
-    assertion: "Duplicate commandId does not create duplicate retry transitions."
+  - command: "ResolveSettlement"
+    assertion: "Duplicate commandId does not create duplicate resolved transitions."

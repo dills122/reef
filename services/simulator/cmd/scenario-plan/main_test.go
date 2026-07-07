@@ -41,8 +41,8 @@ func TestScenarioPlanCommandPrintsP1Json(t *testing.T) {
 			}
 		}
 	}
-	if apiSteps != 2 {
-		t.Fatalf("api executable steps: got %d want 2", apiSteps)
+	if apiSteps != 3 {
+		t.Fatalf("api executable steps: got %d want 3", apiSteps)
 	}
 	if !strings.Contains(stdout.String(), `"pathId":"P1_GOLDEN_HIDDEN_CROSS_T1"`) {
 		t.Fatalf("expected compact lower-camel JSON, got %s", stdout.String())

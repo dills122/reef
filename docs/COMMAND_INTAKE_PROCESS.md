@@ -267,22 +267,151 @@ Required counters:
 
 The target is not a release claim by itself. It is the first local gate before longer DigitalOcean soaks.
 
-## Failure Tests
+## Profile Classes And Gates
+
+Use named profiles so benchmark claims state what path they prove.
+
+| Profile class | Purpose | Gate posture | Minimum result |
+| --- | --- | --- | --- |
+| `nodb-ceiling` | API, durable-log producer, and direct matching-engine headroom without DB materialization | warning/diagnostic, not release evidence | high-limit probes such as `15k-20k/sec` for `30-90s`; no crashes, bounded memory, no direct ack gaps when broker-backed |
+| `direct-materializer-short` | local durable direct path gate | required before remote promotion | `10k/sec` for `60s`, drain within `120s`, final accepted/materialized/projected gap `0` |
+| `direct-materializer-mixed` | real-world mixed order-flow gate | required before treating the path as bot/simulation-ready | mixed submit/modify/cancel, hot/cold instruments, stale lifecycle commands, business rejects as terminal outcomes, `2k-5k/sec` for `10-15m`, final lag `0` |
+| `simulation-soak` | expected bot/simulator run shape | required before public arena-style runs | `15m-1h`, lower workload-specific throughput, same accounting and replay gates |
+| `do-direct-materializer-2000` | first remote durable promotion tier | blocking | `2000` completed/materialized commands/sec for `5m`, accepted within `5%` of materialized unless intentional pre-acceptance `429` |
+| `do-direct-materializer-5000` | second remote durable promotion tier | blocking after `2000` tier | `5000` completed/materialized commands/sec for `5m`, same safety gates |
+| `do-direct-materializer-7500` | minimum target remote promotion tier | blocking after `5000` tier | `7500` completed/materialized commands/sec for `5m`, same safety gates |
+
+Latency gates:
+
+- local healthy target: p95 `<75ms`, p99 `<200ms`
+- DO healthy target: p95 `<150ms`, p99 `<300ms`
+- p99 `>500ms` fails promotion unless the run is explicitly marked exploratory before it starts
+
+Lag gates:
+
+- direct worker lag drains to `0`
+- materializer lag drains to `0`
+- projection lag drains to `0` after the configured drain window
+- `venue-core` mode may ignore projection lag for intake backpressure during the run, but final promotion still requires projection lag `0` after drain
+
+Trace gates:
+
+- trace checks are diagnostic for high-rate submit-only runs unless the profile explicitly makes trace projection freshness part of the gate
+- accepted/materialized accounting and replay/checksum checks are hard gates for every durable profile
+
+## Local Promotion Gates
+
+Before any long remote soak, pass the gates below in order:
+
+1. Profile guard.
+   - active profile validates before startup
+   - no no-op publisher in durable-acceptance claims
+   - bounded in-memory intake retention enabled for no-DB ceiling profiles
+   - provider, stream/topic, partition count, worker/projector/materializer role, and backpressure policy recorded in artifacts
+
+2. Correctness smoke.
+   - one command reaches durable publish ack, direct engine consume, durable `VenueEventBatch`, canonical materialization, projection, and status lookup
+   - materializer and projector counters show `failed=0`, `ackFailed=0`, `unsupported=0`
+   - order read-model reconstruction proves `acceptedOrder` facts are sufficient without depending on API command payload joins except as compatibility fallback
+
+3. Replay/checksum gate.
+   - venue event batch replay is idempotent
+   - command counts match accepted/materialized counts after drain
+   - payload checksum and command outcome payload hash checks pass
+   - stream gaps, overlaps, duplicate replay inserts, missing canonical rows, and extra canonical rows are all `0`
+
+4. Short load gate.
+   - local target: `10k/sec` for `60s` where the active profile is intended to hit that rate; otherwise record the profile-specific target explicitly before the run
+   - unexpected `5xx` is `0`
+   - direct engine failed/ack-failed/unsupported counters are `0`
+   - materializer failed/ack-failed/unsupported counters are `0`
+   - final accepted/materialized accounting gap is `0`
+   - worker and materializer lag drain to `0` within the configured drain window, or the run fails
+
+## Failure Matrix
 
 Required before promoting the path:
 
-- duplicate idempotency key with same payload
-- duplicate idempotency key with different payload
-- publish timeout returns `503` before durable acceptance
-- broker unavailable returns `503`
-- producer in-flight saturation returns `429`
-- cancel without routing metadata returns `400`
-- engine crash before event-batch publish redelivers command
-- engine crash after event-batch publish but before command offset commit does not duplicate outcome
-- event-batch publisher failure leaves command offset uncommitted
-- materializer crash before offset commit redelivers event batch idempotently
-- poison command produces durable terminal `FAILED` outcome after retry policy
-- drain check fails any accepted/materialized accounting gap
+| Case | Required result |
+| --- | --- |
+| duplicate idempotency key with same payload | returns prior accepted command reference |
+| duplicate idempotency key with different payload | returns `409` and publishes no new command |
+| publish timeout | returns `503` before durable acceptance |
+| broker unavailable | returns `503` before durable acceptance |
+| producer in-flight saturation | returns `429` before durable acceptance |
+| cancel without routing metadata | returns `400` and performs no hot-path lookup |
+| API exits after publish ack before marker update | retry/status can recover from durable stream reference; worker repair completes marker |
+| engine exits before event-batch publish | command offset remains uncommitted and redelivery produces one outcome |
+| engine exits after event-batch publish before command offset commit | redelivery observes deterministic outcome identity and does not duplicate trades/events |
+| event-batch publisher fails | command offset remains uncommitted |
+| materializer exits after Postgres commit before event offset commit | event-batch redelivery is idempotent and inserts `0` duplicate canonical rows |
+| projector exits mid-batch | replay advances watermark without duplicate read-model rows |
+| poison command exhausts retry policy | durable terminal `FAILED` outcome materializes and closes accounting |
+| drain check finds accepted/materialized gap | run fails; gap must be classified as broker backlog, engine redelivery, materializer lag, or poison handling |
+
+## Crash/Restart Runbook
+
+Run crash/restart tests locally before promoting any profile to DigitalOcean. The first pass should use explicit named kill points or deterministic test hooks, not random chaos. Randomized chaos can come after the named cases are boring.
+
+Each case must produce one assertion report with:
+
+- profile name
+- provider and stream/topic names
+- kill point id
+- submitted command count
+- accepted command count
+- event batches published
+- command offsets committed
+- canonical outcomes materialized
+- projections applied
+- restart count
+- final worker/materializer/projector lag
+- replay/checksum result
+- artifact paths
+
+Required first cases:
+
+| Test id | Kill point | Expected recovery | Required evidence |
+| --- | --- | --- | --- |
+| `api-publish-ack-before-marker` | API exits after durable publish ack before boundary marker/status update | retry/status repair recovers from durable stream reference | no duplicate command, stable command status, final accepted/materialized/projected gap `0` |
+| `engine-before-event-batch-publish` | matching engine exits after consuming command before publishing `VenueEventBatch` | command offset remains uncommitted and broker redelivers | one deterministic terminal outcome, no missing outcome, command offset commits only after event-batch durability |
+| `engine-after-event-batch-before-command-offset` | matching engine publishes durable `VenueEventBatch` then exits before command offset commit | redelivery observes deterministic outcome identity | no duplicate trades/events, event-batch idempotency holds, final accepted/materialized gap `0` |
+| `materializer-after-postgres-before-event-offset` | materializer commits compact canonical Postgres rows then exits before event-batch offset commit | event batch redelivers and canonical inserts are idempotent | duplicate canonical inserts `0`, missing rows `0`, extra rows `0` |
+| `projector-mid-batch` | projector exits after partially applying a batch before watermark commit | projector replays and advances watermark | duplicate read-model rows `0`, final projected gap `0`, watermark monotonic |
+| `poison-command-terminal-failed` | command repeatedly fails deterministic validation/processing after durable acceptance | retry policy exhausts and emits durable terminal `FAILED` | command offset commits after terminal failure, materialized outcome is `FAILED`, drain accounting closes |
+
+Pass criteria for every case:
+
+- public `202` is returned only after durable ingress acknowledgement
+- accepted commands have one terminal canonical outcome after drain
+- final accepted/materialized/projected gap is `0`
+- worker/materializer/projector lag drains to `0` inside the configured drain window
+- replay/checksum reports `0` gaps, overlaps, duplicate inserts, payload mismatches, missing rows, and extra rows
+- any failure is classified before rerun as broker backlog, redelivery/idempotency, materializer lag, projector lag, poison handling, or profile misconfiguration
+
+## Implementation Slices
+
+Implement the matrix by subsystem so each change has clear ownership and evidence:
+
+1. API intake and publish marker.
+   - covers duplicate same-payload replay, duplicate different-payload conflict, publish timeout, broker unavailable, producer saturation, hot cancel metadata rejection, and API crash after publish ack before marker update
+   - expected evidence: boundary/API tests plus one local smoke proving worker repair or status recovery from durable stream reference
+
+2. Matching-engine direct consumer.
+   - covers engine crash before event-batch publish, crash after event-batch publish before command offset commit, event-batch publisher failure, and poison command terminal failure
+   - expected evidence: direct consumer tests proving command offset is not committed before event-batch durability and redelivery produces one deterministic outcome
+
+3. Venue event materializer.
+   - covers materializer crash after compact canonical Postgres commit before event-batch offset commit
+   - expected evidence: materializer tests proving redelivery inserts `0` duplicate canonical rows and closes accepted/materialized accounting
+
+4. Projection and replay.
+   - covers projector crash mid-batch, projection watermark replay, and replay/checksum verification
+   - expected evidence: projection idempotency tests and `make dev-venue-event-replay-check` with `0` gaps, overlaps, duplicate inserts, payload mismatches, missing rows, or extra rows
+
+5. Promotion harness.
+   - covers profile validation, short local durable gate, pre-DO admission, report validation, artifact fetch, and safe destroy behavior
+   - expected evidence: scripts fail closed when gates are missing or counters are unsafe
 
 ## Implementation Backlog
 

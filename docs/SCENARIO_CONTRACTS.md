@@ -1,0 +1,121 @@
+# Scenario Contracts
+
+## Purpose
+
+Lock the first deterministic lifecycle scenarios so implementation, replay checks, smoke artifacts, and planning all assert the same behavior.
+
+Live lock criteria and assertion report requirements live in [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+
+These contracts are stricter than the current YAML fixtures where noted. If a YAML scenario differs from this document, update the YAML and golden artifacts deliberately rather than treating the difference as implementation freedom.
+
+## P1_GOLDEN_HIDDEN_CROSS_T1
+
+Status: fixture-aligned contract. `packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CROSS_T1.yaml` and the checked-in dry-run smoke golden now model the hidden-resting-order path. P1 is not fully locked until live replay, lifecycle, trade tape, and visibility assertions pass under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+
+Purpose: prove core venue lifecycle with hidden liquidity, partial fill, full fill, public market-data visibility rules, and deterministic replay.
+
+### Actors
+
+- Participant A: hidden seller
+- Participant B: first visible buyer
+- Participant C: second visible buyer
+
+### Command Sequence
+
+1. Participant A submits hidden resting sell:
+   - instrument: `XYZ`
+   - side: `SELL`
+   - quantity: `100`
+   - limit price: `100.00`
+   - visibility: hidden
+2. Participant B submits visible buy:
+   - instrument: `XYZ`
+   - side: `BUY`
+   - quantity: `40`
+   - limit price: `101.00`
+   - expected result: fills `40` against hidden resting sell at resting price `100.00`
+3. Participant C submits visible buy:
+   - instrument: `XYZ`
+   - side: `BUY`
+   - quantity: `60`
+   - limit price: `100.00`
+   - expected result: fills remaining `60` against hidden resting sell at resting price `100.00`
+4. Scenario completes after venue facts, order lifecycle, trade tape, and replay assertions pass.
+
+### Expected States
+
+- hidden sell order: `OPEN -> PARTIALLY_FILLED -> FILLED`
+- first visible buy: `FILLED`
+- second visible buy: `FILLED`
+- visible top-of-book/depth: must not expose the hidden resting sell size before execution
+- owner own-order reads: hidden seller may see its own hidden order and lifecycle state
+- trade tape: shows both trades without counterparty identity
+
+### Expected Facts
+
+- exactly two executions
+- exactly two trades
+- total executed quantity: `100`
+- execution price for both trades: `100.00`
+- all scenario-driven facts carry `scenarioRunId`, `correlationId`, and `causationId`
+- replay produces identical command outcome order, execution/trade facts, order lifecycle states, and checksums
+
+### Gate Level
+
+P1 is a hard correctness gate. It must not rely on stubbed settlement or post-trade behavior.
+
+## P2_SETTLEMENT_BREAK_REPAIR
+
+Status: target contract. The first settlement-break fixture uses `CASH_LEG_FAILED` by decision; `SSI_MISMATCH` remains a later confirmation/standing-instruction scenario, not the first P2 contract. P2 is not fully locked until settlement fact assertions pass under [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md).
+
+Purpose: prove post-match causation from canonical trade fact through settlement obligation, cash-leg break, manual repair, and resolved exception without building full post-trade/account-ledger modules yet.
+
+### Inputs
+
+P2 should consume or recreate one canonical trade equivalent to P1's completed trade facts. It must reference canonical venue facts rather than mutating matching history.
+
+### Command/Event Sequence
+
+1. Canonical trade fact exists.
+2. Settlement obligation is created:
+   - buyer owes cash
+   - seller owes shares
+3. Fault injection fails the cash leg:
+   - break reason: `CASH_LEG_FAILED`
+4. Settlement enters break state:
+   - `OBLIGATION_CREATED -> CASH_LEG_FAILED -> BROKEN`
+5. Operator/manual repair is posted:
+   - `REPAIR_POSTED`
+   - first version is a simulated/manual repair event; no real account ledger mutation is required
+6. Settlement resolves:
+   - `RESOLVED`
+   - use `SETTLED` only after full settlement/account-ledger modules exist
+
+### Expected Facts
+
+- one settlement obligation references one canonical trade
+- one break is opened with reason `CASH_LEG_FAILED`
+- one repair action is posted by a user/operator actor
+- final exception state: closed/resolved
+- final settlement state: `RESOLVED`
+- no direct transition from failed cash leg to resolved without repair
+- all scenario-driven facts carry `scenarioRunId`, `correlationId`, and `causationId`
+
+### Gate Level
+
+P2 is a scenario contract gate. The first implementation may use lightweight settlement/break/repair facts, but causation must be explicit:
+
+```text
+trade -> obligation -> break -> repair -> resolved
+```
+
+P2 does not authorize broad post-trade expansion by itself. Allocation, confirmation, full settlement, account ledger mutation, and operational exception workbenches remain later work unless separately planned.
+
+Post-trade implementation may resume only through the P2-only settlement exception slice defined in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
+
+## Implementation Alignment Tasks
+
+1. Implement [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md) report generation.
+2. Add P1 live assertions for final order lifecycle states, execution/trade count, total executed quantity, public depth visibility, own-order visibility, trade tape contents, and replay checksum identity.
+3. Add P2 replay assertions for final `RESOLVED` settlement state, one `CASH_LEG_FAILED` break, one manual repair, and no direct failed-to-resolved transition.
+4. Keep these scenarios on public command/API paths where platform functionality exists; any stubbed post-trade action must be clearly marked in the scenario and report.

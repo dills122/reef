@@ -54,7 +54,7 @@ Engine-direct mode is the first slice of the higher-headroom venue-core path:
 API -> durable command stream/topic -> matching engine shard -> durable venue event batch -> command ack/offset commit
 ```
 
-The implementation consumes `SubmitOrder` commands from assigned stream/topic partitions, processes them in ordered batches, publishes a `VenueEventBatch` JSON fact to the event stream/topic, then acknowledges or commits the command messages only after the event batch publish succeeds. Unsupported command types are terminated for now; cancel/modify direct-stream support and Postgres materialization are follow-up slices.
+The implementation consumes `SubmitOrder`, `ModifyOrder`, and `CancelOrder` commands from assigned stream/topic partitions, processes them in ordered batches, publishes a `VenueEventBatch` JSON fact to the event stream/topic, then acknowledges or commits the command messages only after the event batch publish succeeds. Unsupported command types are terminated with durable failed outcomes. Postgres materialization is handled by the platform materializer profile, not by the matching-engine hot path.
 
 Hot book ownership is shard-local. The command router must send all submit/cancel/modify commands for a `runId + venueSessionId + instrumentId` book key to the same durable partition and matching-engine shard owner. The book itself is in-memory Go state; recovery is planned as snapshot plus durable command/event replay with checksum verification. See [`../../docs/HOT_BOOK_SHARDING_PLAN.md`](../../docs/HOT_BOOK_SHARDING_PLAN.md).
 

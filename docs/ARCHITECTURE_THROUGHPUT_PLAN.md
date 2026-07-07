@@ -78,7 +78,7 @@ client / simulator
 
 The critical shift is separating durable command intake from heavier downstream persistence and projection work.
 
-The target high-throughput variant is `stream-ack`: the boundary returns `202` only after JetStream confirms durable publish, partition workers ack JetStream only after canonical Postgres results/events commit, and projections run downstream from the canonical event log.
+The target high-throughput variant is the direct durable stream path: the boundary returns `202` only after the configured durable log confirms publish, matching-engine consumers publish durable `VenueEventBatch` records before committing command offsets, materializers commit compact canonical Postgres rows before committing event-batch offsets, and projections run downstream from canonical facts.
 
 ## DB Slice Model
 
@@ -289,30 +289,34 @@ Move query/UI projection writes out of the command request path.
 - Projection lag is observable.
 - Read model can be rebuilt from runtime state/events in local dev.
 
-## Priority 6: Stream-Ack Async Backbone
+## Priority 6: Durable Stream Backbone
 
 ### Objective
 
-Introduce NATS JetStream as the durable accepted-command ingress log for the bot-arena throughput target, with Postgres remaining canonical for venue outcomes.
+Use a durable accepted-command ingress log for the bot-arena throughput target, with Postgres remaining the compact materialized canonical/query store for venue outcomes.
+
+JetStream is implemented as the fallback/comparison stream-ack provider. Redpanda/Kafka-compatible ingress is implemented as an opt-in comparison provider and is the active hot-ingress promotion path for direct matching-engine consumption and durable venue event batches.
 
 ### Design
 
-- Use a retained JetStream command log, not WorkQueue retention, for accepted commands.
+- Use a retained command log/topic, not transient queue semantics, for accepted commands.
 - Return `202` only after durable publish ack.
 - Use deterministic subjects such as `reef.cmd.v1.pXX.<venueSessionId>.<instrumentId>.<commandType>`.
 - Route by `hash(venueSessionId + instrumentId) % partitionCount`, or `hash(runId + venueSessionId + instrumentId) % partitionCount` for isolated simulator/arena runs.
 - Require submit/cancel/modify commands to carry routing metadata so the hot path does not need a synchronous DB lookup.
-- Use a scoped idempotency guard with payload hashes; JetStream dedupe alone is not business idempotency.
-- Partition workers process commands, commit canonical command results plus event log rows in Postgres, then ack JetStream.
-- Projection workers consume canonical events and maintain lag/watermark tables outside the command hot path.
+- Use a scoped idempotency guard with payload hashes; broker dedupe alone is not business idempotency.
+- Matching-engine direct consumers process assigned partitions, publish durable `VenueEventBatch` records, then ack or commit command offsets.
+- Materializers consume `VenueEventBatch` records, commit compact canonical rows to Postgres, then ack or commit event-batch offsets.
+- Projection workers consume canonical facts and maintain lag/watermark tables outside the command hot path.
 
 ### Acceptance Criteria
 
 - API publish ack failures return explicit `429`/`503` before durable acceptance.
 - Duplicate same-key/same-body commands replay the same command reference.
 - Duplicate same-key/different-body commands return `409`.
-- Crash before DB commit redelivers and produces one terminal result.
-- Crash after DB commit but before JetStream ack redelivers without duplicate trades/events.
+- Crash before venue event-batch publish redelivers and produces one terminal outcome.
+- Crash after event-batch publish but before command offset commit redelivers without duplicate trades/events.
+- Crash before materializer offset commit redelivers and materializes idempotently.
 - Hot single-instrument load preserves partition ordering.
 - Multi-instrument load processes partitions concurrently.
 - Projection lag is visible and does not block command processing.
@@ -329,7 +333,7 @@ Reference:
 | M3 batched persistence | reduce write round trips | `25-100%+` possible |
 | M4 partition/retention | stabilize long soaks | lower degradation risk |
 | M5 read-model async | reduce hot-path write amplification | improved p99 and growth control |
-| M6 stream-ack JetStream | durable partitioned ingress without losing canonical Postgres outcomes | scalable async workflows |
+| M6 durable stream backbone | durable partitioned ingress without losing canonical Postgres outcomes | scalable async workflows |
 
 ## Target Metrics
 
@@ -360,17 +364,15 @@ Diagnostic targets:
 4. Do not remove synchronous mode; it remains required for deterministic tests and compatibility.
 5. Do not add indexes to hot write tables without benchmark evidence.
 6. Do not use Kubernetes scale-out to mask per-instance write amplification or accepted-command accounting gaps.
-7. Do not ack JetStream before canonical command results and lifecycle events are durable.
+7. Do not ack or commit durable-log offsets before the configured completion boundary is durable: event-batch publish for direct engine consumers, and compact canonical Postgres materialization for materializers.
 
-## First Sprint Recommendation
+## Current Sprint Recommendation
 
-Build the first stream-ack architecture slice while preserving the current fallback modes:
+The first stream-ack slice is implemented. The next sprint should harden the direct durable path before another long throughput push:
 
-1. Define the command envelope, routing metadata, partition key, and JetStream subject contract.
-2. Add the local JetStream dev profile and command stream bootstrap.
-3. Add stream health, publish-ack latency, lag, and partition-depth telemetry.
-4. Implement `stream-ack` publish behind a mode flag without removing `sync-result` or Postgres `captured-ack`.
-5. Add scoped idempotency guard tests for replay and payload-hash conflict.
-6. Add the first partition worker with DB-commit-before-ack crash/redelivery tests.
+1. Keep `sync-result`, `captured-ack`, JetStream stream-ack, Redpanda/Kafka-compatible stream-ack, stream-direct no-DB, and materializer profiles explicitly validated before runs.
+2. Add crash/restart integration tests around API publish-before-marker enqueue, matching-engine event-batch publish, command offset commit, materializer offset commit, and projector replay.
+3. Use short local durable gates before long soaks: publish ack, direct ack, materialized canonical outcomes, projector replay/idempotency, and replay/checksum must all close with `0` unexplained gaps.
+4. Promote only clean gates to the DigitalOcean/OpenTofu harness with actual attempted/accepted/completed/materialized/projected counters, lag, p95/p99, restart count, and artifact export.
 
-This turns the current queue/drain findings into a larger architecture move toward `7500-10000` completed commands/sec without weakening no-loss guarantees.
+This keeps the move toward `7500-10000` completed commands/sec focused on durable drain/accounting instead of repeating API intake tuning.

@@ -46,9 +46,14 @@ The runtime supports multiple internal processing modes behind the same external
 | [`/api/v1/orders/modify`](../orders/) | POST | Modify quantity/price of a resting order |
 | [`/api/v1/orders/cancel`](../orders/) | POST | Cancel an order |
 | [`/api/v1/orders/lifecycle-state`](../orders/) | POST | Rebuild order lifecycle projection |
+| [`/api/v1/orders/current`](../market-data/) | GET | Participant-scoped current own-order state |
+| [`/api/v1/orders/history`](../market-data/) | GET | Participant-scoped own-order history |
 | [`/api/v1/market-data/snapshots/{instrumentId}`](../market-data/) | GET | Top-of-book snapshot |
 | [`/api/v1/market-data/snapshots`](../market-data/) | POST | Refresh snapshot projection |
 | [`/api/v1/market-data/depth/{instrumentId}`](../market-data/) | GET | Bounded depth snapshot |
+| [`/api/v1/market-data/trades/{instrumentId}`](../market-data/) | GET | Public trade tape |
+| [`/api/v1/market-data/bars/{instrumentId}`](../market-data/) | GET | Intraday OHLCV bars |
+| [`/api/v1/data/availability`](../market-data/) | GET | Read-surface availability and freshness inventory |
 | [`/api/v1/commands/{commandId}`](../commands/) | GET | Command status lookup |
 
 `/internal/*` routes exist for operator/admin tooling and diagnostics only — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract.
