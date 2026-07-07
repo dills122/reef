@@ -9,6 +9,39 @@ export function canonicalThroughput(report) {
   };
 }
 
+export function canonicalEvidenceSummary(report) {
+  const unitMetrics = report?.unitMetrics ?? {};
+  const attempted = unitMetrics.attemptedCommands ?? report?.totalRequests;
+  const accepted = unitMetrics.acceptedCommands ?? report?.totalSuccess;
+  const directAcked = unitMetrics.directAckedCommands ?? report?.streamDirect?.delta?.ackedDelta;
+  const materialized =
+    unitMetrics.durableCanonicalCompletedItems ?? report?.venueEventMaterializer?.delta?.materializedDelta;
+  const projected = unitMetrics.projectedWorkItems ?? report?.streamAckProjector?.delta?.projectedDelta;
+  const throughput = canonicalThroughput(report);
+  return {
+    attempted: numberOrZero(attempted),
+    accepted: numberOrZero(accepted),
+    directAcked: numberOrZero(directAcked),
+    materialized: numberOrZero(materialized),
+    projected: numberOrZero(projected),
+    lag: numberOrZero(unitMetrics.projectionLagAfter ?? report?.streamAckProjector?.delta?.afterLag),
+    p95LatencyMs: numberOrZero(report?.latencyMs?.p95),
+    p99LatencyMs: numberOrZero(report?.latencyMs?.p99),
+    rates: {
+      attemptedPerSecond: numberOrZero(unitMetrics.attemptedCommandsPerSecond ?? throughput.attemptedPerSecond),
+      acceptedPerSecond: numberOrZero(unitMetrics.acceptedCommandsPerSecond ?? throughput.acceptedPerSecond),
+      directAckedPerSecond: numberOrZero(unitMetrics.directAckedCommandsPerSecond),
+      materializedPerSecond: numberOrZero(unitMetrics.durableCanonicalCompletedPerSecond),
+      projectedPerSecond: numberOrZero(unitMetrics.projectedWorkItemsPerSecond ?? throughput.projectedPerSecond),
+    },
+    gaps: {
+      acceptedToDirectAcked: nonNegativeGap(accepted, directAcked),
+      acceptedToMaterialized: nonNegativeGap(accepted, materialized),
+      materializedToProjected: nonNegativeGap(materialized, projected),
+    },
+  };
+}
+
 export function tracePassRatePct(report) {
   const checked = numberOrZero(report?.traceChecks?.checked);
   if (checked === 0) return 0;
@@ -43,7 +76,9 @@ export function aggregateReports(reports) {
     path: report.path,
     seed: numberOrZero(report.data?.config?.Seed ?? report.data?.config?.seed),
     throughput: canonicalThroughput(report.data),
+    evidence: canonicalEvidenceSummary(report.data),
     p95LatencyMs: numberOrZero(report.data?.latencyMs?.p95),
+    p99LatencyMs: numberOrZero(report.data?.latencyMs?.p99),
     tracePassRatePct: tracePassRatePct(report.data),
     totalRequests: numberOrZero(report.data?.totalRequests),
     totalSuccess: numberOrZero(report.data?.totalSuccess),
@@ -58,6 +93,7 @@ export function aggregateReports(reports) {
     },
     throughput: aggregateThroughput(rows),
     p95LatencyMs: aggregateNumber(rows.map((row) => row.p95LatencyMs)),
+    p99LatencyMs: aggregateNumber(rows.map((row) => row.p99LatencyMs)),
     tracePassRatePct: aggregateNumber(rows.map((row) => row.tracePassRatePct)),
     runs: rows,
   };
@@ -114,6 +150,10 @@ function sortObject(value) {
 
 function sum(rows, key) {
   return rows.reduce((acc, row) => acc + numberOrZero(row[key]), 0);
+}
+
+function nonNegativeGap(left, right) {
+  return Math.max(numberOrZero(left) - numberOrZero(right), 0);
 }
 
 function numberOrZero(value) {

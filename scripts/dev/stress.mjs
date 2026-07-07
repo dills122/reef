@@ -12,6 +12,7 @@ import {
   defaultDiagnosticSchemas,
   summarizeDiagnosticsDelta,
 } from "./lib/db-diagnostics.mjs";
+import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 
 loadDotEnv();
 const execFileAsync = promisify(execFile);
@@ -1983,10 +1984,12 @@ function buildKpiSummary(reportFiles, invalidCodes) {
       const streamIssueCount = streamAckIssues.totalIssueCount + directIssues.totalIssueCount;
       const traceChecked = Number(report.traceChecks?.checked ?? 0);
       const tracePass = Number(report.traceChecks?.pass ?? 0);
+      const evidence = canonicalEvidenceSummary(report);
       samples.push({
         path,
         rate: rateMatch ? Number(rateMatch[1]) : Number(report.config?.ratePerSecond ?? 0),
         workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
+        evidence,
         throughputRps: Number(report.throughputRps ?? 0),
         acceptedBusinessOpsRps: Number(report.acceptedBusinessOpsRps ?? 0),
         endToEndSuccessRatePct: quality.endToEndSuccessRatePct,
@@ -2032,12 +2035,35 @@ function buildKpiSummary(reportFiles, invalidCodes) {
     p95LatencyMs: avg(samples.map((sample) => sample.p95LatencyMs)),
     p99LatencyMs: avg(samples.map((sample) => sample.p99LatencyMs)),
   };
+  const evidenceAverages = {
+    attempted: avg(samples.map((sample) => sample.evidence.attempted)),
+    accepted: avg(samples.map((sample) => sample.evidence.accepted)),
+    directAcked: avg(samples.map((sample) => sample.evidence.directAcked)),
+    materialized: avg(samples.map((sample) => sample.evidence.materialized)),
+    projected: avg(samples.map((sample) => sample.evidence.projected)),
+    lag: avg(samples.map((sample) => sample.evidence.lag)),
+    p95LatencyMs: avg(samples.map((sample) => sample.evidence.p95LatencyMs)),
+    p99LatencyMs: avg(samples.map((sample) => sample.evidence.p99LatencyMs)),
+    rates: {
+      attemptedPerSecond: avg(samples.map((sample) => sample.evidence.rates.attemptedPerSecond)),
+      acceptedPerSecond: avg(samples.map((sample) => sample.evidence.rates.acceptedPerSecond)),
+      directAckedPerSecond: avg(samples.map((sample) => sample.evidence.rates.directAckedPerSecond)),
+      materializedPerSecond: avg(samples.map((sample) => sample.evidence.rates.materializedPerSecond)),
+      projectedPerSecond: avg(samples.map((sample) => sample.evidence.rates.projectedPerSecond)),
+    },
+    gaps: {
+      acceptedToDirectAcked: avg(samples.map((sample) => sample.evidence.gaps.acceptedToDirectAcked)),
+      acceptedToMaterialized: avg(samples.map((sample) => sample.evidence.gaps.acceptedToMaterialized)),
+      materializedToProjected: avg(samples.map((sample) => sample.evidence.gaps.materializedToProjected)),
+    },
+  };
 
   return {
     generatedAt: new Date().toISOString(),
     invalidIntentCodes: invalidCodes,
     sampleCount: samples.length,
     averages,
+    evidenceAverages,
     bestByThroughput,
     bestByAccepted,
     qualityCap90: quality90,
@@ -2167,6 +2193,12 @@ function toKpiMarkdown(kpiSummary) {
   lines.push(`- trace pass-rate: ${kpiSummary.averages.tracePassRatePct.toFixed(2)}%`);
   lines.push(`- p95 latency: ${kpiSummary.averages.p95LatencyMs.toFixed(2)} ms`);
   lines.push(`- p99 latency: ${kpiSummary.averages.p99LatencyMs.toFixed(2)} ms`);
+  lines.push(`- attempted: ${kpiSummary.evidenceAverages.attempted.toFixed(2)}`);
+  lines.push(`- accepted: ${kpiSummary.evidenceAverages.accepted.toFixed(2)}`);
+  lines.push(`- direct-acked: ${kpiSummary.evidenceAverages.directAcked.toFixed(2)}`);
+  lines.push(`- materialized: ${kpiSummary.evidenceAverages.materialized.toFixed(2)}`);
+  lines.push(`- projected: ${kpiSummary.evidenceAverages.projected.toFixed(2)}`);
+  lines.push(`- lag: ${kpiSummary.evidenceAverages.lag.toFixed(2)}`);
   lines.push("");
   lines.push("## Best Samples");
   lines.push(
@@ -2189,6 +2221,15 @@ function toKpiMarkdown(kpiSummary) {
         : "not reached"
     }`,
   );
+  lines.push("");
+  lines.push("## Gate Evidence");
+  lines.push("| Rate | Workers | Attempted | Accepted | Direct-Acked | Materialized | Projected | Lag | p95 ms | p99 ms | Accepted/Materialized Gap | Materialized/Projected Gap |");
+  lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+  for (const sample of kpiSummary.samples) {
+    lines.push(
+      `| ${sample.rate} | ${sample.workers} | ${sample.evidence.attempted} | ${sample.evidence.accepted} | ${sample.evidence.directAcked} | ${sample.evidence.materialized} | ${sample.evidence.projected} | ${sample.evidence.lag} | ${sample.evidence.p95LatencyMs.toFixed(2)} | ${sample.evidence.p99LatencyMs.toFixed(2)} | ${sample.evidence.gaps.acceptedToMaterialized} | ${sample.evidence.gaps.materializedToProjected} |`,
+    );
+  }
   lines.push("");
   lines.push("## Per Sample");
   lines.push("| Rate | Workers | Throughput RPS | Accepted RPS | E2E Success % | Valid-Intent Success % | Invalid-Intent % | System-Failure % (proxy) | Stream Clean | p95 ms | p99 ms |");

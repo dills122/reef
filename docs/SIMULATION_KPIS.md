@@ -62,6 +62,69 @@ This defines the canonical metrics for simulator-driven performance runs so we c
 
 Raw load-tester JSON reports also include a `quality` object with the KPI proxy fields above. Wrapper summaries should read from that object where possible instead of recomputing incompatible definitions.
 
+## Gate Evidence Template
+
+Local and DigitalOcean gates should include this normalized evidence block when reporting throughput or promotion claims. `scripts/dev/lib/report-taxonomy.mjs` exposes `canonicalEvidenceSummary(report)` so wrappers and checks can render the same fields from stress report JSON without inventing per-script names.
+
+```json
+{
+  "attempted": 0,
+  "accepted": 0,
+  "directAcked": 0,
+  "materialized": 0,
+  "projected": 0,
+  "lag": 0,
+  "p95LatencyMs": 0,
+  "p99LatencyMs": 0,
+  "rates": {
+    "attemptedPerSecond": 0,
+    "acceptedPerSecond": 0,
+    "directAckedPerSecond": 0,
+    "materializedPerSecond": 0,
+    "projectedPerSecond": 0
+  },
+  "gaps": {
+    "acceptedToDirectAcked": 0,
+    "acceptedToMaterialized": 0,
+    "materializedToProjected": 0
+  }
+}
+```
+
+Field sources:
+
+1. `attempted`: `unitMetrics.attemptedCommands`, fallback `totalRequests`.
+2. `accepted`: `unitMetrics.acceptedCommands`, fallback `totalSuccess`.
+3. `directAcked`: `unitMetrics.directAckedCommands`, fallback `streamDirect.delta.ackedDelta`.
+4. `materialized`: `unitMetrics.durableCanonicalCompletedItems`, fallback `venueEventMaterializer.delta.materializedDelta`.
+5. `projected`: `unitMetrics.projectedWorkItems`, fallback `streamAckProjector.delta.projectedDelta`.
+6. `lag`: `unitMetrics.projectionLagAfter`, fallback `streamAckProjector.delta.afterLag`.
+7. `p95LatencyMs`, `p99LatencyMs`: `latencyMs.p95`, `latencyMs.p99`.
+8. `rates`: matching `unitMetrics.*PerSecond` values, with legacy throughput fallbacks for attempted/accepted/projected.
+9. `gaps`: non-negative differences for accepted to direct-acked, accepted to materialized, and materialized to projected.
+
+Local gate:
+
+```bash
+make dev-stress
+```
+
+Expected local artifacts:
+
+1. `/tmp/reef-load-report-dev-stress-kpi.json`: includes `evidenceAverages` and per-sample `evidence`.
+2. `/tmp/reef-load-report-dev-stress-kpi.md`: includes the `Gate Evidence` table.
+3. Per-rate JSON reports: source records for `canonicalEvidenceSummary(report)`.
+
+DigitalOcean gate:
+
+```bash
+scripts/dev/do-benchmark-host.sh check
+```
+
+Expected DigitalOcean check artifact:
+
+1. `<fetched-run-artifact-dir>/do-benchmark-evidence-summary.json`: per-report normalized evidence from `canonicalEvidenceSummary(report)`.
+
 ## Comparator Usage
 
 Use campaign comparator for before/after tuning:
