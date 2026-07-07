@@ -133,6 +133,9 @@ function enforceBot(bot, session) {
   if (counters.failedCommands > 0) {
     reasons.push(`failedCommands ${counters.failedCommands} > 0`);
   }
+  if (counters.timedOutCommands > 0) {
+    reasons.push(`timedOutCommands ${counters.timedOutCommands} > 0`);
+  }
   if (counters.maxActionsPerTick > bot.riskProfile.maxActionsPerTick) {
     reasons.push(`maxActionsPerTick ${counters.maxActionsPerTick} > ${bot.riskProfile.maxActionsPerTick}`);
   }
@@ -288,8 +291,9 @@ async function submitVenueCommands(commands) {
   for (const command of commands) {
     const submittedAt = performance.now();
     const intake = await postJson(`${config.venueUrl.replace(/\/$/, "")}${command.route}`, command.body, command.headers);
+    const intakeBody = safeJson(intake.body);
     const status = intake.statusCode >= 200 && intake.statusCode < 300
-      ? await waitForCommandStatus(command.body.commandId)
+      ? await terminalStatusForAcceptedCommand(command, intakeBody)
       : { timedOut: false, statusCode: intake.statusCode, body: safeJson(intake.body) };
     const finalStatus = String(status.body?.status ?? "");
     const responseStatus = Number(status.body?.responseStatus ?? 0);
@@ -297,6 +301,7 @@ async function submitVenueCommands(commands) {
       commandId: command.body.commandId,
       route: command.route,
       intakeStatus: intake.statusCode,
+      intakeBody,
       finalStatus,
       responseStatus,
       rejected: responseStatus >= 400 || String(status.body?.resultStatus ?? "").toLowerCase() === "rejected",
@@ -320,11 +325,31 @@ function summarizeSubmissionResults(results) {
   };
 }
 
-async function waitForCommandStatus(commandId) {
+async function terminalStatusForAcceptedCommand(command, intakeBody) {
+  if (typeof intakeBody.statusUrl === "string" && intakeBody.statusUrl.length > 0) {
+    return await waitForCommandStatus(command);
+  }
+  return {
+    timedOut: false,
+    statusCode: 200,
+    body: {
+      commandId: command.body.commandId,
+      status: "COMPLETED",
+      responseStatus: 200,
+      responsePayloadJson: JSON.stringify(intakeBody),
+      source: "intake_response",
+    },
+  };
+}
+
+async function waitForCommandStatus(command) {
   const deadline = Date.now() + config.commandTimeoutMs;
   let last = { statusCode: 0, body: {} };
   while (Date.now() <= deadline) {
-    const response = await getJson(`${config.venueUrl.replace(/\/$/, "")}/api/v1/commands/${encodeURIComponent(commandId)}`);
+    const response = await getJson(
+      `${config.venueUrl.replace(/\/$/, "")}/api/v1/commands/${encodeURIComponent(command.body.commandId)}`,
+      statusReadHeaders(command),
+    );
     last = response;
     const status = String(response.body?.status ?? "");
     if (status === "COMPLETED" || status === "FAILED") {
@@ -364,6 +389,13 @@ async function seedReferenceData(bots) {
       roleId: "order_trader",
     }, internal);
   }
+}
+
+function statusReadHeaders(command) {
+  return {
+    "X-Client-Id": command.headers["X-Client-Id"] ?? "",
+    "Idempotency-Key": command.headers["Idempotency-Key"] ?? "",
+  };
 }
 
 function sessionCounters(session) {
@@ -547,8 +579,8 @@ async function postJson(url, payload, headers = {}) {
   return { ...response, body: response.body };
 }
 
-async function getJson(url) {
-  const response = await request("GET", url, undefined, {}, 5000);
+async function getJson(url, headers = {}) {
+  const response = await request("GET", url, undefined, headers, 5000);
   return { statusCode: response.statusCode, body: safeJson(response.body) };
 }
 

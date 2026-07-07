@@ -673,5 +673,15 @@ The same report now includes:
 - `venueReadback.snapshots`
 - freeze events for bot-caused tick or command failures
 
+Observed live smoke:
+
+- status `completed`
+- 14 venue command drafts
+- 14 submitted commands
+- 14 terminal commands
+- 0 rejected commands
+- 0 timed-out commands
+- 0 freezes
+
 Takeaway: the local arena now has a stable mode/catalog/report shape around the
 tick protocol and can route accepted venue command drafts through `/api/v1`.
