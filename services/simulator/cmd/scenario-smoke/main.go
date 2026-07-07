@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -24,6 +25,7 @@ type config struct {
 	start         string
 	baseURL       string
 	live          bool
+	assertions    bool
 	seedReference bool
 	timeout       time.Duration
 	statusTimeout time.Duration
@@ -32,16 +34,23 @@ type config struct {
 }
 
 type smokeReport struct {
-	Mode          string         `json:"mode"`
-	Pass          bool           `json:"pass"`
-	PathID        string         `json:"pathId"`
-	ScenarioRunID string         `json:"scenarioRunId"`
-	Seed          int64          `json:"seed"`
-	BaseURL       string         `json:"baseUrl,omitempty"`
-	SeedRequests  []smokeRequest `json:"seedRequests,omitempty"`
-	Requests      []smokeRequest `json:"requests"`
-	Results       []smokeResult  `json:"results,omitempty"`
-	Errors        []string       `json:"errors,omitempty"`
+	Mode           string              `json:"mode"`
+	Pass           bool                `json:"pass"`
+	PathID         string              `json:"pathId"`
+	ScenarioRunID  string              `json:"scenarioRunId"`
+	Seed           int64               `json:"seed"`
+	BaseURL        string              `json:"baseUrl,omitempty"`
+	SeedRequests   []smokeRequest      `json:"seedRequests,omitempty"`
+	Requests       []smokeRequest      `json:"requests"`
+	Results        []smokeResult       `json:"results,omitempty"`
+	Commands       []assertionCommand  `json:"commands,omitempty"`
+	Reads          []assertionRead     `json:"reads,omitempty"`
+	Assertions     []scenarioAssertion `json:"assertions,omitempty"`
+	Failures       []scenarioFailure   `json:"failures,omitempty"`
+	ProjectionLag  []projectionLag     `json:"projectionLag,omitempty"`
+	ReplayChecksum map[string]any      `json:"replayChecksum,omitempty"`
+	ArtifactPaths  []string            `json:"artifactPaths,omitempty"`
+	Errors         []string            `json:"errors,omitempty"`
 }
 
 type smokeRequest struct {
@@ -63,6 +72,69 @@ type smokeResult struct {
 	CommandStatusCode int    `json:"commandStatusCode,omitempty"`
 	CommandStatusBody string `json:"commandStatusBody,omitempty"`
 	Error             string `json:"error,omitempty"`
+}
+
+type assertionCommand struct {
+	Sequence     int    `json:"sequence"`
+	Command      string `json:"command"`
+	CommandID    string `json:"commandId"`
+	Route        string `json:"route"`
+	Status       string `json:"status"`
+	ResultStatus string `json:"resultStatus,omitempty"`
+	Source       string `json:"source,omitempty"`
+	StatusCode   int    `json:"statusCode"`
+	Body         string `json:"body,omitempty"`
+}
+
+type assertionRead struct {
+	Endpoint       string            `json:"endpoint"`
+	Filters        map[string]string `json:"filters,omitempty"`
+	SourceType     string            `json:"sourceType,omitempty"`
+	FreshnessModel string            `json:"freshnessModel,omitempty"`
+	StatusCode     int               `json:"statusCode"`
+	Body           string            `json:"body,omitempty"`
+}
+
+type scenarioAssertion struct {
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	Expected    string `json:"expected,omitempty"`
+	Observed    string `json:"observed,omitempty"`
+	ProofSource string `json:"proofSource"`
+}
+
+type scenarioFailure struct {
+	AssertionID string `json:"assertionId"`
+	Category    string `json:"category"`
+	Message     string `json:"message"`
+	ProofSource string `json:"proofSource"`
+}
+
+type projectionLag struct {
+	Projection string `json:"projection"`
+	Lag        string `json:"lag,omitempty"`
+	Watermark  string `json:"watermark,omitempty"`
+	MeasuredAt string `json:"measuredAt,omitempty"`
+}
+
+type commandStatusBody struct {
+	CommandID    string `json:"commandId"`
+	Status       string `json:"status"`
+	ResultStatus string `json:"resultStatus"`
+	Source       string `json:"source"`
+}
+
+type ownOrdersBody struct {
+	Meta struct {
+		Source    string `json:"source"`
+		Freshness string `json:"freshness"`
+	} `json:"meta"`
+	Orders []ownOrderBody `json:"orders"`
+}
+
+type ownOrderBody struct {
+	OrderID string `json:"orderId"`
+	Status  string `json:"status"`
 }
 
 func main() {
@@ -130,6 +202,7 @@ func parseConfig(args []string) (config, error) {
 	fs.StringVar(&cfg.start, "start", cfg.start, "scenario start time, RFC3339")
 	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "platform runtime base URL for live mode")
 	fs.BoolVar(&cfg.live, "live", false, "send executable scenario requests to base-url")
+	fs.BoolVar(&cfg.assertions, "assertions", false, "run first-wave live scenario assertions after command submission")
 	fs.BoolVar(&cfg.seedReference, "seed-reference", cfg.seedReference, "seed scenario reference/auth data in live mode")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP request timeout")
 	fs.DurationVar(&cfg.statusTimeout, "status-timeout", cfg.statusTimeout, "command status polling timeout")
@@ -140,6 +213,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if cfg.scenarioPath == "" {
 		return cfg, errors.New("missing --scenario")
+	}
+	if cfg.assertions && !cfg.live {
+		return cfg, errors.New("--assertions requires --live")
 	}
 	if cfg.timeout <= 0 {
 		return cfg, errors.New("timeout must be > 0")
@@ -279,6 +355,183 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 			report.Errors = append(report.Errors, fmt.Sprintf("command %s failed", request.Payload["commandId"]))
 		}
 	}
+	if cfg.assertions && len(report.Errors) == 0 {
+		runAssertions(cfg, client, report)
+	}
+}
+
+func runAssertions(cfg config, client *http.Client, report *smokeReport) {
+	for _, result := range report.Results {
+		if result.Command == "" {
+			continue
+		}
+		status := parseCommandStatus(result.CommandStatusBody)
+		command := assertionCommand{
+			Sequence:     result.Sequence,
+			Command:      result.Command,
+			CommandID:    status.CommandID,
+			Route:        result.Path,
+			Status:       status.Status,
+			ResultStatus: status.ResultStatus,
+			Source:       status.Source,
+			StatusCode:   result.CommandStatusCode,
+			Body:         result.CommandStatusBody,
+		}
+		if command.CommandID == "" {
+			command.CommandID = commandIDForResult(report.Requests, result)
+		}
+		report.Commands = append(report.Commands, command)
+		assertionID := fmt.Sprintf("command-%03d-completed", result.Sequence)
+		if strings.EqualFold(status.Status, "COMPLETED") && strings.EqualFold(status.ResultStatus, "accepted") {
+			passAssertion(report, assertionID, "COMPLETED/accepted", status.Status+"/"+status.ResultStatus, "GET /api/v1/commands/{commandId}")
+		} else {
+			failAssertion(report, assertionID, "command_completion", "COMPLETED/accepted", status.Status+"/"+status.ResultStatus, "GET /api/v1/commands/{commandId}")
+		}
+	}
+	if report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
+		runP1OwnOrderAssertions(cfg, client, report)
+	}
+}
+
+func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeReport) {
+	expected := []struct {
+		assertionID   string
+		participantID string
+		orderID       string
+		status        string
+	}{
+		{
+			assertionID:   "p1-hidden-sell-filled",
+			participantID: "HIDDEN_SELLER_A",
+			orderID:       "p1_golden_hidden_cross_t1-ord-001",
+			status:        "FILLED",
+		},
+		{
+			assertionID:   "p1-first-visible-buy-filled",
+			participantID: "VISIBLE_BUYER_B",
+			orderID:       "p1_golden_hidden_cross_t1-ord-002",
+			status:        "FILLED",
+		},
+		{
+			assertionID:   "p1-second-visible-buy-filled",
+			participantID: "VISIBLE_BUYER_C",
+			orderID:       "p1_golden_hidden_cross_t1-ord-003",
+			status:        "FILLED",
+		},
+	}
+	for _, want := range expected {
+		read, orders, err := readOwnOrderHistory(cfg, client, want.participantID, "XYZ")
+		report.Reads = append(report.Reads, read)
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Sprintf("%s failed", want.assertionID))
+			report.Failures = append(report.Failures, scenarioFailure{
+				AssertionID: want.assertionID,
+				Category:    "own_order_read",
+				Message:     err.Error(),
+				ProofSource: read.Endpoint,
+			})
+			continue
+		}
+		observed := findOwnOrderStatus(orders, want.orderID)
+		if observed == want.status {
+			passAssertion(report, want.assertionID, want.status, observed, read.Endpoint)
+		} else {
+			failAssertion(report, want.assertionID, "own_order_lifecycle", want.status, observed, read.Endpoint)
+		}
+	}
+}
+
+func readOwnOrderHistory(cfg config, client *http.Client, participantID string, instrumentID string) (assertionRead, []ownOrderBody, error) {
+	endpoint := "/api/v1/orders/history"
+	query := url.Values{}
+	query.Set("participantId", participantID)
+	query.Set("instrumentId", instrumentID)
+	query.Set("limit", "50")
+	requestURL := absoluteURL(cfg.baseURL, endpoint) + "?" + query.Encode()
+	read := assertionRead{
+		Endpoint: endpoint,
+		Filters: map[string]string{
+			"participantId": participantID,
+			"instrumentId":  instrumentID,
+			"limit":         "50",
+		},
+	}
+	request, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return read, nil, err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return read, nil, err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return read, nil, err
+	}
+	read.StatusCode = response.StatusCode
+	read.Body = strings.TrimSpace(string(body))
+	var parsed ownOrdersBody
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return read, nil, err
+	}
+	read.SourceType = parsed.Meta.Source
+	read.FreshnessModel = parsed.Meta.Freshness
+	if response.StatusCode != 200 {
+		return read, parsed.Orders, fmt.Errorf("own-order history returned %d", response.StatusCode)
+	}
+	return read, parsed.Orders, nil
+}
+
+func parseCommandStatus(body string) commandStatusBody {
+	var status commandStatusBody
+	_ = json.Unmarshal([]byte(body), &status)
+	return status
+}
+
+func commandIDForResult(requests []smokeRequest, result smokeResult) string {
+	for _, request := range requests {
+		if request.Sequence == result.Sequence {
+			return request.Payload["commandId"]
+		}
+	}
+	return ""
+}
+
+func findOwnOrderStatus(orders []ownOrderBody, orderID string) string {
+	for _, order := range orders {
+		if order.OrderID == orderID {
+			return order.Status
+		}
+	}
+	return ""
+}
+
+func passAssertion(report *smokeReport, id string, expected string, observed string, proofSource string) {
+	report.Assertions = append(report.Assertions, scenarioAssertion{
+		ID:          id,
+		Status:      "pass",
+		Expected:    expected,
+		Observed:    observed,
+		ProofSource: proofSource,
+	})
+}
+
+func failAssertion(report *smokeReport, id string, category string, expected string, observed string, proofSource string) {
+	report.Assertions = append(report.Assertions, scenarioAssertion{
+		ID:          id,
+		Status:      "fail",
+		Expected:    expected,
+		Observed:    observed,
+		ProofSource: proofSource,
+	})
+	report.Failures = append(report.Failures, scenarioFailure{
+		AssertionID: id,
+		Category:    category,
+		Message:     fmt.Sprintf("expected %s, observed %s", expected, observed),
+		ProofSource: proofSource,
+	})
+	report.Errors = append(report.Errors, fmt.Sprintf("%s failed", id))
 }
 
 func executeRequest(client *http.Client, request smokeRequest) smokeResult {
