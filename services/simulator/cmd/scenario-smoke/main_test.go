@@ -145,6 +145,12 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"sequence":2,"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"},{"sequence":1,"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -173,16 +179,116 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 	if len(report.Commands) != 3 {
 		t.Fatalf("commands: got %d want 3", len(report.Commands))
 	}
-	if len(report.Reads) != 3 {
-		t.Fatalf("reads: got %d want 3", len(report.Reads))
+	if len(report.Reads) != 5 {
+		t.Fatalf("reads: got %d want 5", len(report.Reads))
 	}
-	if len(report.Assertions) != 6 {
-		t.Fatalf("assertions: got %d want 6", len(report.Assertions))
+	if len(report.Assertions) != 11 {
+		t.Fatalf("assertions: got %d want 11", len(report.Assertions))
 	}
 	for _, assertion := range report.Assertions {
 		if assertion.Status != "pass" {
 			t.Fatalf("assertion did not pass: %+v", assertion)
 		}
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnPublicTradeIdentityLeak(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/commands/"):
+			commandID := strings.TrimPrefix(r.URL.Path, "/api/v1/commands/")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"commandId":"` + commandID + `","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/history":
+			participantID := r.URL.Query().Get("participantId")
+			orderID := map[string]string{
+				"HIDDEN_SELLER_A": "p1_golden_hidden_cross_t1-ord-001",
+				"VISIBLE_BUYER_B": "p1_golden_hidden_cross_t1-ord-002",
+				"VISIBLE_BUYER_C": "p1_golden_hidden_cross_t1-ord-003",
+			}[participantID]
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000","buyOrderId":"p1_golden_hidden_cross_t1-ord-002"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected public trade identity leak failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p1-trade-tape-public-safe") {
+		t.Fatalf("expected p1-trade-tape-public-safe failure: %+v", report.Failures)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost:
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/commands/"):
+			commandID := strings.TrimPrefix(r.URL.Path, "/api/v1/commands/")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"commandId":"` + commandID + `","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/history":
+			participantID := r.URL.Query().Get("participantId")
+			orderID := map[string]string{
+				"HIDDEN_SELLER_A": "p1_golden_hidden_cross_t1-ord-001",
+				"VISIBLE_BUYER_B": "p1_golden_hidden_cross_t1-ord-002",
+				"VISIBLE_BUYER_C": "p1_golden_hidden_cross_t1-ord-003",
+			}[participantID]
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"depth":{"projectionName":"market-data-depth","instrumentId":"XYZ","bidLevels":[],"askLevels":[{"price":"100000000000","quantity":"100"}]}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected public hidden depth failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p1-public-depth-hidden-size-not-visible") {
+		t.Fatalf("expected p1-public-depth-hidden-size-not-visible failure: %+v", report.Failures)
 	}
 }
 
@@ -214,6 +320,12 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -279,6 +391,12 @@ func TestScenarioSmokeLiveAssertionsFailOnReplayChecksumEvidence(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/trades/XYZ":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"instrumentId":"XYZ","meta":{"source":"runtime.trades","freshness":"durable fact rows"},"trades":[{"tradeId":"trade-1","instrumentId":"XYZ","quantityUnits":"40","price":"100000000000"},{"tradeId":"trade-2","instrumentId":"XYZ","quantityUnits":"60","price":"100000000000"}]}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/market-data/depth/XYZ":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"market data depth not found","instrumentId":"XYZ"}`))
 		default:
 			http.NotFound(w, r)
 		}
