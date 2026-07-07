@@ -9,6 +9,22 @@ Reef uses a split deployment shape for budget-sensitive hosted simulations:
 The worker is created for one run, executes the simulation, sends artifacts
 back, and is destroyed unless explicitly retained for debugging.
 
+## Current Status
+
+This directory documents the target run-plane shape. The dedicated
+`infra/simulation-runner/tofu/` and
+`infra/simulation-runner/server/docker-compose.yml` bundle is not built yet.
+
+Today, `make simulation-run` calls `scripts/deploy/simulation-run.mjs`, which
+wraps the older `scripts/dev/do-benchmark-host.sh` bridge harness. That bridge
+provisions a disposable DigitalOcean host, syncs the checkout, starts the root
+local stream-ack Compose profile on the worker, collects artifacts, optionally
+exports a compressed artifact bundle to R2, and destroys the worker unless it is
+retained for debugging.
+
+The bridge is useful operationally, but it is not the final hosted run-plane
+layout and should not be confused with the Hetzner backbone Compose files.
+
 ## Communication Model
 
 The first slice is local-driven:
@@ -16,8 +32,8 @@ The first slice is local-driven:
 ```text
 local operator
   -> creates the DO worker with OpenTofu
-  -> syncs the checkout or uses published images when available
-  -> starts the simulation stack
+  -> syncs the checkout
+  -> starts the simulation stack through the bridge harness
   -> runs the selected stress profile
   -> fetches reports and debug artifacts locally
   -> optionally pushes those artifacts to the always-on core
@@ -156,8 +172,8 @@ Use source-build fallback while package visibility is being finalized:
 make simulation-run ARGS="--image-mode source --rate 1000 --duration 60s --workers 128"
 ```
 
-The source mode still syncs the checkout and lets the dev Compose stack build
-images on the worker.
+The source mode still syncs the checkout and lets the root local Compose stack
+build images on the worker.
 
 ## Cost Controls
 

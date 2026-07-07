@@ -1,6 +1,6 @@
 # Reef Infrastructure Backbone
 
-Last aligned: 2026-07-06.
+Last aligned: 2026-07-07.
 
 ## Purpose
 
@@ -34,6 +34,7 @@ For the one-page map of the whole system, start with
 
 Primary source code lives in:
 
+- [`infra/README.md`](../infra/README.md)
 - [`infra/hetzner-core/`](../infra/hetzner-core/)
 - [`infra/hetzner-core/server/docker-compose.yml`](../infra/hetzner-core/server/docker-compose.yml)
 - [`infra/simulation-runner/README.md`](../infra/simulation-runner/README.md)
@@ -304,6 +305,10 @@ Current implementation is still partly the older benchmark harness:
 - `infra/do-benchmark/`
 - `scripts/dev/do-benchmark-host.sh`
 - `scripts/deploy/simulation-run.mjs`
+
+That bridge starts the root local stream-ack Compose profile on the disposable
+DigitalOcean worker. It should stay clearly separate from the Hetzner backbone
+Compose files under `infra/hetzner-core/server/`.
 
 Target implementation should mirror the Hetzner backbone pattern:
 

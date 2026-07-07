@@ -10,7 +10,14 @@ Default shape:
 - SSH only from configured CIDRs
 - Docker, Docker Compose, Node.js, Go, Make, jq, rsync, and basic host diagnostics installed by cloud-init
 
-Use `scripts/dev/do-benchmark-host.sh` from the repository root. The first harness uses local OpenTofu state intentionally; do not commit generated state files.
+Use `scripts/dev/do-benchmark-host.sh` from the repository root. The first
+harness uses local OpenTofu state intentionally; do not commit generated state
+files.
+
+This is bridge infrastructure. It provisions disposable DigitalOcean compute
+and starts the root local stream-ack Compose profile on that host. The target
+simulation run plane is still `infra/simulation-runner/`, which should
+eventually own its own OpenTofu and server Compose bundle.
 
 For budget-safe simulation runs that should fetch artifacts, optionally push
 them to the always-on core, and destroy the worker by default, prefer
