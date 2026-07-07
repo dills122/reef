@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
+	"github.com/dills122/reef/services/matching-engine/internal/domain"
 )
 
 func TestProcessorPublishesEventBatchBeforeAck(t *testing.T) {
@@ -320,6 +321,157 @@ func TestProcessorRedeliveredSubmitAfterCrashIsRejectedNotReexecuted(t *testing.
 	}
 	if redelivered.acked != 1 {
 		t.Fatalf("expected redelivered delivery acked (not endlessly nak-retried), got %d", redelivered.acked)
+	}
+}
+
+// TestScenario2_RedeliveryAfterPublishSucceedsButOffsetCommitIsLostIsDedupedNotReexecuted
+// covers WORK_PLAN.md crash/restart scenario 2: "matching engine publishes
+// VenueEventBatch then exits before command offset commit." The batch published
+// successfully (durable event-batch handoff complete) but the process exits before
+// the delivery ack (offset commit) lands, so the broker redelivers the same command.
+// This is the same shape as TestProcessorRedeliveredSubmitAfterCrashIsRejectedNotReexecuted
+// above; this test names it explicitly to the WORK_PLAN scenario and additionally
+// asserts the redelivered attempt is still acked so the offset advances exactly once
+// even though the engine-level result differs (rejected) from the original (accepted).
+func TestScenario2_RedeliveryAfterPublishSucceedsButOffsetCommitIsLostIsDedupedNotReexecuted(t *testing.T) {
+	payload := map[string]string{
+		"commandId":     "cmd-scenario2",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-scenario2",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	}
+	service := app.NewService()
+	publisher := &fakePublisher{}
+
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 40, payload)
+	firstProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{first}}, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := firstProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("first ProcessOnce returned error: %v", err)
+	}
+	if len(publisher.batches) != 1 || first.acked != 1 {
+		t.Fatalf("expected first attempt published and acked, got batches=%d acked=%d", len(publisher.batches), first.acked)
+	}
+
+	// Process "exits" here, before the broker durably records the offset commit for
+	// stream sequence 40 - it redelivers the same command on restart.
+	redelivered := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 40, payload)
+	redeliveredProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redelivered}}, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	processed, err := redeliveredProcessor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("redelivered ProcessOnce returned error: %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("expected redelivered command to be processed exactly once per cycle, got %d", processed)
+	}
+	if len(publisher.batches) != 2 {
+		t.Fatalf("expected redelivery to publish a second outcome batch (never silently dropped), got %d", len(publisher.batches))
+	}
+	if redelivered.acked != 1 || redelivered.nacked != 0 {
+		t.Fatalf("expected redelivered command to ack (offset commits exactly once), got acked=%d nacked=%d", redelivered.acked, redelivered.nacked)
+	}
+}
+
+// TestScenario3_MatchingEngineFailsBeforeEventBatchPublishLeavesCommandOffsetUncommitted
+// covers WORK_PLAN.md crash/restart scenario 3: "matching engine fails before
+// event-batch publish, leaving command offset uncommitted." It proves the trivial
+// half by construction (no ack, no offset commit, so a nak'd/never-acked delivery
+// will be redelivered by the broker) and, more importantly, that the engine's book
+// does not diverge from the canonical published record at this crash point: a
+// failed publish now rolls back the order reservation/match that processing made
+// (via Service.BeginBatch/BatchRollback.Rollback), so a subsequent redelivery
+// reprocesses the command cleanly and is durably published as ACCEPTED - not
+// rejected as a duplicate - exactly once.
+func TestScenario3_MatchingEngineFailsBeforeEventBatchPublishLeavesCommandOffsetUncommitted(t *testing.T) {
+	payload := map[string]string{
+		"commandId":     "cmd-scenario3",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-scenario3",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "SELL",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	}
+	service := app.NewService()
+
+	failingPublisher := &fakePublisher{err: errors.New("publish failed")}
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 41, payload)
+	firstProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{first}}, failingPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := firstProcessor.ProcessOnce(context.Background()); err == nil {
+		t.Fatal("expected publish error before any offset commit")
+	}
+	if first.acked != 0 || first.nacked != 1 {
+		t.Fatalf("expected offset left uncommitted (nak, no ack) when publish fails, got acked=%d nacked=%d", first.acked, first.nacked)
+	}
+	if len(failingPublisher.batches) != 0 {
+		t.Fatalf("expected nothing durable to have been published, got %d batches", len(failingPublisher.batches))
+	}
+
+	// The book must not hold a live reservation for a command that was never
+	// durably published: the failed publish should have rolled back
+	// reserveOrder()'s mutation entirely.
+	if _, ok := service.OrderState("ord-scenario3"); ok {
+		t.Fatal("expected the order reservation to be rolled back after the failed publish, but it is still live in engine state")
+	}
+	if resting := service.RestingOrders("STK001", domain.SideSell); resting != 0 {
+		t.Fatalf("expected no resting orders left in the book after rollback, got %d", resting)
+	}
+
+	// Broker redelivers the un-acked command; this time publish succeeds.
+	successPublisher := &fakePublisher{}
+	redelivered := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 41, payload)
+	redeliveredProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redelivered}}, successPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := redeliveredProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("redelivered ProcessOnce returned error: %v", err)
+	}
+	if len(successPublisher.batches) != 1 {
+		t.Fatalf("expected the redelivered command to still be durably published (not silently dropped), got %d batches", len(successPublisher.batches))
+	}
+	if redelivered.acked != 1 {
+		t.Fatalf("expected redelivered command to ack once published successfully, got %d", redelivered.acked)
+	}
+	// The rollback means this redelivery is the *first* successful durable
+	// publish attempt for this commandId, so it must be accepted, not rejected
+	// as a duplicate of a reservation that no longer exists.
+	outcome := successPublisher.batches[0].Outcomes[0]
+	if outcome.CommandID != "cmd-scenario3" {
+		t.Fatalf("unexpected outcome commandId %q", outcome.CommandID)
+	}
+	if outcome.Status != "accepted" || outcome.Result.Accepted == nil {
+		t.Fatalf("expected the redelivered submit to be accepted after rollback, got %#v", outcome)
+	}
+	if resting := service.RestingOrders("STK001", domain.SideSell); resting != 1 {
+		t.Fatalf("expected exactly one resting order in the book after the redelivered accept, got %d", resting)
 	}
 }
 
