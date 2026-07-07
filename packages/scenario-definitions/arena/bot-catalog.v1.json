@@ -52,6 +52,16 @@
       "riskProfile": "competitor_standard",
       "scoreEligible": true,
       "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-too-many-orders",
+      "versionId": "local-1",
+      "runnerKey": "too-many-orders",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/test-fixtures/bad-bots/too-many-orders-bot.ts",
+      "riskProfile": "competitor_standard",
+      "scoreEligible": true,
+      "publicLeaderboard": false
     }
   ],
   "riskProfiles": {

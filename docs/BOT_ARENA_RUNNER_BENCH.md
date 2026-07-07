@@ -722,6 +722,25 @@ Observed persisted smoke:
 - 0 timed-out commands
 - 0 freezes
 
+Bad-bot validation:
+
+```bash
+make dev-smoke-bot-arena-local \
+  ARGS="--extra-bots=custom-too-many-orders"
+```
+
+Observed:
+
+- status `completed_with_freezes`
+- 6 catalog bots
+- 16 ticks
+- 14 healthy venue command drafts
+- 14 submitted commands
+- bad bot proposed 11 actions on its first tick
+- bad bot emitted 0 venue command drafts
+- 1 freeze event with `reasonCode` `tick_policy_violation`
+- bad bot result retained with `disqualified=true`
+
 Local stack requirement: `platform-runtime` must run with
 `PLATFORM_ARENA_ADMIN_ENABLED=true`. Host-based smoke calls to raw
 `/internal/admin/*` routes also require an exposure mode that allows the caller,

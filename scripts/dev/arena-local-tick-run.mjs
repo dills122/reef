@@ -14,6 +14,7 @@ const args = process.argv.slice(2);
 const config = {
   runId: stringOption("--run-id", `arena-local-tick-${Date.now()}`),
   mode: stringOption("--mode", "packages/scenario-definitions/arena/equity-sprint.v1.json"),
+  extraBots: csvOption("--extra-bots", ""),
   compartment: stringOption("--compartment", "ses"),
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
@@ -46,7 +47,7 @@ const mode = readJson(config.mode);
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
 const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
-const selectedBots = mode.botRefs.map((botId) => {
+const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
     throw new Error(`mode references unknown bot ${botId}`);
@@ -122,6 +123,18 @@ async function runBotSession(bot) {
   const ticks = [];
   for (const tick of fixture.ticks.slice(0, mode.ticks)) {
     const tickResult = await worker.request({ type: "runTick", sessionId, tick });
+    const policyViolation = tickPolicyViolation(bot, tickResult);
+    if (policyViolation !== undefined) {
+      ticks.push({
+        ...tickResult,
+        ok: false,
+        policyViolation,
+        issues: [...(tickResult.issues ?? []), policyViolation],
+        venueCommands: [],
+        submission: emptySubmission("policy_violation"),
+      });
+      break;
+    }
     ticks.push({
       ...tickResult,
       submission: await submitVenueCommands(tickResult.venueCommands ?? []),
@@ -129,6 +142,19 @@ async function runBotSession(bot) {
   }
   const stop = await worker.request({ type: "stopSession", sessionId });
   return { bot, sessionId, start, ticks, stop };
+}
+
+function tickPolicyViolation(bot, tickResult) {
+  const actionCount = tickResult.actions?.length ?? 0;
+  if (actionCount > bot.riskProfile.maxActionsPerTick) {
+    return {
+      code: "max_actions_per_tick",
+      message: `actions ${actionCount} > ${bot.riskProfile.maxActionsPerTick}`,
+      observed: actionCount,
+      limit: bot.riskProfile.maxActionsPerTick,
+    };
+  }
+  return undefined;
 }
 
 function enforceBot(bot, session) {
@@ -158,7 +184,7 @@ function enforceBot(bot, session) {
   }
   events.push({
     type: "arena.enforcement.v0",
-    runId: `${mode.modeId}-${mode.version}`,
+    runId: config.runId,
     botId: bot.botId,
     versionId: bot.versionId,
     decision: "freeze",
@@ -457,15 +483,7 @@ function adminHeaders(correlationId) {
 
 async function submitVenueCommands(commands) {
   if (config.submitMode === "dry-run" || commands.length === 0) {
-    return {
-      mode: config.submitMode,
-      submitted: 0,
-      completed: 0,
-      failed: 0,
-      rejected: 0,
-      timedOut: 0,
-      commands: [],
-    };
+    return emptySubmission(config.submitMode);
   }
 
   const results = [];
@@ -492,6 +510,19 @@ async function submitVenueCommands(commands) {
     });
   }
   return summarizeSubmissionResults(results);
+}
+
+function emptySubmission(reason) {
+  return {
+    mode: config.submitMode,
+    skippedReason: reason,
+    submitted: 0,
+    completed: 0,
+    failed: 0,
+    rejected: 0,
+    timedOut: 0,
+    commands: [],
+  };
 }
 
 function summarizeSubmissionResults(results) {
@@ -829,6 +860,10 @@ function numberOption(name, fallback) {
 function stringOption(name, fallback) {
   const raw = optionValue(name);
   return raw === undefined ? fallback : raw;
+}
+
+function csvOption(name, fallback) {
+  return stringOption(name, fallback).split(",").map((value) => value.trim()).filter(Boolean);
 }
 
 function optionValue(name) {
