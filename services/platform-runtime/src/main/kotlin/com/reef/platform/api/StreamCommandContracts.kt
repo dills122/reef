@@ -15,8 +15,10 @@ enum class StreamCommandLogProvider(val configValue: String) {
     Redpanda("redpanda");
 
     companion object {
-        fun fromEnv(): StreamCommandLogProvider {
-            return when (val raw = RuntimeEnv.string("STREAM_ACK_LOG_PROVIDER", JetStream.configValue).trim().lowercase()) {
+        fun fromEnv(lookup: (String) -> String? = { key -> System.getenv(key) }): StreamCommandLogProvider {
+            return when (
+                val raw = RuntimeEnv.string("STREAM_ACK_LOG_PROVIDER", JetStream.configValue, lookup).trim().lowercase()
+            ) {
                 JetStream.configValue, "nats", "nats-jetstream" -> JetStream
                 Redpanda.configValue, "kafka" -> Redpanda
                 else -> throw IllegalArgumentException(
