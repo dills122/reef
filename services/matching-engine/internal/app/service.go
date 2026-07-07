@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -98,14 +97,7 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
 	}
 
-	result := domain.SubmitOrderResult{
-		Accepted: &domain.OrderAccepted{
-			EventID:       fmt.Sprintf("evt-order-accepted-%s", cmd.OrderID),
-			OrderID:       cmd.OrderID,
-			EngineOrderID: fmt.Sprintf("eng-%s", cmd.OrderID),
-			OccurredAt:    now,
-		},
-	}
+	result := acceptedResult("accepted", cmd.OrderID, now)
 
 	book := s.bookFor(cmd.InstrumentID)
 	book.mu.Lock()
@@ -171,14 +163,7 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 	record.LastUpdatedAt = now
 	s.trackTerminalOrder(record)
 
-	return domain.SubmitOrderResult{
-		Accepted: &domain.OrderAccepted{
-			EventID:       fmt.Sprintf("evt-order-cancelled-%s", cmd.OrderID),
-			OrderID:       cmd.OrderID,
-			EngineOrderID: fmt.Sprintf("eng-%s", cmd.OrderID),
-			OccurredAt:    now,
-		},
-	}
+	return acceptedResult("cancelled", cmd.OrderID, now)
 }
 
 func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
@@ -222,14 +207,7 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	record.LastUpdatedAt = now
 	s.refreshOrderStatus(record)
 
-	result := domain.SubmitOrderResult{
-		Accepted: &domain.OrderAccepted{
-			EventID:       fmt.Sprintf("evt-order-modified-%s", cmd.OrderID),
-			OrderID:       cmd.OrderID,
-			EngineOrderID: fmt.Sprintf("eng-%s", cmd.OrderID),
-			OccurredAt:    now,
-		},
-	}
+	result := acceptedResult("modified", cmd.OrderID, now)
 
 	if record.RemainingQuantity > 0 {
 		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
@@ -462,14 +440,15 @@ func (s *Service) matchSell(book *orderBook, incoming restingOrder, result *doma
 }
 
 func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderRecord, sellOrder *orderRecord, matchedUnits int64, executionPrice int64, occurredAt string) {
-	executionID := fmt.Sprintf("exec-%s-%s-%d", buyOrder.OrderID, sellOrder.OrderID, len(result.Trades)+1)
-	tradeID := fmt.Sprintf("trade-%s-%s-%d", buyOrder.OrderID, sellOrder.OrderID, len(result.Trades)+1)
+	seq := strconv.Itoa(len(result.Trades) + 1)
+	executionID := "exec-" + buyOrder.OrderID + "-" + sellOrder.OrderID + "-" + seq
+	tradeID := "trade-" + buyOrder.OrderID + "-" + sellOrder.OrderID + "-" + seq
 	matchedUnitsStr := strconv.FormatInt(matchedUnits, 10)
 	executionPriceStr := strconv.FormatInt(executionPrice, 10)
 
 	result.Executions = append(result.Executions,
 		domain.ExecutionCreated{
-			EventID:        fmt.Sprintf("evt-execution-%s-buy", executionID),
+			EventID:        "evt-execution-" + executionID + "-buy",
 			ExecutionID:    executionID + "-buy",
 			OrderID:        buyOrder.OrderID,
 			InstrumentID:   buyOrder.InstrumentID,
@@ -479,7 +458,7 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 			OccurredAt:     occurredAt,
 		},
 		domain.ExecutionCreated{
-			EventID:        fmt.Sprintf("evt-execution-%s-sell", executionID),
+			EventID:        "evt-execution-" + executionID + "-sell",
 			ExecutionID:    executionID + "-sell",
 			OrderID:        sellOrder.OrderID,
 			InstrumentID:   sellOrder.InstrumentID,
@@ -491,7 +470,7 @@ func (s *Service) appendMatch(result *domain.SubmitOrderResult, buyOrder *orderR
 	)
 
 	result.Trades = append(result.Trades, domain.TradeCreated{
-		EventID:       fmt.Sprintf("evt-trade-%s", tradeID),
+		EventID:       "evt-trade-" + tradeID,
 		TradeID:       tradeID,
 		ExecutionID:   executionID,
 		BuyOrderID:    buyOrder.OrderID,
@@ -574,6 +553,17 @@ func parsePositiveInt(value string) (int64, bool) {
 		return 0, false
 	}
 	return parsed, true
+}
+
+func acceptedResult(verb string, orderID string, occurredAt string) domain.SubmitOrderResult {
+	return domain.SubmitOrderResult{
+		Accepted: &domain.OrderAccepted{
+			EventID:       "evt-order-" + verb + "-" + orderID,
+			OrderID:       orderID,
+			EngineOrderID: "eng-" + orderID,
+			OccurredAt:    occurredAt,
+		},
+	}
 }
 
 func rejectedResult(eventID string, orderID string, code string, reason string, occurredAt string) domain.SubmitOrderResult {
