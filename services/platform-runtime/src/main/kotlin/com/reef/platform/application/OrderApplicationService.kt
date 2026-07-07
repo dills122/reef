@@ -157,7 +157,7 @@ class OrderApplicationService(
     ): PersistableSubmitOutcome {
         val accepted = result.accepted
         var acceptedOrder: PersistedOrder? = null
-        val lifecycleEvents = mutableListOf<RuntimeEvent>()
+        val lifecycleEvents = ArrayList<RuntimeEvent>(1 + result.executions.size + result.trades.size)
         if (accepted != null) {
             acceptedOrder = PersistedOrder(
                 orderId = command.orderId,
@@ -186,12 +186,8 @@ class OrderApplicationService(
                     payloadJson = commandPayload(command.commandId)
                 )
             )
-            val capacity = ArrayList<RuntimeEvent>(
-                1 + result.executions.size + result.trades.size
-            )
-            capacity.addAll(lifecycleEvents)
             result.executions.forEach { execution ->
-                capacity.add(
+                lifecycleEvents.add(
                     lifecycleEvent(
                         eventId = execution.eventId,
                         eventType = "ExecutionCreated",
@@ -206,7 +202,7 @@ class OrderApplicationService(
                 )
             }
             result.trades.forEach { trade ->
-                capacity.add(
+                lifecycleEvents.add(
                     lifecycleEvent(
                         eventId = trade.eventId,
                         eventType = "TradeCreated",
@@ -220,8 +216,6 @@ class OrderApplicationService(
                     )
                 )
             }
-            lifecycleEvents.clear()
-            lifecycleEvents.addAll(capacity)
         } else {
             val rejected = result.rejected
             if (rejected != null) {

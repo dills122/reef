@@ -3,8 +3,8 @@ package book
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
-	"strings"
+	"hash"
+	"strconv"
 
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
 	"github.com/tidwall/btree"
@@ -254,14 +254,37 @@ func (s Snapshot) withoutChecksum() Snapshot {
 }
 
 func checksum(snapshot Snapshot) string {
-	input := strings.Builder{}
-	input.WriteString(fmt.Sprintf("next=%d;", snapshot.NextSequence))
+	h := sha256.New()
+	writeChecksumField(h, "next=")
+	writeChecksumInt(h, snapshot.NextSequence)
+	h.Write(semicolon)
 	for _, order := range snapshot.Buys {
-		input.WriteString(fmt.Sprintf("B:%s:%d:%d;", order.OrderID, order.LimitPrice, order.Sequence))
+		writeChecksumOrder(h, "B:", order)
 	}
 	for _, order := range snapshot.Sells {
-		input.WriteString(fmt.Sprintf("S:%s:%d:%d;", order.OrderID, order.LimitPrice, order.Sequence))
+		writeChecksumOrder(h, "S:", order)
 	}
-	sum := sha256.Sum256([]byte(input.String()))
-	return hex.EncodeToString(sum[:])
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum)
+}
+
+var semicolon = []byte(";")
+var colon = []byte(":")
+
+func writeChecksumField(h hash.Hash, s string) {
+	h.Write([]byte(s))
+}
+
+func writeChecksumInt(h hash.Hash, v int64) {
+	h.Write(strconv.AppendInt(nil, v, 10))
+}
+
+func writeChecksumOrder(h hash.Hash, prefix string, order SnapshotOrder) {
+	writeChecksumField(h, prefix)
+	writeChecksumField(h, order.OrderID)
+	h.Write(colon)
+	writeChecksumInt(h, order.LimitPrice)
+	h.Write(colon)
+	writeChecksumInt(h, order.Sequence)
+	h.Write(semicolon)
 }

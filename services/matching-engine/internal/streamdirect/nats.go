@@ -116,7 +116,13 @@ func (s *NatsCommandSource) Fetch(_ context.Context, batchSize int, timeout time
 		if err == nats.ErrTimeout {
 			return nil, nil
 		}
-		s.sub = nil
+		// Only drop the subscription when it is no longer usable (invalid or
+		// the underlying consumer is gone); transient errors like a closed or
+		// reconnecting connection resolve on their own once the client
+		// reconnects, and the same subscription remains valid to Fetch from.
+		if errors.Is(err, nats.ErrBadSubscription) || errors.Is(err, nats.ErrConsumerNotFound) {
+			s.sub = nil
+		}
 		return nil, err
 	}
 	deliveries := make([]CommandDelivery, 0, len(msgs))

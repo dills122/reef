@@ -111,6 +111,8 @@ class PlatformNettyHotPathServer(
                 )
                 delegate.handleHotPathRequestAsync(hotPathRequest)
             } catch (ex: Exception) {
+                System.err.println("platform-runtime hot-path request failed: ${ex.javaClass.name}: ${ex.message}")
+                ex.printStackTrace()
                 java.util.concurrent.CompletableFuture.completedFuture(
                     PlatformHotPathResponse(500, JsonCodec.writeObject("error" to "runtime unavailable", "message" to (ex.message ?: "unknown")))
                 )
@@ -135,6 +137,8 @@ class PlatformNettyHotPathServer(
                 ctx.close()
                 return
             }
+            System.err.println("platform-runtime hot-path channel error: ${cause.javaClass.name}: ${cause.message}")
+            cause.printStackTrace()
             val response = if (cause is TooLongFrameException) {
                 PlatformHotPathResponse(413, JsonCodec.writeObject("error" to "request body too large"))
             } else {

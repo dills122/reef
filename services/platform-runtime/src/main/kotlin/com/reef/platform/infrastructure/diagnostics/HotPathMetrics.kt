@@ -9,7 +9,7 @@ object HotPathMetrics {
     private val stats = ConcurrentHashMap<String, PhaseStats>()
     private val resetAt = AtomicLong(System.currentTimeMillis())
 
-    fun <T> time(phase: String, block: () -> T): T {
+    inline fun <T> time(phase: String, block: () -> T): T {
         val started = System.nanoTime()
         try {
             return block()
