@@ -28,8 +28,14 @@ type WorkerReport = {
   ticks: number;
   actions: number;
   lateTicks: number;
+  outputBytes: number;
   elapsedMs: number;
+  setupMs: number;
   tickLatency: TickStats;
+  queue: {
+    maxDepth: number;
+    staleTicksDropped: number;
+  };
   memoryUsage: Record<string, number>;
 };
 
@@ -62,6 +68,7 @@ async function runRunner() {
     },
     { bots: 0, ticks: 0, actions: 0, lateTicks: 0 },
   );
+  const outputBytes = reports.reduce((total, report) => total + report.outputBytes, 0);
   const tickLatency = mergeTickStats(reports.map((report) => report.tickLatency));
   const report = {
     runnerId: config.runnerId,
@@ -70,12 +77,21 @@ async function runRunner() {
     workers: config.workers,
     botsPerWorker: config.botsPerWorker,
     elapsedMs,
-    totals,
+    setupMs: Math.max(0, ...reports.map((workerReport) => workerReport.setupMs)),
+    totals: {
+      ...totals,
+      outputBytes,
+      maxQueueDepth: Math.max(0, ...reports.map((workerReport) => workerReport.queue.maxDepth)),
+    },
     throughput: {
       ticksPerSecond: rate(totals.ticks, elapsedMs),
       actionsPerSecond: rate(totals.actions, elapsedMs),
     },
     tickLatency,
+    queue: {
+      maxDepth: Math.max(0, ...reports.map((workerReport) => workerReport.queue.maxDepth)),
+      staleTicksDropped: 0,
+    },
     memoryUsage: Deno.memoryUsage(),
     workerReports: reports,
   };
@@ -100,10 +116,13 @@ function runBenchWorker(workerUrl: URL, config: WorkerConfig): Promise<WorkerRep
 function runWorker() {
   self.onmessage = async (event: MessageEvent<WorkerConfig>) => {
     const config = event.data;
+    const setupStartedAt = performance.now();
     const bots = await createBots(config);
+    const setupMs = performance.now() - setupStartedAt;
     const startedAt = performance.now();
     const tickLatency = emptyTickStats();
     let actions = 0;
+    let outputBytes = 0;
 
     for (let tick = 0; tick < config.ticksPerBot; tick += 1) {
       const snapshot = createSnapshot(tick);
@@ -113,6 +132,7 @@ function runWorker() {
         const elapsedMs = performance.now() - tickStartedAt;
         recordTick(tickLatency, elapsedMs, config.tickDeadlineMs);
         actions += proposed.length;
+        outputBytes += JSON.stringify(proposed).length;
       }
     }
 
@@ -124,8 +144,14 @@ function runWorker() {
       ticks: bots.length * config.ticksPerBot,
       actions,
       lateTicks: tickLatency.late,
+      outputBytes,
       elapsedMs,
+      setupMs,
       tickLatency,
+      queue: {
+        maxDepth: 0,
+        staleTicksDropped: 0,
+      },
       memoryUsage: Deno.memoryUsage(),
     };
     self.postMessage(report);

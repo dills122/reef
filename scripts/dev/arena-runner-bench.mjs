@@ -7,6 +7,7 @@ const repoRoot = new URL("../../", import.meta.url).pathname;
 const args = process.argv.slice(2);
 
 const config = {
+  runtime: stringOption("--runtime", "node-worker"),
   runnerProcesses: numberOption("--runner-processes", 1),
   workersPerRunner: numberOption("--workers-per-runner", 2),
   botsPerWorker: numberOption("--bots-per-worker", 4),
@@ -19,20 +20,21 @@ const config = {
   out: stringOption("--out", "/tmp/reef-arena-runner-bench.json"),
 };
 
-const denoPath = findExecutable("deno");
-if (denoPath === undefined) {
-  console.error("Deno is required for arena runner bench but was not found on PATH.");
-  console.error("Install Deno or run this script in the planned Deno runner container.");
+if (!["deno-worker", "node-worker"].includes(config.runtime)) {
+  console.error(`unsupported --runtime=${config.runtime}; expected deno-worker or node-worker`);
   process.exit(2);
 }
 
-const denoVersion = spawnSync(denoPath, ["--version"], { encoding: "utf8" });
+const runtimeExecutable = resolveRuntimeExecutable(config.runtime);
+const runtimeVersion = runtimeExecutable.versionCommand === undefined
+  ? ""
+  : spawnSync(runtimeExecutable.path, runtimeExecutable.versionCommand, { encoding: "utf8" }).stdout.trim();
 const startedAt = performance.now();
 const runnerReports = await Promise.all(
-  Array.from({ length: config.runnerProcesses }, (_, runnerId) => runDenoRunner(denoPath, runnerId)),
+  Array.from({ length: config.runnerProcesses }, (_, runnerId) => runRunnerProcess(runtimeExecutable, runnerId)),
 );
 const elapsedMs = performance.now() - startedAt;
-const report = buildReport({ denoVersion: denoVersion.stdout.trim(), elapsedMs, runnerReports });
+const report = buildReport({ runtimeVersion, elapsedMs, runnerReports });
 
 mkdirSync(dirname(config.out), { recursive: true });
 writeFileSync(config.out, JSON.stringify(report, null, 2));
@@ -42,12 +44,13 @@ console.log(
   `runners=${config.runnerProcesses} workers=${config.runnerProcesses * config.workersPerRunner} bots=${report.totals.bots} ticks=${report.totals.ticks} actions=${report.totals.actions}`,
 );
 console.log(
-  `elapsed=${elapsedMs.toFixed(2)}ms tickRps=${report.throughput.ticksPerSecond.toFixed(2)} actionRps=${report.throughput.actionsPerSecond.toFixed(2)} lateTicks=${report.totals.lateTicks}`,
+  `elapsed=${elapsedMs.toFixed(2)}ms setup=${report.setupMs.toFixed(2)}ms tickRps=${report.throughput.ticksPerSecond.toFixed(2)} actionRps=${report.throughput.actionsPerSecond.toFixed(2)} lateTicks=${report.totals.lateTicks}`,
 );
-console.log(`rssPeakMiB=${(report.memory.rssPeakBytes / 1024 / 1024).toFixed(2)} ses=${config.useSes}`);
+console.log(
+  `rssPeakMiB=${(report.memory.rssPeakBytes / 1024 / 1024).toFixed(2)} outputMiB=${(report.totals.outputBytes / 1024 / 1024).toFixed(2)} ses=${config.useSes} runtime=${config.runtime}`,
+);
 
-async function runDenoRunner(deno, runnerId) {
-  const runnerScript = new URL("./arena-runner-bench-deno.ts", import.meta.url).pathname;
+async function runRunnerProcess(runtimeExecutable, runnerId) {
   const payload = {
     runnerId,
     workers: config.workersPerRunner,
@@ -59,15 +62,10 @@ async function runDenoRunner(deno, runnerId) {
     useSes: config.useSes,
   };
   return new Promise((resolveReport, reject) => {
+    const processStartedAt = performance.now();
     const child = spawn(
-      deno,
-      [
-        "run",
-        "--no-prompt",
-        "--no-config",
-        "--no-lock",
-        runnerScript,
-      ],
+      runtimeExecutable.path,
+      runtimeExecutable.args,
       {
         cwd: repoRoot,
         stdio: ["pipe", "pipe", "pipe"],
@@ -98,19 +96,23 @@ async function runDenoRunner(deno, runnerId) {
     child.on("close", (code) => {
       clearInterval(rssTimer);
       if (code !== 0) {
-        reject(new Error(`Deno runner ${runnerId} exited with code ${code}: ${stderr || stdout}`));
+        reject(new Error(`${config.runtime} runner ${runnerId} exited with code ${code}: ${stderr || stdout}`));
         return;
       }
       const parsed = parseLastJsonLine(stdout);
       if (parsed === undefined) {
-        reject(new Error(`Deno runner ${runnerId} did not emit JSON: ${stderr || stdout}`));
+        reject(new Error(`${config.runtime} runner ${runnerId} did not emit JSON: ${stderr || stdout}`));
         return;
       }
       resolveReport({
         ...parsed,
         process: {
           pid: child.pid,
-          rssPeakBytes: Math.max(0, ...rssSamples.map((sample) => sample.rssBytes)),
+          elapsedMs: performance.now() - processStartedAt,
+          rssPeakBytes: Math.max(
+            Number(parsed.memoryUsage?.rss ?? 0),
+            ...rssSamples.map((sample) => sample.rssBytes),
+          ),
           rssSamples,
         },
       });
@@ -119,32 +121,40 @@ async function runDenoRunner(deno, runnerId) {
   });
 }
 
-function buildReport({ denoVersion, elapsedMs, runnerReports }) {
+function buildReport({ runtimeVersion, elapsedMs, runnerReports }) {
   const totals = runnerReports.reduce(
     (acc, runner) => {
       acc.bots += runner.totals.bots;
       acc.ticks += runner.totals.ticks;
       acc.actions += runner.totals.actions;
       acc.lateTicks += runner.totals.lateTicks;
+      acc.outputBytes += Number(runner.totals.outputBytes ?? 0);
+      acc.maxQueueDepth = Math.max(acc.maxQueueDepth, Number(runner.queue?.maxDepth ?? runner.totals.maxQueueDepth ?? 0));
       return acc;
     },
-    { bots: 0, ticks: 0, actions: 0, lateTicks: 0 },
+    { bots: 0, ticks: 0, actions: 0, lateTicks: 0, outputBytes: 0, maxQueueDepth: 0 },
   );
   return {
     generatedAt: new Date().toISOString(),
     config,
     runtime: {
       driver: "bun-or-node",
-      runner: "deno-worker",
-      denoVersion,
+      runner: config.runtime,
+      version: runtimeVersion,
     },
     elapsedMs,
+    setupMs: max(runnerReports.map((runner) => Number(runner.setupMs ?? 0))),
+    runnerProcessElapsedMs: max(runnerReports.map((runner) => Number(runner.process?.elapsedMs ?? 0))),
     totals,
     throughput: {
       ticksPerSecond: rate(totals.ticks, elapsedMs),
       actionsPerSecond: rate(totals.actions, elapsedMs),
     },
     tickLatency: mergeTickStats(runnerReports.map((runner) => runner.tickLatency)),
+    queue: {
+      maxDepth: totals.maxQueueDepth,
+      staleTicksDropped: runnerReports.reduce((total, runner) => total + Number(runner.queue?.staleTicksDropped ?? 0), 0),
+    },
     memory: {
       rssPeakBytes: runnerReports.reduce((total, runner) => total + runner.process.rssPeakBytes, 0),
       largestRunnerRssPeakBytes: Math.max(0, ...runnerReports.map((runner) => runner.process.rssPeakBytes)),
@@ -154,6 +164,35 @@ function buildReport({ denoVersion, elapsedMs, runnerReports }) {
       })),
     },
     runnerReports,
+  };
+}
+
+function resolveRuntimeExecutable(runtime) {
+  if (runtime === "deno-worker") {
+    const denoPath = findExecutable("deno");
+    if (denoPath === undefined) {
+      console.error("Deno is required for --runtime=deno-worker but was not found on PATH.");
+      console.error("Install Deno or run this script in the planned Deno runner container.");
+      process.exit(2);
+    }
+    const runnerScript = new URL("./arena-runner-bench-deno.ts", import.meta.url).pathname;
+    return {
+      path: denoPath,
+      args: ["run", "--no-prompt", "--no-config", "--no-lock", runnerScript],
+      versionCommand: ["--version"],
+    };
+  }
+
+  const nodePath = findExecutable("node");
+  if (nodePath === undefined) {
+    console.error("Node is required for --runtime=node-worker but was not found on PATH.");
+    process.exit(2);
+  }
+  const runnerScript = new URL("./arena-runner-bench-node.mjs", import.meta.url).pathname;
+  return {
+    path: nodePath,
+    args: [runnerScript],
+    versionCommand: ["--version"],
   };
 }
 
@@ -186,6 +225,10 @@ function mergeTickStats(allStats) {
 
 function rate(count, elapsedMs) {
   return elapsedMs > 0 ? count / (elapsedMs / 1000) : 0;
+}
+
+function max(values) {
+  return values.reduce((largest, value) => Math.max(largest, Number(value) || 0), 0);
 }
 
 function parseLastJsonLine(output) {
