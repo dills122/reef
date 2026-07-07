@@ -23,6 +23,9 @@ const config = {
   actorId: stringOption("--actor-id", env("ADMIN_ACTOR_ID", "admin-cli")),
   commandTimeoutMs: numberOption("--command-timeout-ms", 15000),
   commandPollMs: numberOption("--command-poll-ms", 250),
+  projectionDrainTimeoutMs: numberOption("--projection-drain-timeout-ms", 0),
+  projectionDrainPollMs: numberOption("--projection-drain-poll-ms", 500),
+  requireProjectionDrain: args.includes("--require-projection-drain"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
 };
 
@@ -255,7 +258,7 @@ async function collectVenueReadback(botResults) {
     return { mode: config.submitMode, skipped: true };
   }
   const baseUrl = config.venueUrl.replace(/\/$/, "");
-  const availability = await getJson(`${baseUrl}/api/v1/data/availability`);
+  const availability = await waitForDataAvailability(baseUrl);
   const snapshots = [];
   for (const instrumentId of mode.instruments ?? ["AAPL"]) {
     snapshots.push({
@@ -279,9 +282,29 @@ async function collectVenueReadback(botResults) {
     projectionDrained: availability.body?.projections === undefined
       ? false
       : availability.body.projections.every((projection) => Number(projection.lag ?? 0) === 0),
+    projectionDrainRequired: config.requireProjectionDrain,
     snapshots,
     ownOrders,
   };
+}
+
+async function waitForDataAvailability(baseUrl) {
+  const url = `${baseUrl}/api/v1/data/availability`;
+  const deadline = Date.now() + config.projectionDrainTimeoutMs;
+  let latest = await getJson(url);
+  while (config.projectionDrainTimeoutMs > 0 && Date.now() <= deadline && !availabilityDrained(latest)) {
+    await sleep(config.projectionDrainPollMs);
+    latest = await getJson(url);
+  }
+  if (config.requireProjectionDrain && !availabilityDrained(latest)) {
+    throw new Error(`projection drain requirement failed: ${JSON.stringify(latest.body)}`);
+  }
+  return latest;
+}
+
+function availabilityDrained(availability) {
+  const projections = availability.body?.projections;
+  return Array.isArray(projections) && projections.every((projection) => Number(projection.lag ?? 0) === 0);
 }
 
 async function persistArenaResults(report) {

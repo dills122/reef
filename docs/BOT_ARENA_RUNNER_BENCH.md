@@ -659,6 +659,7 @@ Useful direct command:
 bun run arena:local-tick-run --submit-mode=live \
   --venue-url=http://127.0.0.1:8080 \
   --seed-reference \
+  --projection-drain-timeout-ms=5000 \
   --compartment=ses \
   --out=/tmp/reef-arena-local-tick-run-live.json
 ```
@@ -669,6 +670,8 @@ The same report now includes:
 - per-tick `submission` records
 - terminal command status bodies
 - `venueReadback.availability`
+- optional projection-drain wait/fail behavior through
+  `--projection-drain-timeout-ms` and `--require-projection-drain`
 - `venueReadback.ownOrders`
 - `venueReadback.snapshots`
 - freeze events for bot-caused tick or command failures
