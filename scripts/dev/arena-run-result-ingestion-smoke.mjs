@@ -19,6 +19,7 @@ const runId = env("DEV_ARENA_RUN_RESULT_SMOKE_RUN_ID", `arena-result-run-${suffi
 const modeId = env("DEV_ARENA_RUN_RESULT_SMOKE_MODE_ID", "hosted-sim-smoke");
 const scoringPolicyVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_SCORING_POLICY_VERSION", "score-v1");
 const finalEquity = Number(env("DEV_ARENA_RUN_RESULT_SMOKE_FINAL_EQUITY", "1025000"));
+const replacementFinalEquity = finalEquity + 1500;
 
 async function request(method, path, payload = undefined) {
   const response = await requestJson(`${runtimeUrl}${path}`, method, payload);
@@ -136,6 +137,23 @@ if (ingest.status !== 0) {
   throw new Error(`arena result ingestion failed (${ingest.status}): ${ingest.stdout}${ingest.stderr}`);
 }
 
+const retryIngest = spawnSync("node", [
+  "scripts/dev/arena-ingest-bot-run-result.mjs",
+  `--summary=${summaryPath}`,
+  `--bot-id=${botId}`,
+  `--version-id=${versionId}`,
+  `--scoring-policy-version=${scoringPolicyVersion}`,
+  `--final-equity=${replacementFinalEquity}`,
+  "--realized-pnl=26500",
+  "--max-drawdown=750",
+  `--runtime-url=${runtimeUrl}`,
+  `--actor-id=${actorId}`,
+  `--correlation-id=arena-result-smoke-retry-${suffix}`,
+], { cwd: repoRoot, encoding: "utf8" });
+if (retryIngest.status !== 0) {
+  throw new Error(`arena result retry ingestion failed (${retryIngest.status}): ${retryIngest.stdout}${retryIngest.stderr}`);
+}
+
 const rawResults = await expectOk(
   "GET",
   `/internal/admin/arena/run-bot-results?runId=${encodeURIComponent(runId)}&actorId=${encodeURIComponent(actorId)}`,
@@ -144,8 +162,14 @@ const rawResult = rawResults.json.results?.find((candidate) => candidate.botId =
 if (!rawResult) {
   throw new Error(`expected raw result for ${runId}/${botId}/${versionId}, got ${rawResults.text}`);
 }
-if (rawResult.finalEquity !== finalEquity) {
-  throw new Error(`expected raw finalEquity ${finalEquity}, got ${rawResult.finalEquity}`);
+if (rawResults.json.results?.filter((candidate) => candidate.botId === botId && candidate.versionId === versionId).length !== 1) {
+  throw new Error(`expected one replaced raw result for ${runId}/${botId}/${versionId}, got ${rawResults.text}`);
+}
+if (rawResult.finalEquity !== replacementFinalEquity) {
+  throw new Error(`expected raw finalEquity ${replacementFinalEquity}, got ${rawResult.finalEquity}`);
+}
+if (rawResult.realizedPnl !== 26500 || rawResult.maxDrawdown !== 750) {
+  throw new Error(`expected retry result metrics to replace first ingest, got ${rawResults.text}`);
 }
 
 const leaderboard = await expectOk(
@@ -156,12 +180,12 @@ const entry = leaderboard.json.entries?.find((candidate) => candidate.runId === 
 if (!entry) {
   throw new Error(`expected leaderboard entry for ${runId}/${botId}, got ${leaderboard.text}`);
 }
-if (entry.finalEquity !== finalEquity) {
-  throw new Error(`expected finalEquity ${finalEquity}, got ${entry.finalEquity}`);
+if (entry.finalEquity !== replacementFinalEquity) {
+  throw new Error(`expected finalEquity ${replacementFinalEquity}, got ${entry.finalEquity}`);
 }
 
 console.log("arena run result ingestion smoke passed");
-console.log(JSON.stringify({ botId, versionId, runId, modeId, scoringPolicyVersion, finalEquity }, null, 2));
+console.log(JSON.stringify({ botId, versionId, runId, modeId, scoringPolicyVersion, finalEquity: replacementFinalEquity }, null, 2));
 
 function requestJson(url, method, payload = undefined) {
   const parsed = new URL(url);

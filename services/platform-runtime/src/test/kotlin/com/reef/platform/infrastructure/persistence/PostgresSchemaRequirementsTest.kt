@@ -190,6 +190,27 @@ class PostgresSchemaRequirementsTest {
                     )
                 )
         )
+        assertEquals(
+            setOf(
+                "arena.run_bot_results.run_id:text",
+                "arena.run_bot_results.bot_id:text",
+                "arena.run_bot_results.version_id:text",
+                "arena.run_bot_results.scoring_policy_version:text",
+                "arena.run_bot_results.final_equity:bigint",
+                "arena.run_bot_results.realized_pnl:bigint",
+                "arena.run_bot_results.max_drawdown:bigint",
+                "arena.run_bot_results.actions_proposed:integer",
+                "arena.run_bot_results.order_actions_proposed:integer",
+                "arena.run_bot_results.data_calls:integer",
+                "arena.run_bot_results.signals_generated:integer",
+                "arena.run_bot_results.disqualified:boolean",
+                "arena.run_bot_results.created_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "arena.run_bot_results" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
     }
 
     @Test

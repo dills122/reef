@@ -115,13 +115,14 @@ Implementation checkpoint:
 - Arena run records reference approved bot versions, scenario ID, seed, and policy version before execution starts.
 - Arena runtime config descriptors record OpenBao secret paths and required keys without storing secret values.
 - Arena bot version risk checks can reject exact bot/version commands before venue acceptance when the version is not approved or active.
+- Arena run result ingestion writes `arena.run_bot_results` idempotently by `(runId, botId, versionId, scoringPolicyVersion)`, replaces retry payloads, excludes disqualified results from leaderboards, and is covered by the local `make dev-smoke-arena-run-results` gate.
 
 Remaining work before this becomes a production control plane:
 
-- keep `PostgresArenaBotRegistryStore` validation coverage in the schema-placement CI job as arena schema evolves
+- keep `PostgresArenaBotRegistryStore` validation coverage in the schema-placement CI job as arena schema evolves; current coverage includes the full `arena.run_bot_results` ingestion shape
 - keep `make dev-smoke-arena-bot-risk` as the local stack gate for bot-version risk controls; `make test-bot-sdk` syntax-checks the smoke script
 - wire the platform-owned `OpenBao` provider into runner preflight using `resolveBotRuntimeConfigV1`
-- extend result ingestion smoke to use a real hosted bot test summary once score calculation policy is accepted
+- extend result ingestion smoke from the current synthetic hosted-summary fixture to a real hosted bot test summary once score calculation policy is accepted
 
 Local arena risk smoke:
 
