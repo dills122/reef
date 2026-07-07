@@ -93,6 +93,7 @@ func startNatsRunner(parent context.Context, service *app.Service, config Runtim
 			PollInterval:    config.PollInterval,
 			CommandStream:   config.CommandStream,
 			EventStreamName: config.EventStream,
+			Source:          "jetstream",
 		})
 		runner.processors = append(runner.processors, processor)
 		runner.wg.Add(1)
@@ -155,6 +156,7 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 			PollInterval:    config.PollInterval,
 			CommandStream:   config.CommandStream,
 			EventStreamName: config.EventStream,
+			Source:          "redpanda",
 		})
 		runner.processors = append(runner.processors, processor)
 		runner.wg.Add(1)

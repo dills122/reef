@@ -42,7 +42,15 @@ class VenueEventBatchMaterializerTest {
         assertEquals(2, outcome.partition)
         assertEquals(100L, outcome.streamSequence)
         assertEquals("accepted", outcome.resultStatus)
-        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().materialized)
+        val stats = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(1, stats.materialized)
+        assertEquals(50L, stats.lastFetchedStreamSequence)
+        assertEquals(50L, stats.lastMaterializedStreamSequence)
+        assertEquals("batch-1", stats.lastMaterializedBatchId)
+        assertEquals(2, stats.lastMaterializedPartition)
+        assertEquals(100L, stats.lastMaterializedFirstSequence)
+        assertEquals(100L, stats.lastMaterializedLastSequence)
+        assertEquals(0L, stats.materializerLag)
     }
 
     @Test
@@ -230,7 +238,13 @@ class VenueEventBatchMaterializerTest {
         val outcomeAfterCrash = persistence.canonicalCommandOutcome("cmd-1")
         assertNotNull(outcomeAfterCrash)
         assertEquals("batch-offset-crash-1", outcomeAfterCrash.batchId)
-        assertEquals(1, VenueEventBatchMaterializerMetrics.snapshot().ackFailed)
+        val statsAfterCrash = VenueEventBatchMaterializerMetrics.snapshot()
+        assertEquals(1, statsAfterCrash.ackFailed)
+        assertEquals(1, statsAfterCrash.materialized)
+        assertEquals("batch-offset-crash-1", statsAfterCrash.lastMaterializedBatchId)
+        assertEquals(70L, statsAfterCrash.lastFetchedStreamSequence)
+        assertEquals(70L, statsAfterCrash.lastMaterializedStreamSequence)
+        assertEquals(0L, statsAfterCrash.materializerLag)
 
         // "Restart": a brand new materializer instance over the same durable
         // persistence receives the redelivered (still-unacked) batch and must not

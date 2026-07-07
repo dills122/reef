@@ -4168,7 +4168,13 @@ class PlatformHttpServer(
                 "ackFailed" to stats.ackFailed,
                 "unsupported" to stats.unsupported,
                 "emptyPolls" to stats.emptyPolls,
+                "lastFetchedStreamSequence" to stats.lastFetchedStreamSequence,
                 "lastMaterializedStreamSequence" to stats.lastMaterializedStreamSequence,
+                "lastMaterializedBatchId" to stats.lastMaterializedBatchId,
+                "lastMaterializedPartition" to stats.lastMaterializedPartition,
+                "lastMaterializedFirstSequence" to stats.lastMaterializedFirstSequence,
+                "lastMaterializedLastSequence" to stats.lastMaterializedLastSequence,
+                "materializerLag" to stats.materializerLag,
                 "lastMaterializedAt" to stats.lastMaterializedAt,
                 "lastFailedAt" to stats.lastFailedAt,
                 "lastError" to stats.lastError
