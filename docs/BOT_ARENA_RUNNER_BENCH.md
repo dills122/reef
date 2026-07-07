@@ -455,3 +455,62 @@ Takeaway: the outer container boundary is viable, but 1 CPU is close to the
 initial 25-50 ms p95 budget when several real hosted bot cases run concurrently.
 For hosted/internal Phase 1, use 2 CPU / 512 MiB as the first comfortable runner
 container profile, then tune down only with sustained evidence.
+
+## Pooled Runner Prototype
+
+The next prototype is the first arena-callable runner shape:
+
+```bash
+bun run arena:runner-pool-smoke
+```
+
+It uses a small worker-process pool and a JSON-line protocol. Each worker can:
+
+- `loadBot`: load and cache a hosted artifact as a guarded `BotClass`
+- `runScenario`: run a fixture/scenario through the cached bot class
+- `freezeBot`: unload a bot from the worker
+- `heartbeat`: return loaded bot count and resource usage
+- `shutdown`: stop the worker
+
+This keeps the protocol narrow enough to put the same boundary behind a runner
+container later. The smoke driver currently loads each selected bot into every
+worker so jobs can be round-robin dispatched without placement logic. Placement
+can become smarter once the orchestrator owns bot assignment.
+
+Useful commands:
+
+```bash
+bun scripts/dev/arena-runner-pool-smoke.mjs \
+  --workers=2 \
+  --bots=simple,lifecycle,refreshing,multi-symbol \
+  --iterations=10 \
+  --concurrency=4 \
+  --compartment=vm \
+  --out=/tmp/reef-arena-runner-pool-smoke-vm.json
+```
+
+```bash
+bun scripts/dev/arena-runner-pool-smoke.mjs \
+  --workers=2 \
+  --bots=simple,lifecycle,refreshing,multi-symbol,technical \
+  --iterations=10 \
+  --concurrency=4 \
+  --compartment=ses \
+  --out=/tmp/reef-arena-runner-pool-smoke-ses-technical.json
+```
+
+Initial pool evidence:
+
+- tiny smoke, 1 worker / 1 bot / 1 run: p95 2.91 ms, 0 failed
+- VM pool, 2 workers / 4 bots / 40 runs: load 8.09 ms, run 8.86 ms,
+  p95 2.98 ms, 0 failed
+- SES pool, 2 workers / 4 bots / 40 runs: load 9.06 ms, run 8.87 ms,
+  p95 3.10 ms, 0 failed
+- SES pool with technical package bot, 2 workers / 5 bots / 50 runs:
+  load 15.50 ms, run 12.14 ms, p95 3.14 ms, 0 failed
+
+Takeaway: loading hosted artifacts once per worker and dispatching cached
+scenario jobs is materially cheaper than repeatedly loading artifacts. This is
+the right shape for the first arena orchestrator integration: orchestrator owns
+policy and venue transport; runner workers own isolated bot execution and return
+proposed actions, venue command drafts, summaries, and resource reports.

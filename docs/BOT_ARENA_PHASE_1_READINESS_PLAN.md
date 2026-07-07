@@ -458,6 +458,9 @@ measures Deno runner processes, Deno workers, synthetic bot ticks, RSS, tick
 latency, and proposed-action throughput without involving the Reef venue API.
 The same doc also tracks the follow-on hosted-bot bench that uses real Bot SDK
 examples and hosted artifacts while still keeping venue transport out of scope.
+The first pooled runner smoke now adds a JSON-line worker protocol with
+`loadBot`, `runScenario`, `freezeBot`, `heartbeat`, and `shutdown`; that protocol
+is the preferred handoff boundary for the arena orchestrator.
 
 For a rough first sizing model, a bot at 500 actions per second with 5 actions
 per tick requires 100 ticks per second. Ten bots at that rate means 1,000
@@ -511,15 +514,16 @@ and produce all of:
 
 ## Recommended Work Order
 
-1. Add arena package skeleton under `services/simulator/internal/arena`.
-2. Add the arena mode config and built-in bot catalog shape.
-3. Add local custom bot fixtures.
-4. Add `cmd/arena-local-run` plus `scripts/dev/arena-local-run.mjs`.
-5. Add enforcement policy and run-freeze report fields.
-6. Add scoring v0 and report shape.
-7. Wire real run-result ingestion from the arena report.
-8. Add `make dev-smoke-bot-arena-local`.
-9. Add drift/replay checks once the first smoke report is stable.
+1. Promote the pooled runner protocol into the arena package boundary.
+2. Add arena package skeleton under `services/simulator/internal/arena`.
+3. Add the arena mode config and built-in bot catalog shape.
+4. Add local custom bot fixtures.
+5. Add `cmd/arena-local-run` plus `scripts/dev/arena-local-run.mjs`.
+6. Add enforcement policy and run-freeze report fields.
+7. Add scoring v0 and report shape.
+8. Wire real run-result ingestion from the arena report.
+9. Add `make dev-smoke-bot-arena-local`.
+10. Add drift/replay checks once the first smoke report is stable.
 
 ## Follow-Up After Phase 1
 
