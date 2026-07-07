@@ -86,7 +86,8 @@ try {
   }
 
   const botResults = scoreBots(sessionReports, enforcementEvents);
-  const report = buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs: performance.now() - startedAt });
+  const venueReadback = await collectVenueReadback(botResults);
+  const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
   mkdirSync(dirname(config.out), { recursive: true });
   writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`arena local tick run complete: ${resolve(config.out)}`);
@@ -184,7 +185,7 @@ function scoreBots(sessionReports, enforcementEvents) {
   });
 }
 
-function buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs }) {
+function buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs }) {
   const tickResults = sessionReports.flatMap((session) => session.ticks);
   const totals = tickResults.reduce(
     (acc, tick) => {
@@ -216,6 +217,15 @@ function buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs 
     status: enforcementEvents.some((event) => event.decision === "freeze") ? "completed_with_freezes" : "completed",
     elapsedMs,
     totals,
+    commandAccounting: {
+      draftCommands: totals.venueCommands,
+      submittedCommands: totals.submittedCommands,
+      terminalCommands: totals.completedCommands + totals.failedCommands,
+      accountingGap: config.submitMode === "live"
+        ? totals.venueCommands - totals.submittedCommands
+        : 0,
+    },
+    venueReadback,
     enforcementEvents,
     botResults,
     leaderboard: botResults
@@ -224,6 +234,40 @@ function buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs 
       .sort((left, right) => Number(left.disqualified) - Number(right.disqualified) || right.score - left.score || left.botId.localeCompare(right.botId))
       .map((result, index) => ({ rank: index + 1, ...result })),
     sessionReports,
+  };
+}
+
+async function collectVenueReadback(botResults) {
+  if (config.submitMode !== "live") {
+    return { mode: config.submitMode, skipped: true };
+  }
+  const baseUrl = config.venueUrl.replace(/\/$/, "");
+  const availability = await getJson(`${baseUrl}/api/v1/data/availability`);
+  const snapshots = [];
+  for (const instrumentId of mode.instruments ?? ["AAPL"]) {
+    snapshots.push({
+      instrumentId,
+      ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`)),
+    });
+  }
+  const ownOrders = [];
+  for (const result of botResults) {
+    ownOrders.push({
+      botId: result.botId,
+      participantId: `participant-${result.runnerKey}`,
+      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`),
+      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`),
+    });
+  }
+  return {
+    mode: config.submitMode,
+    skipped: false,
+    availability,
+    projectionDrained: availability.body?.projections === undefined
+      ? false
+      : availability.body.projections.every((projection) => Number(projection.lag ?? 0) === 0),
+    snapshots,
+    ownOrders,
   };
 }
 
