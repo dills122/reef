@@ -387,35 +387,102 @@ Expected proof:
 - full account ledger, buying power, or settlement expansion
 - broad tournament/season mechanics
 
-## Runner Isolation Discussion
+## Runner Isolation Direction
 
-This section is intentionally not locked yet.
+Phase 1 should avoid one long-lived Docker container per bot. Twenty extra local
+containers would add operational noise before the arena protocol is stable, and
+the per-bot memory overhead is not needed for the first local proof.
 
-Phase 1 should avoid one long-lived Docker container per bot if possible. Twenty
-extra local containers would add operational noise before the arena protocol is
-stable.
+The preferred near-term direction is a small pool of TypeScript-capable runners:
 
-Current preferred direction for discussion:
+1. The arena orchestrator talks to runners through a stable bot-runtime protocol.
+2. Each runner hosts multiple bots using Deno workers and SES compartments where
+   practical.
+3. The runner receives only arena snapshots, bot config, and deterministic seed
+   material.
+4. The runner returns proposed actions, bot logs, resource counters, and
+   heartbeat/status reports.
+5. The orchestrator owns venue transport, risk/enforcement, scoring, command
+   status waiting, persistence, and lifecycle decisions.
+6. Hosted/public phases can put the same runner protocol behind one stronger
+   outer container, gVisor sandbox, or microVM boundary per runner group without
+   rewriting arena orchestration.
 
-1. Local Phase 1 uses hosted worker child processes or a small worker-process
-   pool.
-2. The orchestrator talks to workers through a stable bot-runtime protocol.
-3. The worker loads built artifacts, runs SES/hosted execution, and returns
-   proposed actions/resource reports.
-4. The orchestrator owns venue transport, risk/enforcement, scoring, and run
-   persistence.
-5. Hosted/public phases can put the same worker protocol behind a stronger
-   container or microVM boundary without rewriting arena orchestration.
+The worker should not receive direct network, filesystem, environment,
+subprocess, credential, or venue API capability. Deno's permission model is the
+preferred local runtime guardrail for TypeScript, while SES compartments harden
+the JavaScript object-capability surface inside the runner. These are useful
+defense layers, but not a full replacement for an outer sandbox when bots become
+public or hostile.
 
-Open points to resolve before implementation:
+Initial grouping target:
 
-- whether Phase 1 workers are one process per bot, a fixed process pool, or a
-  hybrid
-- how often workers are recycled to clear retained bot state
-- what memory/CPU/output limits can be enforced locally without making dev setup
-  brittle
-- whether house bots can run in the same worker class as competitor bots
-- what outer boundary is required before public submissions are enabled
+- local dev: 1 runner process with 2-4 Deno workers
+- local smoke: 2 runner processes with 2-4 workers each
+- hosted internal: fixed runner container pool, each container hosting multiple
+  workers and no direct network except the parent-owned control channel
+- public/custom future: same protocol behind gVisor or equivalent outer sandbox
+
+Each worker can host more than one low-rate bot, but the scheduler should treat
+work as per-bot tick jobs rather than one endless loop per bot. This lets the
+runner enforce per-bot time budgets, reject late tick results, recycle workers
+after a fixed number of ticks/runs, and isolate overloaded bots from the rest of
+the pool.
+
+### Runner Throughput Guardrails
+
+The arena should assume that bot runtime capacity is finite and explicitly
+metered. A target like 500 proposed actions per second is feasible only if the
+bot contract stays narrow and the runner does not perform venue I/O itself.
+
+Initial guardrails:
+
+- `maxTickWallTimeMs`: default 25-50 ms for competitor bots
+- `maxTickCpuTimeMs`: tracked when the runtime exposes it
+- `maxActionsPerTick`: still enforced by arena policy even if the runner is fast
+- `maxQueuedTicksPerBot`: 1, with stale ticks dropped or marked late
+- `maxRunnerQueueDepth`: freeze or shed lowest-priority custom bots before house
+  market makers
+- `maxResultBytesPerTick`: cap action/log output to prevent memory pressure
+- `workerRecycleTicks`: recycle workers after N ticks or after any policy breach
+- `runnerHeartbeatMs`: missing heartbeat freezes assigned bots for that run
+
+The scheduler should reserve capacity for house market makers and health-monitor
+bots. Custom bots should consume the remaining budget. If a runner saturates, the
+correct first response is not to let latency compound; the arena should mark
+late ticks, drop stale work, and freeze bots that repeatedly exceed their budget.
+
+For a rough first sizing model, a bot at 500 actions per second with 5 actions
+per tick requires 100 ticks per second. Ten bots at that rate means 1,000
+bot-ticks per second before validation and command submission. That is plausible
+only for simple strategies, batched snapshots, bounded output, and a runner pool
+with backpressure. It should not be the Phase 1 default.
+
+Phase 1 target should be much smaller and deterministic:
+
+- 10-20 bots total
+- 1-10 ticks per second per bot
+- 3-10 actions per tick depending on bot class
+- runner utilization and late-tick counts recorded in every arena report
+
+### Parked Rust/WASM SDK Direction
+
+The preferred long-term competitive bot lane is still Rust compiled to WASM,
+with TinyGo as a likely second SDK once the ABI is stable. This is parked for
+Phase 1 implementation but should shape the runner protocol now.
+
+The important contract is language-neutral:
+
+```text
+init(config) -> bot_state
+on_tick(snapshot, bot_state) -> tick_result
+```
+
+Rust/WASM remains attractive because it gives the arena cheap isolated artifacts,
+bounded memory, deterministic host calls, no direct network or filesystem by
+default, stable artifact hashing, and a clean ban/replay/audit model. The
+TypeScript runner should therefore behave like one implementation of the same
+bot ABI, not like the permanent platform contract.
 
 ## Readiness Criteria
 
