@@ -20,17 +20,18 @@ import (
 const defaultScenarioStart = "2026-03-14T18:00:00Z"
 
 type config struct {
-	scenarioPath  string
-	scenarioRunID string
-	start         string
-	baseURL       string
-	live          bool
-	assertions    bool
-	seedReference bool
-	timeout       time.Duration
-	statusTimeout time.Duration
-	reportOut     string
-	pretty        bool
+	scenarioPath              string
+	scenarioRunID             string
+	start                     string
+	baseURL                   string
+	live                      bool
+	assertions                bool
+	settlementFactsReportPath string
+	seedReference             bool
+	timeout                   time.Duration
+	statusTimeout             time.Duration
+	reportOut                 string
+	pretty                    bool
 }
 
 type smokeReport struct {
@@ -137,6 +138,55 @@ type ownOrderBody struct {
 	Status  string `json:"status"`
 }
 
+type settlementFactsReport struct {
+	ScenarioRunID string                 `json:"scenarioRunId"`
+	Obligations   []settlementObligation `json:"obligations"`
+	Breaks        []settlementBreak      `json:"breaks"`
+	Repairs       []settlementRepair     `json:"repairs"`
+	Resolutions   []settlementResolution `json:"resolutions"`
+}
+
+type settlementObligation struct {
+	SettlementObligationID string `json:"settlementObligationId"`
+	ScenarioRunID          string `json:"scenarioRunId"`
+	CorrelationID          string `json:"correlationId"`
+	CausationID            string `json:"causationId"`
+	TradeID                string `json:"tradeId"`
+	State                  string `json:"state"`
+}
+
+type settlementBreak struct {
+	SettlementBreakID      string `json:"settlementBreakId"`
+	SettlementObligationID string `json:"settlementObligationId"`
+	ScenarioRunID          string `json:"scenarioRunId"`
+	CorrelationID          string `json:"correlationId"`
+	CausationID            string `json:"causationId"`
+	Reason                 string `json:"reason"`
+	State                  string `json:"state"`
+}
+
+type settlementRepair struct {
+	SettlementRepairID     string `json:"settlementRepairId"`
+	SettlementBreakID      string `json:"settlementBreakId"`
+	SettlementObligationID string `json:"settlementObligationId"`
+	ScenarioRunID          string `json:"scenarioRunId"`
+	CorrelationID          string `json:"correlationId"`
+	CausationID            string `json:"causationId"`
+	RepairAction           string `json:"repairAction"`
+}
+
+type settlementResolution struct {
+	SettlementResolutionID string `json:"settlementResolutionId"`
+	SettlementObligationID string `json:"settlementObligationId"`
+	SettlementBreakID      string `json:"settlementBreakId"`
+	SettlementRepairID     string `json:"settlementRepairId"`
+	ScenarioRunID          string `json:"scenarioRunId"`
+	CorrelationID          string `json:"correlationId"`
+	CausationID            string `json:"causationId"`
+	SettlementState        string `json:"settlementState"`
+	ExceptionState         string `json:"exceptionState"`
+}
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout, http.DefaultClient); err != nil {
 		fmt.Fprintf(os.Stderr, "scenario-smoke error: %v\n", err)
@@ -167,6 +217,9 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 			client = http.DefaultClient
 		}
 		runLive(cfg, client, &report)
+		if cfg.settlementFactsReportPath != "" {
+			attachSettlementFactAssertions(cfg, &report)
+		}
 		report.Pass = len(report.Errors) == 0
 	}
 	body, err := encodeReport(report, cfg.pretty)
@@ -203,6 +256,7 @@ func parseConfig(args []string) (config, error) {
 	fs.StringVar(&cfg.baseURL, "base-url", cfg.baseURL, "platform runtime base URL for live mode")
 	fs.BoolVar(&cfg.live, "live", false, "send executable scenario requests to base-url")
 	fs.BoolVar(&cfg.assertions, "assertions", false, "run first-wave live scenario assertions after command submission")
+	fs.StringVar(&cfg.settlementFactsReportPath, "settlement-facts-report", "", "optional P2 settlement assertion JSON artifact")
 	fs.BoolVar(&cfg.seedReference, "seed-reference", cfg.seedReference, "seed scenario reference/auth data in live mode")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP request timeout")
 	fs.DurationVar(&cfg.statusTimeout, "status-timeout", cfg.statusTimeout, "command status polling timeout")
@@ -216,6 +270,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if cfg.assertions && !cfg.live {
 		return cfg, errors.New("--assertions requires --live")
+	}
+	if cfg.settlementFactsReportPath != "" && !cfg.assertions {
+		return cfg, errors.New("--settlement-facts-report requires --assertions")
 	}
 	if cfg.timeout <= 0 {
 		return cfg, errors.New("timeout must be > 0")
@@ -391,6 +448,171 @@ func runAssertions(cfg config, client *http.Client, report *smokeReport) {
 	if report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
 		runP1OwnOrderAssertions(cfg, client, report)
 	}
+}
+
+func attachSettlementFactAssertions(cfg config, report *smokeReport) {
+	body, err := os.ReadFile(cfg.settlementFactsReportPath)
+	read := assertionRead{
+		Endpoint:       cfg.settlementFactsReportPath,
+		SourceType:     "settlement assertion artifact",
+		FreshnessModel: "artifact snapshot",
+		Body:           strings.TrimSpace(string(body)),
+	}
+	if err != nil {
+		read.StatusCode = 0
+		report.Reads = append(report.Reads, read)
+		failAssertion(report, "p2-settlement-facts-readable", "settlement_fact_read", "readable settlement facts report", err.Error(), cfg.settlementFactsReportPath)
+		return
+	}
+	read.StatusCode = 200
+	report.Reads = append(report.Reads, read)
+	var facts settlementFactsReport
+	if err := json.Unmarshal(body, &facts); err != nil {
+		failAssertion(report, "p2-settlement-facts-readable", "settlement_fact_read", "valid settlement facts JSON", err.Error(), cfg.settlementFactsReportPath)
+		return
+	}
+	if report.PathID != "P2_SETTLEMENT_BREAK_REPAIR" {
+		passAssertion(report, "settlement-facts-attached", "settlement facts artifact attached", "attached", cfg.settlementFactsReportPath)
+		return
+	}
+	assertP2SettlementFacts(report, facts, cfg.settlementFactsReportPath)
+}
+
+func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, proofSource string) {
+	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
+	assertCount(report, "p2-one-cash-leg-break", "settlement_fact_count", len(facts.Breaks), 1, proofSource)
+	assertCount(report, "p2-one-manual-repair", "settlement_fact_count", len(facts.Repairs), 1, proofSource)
+	assertCount(report, "p2-one-settlement-resolution", "settlement_fact_count", len(facts.Resolutions), 1, proofSource)
+	if facts.ScenarioRunID == report.ScenarioRunID {
+		passAssertion(report, "p2-settlement-scenario-run", report.ScenarioRunID, facts.ScenarioRunID, proofSource)
+	} else {
+		failAssertion(report, "p2-settlement-scenario-run", "settlement_fact_scope", report.ScenarioRunID, facts.ScenarioRunID, proofSource)
+	}
+	if len(facts.Obligations) == 1 && strings.TrimSpace(facts.Obligations[0].TradeID) != "" {
+		passAssertion(report, "p2-obligation-references-trade", "non-empty tradeId", facts.Obligations[0].TradeID, proofSource)
+	} else {
+		failAssertion(report, "p2-obligation-references-trade", "settlement_fact_causation", "one obligation with tradeId", obligationTradeIDs(facts.Obligations), proofSource)
+	}
+	if len(facts.Breaks) == 1 && facts.Breaks[0].Reason == "CASH_LEG_FAILED" {
+		passAssertion(report, "p2-break-reason-cash-leg-failed", "CASH_LEG_FAILED", facts.Breaks[0].Reason, proofSource)
+	} else {
+		failAssertion(report, "p2-break-reason-cash-leg-failed", "settlement_fact_reason", "CASH_LEG_FAILED", breakReasons(facts.Breaks), proofSource)
+	}
+	if len(facts.Repairs) == 1 && facts.Repairs[0].RepairAction == "POST_CASH_LEG_REPAIR" {
+		passAssertion(report, "p2-repair-action-posted", "POST_CASH_LEG_REPAIR", facts.Repairs[0].RepairAction, proofSource)
+	} else {
+		failAssertion(report, "p2-repair-action-posted", "settlement_fact_repair", "POST_CASH_LEG_REPAIR", repairActions(facts.Repairs), proofSource)
+	}
+	if len(facts.Resolutions) == 1 && facts.Resolutions[0].SettlementState == "RESOLVED" {
+		passAssertion(report, "p2-settlement-final-resolved", "RESOLVED", facts.Resolutions[0].SettlementState, proofSource)
+	} else {
+		failAssertion(report, "p2-settlement-final-resolved", "settlement_fact_state", "RESOLVED", settlementStates(facts.Resolutions), proofSource)
+	}
+	if len(facts.Resolutions) == 1 && facts.Resolutions[0].ExceptionState == "RESOLVED" {
+		passAssertion(report, "p2-exception-final-resolved", "RESOLVED", facts.Resolutions[0].ExceptionState, proofSource)
+	} else {
+		failAssertion(report, "p2-exception-final-resolved", "settlement_fact_state", "RESOLVED", exceptionStates(facts.Resolutions), proofSource)
+	}
+	if p2ResolutionReferencesRepair(facts) {
+		passAssertion(report, "p2-no-direct-resolution-without-repair", "resolution references repair", "resolution references repair", proofSource)
+	} else {
+		failAssertion(report, "p2-no-direct-resolution-without-repair", "settlement_fact_causation", "resolution references repair", "missing repair linkage", proofSource)
+	}
+	if settlementFactsHaveCausation(facts) {
+		passAssertion(report, "p2-settlement-causation-fields", "scenarioRunId/correlationId/causationId on every fact", "all facts carry causation fields", proofSource)
+	} else {
+		failAssertion(report, "p2-settlement-causation-fields", "settlement_fact_causation", "scenarioRunId/correlationId/causationId on every fact", "missing causation field", proofSource)
+	}
+}
+
+func assertCount(report *smokeReport, id string, category string, observed int, expected int, proofSource string) {
+	if observed == expected {
+		passAssertion(report, id, fmt.Sprint(expected), fmt.Sprint(observed), proofSource)
+		return
+	}
+	failAssertion(report, id, category, fmt.Sprint(expected), fmt.Sprint(observed), proofSource)
+}
+
+func p2ResolutionReferencesRepair(facts settlementFactsReport) bool {
+	if len(facts.Resolutions) != 1 || len(facts.Repairs) != 1 {
+		return false
+	}
+	resolution := facts.Resolutions[0]
+	repair := facts.Repairs[0]
+	return resolution.SettlementRepairID != "" &&
+		resolution.SettlementRepairID == repair.SettlementRepairID &&
+		resolution.SettlementBreakID == repair.SettlementBreakID &&
+		resolution.SettlementObligationID == repair.SettlementObligationID
+}
+
+func settlementFactsHaveCausation(facts settlementFactsReport) bool {
+	for _, obligation := range facts.Obligations {
+		if !hasCausationFields(obligation.ScenarioRunID, obligation.CorrelationID, obligation.CausationID) {
+			return false
+		}
+	}
+	for _, breakFact := range facts.Breaks {
+		if !hasCausationFields(breakFact.ScenarioRunID, breakFact.CorrelationID, breakFact.CausationID) {
+			return false
+		}
+	}
+	for _, repair := range facts.Repairs {
+		if !hasCausationFields(repair.ScenarioRunID, repair.CorrelationID, repair.CausationID) {
+			return false
+		}
+	}
+	for _, resolution := range facts.Resolutions {
+		if !hasCausationFields(resolution.ScenarioRunID, resolution.CorrelationID, resolution.CausationID) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasCausationFields(scenarioRunID string, correlationID string, causationID string) bool {
+	return strings.TrimSpace(scenarioRunID) != "" &&
+		strings.TrimSpace(correlationID) != "" &&
+		strings.TrimSpace(causationID) != ""
+}
+
+func obligationTradeIDs(obligations []settlementObligation) string {
+	values := make([]string, 0, len(obligations))
+	for _, obligation := range obligations {
+		values = append(values, obligation.TradeID)
+	}
+	return strings.Join(values, ",")
+}
+
+func breakReasons(breaks []settlementBreak) string {
+	values := make([]string, 0, len(breaks))
+	for _, breakFact := range breaks {
+		values = append(values, breakFact.Reason)
+	}
+	return strings.Join(values, ",")
+}
+
+func repairActions(repairs []settlementRepair) string {
+	values := make([]string, 0, len(repairs))
+	for _, repair := range repairs {
+		values = append(values, repair.RepairAction)
+	}
+	return strings.Join(values, ",")
+}
+
+func settlementStates(resolutions []settlementResolution) string {
+	values := make([]string, 0, len(resolutions))
+	for _, resolution := range resolutions {
+		values = append(values, resolution.SettlementState)
+	}
+	return strings.Join(values, ",")
+}
+
+func exceptionStates(resolutions []settlementResolution) string {
+	values := make([]string, 0, len(resolutions))
+	for _, resolution := range resolutions {
+		values = append(values, resolution.ExceptionState)
+	}
+	return strings.Join(values, ",")
 }
 
 func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeReport) {
