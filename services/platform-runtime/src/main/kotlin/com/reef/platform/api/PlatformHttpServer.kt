@@ -3785,7 +3785,7 @@ class PlatformHttpServer(
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
 
-private fun rootCause(failure: Throwable): Throwable {
+internal fun rootCause(failure: Throwable): Throwable {
     var current = failure
     while (
         current.cause != null &&
@@ -3796,7 +3796,7 @@ private fun rootCause(failure: Throwable): Throwable {
     return current
 }
 
-private fun rootMessage(failure: Throwable): String {
+internal fun rootMessage(failure: Throwable): String {
     return rootCause(failure).message ?: "unknown"
 }
 
@@ -3873,15 +3873,15 @@ private fun defaultAnalyticsRunExportService(): SimulationRunExportService? {
     return SimulationRunExportService(store)
 }
 
-private fun JsonDocument.requiredLong(key: String): Long {
+internal fun JsonDocument.requiredLong(key: String): Long {
     return string(key).toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
 }
 
-private fun JsonDocument.requiredInt(key: String): Int {
+internal fun JsonDocument.requiredInt(key: String): Int {
     return string(key).toIntOrNull() ?: throw IllegalArgumentException("$key must be an integer")
 }
 
-private fun JsonDocument.boolean(key: String): Boolean {
+internal fun JsonDocument.boolean(key: String): Boolean {
     return string(key).equals("true", ignoreCase = true)
 }
 

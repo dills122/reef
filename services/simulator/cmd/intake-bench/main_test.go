@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -243,6 +245,109 @@ func TestBuildHTTPClient(t *testing.T) {
 	}
 	if client.Transport == nil {
 		t.Error("expected non-nil transport")
+	}
+}
+
+func TestSubmitPostsExpectedRequest(t *testing.T) {
+	var gotMethod, gotPath, gotClientID, gotIdempotencyKey string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotClientID = r.Header.Get("X-Client-Id")
+		gotIdempotencyKey = r.Header.Get("Idempotency-Key")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+
+	cfg := defaultConfig()
+	cfg.BaseURL = server.URL
+	cfg.ClientIDPrefix = "bench"
+	client := buildHTTPClient(cfg)
+
+	status, body, err := submit(client, cfg, "session-1", 3, 7)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	if status != http.StatusAccepted {
+		t.Errorf("status = %d, want 202", status)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %s, want POST", gotMethod)
+	}
+	if gotPath != "/api/v1/orders/submit" {
+		t.Errorf("path = %s", gotPath)
+	}
+	if gotClientID != "bench-3" {
+		t.Errorf("clientID = %s, want bench-3", gotClientID)
+	}
+	if gotIdempotencyKey == "" {
+		t.Error("expected idempotency key header to be set")
+	}
+	if len(body) == 0 {
+		t.Error("expected non-empty response body")
+	}
+}
+
+func TestSubmitReturnsErrorOnUnreachableServer(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.BaseURL = "http://127.0.0.1:1"
+	cfg.RequestTimeout = 200 * time.Millisecond
+	client := buildHTTPClient(cfg)
+
+	_, _, err := submit(client, cfg, "session-1", 0, 1)
+	if err == nil {
+		t.Fatal("expected error for unreachable server")
+	}
+}
+
+func TestRunWorkerProducesResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+
+	cfg := defaultConfig()
+	cfg.BaseURL = server.URL
+	client := buildHTTPClient(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	results := make(chan requestResult, 10)
+	var counter int64
+
+	go runWorker(ctx, client, cfg, "session-1", 0, &counter, nil, results)
+
+	first := <-results
+	cancel()
+	if !first.Success {
+		t.Errorf("expected successful result, got %#v", first)
+	}
+	if first.StatusCode != http.StatusAccepted {
+		t.Errorf("StatusCode = %d, want 202", first.StatusCode)
+	}
+}
+
+func TestRunEndToEndAgainstFakeServer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"accepted":true}`))
+	}))
+	defer server.Close()
+
+	cfg := defaultConfig()
+	cfg.BaseURL = server.URL
+	cfg.Workers = 2
+	cfg.Duration = 100 * time.Millisecond
+	cfg.RatePerSecond = 50
+	cfg.RateSchedule = rateScheduleDrop
+
+	result := run(cfg)
+	if result.Requests == 0 {
+		t.Error("expected at least one request to complete")
+	}
+	if result.Failures != 0 {
+		t.Errorf("expected no failures, got %d", result.Failures)
 	}
 }
 

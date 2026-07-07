@@ -213,3 +213,46 @@ func TestValidTransport(t *testing.T) {
 		t.Error("expected unknown transport to be invalid")
 	}
 }
+
+func TestCommandRoute(t *testing.T) {
+	apiV1 := Config{UseApiV1: true}
+	if commandRoute(apiV1, ActionSubmit) != "/api/v1/orders/submit" {
+		t.Error("expected api-v1 submit route")
+	}
+	if commandRoute(apiV1, ActionModify) != "/api/v1/orders/modify" {
+		t.Error("expected api-v1 modify route")
+	}
+	if commandRoute(apiV1, ActionCancel) != "/api/v1/orders/cancel" {
+		t.Error("expected api-v1 cancel route")
+	}
+
+	legacy := Config{UseApiV1: false}
+	if commandRoute(legacy, ActionSubmit) != "/orders/submit" {
+		t.Error("expected legacy submit route")
+	}
+	if commandRoute(legacy, ActionModify) != "/orders/modify" {
+		t.Error("expected legacy modify route")
+	}
+	if commandRoute(legacy, ActionCancel) != "/orders/cancel" {
+		t.Error("expected legacy cancel route")
+	}
+}
+
+func TestCommandHeaders(t *testing.T) {
+	apiV1 := Config{UseApiV1: true, ClientIDPrefix: "bot"}
+	headers := commandHeaders(apiV1, 3, "cmd-1", "trace-1")
+	if headers["X-Client-Id"] != "bot-3" || headers["Idempotency-Key"] != "cmd-1" || headers["X-Correlation-Id"] != "trace-1" {
+		t.Errorf("unexpected api-v1 headers: %#v", headers)
+	}
+
+	legacyInternal := Config{UseApiV1: false, LegacyInternalRoute: true}
+	headers = commandHeaders(legacyInternal, 0, "cmd-1", "trace-1")
+	if headers["X-Reef-Internal-Route"] != "true" {
+		t.Errorf("expected internal route header, got %#v", headers)
+	}
+
+	legacy := Config{UseApiV1: false, LegacyInternalRoute: false}
+	if headers := commandHeaders(legacy, 0, "cmd-1", "trace-1"); headers != nil {
+		t.Errorf("expected nil headers for plain legacy route, got %#v", headers)
+	}
+}
