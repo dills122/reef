@@ -1,19 +1,35 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+
+loadDotEnv();
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const args = process.argv.slice(2);
 const config = {
   mode: stringOption("--mode", "packages/scenario-definitions/arena/equity-sprint.v1.json"),
   compartment: stringOption("--compartment", "ses"),
+  submitMode: stringOption("--submit-mode", "dry-run"),
+  venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
+  seedReference: args.includes("--seed-reference"),
+  commandTimeoutMs: numberOption("--command-timeout-ms", 15000),
+  commandPollMs: numberOption("--command-poll-ms", 250),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
 };
 
 if (!["vm", "ses"].includes(config.compartment)) {
   throw new Error(`unsupported --compartment=${config.compartment}; expected vm or ses`);
+}
+if (!["dry-run", "live"].includes(config.submitMode)) {
+  throw new Error(`unsupported --submit-mode=${config.submitMode}; expected dry-run or live`);
+}
+if (config.submitMode === "live" && config.venueUrl.length === 0) {
+  throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
 }
 
 const mode = readJson(config.mode);
@@ -37,6 +53,12 @@ const worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
 const startedAt = performance.now();
 
 try {
+  if (config.submitMode === "live") {
+    await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+    if (config.seedReference) {
+      await seedReferenceData(selectedBots);
+    }
+  }
   await worker.start();
   const bots = selectedBots.map((bot) => ({ ...bot, artifact: buildArtifact(bot.entryPath, bot.runnerKey) }));
   for (const bot of bots) {
@@ -69,7 +91,7 @@ try {
   writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`arena local tick run complete: ${resolve(config.out)}`);
   console.log(
-    `status=${report.status} bots=${botResults.length} ticks=${report.totals.ticks} venueCommands=${report.totals.venueCommands} freezes=${enforcementEvents.filter((event) => event.decision === "freeze").length}`,
+    `status=${report.status} bots=${botResults.length} ticks=${report.totals.ticks} venueCommands=${report.totals.venueCommands} submitted=${report.totals.submittedCommands} freezes=${enforcementEvents.filter((event) => event.decision === "freeze").length}`,
   );
   for (const entry of report.leaderboard) {
     console.log(`rank=${entry.rank} bot=${entry.botId} score=${entry.score} disqualified=${entry.disqualified}`);
@@ -87,7 +109,11 @@ async function runBotSession(bot) {
   }
   const ticks = [];
   for (const tick of fixture.ticks.slice(0, mode.ticks)) {
-    ticks.push(await worker.request({ type: "runTick", sessionId, tick }));
+    const tickResult = await worker.request({ type: "runTick", sessionId, tick });
+    ticks.push({
+      ...tickResult,
+      submission: await submitVenueCommands(tickResult.venueCommands ?? []),
+    });
   }
   const stop = await worker.request({ type: "stopSession", sessionId });
   return { bot, sessionId, start, ticks, stop };
@@ -102,6 +128,9 @@ function enforceBot(bot, session) {
   }
   if (counters.failedTicks > 0) {
     reasons.push(`failedTicks ${counters.failedTicks} > 0`);
+  }
+  if (counters.failedCommands > 0) {
+    reasons.push(`failedCommands ${counters.failedCommands} > 0`);
   }
   if (counters.maxActionsPerTick > bot.riskProfile.maxActionsPerTick) {
     reasons.push(`maxActionsPerTick ${counters.maxActionsPerTick} > ${bot.riskProfile.maxActionsPerTick}`);
@@ -163,10 +192,15 @@ function buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs 
       acc.failedTicks += tick.ok ? 0 : 1;
       acc.actions += tick.actions?.length ?? 0;
       acc.venueCommands += tick.venueCommands?.length ?? 0;
+      acc.submittedCommands += tick.submission?.submitted ?? 0;
+      acc.completedCommands += tick.submission?.completed ?? 0;
+      acc.failedCommands += tick.submission?.failed ?? 0;
+      acc.rejectedCommands += tick.submission?.rejected ?? 0;
+      acc.timedOutCommands += tick.submission?.timedOut ?? 0;
       acc.dataCalls += Number(tick.dataCalls ?? 0);
       return acc;
     },
-    { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, dataCalls: 0 },
+    { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, completedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0 },
   );
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
@@ -178,7 +212,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs 
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
     },
-    runnerProfile: { compartment: config.compartment, workerCount: 1 },
+    runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
     status: enforcementEvents.some((event) => event.decision === "freeze") ? "completed_with_freezes" : "completed",
     elapsedMs,
     totals,
@@ -193,6 +227,101 @@ function buildReport({ botResults, enforcementEvents, sessionReports, elapsedMs 
   };
 }
 
+async function submitVenueCommands(commands) {
+  if (config.submitMode === "dry-run" || commands.length === 0) {
+    return {
+      mode: config.submitMode,
+      submitted: 0,
+      completed: 0,
+      failed: 0,
+      rejected: 0,
+      timedOut: 0,
+      commands: [],
+    };
+  }
+
+  const results = [];
+  for (const command of commands) {
+    const submittedAt = performance.now();
+    const intake = await postJson(`${config.venueUrl.replace(/\/$/, "")}${command.route}`, command.body, command.headers);
+    const status = intake.statusCode >= 200 && intake.statusCode < 300
+      ? await waitForCommandStatus(command.body.commandId)
+      : { timedOut: false, statusCode: intake.statusCode, body: safeJson(intake.body) };
+    const finalStatus = String(status.body?.status ?? "");
+    const responseStatus = Number(status.body?.responseStatus ?? 0);
+    results.push({
+      commandId: command.body.commandId,
+      route: command.route,
+      intakeStatus: intake.statusCode,
+      finalStatus,
+      responseStatus,
+      rejected: responseStatus >= 400 || String(status.body?.resultStatus ?? "").toLowerCase() === "rejected",
+      timedOut: status.timedOut,
+      elapsedMs: performance.now() - submittedAt,
+      statusBody: status.body,
+    });
+  }
+  return summarizeSubmissionResults(results);
+}
+
+function summarizeSubmissionResults(results) {
+  return {
+    mode: config.submitMode,
+    submitted: results.length,
+    completed: results.filter((result) => result.finalStatus === "COMPLETED").length,
+    failed: results.filter((result) => result.finalStatus === "FAILED" || result.intakeStatus < 200 || result.intakeStatus >= 300).length,
+    rejected: results.filter((result) => result.rejected).length,
+    timedOut: results.filter((result) => result.timedOut).length,
+    commands: results,
+  };
+}
+
+async function waitForCommandStatus(commandId) {
+  const deadline = Date.now() + config.commandTimeoutMs;
+  let last = { statusCode: 0, body: {} };
+  while (Date.now() <= deadline) {
+    const response = await getJson(`${config.venueUrl.replace(/\/$/, "")}/api/v1/commands/${encodeURIComponent(commandId)}`);
+    last = response;
+    const status = String(response.body?.status ?? "");
+    if (status === "COMPLETED" || status === "FAILED") {
+      return { timedOut: false, statusCode: response.statusCode, body: response.body };
+    }
+    await sleep(config.commandPollMs);
+  }
+  return { timedOut: true, statusCode: last.statusCode, body: last.body };
+}
+
+async function seedReferenceData(bots) {
+  const internal = { "X-Reef-Internal-Route": "true" };
+  for (const instrumentId of mode.instruments ?? ["AAPL"]) {
+    await postJson(`${config.venueUrl.replace(/\/$/, "")}/reference/instruments`, {
+      instrumentId,
+      symbol: instrumentId,
+      assetClass: "US_EQ",
+      currency: "USD",
+    }, internal);
+  }
+  for (const bot of bots) {
+    await postJson(`${config.venueUrl.replace(/\/$/, "")}/reference/participants`, {
+      participantId: `participant-${bot.runnerKey}`,
+      name: `Arena ${bot.botId}`,
+    }, internal);
+    await postJson(`${config.venueUrl.replace(/\/$/, "")}/reference/accounts`, {
+      accountId: `account-${bot.runnerKey}`,
+      participantId: `participant-${bot.runnerKey}`,
+      accountType: bot.riskProfile.assetLedgerMode === "bypass" ? "HOUSE" : "CUSTOMER",
+    }, internal);
+    await postJson(`${config.venueUrl.replace(/\/$/, "")}/auth/roles`, {
+      roleId: "order_trader",
+      permissions: "order.submit,order.cancel,order.modify",
+    }, internal);
+    await postJson(`${config.venueUrl.replace(/\/$/, "")}/auth/actor-roles`, {
+      actorId: `actor-${bot.runnerKey}`,
+      roleId: "order_trader",
+    }, internal);
+  }
+}
+
 function sessionCounters(session) {
   const latencies = session.ticks.map((tick) => Number(tick.elapsedMs ?? 0)).sort((a, b) => a - b);
   return session.ticks.reduce(
@@ -201,11 +330,15 @@ function sessionCounters(session) {
       acc.failedTicks += tick.ok ? 0 : 1;
       acc.actions += tick.actions?.length ?? 0;
       acc.venueCommands += tick.venueCommands?.length ?? 0;
+      acc.submittedCommands += tick.submission?.submitted ?? 0;
+      acc.failedCommands += tick.submission?.failed ?? 0;
+      acc.rejectedCommands += tick.submission?.rejected ?? 0;
+      acc.timedOutCommands += tick.submission?.timedOut ?? 0;
       acc.dataCalls += Number(tick.dataCalls ?? 0);
       acc.maxActionsPerTick = Math.max(acc.maxActionsPerTick, tick.actions?.length ?? 0);
       return acc;
     },
-    { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, dataCalls: 0, maxActionsPerTick: 0, latencyP95Ms: percentile(latencies, 0.95) },
+    { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0, maxActionsPerTick: 0, latencyP95Ms: percentile(latencies, 0.95) },
   );
 }
 
@@ -365,8 +498,75 @@ function percentile(sortedValues, pct) {
   return sortedValues[index];
 }
 
+async function postJson(url, payload, headers = {}) {
+  const response = await request("POST", url, payload, headers, 5000);
+  return { ...response, body: response.body };
+}
+
+async function getJson(url) {
+  const response = await request("GET", url, undefined, {}, 5000);
+  return { statusCode: response.statusCode, body: safeJson(response.body) };
+}
+
+function request(method, url, payload, headers = {}, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const body = payload === undefined ? "" : JSON.stringify(payload);
+    const transport = parsed.protocol === "https:" ? https : http;
+    const req = transport.request(parsed, {
+      method,
+      timeout: timeoutMs,
+      headers: {
+        ...(payload === undefined ? {} : {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+        }),
+        ...headers,
+      },
+    }, (res) => {
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        resolve({ statusCode: res.statusCode ?? 0, body: data });
+      });
+    });
+    req.on("timeout", () => {
+      req.destroy(new Error(`request timeout after ${timeoutMs}ms`));
+    });
+    req.on("error", reject);
+    if (body.length > 0) {
+      req.write(body);
+    }
+    req.end();
+  });
+}
+
+function safeJson(raw) {
+  if (typeof raw !== "string" || raw.length === 0) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { raw };
+  }
+}
+
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
+}
+
+function numberOption(name, fallback) {
+  const raw = optionValue(name);
+  if (raw === undefined) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be numeric; got ${raw}`);
+  }
+  return parsed;
 }
 
 function stringOption(name, fallback) {
