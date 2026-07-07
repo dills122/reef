@@ -710,6 +710,18 @@ registers the arena run, posts all `botResults` to
 `/internal/admin/arena/run-bot-results`, then reads back raw run results and
 `/internal/admin/arena/leaderboard` into the report.
 
+Observed persisted smoke:
+
+- status `completed`
+- 14 venue command drafts
+- 14 submitted commands
+- 14 terminal commands
+- 5 persisted run-bot results
+- leaderboard rank 1 readback succeeded
+- 0 rejected commands
+- 0 timed-out commands
+- 0 freezes
+
 Local stack requirement: `platform-runtime` must run with
 `PLATFORM_ARENA_ADMIN_ENABLED=true`. Host-based smoke calls to raw
 `/internal/admin/*` routes also require an exposure mode that allows the caller,
