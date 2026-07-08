@@ -218,8 +218,9 @@ Goal:
 Acceptance:
 
 - first in-code golden corpus covers rest, sweep, partial residual, modify, cancel, and final book state
-- fixture runner for command NDJSON or JSON remains pending
-- expected durable event batches and final checksum literals remain pending
+- NDJSON fixture runner covers the same lifecycle corpus
+- final book checksum literal is asserted
+- expected durable event batches remain pending
 - fixtures should include self-trade prevention and session gates as those features land
 
 ### 8. Engine Observability

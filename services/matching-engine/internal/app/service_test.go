@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bufio"
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -1070,6 +1072,20 @@ func TestGoldenReplayBasicLifecycleCorpus(t *testing.T) {
 	}
 }
 
+func TestGoldenReplayFixtureBasicLifecycle(t *testing.T) {
+	service := NewService()
+	runGoldenFixture(t, service, "testdata/golden_basic_lifecycle.ndjson")
+
+	stats := service.BookStats("AAPL")
+	if stats.BuyOrders != 0 || stats.SellOrders != 0 || stats.BuyPriceLevels != 0 || stats.SellPriceLevels != 0 {
+		t.Fatalf("expected golden fixture to end with empty book, got %#v", stats)
+	}
+	const wantChecksum = "aaa6376c4c84585c9c2799dba5728cbdd26f98fb426709bf75459b8330917932"
+	if stats.Checksum != wantChecksum {
+		t.Fatalf("unexpected golden fixture checksum: got %s want %s", stats.Checksum, wantChecksum)
+	}
+}
+
 func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
@@ -1804,5 +1820,93 @@ func submitRestingSell(t *testing.T, service *Service, instrumentID string, orde
 	}
 	if len(result.Trades) != 0 {
 		t.Fatalf("expected resting sell %s to avoid immediate trades, got %#v", orderID, result.Trades)
+	}
+}
+
+type goldenCommand struct {
+	Type   string                   `json:"type"`
+	Submit domain.SubmitOrder       `json:"submit"`
+	Modify domain.ModifyOrder       `json:"modify"`
+	Cancel domain.CancelOrder       `json:"cancel"`
+	Want   goldenCommandExpectation `json:"want"`
+}
+
+type goldenCommandExpectation struct {
+	Status            string   `json:"status"`
+	Trades            int      `json:"trades"`
+	RejectCode        string   `json:"rejectCode"`
+	TradeSellOrderIDs []string `json:"tradeSellOrderIds"`
+	TradeQuantities   []string `json:"tradeQuantities"`
+	TradePrices       []string `json:"tradePrices"`
+}
+
+func runGoldenFixture(t *testing.T, service *Service, path string) {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open golden fixture: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	line := 0
+	for scanner.Scan() {
+		line++
+		var command goldenCommand
+		if err := json.Unmarshal(scanner.Bytes(), &command); err != nil {
+			t.Fatalf("decode golden fixture line %d: %v", line, err)
+		}
+		var result domain.SubmitOrderResult
+		switch command.Type {
+		case "SubmitOrder":
+			result = service.SubmitOrder(command.Submit)
+		case "ModifyOrder":
+			result = service.ModifyOrder(command.Modify)
+		case "CancelOrder":
+			result = service.CancelOrder(command.Cancel)
+		default:
+			t.Fatalf("unsupported golden command type on line %d: %s", line, command.Type)
+		}
+		assertGoldenResult(t, line, result, command.Want)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan golden fixture: %v", err)
+	}
+}
+
+func assertGoldenResult(t *testing.T, line int, result domain.SubmitOrderResult, want goldenCommandExpectation) {
+	t.Helper()
+	switch want.Status {
+	case "accepted":
+		if result.Accepted == nil {
+			t.Fatalf("line %d expected accepted result, got %#v", line, result)
+		}
+	case "rejected":
+		if result.Rejected == nil {
+			t.Fatalf("line %d expected rejected result, got %#v", line, result)
+		}
+		if result.Rejected.Code != want.RejectCode {
+			t.Fatalf("line %d expected reject code %s, got %#v", line, want.RejectCode, result.Rejected)
+		}
+	default:
+		t.Fatalf("line %d unsupported expected status %q", line, want.Status)
+	}
+	if len(result.Trades) != want.Trades {
+		t.Fatalf("line %d expected %d trades, got %#v", line, want.Trades, result.Trades)
+	}
+	for i, sellOrderID := range want.TradeSellOrderIDs {
+		if result.Trades[i].SellOrderID != sellOrderID {
+			t.Fatalf("line %d trade %d expected sell %s, got %#v", line, i, sellOrderID, result.Trades[i])
+		}
+	}
+	for i, quantity := range want.TradeQuantities {
+		if result.Trades[i].QuantityUnits != quantity {
+			t.Fatalf("line %d trade %d expected quantity %s, got %#v", line, i, quantity, result.Trades[i])
+		}
+	}
+	for i, price := range want.TradePrices {
+		if result.Trades[i].Price != price {
+			t.Fatalf("line %d trade %d expected price %s, got %#v", line, i, price, result.Trades[i])
+		}
 	}
 }
