@@ -123,8 +123,12 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "runtime.order_lifecycle_state.order_id:text",
+                "runtime.order_lifecycle_state.original_quantity_units_num:numeric",
                 "runtime.order_lifecycle_state.remaining_quantity_units:text",
+                "runtime.order_lifecycle_state.remaining_quantity_units_num:numeric",
                 "runtime.order_lifecycle_state.filled_quantity_units:text",
+                "runtime.order_lifecycle_state.filled_quantity_units_num:numeric",
+                "runtime.order_lifecycle_state.limit_price_num:numeric",
                 "runtime.order_lifecycle_state.status:text"
             ),
             requirements.columns
@@ -137,6 +141,10 @@ class PostgresSchemaRequirementsTest {
                 "runtime.market_data_snapshots.projection_name:text",
                 "runtime.market_data_snapshots.source_projection_name:text",
                 "runtime.market_data_snapshots.instrument_id:text",
+                "runtime.market_data_snapshots.best_bid_price_num:numeric",
+                "runtime.market_data_snapshots.best_bid_quantity_num:numeric",
+                "runtime.market_data_snapshots.best_ask_price_num:numeric",
+                "runtime.market_data_snapshots.best_ask_quantity_num:numeric",
                 "runtime.market_data_snapshots.last_partition_seq:bigint",
                 "runtime.market_data_snapshots.lag:bigint"
             ),

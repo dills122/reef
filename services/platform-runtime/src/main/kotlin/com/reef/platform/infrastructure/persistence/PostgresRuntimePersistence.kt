@@ -305,6 +305,10 @@ class PostgresRuntimePersistence(
                       remaining_quantity_units TEXT NOT NULL,
                       filled_quantity_units TEXT NOT NULL,
                       limit_price TEXT NOT NULL,
+                      original_quantity_units_num NUMERIC,
+                      remaining_quantity_units_num NUMERIC,
+                      filled_quantity_units_num NUMERIC,
+                      limit_price_num NUMERIC,
                       currency TEXT NOT NULL,
                       time_in_force TEXT NOT NULL,
                       status TEXT NOT NULL,
@@ -324,6 +328,10 @@ class PostgresRuntimePersistence(
                       best_bid_quantity TEXT NOT NULL DEFAULT '',
                       best_ask_price TEXT NOT NULL DEFAULT '',
                       best_ask_quantity TEXT NOT NULL DEFAULT '',
+                      best_bid_price_num NUMERIC,
+                      best_bid_quantity_num NUMERIC,
+                      best_ask_price_num NUMERIC,
+                      best_ask_quantity_num NUMERIC,
                       currency TEXT NOT NULL DEFAULT '',
                       last_partition_seq BIGINT NOT NULL DEFAULT 0,
                       lag BIGINT NOT NULL DEFAULT 0,
@@ -332,6 +340,14 @@ class PostgresRuntimePersistence(
                     )
                     """.trimIndent()
                 )
+                stmt.execute("ALTER TABLE ${names.orderLifecycleState} ADD COLUMN IF NOT EXISTS original_quantity_units_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.orderLifecycleState} ADD COLUMN IF NOT EXISTS remaining_quantity_units_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.orderLifecycleState} ADD COLUMN IF NOT EXISTS filled_quantity_units_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.orderLifecycleState} ADD COLUMN IF NOT EXISTS limit_price_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.marketDataSnapshots} ADD COLUMN IF NOT EXISTS best_bid_price_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.marketDataSnapshots} ADD COLUMN IF NOT EXISTS best_bid_quantity_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.marketDataSnapshots} ADD COLUMN IF NOT EXISTS best_ask_price_num NUMERIC")
+                stmt.execute("ALTER TABLE ${names.marketDataSnapshots} ADD COLUMN IF NOT EXISTS best_ask_quantity_num NUMERIC")
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalCommandResults} (
@@ -2703,7 +2719,11 @@ class PostgresRuntimePersistence(
                     calculated AS (
                       SELECT
                         *,
-                        GREATEST(current_quantity_units::NUMERIC - filled_quantity_units, 0) AS remaining_quantity_units
+                        GREATEST(current_quantity_units::NUMERIC - filled_quantity_units, 0) AS remaining_quantity_units,
+                        CASE
+                          WHEN current_limit_price ~ '^-?[0-9]+(\.[0-9]+)?$' THEN current_limit_price::NUMERIC
+                          ELSE NULL
+                        END AS current_limit_price_num
                       FROM shaped
                     )
                     INSERT INTO ${names.orderLifecycleState}(
@@ -2723,7 +2743,11 @@ class PostgresRuntimePersistence(
                       status,
                       accepted_at,
                       last_event_at,
-                      updated_at
+                      updated_at,
+                      original_quantity_units_num,
+                      remaining_quantity_units_num,
+                      filled_quantity_units_num,
+                      limit_price_num
                     )
                     SELECT
                       order_id,
@@ -2748,7 +2772,11 @@ class PostgresRuntimePersistence(
                       END,
                       accepted_at,
                       last_event_at,
-                      now()
+                      now(),
+                      original_quantity_units::NUMERIC,
+                      CASE WHEN cancelled OR rejected THEN 0 ELSE remaining_quantity_units END,
+                      filled_quantity_units,
+                      current_limit_price_num
                     FROM calculated
                     ORDER BY order_id
                     """.trimIndent()
@@ -2852,14 +2880,13 @@ class PostgresRuntimePersistence(
                         instrument_id,
                         side,
                         currency,
-                        limit_price::NUMERIC AS price_num,
-                        remaining_quantity_units::NUMERIC AS quantity_num
+                        limit_price_num AS price_num,
+                        remaining_quantity_units_num AS quantity_num
                       FROM ${names.orderLifecycleState}
                       WHERE order_type = 'LIMIT'
                         AND status IN ('OPEN', 'PARTIALLY_FILLED')
-                        AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
-                        AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
-                        AND remaining_quantity_units::NUMERIC > 0
+                        AND limit_price_num IS NOT NULL
+                        AND remaining_quantity_units_num > 0
                     ),
                     bid_prices AS (
                       SELECT instrument_id, MAX(price_num) AS best_bid_price
@@ -2907,7 +2934,11 @@ class PostgresRuntimePersistence(
                       currency,
                       last_partition_seq,
                       lag,
-                      updated_at
+                      updated_at,
+                      best_bid_price_num,
+                      best_bid_quantity_num,
+                      best_ask_price_num,
+                      best_ask_quantity_num
                     )
                     SELECT
                       ?,
@@ -2920,7 +2951,11 @@ class PostgresRuntimePersistence(
                       COALESCE(instruments.currency, ''),
                       ?,
                       ?,
-                      now()
+                      now(),
+                      bid_prices.best_bid_price,
+                      bid_totals.best_bid_quantity,
+                      ask_prices.best_ask_price,
+                      ask_totals.best_ask_quantity
                     FROM instruments
                     LEFT JOIN bid_prices ON bid_prices.instrument_id = instruments.instrument_id
                     LEFT JOIN bid_totals ON bid_totals.instrument_id = instruments.instrument_id
@@ -3035,8 +3070,7 @@ class PostgresRuntimePersistence(
                 FROM ${names.orderLifecycleState}
                 WHERE instrument_id = ?
                   AND status IN ('OPEN', 'PARTIALLY_FILLED')
-                  AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
-                  AND remaining_quantity_units::NUMERIC > 0
+                  AND remaining_quantity_units_num > 0
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, instrumentId)
@@ -3071,19 +3105,18 @@ class PostgresRuntimePersistence(
             """
             SELECT
               price_num::TEXT AS price,
-              SUM(remaining_quantity_units::NUMERIC)::TEXT AS quantity
+              SUM(remaining_quantity_units_num)::TEXT AS quantity
             FROM (
               SELECT
-                limit_price::NUMERIC AS price_num,
-                remaining_quantity_units
+                limit_price_num AS price_num,
+                remaining_quantity_units_num
               FROM ${names.orderLifecycleState}
               WHERE instrument_id = ?
                 AND side = ?
                 AND order_type = 'LIMIT'
                 AND status IN ('OPEN', 'PARTIALLY_FILLED')
-                AND limit_price ~ '^-?[0-9]+(\.[0-9]+)?$'
-                AND remaining_quantity_units ~ '^[0-9]+(\.[0-9]+)?$'
-                AND remaining_quantity_units::NUMERIC > 0
+                AND limit_price_num IS NOT NULL
+                AND remaining_quantity_units_num > 0
             ) priced
             GROUP BY price_num
             ORDER BY price_num $direction

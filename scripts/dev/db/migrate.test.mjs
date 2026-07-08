@@ -42,6 +42,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0025_orders_client_order_lookup.sql",
       "runtime/0026_contiguous_command_outcome_projection_watermarks.sql",
       "runtime/0027_audit_persistence_hardening.sql",
+      "runtime/0028_typed_top_of_book_facts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -93,6 +94,19 @@ test("command-log integrity audit migration replaces dropped hot-path foreign ke
   assert.match(migration.sql, /active_command_missing_queue/);
   assert.match(migration.sql, /terminal_result_still_queued/);
   assert.match(migration.sql, /CREATE OR REPLACE FUNCTION command_log\.command_integrity_summary/);
+});
+
+test("typed top-of-book migration adds native numeric facts and indexes", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0028_typed_top_of_book_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS limit_price_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS best_bid_price_num NUMERIC/);
+  assert.match(migration.sql, /idx_order_lifecycle_state_book_bid_native/);
+  assert.match(migration.sql, /idx_order_lifecycle_state_book_ask_native/);
+  assert.match(migration.sql, /limit_price_num AS price_num/);
+  assert.match(migration.sql, /best_bid_price_num = EXCLUDED\.best_bid_price_num/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

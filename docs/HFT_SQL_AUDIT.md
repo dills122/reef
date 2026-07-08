@@ -127,6 +127,11 @@ Target:
 - Move price and remaining quantity to typed columns.
 - Add side-aware indexes that satisfy best bid/ask `ORDER BY ... LIMIT 1` patterns without regex filters or casts.
 
+Implemented here:
+- `runtime/0028_typed_top_of_book_facts.sql` adds typed numeric companion columns for lifecycle book facts and top-of-book snapshots.
+- The lifecycle and market-data projection routines now maintain those numeric facts while preserving existing text columns for API compatibility.
+- Native bid/ask indexes on `runtime.order_lifecycle_state` replace the transitional text-cast expression index for top-of-book access.
+
 ### 9. Boundary risk/collar facts need typed constraints
 
 Priority: P3
@@ -156,11 +161,12 @@ Target:
 - Added numeric top-of-book expression index in `runtime/0027_audit_persistence_hardening.sql`.
 - Added command-log integrity diagnostics in `command_log/0014_integrity_audit_views.sql`.
 - Added orphan-child cleanup to `scripts/dev/command-log-prune.mjs`.
+- Added typed top-of-book projection facts and native lifecycle book indexes in `runtime/0028_typed_top_of_book_facts.sql`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
 ### Next service-spanning work
 
-- Typed runtime facts across persistence, bootstrap validation, mappers, projectors, and smoke tests.
+- Typed runtime facts beyond top-of-book projection columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
 - Runtime event typed schema reconciliation.
 - Physical partition plan and measured migration path.
 - Canonical command model cleanup.

@@ -62,6 +62,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0015_market_data_snapshots.sql',
                   'runtime/0016_order_lifecycle_state.sql',
                   'runtime/0027_audit_persistence_hardening.sql',
+                  'runtime/0028_typed_top_of_book_facts.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -135,7 +136,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0014_lifecycle_command_outcome_projection.sql",
                     "runtime/0015_market_data_snapshots.sql",
                     "runtime/0016_order_lifecycle_state.sql",
-                    "runtime/0027_audit_persistence_hardening.sql"
+                    "runtime/0027_audit_persistence_hardening.sql",
+                    "runtime/0028_typed_top_of_book_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -372,6 +374,50 @@ class PostgresSchemaMigrationIntegrationTest {
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val topOfBookColumns = conn.prepareStatement(
+                """
+                SELECT table_name || '.' || column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND (
+                    (table_name = 'order_lifecycle_state' AND column_name IN (
+                      'original_quantity_units_num',
+                      'remaining_quantity_units_num',
+                      'filled_quantity_units_num',
+                      'limit_price_num'
+                    ))
+                    OR
+                    (table_name = 'market_data_snapshots' AND column_name IN (
+                      'best_bid_price_num',
+                      'best_bid_quantity_num',
+                      'best_ask_price_num',
+                      'best_ask_quantity_num'
+                    ))
+                  )
+                ORDER BY table_name, column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "market_data_snapshots.best_ask_price_num:numeric",
+                    "market_data_snapshots.best_ask_quantity_num:numeric",
+                    "market_data_snapshots.best_bid_price_num:numeric",
+                    "market_data_snapshots.best_bid_quantity_num:numeric",
+                    "order_lifecycle_state.filled_quantity_units_num:numeric",
+                    "order_lifecycle_state.limit_price_num:numeric",
+                    "order_lifecycle_state.original_quantity_units_num:numeric",
+                    "order_lifecycle_state.remaining_quantity_units_num:numeric"
+                ),
+                topOfBookColumns
             )
 
             val runtimeFunctions = conn.prepareStatement(
