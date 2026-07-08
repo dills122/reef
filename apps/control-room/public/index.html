@@ -93,6 +93,17 @@
         <article class="panel">
           <div class="panel-title">
             <h2>Run History</h2>
+            <label class="run-sort-control" for="run-sort">
+              <span>Sort</span>
+              <select id="run-sort">
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="reports">Most reports</option>
+                <option value="failed">Failed first</option>
+                <option value="kind">Kind</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
           </div>
           <div id="run-list" class="run-list"></div>
         </article>

@@ -167,7 +167,22 @@ button {
   padding: 7px 11px;
 }
 
+select {
+  background: #0f1519;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  min-height: 32px;
+  padding: 5px 28px 5px 9px;
+}
+
 button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+select:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
@@ -221,6 +236,14 @@ button:disabled {
 .evidence {
   display: grid;
   gap: 10px;
+}
+
+.run-sort-control {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
 }
 
 .run-row,

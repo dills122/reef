@@ -1,6 +1,8 @@
 const state = {
   selectedRunId: "",
   selectedRun: null,
+  runs: [],
+  runSort: "newest",
   events: [],
   trend: [],
   source: null,
@@ -18,11 +20,16 @@ const ids = {
   runtimeUrl: document.querySelector("#runtime-url"),
   lastProbe: document.querySelector("#last-probe"),
   probeError: document.querySelector("#probe-error"),
+  runSort: document.querySelector("#run-sort"),
   refreshRuns: document.querySelector("#refresh-runs"),
   connect: document.querySelector("#connect"),
   pause: document.querySelector("#pause"),
 };
 
+ids.runSort.addEventListener("change", () => {
+  state.runSort = ids.runSort.value;
+  renderRuns(state.runs);
+});
 ids.refreshRuns.addEventListener("click", () => refreshRunsNow());
 ids.connect.addEventListener("click", () => reconnect());
 ids.pause.addEventListener("click", () => pause());
@@ -44,6 +51,7 @@ async function refreshAll(options = {}) {
   if (!state.connected && !options.allowPaused) return;
   const runsPayload = await getJson("/api/runs");
   const runs = runsPayload.runs || [];
+  state.runs = runs;
   autoSelectRun(runs, { preferNewest: Boolean(options.preferNewest) });
   const [snapshot, selected] = await Promise.all([
     getJson(`/api/snapshot?runId=${encodeURIComponent(state.selectedRunId)}`),
@@ -196,7 +204,7 @@ function renderSnapshot(snapshot, selectedRun) {
 
 function renderRuns(runs) {
   ids.runList.innerHTML = "";
-  for (const run of runs.slice(0, 12)) {
+  for (const run of sortRuns(runs, state.runSort).slice(0, 12)) {
     const row = document.createElement("button");
     row.type = "button";
     row.className = `run-row ${run.runId === state.selectedRunId ? "active" : ""}`;
@@ -205,6 +213,7 @@ function renderRuns(runs) {
       <span class="muted">${escapeHtml(run.kind)} · ${escapeHtml(run.status)}</span>
       <span class="kv">
         <span>exit ${run.exitCode ?? ""}</span>
+        <span>${fmt((run.evidence || []).length)} reports</span>
         <span>${escapeHtml(run.startedAt || "")}</span>
       </span>
     `;
@@ -448,6 +457,36 @@ function sortEvidenceRows(rows) {
     if (byModifiedAt !== 0) return byModifiedAt;
     return String(left.name || "").localeCompare(String(right.name || ""));
   });
+}
+
+function sortRuns(runs, mode) {
+  return runs.slice().sort((left, right) => {
+    switch (mode) {
+      case "oldest":
+        return runSortTime(left) - runSortTime(right);
+      case "reports":
+        return (right.evidence?.length || 0) - (left.evidence?.length || 0) || runSortTime(right) - runSortTime(left);
+      case "failed":
+        return failureRank(left) - failureRank(right) || runSortTime(right) - runSortTime(left);
+      case "kind":
+        return String(left.kind || "").localeCompare(String(right.kind || "")) || runSortTime(right) - runSortTime(left);
+      case "name":
+        return String(left.runId || "").localeCompare(String(right.runId || ""));
+      case "newest":
+      default:
+        return runSortTime(right) - runSortTime(left);
+    }
+  });
+}
+
+function runSortTime(run) {
+  return Date.parse(run.completedAt || run.startedAt || "") || 0;
+}
+
+function failureRank(run) {
+  if (run.status === "failed" || Number(run.exitCode) > 0) return 0;
+  if (run.status === "running") return 1;
+  return 2;
 }
 
 async function getJson(path) {
