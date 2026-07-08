@@ -30,9 +30,13 @@ class SettlementLedgerProjectionTest {
         assertEquals("15000", buyerCash.debitQuantity)
         assertEquals("0", buyerCash.creditQuantity)
         assertEquals("-15000", buyerCash.netQuantity)
+        assertEquals("15000", buyerCash.openingQuantity)
+        assertEquals("0", buyerCash.availableQuantity)
         assertEquals("100", buyerSecurity.netQuantity)
         assertEquals("15000", sellerCash.netQuantity)
         assertEquals("-100", sellerSecurity.netQuantity)
+        assertEquals("100", sellerSecurity.openingQuantity)
+        assertEquals("0", sellerSecurity.availableQuantity)
     }
 
     @Test
@@ -55,6 +59,10 @@ class SettlementLedgerProjectionTest {
     private fun finalityFacts(scenarioRunId: String): SettlementFactBundle {
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
+            resourcePositions = listOf(
+                resourcePosition(scenarioRunId, "resource-buyer-cash", "buyer-1", "account-buyer-1", SettlementLedgerEntryTypeCash, "USD", "15000.00"),
+                resourcePosition(scenarioRunId, "resource-seller-security", "seller-1", "account-seller-1", SettlementLedgerEntryTypeSecurity, "AAPL", "100")
+            ),
             obligations = listOf(obligation(scenarioRunId)),
             instructions = listOf(instructionCreated(scenarioRunId)),
             attempts = listOf(attemptStarted(scenarioRunId)),
@@ -69,6 +77,31 @@ class SettlementLedgerProjectionTest {
                 ledgerEntry(scenarioRunId, "ledger-buyer-security-credit", "buyer-1", "account-buyer-1", SettlementLedgerEntryTypeSecurity, "AAPL", SettlementLedgerDirectionCredit, "100")
             ),
             settlements = listOf(settled(scenarioRunId))
+        )
+    }
+
+    private fun resourcePosition(
+        scenarioRunId: String,
+        id: String,
+        participantId: String,
+        accountId: String,
+        assetType: String,
+        assetId: String,
+        quantity: String
+    ): SettlementResourcePositionFact {
+        return SettlementResourcePositionFact(
+            resourcePositionId = id,
+            scenarioRunId = scenarioRunId,
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "seed-resource-1",
+            participantId = participantId,
+            accountId = accountId,
+            assetType = assetType,
+            assetId = assetId,
+            quantity = quantity,
+            occurredAt = Instant.parse("2025-12-31T23:59:59Z")
         )
     }
 

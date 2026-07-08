@@ -127,6 +127,105 @@ class TradeSettlementObligationMaterializerTest {
     }
 
     @Test
+    fun instantProfileCreatesCashBreakWhenBuyerCashIsUnavailable() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-cash-fail", venueSessionId = "session-env")
+        seedResources(store, runId = "run-cash-fail", sellerSecurity = "100")
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = store,
+            postTradeProfileResolver = PostTradeProfileResolver.envOnly(
+                profileId = "instant-post-trade-v1",
+                policyVersion = 4
+            )
+        )
+
+        val result = materializer.materialize("run-cash-fail")
+        val facts = store.factsByScenarioRunId("run-cash-fail")
+
+        assertEquals(1, result.materializedObligations)
+        assertEquals(2, result.materializedLegOutcomes)
+        assertEquals(0, result.materializedLedgerEntries)
+        assertEquals(0, result.materializedSettlements)
+        assertEquals(1, result.materializedBreaks)
+        assertEquals(SettlementLegFailedState, facts.legOutcomes.single { it.legType == SettlementLegTypeCash }.state)
+        assertEquals(SettlementLegSucceededState, facts.legOutcomes.single { it.legType == SettlementLegTypeSecurity }.state)
+        assertEquals(SettlementBreakOpenedReason, facts.breaks.single().reason)
+    }
+
+    @Test
+    fun instantProfileCreatesSecurityBreakWhenSellerSecurityIsUnavailable() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-security-fail", venueSessionId = "session-env")
+        seedResources(store, runId = "run-security-fail", buyerCash = "15025000000000")
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = store,
+            postTradeProfileResolver = PostTradeProfileResolver.envOnly(
+                profileId = "instant-post-trade-v1",
+                policyVersion = 4
+            )
+        )
+
+        val result = materializer.materialize("run-security-fail")
+        val facts = store.factsByScenarioRunId("run-security-fail")
+
+        assertEquals(1, result.materializedObligations)
+        assertEquals(2, result.materializedLegOutcomes)
+        assertEquals(0, result.materializedLedgerEntries)
+        assertEquals(0, result.materializedSettlements)
+        assertEquals(1, result.materializedBreaks)
+        assertEquals(SettlementLegSucceededState, facts.legOutcomes.single { it.legType == SettlementLegTypeCash }.state)
+        assertEquals(SettlementLegFailedState, facts.legOutcomes.single { it.legType == SettlementLegTypeSecurity }.state)
+        assertEquals(SettlementBreakOpenedReasonSecurity, facts.breaks.single().reason)
+    }
+
+    @Test
+    fun repairedCashBreakReattemptsSettlementAndResolvesException() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-cash-repair", venueSessionId = "session-env")
+        seedResources(store, runId = "run-cash-repair", sellerSecurity = "100")
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = store,
+            postTradeProfileResolver = PostTradeProfileResolver.envOnly(
+                profileId = "instant-post-trade-v1",
+                policyVersion = 4
+            )
+        )
+
+        val failed = materializer.materialize("run-cash-repair")
+        val beforeRepair = materializer.materialize("run-cash-repair")
+        seedResources(store, runId = "run-cash-repair", buyerCash = "15025000000000", suffix = "repair")
+        store.appendFacts(
+            SettlementFactBundle(
+                scenarioRunId = "run-cash-repair",
+                repairs = listOf(repair("run-cash-repair", "settlement-break-settlement-obligation-trade-1-1"))
+            )
+        )
+        val repaired = materializer.materialize("run-cash-repair")
+        val afterDuplicate = materializer.materialize("run-cash-repair")
+        val facts = store.factsByScenarioRunId("run-cash-repair")
+
+        assertEquals(1, failed.materializedBreaks)
+        assertEquals(0, beforeRepair.materializedAttempts)
+        assertEquals(1, repaired.materializedAttempts)
+        assertEquals(4, repaired.materializedLedgerEntries)
+        assertEquals(1, repaired.materializedSettlements)
+        assertEquals(1, repaired.materializedResolutions)
+        assertEquals(0, afterDuplicate.materializedAttempts)
+        assertEquals(2, facts.attempts.size)
+        assertEquals(setOf(1, 2), facts.attempts.map { it.attemptNumber }.toSet())
+        assertEquals("settlement-attempt-settlement-obligation-trade-1-2", facts.attempts.maxBy { it.attemptNumber }.settlementAttemptId)
+        assertEquals(4, facts.ledgerEntries.size)
+        assertEquals(1, facts.settlements.size)
+        assertEquals(1, facts.resolutions.size)
+    }
+
+    @Test
     fun environmentInstantProfileStartsAttempts() {
         val persistence = InMemoryRuntimePersistence()
         val store = InMemorySettlementFactStore()
@@ -152,6 +251,80 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals("instant-post-trade-v1", facts.attempts.single().postTradeProfileId)
         assertEquals("instant-post-trade-v1", facts.settlements.single().postTradeProfileId)
         assertEquals(4, facts.attempts.single().postTradePolicyVersion)
+    }
+
+    private fun seedResources(
+        store: SettlementFactStore,
+        runId: String,
+        buyerCash: String = "",
+        sellerSecurity: String = "",
+        suffix: String = "initial"
+    ) {
+        val positions = listOfNotNull(
+            buyerCash.ifBlank { null }?.let {
+                resourcePosition(
+                    runId = runId,
+                    id = "resource-$runId-$suffix-buyer-cash",
+                    participantId = "buyer-1",
+                    accountId = "account-buyer-1",
+                    assetType = SettlementLedgerEntryTypeCash,
+                    assetId = "USD",
+                    quantity = it
+                )
+            },
+            sellerSecurity.ifBlank { null }?.let {
+                resourcePosition(
+                    runId = runId,
+                    id = "resource-$runId-$suffix-seller-security",
+                    participantId = "seller-1",
+                    accountId = "account-seller-1",
+                    assetType = SettlementLedgerEntryTypeSecurity,
+                    assetId = "AAPL",
+                    quantity = it
+                )
+            }
+        )
+        store.appendFacts(SettlementFactBundle(scenarioRunId = runId, resourcePositions = positions))
+    }
+
+    private fun repair(runId: String, breakId: String): SettlementRepairPostedFact {
+        return SettlementRepairPostedFact(
+            settlementRepairId = "repair-$runId-1",
+            settlementBreakId = breakId,
+            settlementObligationId = "settlement-obligation-trade-1",
+            scenarioRunId = runId,
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 4,
+            correlationId = "corr-repair-$runId",
+            causationId = breakId,
+            actorId = "ops-1",
+            occurredAt = java.time.Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun resourcePosition(
+        runId: String,
+        id: String,
+        participantId: String,
+        accountId: String,
+        assetType: String,
+        assetId: String,
+        quantity: String
+    ): SettlementResourcePositionFact {
+        return SettlementResourcePositionFact(
+            resourcePositionId = id,
+            scenarioRunId = runId,
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 4,
+            correlationId = "corr-resource-$runId",
+            causationId = "seed-resource-$runId",
+            participantId = participantId,
+            accountId = accountId,
+            assetType = assetType,
+            assetId = assetId,
+            quantity = quantity,
+            occurredAt = java.time.Instant.parse("2025-12-31T23:59:59Z")
+        )
     }
 
     private fun seedTrade(

@@ -465,8 +465,9 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
-    fun settlementFactsRequirementsCoverAllNineTables() {
+    fun settlementFactsRequirementsCoverAllTenTables() {
         val requirements = PostgresSchemaRequirements.settlementFacts(
+            resourcePositions = "settlement.resource_positions",
             obligations = "settlement.obligations",
             instructions = "settlement.instructions",
             attempts = "settlement.attempts",
@@ -480,6 +481,7 @@ class PostgresSchemaRequirementsTest {
 
         assertEquals(
             setOf(
+                "settlement.resource_positions",
                 "settlement.obligations",
                 "settlement.instructions",
                 "settlement.attempts",
@@ -492,6 +494,8 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.resource_positions.resource_position_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.resource_positions.quantity" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.trade_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.post_trade_profile_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.settlement_instruction_id" })

@@ -38,20 +38,27 @@ import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
 import com.reef.platform.application.settlement.PostTradeProfileResolver
+import com.reef.platform.application.settlement.SettlementBreakOpenedReason
+import com.reef.platform.application.settlement.SettlementBreakOpenedReasonSecurity
 import com.reef.platform.application.settlement.SettlementAttemptStartedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
 import com.reef.platform.application.settlement.SettlementLedgerEntryFact
+import com.reef.platform.application.settlement.SettlementLedgerEntryTypeCash
+import com.reef.platform.application.settlement.SettlementLedgerEntryTypeSecurity
 import com.reef.platform.application.settlement.SettlementLedgerProjection
 import com.reef.platform.application.settlement.SettlementLedgerProjectionView
 import com.reef.platform.application.settlement.SettlementLegOutcomeFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationProjection
 import com.reef.platform.application.settlement.SettlementObligationView
+import com.reef.platform.application.settlement.SettlementRepairPostedActionCash
+import com.reef.platform.application.settlement.SettlementRepairPostedActionSecurity
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
+import com.reef.platform.application.settlement.SettlementResourcePositionFact
 import com.reef.platform.application.settlement.SettlementSettledFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
@@ -433,6 +440,30 @@ class PlatformHttpServer(
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
                 writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/repairs/cash") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, postCashSettlementRepairResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/repairs/security") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, postSecuritySettlementRepairResponse(body))
             }
         }
 
@@ -3393,6 +3424,121 @@ class PlatformHttpServer(
         }
     }
 
+    private fun postCashSettlementRepairResponse(body: String): PlatformHotPathResponse {
+        return postSettlementRepairResponse(
+            body = body,
+            repairKind = "cash",
+            expectedBreakReason = SettlementBreakOpenedReason,
+            repairAction = SettlementRepairPostedActionCash,
+            assetType = SettlementLedgerEntryTypeCash,
+            defaultParticipantId = { it.buyerParticipantId },
+            defaultAssetId = { it.currency },
+            defaultQuantity = { it.cashAmount }
+        )
+    }
+
+    private fun postSecuritySettlementRepairResponse(body: String): PlatformHotPathResponse {
+        return postSettlementRepairResponse(
+            body = body,
+            repairKind = "security",
+            expectedBreakReason = SettlementBreakOpenedReasonSecurity,
+            repairAction = SettlementRepairPostedActionSecurity,
+            assetType = SettlementLedgerEntryTypeSecurity,
+            defaultParticipantId = { it.sellerParticipantId },
+            defaultAssetId = { it.instrumentId },
+            defaultQuantity = { it.quantity }
+        )
+    }
+
+    private fun postSettlementRepairResponse(
+        body: String,
+        repairKind: String,
+        expectedBreakReason: String,
+        repairAction: String,
+        assetType: String,
+        defaultParticipantId: (SettlementObligationCreatedFact) -> String,
+        defaultAssetId: (SettlementObligationCreatedFact) -> String,
+        defaultQuantity: (SettlementObligationCreatedFact) -> String
+    ): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        return try {
+            val json = JsonCodec.parseObject(body)
+            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
+            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
+            val settlementBreakId = json.string("settlementBreakId")
+            require(settlementBreakId.isNotBlank()) { "settlementBreakId is required" }
+            val accountId = json.string("accountId")
+            require(accountId.isNotBlank()) { "accountId is required" }
+            val existing = store.factsByScenarioRunId(scenarioRunId)
+            val breakFact = existing.breaks.firstOrNull { it.settlementBreakId == settlementBreakId }
+                ?: throw IllegalArgumentException("settlementBreakId not found")
+            require(breakFact.reason == expectedBreakReason) { "settlementBreakId is not a $repairKind break" }
+            val obligation = existing.obligations.firstOrNull {
+                it.settlementObligationId == breakFact.settlementObligationId
+            } ?: throw IllegalArgumentException("settlement obligation not found")
+            val principal = currentAdminPrincipal()
+            val occurredAtRaw = json.string("occurredAt")
+            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
+            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
+            val actorId = json.string("actorId").ifBlank { principal.actorId }
+            require(actorId.isNotBlank()) { "actorId is required" }
+            val participantId = json.string("participantId").ifBlank { defaultParticipantId(obligation) }
+            val assetId = json.string("assetId").ifBlank { defaultAssetId(obligation) }
+            val quantity = json.string("quantity").ifBlank { defaultQuantity(obligation) }
+            require(quantity.isNotBlank()) { "quantity is required" }
+            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-$repairKind" }
+            val resourcePositionId = json.string("resourcePositionId").ifBlank {
+                "resource-$settlementBreakId-$repairKind-repair"
+            }
+            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
+            val causationId = json.string("causationId").ifBlank { settlementBreakId }
+            val facts = SettlementFactBundle(
+                scenarioRunId = scenarioRunId,
+                resourcePositions = listOf(
+                    SettlementResourcePositionFact(
+                        resourcePositionId = resourcePositionId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = causationId,
+                        participantId = participantId,
+                        accountId = accountId,
+                        assetType = assetType,
+                        assetId = assetId,
+                        quantity = quantity,
+                        occurredAt = occurredAt
+                    )
+                ),
+                repairs = listOf(
+                    SettlementRepairPostedFact(
+                        settlementRepairId = repairId,
+                        settlementBreakId = settlementBreakId,
+                        settlementObligationId = obligation.settlementObligationId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = causationId,
+                        repairAction = repairAction,
+                        actorId = actorId,
+                        occurredAt = occurredAt
+                    )
+                )
+            )
+            store.appendFacts(facts)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement repair")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement repair failed")))
+        }
+    }
+
     private fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
         val materializer = settlementObligationMaterializer
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
@@ -3414,6 +3560,8 @@ class PlatformHttpServer(
                     "materializedLegOutcomes" to result.materializedLegOutcomes,
                     "materializedLedgerEntries" to result.materializedLedgerEntries,
                     "materializedSettlements" to result.materializedSettlements,
+                    "materializedBreaks" to result.materializedBreaks,
+                    "materializedResolutions" to result.materializedResolutions,
                     "skippedTrades" to result.skippedTrades
                 )
             )
@@ -3501,6 +3649,9 @@ class PlatformHttpServer(
         )
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
+            resourcePositions = json.objectDocuments("resourcePositions").map {
+                resourcePositionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
             obligations = json.objectDocuments("obligations").map {
                 obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
@@ -3528,6 +3679,28 @@ class PlatformHttpServer(
             resolutions = json.objectDocuments("resolutions").map {
                 resolutionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             }
+        )
+    }
+
+    private fun resourcePositionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementResourcePositionFact {
+        return SettlementResourcePositionFact(
+            resourcePositionId = json.string("resourcePositionId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId"),
+            assetType = json.string("assetType"),
+            assetId = json.string("assetId"),
+            quantity = json.string("quantity"),
+            occurredAt = requiredInstant(json, "occurredAt")
         )
     }
 
@@ -3701,7 +3874,7 @@ class PlatformHttpServer(
             postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
-            repairAction = json.string("repairAction").ifBlank { "POST_CASH_LEG_REPAIR" },
+            repairAction = json.string("repairAction").ifBlank { SettlementRepairPostedActionCash },
             actorType = json.string("actorType").ifBlank { "USER" },
             actorId = json.string("actorId"),
             occurredAt = requiredInstant(json, "occurredAt")
@@ -3739,8 +3912,12 @@ class PlatformHttpServer(
     }
 
     private fun requiredInstant(json: JsonDocument, key: String): Instant {
+        return instantFrom(json.string(key), key)
+    }
+
+    private fun instantFrom(value: String, key: String): Instant {
         return try {
-            Instant.parse(json.string(key))
+            Instant.parse(value)
         } catch (_: Exception) {
             throw IllegalArgumentException("$key must be RFC3339")
         }
@@ -3749,6 +3926,22 @@ class PlatformHttpServer(
     private fun settlementFactBundleJson(facts: SettlementFactBundle): Map<String, Any?> {
         return mapOf(
             "scenarioRunId" to facts.scenarioRunId,
+            "resourcePositions" to facts.resourcePositions.map {
+                mapOf(
+                    "resourcePositionId" to it.resourcePositionId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "participantId" to it.participantId,
+                    "accountId" to it.accountId,
+                    "assetType" to it.assetType,
+                    "assetId" to it.assetId,
+                    "quantity" to it.quantity,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "obligations" to facts.obligations.map {
                 mapOf(
                     "settlementObligationId" to it.settlementObligationId,
@@ -3914,9 +4107,11 @@ class PlatformHttpServer(
                         "accountId" to it.accountId,
                         "assetType" to it.assetType,
                         "assetId" to it.assetId,
+                        "openingQuantity" to it.openingQuantity,
                         "debitQuantity" to it.debitQuantity,
                         "creditQuantity" to it.creditQuantity,
                         "netQuantity" to it.netQuantity,
+                        "availableQuantity" to it.availableQuantity,
                         "ledgerEntryCount" to it.ledgerEntryCount,
                         "updatedAt" to it.updatedAt.toString()
                     )

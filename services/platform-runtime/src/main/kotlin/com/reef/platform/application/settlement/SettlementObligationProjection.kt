@@ -96,9 +96,8 @@ object SettlementObligationProjection {
                     cashAmount = obligation.cashAmount,
                     currency = obligation.currency,
                     obligationState = obligation.state,
-                    settlementState = resolution?.settlementState
+                    settlementState = settlement?.settlementState
                         ?: breakFact?.state
-                        ?: settlement?.settlementState
                         ?: attempt?.state
                         ?: instruction?.state
                         ?: obligation.state,

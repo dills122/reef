@@ -18,7 +18,7 @@ class SettlementObligationProjectionTest {
         val view = SettlementObligationProjection.project(facts).single()
 
         assertEquals("obl-1", view.settlementObligationId)
-        assertEquals("RESOLVED", view.settlementState)
+        assertEquals("BROKEN", view.settlementState)
         assertEquals("RESOLVED", view.exceptionState)
         assertEquals("", view.settlementInstructionId)
         assertEquals("", view.settlementAttemptId)
@@ -31,6 +31,34 @@ class SettlementObligationProjectionTest {
         assertEquals("repair-1", view.settlementRepairId)
         assertEquals("resolution-1", view.settlementResolutionId)
         assertEquals(Instant.parse("2026-01-01T00:00:03Z"), view.updatedAt)
+    }
+
+    @Test
+    fun projectsSettledFinalityAndResolvedExceptionIndependently() {
+        val view = SettlementObligationProjection.project(
+            SettlementFactBundle(
+                scenarioRunId = "run-1",
+                obligations = listOf(obligation()),
+                instructions = listOf(instructionCreated()),
+                attempts = listOf(attemptStarted()),
+                legOutcomes = listOf(legOutcome("cash-leg-1", SettlementLegTypeCash), legOutcome("security-leg-1", SettlementLegTypeSecurity)),
+                ledgerEntries = listOf(
+                    ledgerEntry("ledger-buyer-cash-debit", SettlementLedgerEntryTypeCash, SettlementLedgerDirectionDebit),
+                    ledgerEntry("ledger-seller-cash-credit", SettlementLedgerEntryTypeCash, SettlementLedgerDirectionCredit),
+                    ledgerEntry("ledger-seller-security-debit", SettlementLedgerEntryTypeSecurity, SettlementLedgerDirectionDebit),
+                    ledgerEntry("ledger-buyer-security-credit", SettlementLedgerEntryTypeSecurity, SettlementLedgerDirectionCredit)
+                ),
+                settlements = listOf(settled()),
+                breaks = listOf(breakOpened()),
+                repairs = listOf(repairPosted()),
+                resolutions = listOf(resolved())
+            )
+        ).single()
+
+        assertEquals("SETTLED", view.settlementState)
+        assertEquals("RESOLVED", view.exceptionState)
+        assertEquals("settlement-1", view.settlementId)
+        assertEquals("resolution-1", view.settlementResolutionId)
     }
 
     @Test

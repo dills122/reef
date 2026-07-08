@@ -154,7 +154,7 @@ Rules:
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
-- The current materializer creates deterministic settlement instructions, attempts, cash/security leg outcome facts, append-only ledger proof entries, and `SETTLED` facts for `instant-post-trade` obligations. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
+- The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations. If no opening resource facts are seeded for a scenario, instant mode remains unconstrained for fast simulation. If resource facts are seeded, it checks buyer cash and seller securities before finality, emits failed leg outcomes plus a break on insufficiency, and only writes append-only ledger proof entries plus `SETTLED` facts when both legs pass. A posted repair unlocks the next deterministic attempt number; a successful retry writes ledger proof, `SETTLED`, and `RESOLVED` facts. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
 - The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, but it does not yet apply micro-batch netting, model allocation/confirmation/affirmation, or create clearing/novation records.
 - Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
 
@@ -170,17 +170,25 @@ Policy storage:
 Obligation materialization:
 
 - internal command: `POST /internal/admin/settlement/obligations/materialize`
+- cash repair command: `POST /internal/admin/settlement/repairs/cash`
+- security repair command: `POST /internal/admin/settlement/repairs/security`
 - input: `scenarioRunId`/`runId`, optional `venueSessionId`
 - source: persisted runtime trades plus accepted buy/sell orders
 - deterministic obligation id: `settlement-obligation-{tradeId}`
 - deterministic instant instruction id: `settlement-instruction-settlement-obligation-{tradeId}-1`
 - deterministic instant attempt id: `settlement-attempt-settlement-obligation-{tradeId}-1`
+- repaired instant retry id shape: `settlement-attempt-settlement-obligation-{tradeId}-{attemptNumber}`
 - deterministic instant settlement id: `settlement-final-settlement-obligation-{tradeId}`
 - ledger proof: buyer cash debit, seller cash credit, seller security debit, buyer security credit
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 - ledger query surface: `GET /api/v1/settlement/ledger/{scenarioRunId}` returns replayable participant/account/asset balances plus per-settlement proof totals derived from append-only ledger facts
+- resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
+- constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts
+- repair reattempts: a `SettlementRepairPosted` fact against the open break lets the next materialization create attempt `N+1`; successful repaired attempts emit the normal four ledger entries, one `SETTLED` fact, and a `SettlementResolved` fact for the repaired break
+- repair command behavior: the first command paths post either buyer cash or seller security `resourcePosition` facts plus `SettlementRepairPosted` against an existing break; they require `scenarioRunId`, `settlementBreakId`, `accountId`, `actorId`, and deterministic `occurredAt`, and can default participant, asset, quantity, profile, and policy version from the broken obligation
+- repair actions: cash breaks use `POST_CASH_LEG_REPAIR`; security breaks use `POST_SECURITY_LEG_REPAIR`
 
 ## Data Model Direction
 
@@ -239,7 +247,7 @@ SettlementObligationCreated
   -> SettlementInstructionCreated
   -> SettlementAttemptStarted
   -> SettlementFailed(reason=CASH_LEG_FAILED)
-  -> SettlementRepairPosted(action=POST_CASH_LEG_REPAIR)
+  -> SettlementRepairPosted(action=POST_CASH_LEG_REPAIR or POST_SECURITY_LEG_REPAIR)
   -> SettlementResolved
 ```
 
