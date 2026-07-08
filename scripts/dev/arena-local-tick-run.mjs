@@ -10,6 +10,7 @@ import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 loadDotEnv();
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
+const resolveBotRuntimeConfig = await loadRuntimeConfigResolver();
 const args = process.argv.slice(2);
 const config = {
   runId: stringOption("--run-id", `arena-local-tick-${Date.now()}`),
@@ -75,7 +76,14 @@ async function main() {
       }
     }
     await worker.start();
-    const bots = selectedBots.map((bot) => ({ ...bot, artifact: buildArtifact(bot.entryPath, bot.runnerKey) }));
+    const bots = [];
+    for (const bot of selectedBots) {
+      bots.push({
+        ...bot,
+        artifact: buildArtifact(bot.entryPath, bot.runnerKey),
+        runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
+      });
+    }
     for (const bot of bots) {
       const load = await worker.request({
         type: "loadBot",
@@ -219,6 +227,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
       riskProfile: session.bot.riskProfile === undefined ? undefined : session.bot.riskProfile,
+      runtimeConfigPreflight: session.bot.runtimeConfigPreflight.report,
       scoreEligible: session.bot.scoreEligible,
       publicLeaderboard: session.bot.publicLeaderboard,
       ticksRun: counters.ticks,
@@ -808,11 +817,129 @@ function fixtureForBot(bot) {
     participantId: `participant-${bot.runnerKey}`,
     accountId: `account-${bot.runnerKey}`,
     correlationId: `${mode.modeId}-${bot.runnerKey}`,
+    config: {
+      ...(baseFixture.config ?? {}),
+      ...bot.runtimeConfigPreflight.values,
+    },
   };
   if (bot.runnerKey === "multi-symbol" || bot.runnerKey === "technical") {
     return withMultiSymbolData(fixture);
   }
   return fixture;
+}
+
+async function resolveRuntimeConfigForBot(bot) {
+  const descriptors = runtimeConfigDescriptorsForBot(bot);
+  if (descriptors.length === 0) {
+    return {
+      values: Object.freeze({}),
+      report: {
+        provider: "OpenBao",
+        descriptorCount: 0,
+        resolvedKeys: [],
+      },
+    };
+  }
+  const resolved = await resolveBotRuntimeConfig(descriptors, localOpenBaoSecretProvider(bot));
+  return {
+    values: resolved.values,
+    report: {
+      provider: "OpenBao",
+      descriptorCount: descriptors.length,
+      resolvedKeys: Object.keys(resolved.values).sort(),
+    },
+  };
+}
+
+function runtimeConfigDescriptorsForBot(bot) {
+  const runtimeConfig = bot.runtimeConfig;
+  if (runtimeConfig === undefined) return [];
+  const values = runtimeConfig.values ?? {};
+  return Object.keys(values).sort().map((key) => ({
+    key,
+    provider: "OpenBao",
+    secretPath: runtimeConfig.secretPath,
+    required: true,
+    valueType: typeof values[key],
+    description: `local arena ${bot.botId} ${key}`,
+  }));
+}
+
+function localOpenBaoSecretProvider(bot) {
+  return {
+    provider: "OpenBao",
+    async readSecret(path) {
+      if (path !== bot.runtimeConfig?.secretPath) {
+        return undefined;
+      }
+      return Object.freeze({ ...(bot.runtimeConfig.values ?? {}) });
+    },
+  };
+}
+
+async function loadRuntimeConfigResolver() {
+  if (process.versions.bun !== undefined) {
+    const runtimeConfigModuleUrl = new URL("../../packages/bot-sdk/src/runtime-config.ts", import.meta.url);
+    const { resolveBotRuntimeConfigV1 } = await import(runtimeConfigModuleUrl.href);
+    return resolveBotRuntimeConfigV1;
+  }
+  return resolveBotRuntimeConfigLocalV1;
+}
+
+async function resolveBotRuntimeConfigLocalV1(descriptors, secretProvider) {
+  const values = {};
+  const seenKeys = new Set();
+
+  for (const descriptor of descriptors) {
+    validateRuntimeConfigDescriptor(descriptor, secretProvider);
+    if (seenKeys.has(descriptor.key)) {
+      throw new Error(`Duplicate bot runtime config key ${descriptor.key}.`);
+    }
+    seenKeys.add(descriptor.key);
+
+    const secret = await secretProvider.readSecret(descriptor.secretPath);
+    const value = runtimeConfigValueFromSecret(descriptor, secret);
+    if (value === undefined) {
+      if (descriptor.required) {
+        throw new Error(`Missing required bot runtime config ${descriptor.key}.`);
+      }
+      continue;
+    }
+    values[descriptor.key] = assertRuntimeConfigValueType(descriptor, value);
+  }
+
+  return { values: Object.freeze({ ...values }) };
+}
+
+function validateRuntimeConfigDescriptor(descriptor, secretProvider) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(descriptor.key)) {
+    throw new Error(`Invalid bot runtime config key ${descriptor.key}.`);
+  }
+  if (descriptor.provider !== secretProvider.provider) {
+    throw new Error(`Runtime config provider mismatch for ${descriptor.key}.`);
+  }
+  if (descriptor.provider !== "OpenBao") {
+    throw new Error(`Unsupported bot runtime config provider ${descriptor.provider}.`);
+  }
+  if (descriptor.secretPath.trim() === "") {
+    throw new Error(`Runtime config secretPath is required for ${descriptor.key}.`);
+  }
+}
+
+function runtimeConfigValueFromSecret(descriptor, secret) {
+  if (secret === undefined) return undefined;
+  if (typeof secret === "string" || typeof secret === "number" || typeof secret === "boolean") {
+    return secret;
+  }
+  return secret[descriptor.key];
+}
+
+function assertRuntimeConfigValueType(descriptor, value) {
+  const expected = descriptor.valueType ?? typeof value;
+  if (typeof value !== expected) {
+    throw new Error(`Bot runtime config ${descriptor.key} must be ${expected}.`);
+  }
+  return value;
 }
 
 function withMultiSymbolData(fixture) {
