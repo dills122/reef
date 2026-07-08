@@ -23,6 +23,7 @@ type Service struct {
 	orderControls     OrderControls
 	sessionControls   SessionControls
 	matchingProfiles  MatchingProfiles
+	stpMode           SelfTradePreventionMode
 	terminalRetention terminalOrderRetention
 }
 
@@ -110,6 +111,13 @@ type MatchingProfiles struct {
 	Instruments      map[string]MatchAlgorithm
 }
 
+type SelfTradePreventionMode string
+
+const (
+	SelfTradePreventionCancelNewest SelfTradePreventionMode = "CANCEL_NEWEST"
+	SelfTradePreventionCancelOldest SelfTradePreventionMode = "CANCEL_OLDEST"
+)
+
 type SessionState string
 
 const (
@@ -156,6 +164,12 @@ func WithSessionControls(controls SessionControls) Option {
 func WithMatchingProfiles(profiles MatchingProfiles) Option {
 	return func(s *Service) {
 		s.matchingProfiles = profiles
+	}
+}
+
+func WithSelfTradePreventionMode(mode SelfTradePreventionMode) Option {
+	return func(s *Service) {
+		s.stpMode = mode
 	}
 }
 
@@ -236,9 +250,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if !s.reserveOrder(record) {
 		return rejectedResult("evt-reject-duplicate-order-id", cmd.OrderID, "DUPLICATE_ORDER_ID", "orderId already exists", now)
 	}
-	if s.selfTradeWouldOccur(book, record) {
+	if accepted, rejection := s.applySelfTradePrevention(book, record, now); !accepted {
 		s.releaseOrder(record.OrderID)
-		return rejectedResult("evt-reject-self-trade-"+cmd.OrderID, cmd.OrderID, "SELF_TRADE_PREVENTION", "order would trade with resting order from same participant or account", now)
+		return rejection
 	}
 	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 
@@ -339,8 +353,8 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 		proposed.OriginalQuantity = quantityUnits
 		proposed.RemainingQuantity = quantityUnits - alreadyFilled
 		proposed.LimitPrice = limitPrice
-		if s.selfTradeWouldOccur(book, &proposed) {
-			return rejectedResult("evt-reject-self-trade-"+cmd.OrderID, cmd.OrderID, "SELF_TRADE_PREVENTION", "modified order would trade with resting order from same participant or account", now)
+		if accepted, rejection := s.applySelfTradePrevention(book, &proposed, now); !accepted {
+			return rejection
 		}
 	}
 	if resetPriority {
@@ -628,9 +642,34 @@ func (s *Service) validateMatchingProfile(orderID string, instrumentID string, o
 	return &result
 }
 
-func (s *Service) selfTradeWouldOccur(book *orderBook, incoming *orderRecord) bool {
+func (s *Service) applySelfTradePrevention(book *orderBook, incoming *orderRecord, occurredAt string) (bool, domain.SubmitOrderResult) {
+	matches := s.reachableSelfTradeRestingRecords(book, incoming)
+	if len(matches) == 0 {
+		return true, domain.SubmitOrderResult{}
+	}
+	if s.selfTradePreventionMode() == SelfTradePreventionCancelOldest {
+		for _, restingRecord := range matches {
+			s.removeRestingOrder(book, restingRecord)
+			restingRecord.RemainingQuantity = 0
+			restingRecord.Status = domain.OrderStatusCancelled
+			restingRecord.LastUpdatedAt = occurredAt
+			s.trackTerminalOrder(restingRecord)
+		}
+		return true, domain.SubmitOrderResult{}
+	}
+	return false, rejectedResult("evt-reject-self-trade-"+incoming.OrderID, incoming.OrderID, "SELF_TRADE_PREVENTION", "order would trade with resting order from same participant or account", occurredAt)
+}
+
+func (s *Service) selfTradePreventionMode() SelfTradePreventionMode {
+	if s.stpMode != "" {
+		return s.stpMode
+	}
+	return SelfTradePreventionCancelNewest
+}
+
+func (s *Service) reachableSelfTradeRestingRecords(book *orderBook, incoming *orderRecord) []*orderRecord {
 	if incoming == nil || !hasSelfTradeIdentity(incoming) {
-		return false
+		return nil
 	}
 	remaining := incoming.RemainingQuantity
 	opposite := domain.SideSell
@@ -642,26 +681,28 @@ func (s *Service) selfTradeWouldOccur(book *orderBook, incoming *orderRecord) bo
 	if opposite == domain.SideBuy {
 		orders = snapshot.Buys
 	}
+	matches := make([]*orderRecord, 0)
 	for _, resting := range orders {
 		if remaining <= 0 {
-			return false
+			return matches
 		}
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok || restingRecord.OrderID == incoming.OrderID {
 			continue
 		}
 		if incoming.Side == domain.SideBuy && incoming.LimitPrice < restingRecord.LimitPrice {
-			return false
+			return matches
 		}
 		if incoming.Side == domain.SideSell && incoming.LimitPrice > restingRecord.LimitPrice {
-			return false
+			return matches
 		}
 		if sameSelfTradeIdentity(incoming, restingRecord) {
-			return true
+			matches = append(matches, restingRecord)
+			continue
 		}
 		remaining -= restingRecord.RemainingQuantity
 	}
-	return false
+	return matches
 }
 
 func hasSelfTradeIdentity(record *orderRecord) bool {

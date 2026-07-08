@@ -816,6 +816,51 @@ func TestSubmitOrderAllowsDifferentParticipantCross(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderSelfTradeCancelOldestMode(t *testing.T) {
+	service := NewService(WithSelfTradePreventionMode(SelfTradePreventionCancelOldest))
+	resting := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if resting.Accepted == nil {
+		t.Fatalf("expected resting own sell to accept, got %#v", resting)
+	}
+
+	cross := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150500000000",
+		Currency:      "USD",
+	})
+	if cross.Accepted == nil {
+		t.Fatalf("expected cancel-oldest taker to accept, got %#v", cross)
+	}
+	if len(cross.Trades) != 0 {
+		t.Fatalf("expected cancel-oldest self-trade prevention to avoid trades, got %#v", cross.Trades)
+	}
+	restingState, ok := service.OrderState("ord-sell-own")
+	if !ok || restingState.Status != domain.OrderStatusCancelled {
+		t.Fatalf("expected resting own order cancelled, got %#v", restingState)
+	}
+	takerState, ok := service.OrderState("ord-buy-own")
+	if !ok || takerState.Status != domain.OrderStatusAccepted || takerState.RemainingQuantity != "100" {
+		t.Fatalf("expected taker to rest after cancel-oldest prevention, got %#v", takerState)
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 0 || service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected old sell removed and new buy resting")
+	}
+}
+
 func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{
@@ -1529,6 +1574,53 @@ func TestModifyOrderRejectsSelfTradePreventionWithoutMutation(t *testing.T) {
 	}
 	if service.RestingOrders("AAPL", domain.SideBuy) != 1 || service.RestingOrders("AAPL", domain.SideSell) != 1 {
 		t.Fatalf("expected rejected modify to preserve both resting orders")
+	}
+}
+
+func TestModifyOrderSelfTradeCancelOldestMode(t *testing.T) {
+	service := NewService(WithSelfTradePreventionMode(SelfTradePreventionCancelOldest))
+	ownSell := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150300000000",
+		Currency:      "USD",
+	})
+	if ownSell.Accepted == nil {
+		t.Fatalf("expected own sell to accept, got %#v", ownSell)
+	}
+	buy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if buy.Accepted == nil {
+		t.Fatalf("expected non-crossing own buy to accept, got %#v", buy)
+	}
+
+	modify := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-own",
+		QuantityUnits: "100",
+		LimitPrice:    "150300000000",
+	})
+	if modify.Accepted == nil {
+		t.Fatalf("expected cancel-oldest modify to accept, got %#v", modify)
+	}
+	sellState, ok := service.OrderState("ord-sell-own")
+	if !ok || sellState.Status != domain.OrderStatusCancelled {
+		t.Fatalf("expected own sell cancelled by modify, got %#v", sellState)
+	}
+	buyState, ok := service.OrderState("ord-buy-own")
+	if !ok || buyState.Status != domain.OrderStatusAccepted || buyState.LimitPrice != "150300000000" {
+		t.Fatalf("expected modified buy to remain live at new price, got %#v", buyState)
 	}
 }
 

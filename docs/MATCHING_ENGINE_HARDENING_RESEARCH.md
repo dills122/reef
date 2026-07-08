@@ -48,7 +48,8 @@ Reef status:
 - participant/account metadata exists on submit command payloads
 - engine order records retain participant/account identity
 - default self-trade prevention rejects the newest/taker order before mutation
-- alternate STP modes such as cancel oldest, decrement-and-cancel, and cancel both remain future work
+- cancel-oldest mode cancels reachable resting self liquidity and lets the taker continue
+- decrement-and-cancel and cancel-both remain future work
 
 Reference:
 
@@ -98,7 +99,7 @@ Strong areas:
 
 Gaps before calling it production-ready:
 
-- default self-trade prevention exists; alternate STP modes remain pending
+- default and cancel-oldest self-trade prevention exist; decrement-and-cancel and cancel-both remain pending
 - explicit session state gates exist behind service options
 - engine-level max quantity, max notional, and price collar controls exist behind service options
 - local `json.gz` snapshot file round trip exists with versioned metadata; stream offset metadata remains pending
@@ -181,10 +182,10 @@ Goal:
 Acceptance:
 
 - engine order records retain participant/account identity
-- default STP mode is deterministic and documented
+- default and cancel-oldest STP modes are deterministic and documented
 - tests cover same-account and different-account crossing orders
 - event output records self-trade rejects through stable `SELF_TRADE_PREVENTION` code
-- alternate STP modes remain pending
+- decrement-and-cancel and cancel-both need richer event/output semantics
 
 ### 5. Session State Gates
 
