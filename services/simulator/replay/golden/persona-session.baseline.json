@@ -7,6 +7,6 @@
     "maxP95LatencyMs": 250,
     "minTracePassRatePct": 90
   },
-  "requiredRejectCodes": ["INVALID_STATE"],
+  "requiredRejectCodes": ["SELF_TRADE_PREVENTION"],
   "requiredAttribution": ["byActor", "byStrategy"]
 }

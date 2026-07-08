@@ -19,8 +19,8 @@ This defines the canonical metrics for simulator-driven performance runs so we c
 4. `valid_intent_success_rate_pct` (proxy)
 - Source: `quality.validIntentSuccessRatePct`
 - Formula: `totalSuccess / (totalRequests - invalidIntentRejectCount) * 100`
-- Invalid intent reject codes (default): `INVALID_STATE`, `NOT_FOUND`, `VALIDATION_ERROR`
-- Meaning: approximates system reliability after removing clearly invalid lifecycle attempts.
+- Invalid intent reject codes (default): `INVALID_STATE`, `NOT_FOUND`, `SELF_TRADE_PREVENTION`, `VALIDATION_ERROR`
+- Meaning: approximates system reliability after removing clearly invalid business intents.
 
 5. `invalid_intent_rate_pct`
 - Source: `quality.invalidIntentRatePct`

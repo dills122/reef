@@ -133,6 +133,26 @@ func TestBuildSummaryIncludesRejectTaxonomyPercentages(t *testing.T) {
 	}
 }
 
+func TestBuildSummaryClassifiesSelfTradePreventionAsInvalidIntent(t *testing.T) {
+	start := time.Date(2026, 7, 8, 22, 10, 0, 0, time.UTC)
+	end := start.Add(2 * time.Second)
+	results := []requestResult{
+		{Profile: "market_maker", Action: ActionSubmit, Success: true, Latency: 10 * time.Millisecond, StatusCode: 200},
+		{Profile: "market_maker", Action: ActionSubmit, Success: false, Latency: 10 * time.Millisecond, StatusCode: 200, ErrorText: "rejected:SELF_TRADE_PREVENTION", RejectCode: "SELF_TRADE_PREVENTION"},
+		{Profile: "market_maker", Action: ActionSubmit, Success: false, Latency: 10 * time.Millisecond, StatusCode: 500, ErrorText: "http 500"},
+	}
+	report := buildSummary("s-1", start, end, Config{}, results, loadScheduleSummary{})
+	if report.Quality.InvalidIntentRejectCount != 1 {
+		t.Fatalf("expected self-trade prevention as invalid-intent reject, got %+v", report.Quality)
+	}
+	if report.Quality.SystemFailureCount != 1 {
+		t.Fatalf("expected only transport failure in system-failure proxy, got %+v", report.Quality)
+	}
+	if !approxEqual(report.Quality.ValidIntentSuccessRatePct, 50) {
+		t.Fatalf("unexpected valid-intent success rate: %+v", report.Quality)
+	}
+}
+
 func TestRunTraceChecksSkipsWhenLimitDisabled(t *testing.T) {
 	seen := newTraceSampler(10)
 	seen.offer("trace-1")

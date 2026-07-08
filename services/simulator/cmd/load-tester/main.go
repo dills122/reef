@@ -263,7 +263,7 @@ func validTransport(transport string) bool {
 	}
 }
 
-var defaultInvalidIntentRejectCodes = []string{"INVALID_STATE", "NOT_FOUND", "VALIDATION_ERROR"}
+var defaultInvalidIntentRejectCodes = []string{"INVALID_STATE", "NOT_FOUND", "SELF_TRADE_PREVENTION", "VALIDATION_ERROR"}
 
 type trade struct {
 	EventID       string `json:"eventId"`
