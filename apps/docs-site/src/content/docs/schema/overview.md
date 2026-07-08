@@ -2,35 +2,38 @@
 title: Schema Overview
 description: Schema map across API, runtime, and persistence domains.
 banner:
-  content: Design baseline, not locked DDL. Field types/names change as implementation catches up to the blueprint.
+  content: Design baseline, not locked DDL. The source blueprint tracks live migrations where schemas already exist.
 ---
 
 Reef keeps storage split by responsibility. Some tables are durable facts: what was accepted, matched, settled, or rejected. Others are projections: useful views that can be rebuilt from facts. That split lets the local stack stay simple today while leaving room to separate domains later.
 
 | Schema | Status | Owns |
 |---|---|---|
-| [`runtime`](../runtime-schema/) | built | canonical venue facts, command outcomes, operational projections, lifecycle events, outbox |
-| [`boundary`](../boundary-auth-admin-schema/) | built | API idempotency records |
+| [`runtime`](../runtime-schema/) | built | canonical venue facts, command outcomes, lifecycle/order-book projections, market-data snapshots, lifecycle events, outbox |
+| [`boundary`](../boundary-auth-admin-schema/) | built | API idempotency, command capture, stream intake, risk controls, circuit breakers, price collars, rejection audit |
 | [`auth`](../boundary-auth-admin-schema/) | built | roles and actor-role bindings |
-| [`admin`](../boundary-auth-admin-schema/) | built | policy/config/audit operations (calendars, post-trade profiles, override audit) |
+| [`admin`](../boundary-auth-admin-schema/) | built | policy/config operations, including post-trade profiles |
+| `command_log` | built | append-only inbound command capture, active work queue, terminal results |
 | `account` | [planned](../planned-schema/) | users, bots, accounts, immutable ledger entries, holds, risk limits |
-| `settlement` | first slice built | scenario-scoped obligations, instructions, attempts, leg outcomes, ledger proof, settlements, breaks, repairs, resolutions; full allocation/confirmation/clearing/netting remains planned |
-| `market_data` | partially built | top-of-book/depth snapshots plus public trades/bars through runtime-backed reads; dedicated market-data schema remains planned |
-| `stock_data` | built service schema | seed snapshot batches for game/simulation creation; provider calls happen once per `gameSeedId` |
-| `orchestration` | [planned](../planned-schema/) | scheduler definitions and run-state |
-| `analytics` | [planned](../planned-schema/) | transformed reporting/query surfaces |
+| `settlement` | built, expanding | scenario-scoped obligations, instructions, attempts, leg outcomes, ledger proof, settlements, breaks, repairs, resolutions; full allocation/confirmation/clearing/netting remains planned |
+| `arena` | built | bot registry, bot versions, qualification reports, run records/results, enforcement events |
+| `stock_data` | built | per-game-seed stock snapshot facts for deterministic replay; provider calls happen once per `gameSeedId` |
+| `market_data` | runtime-backed | top-of-book/depth/read slices live in `runtime`; no dedicated schema today |
+| `orchestration` | built | scheduler definitions and run-state |
+| `analytics` | initial slice built | simulation-run exports; broader reporting facts/views remain planned |
 
 Arena registry, qualification, and run-record data lives outside the trading hot path on purpose. Bot metadata and leaderboards should not slow order intake or matching. See [How The Game Works](../../arena/how-the-game-works/).
 
 ## Identifier Baseline
 
-Primary identifiers use UUIDs generated with Postgres `gen_random_uuid()` on Postgres 16. UUIDv7 remains a future optimization, not a current requirement.
+Most live hot-path tables use `TEXT` identifiers today, with typed `_uuid`, `_num`, and `_ts` companion columns where native ordering/indexing is needed. Newer Postgres-generated identifiers use `gen_random_uuid()` on Postgres 16. UUIDv7 is a tracked future optimization, not a current requirement.
 
 ## Routine Ownership
 
 - `runtime` routines: append event + outbox, outbox claim/publish/retry/dead-letter, lifecycle mutation commits
-- `orchestration` routines (planned): enqueue run, claim due run, mark success/retry/fail, heartbeat
-- `analytics` routines (planned): refresh daily facts, validation row-count checks
+- `command_log` routines: append + duplicate replay, integrity audit summary
+- `orchestration` routines: enqueue run, claim due run, mark success/retry/fail, heartbeat
+- `analytics` routines (planned beyond exports): refresh daily facts, validation row-count checks
 
 ## Learn More
 

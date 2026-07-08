@@ -90,7 +90,7 @@ Pull requests and branch pushes run:
 - platform-runtime performance guardrails
 - Postgres schema placement and migration integration checks
 
-Coverage reports are uploaded as GitHub Actions artifacts and summarized in the workflow run. Current baseline coverage is intentionally measured before hard thresholds are introduced; once the first CI run records stable numbers, add per-module minimums for the production packages rather than applying one repository-wide percentage.
+Coverage reports are uploaded as GitHub Actions artifacts and summarized in the workflow run. CI enforces hard per-module coverage minimums rather than one repository-wide percentage: `services/matching-engine` must stay at or above 76% (via `scripts/ci/go-coverage.sh`), `services/simulator` must stay at or above 71% (same script), and `services/platform-runtime` enforces a 58% instruction-coverage minimum through Gradle's `jacocoTestCoverageVerification` (`violationRules` block in `build.gradle.kts`).
 
 ## Throughput Stress
 

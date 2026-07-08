@@ -65,7 +65,7 @@ P1 is a hard venue-core correctness gate. It must not rely on settlement or post
 - final settlement state is `RESOLVED`
 - final exception state is `RESOLVED`
 - no failed-to-resolved transition exists without a repair event
-- no real account-ledger mutation is required or implied by this first slice
+- historical: the first slice required or implied no real account-ledger mutation. `D-050` has since authorized real ledger mutation broadly, and obligation materialization now writes real append-only ledger entries for settled instant-post-trade obligations; this criterion no longer reflects current scope (see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md#obligation-materialization))
 - all settlement facts carry `scenarioRunId`, `correlationId`, and `causationId`
 
 P2 proves causation only:
@@ -74,7 +74,7 @@ P2 proves causation only:
 trade -> obligation -> cash-leg break -> repair -> resolved
 ```
 
-It does not authorize broad allocation, confirmation, clearing, account-ledger, or exception UI work.
+P2 did not by itself authorize broad allocation, confirmation, clearing, account-ledger, or exception UI work. `D-050` has since accepted account-ledger mutation and obligation materialization as shipped scope; full allocation/confirmation/clearing workflows and exception UI remain later work unless separately planned.
 
 ## Authoritative Reads
 
@@ -146,7 +146,7 @@ Required field meaning:
 ## Non-Goals
 
 - no new scenario command path separate from public APIs
-- no broad settlement/account-ledger implementation for P2
+- historical: P2 itself did not authorize broad settlement/account-ledger implementation. `D-050` has since authorized and shipped real account-ledger mutation via obligation materialization, so this is no longer a current restriction (see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)); broad allocation/confirmation/clearing/exception-UI work remains unplanned unless separately scoped
 - no UI-only proof as a locking gate
 - no passing a scenario when projection lag remains unknown
 - no treating dry-run smoke as live correctness evidence

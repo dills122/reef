@@ -12,7 +12,7 @@ This steering is intentionally strict on correctness and auditability, while sta
 - lifecycle writes persist in real time
 - EOD jobs are derivative (archive + analytics), not first persistence
 
-2. Event transport is NATS JetStream.
+2. Event transport is the Kafka-compatible durable log (Redpanda) as the active hot-ingress/event-transport target, with NATS JetStream retained as a fallback/comparison provider.
 - distribution and replay window
 - not the sole source of truth
 
@@ -90,7 +90,7 @@ Rules:
 - partition keys should align with common filters and retention windows
 
 3. Retention
-- NATS retention short-lived (days)
+- durable log retention (Redpanda/Kafka-compatible topics, or NATS JetStream streams where used as fallback) short-lived (days)
 - runtime canonical history medium/long horizon with partition strategy
 - archive files long-term immutable
 
@@ -117,7 +117,7 @@ Operational metrics required:
 1. EOD-first persistence
 - deferring writes until close risks catastrophic intraday data loss
 
-2. Treating JetStream as primary system-of-record
+2. Treating the durable log (Redpanda/Kafka-compatible, or NATS JetStream in fallback/comparison use) as primary system-of-record
 - retention/consumer policies are transport concerns, not canonical audit storage
 
 3. Over-indexing hot tables early
@@ -148,4 +148,5 @@ Operational metrics required:
 - Postgres 16 UUID functions baseline: https://www.postgresql.org/docs/16/functions-uuid.html
 - Postgres transaction isolation: https://www.postgresql.org/docs/current/transaction-iso.html
 - Postgres locking and `FOR UPDATE`: https://www.postgresql.org/docs/current/sql-select.html
-- NATS JetStream concepts and retention semantics: https://docs.nats.io/nats-concepts/jetstream
+- Redpanda/Kafka-compatible log concepts and retention semantics: https://docs.redpanda.com/current/get-started/architecture/
+- NATS JetStream concepts and retention semantics (fallback/comparison provider): https://docs.nats.io/nats-concepts/jetstream

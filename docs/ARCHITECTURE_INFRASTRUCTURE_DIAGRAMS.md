@@ -65,6 +65,12 @@ flowchart LR
     Smoke["make dev-smoke-venue-event-materializer"]
   end
 
+  subgraph Settlement["Settlement (Post-Trade)"]
+    SettlementMaterializer["TradeSettlementObligationMaterializer\nobligations, instructions, attempts, breaks"]
+    SettlementFacts[("settlement fact store\nPostgres / in-memory")]
+    SettlementLedger["SettlementLedgerProjection\ncash/security balances + settlement proof"]
+  end
+
   UI --> API
   Sim --> API
   Manual --> API
@@ -100,6 +106,12 @@ flowchart LR
   Smoke --> API
   Smoke --> MatStats
   Smoke --> CanonOutcomes
+
+  RuntimeDB --> SettlementMaterializer
+  SettlementMaterializer --> SettlementFacts
+  SettlementFacts --> SettlementLedger
+  SettlementLedger --> API
+  API -. admin repair/materialize .-> SettlementFacts
 ```
 
 Current completion boundary:
@@ -137,6 +149,7 @@ Current important implementation pieces:
 - Compact command-outcome projection can materialize submit results and lifecycle runtime events from event-batch outcomes without returning Postgres to the matching-engine hot path.
 - Normalized orders, executions, trades, runtime events, UI views, metrics, and leaderboards remain downstream projections.
 - Full order-table projection from this path uses compact submit command metadata carried in the event-batch outcome, with the durable command-payload join retained only as a fallback for older payloads.
+- `TradeSettlementObligationMaterializer` reads settled trades from the runtime projection and materializes settlement obligation/instruction/attempt/ledger facts; `SettlementLedgerProjection` derives cash/security balances and a per-settlement proof view (`cashBalanced`/`securityBalanced`) from those facts, with admin endpoints for obligation materialization and cash/security repair. This mechanism is unit/integration tested; a sustained-simulator-load soak of the full obligation-to-ledger path is not yet captured as evidence.
 
 ## Target Direction
 
@@ -466,7 +479,7 @@ End-to-end ownership rules:
 1. Venue lifecycle projection.
    - Project compact submit outcomes from canonical command outcomes into `submit_results` and `runtime_events`.
    - Add full `orders` projection after event batches carry submit command metadata or the projector joins durable command payloads.
-   - Expand cancel/modify/fill/reject outcomes from canonical rows into normalized read tables.
+   - Expand cancel/modify/fill/reject outcomes from canonical rows into normalized read tables. Cancel/modify commands are already processed and acked end-to-end on the direct-stream path (dispatch, outcome, ack) with dedicated tests (`TestProcessorProcessesModifyAndCancelCommands`); this step is about projecting those outcomes into the normalized `orders` read model, not about command processing itself.
    - Keep projections downstream and rebuildable.
    - Add deterministic tests that event batch, canonical rows, projection rows, and query APIs agree.
 

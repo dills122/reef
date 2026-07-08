@@ -111,7 +111,9 @@ Exit criteria:
 
 ### P2: Stream-Ack Command Ingress
 
-Objective: make durable acceptance a JetStream publish-ack operation with deterministic partition routing.
+Status: shipped, superseded by D-041. JetStream stream-ack ingress was implemented and measured, including a clean single-droplet DO soak (see "Stream-Ack Sunset Checkpoint (July 3, 2026)" in [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md)), but the full accepted-to-completed lifecycle did not reach the required throughput under real drain pressure. `docs/DECISIONS.md` D-041 moved the active hot-ingress target to a Kafka-compatible durable producer with matching-engine direct consumption; JetStream stream-ack remains available only as fallback/comparison, not the primary gate.
+
+Objective (superseded): make durable acceptance a JetStream publish-ack operation with deterministic partition routing.
 
 Deliverables:
 - define command envelope fields in protobuf/contracts.
@@ -127,7 +129,9 @@ Exit criteria:
 
 ### P3: Stream Idempotency And Partition Workers
 
-Objective: process accepted stream commands exactly once at the business outcome layer under at-least-once delivery.
+Status: shipped, superseded by D-041. Scoped idempotency and generic partition workers calling the matching engine per command were implemented, but `docs/DECISIONS.md` D-040/D-041 confirmed this generic worker-to-engine path is transitional scaffolding, not the target high-throughput architecture. The target path now has matching-engine shards consume assigned command partitions directly and publish durable venue event batches, ack'ing only after that publication succeeds.
+
+Objective (superseded): process accepted stream commands exactly once at the business outcome layer under at-least-once delivery.
 
 Deliverables:
 - add scoped idempotency guard with payload hash, command ID, stream sequence, and first-seen timestamp.
@@ -173,6 +177,8 @@ Exit criteria:
 - projection lag is observable and does not affect command correctness.
 
 ### P5.5: Engine Shards And Hot Book Structure
+
+Status: done locally. The Reef-owned book (`services/matching-engine/internal/book`) with ordered price levels, FIFO queues per price, and direct order-id unlinking shipped, and the "July 4, 2026 Checkpoint" in [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md) and [`PERFORMANCE_LEARNINGS.md`](./PERFORMANCE_LEARNINGS.md) shows single hot-book and multi-book partitionable throughput clearing this phase's targets; the hot book is no longer the active limiter. Snapshot/replay checksum work remains open and is tracked as its own next slice, not a blocker for this phase's exit criteria.
 
 Objective: make matching-engine partition ownership and shard-local book state explicit before adding deeper persistence and replay work.
 

@@ -1,28 +1,32 @@
 ---
 title: Boundary, Auth & Admin Schema
-description: API idempotency, roles/actor-roles, and policy/audit tables.
+description: API boundary guardrails, roles/actor-roles, and admin policy tables.
 ---
 
 ## Boundary Schema
 
-**`boundary.idempotency_records`** — `client_id text`, `route text`, `idempotency_key text`, `request_hash text`, `response_status int`, `response_body jsonb`, `created_at timestamptz`, `expires_at timestamptz`; primary key `(client_id, route, idempotency_key)`. Backs the `Idempotency-Key` contract on every `/api/v1` mutation — see [API Overview](../../api/overview/).
+**`boundary.api_idempotency_records`** — scoped idempotency records keyed by `(client_id, route, idempotency_key)`, with status, payload, created-at, and expiry fields. Backs the `Idempotency-Key` contract on every `/api/v1` mutation — see [API Overview](../../api/overview/).
+
+**`boundary.api_command_captures`** — request/response capture rows for accepted command intake, including command id, request payload, status, response/error fields, correlation id, and received/update timestamps.
+
+**`boundary.stream_command_intake`** — stream-backed intake reservations keyed by scope and idempotency key, with payload hash, command id, route, subject/stream, partition, sequence, and publish markers.
+
+**`boundary.account_risk_controls`** and **`boundary.account_risk_decisions`** — pre-acceptance account/bot risk policy and non-allow audit facts.
+
+**`boundary.command_circuit_breakers`**, **`boundary.instrument_price_collars`**, and **`boundary.boundary_rejections`** — fail-closed command gates and rejection audit for stream health, instrument price limits, and other boundary guardrails.
 
 ## Auth Schema
 
-**`auth.roles`** — `role_id text pk`, `permissions jsonb`, `created_at timestamptz`.
+**`auth.auth_roles`** — `role_id text pk`, `permissions text`.
 
-**`auth.actor_roles`** — `actor_id text`, `role_id text`, `created_at timestamptz`; primary key `(actor_id, role_id)`.
+**`auth.auth_actor_roles`** — `actor_id text`, `role_id text`; primary key `(actor_id, role_id)`.
 
 ## Admin Schema
 
-**`admin.market_calendar_profiles`** — `profile_id text pk`, `timezone text`, `calendar_json jsonb`, `version int`, `active boolean`.
-
-**`admin.settlement_cycle_profiles`** — `profile_id text pk`, `default_cycle text` (e.g. `T+1`), `rules_json jsonb`, `version int`, `active boolean`.
-
-**`admin.override_audit`** — `override_id uuid pk`, `actor_id text`, `reason_code text`, `note text`, `target_type text`, `target_id text`, `occurred_at timestamptz`.
+**`admin.post_trade_profiles`** — post-trade profile policy rows keyed by `profile_id`, with mode, settlement cycle, netting mode, ledger posting mode, policy version, active flag, and update timestamp. A partial unique index enforces only one active profile.
 
 ## Learn More
 
 - `docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md` — full blueprint (source for this page)
 - [Runtime Schema](../runtime-schema/) — canonical venue facts and lifecycle projections
-- [Planned Schema](../planned-schema/) — account/settlement/market_data/analytics design targets
+- [Planned Schema](../planned-schema/) — account and future analytics/archive design targets

@@ -27,27 +27,31 @@ Framework code should wire the application together, not define business behavio
 
 ## Module Boundaries
 
-Prefer a structure like:
+Actual top-level structure:
 
 ```text
 services/platform-runtime/
-  src/main/kotlin/.../
+  src/main/kotlin/com/reef/platform/
     api/
     application/
+      admin/
+      analytics/
+      arena/
+      settlement/
     domain/
     infrastructure/
-    readmodel/
-    simulation/           # optional runtime-side control/orchestration hooks
+    tools/
 ```
 
 Guidance:
 
 - `domain/` contains business rules, entities, value objects, and events
-- `application/` contains command handlers, workflow orchestration, and use cases
-- `api/` contains HTTP or WebSocket endpoints and DTO mapping
+- `application/` contains command handlers, workflow orchestration, use cases, and query-side projections, organized into subpackages by bounded context (`admin/`, `analytics/`, `arena/`, `settlement/`, and similar); projections live alongside the domain area they read from (e.g. `application/settlement/SettlementLedgerProjection.kt`) rather than in a separate top-level read-model package
+- `api/` contains HTTP or WebSocket endpoints, DTO mapping, and projection workers that bridge events into read models (e.g. `CanonicalProjectionWorker`, `OrderLifecycleProjectionWorker`)
 - `infrastructure/` contains persistence, messaging, and engine adapters
-- `readmodel/` contains query-side projections
-- `simulation/` contains only runtime-side control/orchestration hooks when needed; simulator actors still use platform commands/APIs
+- `tools/` contains standalone operational utilities (e.g. benchmarks) that are not part of the runtime's request/command path
+
+There is no dedicated `simulation/` package today; the Go `services/simulator` CLI is the simulation surface, and it only talks to the runtime through platform commands/APIs (see Scope above). If runtime-side simulation-control hooks are ever added, they should live under a bounded-context subpackage of `application/` following the same pattern, not bypass it.
 
 ## Design Rules
 

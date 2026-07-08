@@ -33,7 +33,7 @@ Early product slices:
 
 - Rich platform UI and operator workflows.
 - Full post-trade lifecycle: allocation, confirmation, affirmation, clearing, novation, netting, and exception UI.
-- Dedicated broad `account`, `settlement`, and `market_data` schemas beyond current focused slices.
+- Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
 - Broader analytics facts, dashboards, and reports beyond initial run export.
 - Public bot submission flow, hosted sandbox execution at scale, leaderboards, and full scoring policies.
 - Kafka-compatible durable command log as default hot-ingress path. Local proof exists; default promotion still needs longer evidence.

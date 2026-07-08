@@ -522,7 +522,7 @@ and produce all of:
 
 1. Promote the pooled runner protocol into the arena package boundary.
 2. Wire `startSession`/`runTick`/`stopSession` into `arena-local-run`.
-3. Add arena package skeleton under `services/simulator/internal/arena`.
+3. Add arena package skeleton — no `services/simulator/internal/arena` Go package exists; the actual arena runner/orchestrator logic lives in `scripts/dev/arena-*.mjs` (e.g. `arena-local-run.mjs`, `arena-runner-pool-smoke.mjs`) plus the Kotlin control-plane module `services/platform-runtime/src/main/kotlin/com/reef/platform/application/arena/`.
 4. Add the arena mode config and built-in bot catalog shape.
 5. Add local custom bot fixtures.
 6. Route accepted venue command drafts through `/api/v1`.

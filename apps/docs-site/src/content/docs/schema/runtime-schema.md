@@ -3,7 +3,7 @@ title: Runtime Schema
 description: Canonical venue facts and operational lifecycle projections.
 ---
 
-`runtime` has two distinct responsibilities: compact canonical persistence from durable `VenueEventBatch` output, and rebuildable operational projections for order/status/query surfaces. Synchronous normalized order/trade/execution/UI writes never go back into the matching-engine hot path.
+`runtime` has three responsibilities: compact canonical persistence from durable `VenueEventBatch` output, rebuildable operational projections for order/status/query surfaces, and the runtime event backbone/outbox. Synchronous normalized order/trade/execution/UI writes never go back into the matching-engine hot path.
 
 ## Canonical Venue Facts
 
@@ -11,17 +11,23 @@ description: Canonical venue facts and operational lifecycle projections.
 
 **`runtime.canonical_command_outcomes`** — command-level lookup/replay rows projected from canonical event batches: command id, command type, result status, reject code, order/instrument identifiers, stream sequence/offset, result payload, payload hash. Backs the [Command Status API](../../api/commands/).
 
+**`runtime.canonical_command_results` / `runtime.canonical_venue_events`** — earlier append-only canonical tables used by legacy/compat append/project routines. Do not add new consumers without checking the consolidation status in the source blueprint.
+
 ## Operational Order Lifecycle Projections
 
-These are query/read projections unless a decision explicitly promotes a field into canonical persistence.
+These are query/read projections unless a decision explicitly promotes a field into canonical persistence. Live hot-path fields are generally stored as `TEXT` for compatibility, with typed companion columns added for native sorting/indexing.
 
-**`runtime.orders`** — `order_id uuid pk`, `engine_order_id text unique`, `participant_id uuid`, `account_id uuid`, `instrument_id uuid`, `side text`, `order_type text`, `quantity numeric(20,0)`, `limit_price numeric(20,8)`, `currency char(3)`, `time_in_force text`, `status text`, `accepted_at timestamptz`, `updated_at timestamptz`.
+**`runtime.orders`** — immutable accepted-order facts keyed by `order_id text`; includes engine, participant/account, instrument, side/type, quantity, limit, currency, time-in-force, accepted-at, client-order, run, and venue-session fields. Current status does not live here.
 
-**`runtime.executions`** — `execution_id uuid pk`, `event_id uuid unique`, `order_id uuid`, `instrument_id uuid`, `quantity numeric(20,0)`, `execution_price numeric(20,8)`, `currency char(3)`, `occurred_at timestamptz`.
+**`runtime.order_lifecycle_state`** — rebuildable current-state projection for status, original/remaining/filled quantities, last event time, and book-facing indexes.
 
-**`runtime.trades`** — `trade_id uuid pk`, `event_id uuid unique`, `execution_id uuid`, `buy_order_id uuid`, `sell_order_id uuid`, `instrument_id uuid`, `quantity numeric(20,0)`, `price numeric(20,8)`, `currency char(3)`, `occurred_at timestamptz`.
+**`runtime.market_data_snapshots`** — top-of-book snapshot projection. There is no dedicated `market_data` schema today.
 
-Current read APIs use these runtime facts/projections for public trade tape, intraday bars, top-of-book/depth, and participant-scoped own-order reads. Dedicated `market_data` schema objects remain a planned extraction target.
+**`runtime.executions`** and **`runtime.trades`** — projected execution/trade facts, including typed companions and a monotonic trade-tape cursor on trades.
+
+**`runtime.submit_results`**, **reference tables**, and **`runtime.projection_watermarks`** support submit outcome lookup, reference data, and projector progress.
+
+Current read APIs use these runtime facts/projections for public trade tape, top-of-book/depth, participant-scoped own-order reads, and data availability. Dedicated `market_data` schema objects remain a possible extraction target, not a live schema.
 
 Settlement obligation materialization reads persisted `runtime.trades` plus accepted buy/sell orders as canonical trade evidence. Settlement writes append-only post-trade facts downstream; runtime trade and matching history are not mutated.
 
@@ -44,9 +50,9 @@ Public read APIs expose the append-only facts, projected obligation state, and r
 
 ## Event & Outbox
 
-**`runtime.runtime_events`** — `event_id uuid pk`, `event_type text`, `order_id uuid`, `trace_id uuid`, `causation_id uuid`, `correlation_id uuid`, `actor_id text`, `producer text`, `schema_version text`, `sequence_number bigint`, `payload_json jsonb`, `occurred_at timestamptz`, `created_at timestamptz`. Indexes: `(occurred_at)`, `(trace_id, sequence_number)`, `(order_id, occurred_at)`.
+**`runtime.runtime_events`** — text-keyed runtime event facts with trace/causation/correlation ids, actor, producer, schema version, sequence number, payload, text occurred-at, created-at, and typed companion columns.
 
-**`runtime.event_outbox`** — `outbox_id bigserial pk`, `event_id uuid unique`, `stream text`, `subject text`, `payload_json jsonb`, `status text check ('pending','published','retry_wait','dead_letter')`, `attempt_count int`, `next_attempt_at timestamptz`, `last_error text`, `created_at timestamptz`, `published_at timestamptz`. Index: `(status, next_attempt_at)`.
+**`runtime.event_outbox`** — relay rows with stream/subject/payload, `pending`/`published`/`retry_wait`/`dead_letter` status, attempt tracking, worker id, next-at, last-error, created-at, and published-at fields. Claim/publish/retry/dead-letter routines own state transitions.
 
 ## Learn More
 

@@ -122,6 +122,8 @@ Settlement must not mutate matching history. It can create settlement facts, exc
 
 ## Post-Trade Re-Entry Criteria
 
+Historical note: this section originally gated broad post-trade work (real account-ledger mutation, an operator exception workbench, and broad settlement analytics) behind the criteria below. Re-entry has since happened: `D-050` (accepted; see [`DECISIONS.md`](./DECISIONS.md#d-050-settlement-instant-post-trade-profile)) authorized real ledger mutation for the `instant-post-trade` profile, and obligation materialization now writes real append-only ledger entries, with obligation and ledger query surfaces shipped (see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md#obligation-materialization)). An operator exception workbench UI and broad settlement analytics remain not built. The criteria below are kept as a historical record of what gated re-entry, not as a current restriction on ledger mutation.
+
 Post-trade work remains gated until the venue-core path can prove causation and replay. Do not restart broad allocation, confirmation, settlement, clearing, account-ledger, or UI work until all of these are true:
 
 1. `P1_GOLDEN_HIDDEN_CROSS_T1` is aligned with [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md), golden artifacts are refreshed, replay is stable, hidden-liquidity visibility assertions pass, and order lifecycle states match the contract.
@@ -145,12 +147,12 @@ Explicitly out of scope for the first re-entry slice:
 - full allocation workflow
 - full confirmation/affirmation workflow
 - clearing/netting
-- real account ledger mutation
+- ~~real account ledger mutation~~ — re-entered under `D-050`; obligation materialization now performs real append-only ledger mutation for settled instant-post-trade obligations
 - buying-power/hold enforcement after match
-- operator exception workbench UI
-- broad settlement analytics
+- operator exception workbench UI — still not built
+- broad settlement analytics — still not built
 
-Those modules can start only after the P2-only facts prove causation through real canonical trade references.
+Those modules could start only after the P2-only facts proved causation through real canonical trade references. That happened: obligation materialization consumes canonical trades and orders, and `D-050` accepted real ledger mutation as shipped scope. Full allocation/confirmation/affirmation workflows, clearing/netting, buying-power/hold enforcement, an operator exception workbench UI, and broad settlement analytics remain future work unless separately planned.
 
 ## Market Data / History API
 
@@ -201,10 +203,12 @@ lives in [`STOCK_DATA_SEEDING_PLAN.md`](./STOCK_DATA_SEEDING_PLAN.md).
 | `/api/v1/orders/current` | bot/user | `runtime.orders + runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
 | `/api/v1/orders/history` | bot/user | `runtime.orders + runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
 | `/api/v1/settlement/facts/{scenarioRunId}` | user/admin/test harness | `settlement append-only fact store` | durable fact read | durable fact rows | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
+| `/api/v1/settlement/obligations/{scenarioRunId}` | user/admin/test harness | settlement obligation projection over append-only facts | projection-backed read | derived from durable settlement facts | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
+| `/api/v1/settlement/ledger/{scenarioRunId}` | user/admin/test harness | append-only settlement ledger entry facts | projection-backed read | replayable participant/account/asset balances derived from ledger facts | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
 | `/orders`, `/trades`, `/events`, `/traces` legacy/internal surfaces | admin/test | runtime tables | direct runtime-table read | current local runtime state | varies by source | internal/admin | diagnostic |
 | venue-session-specific depth | bot/user | planned projected lifecycle facts with session key | not built | not available | not available | public market data | deferred |
-| account balances, holds, buying power | bot/user | planned account ledger/projection | not built | not available | not available | participant/account scope | deferred |
-| settlement obligations/breaks/repairs | user/admin | planned settlement facts/projections | not built | not available | not available | participant/admin | deferred |
+| account balances, holds, buying power | bot/user | settlement ledger projection (`/api/v1/settlement/ledger/{scenarioRunId}`) for scenario-scoped balances; broader per-account buying-power/hold enforcement remains planned | partially built | derived from durable ledger facts for scenario-scoped balances | none beyond settlement fact persistence completeness | participant/account scope | partial |
+| settlement obligations/breaks/repairs | user/admin | settlement facts/projections (`/api/v1/settlement/facts`, `/api/v1/settlement/obligations`) | built | derived from durable settlement facts | none beyond settlement fact persistence completeness | participant/admin | active |
 
 Read source definitions:
 

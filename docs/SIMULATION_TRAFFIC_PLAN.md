@@ -1,5 +1,7 @@
 # Reef Simulation Traffic Plan
 
+Historical note: this document describes the original profile-mix traffic model (percentage-based `mm`/`institutional`/`retail`/`noise` worker pools). That model shipped — see "Rollout Phases" below — but persona/traffic-profile work has since moved to a richer session/persona config model in [`SIMULATOR_PERSONA_CONFIG.md`](./SIMULATOR_PERSONA_CONFIG.md) (named personas, per-symbol market conditions, multi-instrument universes, `--session-config` files). Treat `SIMULATOR_PERSONA_CONFIG.md` as the current doc for persona/traffic-profile work; this file is kept for historical rationale (regimes, validation invariants, metrics) that still applies.
+
 ## Goal
 
 Evolve from generic load testing into realistic participant-driven traffic that models institutional and retail-style flows while preserving deterministic replay and traceability.
@@ -105,10 +107,11 @@ Per profile:
 
 ## Rollout Phases
 
-### Phase A: Profile-Aware CLI (Next)
-- add `--profile` mixes to simulator (`mm`, `institutional`, `retail`, `noise`)
-- add per-profile worker pools and metrics
-- keep current JSON summary format with profile extensions
+### Phase A: Profile-Aware CLI — Shipped
+- `--profile-mm-pct` / `--profile-inst-pct` / `--profile-retail-pct` / `--profile-noise-pct` flags (plus `REEF_PROFILE_*_PCT` env overrides, default `35/30/25/10` matching the "Suggested First Profile Mix" above) are implemented in `services/simulator/cmd/load-tester/main.go`, with validation that the four percentages sum to 100
+- per-profile worker pools and mix-driven action routing are implemented, with test coverage in `services/simulator/cmd/load-tester/main_test.go` (e.g. `TestExplicitActionMixOverridesSessionProfileMix`) and `action_policy_test.go`
+- current JSON summary format carries profile extensions (actor/strategy/persona attribution — see `docs/SIMULATOR_UPGRADE_BACKLOG.md`)
+- superseded for further persona/traffic-profile work by the session/persona config model in [`SIMULATOR_PERSONA_CONFIG.md`](./SIMULATOR_PERSONA_CONFIG.md)
 
 ### Phase B: Regime Engine
 - add multi-regime run config file

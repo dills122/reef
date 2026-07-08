@@ -152,8 +152,14 @@ contracts/
   proto/
 packages/
   scenario-definitions/
+  bot-sdk/
 docs/
   steering/
+infra/
+  hetzner-core/
+  simulation-runner/
+  local-kube/
+  do-benchmark/
 ```
 
 Additional folders are acceptable when justified, but avoid mixing runtime, UI, and contract code in the same top-level area.
@@ -222,8 +228,9 @@ At minimum, plan for:
 
 - start with the simplest interface that preserves service boundaries
 - synchronous HTTP between runtime and engine is acceptable only as an early migration/parity fallback; gRPC/protobuf is the default synchronous internal transport
-- introduce NATS when async workflows materially improve the design
-- use JetStream stream-backed command intake when the goal is durable accepted-command throughput under bot/simulator load
+- introduce Kafka-compatible durable streams when ordered high-throughput ingress or venue event batches materially improve the design
+- keep NATS/JetStream available for workflow messaging and fallback/comparison stream-backed intake where it fits
+- use the configured durable ingress provider when the goal is accepted-command throughput under bot/simulator load
 - return `202 Accepted` only after the configured durable ingress mechanism has acknowledged acceptance
 - reject before durable acceptance when backpressure, stream health, partition lag, worker health, or DB flush lag indicates the platform cannot safely drain
 - do not expose raw `/internal/*` HTTP routes to users, bots, SDKs, or third-party integrations
