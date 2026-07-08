@@ -1915,6 +1915,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, fetched.status)
             assertContains(fetched.body, "\"scenarioRunId\":\"p2-run-api\"")
             assertContains(fetched.body, "\"settlementObligationId\":\"obl-1\"")
+            assertContains(fetched.body, "\"settlementInstructionId\":\"instruction-1\"")
             assertContains(fetched.body, "\"settlementAttemptId\":\"attempt-1\"")
             assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
             assertContains(fetched.body, "\"postTradePolicyVersion\":2")
@@ -2196,9 +2197,11 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"materializedObligations\":1")
+            assertContains(posted.body, "\"materializedInstructions\":1")
             assertContains(posted.body, "\"materializedAttempts\":1")
             assertEquals(200, fetched.status)
             assertContains(fetched.body, "\"settlementObligationId\":\"settlement-obligation-trade-materialize\"")
+            assertContains(fetched.body, "\"settlementInstructionId\":\"settlement-instruction-settlement-obligation-trade-materialize-1\"")
             assertContains(fetched.body, "\"settlementAttemptId\":\"settlement-attempt-settlement-obligation-trade-materialize-1\"")
             assertContains(fetched.body, "\"postTradeProfileId\":\"scenario-instant-v1\"")
             assertContains(fetched.body, "\"postTradePolicyVersion\":9")
@@ -2207,6 +2210,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(obligations.body, "\"obligationsCount\":1")
             assertContains(obligations.body, "\"settlementState\":\"ATTEMPT_STARTED\"")
             assertContains(obligations.body, "\"exceptionState\":\"NONE\"")
+            assertContains(obligations.body, "\"settlementInstructionId\":\"settlement-instruction-settlement-obligation-trade-materialize-1\"")
             assertContains(obligations.body, "\"settlementAttemptNumber\":1")
         } finally {
             server.stop(0)
@@ -3937,12 +3941,23 @@ class PlatformHttpServerBoundaryTest {
                 "state":"OBLIGATION_CREATED",
                 "occurredAt":"2026-01-01T00:00:00Z"
               }],
-              "attempts":[{
-                "settlementAttemptId":"attempt-1",
+              "instructions":[{
+                "settlementInstructionId":"instruction-1",
                 "settlementObligationId":"obl-1",
                 "scenarioRunId":"$scenarioRunId",
                 "correlationId":"corr-1",
                 "causationId":"obl-1",
+                "instructionType":"DVP",
+                "state":"INSTRUCTION_CREATED",
+                "occurredAt":"2026-01-01T00:00:00Z"
+              }],
+              "attempts":[{
+                "settlementAttemptId":"attempt-1",
+                "settlementObligationId":"obl-1",
+                "settlementInstructionId":"instruction-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"instruction-1",
                 "attemptNumber":1,
                 "state":"ATTEMPT_STARTED",
                 "occurredAt":"2026-01-01T00:00:00Z"

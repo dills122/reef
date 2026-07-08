@@ -154,7 +154,8 @@ Rules:
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
-- The current materializer starts deterministic settlement attempts for `instant-post-trade` obligations and leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
+- The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations and leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
+- Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
 
 Policy storage:
 
@@ -171,6 +172,7 @@ Obligation materialization:
 - input: `scenarioRunId`/`runId`, optional `venueSessionId`
 - source: persisted runtime trades plus accepted buy/sell orders
 - deterministic obligation id: `settlement-obligation-{tradeId}`
+- deterministic instant instruction id: `settlement-instruction-settlement-obligation-{tradeId}-1`
 - deterministic instant attempt id: `settlement-attempt-settlement-obligation-{tradeId}-1`
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
@@ -230,6 +232,7 @@ Current P2 facts can map into this direction:
 
 ```text
 SettlementObligationCreated
+  -> SettlementInstructionCreated
   -> SettlementAttemptStarted
   -> SettlementFailed(reason=CASH_LEG_FAILED)
   -> SettlementRepairPosted(action=POST_CASH_LEG_REPAIR)
@@ -250,8 +253,10 @@ SettlementObligationCreated
    - keep current P2 assertion compatibility
 
 3. Add instant clearing and gross settlement before full settlement expansion.
+   - settlement instruction facts before settlement attempts
    - auto clearing acceptance
    - gross obligation settlement first
+   - cash/security leg outcomes and append-only ledger before `SETTLED`
    - deterministic per-tick micro-batch netting as follow-up
    - netting policy version on obligations once netting is enabled
 

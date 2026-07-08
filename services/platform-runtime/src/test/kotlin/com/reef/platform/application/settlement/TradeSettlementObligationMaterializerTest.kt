@@ -38,6 +38,7 @@ class TradeSettlementObligationMaterializerTest {
 
         assertEquals(1, result.scannedTrades)
         assertEquals(1, result.materializedObligations)
+        assertEquals(1, result.materializedInstructions)
         assertEquals(1, result.materializedAttempts)
         assertEquals(0, result.skippedTrades)
         assertEquals("settlement-obligation-trade-1", obligation.settlementObligationId)
@@ -47,8 +48,10 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals("seller-1", obligation.sellerParticipantId)
         assertEquals("15025000000000", obligation.cashAmount)
         assertEquals(1, facts.obligations.size)
+        assertEquals("settlement-instruction-settlement-obligation-trade-1-1", facts.instructions.single().settlementInstructionId)
         assertEquals("settlement-attempt-settlement-obligation-trade-1-1", facts.attempts.single().settlementAttemptId)
         assertEquals("settlement-obligation-trade-1", facts.attempts.single().settlementObligationId)
+        assertEquals(facts.instructions.single().settlementInstructionId, facts.attempts.single().settlementInstructionId)
     }
 
     @Test
@@ -77,6 +80,7 @@ class TradeSettlementObligationMaterializerTest {
 
         assertEquals("venue-instant-v1", obligation.postTradeProfileId)
         assertEquals(6, obligation.postTradePolicyVersion)
+        assertEquals(1, facts.instructions.size)
         assertEquals(1, facts.attempts.size)
     }
 
@@ -92,8 +96,10 @@ class TradeSettlementObligationMaterializerTest {
 
         assertEquals(1, result.scannedTrades)
         assertEquals(1, result.materializedObligations)
+        assertEquals(0, result.materializedInstructions)
         assertEquals(0, result.materializedAttempts)
         assertEquals(DefaultPostTradeProfileId, facts.obligations.single().postTradeProfileId)
+        assertEquals(emptyList(), facts.instructions)
         assertEquals(emptyList(), facts.attempts)
     }
 
@@ -114,7 +120,9 @@ class TradeSettlementObligationMaterializerTest {
         val result = materializer.materialize("run-env-instant")
         val facts = store.factsByScenarioRunId("run-env-instant")
 
+        assertEquals(1, result.materializedInstructions)
         assertEquals(1, result.materializedAttempts)
+        assertEquals("instant-post-trade-v1", facts.instructions.single().postTradeProfileId)
         assertEquals("instant-post-trade-v1", facts.attempts.single().postTradeProfileId)
         assertEquals(4, facts.attempts.single().postTradePolicyVersion)
     }

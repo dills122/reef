@@ -20,6 +20,7 @@ data class SettlementObligationView(
     val obligationState: String,
     val settlementState: String,
     val exceptionState: String,
+    val settlementInstructionId: String,
     val settlementAttemptId: String,
     val settlementAttemptNumber: Int,
     val settlementBreakId: String,
@@ -32,6 +33,7 @@ data class SettlementObligationView(
 object SettlementObligationProjection {
     fun project(facts: SettlementFactBundle): List<SettlementObligationView> {
         val breaksByObligation = facts.breaks.groupBy { it.settlementObligationId }
+        val instructionsByObligation = facts.instructions.groupBy { it.settlementObligationId }
         val attemptsByObligation = facts.attempts.groupBy { it.settlementObligationId }
         val repairsByObligation = facts.repairs.groupBy { it.settlementObligationId }
         val resolutionsByObligation = facts.resolutions.groupBy { it.settlementObligationId }
@@ -41,6 +43,9 @@ object SettlementObligationProjection {
                 val breakFact = breaksByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementBreakOpenedFact> { it.occurredAt }.thenBy { it.settlementBreakId })
+                val instruction = instructionsByObligation[obligation.settlementObligationId]
+                    .orEmpty()
+                    .maxWithOrNull(compareBy<SettlementInstructionCreatedFact> { it.occurredAt }.thenBy { it.settlementInstructionId })
                 val attempt = attemptsByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementAttemptStartedFact> { it.occurredAt }.thenBy { it.settlementAttemptId })
@@ -52,6 +57,7 @@ object SettlementObligationProjection {
                     .maxWithOrNull(compareBy<SettlementResolvedFact> { it.occurredAt }.thenBy { it.settlementResolutionId })
                 val updatedAt = listOfNotNull(
                     obligation.occurredAt,
+                    instruction?.occurredAt,
                     attempt?.occurredAt,
                     breakFact?.occurredAt,
                     repair?.occurredAt,
@@ -70,11 +76,12 @@ object SettlementObligationProjection {
                     cashAmount = obligation.cashAmount,
                     currency = obligation.currency,
                     obligationState = obligation.state,
-                    settlementState = resolution?.settlementState ?: breakFact?.state ?: attempt?.state ?: obligation.state,
+                    settlementState = resolution?.settlementState ?: breakFact?.state ?: attempt?.state ?: instruction?.state ?: obligation.state,
                     exceptionState = resolution?.exceptionState
                         ?: repair?.let { SettlementRepairPostedState }
                         ?: breakFact?.state
                         ?: SettlementExceptionNoneState,
+                    settlementInstructionId = instruction?.settlementInstructionId.orEmpty(),
                     settlementAttemptId = attempt?.settlementAttemptId.orEmpty(),
                     settlementAttemptNumber = attempt?.attemptNumber ?: 0,
                     settlementBreakId = breakFact?.settlementBreakId.orEmpty(),

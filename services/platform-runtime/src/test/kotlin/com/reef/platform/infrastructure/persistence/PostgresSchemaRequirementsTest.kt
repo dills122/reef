@@ -393,9 +393,10 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
-    fun settlementFactsRequirementsCoverAllFiveTables() {
+    fun settlementFactsRequirementsCoverAllSixTables() {
         val requirements = PostgresSchemaRequirements.settlementFacts(
             obligations = "settlement.obligations",
+            instructions = "settlement.instructions",
             attempts = "settlement.attempts",
             breaks = "settlement.breaks",
             repairs = "settlement.repairs",
@@ -405,6 +406,7 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "settlement.obligations",
+                "settlement.instructions",
                 "settlement.attempts",
                 "settlement.breaks",
                 "settlement.repairs",
@@ -414,7 +416,10 @@ class PostgresSchemaRequirementsTest {
         )
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.trade_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.post_trade_profile_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.settlement_instruction_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.instruction_type" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_attempt_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_instruction_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.attempt_number" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.reason" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.post_trade_policy_version" })

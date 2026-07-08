@@ -20,6 +20,7 @@ class SettlementObligationProjectionTest {
         assertEquals("obl-1", view.settlementObligationId)
         assertEquals("RESOLVED", view.settlementState)
         assertEquals("RESOLVED", view.exceptionState)
+        assertEquals("", view.settlementInstructionId)
         assertEquals("", view.settlementAttemptId)
         assertEquals(0, view.settlementAttemptNumber)
         assertEquals("break-1", view.settlementBreakId)
@@ -39,6 +40,7 @@ class SettlementObligationProjectionTest {
 
         assertEquals("OBLIGATION_CREATED", view.settlementState)
         assertEquals("NONE", view.exceptionState)
+        assertEquals("", view.settlementInstructionId)
         assertEquals("", view.settlementAttemptId)
         assertEquals(0, view.settlementAttemptNumber)
         assertEquals("", view.settlementBreakId)
@@ -50,14 +52,33 @@ class SettlementObligationProjectionTest {
             SettlementFactBundle(
                 scenarioRunId = "run-1",
                 obligations = listOf(obligation()),
+                instructions = listOf(instructionCreated()),
                 attempts = listOf(attemptStarted())
             )
         ).single()
 
         assertEquals("ATTEMPT_STARTED", view.settlementState)
         assertEquals("NONE", view.exceptionState)
+        assertEquals("instruction-1", view.settlementInstructionId)
         assertEquals("attempt-1", view.settlementAttemptId)
         assertEquals(1, view.settlementAttemptNumber)
+        assertEquals(Instant.parse("2026-01-01T00:00:01Z"), view.updatedAt)
+    }
+
+    @Test
+    fun projectsInstructionCreatedStateBeforeAttempt() {
+        val view = SettlementObligationProjection.project(
+            SettlementFactBundle(
+                scenarioRunId = "run-1",
+                obligations = listOf(obligation()),
+                instructions = listOf(instructionCreated())
+            )
+        ).single()
+
+        assertEquals("INSTRUCTION_CREATED", view.settlementState)
+        assertEquals("NONE", view.exceptionState)
+        assertEquals("instruction-1", view.settlementInstructionId)
+        assertEquals("", view.settlementAttemptId)
         assertEquals(Instant.parse("2026-01-01T00:00:01Z"), view.updatedAt)
     }
 
@@ -83,6 +104,20 @@ class SettlementObligationProjectionTest {
     private fun attemptStarted(): SettlementAttemptStartedFact {
         return SettlementAttemptStartedFact(
             settlementAttemptId = "attempt-1",
+            settlementObligationId = "obl-1",
+            settlementInstructionId = "instruction-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "instruction-1",
+            occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun instructionCreated(): SettlementInstructionCreatedFact {
+        return SettlementInstructionCreatedFact(
+            settlementInstructionId = "instruction-1",
             settlementObligationId = "obl-1",
             scenarioRunId = "run-1",
             postTradeProfileId = "instant-post-trade-v1",

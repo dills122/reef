@@ -891,6 +891,9 @@ Summary:
 - profile resolution order is scenario/run override, then venue/session override, then platform default, then hard default `ops-realistic-v1`.
 - non-local standalone platform boot should require explicit `POST_TRADE_PROFILE`.
 - first implementation should keep P2 settlement assertion compatibility while expanding toward auto allocation/confirmation/affirmation, auto clearing acceptance/novation, gross settlement first, per-tick micro-batch netting later, settlement obligation, seeded failure, repair, synchronous typed account-ledger posting, settled ledger state, resolved exception state, score calculation, and async read projections.
+- settlement instruction facts sit between obligations and attempts, so attempts have explicit DvP instruction causation before leg outcomes and ledger finality.
+- `SETTLED` is reserved for financial finality after cash/security leg and ledger proof; `RESOLVED` remains exception/case closure.
+- gross instant settlement ledger proof comes before micro-batch netting expansion.
 - default game scoring haircut is `100%` for same-tick pending, `50%` for held or repair-pending obligations, and `0%` for rejected or voided obligations.
 
 Primary references:

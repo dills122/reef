@@ -11,6 +11,7 @@ data class SettlementObligationMaterializationResult(
     val scenarioRunId: String,
     val scannedTrades: Int,
     val materializedObligations: Int,
+    val materializedInstructions: Int,
     val materializedAttempts: Int,
     val skippedTrades: Int
 )
@@ -25,6 +26,7 @@ class TradeSettlementObligationMaterializer(
         val trades = runtimePersistence.trades().sortedWith(compareBy<TradeCreated> { it.occurredAt }.thenBy { it.tradeId })
         val eventsById = runtimePersistence.events().associateBy { it.eventId }
         val obligations = mutableListOf<SettlementObligationCreatedFact>()
+        val instructions = mutableListOf<SettlementInstructionCreatedFact>()
         val attempts = mutableListOf<SettlementAttemptStartedFact>()
         var skipped = 0
 
@@ -73,15 +75,18 @@ class TradeSettlementObligationMaterializer(
             )
             obligations += obligation
             if (selection.mode == InstantPostTradeMode) {
-                attempts += attemptFact(obligation)
+                val instruction = instructionFact(obligation)
+                instructions += instruction
+                attempts += attemptFact(obligation, instruction)
             }
         }
 
-        if (obligations.isNotEmpty() || attempts.isNotEmpty()) {
+        if (obligations.isNotEmpty() || instructions.isNotEmpty() || attempts.isNotEmpty()) {
             settlementFactStore.appendFacts(
                 SettlementFactBundle(
                     scenarioRunId = scenarioRunId,
                     obligations = obligations,
+                    instructions = instructions,
                     attempts = attempts
                 )
             )
@@ -90,6 +95,7 @@ class TradeSettlementObligationMaterializer(
             scenarioRunId = scenarioRunId,
             scannedTrades = trades.size,
             materializedObligations = obligations.size,
+            materializedInstructions = instructions.size,
             materializedAttempts = attempts.size,
             skippedTrades = skipped
         )
@@ -122,15 +128,32 @@ class TradeSettlementObligationMaterializer(
         )
     }
 
-    private fun attemptFact(obligation: SettlementObligationCreatedFact): SettlementAttemptStartedFact {
-        return SettlementAttemptStartedFact(
-            settlementAttemptId = "settlement-attempt-${obligation.settlementObligationId}-1",
+    private fun instructionFact(obligation: SettlementObligationCreatedFact): SettlementInstructionCreatedFact {
+        return SettlementInstructionCreatedFact(
+            settlementInstructionId = "settlement-instruction-${obligation.settlementObligationId}-1",
             settlementObligationId = obligation.settlementObligationId,
             scenarioRunId = obligation.scenarioRunId,
             postTradeProfileId = obligation.postTradeProfileId,
             postTradePolicyVersion = obligation.postTradePolicyVersion,
             correlationId = obligation.correlationId,
             causationId = obligation.settlementObligationId,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun attemptFact(
+        obligation: SettlementObligationCreatedFact,
+        instruction: SettlementInstructionCreatedFact
+    ): SettlementAttemptStartedFact {
+        return SettlementAttemptStartedFact(
+            settlementAttemptId = "settlement-attempt-${obligation.settlementObligationId}-1",
+            settlementObligationId = obligation.settlementObligationId,
+            settlementInstructionId = instruction.settlementInstructionId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = instruction.settlementInstructionId,
             attemptNumber = 1,
             occurredAt = obligation.occurredAt
         )
