@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
+import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 
 data class CommandStatusView(
     val commandId: String,
@@ -86,6 +87,9 @@ object CommandStatusResponse {
                 engineResultStatus.equals("rejected", ignoreCase = true) -> "REJECTED"
                 else -> "COMPLETED"
             }
+        }
+        if (source == "event_batch") {
+            return "EVENT_PUBLISHED"
         }
         return when (status) {
             CommandLogStatus.RECEIVED -> "ACCEPTED"
@@ -177,6 +181,37 @@ fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
         rejectCode = rejectCode,
         resultPayloadJson = resultPayloadJson,
         source = "canonical_outcome"
+    )
+}
+
+fun VenueEventBatchCommandReference.toStatusView(): CommandStatusView {
+    return CommandStatusView(
+        commandId = commandId,
+        clientId = "",
+        route = "",
+        idempotencyKey = "",
+        status = CommandLogStatus.PROCESSING,
+        processingMode = CommandProcessingMode.StreamAck,
+        responseStatus = 202,
+        responsePayloadJson = "",
+        lastError = "",
+        canonicalMaterialized = false,
+        engineResultStatus = resultStatus,
+        batchId = batchId,
+        shardId = shardId,
+        partition = partition,
+        commandStream = commandStream,
+        eventStream = eventStream,
+        streamSequence = streamSequence,
+        deliveredCount = deliveredCount,
+        commandType = commandType,
+        payloadHash = payloadHash,
+        instrumentId = instrumentId,
+        participantId = commandStatusParticipantId(resultPayloadJson),
+        orderId = orderId,
+        rejectCode = rejectCode,
+        resultPayloadJson = resultPayloadJson,
+        source = "event_batch"
     )
 }
 

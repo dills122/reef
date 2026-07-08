@@ -762,6 +762,40 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun apiV1CommandStatusEndpointReturnsEventPublishedForDurableVenueEventBatchBeforeCanonicalOutcome() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.recordVenueEventBatch(
+            venueEventBatch(
+                batchId = "batch-status-event-published",
+                commandId = "cmd-status-event-published",
+                resultStatus = "accepted"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = NoopCommandCaptureStore(),
+            runtimePersistence = persistence
+        )
+        try {
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-event-published", headers = apiReadHeaders())
+
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-status-event-published\"")
+            assertContains(status.body, "\"status\":\"EVENT_PUBLISHED\"")
+            assertContains(status.body, "\"internalStatus\":\"PROCESSING\"")
+            assertContains(status.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(status.body, "\"responseStatus\":202")
+            assertContains(status.body, "\"canonicalMaterialized\":false")
+            assertContains(status.body, "\"batchId\":\"batch-status-event-published\"")
+            assertContains(status.body, "\"resultStatus\":\"accepted\"")
+            assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
+            assertContains(status.body, "\"source\":\"event_batch\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1CommandStatusRejectsMismatchedReadPrincipal() {
         val commandLogStore = InMemoryCommandLogStore()
         val captureStore = CommandLogCommandCaptureStore(

@@ -393,14 +393,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     }
 
     override fun materializeVenueEventBatch(batch: VenueEventBatchFact): Long {
-        val existing = venueEventBatches[batch.batchId]
-        if (existing != null) {
-            check(existing.payloadChecksum == batch.payloadChecksum) {
-                "venue event batch checksum conflict for batchId ${batch.batchId}"
-            }
+        if (!recordVenueEventBatch(batch)) {
             return 0
         }
-        venueEventBatches[batch.batchId] = batch
         var inserted = 0L
         batch.outcomes.forEach { outcome ->
             val canonical = CanonicalCommandOutcome(
@@ -429,6 +424,43 @@ class InMemoryRuntimePersistence : RuntimePersistence {
 
     override fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return commandOutcomes[commandId]
+    }
+
+    override fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
+        return venueEventBatches.values.asSequence()
+            .mapNotNull { batch ->
+                val outcome = batch.outcomes.firstOrNull { it.commandId == commandId } ?: return@mapNotNull null
+                VenueEventBatchCommandReference(
+                    commandId = outcome.commandId,
+                    batchId = batch.batchId,
+                    shardId = batch.shardId,
+                    partition = batch.partition,
+                    commandStream = batch.commandStream,
+                    eventStream = batch.eventStream,
+                    streamSequence = outcome.streamSequence,
+                    deliveredCount = outcome.deliveredCount,
+                    commandType = outcome.commandType,
+                    payloadHash = outcome.payloadHash,
+                    instrumentId = outcome.instrumentId,
+                    orderId = outcome.orderId,
+                    resultStatus = outcome.resultStatus,
+                    rejectCode = outcome.rejectCode,
+                    resultPayloadJson = outcome.resultPayloadJson
+                )
+            }
+            .firstOrNull()
+    }
+
+    internal fun recordVenueEventBatch(batch: VenueEventBatchFact): Boolean {
+        val existing = venueEventBatches[batch.batchId]
+        if (existing != null) {
+            check(existing.payloadChecksum == batch.payloadChecksum) {
+                "venue event batch checksum conflict for batchId ${batch.batchId}"
+            }
+            return false
+        }
+        venueEventBatches[batch.batchId] = batch
+        return true
     }
 
     override fun rebuildOrderLifecycleState(): Long {

@@ -2540,6 +2540,9 @@ class PlatformHttpServer(
             api.canonicalCommandOutcome(commandId)?.let { outcome ->
                 return outcome.toStatusView().withReadScopeFrom(capturedStatus)
             }
+            api.venueEventBatchCommandReference(commandId)?.let { reference ->
+                return reference.toStatusView().withReadScopeFrom(capturedStatus)
+            }
         } catch (ex: Exception) {
             System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
         }
