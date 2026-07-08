@@ -72,13 +72,13 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - no-op publisher, stream-direct no-DB, JetStream stream-ack, Redpanda/Kafka-compatible stream-ack, and materializer profiles must reject unsafe settings before runs.
    - bounded in-memory intake retention is required for no-DB ceiling profiles.
 
-3. Add named crash/restart tests for the direct durable path.
+3. Harden the named crash/restart gate for the direct durable path.
    - API publishes then exits before boundary published-marker update.
    - matching engine publishes `VenueEventBatch` then exits before command offset commit.
    - matching engine fails before event-batch publish, leaving command offset uncommitted.
    - materializer commits compact canonical rows then exits before event-batch offset commit.
    - projector exits mid-batch and replays idempotently.
-   - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, selects commands that cover all four direct-stream partitions, stops/restarts engine/materializer/projector roles around accepted commands, injects one engine command-ack failure after durable event-batch publish, injects one materializer ack/offset failure after canonical commit, injects one projector failure after read-model rows commit but before watermark commit, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
+   - local gate target already exists as `make dev-smoke-venue-event-crash-gate`: it starts the Redpanda direct-stream materializer profile, selects commands that cover all four direct-stream partitions, stops/restarts engine/materializer/projector roles around accepted commands, injects one engine command-ack failure after durable event-batch publish, injects one materializer ack/offset failure after canonical commit, injects one projector failure after read-model rows commit but before watermark commit, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
 
 4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
@@ -94,6 +94,7 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - bot/user read-surface claims match `/api/v1/data/availability` and the read-surface inventory in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
 
 5. Promote only clean local gates to the DigitalOcean/OpenTofu harness.
+   - the bridge harness exists under `infra/do-benchmark/` with `scripts/dev/do-benchmark-host.sh`, `make do-benchmark`, and local report checks; the remaining requirement is clean promotion evidence, not initial scaffold creation.
    - first remote tier is `2000` completed/sec for at least `5m`.
    - next tiers are `5000`, then `7500`, only after the lower tier is stable.
    - reports must include attempted, accepted, direct-acked, materialized, projected, lag, p95/p99, restart counts, and artifact paths.

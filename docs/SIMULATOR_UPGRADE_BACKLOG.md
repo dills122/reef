@@ -74,8 +74,8 @@ Finding:
 
 ### Tier 1: High-Leverage
 
-- multi-seed batch runner with aggregate reports
-- scenario baseline drift detection (compare against saved golden summaries)
+- multi-seed batch runner with aggregate reports: first slice exists as `scripts/dev/sim-batch.mjs`
+- scenario baseline drift detection: first slice exists as `scripts/dev/scenario-drift-check.mjs`
 - richer replay artifact bundle (decision stream + summary + trace sample)
 
 ### Tier 2: Realism and Operability
