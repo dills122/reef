@@ -86,6 +86,7 @@ Use these docs for active work:
 - Scenario contracts: [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md)
 - Scenario live assertion plan: [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - Minimal settlement exception facts: [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
+- Settlement and clearing strategy: [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
 - Command intake process: [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md)
 - Current plan: [`WORK_PLAN.md`](./WORK_PLAN.md)
 - Roadmap: [`ROADMAP.md`](./archive/ROADMAP.md)
