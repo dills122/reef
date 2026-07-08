@@ -90,6 +90,7 @@ Priority: P2
 Implemented here:
 - `command_log/0014_integrity_audit_views.sql` adds `command_log.command_integrity_violations`.
 - `command_log.command_integrity_summary()` groups those violations for smoke, CI, or operator checks.
+- `scripts/dev/command-log-integrity-check.mjs` fails when any grouped violation count is nonzero.
 - `scripts/dev/command-log-prune.mjs` deletes orphan child rows when `DEV_COMMAND_LOG_PRUNE_APPLY=1`.
 
 The checks cover orphan payloads, orphan queue rows, orphan results, active commands missing reconstructed queue state, and terminal results that still have active queue rows.
@@ -102,10 +103,8 @@ Priority: P2
 
 Implemented here:
 - The new command-log audit view exposes active commands missing queue rows.
+- `make dev-command-log-integrity-check` gates on that audit view.
 - The command-log prune utility can now remove orphan child rows surfaced by that view.
-
-Still needed:
-- Wire this into a smoke or operational check after queue reconstruction.
 
 ### 7. Two canonical command models exist
 
@@ -155,6 +154,7 @@ Target:
 - Preserved first canonical command-result writes and conflict detection in `runtime/0027_audit_persistence_hardening.sql`.
 - Added numeric top-of-book expression index in `runtime/0027_audit_persistence_hardening.sql`.
 - Added command-log integrity diagnostics in `command_log/0014_integrity_audit_views.sql`.
+- Added `make dev-command-log-integrity-check`.
 - Added orphan-child cleanup to `scripts/dev/command-log-prune.mjs`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
