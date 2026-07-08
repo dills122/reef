@@ -15,7 +15,8 @@ Looks up a previously submitted command by ID, across command-log and canonical-
   "clientId": "...",
   "route": "/api/v1/orders/submit",
   "idempotencyKey": "...",
-  "status": "RECEIVED | PROCESSING | COMPLETED | FAILED",
+  "status": "ACCEPTED | IN_FLIGHT | COMPLETED | REJECTED | FAILED",
+  "internalStatus": "RECEIVED | PROCESSING | COMPLETED | FAILED",
   "processingMode": "sync-result | captured-ack | stream-ack | accepted-async",
   "responseStatus": 200,
   "responsePayloadJson": "...",
@@ -39,6 +40,8 @@ Looks up a previously submitted command by ID, across command-log and canonical-
 }
 ```
 
+`status` is provider-neutral. `ACCEPTED` means the command is durably accepted but not yet draining; `IN_FLIGHT` means worker/engine processing has started; `COMPLETED` means a canonical accepted outcome exists; `REJECTED` means a canonical business reject exists; `FAILED` means a terminal failure outcome exists. Legacy queue/provider state remains diagnostic as `internalStatus`.
+
 `canonicalMaterialized` is `true` once the command's outcome has been durably materialized into compact canonical Postgres storage from the venue event batch (stream-ack mode) rather than only captured at intake.
 
 ### Accepted-Response Shape (Async Modes)
@@ -48,7 +51,7 @@ When a mutation returns `202 Accepted` in stream-ack/accepted-async mode, the im
 ```json
 {
   "commandId": "...",
-  "status": "RECEIVED",
+  "status": "ACCEPTED",
   "processingMode": "stream-ack",
   "statusUrl": "/api/v1/commands/{commandId}"
 }

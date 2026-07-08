@@ -55,11 +55,16 @@ Query params: optional `instrumentId`, optional `limit`.
 
 Returns participant-scoped own-order history. Supports optional `instrumentId` and bounded `limit`.
 
+## GET /api/v1/orders/fills
+
+Returns participant-scoped fills by joining runtime orders and executions. Supports optional `instrumentId` and bounded `limit`.
+
 ## GET /api/v1/data/availability
 
-Returns the current read-surface inventory: endpoint, source type, freshness model, visibility scope, required/optional filters, projection lag, and watermark where available. Scenario and bot reports use this to distinguish durable fact reads from projection freshness.
+Returns the current read-surface inventory: endpoint, source type, freshness model, visibility scope, required/optional filters, projection lag, and watermark where available. Scenario and bot reports use this to distinguish durable fact reads from projection freshness. The inventory now includes settlement facts as scenario evidence.
 
 ## Learn More
 
 - [API Overview](../overview/) — boundary contract shared across all routes
+- [Settlement APIs](../settlement/) — scenario settlement evidence and ledger proof reads
 - `docs/TRADING_MARKET_DATA_BOUNDARIES.md` — why order-entry and market-data are kept as separate planes

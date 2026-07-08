@@ -5,13 +5,13 @@ banner:
   content: Planning/early-build stage. This is not an accepted final design — see Learn More for the living planning document.
 ---
 
-Bot Arena is a tournament-style layer where submitted or built-in trading agents compete in deterministic simulated markets — while preserving Reef's core rules: bots use the same venue command paths as manual users, bot code is untrusted, runs are replayable and auditable, and game rules are config-driven, not hard-coded venue behavior.
+Bot Arena is the game layer on top of Reef. Bots compete in deterministic simulated markets, but their orders still enter the same venue as everyone else. That keeps the arena more interesting than a backtest: bot behavior can change liquidity, fills, and outcomes for other bots.
 
 ## The Idea
 
-Each bot starts with configured capital, risk limits, a visible-data policy, and an allowed action set. The simulator drives seeded market conditions and other participants. Bots observe an explicit public snapshot, emit order intents, and compete on mode-specific leaderboards.
+Each bot starts with capital, risk limits, visible market data, and an allowed action set. The simulator drives seeded market conditions and background participants. Bots observe the public snapshot, choose orders, and compete under a scoring mode.
 
-Competitor bots are not passive backtest observers — their orders enter the same simulated venue, affect liquidity and price formation, and influence other bots' outcomes. Alongside them:
+Competitor bots are not passive observers. Their orders enter the simulated venue, affect liquidity and price formation, and influence other bots' outcomes. Alongside them:
 
 - operator-controlled market-maker bots (public behavior)
 - operator-controlled background-traffic bots
@@ -28,7 +28,7 @@ bot artifact -> sandbox runtime -> Bot SDK interface -> arena runtime protocol
   -> events, read models, analytics, leaderboard
 ```
 
-The matching engine never knows whether an order came from a manual user, simulator persona, or arena bot — the arena adapter translates bot actions into normal venue commands with actor identity, command IDs, idempotency keys, trace/causation IDs, run ID, and bot version metadata.
+The matching engine does not need special arena behavior. The arena adapter turns bot actions into normal venue commands with actor identity, command IDs, idempotency keys, trace/causation IDs, run ID, and bot version metadata.
 
 ## Where Things Stand
 
