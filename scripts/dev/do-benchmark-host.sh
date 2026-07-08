@@ -75,6 +75,8 @@ optional:
   REEF_DO_STRESS_REPEAT_SAMPLES=1
   REEF_DO_STRESS_DURATION=30s
   REEF_DO_DRAIN_BACKPRESSURE_POLICY=control-room-fresh
+  REEF_DO_REQUIRE_DB_DIAGNOSTICS=1
+  REEF_DO_REQUIRE_PG_STAT_IO=1
   REEF_DO_IMAGE_MODE=dockerhub|source
 
 optional R2 artifact export (compressed debug data, uploaded from the worker
@@ -153,6 +155,8 @@ cmd_plan_goal() {
   printf '  max_p99_ms=%s\n' "${max_p99:-none}"
   printf '  min_stream_direct_active_partitions=%s\n' "${REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS:-none}"
   printf '  max_stream_direct_partition_skew=%s\n' "${REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW:-none}"
+  printf '  require_db_diagnostics=%s\n' "${REEF_DO_REQUIRE_DB_DIAGNOSTICS:-0}"
+  printf '  require_pg_stat_io=%s\n' "${REEF_DO_REQUIRE_PG_STAT_IO:-0}"
   printf '  image_mode=%s\n' "${REEF_DO_IMAGE_MODE:-source}"
 }
 

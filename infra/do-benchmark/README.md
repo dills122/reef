@@ -93,6 +93,39 @@ Use `run` while iterating; it provisions or reuses the stack, syncs the checkout
 
 `run-destroy` provisions the stack, syncs the checkout, runs the benchmark, fetches artifacts, validates reports, and destroys resources in one command. Keep it for final lifecycle confirmation, not for every debugging iteration.
 
+## Named Materializer 10k Gate
+
+Use the wrapper below for the current Redpanda direct-stream plus
+venue-event-materializer promotion gate. It pins the known-good c-16 shape,
+10k target, 1024 load workers, SLO gates, repeated samples, and partition-spread
+checks so operators do not need to hand-rebuild the environment block.
+
+```bash
+make do-materializer-10k-gate
+
+REEF_DO_CONFIRM_DESTROYABLE=1 \
+make do-materializer-10k-gate ARGS=run-destroy
+```
+
+Gate tiers:
+
+| Tier | Command | Duration | Samples | Use |
+|---|---|---:|---:|---|
+| `short` | `make do-materializer-10k-gate ARGS=run-destroy` | `60s` | `3` | Default promotion confirmation. |
+| `soak-5m` | `REEF_DO_MATERIALIZER_10K_GATE_TIER=soak-5m make do-materializer-10k-gate ARGS=run-destroy` | `5m` | `2` | First longer remote soak. |
+| `soak-15m` | `REEF_DO_MATERIALIZER_10K_GATE_TIER=soak-15m make do-materializer-10k-gate ARGS=run-destroy` | `15m` | `1` | Only after `soak-5m` is clean. |
+
+Default pass gates:
+
+- attempted rps >= `9900`
+- accepted rps >= `9900`
+- p95 <= `100ms`
+- p99 <= `200ms`
+- direct-stream active partitions >= `16`
+- direct-stream partition skew <= `4`
+- DB WAL/activity/settings/`pg_stat_io` diagnostics present
+- accepted/direct-acked/materialized gaps = `0`
+
 Default report gates validate measured stress reports, expected rates, no unexpected `5xx`, no unallowed failures, profile-specific worker/direct/materializer health, and telemetry probes. Set `REEF_DO_MAX_P95_MS` or `REEF_DO_MAX_P99_MS` directly, or set `REEF_DO_TARGET_P95_MS` / `REEF_DO_TARGET_P99_MS` when using goal mode, to make tail-latency targets fail the report check. The check prints a normalized evidence summary for attempted, accepted, direct-acked, materialized, projected, lag, p95, and p99, and writes `do-benchmark-evidence-summary.json` into the fetched artifact directory. Embedded load-tester trace checks are diagnostic for submit-only stream-ack stress runs because not every accepted submit produces a projected runtime event; set `REEF_DO_REQUIRE_TRACE_CHECKS=1` when running a profile where every sampled command is expected to have trace events.
 
 Optional hardening gates:
