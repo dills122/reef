@@ -303,6 +303,174 @@ func TestSubmitOrderMatchesAcrossMultipleRestingOrders(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderPreservesSamePriceFIFOThroughService(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-2", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-3", "100", "150250000000")
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-sweep",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "300",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+
+	if len(result.Trades) != 3 {
+		t.Fatalf("expected three trades, got %#v", result.Trades)
+	}
+	wantBuyOrderIDs := []string{"ord-buy-1", "ord-buy-2", "ord-buy-3"}
+	for i, want := range wantBuyOrderIDs {
+		if result.Trades[i].BuyOrderID != want {
+			t.Fatalf("expected FIFO buy order %s at trade %d, got %#v", want, i, result.Trades)
+		}
+	}
+}
+
+func TestSubmitOrderPreservesSellSamePriceFIFOThroughService(t *testing.T) {
+	service := NewService()
+	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150250000000")
+	submitRestingSell(t, service, "AAPL", "ord-sell-2", "100", "150250000000")
+	submitRestingSell(t, service, "AAPL", "ord-sell-3", "100", "150250000000")
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-sweep",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "300",
+		LimitPrice:    "150500000000",
+		Currency:      "USD",
+	})
+
+	if len(result.Trades) != 3 {
+		t.Fatalf("expected three trades, got %#v", result.Trades)
+	}
+	wantSellOrderIDs := []string{"ord-sell-1", "ord-sell-2", "ord-sell-3"}
+	for i, want := range wantSellOrderIDs {
+		if result.Trades[i].SellOrderID != want {
+			t.Fatalf("expected FIFO sell order %s at trade %d, got %#v", want, i, result.Trades)
+		}
+	}
+}
+
+func TestSubmitOrderMatchesBestPriceBeforeTime(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-older-worse", "100", "150000000000")
+	submitRestingBuy(t, service, "ord-buy-newer-better", "100", "150250000000")
+
+	firstSell := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "149900000000",
+		Currency:      "USD",
+	})
+	if len(firstSell.Trades) != 1 {
+		t.Fatalf("expected one trade against best bid, got %#v", firstSell.Trades)
+	}
+	if firstSell.Trades[0].BuyOrderID != "ord-buy-newer-better" {
+		t.Fatalf("expected newer better-priced buy to match before older worse-priced buy, got %#v", firstSell.Trades[0])
+	}
+
+	submitRestingSell(t, service, "AAPL", "ord-sell-older-worse", "100", "150500000000")
+	submitRestingSell(t, service, "AAPL", "ord-sell-newer-better", "100", "150300000000")
+
+	firstBuy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150600000000",
+		Currency:      "USD",
+	})
+	if len(firstBuy.Trades) != 1 {
+		t.Fatalf("expected one trade against best offer, got %#v", firstBuy.Trades)
+	}
+	if firstBuy.Trades[0].SellOrderID != "ord-sell-newer-better" {
+		t.Fatalf("expected newer better-priced sell to match before older worse-priced sell, got %#v", firstBuy.Trades[0])
+	}
+}
+
+func TestSubmitOrderDoesNotMatchAcrossInstruments(t *testing.T) {
+	service := NewService()
+	submitRestingSell(t, service, "AAPL", "ord-aapl-sell", "100", "150000000000")
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-msft-buy",
+		InstrumentID:  "MSFT",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "200000000000",
+		Currency:      "USD",
+	})
+
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted MSFT buy, got %#v", result)
+	}
+	if len(result.Trades) != 0 {
+		t.Fatalf("expected no cross-instrument trades, got %#v", result.Trades)
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
+		t.Fatalf("expected AAPL sell liquidity to remain")
+	}
+	if service.RestingOrders("MSFT", domain.SideBuy) != 1 {
+		t.Fatalf("expected MSFT buy liquidity to rest separately")
+	}
+}
+
+func TestSubmitOrderUsesRestingOrderPriceForExecution(t *testing.T) {
+	service := NewService()
+	submitRestingSell(t, service, "AAPL", "ord-sell-resting", "100", "150000000000")
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-marketable",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150500000000",
+		Currency:      "USD",
+	})
+
+	if len(result.Trades) != 1 {
+		t.Fatalf("expected one trade, got %#v", result.Trades)
+	}
+	if result.Trades[0].Price != "150000000000" {
+		t.Fatalf("expected trade at resting sell price, got %#v", result.Trades[0])
+	}
+	for _, execution := range result.Executions {
+		if execution.ExecutionPrice != "150000000000" {
+			t.Fatalf("expected execution at resting sell price, got %#v", execution)
+		}
+	}
+}
+
+func TestSubmitOrderLeavesNonCrossingOrdersResting(t *testing.T) {
+	service := NewService()
+	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150300000000")
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted non-crossing buy, got %#v", result)
+	}
+	if len(result.Trades) != 0 {
+		t.Fatalf("expected no trades for non-crossing prices, got %#v", result.Trades)
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 || service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected both non-crossing orders to rest")
+	}
+}
+
 func TestSubmitOrderRejectsMissingInstrument(t *testing.T) {
 	service := NewService()
 
@@ -512,6 +680,66 @@ func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
 	}
 }
 
+func TestCancelOrderRemovesPartiallyFilledResidual(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "150", "150250000000")
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 1 {
+		t.Fatalf("expected partial fill trade, got %#v", match.Trades)
+	}
+
+	cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-1"})
+	if cancel.Accepted == nil {
+		t.Fatalf("expected accepted cancel result, got %#v", cancel)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
+		t.Fatalf("expected partially filled residual to be removed from book")
+	}
+
+	state, ok := service.OrderState("ord-buy-1")
+	if !ok || state.Status != domain.OrderStatusCancelled || state.RemainingQuantity != "0" {
+		t.Fatalf("expected cancelled residual state, got %#v", state)
+	}
+}
+
+func TestCancelOrderRejectsFilledOrderWithoutChangingState(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 1 {
+		t.Fatalf("expected fill trade, got %#v", match.Trades)
+	}
+
+	cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-1"})
+	if cancel.Rejected == nil {
+		t.Fatalf("expected cancel filled order to reject, got %#v", cancel)
+	}
+	if cancel.Rejected.Code != "INVALID_STATE" {
+		t.Fatalf("expected invalid state rejection, got %#v", cancel.Rejected)
+	}
+
+	state, ok := service.OrderState("ord-buy-1")
+	if !ok || state.Status != domain.OrderStatusFilled || state.RemainingQuantity != "0" {
+		t.Fatalf("expected filled state to remain unchanged, got %#v", state)
+	}
+}
+
 func TestModifyOrderUpdatesPriceAndQuantity(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{
@@ -617,6 +845,95 @@ func TestModifyOrderResetsPriorityAtSamePrice(t *testing.T) {
 	}
 }
 
+func TestModifyOrderRejectsQuantityAtOrBelowAlreadyFilled(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "150", "150250000000")
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 1 {
+		t.Fatalf("expected partial fill trade, got %#v", match.Trades)
+	}
+
+	result := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+	})
+	if result.Rejected == nil {
+		t.Fatalf("expected modify below filled quantity to reject, got %#v", result)
+	}
+	if result.Rejected.Code != "VALIDATION_ERROR" {
+		t.Fatalf("expected validation error, got %#v", result.Rejected)
+	}
+
+	state, ok := service.OrderState("ord-buy-1")
+	if !ok || state.Status != domain.OrderStatusPartiallyFilled || state.RemainingQuantity != "50" {
+		t.Fatalf("expected partially filled state to remain unchanged, got %#v", state)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected residual buy liquidity to remain")
+	}
+}
+
+func TestModifyOrderRejectsTerminalOrderWithoutChangingState(t *testing.T) {
+	service := NewService()
+	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150250000000")
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 1 {
+		t.Fatalf("expected fill trade, got %#v", match.Trades)
+	}
+
+	modifyFilled := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "200",
+		LimitPrice:    "150500000000",
+	})
+	if modifyFilled.Rejected == nil {
+		t.Fatalf("expected modify filled order to reject, got %#v", modifyFilled)
+	}
+	if modifyFilled.Rejected.Code != "INVALID_STATE" {
+		t.Fatalf("expected invalid state rejection, got %#v", modifyFilled.Rejected)
+	}
+
+	submitRestingBuy(t, service, "ord-buy-cancelled", "100", "150000000000")
+	cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-cancelled"})
+	if cancel.Accepted == nil {
+		t.Fatalf("expected cancel to accept, got %#v", cancel)
+	}
+
+	modifyCancelled := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-cancelled",
+		QuantityUnits: "200",
+		LimitPrice:    "150100000000",
+	})
+	if modifyCancelled.Rejected == nil {
+		t.Fatalf("expected modify cancelled order to reject, got %#v", modifyCancelled)
+	}
+	if modifyCancelled.Rejected.Code != "INVALID_STATE" {
+		t.Fatalf("expected invalid state rejection, got %#v", modifyCancelled.Rejected)
+	}
+
+	state, ok := service.OrderState("ord-buy-cancelled")
+	if !ok || state.Status != domain.OrderStatusCancelled || state.RemainingQuantity != "0" {
+		t.Fatalf("expected cancelled state to remain unchanged, got %#v", state)
+	}
+}
+
 func TestParsePositiveInt(t *testing.T) {
 	if _, ok := parsePositiveInt(""); ok {
 		t.Fatal("expected empty input to fail")
@@ -666,5 +983,23 @@ func submitRestingBuy(t *testing.T, service *Service, orderID string, quantity s
 	}
 	if len(result.Trades) != 0 {
 		t.Fatalf("expected resting buy %s to avoid immediate trades, got %#v", orderID, result.Trades)
+	}
+}
+
+func submitRestingSell(t *testing.T, service *Service, instrumentID string, orderID string, quantity string, limitPrice string) {
+	t.Helper()
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       orderID,
+		InstrumentID:  instrumentID,
+		Side:          domain.SideSell,
+		QuantityUnits: quantity,
+		LimitPrice:    limitPrice,
+		Currency:      "USD",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected accepted resting sell %s, got %#v", orderID, result)
+	}
+	if len(result.Trades) != 0 {
+		t.Fatalf("expected resting sell %s to avoid immediate trades, got %#v", orderID, result.Trades)
 	}
 }
