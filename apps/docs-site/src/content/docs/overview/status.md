@@ -5,38 +5,45 @@ banner:
   content: This page is the fastest-changing page on the site. It reflects a point-in-time snapshot, not a live status feed.
 ---
 
-Reef has moved past a repository skeleton, but most of the platform is still early. This page separates **built** from **planned** so the rest of the site doesn't market unbuilt features as live.
+Reef is past skeleton stage. You can run the local stack, submit orders, drive scenarios, inspect command status, read market data, and follow the first settlement evidence path. The UI and full post-trade workflow are still early, so this page keeps the marketing honest: built means implemented; planned means target shape.
 
 ## Built Today
 
-- Kotlin platform runtime with `/api/v1` submit, cancel, modify, and lifecycle-state order paths
-- Boundary idempotency, auth/rate-limit hooks, abuse protection, command capture, command status lookup
-- Explicit runtime, boundary, auth, admin, orchestration, analytics, and command-log schemas via local migrations
-- Runtime query surfaces for orders, trades, events, and trace timelines
-- Admin CLI scaffolding for reference data, roles, calendars, simulation controls, trace inspection
-- Go matching engine: hidden-book matching, partial fills, multi-match, cancel, modify, HTTP/gRPC/direct-stream paths
-- Protobuf contracts for order execution commands and results
-- Go simulator/load tester: persona/session support, deterministic replay checks, stress reports, intake benchmarks
-- Docker-first local setup, reset, smoke, stress, replay, and benchmark automation
-- First arena control-plane slice: bot registry, bot-version approval lifecycle, operator decisions, run records (see [Arena Overview](../../arena/overview/))
-- First conservative bot/user read slice: order lifecycle projection, top-of-book snapshots, bounded depth, public trade tape, intraday OHLCV bars, participant-scoped own-order reads, and data-availability inventory
-- First settlement/post-trade slices: obligation materialization, instant-finality facts, resource-position/fail tracking, repair actions, and ledger/proof projections
+Core venue path:
 
-## Not Yet Built (Planned)
+- Kotlin runtime with `/api/v1` submit, cancel, modify, and order lifecycle paths.
+- Boundary checks for idempotency, auth/rate-limit hooks, abuse protection, command capture, and command status lookup.
+- Go matching engine with hidden-book matching, partial fills, multi-match, cancel, modify, HTTP/gRPC, and direct-stream paths.
+- Protobuf order-execution contracts shared across Kotlin and Go.
 
-- Platform UI and broader post-trade lifecycle (allocation, confirmation, clearing workflows, exception UI) — still early
-- Dedicated `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice — designed, not broadly implemented (see [Planned Schema](../../schema/planned-schema/))
-- Analytics has an initial simulation-run export slice, but broader analytics facts/views remain planned
-- Public bot submissions and hosted sandbox execution at scale — arena is still built-in-bots/control-plane stage
-- Leaderboard publication and scoring surfaces beyond the source facts
-- Kafka-compatible durable command log as the default hot-ingress path — proven locally, with longer remote evidence still pending
-- Scenario live assertion harness and full sustained simulator proof of the settlement path — planned next locking gates
+Inspection and replay:
+
+- Runtime query surfaces for orders, trades, events, trace timelines, public trade tape, intraday bars, own-order reads, and data-availability inventory.
+- Explicit runtime, boundary, auth, admin, orchestration, analytics, and command-log schemas through local migrations.
+- Go simulator/load tester with persona sessions, deterministic replay checks, stress reports, and intake benchmarks.
+- Docker-first setup, reset, smoke, stress, replay, and benchmark automation.
+
+Early product slices:
+
+- Arena control plane: bot registry, bot-version approval lifecycle, operator decisions, run records, and bot-originated order flow through real venue risk checks.
+- Settlement evidence: scenario facts API, obligation materializer, instant-post-trade instructions/attempts, cash/security leg outcomes, append-only ledger proof, `SETTLED` finality facts, break/repair paths, and replayable balance/proof reads.
+- `stock-data` seed service: seed-once Tiingo/fake provider boundary, normalized snapshots, batch seed hash, Postgres or in-memory persistence, and `/v1/seed-snapshots`.
+
+## Still Planned
+
+- Rich platform UI and operator workflows.
+- Full post-trade lifecycle: allocation, confirmation, affirmation, clearing, novation, netting, and exception UI.
+- Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
+- Broader analytics facts, dashboards, and reports beyond initial run export.
+- Public bot submission flow, hosted sandbox execution at scale, leaderboards, and full scoring policies.
+- Kafka-compatible durable command log as default hot-ingress path. Local proof exists; default promotion still needs longer evidence.
+- Complete scenario locking for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
 
 ## Active Architecture Direction
 
-The high-throughput venue-ingress path is moving toward: durable command log → matching-engine direct partition consumer → durable venue event batch → command offset commit after batch publish → async Postgres materialization. `202 Accepted` means the durable ingress/log producer acknowledged the command — this contract does not weaken as throughput work continues.
+The high-throughput path is being tightened around one promise: if Reef says `202 Accepted`, the command has reached durable intake. After that, the matching engine consumes commands by partition, publishes durable venue event batches, and Postgres catches up asynchronously. Speed work must not weaken audit, replay, or acceptance semantics.
 
-The first deterministic scenario fixtures now encode the target `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR` shapes. They are not fully locked until live assertions prove lifecycle, visibility, trade-tape, replay, and settlement-fact checks against platform facts.
+The first deterministic scenarios now have clear target stories. P1 proves a hidden-cross trade lifecycle. P2 proves a settlement break and repair path. The assertion surfaces exist; the remaining work is making live gates prove those stories consistently from platform facts.
 
 ## Learn More
 
@@ -44,3 +51,4 @@ The first deterministic scenario fixtures now encode the target `P1_GOLDEN_HIDDE
 - `docs/DECISIONS.md` — accepted architecture decisions
 - `docs/WORK_PLAN.md` — active execution ladder
 - `docs/SCENARIO_CONTRACTS.md` and `docs/SCENARIO_ASSERTION_PLAN.md` — first-wave scenario gates
+- `docs/SETTLEMENT_EXCEPTION_FACTS.md` and `docs/SETTLEMENT_CLEARING_STRATEGY.md` — current and target settlement slices

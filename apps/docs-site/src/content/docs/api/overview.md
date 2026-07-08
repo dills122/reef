@@ -5,14 +5,14 @@ banner:
   content: Routes below reflect the current implementation checkpoint, not a stable contract. Breaking changes are still expected pre-release.
 ---
 
-External clients integrate with a stable `/api/v1` boundary, implemented today in the Kotlin platform runtime, kept separate from internal service transport (engine gRPC/HTTP, stream ingress). Internal contracts can evolve independently; the public boundary changes deliberately and stays versioned.
+The public API is the front door. Users, simulator runs, and Bot Arena traffic all come through versioned `/api/v1` routes instead of reaching into engine internals or database tables. That keeps the system inspectable: each accepted command has identity, idempotency, status, and trace data attached.
 
 Reef exposes two product-facing API families:
 
-- venue intake and trading information for orders, command status, participant order state, executions, trade tape, and current market data
+- venue intake and trading information for orders, command status, participant order state, executions, trade tape, current market data, and scenario settlement evidence
 - admin/data for operator-approved administration plus intraday and historical data access
 
-Internal service/control interfaces are not product APIs. They should sit behind gRPC/protobuf, durable messaging, or a gateway-backed admin/data adapter with auth, authorization, audit, and versioning. Canonical policy: `docs/API_SURFACE_POLICY.md`.
+Internal service/control interfaces are not product APIs. They can change faster and should sit behind gRPC/protobuf, durable messaging, or gateway-backed admin/data routes with auth, authorization, audit, and versioning. Canonical policy: `docs/API_SURFACE_POLICY.md`.
 
 ## Required Headers (Writes)
 
@@ -25,9 +25,9 @@ Internal service/control interfaces are not product APIs. They should sit behind
 
 ## What Happens Before A Write Is Accepted
 
-Every mutating request passes, in order: request validation (schema + semantic) → command circuit breaker check → instrument price collar check → account/bot risk pre-check → idempotency reservation → abuse-protection check → durable command capture/publish. A non-`allow` decision at any boundary stage does **not** append a command-log row, reserve stream intake, or publish a command — rejections are cheap and don't consume durable resources.
+Before an order can enter the venue, Reef checks whether it is well-formed, allowed for the actor, inside protective controls, and safe for the configured risk policy. Only then does it reserve idempotency and publish or capture the command durably.
 
-`202 Accepted` (in stream-ack/async modes) or `200 OK` (in sync-result mode) only comes back once the configured durable ingress has acknowledged the command — this contract holds regardless of internal processing mode.
+A rejected command stops early and does not reserve stream intake or publish durable work. A `202 Accepted` response means durable intake acknowledged the command; it does not mean matching has finished yet.
 
 ## Error Envelope
 
@@ -61,6 +61,9 @@ The runtime supports multiple internal processing modes behind the same external
 | [`/api/v1/market-data/trades/{instrumentId}`](../market-data/) | GET | Public trade tape |
 | [`/api/v1/market-data/bars/{instrumentId}`](../market-data/) | GET | Intraday OHLCV bars |
 | [`/api/v1/data/availability`](../market-data/) | GET | Read-surface availability and freshness inventory |
+| [`/api/v1/settlement/facts/{scenarioRunId}`](../settlement/) | GET | Append-only settlement facts for one scenario run |
+| [`/api/v1/settlement/obligations/{scenarioRunId}`](../settlement/) | GET | Current settlement obligation state projected from facts |
+| [`/api/v1/settlement/ledger/{scenarioRunId}`](../settlement/) | GET | Replayable balances and settlement proof totals |
 | [`/api/v1/commands/{commandId}`](../commands/) | GET | Command status lookup |
 
 `/internal/*` routes exist only as local/migration operator tooling and diagnostics — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract and must not be exposed raw outside private operator networks.

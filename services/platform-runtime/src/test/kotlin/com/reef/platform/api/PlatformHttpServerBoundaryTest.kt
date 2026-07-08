@@ -117,6 +117,10 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"freshness\":\"durable fact rows\"")
             assertContains(response.body, "\"name\":\"settlementFacts\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"settlementProof\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/proof/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"settlementScore\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/score/{scenarioRunId}\"")
         } finally {
             server.stop(0)
         }
@@ -2195,6 +2199,8 @@ class PlatformHttpServerBoundaryTest {
             val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
             val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize")
             val ledger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize")
+            val proof = get(server.address.port, "/api/v1/settlement/proof/run-materialize")
+            val score = get(server.address.port, "/api/v1/settlement/score/run-materialize")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"materializedObligations\":1")
@@ -2230,6 +2236,48 @@ class PlatformHttpServerBoundaryTest {
             assertContains(ledger.body, "\"proofState\":\"PROVEN\"")
             assertContains(ledger.body, "\"cashBalanced\":true")
             assertContains(ledger.body, "\"securityBalanced\":true")
+            assertEquals(200, proof.status)
+            assertContains(proof.body, "\"proofStatus\":\"CLEAN\"")
+            assertContains(proof.body, "\"checksumAlgorithm\":\"SHA-256\"")
+            assertContains(proof.body, "\"profilePolicies\"")
+            assertContains(proof.body, "\"causationGapsCount\":0")
+            assertContains(proof.body, "\"ledgerEntryIds\"")
+            assertContains(proof.body, "\"settlement-ledger-settlement-attempt-settlement-obligation-trade-materialize-1-buyer-cash-debit\"")
+            assertEquals(200, score.status)
+            assertContains(score.body, "\"agedFailAfterSeconds\":86400")
+            assertContains(score.body, "\"participantsCount\":2")
+            assertContains(score.body, "\"participantId\":\"buyer-1\"")
+            assertContains(score.body, "\"pendingValue\":\"0\"")
+            assertContains(score.body, "\"scorePenaltyPoints\":0")
+            assertContains(score.body, "\"agedFailCount\":0")
+
+            val reversed = post(
+                server.address.port,
+                "/internal/admin/settlement/reverse-ledger-entry",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-materialize",
+                  "ledgerEntryId":"settlement-ledger-settlement-attempt-settlement-obligation-trade-materialize-1-buyer-cash-debit",
+                  "actorId":"ops-user-1",
+                  "reasonNote":"reverse buyer cash debit for operator test",
+                  "occurredAt":"2026-01-01T00:00:03Z"
+                }
+                """.trimIndent()
+            )
+            val reversedFacts = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
+            val reversedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize")
+
+            assertEquals(200, reversed.status)
+            assertContains(reversed.body, "\"action\":\"REVERSE_LEDGER_ENTRY\"")
+            assertContains(reversed.body, "\"reasonNote\":\"reverse buyer cash debit for operator test\"")
+            assertContains(reversed.body, "\"ledgerEntryId\":\"settlement-ledger-reversal-settlement-ledger-settlement-attempt-settlement-obligation-trade-materialize-1-buyer-cash-debit\"")
+            assertEquals(200, reversedFacts.status)
+            assertContains(reversedFacts.body, "\"operatorActions\"")
+            assertContains(reversedFacts.body, "\"settlementOperatorActionId\":\"operator-reverse-ledger-settlement-ledger-settlement-attempt-settlement-obligation-trade-materialize-1-buyer-cash-debit\"")
+            assertEquals(200, reversedLedger.status)
+            assertContains(reversedLedger.body, "\"settlementProofsCount\":1")
+            assertContains(reversedLedger.body, "\"cashBalanced\":true")
         } finally {
             server.stop(0)
         }
@@ -2561,6 +2609,133 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, repairedLedger.status)
             assertContains(repairedLedger.body, "\"settlementProofsCount\":1")
             assertContains(repairedLedger.body, "\"proofState\":\"PROVEN\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun settlementForceSettleCommandRepairsAndMaterializesBreak() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveAcceptedOrder(
+            persistedOrder("buy-order-force-settle", "buyer-1", "BUY", "run-force-settle", "session-fast")
+        )
+        persistence.saveAcceptedOrder(
+            persistedOrder("sell-order-force-settle", "seller-1", "SELL", "run-force-settle", "session-fast")
+        )
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-trade-force-settle",
+                    tradeId = "trade-force-settle",
+                    executionId = "exec-force-settle",
+                    buyOrderId = "buy-order-force-settle",
+                    sellOrderId = "sell-order-force-settle",
+                    instrumentId = "AAPL",
+                    quantityUnits = "100",
+                    price = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-01-01T00:00:00Z"
+                )
+            )
+        )
+        val resolver = PostTradeProfileResolver.envOnly("instant-post-trade-v1", 4)
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = settlementStore,
+            postTradeProfileResolver = resolver
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            settlementObligationMaterializer = materializer,
+            runtimePersistence = persistence,
+            defaultPostTradeProfileId = "instant-post-trade-v1",
+            defaultPostTradePolicyVersion = 4,
+            postTradeProfileResolver = resolver
+        )
+        try {
+            val seeded = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-force-settle",
+                  "resourcePositions":[
+                    {
+                      "resourcePositionId":"resource-run-force-settle-seller-security",
+                      "correlationId":"corr-force-settle",
+                      "causationId":"seed-force-settle",
+                      "participantId":"seller-1",
+                      "accountId":"account-seller-1",
+                      "assetType":"SECURITY",
+                      "assetId":"AAPL",
+                      "quantity":"100",
+                      "occurredAt":"2025-12-31T23:59:59Z"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+            val broken = post(
+                server.address.port,
+                "/internal/admin/settlement/obligations/materialize",
+                emptyMap(),
+                """{"scenarioRunId":"run-force-settle"}"""
+            )
+            val missingReason = post(
+                server.address.port,
+                "/internal/admin/settlement/force-settle",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-force-settle",
+                  "settlementBreakId":"settlement-break-settlement-obligation-trade-force-settle-1",
+                  "accountId":"account-buyer-1",
+                  "actorId":"ops-user-1",
+                  "occurredAt":"2026-01-01T00:00:02Z"
+                }
+                """.trimIndent()
+            )
+            val forced = post(
+                server.address.port,
+                "/internal/admin/settlement/force-settle",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-force-settle",
+                  "settlementBreakId":"settlement-break-settlement-obligation-trade-force-settle-1",
+                  "accountId":"account-buyer-1",
+                  "actorId":"ops-user-1",
+                  "reasonNote":"force settle cash fail in scenario",
+                  "occurredAt":"2026-01-01T00:00:02Z"
+                }
+                """.trimIndent()
+            )
+            val facts = get(server.address.port, "/api/v1/settlement/facts/run-force-settle")
+            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-force-settle")
+            val proof = get(server.address.port, "/api/v1/settlement/proof/run-force-settle")
+
+            assertEquals(200, seeded.status)
+            assertEquals(200, broken.status)
+            assertContains(broken.body, "\"materializedBreaks\":1")
+            assertEquals(400, missingReason.status)
+            assertContains(missingReason.body, "\"error\":\"reasonNote is required\"")
+            assertEquals(200, forced.status)
+            assertContains(forced.body, "\"action\":\"FORCE_SETTLE\"")
+            assertContains(forced.body, "\"reasonNote\":\"force settle cash fail in scenario\"")
+            assertContains(forced.body, "\"materializedSettlements\":1")
+            assertContains(forced.body, "\"materializedResolutions\":1")
+            assertEquals(200, facts.status)
+            assertContains(facts.body, "\"settlementOperatorActionId\":\"operator-force-settle-settlement-break-settlement-obligation-trade-force-settle-1\"")
+            assertEquals(200, obligations.status)
+            assertContains(obligations.body, "\"settlementState\":\"SETTLED\"")
+            assertContains(obligations.body, "\"exceptionState\":\"RESOLVED\"")
+            assertEquals(200, proof.status)
+            assertContains(proof.body, "\"operatorActionsCount\":1")
+            assertContains(proof.body, "\"proofStatus\":\"CLEAN\"")
         } finally {
             server.stop(0)
         }

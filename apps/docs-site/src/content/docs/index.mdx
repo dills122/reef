@@ -4,9 +4,9 @@ description: Simulation-first institutional trading venue and post-trade platfor
 template: splash
 banner:
   content: |
-    Pre-release, heavy development. APIs, schemas, and game mechanics change without notice — see <a href="overview/status/">Current Status</a>.
+    Pre-release, heavy development. Reef is already runnable, but APIs, schemas, and game mechanics still change - see <a href="overview/status/">Current Status</a>.
 hero:
-  tagline: A simulation-first institutional trading venue and post-trade platform, with a tournament-style Bot Arena taking shape on top of it.
+  tagline: "A hands-on market-infrastructure lab: submit orders, watch them match, replay what happened, and follow trades into settlement."
   actions:
     - text: What Is Reef
       link: overview/what-is-reef/
@@ -22,13 +22,14 @@ hero:
 
 import { Card, CardGrid, Badge, Aside } from '@astrojs/starlight/components';
 
-Reef models the lifecycle of privately matched institutional trades — order intake, hidden-book matching, executions, and the post-trade path toward settlement — with production-shaped architecture that stays easy to run and inspect locally.
+Reef is built to make market plumbing visible. Orders go through a real command boundary, hit a hidden-book matching engine, produce trades, then leave evidence you can inspect and replay. The platform is shaped like serious infrastructure, but it stays local-first so you can run it, break it, and understand it from end to end.
 
 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0;">
 	<Badge text="Kotlin runtime" variant="note" />
 	<Badge text="Go matching engine" variant="note" />
 	<Badge text="Postgres" variant="note" />
 	<Badge text="Protobuf contracts" variant="note" />
+	<Badge text="Settlement facts: first slice" variant="note" />
 	<Badge text="Bot Arena: WIP" variant="caution" />
 </div>
 
@@ -36,35 +37,35 @@ Reef models the lifecycle of privately matched institutional trades — order in
 
 <CardGrid>
 	<Card title="Project Overview" icon="open-book">
-		What Reef is, why it exists, and how the core platform and simulation control plane relate. Start at [What Is Reef](overview/what-is-reef/).
+		The short version: what Reef is, who it is for, and why simulation drives the same command path as real users. Start at [What Is Reef](overview/what-is-reef/).
 	</Card>
 	<Card title="Bot Arena & Bot SDK" icon="rocket">
-		The work-in-progress trading-bot game: how to author a bot, how a run works, how scoring works. Start at [Arena Overview](arena/overview/).
+		The trading-bot game taking shape on top of the venue. Author a bot, run seeded matches, and keep every result replayable. Start at [Arena Overview](arena/overview/).
 	</Card>
 	<Card title="Trading API" icon="setting">
-		The external `/api/v1` surface: orders, market data, command status, headers, and error shape. Start at [API Overview](api/overview/).
+		The public surface for submitting orders, reading market data, checking command status, and inspecting settlement evidence. Start at [API Overview](api/overview/).
 	</Card>
 	<Card title="Data Schema" icon="document">
-		Persistent schema (`runtime`, `boundary`, `auth`, `admin`, and planned domains) plus the protobuf wire contracts. Start at [Schema Overview](schema/overview/).
+		Where Reef keeps durable facts, rebuildable projections, auth/admin policy, and wire contracts. Start at [Schema Overview](schema/overview/).
 	</Card>
 </CardGrid>
 
 ## How It Fits Together
 
-Two layers, one command path. The **core platform** owns real business behavior — order intake, hidden-book matching, executions, and the post-trade path toward settlement. The **simulation control plane** — scenarios, participant bots, seeded randomness, and the emerging Bot Arena — drives that same platform through the identical commands a manual user would issue. Simulation never writes to domain tables directly.
+Two layers, one command path. The **core platform** owns the business behavior: order intake, matching, trades, settlement evidence, and audit trails. The **simulation control plane** supplies scripted scenarios, participant bots, seeded randomness, and Bot Arena runs. Both layers use the same public commands, so a replayed scenario and a manual user leave comparable evidence.
 
 ```text
 order intake -> hidden-book matching engine -> executions & trades
-             -> allocations -> confirmations -> settlement -> audit trail
+             -> settlement obligations/facts -> ledger proof -> audit trail
 ```
 
-<Card title="Read the full architecture" icon="puzzle">
-	Service boundaries, bounded contexts, and current deployment shape. See [Architecture](overview/architecture/).
+<Card title="Read The Architecture" icon="puzzle">
+	How the runtime, matching engine, simulator, stock-data service, and schema boundaries fit together. See [Architecture](overview/architecture/).
 </Card>
 
 ## Write A Trading Bot
 
-Bots are TypeScript classes extending `ReefBotV1`. The harness owns scheduling, validation, and risk checks — your bot just decides what to do each tick.
+Bots are TypeScript classes extending `ReefBotV1`. The harness handles ticks, validation, and risk checks; your bot reads the market snapshot and chooses what orders to place.
 
 ```ts
 export default class ExampleBot extends ReefBotV1 {
@@ -94,7 +95,7 @@ export default class ExampleBot extends ReefBotV1 {
 ```
 
 <Card title="Write your first bot" icon="rocket">
-	Full lifecycle, limits, and local qualification checks. See [Bot SDK Quickstart](arena/bot-sdk-quickstart/).
+	Build a bot, run it locally, and see what the harness accepts or rejects. See [Bot SDK Quickstart](arena/bot-sdk-quickstart/).
 </Card>
 
 ## Run It Locally
@@ -106,5 +107,5 @@ make dev-sim      # drive a seeded scenario
 ```
 
 <Aside type="caution" title="Pre-release">
-	Reef is under heavy development. Routes, schemas, and game mechanics described in these docs are the current target, not a stable release — see [Current Status](overview/status/) for what's actually built today.
+	Reef is under heavy development. These docs describe the current build plus near-term shape, not a stable product release. See [Current Status](overview/status/) for what is built today.
 </Aside>

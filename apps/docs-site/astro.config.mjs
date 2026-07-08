@@ -44,6 +44,7 @@ export default defineConfig({
             { label: "Overview", slug: "api/overview" },
             { label: "Orders", slug: "api/orders" },
             { label: "Market Data", slug: "api/market-data" },
+            { label: "Settlement", slug: "api/settlement" },
             { label: "Command Status", slug: "api/commands" },
             { label: "Internal & Admin Routes", slug: "api/internal-admin" },
           ],

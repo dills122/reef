@@ -31,6 +31,8 @@ const val SettlementRepairPostedActionSecurity = "POST_SECURITY_LEG_REPAIR"
 const val SettlementRepairPostedAction = SettlementRepairPostedActionCash
 const val SettlementRepairPostedActorType = "USER"
 const val SettlementResolvedState = "RESOLVED"
+const val SettlementOperatorActionForceSettle = "FORCE_SETTLE"
+const val SettlementOperatorActionReverseLedgerEntry = "REVERSE_LEDGER_ENTRY"
 const val DefaultPostTradeProfileId = "ops-realistic-v1"
 const val DefaultPostTradePolicyVersion = 1
 
@@ -185,6 +187,21 @@ data class SettlementResolvedFact(
     val occurredAt: Instant
 )
 
+data class SettlementOperatorActionFact(
+    val settlementOperatorActionId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val action: String,
+    val targetId: String,
+    val reasonNote: String,
+    val actorType: String = SettlementRepairPostedActorType,
+    val actorId: String,
+    val occurredAt: Instant
+)
+
 data class SettlementFactBundle(
     val scenarioRunId: String,
     val resourcePositions: List<SettlementResourcePositionFact> = emptyList(),
@@ -196,12 +213,13 @@ data class SettlementFactBundle(
     val settlements: List<SettlementSettledFact> = emptyList(),
     val breaks: List<SettlementBreakOpenedFact> = emptyList(),
     val repairs: List<SettlementRepairPostedFact> = emptyList(),
-    val resolutions: List<SettlementResolvedFact> = emptyList()
+    val resolutions: List<SettlementResolvedFact> = emptyList(),
+    val operatorActions: List<SettlementOperatorActionFact> = emptyList()
 ) {
     fun isEmpty(): Boolean =
         resourcePositions.isEmpty() && obligations.isEmpty() && instructions.isEmpty() && attempts.isEmpty() &&
             legOutcomes.isEmpty() && ledgerEntries.isEmpty() && settlements.isEmpty() &&
-            breaks.isEmpty() && repairs.isEmpty() && resolutions.isEmpty()
+            breaks.isEmpty() && repairs.isEmpty() && resolutions.isEmpty() && operatorActions.isEmpty()
 }
 
 interface SettlementFactStore {
@@ -220,6 +238,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
     private val breaks = ConcurrentHashMap<String, SettlementBreakOpenedFact>()
     private val repairs = ConcurrentHashMap<String, SettlementRepairPostedFact>()
     private val resolutions = ConcurrentHashMap<String, SettlementResolvedFact>()
+    private val operatorActions = ConcurrentHashMap<String, SettlementOperatorActionFact>()
 
     override fun appendFacts(facts: SettlementFactBundle): SettlementFactBundle {
         if (facts.isEmpty()) return facts
@@ -235,6 +254,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
         facts.breaks.forEach { breaks.putIfAbsent(it.settlementBreakId, it) }
         facts.repairs.forEach { repairs.putIfAbsent(it.settlementRepairId, it) }
         facts.resolutions.forEach { resolutions.putIfAbsent(it.settlementResolutionId, it) }
+        facts.operatorActions.forEach { operatorActions.putIfAbsent(it.settlementOperatorActionId, it) }
         return facts
     }
 
@@ -251,7 +271,8 @@ class InMemorySettlementFactStore : SettlementFactStore {
             settlements = settlements.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             breaks = breaks.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             repairs = repairs.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
-            resolutions = resolutions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt }
+            resolutions = resolutions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
+            operatorActions = operatorActions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt }
         )
     }
 }
@@ -270,6 +291,7 @@ data class PostgresSettlementSqlNames(
     val breaks = qualify("breaks")
     val repairs = qualify("repairs")
     val resolutions = qualify("resolutions")
+    val operatorActions = qualify("operator_actions")
 
     private fun schemaOrDefault(schema: String): String {
         val candidate = schema.trim().ifBlank { "settlement" }
@@ -304,7 +326,8 @@ class PostgresSettlementFactStore(
                         settlements = names.settlements,
                         breaks = names.breaks,
                         repairs = names.repairs,
-                        resolutions = names.resolutions
+                        resolutions = names.resolutions,
+                        operatorActions = names.operatorActions
                     )
                 )
                 return@use
@@ -502,6 +525,25 @@ class PostgresSettlementFactStore(
                     )
                     """.trimIndent()
                 )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.operatorActions} (
+                      settlement_operator_action_id TEXT PRIMARY KEY,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      action TEXT NOT NULL CHECK (action IN ('FORCE_SETTLE', 'REVERSE_LEDGER_ENTRY')),
+                      target_id TEXT NOT NULL,
+                      reason_note TEXT NOT NULL,
+                      actor_type TEXT NOT NULL CHECK (actor_type = 'USER'),
+                      actor_id TEXT NOT NULL,
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
                 ensureSettlementEvidenceColumns(stmt)
                 ensureSettlementAttemptInstructionColumn(stmt)
                 createIndexes(stmt = stmt)
@@ -526,6 +568,7 @@ class PostgresSettlementFactStore(
                 insertBreaks(conn, facts.breaks)
                 insertRepairs(conn, facts.repairs)
                 insertResolutions(conn, facts.resolutions)
+                insertOperatorActions(conn, facts.operatorActions)
                 conn.commit()
             } catch (error: Throwable) {
                 conn.rollback()
@@ -554,7 +597,8 @@ class PostgresSettlementFactStore(
             settlements = querySettlements(conn, scenarioRunId),
             breaks = queryBreaks(conn, scenarioRunId),
             repairs = queryRepairs(conn, scenarioRunId),
-            resolutions = queryResolutions(conn, scenarioRunId)
+            resolutions = queryResolutions(conn, scenarioRunId),
+            operatorActions = queryOperatorActions(conn, scenarioRunId)
         )
     }
 
@@ -870,6 +914,37 @@ class PostgresSettlementFactStore(
         }
     }
 
+    private fun insertOperatorActions(conn: Connection, facts: List<SettlementOperatorActionFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.operatorActions}(
+              settlement_operator_action_id, scenario_run_id, post_trade_profile_id,
+              post_trade_policy_version, correlation_id, causation_id, action, target_id,
+              reason_note, actor_type, actor_id, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (settlement_operator_action_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.settlementOperatorActionId)
+                ps.setString(2, it.scenarioRunId)
+                ps.setString(3, it.postTradeProfileId)
+                ps.setInt(4, it.postTradePolicyVersion)
+                ps.setString(5, it.correlationId)
+                ps.setString(6, it.causationId)
+                ps.setString(7, it.action)
+                ps.setString(8, it.targetId)
+                ps.setString(9, it.reasonNote)
+                ps.setString(10, it.actorType)
+                ps.setString(11, it.actorId)
+                ps.setTimestamp(12, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
+    }
+
     private fun queryResourcePositions(conn: Connection, scenarioRunId: String): List<SettlementResourcePositionFact> {
         conn.prepareStatement(
             """
@@ -1069,6 +1144,26 @@ class PostgresSettlementFactStore(
         }
     }
 
+    private fun queryOperatorActions(conn: Connection, scenarioRunId: String): List<SettlementOperatorActionFact> {
+        conn.prepareStatement(
+            """
+            SELECT settlement_operator_action_id, scenario_run_id, post_trade_profile_id,
+                   post_trade_policy_version, correlation_id, causation_id, action, target_id,
+                   reason_note, actor_type, actor_id, occurred_at
+            FROM ${names.operatorActions}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, settlement_operator_action_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementOperatorActionFact>()
+                while (rs.next()) records.add(rs.toOperatorAction())
+                return records
+            }
+        }
+    }
+
     private fun createIndexes(stmt: java.sql.Statement) {
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_resource_positions_run ON ${names.resourcePositions}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_obligations_run ON ${names.obligations}(scenario_run_id, occurred_at)")
@@ -1080,6 +1175,7 @@ class PostgresSettlementFactStore(
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_breaks_run ON ${names.breaks}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_repairs_run ON ${names.repairs}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_resolutions_run ON ${names.resolutions}(scenario_run_id, occurred_at)")
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_operator_actions_run ON ${names.operatorActions}(scenario_run_id, occurred_at)")
     }
 
     private fun ensureSettlementEvidenceColumns(stmt: java.sql.Statement) {
@@ -1093,7 +1189,8 @@ class PostgresSettlementFactStore(
             names.settlements,
             names.breaks,
             names.repairs,
-            names.resolutions
+            names.resolutions,
+            names.operatorActions
         ).forEach { table ->
             stmt.execute(
                 "ALTER TABLE $table ADD COLUMN IF NOT EXISTS post_trade_profile_id " +
@@ -1128,7 +1225,8 @@ private fun SettlementFactBundle.merge(next: SettlementFactBundle): SettlementFa
         settlements = settlements.byId(next.settlements) { it.settlementId },
         breaks = breaks.byId(next.breaks) { it.settlementBreakId },
         repairs = repairs.byId(next.repairs) { it.settlementRepairId },
-        resolutions = resolutions.byId(next.resolutions) { it.settlementResolutionId }
+        resolutions = resolutions.byId(next.resolutions) { it.settlementResolutionId },
+        operatorActions = operatorActions.byId(next.operatorActions) { it.settlementOperatorActionId }
     )
 }
 
@@ -1160,7 +1258,8 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
             facts.settlements.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.breaks.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.repairs.map { it.postTradeProfileId to it.postTradePolicyVersion } +
-            facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion }
+            facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.operatorActions.map { it.postTradeProfileId to it.postTradePolicyVersion }
         ).toSet()
     require(profileEvidence.size <= 1) { "settlement facts must use one post-trade profile per scenarioRunId" }
 
@@ -1356,6 +1455,19 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         }
         require(it.settlementState == SettlementResolvedState) { "settlementState must be $SettlementResolvedState" }
         require(it.exceptionState == SettlementResolvedState) { "exceptionState must be $SettlementResolvedState" }
+    }
+
+    facts.operatorActions.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.settlementOperatorActionId.isNotBlank()) { "settlementOperatorActionId is required" }
+        require(it.action in setOf(SettlementOperatorActionForceSettle, SettlementOperatorActionReverseLedgerEntry)) {
+            "operator action must be $SettlementOperatorActionForceSettle or $SettlementOperatorActionReverseLedgerEntry"
+        }
+        require(it.targetId.isNotBlank()) { "operator action targetId is required" }
+        require(it.reasonNote.isNotBlank()) { "operator action reasonNote is required" }
+        require(it.actorType == SettlementRepairPostedActorType) { "operator action actorType must be $SettlementRepairPostedActorType" }
+        require(it.actorId.isNotBlank()) { "operator action actorId is required" }
     }
 }
 
@@ -1583,5 +1695,22 @@ private fun ResultSet.toResolution(): SettlementResolvedFact {
         settlementState = getString(8),
         exceptionState = getString(9),
         occurredAt = getTimestamp(10).toInstant()
+    )
+}
+
+private fun ResultSet.toOperatorAction(): SettlementOperatorActionFact {
+    return SettlementOperatorActionFact(
+        settlementOperatorActionId = getString(1),
+        scenarioRunId = getString(2),
+        postTradeProfileId = getString(3),
+        postTradePolicyVersion = getInt(4),
+        correlationId = getString(5),
+        causationId = getString(6),
+        action = getString(7),
+        targetId = getString(8),
+        reasonNote = getString(9),
+        actorType = getString(10),
+        actorId = getString(11),
+        occurredAt = getTimestamp(12).toInstant()
     )
 }

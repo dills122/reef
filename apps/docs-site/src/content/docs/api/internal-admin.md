@@ -23,6 +23,10 @@ Canonical policy: `docs/API_SURFACE_POLICY.md`.
 | `/internal/admin/arena/bot-versions/transition` | Transition a bot version's approval-lifecycle state |
 | `/internal/admin/circuit-breakers` | Manage command circuit breakers |
 | `/internal/admin/price-collars` | Manage instrument price collars |
+| `/internal/admin/settlement/facts` | Append scenario settlement fact bundle for smoke/evidence setup |
+| `/internal/admin/settlement/obligations/materialize` | Materialize trade-to-settlement obligations for a scenario run |
+| `/internal/admin/settlement/repairs/cash` | Post cash resource repair plus settlement repair fact |
+| `/internal/admin/settlement/repairs/security` | Post security resource repair plus settlement repair fact |
 | `/internal/boundary/abuse/stats` | Abuse-protection hook stats |
 | `/internal/boundary/account-risk/controls` | Boundary-side account-risk control read |
 | `/internal/boundary/account-risk/decisions/recent` | Recent account-risk decisions |
@@ -44,3 +48,4 @@ Arena admin routes require the separate arena datasource (`ARENA_POSTGRES_JDBC_U
 
 - [API Overview](../overview/) — the public `/api/v1` contract these routes are explicitly separate from
 - `docs/BOT_ARENA_PLAN.md` — arena control-plane detail
+- `docs/SETTLEMENT_CLEARING_STRATEGY.md` — settlement materialization and repair route detail
