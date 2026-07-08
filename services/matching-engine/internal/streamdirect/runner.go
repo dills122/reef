@@ -87,17 +87,21 @@ func startNatsRunner(parent context.Context, service *app.Service, config Runtim
 	for _, partition := range config.Partitions {
 		source := NewNatsCommandSource(js, natsConfig, partition, config.DurablePrefix)
 		commandSource := wrapCommandSourceWithLocalFaultHooks(source, config)
-		publisher := NewNatsEventBatchPublisher(js, config.EventStream, config.EventSubjectPrefix, config.PartitionCount)
+		publisher := wrapEventBatchPublisherWithLocalFaultHooks(
+			NewNatsEventBatchPublisher(js, config.EventStream, config.EventSubjectPrefix, config.PartitionCount),
+			config,
+		)
 		processor := NewProcessor(service, commandSource, publisher, ProcessorConfig{
-			ShardID:          config.ShardID,
-			Partition:        partition,
-			BatchSize:        config.BatchSize,
-			FetchTimeout:     config.FetchTimeout,
-			PollInterval:     config.PollInterval,
-			CommandStream:    config.CommandStream,
-			EventStreamName:  config.EventStream,
-			Source:           "jetstream",
-			StopAfterAckFail: config.TestStopAfterAckFail,
+			ShardID:              config.ShardID,
+			Partition:            partition,
+			BatchSize:            config.BatchSize,
+			FetchTimeout:         config.FetchTimeout,
+			PollInterval:         config.PollInterval,
+			CommandStream:        config.CommandStream,
+			EventStreamName:      config.EventStream,
+			Source:               "jetstream",
+			StopAfterAckFail:     config.TestStopAfterAckFail,
+			StopAfterPublishFail: config.TestStopAfterPublishFail,
 		})
 		runner.processors = append(runner.processors, processor)
 		runner.wg.Add(1)
@@ -153,16 +157,18 @@ func startKafkaRunner(parent context.Context, service *app.Service, config Runti
 		}
 		closers = append(closers, source.Close)
 		commandSource := wrapCommandSourceWithLocalFaultHooks(source, config)
-		processor := NewProcessor(service, commandSource, publisher, ProcessorConfig{
-			ShardID:          config.ShardID,
-			Partition:        partition,
-			BatchSize:        config.BatchSize,
-			FetchTimeout:     config.FetchTimeout,
-			PollInterval:     config.PollInterval,
-			CommandStream:    config.CommandStream,
-			EventStreamName:  config.EventStream,
-			Source:           "redpanda",
-			StopAfterAckFail: config.TestStopAfterAckFail,
+		eventPublisher := wrapEventBatchPublisherWithLocalFaultHooks(publisher, config)
+		processor := NewProcessor(service, commandSource, eventPublisher, ProcessorConfig{
+			ShardID:              config.ShardID,
+			Partition:            partition,
+			BatchSize:            config.BatchSize,
+			FetchTimeout:         config.FetchTimeout,
+			PollInterval:         config.PollInterval,
+			CommandStream:        config.CommandStream,
+			EventStreamName:      config.EventStream,
+			Source:               "redpanda",
+			StopAfterAckFail:     config.TestStopAfterAckFail,
+			StopAfterPublishFail: config.TestStopAfterPublishFail,
 		})
 		runner.processors = append(runner.processors, processor)
 		runner.wg.Add(1)
@@ -211,6 +217,28 @@ func (s *localAckFailureSource) AckBatch(deliveries []CommandDelivery) (int, err
 		acked++
 	}
 	return acked, nil
+}
+
+func wrapEventBatchPublisherWithLocalFaultHooks(publisher EventBatchPublisher, config RuntimeConfig) EventBatchPublisher {
+	if !config.TestFailPublishOnce {
+		return publisher
+	}
+	return &localPublishFailurePublisher{
+		delegate:             publisher,
+		injectedFailureCount: &atomic.Uint64{},
+	}
+}
+
+type localPublishFailurePublisher struct {
+	delegate             EventBatchPublisher
+	injectedFailureCount *atomic.Uint64
+}
+
+func (p *localPublishFailurePublisher) PublishEventBatch(ctx context.Context, batch VenueEventBatch) error {
+	if p.injectedFailureCount.CompareAndSwap(0, 1) {
+		return errors.New("injected matching-engine event-batch publish failure before command offset commit")
+	}
+	return p.delegate.PublishEventBatch(ctx, batch)
 }
 
 func (r *Runner) Stop() {

@@ -46,15 +46,16 @@ type Processor struct {
 }
 
 type ProcessorConfig struct {
-	ShardID          string
-	Partition        int
-	BatchSize        int
-	FetchTimeout     time.Duration
-	PollInterval     time.Duration
-	CommandStream    string
-	EventStreamName  string
-	Source           string
-	StopAfterAckFail bool
+	ShardID              string
+	Partition            int
+	BatchSize            int
+	FetchTimeout         time.Duration
+	PollInterval         time.Duration
+	CommandStream        string
+	EventStreamName      string
+	Source               string
+	StopAfterAckFail     bool
+	StopAfterPublishFail bool
 }
 
 type Stats struct {
@@ -191,7 +192,7 @@ func (p *Processor) Run(ctx context.Context) error {
 		processed, err := p.ProcessOnce(ctx)
 		if err != nil {
 			p.recordFailure(err)
-			if p.config.StopAfterAckFail {
+			if p.config.StopAfterAckFail || p.config.StopAfterPublishFail {
 				return err
 			}
 		}

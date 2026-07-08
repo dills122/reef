@@ -41,6 +41,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -2854,6 +2855,49 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun streamAckRetryAfterPublishAckBeforeMarkerUpdateRepublishesAndConverges() {
+        val store = SkipFirstPublishedMarkerIntakeStore(InMemoryStreamCommandIntakeStore())
+        val publisher = RecordingStreamCommandPublisher()
+        val server = testServerWithGateway(
+            gateway = CountingEngineGateway(EchoOrderEngineGateway()),
+            commandProcessingMode = CommandProcessingMode.StreamAck,
+            streamCommandIntakeStore = store,
+            streamCommandPublisher = publisher
+        )
+        try {
+            val headers = mapOf(
+                "X-Client-Id" to "client-1",
+                "Idempotency-Key" to "idem-stream-marker-crash"
+            )
+            val body = validSubmitBody(
+                "cmd-stream-marker-crash",
+                "trace-stream-marker-crash",
+                "ord-stream-marker-crash",
+                extra = streamRoutingExtra()
+            )
+
+            val first = post(server.address.port, "/api/v1/orders/submit", headers, body)
+            assertEquals(202, first.status)
+            assertContains(first.body, "\"commandId\":\"cmd-stream-marker-crash\"")
+            assertEquals(1, publisher.published.size)
+            assertEquals(0L, store.findByCommandId("cmd-stream-marker-crash")?.streamSequence)
+
+            val retry = post(server.address.port, "/api/v1/orders/submit", headers, body)
+            assertEquals(202, retry.status)
+            assertContains(retry.body, "\"commandId\":\"cmd-stream-marker-crash\"")
+            assertEquals(2, publisher.published.size)
+            assertEquals(2L, store.findByCommandId("cmd-stream-marker-crash")?.streamSequence)
+
+            val replay = post(server.address.port, "/api/v1/orders/submit", headers, body)
+            assertEquals(202, replay.status)
+            assertContains(replay.body, "\"commandId\":\"cmd-stream-marker-crash\"")
+            assertEquals(2, publisher.published.size)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun streamAckHealthEndpointReturnsStreamSnapshot() {
         val server = testServerWithGateway(
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
@@ -3689,6 +3733,38 @@ private class RecordingStreamCommandPublisher(
             error("publish ack timeout")
         }
         return StreamPublishAck("REEF_COMMANDS", published.size.toLong())
+    }
+}
+
+private class SkipFirstPublishedMarkerIntakeStore(
+    private val delegate: StreamCommandIntakeStore
+) : StreamCommandIntakeStore {
+    private val skipNext = AtomicBoolean(true)
+
+    override fun reserve(envelope: StreamCommandEnvelope, reference: StreamCommandReference): StreamCommandReservation {
+        return delegate.reserve(envelope, reference)
+    }
+
+    override fun markPublished(scope: String, idempotencyKey: String, streamSequence: Long): Boolean {
+        if (skipNext.compareAndSet(true, false)) {
+            return true
+        }
+        return delegate.markPublished(scope, idempotencyKey, streamSequence)
+    }
+
+    override fun markPublishedByCommandId(commandId: String, streamSequence: Long): Boolean {
+        if (skipNext.compareAndSet(true, false)) {
+            return true
+        }
+        return delegate.markPublishedByCommandId(commandId, streamSequence)
+    }
+
+    override fun markPublishedByCommandIds(commands: List<Pair<String, Long>>): Int {
+        return delegate.markPublishedByCommandIds(commands)
+    }
+
+    override fun findByCommandId(commandId: String): StreamCommandReference? {
+        return delegate.findByCommandId(commandId)
     }
 }
 
