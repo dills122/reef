@@ -98,7 +98,7 @@ Strong areas:
 Gaps before calling it production-ready:
 
 - no self-trade prevention
-- no explicit session state gates
+- explicit session state gates exist behind service options
 - engine-level max quantity, max notional, and price collar controls exist behind service options
 - no implemented snapshot/replay/checksum recovery proof
 - no formal lifecycle conformance matrix
@@ -188,8 +188,8 @@ Goal:
 Acceptance:
 
 - `OPEN` accepts normal matching
-- `HALTED` rejects or prevents new matching according to a documented policy
-- `CLOSED` rejects new order entry and lifecycle changes
+- `HALTED` rejects submit and modify while allowing cancel
+- `CLOSED` rejects submit, modify, and cancel
 - tests prove no book mutation on session-state rejection
 
 ### 6. Market Integrity Controls

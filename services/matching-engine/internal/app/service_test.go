@@ -605,6 +605,41 @@ func TestSubmitOrderRejectsMarketIntegrityControlBreaches(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderRejectsWhenSessionNotOpen(t *testing.T) {
+	service := NewService(WithSessionControls(SessionControls{
+		States: map[string]SessionState{
+			"session-halted": SessionStateHalted,
+			"session-closed": SessionStateClosed,
+		},
+	}))
+
+	for _, sessionID := range []string{"session-halted", "session-closed"} {
+		t.Run(sessionID, func(t *testing.T) {
+			result := service.SubmitOrder(domain.SubmitOrder{
+				OrderID:        "ord-" + sessionID,
+				VenueSessionID: sessionID,
+				InstrumentID:   "AAPL",
+				Side:           domain.SideBuy,
+				QuantityUnits:  "100",
+				LimitPrice:     "150250000000",
+				Currency:       "USD",
+			})
+			if result.Rejected == nil {
+				t.Fatalf("expected session-state rejection, got %#v", result)
+			}
+			if result.Rejected.Code != "SESSION_STATE_REJECT" {
+				t.Fatalf("expected session-state reject code, got %#v", result.Rejected)
+			}
+			if _, ok := service.OrderState("ord-" + sessionID); ok {
+				t.Fatalf("expected session-rejected order to avoid order state")
+			}
+		})
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
+		t.Fatalf("expected session-rejected submits to avoid book mutation")
+	}
+}
+
 func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{
@@ -995,6 +1030,85 @@ func TestModifyOrderRejectsMarketIntegrityControlWithoutMutation(t *testing.T) {
 	}
 	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
 		t.Fatalf("expected original buy liquidity to remain")
+	}
+}
+
+func TestHaltedSessionRejectsModifyButAllowsCancel(t *testing.T) {
+	states := map[string]SessionState{"session-1": SessionStateOpen}
+	service := NewService(WithSessionControls(SessionControls{States: states}))
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-buy-1",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "100",
+		LimitPrice:     "150250000000",
+		Currency:       "USD",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected submit in open session to accept, got %#v", result)
+	}
+
+	states["session-1"] = SessionStateHalted
+	modify := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "90",
+		LimitPrice:    "150250000000",
+	})
+	if modify.Rejected == nil {
+		t.Fatalf("expected halted session modify to reject, got %#v", modify)
+	}
+	if modify.Rejected.Code != "SESSION_STATE_REJECT" {
+		t.Fatalf("expected session-state reject code, got %#v", modify.Rejected)
+	}
+
+	state, ok := service.OrderState("ord-buy-1")
+	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
+		t.Fatalf("expected rejected modify to preserve order state, got %#v", state)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected halted modify to preserve resting liquidity")
+	}
+
+	cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-1"})
+	if cancel.Accepted == nil {
+		t.Fatalf("expected halted session cancel to accept, got %#v", cancel)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
+		t.Fatalf("expected halted cancel to remove resting liquidity")
+	}
+}
+
+func TestClosedSessionRejectsCancelWithoutMutation(t *testing.T) {
+	states := map[string]SessionState{"session-1": SessionStateOpen}
+	service := NewService(WithSessionControls(SessionControls{States: states}))
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-buy-1",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "100",
+		LimitPrice:     "150250000000",
+		Currency:       "USD",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected submit in open session to accept, got %#v", result)
+	}
+
+	states["session-1"] = SessionStateClosed
+	cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-1"})
+	if cancel.Rejected == nil {
+		t.Fatalf("expected closed session cancel to reject, got %#v", cancel)
+	}
+	if cancel.Rejected.Code != "SESSION_STATE_REJECT" {
+		t.Fatalf("expected session-state reject code, got %#v", cancel.Rejected)
+	}
+	state, ok := service.OrderState("ord-buy-1")
+	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
+		t.Fatalf("expected rejected cancel to preserve order state, got %#v", state)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected closed cancel reject to preserve resting liquidity")
 	}
 }
 

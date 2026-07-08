@@ -18,6 +18,7 @@ type Service struct {
 	orders            map[string]*orderRecord
 	now               func() time.Time
 	orderControls     OrderControls
+	sessionControls   SessionControls
 	terminalRetention terminalOrderRetention
 }
 
@@ -31,6 +32,7 @@ type orderBook struct {
 type orderRecord struct {
 	OrderID           string
 	InstrumentID      string
+	VenueSessionID    string
 	Side              domain.Side
 	OriginalQuantity  int64
 	RemainingQuantity int64
@@ -50,6 +52,19 @@ type OrderControls struct {
 type PriceCollar struct {
 	ReferencePrice int64
 	BandBps        int64
+}
+
+type SessionState string
+
+const (
+	SessionStateOpen   SessionState = "OPEN"
+	SessionStateHalted SessionState = "HALTED"
+	SessionStateClosed SessionState = "CLOSED"
+)
+
+type SessionControls struct {
+	DefaultState SessionState
+	States       map[string]SessionState
 }
 
 type Option func(*Service)
@@ -73,6 +88,12 @@ func WithTerminalOrderRetentionLimit(limit int) Option {
 func WithOrderControls(controls OrderControls) Option {
 	return func(s *Service) {
 		s.orderControls = controls
+	}
+}
+
+func WithSessionControls(controls SessionControls) Option {
+	return func(s *Service) {
+		s.sessionControls = controls
 	}
 }
 
@@ -106,6 +127,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if cmd.InstrumentID == "" {
 		return rejectedResult("evt-reject-missing-instrument", cmd.OrderID, "VALIDATION_ERROR", "instrumentId is required", now)
 	}
+	if rejection := s.validateSessionForSubmit(cmd.OrderID, cmd.VenueSessionID, now); rejection != nil {
+		return *rejection
+	}
 
 	if cmd.Side != domain.SideBuy && cmd.Side != domain.SideSell {
 		return rejectedResult("evt-reject-invalid-side", cmd.OrderID, "VALIDATION_ERROR", "side must be BUY or SELL", now)
@@ -133,6 +157,7 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	record := &orderRecord{
 		OrderID:           cmd.OrderID,
 		InstrumentID:      cmd.InstrumentID,
+		VenueSessionID:    cmd.VenueSessionID,
 		Side:              cmd.Side,
 		OriginalQuantity:  quantityUnits,
 		RemainingQuantity: quantityUnits,
@@ -169,6 +194,9 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
 	}
+	if rejection := s.validateSessionForCancel(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
+		return *rejection
+	}
 	book := s.bookFor(record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
@@ -201,6 +229,9 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	record, ok := s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	if rejection := s.validateSessionForModify(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
+		return *rejection
 	}
 	book := s.bookFor(record.InstrumentID)
 	book.mu.Lock()
@@ -346,6 +377,43 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 	book := newOrderBook()
 	s.books[instrumentID] = book
 	return book
+}
+
+func (s *Service) validateSessionForSubmit(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
+	state := s.sessionState(venueSessionID)
+	if state == SessionStateOpen {
+		return nil
+	}
+	result := rejectedResult("evt-reject-session-state-"+orderID, orderID, "SESSION_STATE_REJECT", "venue session is not open for submit", occurredAt)
+	return &result
+}
+
+func (s *Service) validateSessionForModify(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
+	state := s.sessionState(venueSessionID)
+	if state == SessionStateOpen {
+		return nil
+	}
+	result := rejectedResult("evt-reject-session-state-"+orderID, orderID, "SESSION_STATE_REJECT", "venue session is not open for modify", occurredAt)
+	return &result
+}
+
+func (s *Service) validateSessionForCancel(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
+	state := s.sessionState(venueSessionID)
+	if state != SessionStateClosed {
+		return nil
+	}
+	result := rejectedResult("evt-reject-session-state-"+orderID, orderID, "SESSION_STATE_REJECT", "venue session is closed for cancel", occurredAt)
+	return &result
+}
+
+func (s *Service) sessionState(venueSessionID string) SessionState {
+	if state, ok := s.sessionControls.States[venueSessionID]; ok && state != "" {
+		return state
+	}
+	if s.sessionControls.DefaultState != "" {
+		return s.sessionControls.DefaultState
+	}
+	return SessionStateOpen
 }
 
 // BatchRollback captures a pre-mutation snapshot of the order book(s) and
