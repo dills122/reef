@@ -117,6 +117,10 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"freshness\":\"durable fact rows\"")
             assertContains(response.body, "\"name\":\"settlementFacts\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"settlementObligations\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/obligations/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"settlementLedger\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/ledger/{scenarioRunId}\"")
             assertContains(response.body, "\"name\":\"settlementProof\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/proof/{scenarioRunId}\"")
             assertContains(response.body, "\"name\":\"settlementScore\"")
@@ -3839,7 +3843,8 @@ class PlatformHttpServerBoundaryTest {
                     maxBytes = 1024,
                     storageUtilization = 0.5,
                     publishAckLastMs = 7,
-                    publishAckMaxMs = 11
+                    publishAckMaxMs = 11,
+                    producerMetrics = mapOf("request-latency-max" to 13.0)
                 )
             )
         )
@@ -3853,6 +3858,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"messages\":3")
             assertContains(response.body, "\"storageUtilization\":0.5")
             assertContains(response.body, "\"publishAckLastMs\":7")
+            assertContains(response.body, "\"producerMetrics\":{\"request-latency-max\":13.0}")
         } finally {
             server.stop(0)
         }

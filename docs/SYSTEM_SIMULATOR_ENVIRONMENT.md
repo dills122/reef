@@ -292,9 +292,18 @@ operator/deploy script
 The export/cleanup service is planned. Until it exists, current harnesses still
 fetch or push artifacts through deploy scripts. The current
 `make simulation-run` path wraps `scripts/dev/do-benchmark-host.sh`, which
-starts the root local stream-ack Compose profile on the disposable worker. That
-is bridge tooling and an implementation gap, not the target run-plane
-architecture.
+starts a root local benchmark Compose profile on the disposable worker. The
+historical default is `stream-ack`; set `REEF_DO_BENCHMARK_PROFILE=materializer`
+when the remote run should mirror the current direct-stream plus
+venue-event-materializer durable-canonical local path. That is bridge tooling
+and an implementation gap, not the target run-plane architecture.
+
+The bridge runner can also resolve a first-pass infrastructure and load plan
+from a goal. Use `scripts/dev/do-benchmark-host.sh plan-goal` for a dry run, or
+pass `--profile materializer`, `--goal latency-knee|sustain|ceiling`, and
+`--target-rps <rps>` through `make simulation-run` /
+`scripts/deploy/simulation-run.mjs`. Explicit DO size, rate, worker, and
+duration overrides still take precedence.
 
 ## What The Simulator Should Not Claim
 

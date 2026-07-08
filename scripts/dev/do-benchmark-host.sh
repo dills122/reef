@@ -38,6 +38,7 @@ usage: scripts/dev/do-benchmark-host.sh <command>
 
 commands:
   up             provision the DO benchmark droplet and firewall
+  plan-goal      print resolved profile, sizing, load, and report gates without provisioning
   status         print OpenTofu outputs
   sync           rsync the current checkout to the droplet
   start          start the remote stream-ack stack
@@ -60,10 +61,18 @@ optional:
   REEF_DO_SSH_PUBLIC_KEY=~/.ssh/id_ed25519.pub
   REEF_DO_SSH_PRIVATE_KEY=~/.ssh/id_ed25519
   REEF_DO_ALLOWED_SSH_CIDRS=203.0.113.10/32
-  REEF_DO_REGION=sfo3
+  REEF_DO_REGION=sfo2
   REEF_DO_SIZE=c-8
+  REEF_DO_BENCHMARK_PROFILE=stream-ack|materializer
+  REEF_DO_BENCHMARK_GOAL=fixed|latency-knee|sustain|ceiling
+  REEF_DO_TARGET_ACCEPTED_RPS=10000
+  REEF_DO_TARGET_P95_MS=100
+  REEF_DO_TARGET_P99_MS=200
+  REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS=16
+  REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW=4
   REEF_DO_STRESS_RATES=2500,5000
   REEF_DO_STRESS_WORKERS=256
+  REEF_DO_STRESS_REPEAT_SAMPLES=1
   REEF_DO_STRESS_DURATION=30s
   REEF_DO_DRAIN_BACKPRESSURE_POLICY=control-room-fresh
   REEF_DO_IMAGE_MODE=dockerhub|source
@@ -89,6 +98,7 @@ main() {
   local command="${1:-}"
   case "$command" in
     up) cmd_up ;;
+    plan-goal) cmd_plan_goal ;;
     status) cmd_status ;;
     sync) cmd_sync ;;
     start) cmd_start ;;
@@ -109,6 +119,41 @@ main() {
 
 cmd_up() {
   provision_stack
+}
+
+cmd_plan_goal() {
+  local profile goal target rates workers repeat_samples duration trace_limit size min_rps max_p95 max_p99
+  profile="$(benchmark_profile)"
+  goal="$(benchmark_goal)"
+  target="$(benchmark_target_rps "$profile")"
+  rates="${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}"
+  workers="${REEF_DO_STRESS_WORKERS:-$(benchmark_default_workers "$profile")}"
+  repeat_samples="${REEF_DO_STRESS_REPEAT_SAMPLES:-1}"
+  duration="${REEF_DO_STRESS_DURATION:-$(benchmark_default_duration "$profile")}"
+  trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-$(benchmark_default_trace_limit "$profile")}"
+  size="${REEF_DO_SIZE:-$(benchmark_default_size "$profile")}"
+  min_rps="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}"
+  max_p95="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}"
+  max_p99="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}"
+
+  printf 'DO benchmark goal plan:\n'
+  printf '  profile=%s\n' "$profile"
+  printf '  goal=%s\n' "$goal"
+  printf '  target_accepted_rps=%s\n' "${target:-none}"
+  printf '  region=%s\n' "${REEF_DO_REGION:-sfo2}"
+  printf '  size=%s\n' "$size"
+  printf '  rates=%s\n' "$rates"
+  printf '  workers=%s\n' "$workers"
+  printf '  repeat_samples=%s\n' "$repeat_samples"
+  printf '  duration=%s\n' "$duration"
+  printf '  trace_check_limit=%s\n' "$trace_limit"
+  printf '  min_attempted_rps=%s\n' "${REEF_DO_MIN_ATTEMPTED_RPS:-$min_rps}"
+  printf '  min_accepted_rps=%s\n' "${REEF_DO_MIN_ACCEPTED_RPS:-$min_rps}"
+  printf '  max_p95_ms=%s\n' "${max_p95:-none}"
+  printf '  max_p99_ms=%s\n' "${max_p99:-none}"
+  printf '  min_stream_direct_active_partitions=%s\n' "${REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS:-none}"
+  printf '  max_stream_direct_partition_skew=%s\n' "${REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW:-none}"
+  printf '  image_mode=%s\n' "${REEF_DO_IMAGE_MODE:-source}"
 }
 
 cmd_status() {
@@ -140,19 +185,29 @@ cmd_run() {
     remote_export_to_r2 "$run_id" || status=$?
   fi
   fetch_artifacts || status=$?
-  REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
-  REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-2000}" \
-  REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-2000}" \
+  local profile
+  profile="$(benchmark_profile)"
+  REEF_DO_REPORT_PROFILE="$profile" \
+  REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
+  REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
+  REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
+  REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
+  REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
   return "$status"
 }
 
 cmd_check() {
   local report_dir
+  local profile
+  profile="$(benchmark_profile)"
   report_dir="$(benchmark_report_dir)"
-  REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-2500,5000}}" \
-  REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-2000}" \
-  REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-2000}" \
+  REEF_DO_REPORT_PROFILE="$profile" \
+  REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
+  REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
+  REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
+  REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
+  REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$report_dir"
 }
 
@@ -242,39 +297,63 @@ provision_stack() {
 }
 
 remote_start_stack() {
-  remote_script <<'REMOTE'
+  local profile
+  profile="$(benchmark_profile)"
+  remote_script REEF_BENCHMARK_PROFILE="$profile" <<'REMOTE'
 set -euo pipefail
 cd "$REMOTE_DIR"
 export JS_RUNTIME=node
-export STREAM_ACK_COMMAND_STREAM="${STREAM_ACK_COMMAND_STREAM:-REEF_COMMANDS}"
-make dev-up-stream-ack
+export PLATFORM_INTERNAL_HTTP_MODE=enabled
+if [ "$REEF_BENCHMARK_PROFILE" = "stream-ack" ]; then
+  export STREAM_ACK_COMMAND_STREAM="${STREAM_ACK_COMMAND_STREAM:-REEF_COMMANDS}"
+  make dev-up-stream-ack
+elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
+  make dev-smoke-venue-event-materializer
+else
+  echo "unsupported REEF_DO_BENCHMARK_PROFILE=$REEF_BENCHMARK_PROFILE" >&2
+  exit 2
+fi
 REMOTE
 }
 
 remote_run_benchmark() {
   local run_id="$1"
+  local profile
+  profile="$(benchmark_profile)"
   local stream_name
   stream_name="REEF_COMMANDS_$(sanitize_token "$run_id")"
   local subject_prefix
   subject_prefix="reef.do_benchmark.$(sanitize_token "$run_id")"
   local durable_prefix
   durable_prefix="reef-stream-worker-$(sanitize_token "$run_id")"
-  local rates="${REEF_DO_STRESS_RATES:-2500,5000}"
-  local workers="${REEF_DO_STRESS_WORKERS:-256}"
-  local duration="${REEF_DO_STRESS_DURATION:-30s}"
-  local trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-200}"
+  local event_stream
+  event_stream="REEF_EVENTS_$(sanitize_token "$run_id")"
+  local event_subject_prefix
+  event_subject_prefix="reef.do_benchmark.$(sanitize_token "$run_id").events.v1"
+  local materializer_group
+  materializer_group="reef-venue-event-materializer-$(sanitize_token "$run_id")"
+  local rates="${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}"
+  local workers="${REEF_DO_STRESS_WORKERS:-$(benchmark_default_workers "$profile")}"
+  local repeat_samples="${REEF_DO_STRESS_REPEAT_SAMPLES:-1}"
+  local duration="${REEF_DO_STRESS_DURATION:-$(benchmark_default_duration "$profile")}"
+  local trace_limit="${REEF_DO_TRACE_CHECK_LIMIT:-$(benchmark_default_trace_limit "$profile")}"
   local min_success="${REEF_DO_MIN_SUCCESS_RATE_PCT:-100}"
   local drain_backpressure_policy="${REEF_DO_DRAIN_BACKPRESSURE_POLICY:-${STREAM_ACK_DRAIN_BACKPRESSURE_POLICY:-venue-core}}"
   local image_mode="${REEF_DO_IMAGE_MODE:-source}"
 
-  echo "running remote benchmark run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers duration=$duration drain_backpressure_policy=$drain_backpressure_policy image_mode=$image_mode"
+  echo "running remote benchmark profile=$profile run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers repeat_samples=$repeat_samples duration=$duration drain_backpressure_policy=$drain_backpressure_policy image_mode=$image_mode"
   remote_script \
+    REEF_BENCHMARK_PROFILE="$profile" \
     REEF_BENCHMARK_RUN_ID="$run_id" \
     REEF_BENCHMARK_STREAM="$stream_name" \
     REEF_BENCHMARK_SUBJECT_PREFIX="$subject_prefix" \
     REEF_BENCHMARK_DURABLE_PREFIX="$durable_prefix" \
+    REEF_BENCHMARK_EVENT_STREAM="$event_stream" \
+    REEF_BENCHMARK_EVENT_SUBJECT_PREFIX="$event_subject_prefix" \
+    REEF_BENCHMARK_MATERIALIZER_GROUP="$materializer_group" \
     REEF_BENCHMARK_RATES="$rates" \
     REEF_BENCHMARK_WORKERS="$workers" \
+    REEF_BENCHMARK_REPEAT_SAMPLES="$repeat_samples" \
     REEF_BENCHMARK_DURATION="$duration" \
     REEF_BENCHMARK_TRACE_LIMIT="$trace_limit" \
     REEF_BENCHMARK_MIN_SUCCESS="$min_success" \
@@ -288,52 +367,77 @@ exec > >(tee -a "$log_dir/remote-benchmark.log") 2>&1
 cd "$REMOTE_DIR"
 
 echo "[$(date -Is)] remote benchmark starting"
+echo "profile=$REEF_BENCHMARK_PROFILE"
 echo "run_id=$REEF_BENCHMARK_RUN_ID"
 echo "stream=$REEF_BENCHMARK_STREAM"
 echo "subject_prefix=$REEF_BENCHMARK_SUBJECT_PREFIX"
 echo "durable_prefix=$REEF_BENCHMARK_DURABLE_PREFIX"
-echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS duration=$REEF_BENCHMARK_DURATION"
+echo "event_stream=$REEF_BENCHMARK_EVENT_STREAM"
+echo "event_subject_prefix=$REEF_BENCHMARK_EVENT_SUBJECT_PREFIX"
+echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS repeat_samples=$REEF_BENCHMARK_REPEAT_SAMPLES duration=$REEF_BENCHMARK_DURATION"
 echo "drain_backpressure_policy=$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
 echo "image_mode=$REEF_BENCHMARK_IMAGE_MODE"
 
 export JS_RUNTIME=node
+export PLATFORM_INTERNAL_HTTP_MODE=enabled
 export STREAM_ACK_COMMAND_STREAM="$REEF_BENCHMARK_STREAM"
 export STREAM_ACK_SUBJECT_PREFIX="$REEF_BENCHMARK_SUBJECT_PREFIX"
 export STREAM_ACK_WORKER_DURABLE_PREFIX="$REEF_BENCHMARK_DURABLE_PREFIX"
 export STREAM_ACK_DRAIN_BACKPRESSURE_POLICY="$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
 export DEV_STRESS_ARTIFACT_DIR="$artifact_dir"
-export DEV_STRESS_REPORT_OUT="$artifact_dir/stream-ack-stress.json"
 export DEV_STRESS_RATES="$REEF_BENCHMARK_RATES"
 export DEV_STRESS_SWEEP_WORKERS="$REEF_BENCHMARK_WORKERS"
+export DEV_STRESS_REPEAT_SAMPLES="$REEF_BENCHMARK_REPEAT_SAMPLES"
 export DEV_STRESS_DURATION="$REEF_BENCHMARK_DURATION"
 export DEV_STRESS_TRACE_CHECK_LIMIT="$REEF_BENCHMARK_TRACE_LIMIT"
 export DEV_STRESS_MIN_SUCCESS_RATE_PCT="$REEF_BENCHMARK_MIN_SUCCESS"
 export DEV_STRESS_RATE_SCHEDULE=precise
-export DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS=1
-export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
-export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
 
 if [ "$REEF_BENCHMARK_IMAGE_MODE" = "dockerhub" ]; then
   export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}"
   export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}"
   export DEV_COMPOSE_BUILD=0
   echo "[$(date -Is)] stage: docker compose pull Docker Hub runtime images"
-  docker compose pull platform-api matching-engine
+  docker compose pull platform-api matching-engine platform-materializer platform-materializer-1 platform-materializer-2 platform-materializer-3
   echo "[$(date -Is)] stage complete: docker compose pull Docker Hub runtime images"
 else
   export DEV_COMPOSE_BUILD="${DEV_COMPOSE_BUILD:-1}"
 fi
 
-echo "[$(date -Is)] stage: make dev-up-stream-ack"
-make dev-up-stream-ack </dev/null
-echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
-echo "[$(date -Is)] stage: make dev-smoke"
-make dev-smoke </dev/null
-echo "[$(date -Is)] stage complete: make dev-smoke"
-echo "[$(date -Is)] stage: make dev-stress-stream-ack"
-make dev-stress-stream-ack </dev/null
-echo "[$(date -Is)] stage complete: make dev-stress-stream-ack"
+if [ "$REEF_BENCHMARK_PROFILE" = "stream-ack" ]; then
+  export DEV_STRESS_REPORT_OUT="$artifact_dir/stream-ack-stress.json"
+  export DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS=1
+  export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
+  export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
+
+  echo "[$(date -Is)] stage: make dev-up-stream-ack"
+  make dev-up-stream-ack </dev/null
+  echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
+  echo "[$(date -Is)] stage: make dev-smoke"
+  make dev-smoke </dev/null
+  echo "[$(date -Is)] stage complete: make dev-smoke"
+  echo "[$(date -Is)] stage: make dev-stress-stream-ack"
+  make dev-stress-stream-ack </dev/null
+  echo "[$(date -Is)] stage complete: make dev-stress-stream-ack"
+elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
+  export DEV_STRESS_REPORT_OUT="$artifact_dir/venue-event-materializer-stress.json"
+  export MATCHING_ENGINE_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
+  export MATCHING_ENGINE_EVENT_SUBJECT_PREFIX="$REEF_BENCHMARK_EVENT_SUBJECT_PREFIX"
+  export VENUE_EVENT_MATERIALIZER_TOPIC="$REEF_BENCHMARK_EVENT_STREAM"
+  export VENUE_EVENT_MATERIALIZER_GROUP_ID="$REEF_BENCHMARK_MATERIALIZER_GROUP"
+  export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
+
+  echo "[$(date -Is)] stage: make dev-smoke-venue-event-materializer"
+  make dev-smoke-venue-event-materializer </dev/null
+  echo "[$(date -Is)] stage complete: make dev-smoke-venue-event-materializer"
+  echo "[$(date -Is)] stage: make dev-stress-venue-event-materializer"
+  make dev-stress-venue-event-materializer </dev/null
+  echo "[$(date -Is)] stage complete: make dev-stress-venue-event-materializer"
+else
+  echo "unsupported REEF_DO_BENCHMARK_PROFILE=$REEF_BENCHMARK_PROFILE" >&2
+  exit 2
+fi
 echo "[$(date -Is)] remote benchmark complete"
 REMOTE
 }
@@ -540,8 +644,8 @@ configure_tf_vars() {
     export TF_VAR_ssh_public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDummyKeyForOutputOnly000000000000000000000 reef-dummy"
   fi
 
-  export TF_VAR_region="${REEF_DO_REGION:-sfo3}"
-  export TF_VAR_size="${REEF_DO_SIZE:-c-8}"
+  export TF_VAR_region="${REEF_DO_REGION:-sfo2}"
+  export TF_VAR_size="${REEF_DO_SIZE:-$(benchmark_default_size "$(benchmark_profile)")}"
   export TF_VAR_image="${REEF_DO_IMAGE:-ubuntu-24-04-x64}"
   export TF_VAR_ssh_user="${REEF_DO_SSH_USER:-reefbench}"
   export TF_VAR_droplet_name="${REEF_DO_DROPLET_NAME:-reef-stream-ack-benchmark}"
@@ -659,6 +763,221 @@ expand_path() {
     "~/"*) printf '%s/%s' "$HOME" "${path#~/}" ;;
     *) printf '%s' "$path" ;;
   esac
+}
+
+benchmark_profile() {
+  local profile="${REEF_DO_BENCHMARK_PROFILE:-stream-ack}"
+  case "$profile" in
+    stream-ack|materializer) printf '%s' "$profile" ;;
+    *)
+      echo "unsupported REEF_DO_BENCHMARK_PROFILE=$profile" >&2
+      exit 2
+      ;;
+  esac
+}
+
+benchmark_default_rates() {
+  local profile="$1"
+  local goal target
+  goal="$(benchmark_goal)"
+  target="$(benchmark_target_rps "$profile")"
+  case "$goal" in
+    latency-knee)
+      if [ -n "$target" ]; then
+        printf '%s,%s,%s,%s' \
+          "$(round_rate $((target * 70 / 100)))" \
+          "$(round_rate $((target * 90 / 100)))" \
+          "$(round_rate $((target * 110 / 100)))" \
+          "$(round_rate $((target * 130 / 100)))"
+      else
+        benchmark_fixed_default_rates "$profile"
+      fi
+      ;;
+    sustain)
+      if [ -n "$target" ]; then
+        printf '%s' "$(round_rate "$target")"
+      else
+        benchmark_fixed_default_rates "$profile"
+      fi
+      ;;
+    ceiling)
+      if [ -n "$target" ]; then
+        printf '%s,%s,%s,%s' \
+          "$(round_rate $((target * 50 / 100)))" \
+          "$(round_rate $((target * 75 / 100)))" \
+          "$(round_rate "$target")" \
+          "$(round_rate $((target * 125 / 100)))"
+      else
+        benchmark_fixed_default_rates "$profile"
+      fi
+      ;;
+    fixed) benchmark_fixed_default_rates "$profile" ;;
+    *)
+      echo "unsupported REEF_DO_BENCHMARK_GOAL=$goal" >&2
+      exit 2
+      ;;
+  esac
+}
+
+benchmark_fixed_default_rates() {
+  case "$1" in
+    materializer) printf '%s' "10000" ;;
+    *) printf '%s' "2500,5000" ;;
+  esac
+}
+
+benchmark_default_workers() {
+  local profile="$1"
+  local goal target
+  goal="$(benchmark_goal)"
+  target="$(benchmark_target_rps "$profile")"
+  if [ "$goal" = "fixed" ] || [ -z "$target" ]; then
+    case "$profile" in
+      materializer) printf '%s' "384" ;;
+      *) printf '%s' "256" ;;
+    esac
+    return
+  fi
+  if [ "$target" -le 5000 ]; then
+    printf '%s' "512"
+  elif [ "$target" -le 10000 ]; then
+    printf '%s' "1024"
+  else
+    printf '%s' "1536"
+  fi
+}
+
+benchmark_default_duration() {
+  case "$1" in
+    materializer) printf '%s' "60s" ;;
+    *) printf '%s' "30s" ;;
+  esac
+}
+
+benchmark_default_trace_limit() {
+  case "$1" in
+    materializer) printf '%s' "0" ;;
+    *) printf '%s' "200" ;;
+  esac
+}
+
+benchmark_goal() {
+  local goal="${REEF_DO_BENCHMARK_GOAL:-${REEF_DO_GOAL:-}}"
+  if [ -z "$goal" ]; then
+    if [ -n "${REEF_DO_TARGET_ACCEPTED_RPS:-}" ]; then
+      goal="sustain"
+    else
+      goal="fixed"
+    fi
+  fi
+  case "$goal" in
+    fixed|latency-knee|sustain|ceiling) printf '%s' "$goal" ;;
+    *)
+      echo "unsupported REEF_DO_BENCHMARK_GOAL=$goal" >&2
+      exit 2
+      ;;
+  esac
+}
+
+benchmark_target_rps() {
+  local profile="$1"
+  local target="${REEF_DO_TARGET_ACCEPTED_RPS:-}"
+  if [ -z "$target" ]; then
+    case "$(benchmark_goal)" in
+      latency-knee)
+        case "$profile" in
+          materializer) target="5000" ;;
+          *) target="2500" ;;
+        esac
+        ;;
+      ceiling)
+        case "$profile" in
+          materializer) target="10000" ;;
+          *) target="5000" ;;
+        esac
+        ;;
+      sustain)
+        case "$profile" in
+          materializer) target="10000" ;;
+          *) target="5000" ;;
+        esac
+        ;;
+      *) target="" ;;
+    esac
+  fi
+  if [ -n "$target" ]; then
+    case "$target" in
+      ''|*[!0-9]*)
+        echo "REEF_DO_TARGET_ACCEPTED_RPS must be a positive integer, got $target" >&2
+        exit 2
+        ;;
+    esac
+    if [ "$target" -le 0 ]; then
+      echo "REEF_DO_TARGET_ACCEPTED_RPS must be > 0" >&2
+      exit 2
+    fi
+  fi
+  printf '%s' "$target"
+}
+
+benchmark_default_size() {
+  local profile="$1"
+  local goal target
+  goal="$(benchmark_goal)"
+  target="$(benchmark_target_rps "$profile")"
+  if [ "$goal" = "fixed" ] || [ -z "$target" ]; then
+    printf '%s' "c-8"
+    return
+  fi
+  if [ "$target" -le 5000 ]; then
+    printf '%s' "c-8"
+  elif [ "$target" -le 10000 ]; then
+    printf '%s' "c-16"
+  else
+    printf '%s' "c-32"
+  fi
+}
+
+benchmark_default_min_rps() {
+  local profile="$1"
+  local goal rates min_rate
+  goal="$(benchmark_goal)"
+  if [ "$goal" != "fixed" ]; then
+    rates="${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}"
+    min_rate="$(min_csv_rate "$rates")"
+    if [ -n "$min_rate" ]; then
+      printf '%s' "$((min_rate * 90 / 100))"
+      return
+    fi
+  fi
+  printf '%s' "2000"
+}
+
+min_csv_rate() {
+  local raw="$1"
+  local min=""
+  local value
+  IFS=',' read -ra values <<< "$raw"
+  for value in "${values[@]}"; do
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    case "$value" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    if [ -z "$min" ] || [ "$value" -lt "$min" ]; then
+      min="$value"
+    fi
+  done
+  if [ -n "$min" ]; then
+    printf '%s' "$min"
+  else
+    printf ''
+  fi
+}
+
+round_rate() {
+  local value="$1"
+  printf '%s' "$(( ((value + 50) / 100) * 100 ))"
 }
 
 benchmark_run_id() {

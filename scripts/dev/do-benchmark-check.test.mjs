@@ -57,6 +57,79 @@ assert.equal(summary.reports.length, 2);
 assert.equal(summary.reports[0].evidence.gaps.acceptedToMaterialized, 2);
 assert.equal(summary.reports[1].evidence.p99LatencyMs, 28.1);
 
+const materializerArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-materializer-"));
+writeMaterializerReport(materializerArtifactDir, "rate-10000.json", 10000, 1000);
+writeTelemetry(materializerArtifactDir);
+const materializerResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", materializerArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer",
+    REEF_DO_REQUIRED_RATES: "10000",
+    REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS: "4",
+    REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW: "1.1",
+  },
+  encoding: "utf8",
+});
+assert.equal(materializerResult.status, 0, materializerResult.stderr);
+assert.match(materializerResult.stdout, /rate=10000 attempted=1000 accepted=1000 directAcked=1000 materialized=1000/);
+
+const blockedArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-blocked-"));
+writeBlockedStreamAckReport(blockedArtifactDir, "rate-2500.json", 2500);
+writeTelemetry(blockedArtifactDir);
+const blockedResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", blockedArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "stream-ack",
+    REEF_DO_REQUIRED_RATES: "2500",
+  },
+  encoding: "utf8",
+});
+assert.equal(blockedResult.status, 1);
+assert.match(blockedResult.stderr, /internal diagnostics were blocked by PLATFORM_INTERNAL_HTTP_MODE/);
+
+const latencyGateArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-latency-"));
+writeMaterializerReport(latencyGateArtifactDir, "rate-10000.json", 10000, 1000);
+writeTelemetry(latencyGateArtifactDir);
+const latencyGateResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", latencyGateArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer",
+    REEF_DO_REQUIRED_RATES: "10000",
+    REEF_DO_MAX_P95_MS: "40",
+  },
+  encoding: "utf8",
+});
+assert.equal(latencyGateResult.status, 1);
+assert.match(latencyGateResult.stderr, /actual p95 44\.90ms > required 40\.00ms/);
+
+const partitionGateArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-partitions-"));
+writeMaterializerReport(partitionGateArtifactDir, "rate-10000.json", 10000, 1000, {
+  partitionDeltas: [
+    { partition: 0, ackedDelta: 900 },
+    { partition: 1, ackedDelta: 100 },
+    { partition: 2, ackedDelta: 0 },
+    { partition: 3, ackedDelta: 0 },
+  ],
+});
+writeTelemetry(partitionGateArtifactDir);
+const partitionGateResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", partitionGateArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer",
+    REEF_DO_REQUIRED_RATES: "10000",
+    REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS: "3",
+    REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW: "4",
+  },
+  encoding: "utf8",
+});
+assert.equal(partitionGateResult.status, 1);
+assert.match(partitionGateResult.stderr, /streamDirect active partitions 2 < required 3\.00/);
+assert.match(partitionGateResult.stderr, /streamDirect partition skew 9\.00 > required 4\.00/);
+
 function writeReport(name, rate, values) {
   writeFileSync(
     join(artifactDir, name),
@@ -104,6 +177,109 @@ function writeReport(name, rate, values) {
           },
         },
         streamAckApiPhases: { phases: [] },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function writeTelemetry(dir) {
+  writeFileSync(
+    join(dir, "sample-telemetry.ndjson"),
+    `${JSON.stringify({
+      app: {
+        probes: [
+          { name: "runtime.dbPools", ok: true },
+          { name: "runtime.streamAckHealth", ok: true },
+        ],
+      },
+    })}\n`,
+  );
+}
+
+function writeMaterializerReport(dir, name, rate, total, options = {}) {
+  const partitionDeltas =
+    options.partitionDeltas ??
+    [
+      { partition: 0, ackedDelta: total / 4 },
+      { partition: 1, ackedDelta: total / 4 },
+      { partition: 2, ackedDelta: total / 4 },
+      { partition: 3, ackedDelta: total / 4 },
+    ];
+  writeFileSync(
+    join(dir, name),
+    JSON.stringify(
+      {
+        config: { ratePerSecond: rate, workers: 384 },
+        totalRequests: total,
+        totalSuccess: total,
+        totalFailures: 0,
+        statusCodes: { 202: total },
+        throughputRps: rate,
+        acceptedBusinessOpsRps: rate,
+        latencyMs: { p95: 44.9, p99: 68.6 },
+        traceChecks: { checked: 0, pass: 0, fail: 0 },
+        unitMetrics: {
+          attemptedCommands: total,
+          acceptedCommands: total,
+          directAckedCommands: total,
+          durableCanonicalCompletedItems: total,
+          attemptedCommandsPerSecond: rate,
+          acceptedCommandsPerSecond: rate,
+          directAckedCommandsPerSecond: rate,
+          durableCanonicalCompletedPerSecond: rate,
+        },
+        streamDirect: {
+          delta: {
+            ackedDelta: total,
+            failedDelta: 0,
+            nackedDelta: 0,
+            termedDelta: 0,
+            unsupportedDelta: 0,
+            partitionDeltas,
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+        venueEventMaterializer: {
+          delta: {
+            materializedDelta: total,
+            failedDelta: 0,
+            ackFailedDelta: 0,
+            unsupportedDelta: 0,
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function writeBlockedStreamAckReport(dir, name, rate) {
+  writeFileSync(
+    join(dir, name),
+    JSON.stringify(
+      {
+        config: { ratePerSecond: rate, workers: 256 },
+        totalRequests: 100,
+        totalSuccess: 100,
+        totalFailures: 0,
+        statusCodes: { 202: 100 },
+        throughputRps: rate,
+        acceptedBusinessOpsRps: rate,
+        latencyMs: { p95: 10, p99: 20 },
+        traceChecks: { checked: 0, pass: 0, fail: 0 },
+        streamAckWorkers: {
+          probes: {
+            after: {
+              ok: false,
+              status: 403,
+              json: { error: "internal HTTP route requires loopback access", mode: "local" },
+            },
+          },
+        },
       },
       null,
       2,

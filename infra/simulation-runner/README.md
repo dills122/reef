@@ -17,10 +17,12 @@ This directory documents the target run-plane shape. The dedicated
 
 Today, `make simulation-run` calls `scripts/deploy/simulation-run.mjs`, which
 wraps the older `scripts/dev/do-benchmark-host.sh` bridge harness. That bridge
-provisions a disposable DigitalOcean host, syncs the checkout, starts the root
-local stream-ack Compose profile on the worker, collects artifacts, optionally
+provisions a disposable DigitalOcean host, syncs the checkout, starts a root
+local benchmark Compose profile on the worker, collects artifacts, optionally
 exports a compressed artifact bundle to R2, and destroys the worker unless it is
-retained for debugging.
+retained for debugging. The historical default profile is `stream-ack`; use
+`REEF_DO_BENCHMARK_PROFILE=materializer` when hosted simulation testing should
+mirror the current direct-stream plus venue-event-materializer path.
 
 The bridge is useful operationally, but it is not the final hosted run-plane
 layout and should not be confused with the Hetzner backbone Compose files.

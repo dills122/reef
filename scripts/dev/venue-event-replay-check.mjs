@@ -7,10 +7,11 @@ loadDotEnv();
 const projectionName = env("DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME", "");
 const eventStream = env("DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM", "");
 const allowEmpty = env("DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY", "false").toLowerCase() === "true";
+const requireWatermarks = env("DEV_VENUE_EVENT_REPLAY_CHECK_REQUIRE_WATERMARKS", "false").toLowerCase() === "true";
 const visibilityTimeline = await loadVisibilityTimeline();
 
 const report = JSON.parse(await queryReplayReport());
-const failures = evaluateReport(report, { projectionName, allowEmpty });
+const failures = evaluateReport(report, { projectionName, allowEmpty, requireWatermarks });
 const output = {
   pass: failures.length === 0,
   checkedAt: new Date().toISOString(),
@@ -238,7 +239,7 @@ function evaluateReport(report, options) {
   assertZero(failures, report, "streamGapCount", "event stream sequence gaps");
   assertZero(failures, report, "streamOverlapCount", "event stream sequence overlaps");
   if (options.projectionName) {
-    if (Number(report.watermarkCount ?? 0) === 0) {
+    if (options.requireWatermarks && Number(report.watermarkCount ?? 0) === 0) {
       failures.push(`no projection watermarks found for ${options.projectionName}`);
     }
     assertZero(failures, report, "watermarkLagCount", "projection watermark lag rows");

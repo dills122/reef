@@ -5382,6 +5382,7 @@ class PlatformHttpServer(
             },
             "publishAckLastMs" to snapshot.publishAckLastMs,
             "publishAckMaxMs" to snapshot.publishAckMaxMs,
+            "producerMetrics" to snapshot.producerMetrics,
             "checkedAt" to snapshot.checkedAt.toString(),
             "error" to snapshot.error
         )

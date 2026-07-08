@@ -87,7 +87,7 @@ Projection lag is still operationally important in `venue-core` mode. It is just
 
 Use these defaults for the first implementation unless a later decision explicitly changes them:
 
-- Region: `sfo3`.
+- Region: `sfo2`.
 - First size: `c-8`; treat `c-16` as a follow-up ceiling probe, not the default.
 - OpenTofu state: local state for the first benchmark harness. Add Spaces/S3-compatible remote state only when the benchmark environment becomes shared or long-lived.
 - Repo transfer: `rsync` the current local checkout to the Droplet. This keeps uncommitted benchmark-harness iteration testable without pushing work-in-progress branches.

@@ -34,8 +34,8 @@ expectations.
 
 `scripts/deploy/simulation-run.mjs` still wraps
 `scripts/dev/do-benchmark-host.sh`. That path provisions a disposable
-DigitalOcean worker, syncs the repository, starts the root local stream-ack
-profile on the worker, collects artifacts, optionally exports compressed debug
-artifacts to R2, and destroys the worker unless retained.
+DigitalOcean worker, syncs the repository, starts the selected root local
+benchmark profile on the worker, collects artifacts, optionally exports
+compressed debug artifacts to R2, and destroys the worker unless retained.
 
 Treat that as bridge tooling, not the final hosted run-plane layout.

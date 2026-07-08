@@ -21,7 +21,17 @@ export async function captureDbDiagnosticsSnapshot({
   const safeSchemas = schemas.map(normalizeSchemaName);
   const info = { capturedAt, stage, service, dbUser, dbName, schemas: safeSchemas };
   try {
-    const [serverVersionRows, bgwriterRows, walRows, databaseRows, hasCheckpointerRows, tables] = await Promise.all([
+    const [
+      serverVersionRows,
+      bgwriterRows,
+      walRows,
+      databaseRows,
+      activityWaitRows,
+      walSettingsRows,
+      hasCheckpointerRows,
+      hasIoRows,
+      tables,
+    ] = await Promise.all([
       queryDbRows({
         service,
         dbUser,
@@ -76,7 +86,28 @@ export async function captureDbDiagnosticsSnapshot({
         service,
         dbUser,
         dbName,
+        sql: "select coalesce(wait_event_type, 'running') as wait_event_type, coalesce(wait_event, '') as wait_event, coalesce(state, '') as state, count(*) as count from pg_stat_activity where datname = current_database() group by 1, 2, 3 order by count desc, wait_event_type, wait_event, state;",
+        columns: ["waitEventType", "waitEvent", "state", "count"],
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
+        sql: "select name, setting, coalesce(unit, '') as unit from pg_settings where name in ('checkpoint_completion_target', 'checkpoint_flush_after', 'checkpoint_timeout', 'fsync', 'full_page_writes', 'max_wal_size', 'min_wal_size', 'synchronous_commit', 'wal_buffers', 'wal_compression', 'wal_sync_method') order by name;",
+        columns: ["name", "setting", "unit"],
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
         sql: "select coalesce((select count(1) from pg_catalog.pg_views where schemaname='pg_catalog' and viewname='pg_stat_checkpointer'),0) as count;",
+        columns: ["count"],
+      }),
+      queryDbRows({
+        service,
+        dbUser,
+        dbName,
+        sql: "select coalesce((select count(1) from pg_catalog.pg_views where schemaname='pg_catalog' and viewname='pg_stat_io'),0) as count;",
         columns: ["count"],
       }),
       queryDbRows({
@@ -108,12 +139,40 @@ export async function captureDbDiagnosticsSnapshot({
     ]);
 
     const hasCheckpointer = Number(hasCheckpointerRows[0]?.count ?? 0) > 0;
+    const hasIo = Number(hasIoRows[0]?.count ?? 0) > 0;
     const checkpointerRows = hasCheckpointer
       ? await queryDbRows({
           service,
           dbUser,
           dbName,
           sql: "select * from pg_stat_checkpointer;",
+        })
+      : [];
+    const ioRows = hasIo
+      ? await queryDbRows({
+          service,
+          dbUser,
+          dbName,
+          sql: "select backend_type, object, context, reads, read_time, writes, write_time, writebacks, writeback_time, extends, extend_time, op_bytes, hits, evictions, reuses, fsyncs, fsync_time from pg_stat_io where object in ('wal', 'relation') order by object, backend_type, context;",
+          columns: [
+            "backendType",
+            "object",
+            "context",
+            "reads",
+            "readTime",
+            "writes",
+            "writeTime",
+            "writebacks",
+            "writebackTime",
+            "extends",
+            "extendTime",
+            "opBytes",
+            "hits",
+            "evictions",
+            "reuses",
+            "fsyncs",
+            "fsyncTime",
+          ],
         })
       : [];
     const snapshot = {
@@ -124,6 +183,18 @@ export async function captureDbDiagnosticsSnapshot({
       wal: coerceNumericStats(walRows[0] ?? {}),
       database: coerceNumericStats(databaseRows[0] ?? {}),
       checkpointer: checkpointerRows[0] ?? {},
+      activityWaits: activityWaitRows.map(coerceNumericStats),
+      walSettings: Object.fromEntries(
+        walSettingsRows.map((row) => [
+          row.name,
+          {
+            setting: coerceNumber(row.setting),
+            unit: row.unit ?? "",
+          },
+        ]),
+      ),
+      io: ioRows.map(coerceNumericStats),
+      walIo: summarizeIoRows(ioRows, "wal"),
     };
 
     writeFileSync(join(diagnosticsDir, `${stage}-db-diagnostics.json`), JSON.stringify(snapshot, null, 2));
@@ -131,8 +202,13 @@ export async function captureDbDiagnosticsSnapshot({
     writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_bgwriter.csv`), toCsv(bgwriterRows) + "\n");
     writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_wal.csv`), toCsv(walRows) + "\n");
     writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_database.csv`), toCsv(databaseRows) + "\n");
+    writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_activity_waits.csv`), toCsv(activityWaitRows) + "\n");
+    writeFileSync(join(diagnosticsDir, `${stage}-pg_settings_wal.csv`), toCsv(walSettingsRows) + "\n");
     if (hasCheckpointer) {
       writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_checkpointer.csv`), toCsv(checkpointerRows) + "\n");
+    }
+    if (hasIo) {
+      writeFileSync(join(diagnosticsDir, `${stage}-pg_stat_io.csv`), toCsv(ioRows) + "\n");
     }
     return { ok: true, snapshot };
   } catch (error) {
@@ -185,7 +261,9 @@ export function summarizeDiagnosticsDelta(preResult, postResult) {
     ok: true,
     tables: deltas,
     wal: numericDelta(preResult.snapshot.wal, postResult.snapshot.wal),
+    walIo: numericDelta(preResult.snapshot.walIo, postResult.snapshot.walIo),
     database: numericDelta(preResult.snapshot.database, postResult.snapshot.database),
+    activityWaitsAfter: postResult.snapshot.activityWaits ?? [],
   };
 }
 
@@ -268,8 +346,27 @@ function groupTablesBySchema(tables) {
 
 function coerceNumericStats(stats) {
   return Object.fromEntries(
-    Object.entries(stats).map(([key, value]) => [key, /^-?\d+$/.test(String(value)) ? Number(value) : value]),
+    Object.entries(stats).map(([key, value]) => [key, value === "" ? value : coerceNumber(value)]),
   );
+}
+
+function coerceNumber(value) {
+  const raw = String(value ?? "");
+  return /^-?\d+(?:\.\d+)?$/.test(raw) ? Number(raw) : value;
+}
+
+function summarizeIoRows(rows, objectName) {
+  const totals = {};
+  for (const row of rows) {
+    if (row.object !== objectName) continue;
+    const stats = coerceNumericStats(row);
+    for (const [key, value] of Object.entries(stats)) {
+      if (typeof value === "number") {
+        totals[key] = (totals[key] ?? 0) + value;
+      }
+    }
+  }
+  return totals;
 }
 
 function flattenTables(tablesBySchema) {

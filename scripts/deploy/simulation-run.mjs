@@ -27,11 +27,20 @@ const runId = option("run-id", env("REEF_SIM_RUN_ID", `sim-do-${timestamp()}`));
 const reportRoot = resolve(repoRoot, option("report-root", env("REEF_SIM_REPORT_ROOT", "reports/simulations/ephemeral-do")));
 const reportDir = resolve(reportRoot, runId);
 const profile = option("profile", env("REEF_SIM_PROFILE", "stream-ack"));
+if (profile !== "stream-ack" && profile !== "materializer") {
+  console.error(`Invalid profile: ${profile}. Expected stream-ack or materializer.`);
+  process.exit(2);
+}
 const imageMode = option("image-mode", env("REEF_SIM_IMAGE_MODE", "dockerhub"));
 if (imageMode !== "dockerhub" && imageMode !== "source") {
   console.error(`Invalid image mode: ${imageMode}. Expected dockerhub or source.`);
   process.exit(2);
 }
+const goal = option("goal", env("REEF_SIM_GOAL", ""));
+const targetRps = option("target-rps", env("REEF_SIM_TARGET_RPS", ""));
+const targetP95Ms = option("target-p95-ms", env("REEF_SIM_TARGET_P95_MS", ""));
+const targetP99Ms = option("target-p99-ms", env("REEF_SIM_TARGET_P99_MS", ""));
+const size = option("size", env("REEF_SIM_SIZE", ""));
 const rate = option("rate", env("RATE", env("REEF_SIM_RATE", "")));
 const duration = option("duration", env("DURATION", env("REEF_SIM_DURATION", "")));
 const workers = option("workers", env("WORKERS", env("REEF_SIM_WORKERS", "")));
@@ -42,10 +51,16 @@ const exportToR2 = boolOption("export-to-r2", env("REEF_DO_EXPORT_TO_R2", "0"));
 
 const commonEnv = {
   ...process.env,
+  REEF_DO_BENCHMARK_PROFILE: profile,
   REEF_DO_RUN_ID: runId,
   REEF_DO_LOCAL_REPORT_ROOT: reportRoot,
 };
 if (exportToR2) commonEnv.REEF_DO_EXPORT_TO_R2 = "1";
+if (goal) commonEnv.REEF_DO_BENCHMARK_GOAL = goal;
+if (targetRps) commonEnv.REEF_DO_TARGET_ACCEPTED_RPS = targetRps;
+if (targetP95Ms) commonEnv.REEF_DO_TARGET_P95_MS = targetP95Ms;
+if (targetP99Ms) commonEnv.REEF_DO_TARGET_P99_MS = targetP99Ms;
+if (size) commonEnv.REEF_DO_SIZE = size;
 if (rate) commonEnv.REEF_DO_STRESS_RATES = rate;
 if (duration) commonEnv.REEF_DO_STRESS_DURATION = duration;
 if (workers) commonEnv.REEF_DO_STRESS_WORKERS = workers;
@@ -56,13 +71,32 @@ if (minRps) {
 commonEnv.REEF_DO_IMAGE_MODE = imageMode;
 
 mkdirSync(reportDir, { recursive: true });
-writeMetadata("started", { profile, imageMode, rate, duration, workers, minRps, keepWorkerOnFailure, skipDestroy });
+writeMetadata("started", {
+  profile,
+  imageMode,
+  goal,
+  targetRps,
+  targetP95Ms,
+  targetP99Ms,
+  size,
+  rate,
+  duration,
+  workers,
+  minRps,
+  keepWorkerOnFailure,
+  skipDestroy,
+});
 
 if (command === "check") {
   const status = run(doHarness, ["check"], { env: commonEnv });
   writeMetadata(status === 0 ? "check_passed" : "check_failed", {
     profile,
     imageMode,
+    goal,
+    targetRps,
+    targetP95Ms,
+    targetP99Ms,
+    size,
     rate,
     duration,
     workers,
@@ -77,6 +111,11 @@ if (command === "push-artifacts") {
   writeMetadata(status === 0 ? "artifacts_pushed" : "artifact_push_failed", {
     profile,
     imageMode,
+    goal,
+    targetRps,
+    targetP95Ms,
+    targetP99Ms,
+    size,
     rate,
     duration,
     workers,
@@ -107,6 +146,11 @@ const finalStatus = firstNonZero(runStatus, pushStatus, destroyStatus);
 writeMetadata(finalStatus === 0 ? "completed" : "failed", {
   profile,
   imageMode,
+  goal,
+  targetRps,
+  targetP95Ms,
+  targetP99Ms,
+  size,
   rate,
   duration,
   workers,
@@ -131,7 +175,12 @@ Options:
   --duration <duration>         stress duration; maps to REEF_DO_STRESS_DURATION
   --workers <count>             stress workers; maps to REEF_DO_STRESS_WORKERS
   --min-rps <rps>               attempted/accepted rps gate; default 90% of the lowest requested rate
-  --profile <name>              metadata label; default stream-ack
+  --profile <name>              benchmark profile: stream-ack or materializer; default stream-ack
+  --goal <name>                 fixed, latency-knee, sustain, or ceiling; maps to REEF_DO_BENCHMARK_GOAL
+  --target-rps <rps>            accepted-rps target; maps to REEF_DO_TARGET_ACCEPTED_RPS
+  --target-p95-ms <ms>          p95 report gate; maps to REEF_DO_TARGET_P95_MS
+  --target-p99-ms <ms>          p99 report gate; maps to REEF_DO_TARGET_P99_MS
+  --size <slug>                 DO size override; maps to REEF_DO_SIZE
   --image-mode <dockerhub|source>
                                   runtime image mode; default dockerhub
   --report-root <path>          local artifact root; default reports/simulations/ephemeral-do
@@ -165,7 +214,7 @@ function parseArgs(rawArgs) {
       process.exit(2);
     }
     const key = arg.slice(2);
-    if (key === "keep-worker-on-failure" || key === "keep-worker") {
+    if (key === "keep-worker-on-failure" || key === "keep-worker" || key === "export-to-r2") {
       parsed.set(key, "1");
       continue;
     }

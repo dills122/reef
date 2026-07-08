@@ -62,6 +62,7 @@ data class StreamCommandHealthSnapshot(
     val publishLaneSnapshots: List<StreamCommandPublishLaneSnapshot> = emptyList(),
     val publishAckLastMs: Long = 0L,
     val publishAckMaxMs: Long = 0L,
+    val producerMetrics: Map<String, Double> = emptyMap(),
     val checkedAt: Instant = Instant.now(),
     val error: String = ""
 )

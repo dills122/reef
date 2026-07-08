@@ -45,6 +45,7 @@ mkdirSync(artifactDir, { recursive: true });
 
 process.env.DEV_VENUE_EVENT_MATERIALIZER_SMOKE_ID = gateId;
 process.env.DEV_VENUE_EVENT_MATERIALIZER_PROJECTION_NAME = projectionName;
+process.env.PLATFORM_INTERNAL_HTTP_MODE = env("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 
 const gates = [];
 
@@ -74,6 +75,7 @@ await runGate({
     DEV_READ_SURFACE_CHECK_VENUE_PROJECTION_NAME: projectionName,
     DEV_READ_SURFACE_CHECK_MARKET_DATA_PROJECTION_NAME: `market-data-top-of-book-${gateId}`,
     DEV_READ_SURFACE_CHECK_SOURCE: "venue-event-batch",
+    DEV_READ_SURFACE_CHECK_CLIENT_ID: "local-durable-gate-readcheck",
   },
 });
 

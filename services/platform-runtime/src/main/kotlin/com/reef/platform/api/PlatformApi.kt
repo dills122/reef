@@ -193,6 +193,26 @@ class PlatformApi(
                     optionalQuery = emptyList()
                 ),
                 surfaceAvailability(
+                    name = "settlementObligations",
+                    endpoint = "/api/v1/settlement/obligations/{scenarioRunId}",
+                    source = "settlement obligation projection over append-only facts",
+                    freshness = "derived from durable settlement facts",
+                    status = venueStatus,
+                    scope = "scenario-settlement-evidence",
+                    requiredQuery = emptyList(),
+                    optionalQuery = emptyList()
+                ),
+                surfaceAvailability(
+                    name = "settlementLedger",
+                    endpoint = "/api/v1/settlement/ledger/{scenarioRunId}",
+                    source = "append-only settlement ledger entry facts",
+                    freshness = "replayable participant/account/asset balances derived from ledger facts",
+                    status = venueStatus,
+                    scope = "scenario-settlement-evidence",
+                    requiredQuery = emptyList(),
+                    optionalQuery = emptyList()
+                ),
+                surfaceAvailability(
                     name = "settlementProof",
                     endpoint = "/api/v1/settlement/proof/{scenarioRunId}",
                     source = "settlement append-only fact store + replayable ledger projection",

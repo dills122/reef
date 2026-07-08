@@ -11,9 +11,14 @@ if (!target) {
 const requiredRates = parseCsvInts(process.env.REEF_DO_REQUIRED_RATES || "2500,5000");
 const allowBackpressure429 = process.env.REEF_DO_ALLOW_429 === "1";
 const requireTraceChecks = process.env.REEF_DO_REQUIRE_TRACE_CHECKS === "1";
+const reportProfile = process.env.REEF_DO_REPORT_PROFILE || process.env.REEF_DO_BENCHMARK_PROFILE || "stream-ack";
 const minAttemptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ATTEMPTED_RPS);
 const minAcceptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ACCEPTED_RPS);
 const minWorkerCompletedRps = parseOptionalNumber(process.env.REEF_DO_MIN_WORKER_COMPLETED_RPS);
+const maxP95Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P95_MS);
+const maxP99Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P99_MS);
+const minStreamDirectActivePartitions = parseOptionalNumber(process.env.REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS);
+const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW);
 const failures = [];
 const evidenceRows = [];
 
@@ -33,12 +38,14 @@ for (const entry of jsonFiles.map((path) => readJson(path)).filter((entry) => !e
 }
 
 for (const rate of requiredRates) {
-  const match = reports.find(({ report }) => reportRatePerSecond(report) === rate);
-  if (!match) {
+  const matches = reports.filter(({ report }) => reportRatePerSecond(report) === rate);
+  if (matches.length === 0) {
     failures.push(`missing measured stress report for rate ${rate}`);
     continue;
   }
-  validateReport(match.path, match.report);
+  for (const match of matches) {
+    validateReport(match.path, match.report);
+  }
 }
 
 validateTelemetry(target);
@@ -58,6 +65,8 @@ function validateReport(path, report) {
   const attemptedRps = reportMetric(report, "attemptedCommandsPerSecond", "throughputRps");
   const acceptedRps = reportMetric(report, "acceptedCommandsPerSecond", "acceptedBusinessOpsRps");
   const workerCompletedRps = reportMetric(report, "workerCompletedCommandsPerSecond");
+  const p95Ms = latencyMetric(report, "p95");
+  const p99Ms = latencyMetric(report, "p99");
   if (total <= 0) {
     failures.push(`${label}: totalRequests must be > 0`);
   }
@@ -71,6 +80,12 @@ function validateReport(path, report) {
     failures.push(
       `${label}: actual worker-completed rps ${formatNumber(workerCompletedRps)} < required ${formatNumber(minWorkerCompletedRps)}`,
     );
+  }
+  if (maxP95Ms !== undefined && p95Ms > maxP95Ms) {
+    failures.push(`${label}: actual p95 ${formatNumber(p95Ms)}ms > required ${formatNumber(maxP95Ms)}ms`);
+  }
+  if (maxP99Ms !== undefined && p99Ms > maxP99Ms) {
+    failures.push(`${label}: actual p99 ${formatNumber(p99Ms)}ms > required ${formatNumber(maxP99Ms)}ms`);
   }
 
   const statusCodes = normalizeStatusCodes(report.statusCodes ?? {});
@@ -93,6 +108,21 @@ function validateReport(path, report) {
   const tracePass = Number(report.traceChecks?.pass ?? 0);
   if (requireTraceChecks && traceChecked > 0 && tracePass !== traceChecked) {
     failures.push(`${label}: trace checks failed pass=${tracePass} checked=${traceChecked}`);
+  }
+
+  if (reportProfile === "stream-ack") {
+    validateStreamAckReport(label, report);
+  } else if (reportProfile === "materializer") {
+    validateMaterializerReport(label, report);
+  } else {
+    failures.push(`${label}: unsupported REEF_DO_REPORT_PROFILE=${reportProfile}`);
+  }
+}
+
+function validateStreamAckReport(label, report) {
+  if (hasBlockedInternalProbe(report.streamAckWorkers?.probes) || hasBlockedInternalProbe(report.streamAckProjector?.probes)) {
+    failures.push(`${label}: internal diagnostics were blocked by PLATFORM_INTERNAL_HTTP_MODE; set PLATFORM_INTERNAL_HTTP_MODE=enabled before starting the stack`);
+    return;
   }
 
   const workerDelta = report.streamAckWorkers?.delta;
@@ -119,6 +149,82 @@ function validateReport(path, report) {
 
   if (!report.streamAckApiPhases?.phases) {
     failures.push(`${label}: missing streamAckApiPhases.phases`);
+  }
+}
+
+function validateMaterializerReport(label, report) {
+  if (hasBlockedInternalProbe(report.streamDirect?.probes) || hasBlockedInternalProbe(report.venueEventMaterializer?.probes)) {
+    failures.push(`${label}: internal diagnostics were blocked by PLATFORM_INTERNAL_HTTP_MODE; set PLATFORM_INTERNAL_HTTP_MODE=enabled before starting the stack`);
+    return;
+  }
+
+  const directDelta = report.streamDirect?.delta;
+  if (!directDelta) {
+    failures.push(`${label}: missing streamDirect.delta`);
+  } else {
+    checkZero(label, "streamDirect.delta.failedDelta", directDelta.failedDelta);
+    checkZero(label, "streamDirect.delta.nackedDelta", directDelta.nackedDelta);
+    checkZero(label, "streamDirect.delta.termedDelta", directDelta.termedDelta);
+    checkZero(label, "streamDirect.delta.unsupportedDelta", directDelta.unsupportedDelta);
+    const accepted = Number(report.totalSuccess ?? 0);
+    const acked = Number(directDelta.ackedDelta ?? 0);
+    if (acked < accepted) {
+      failures.push(`${label}: streamDirect accepted/acked gap ${accepted - acked} must be 0`);
+    }
+    validateStreamDirectPartitionSpread(label, directDelta);
+  }
+
+  const materializerDelta = report.venueEventMaterializer?.delta;
+  if (!materializerDelta) {
+    failures.push(`${label}: missing venueEventMaterializer.delta`);
+  } else {
+    checkZero(label, "venueEventMaterializer.delta.failedDelta", materializerDelta.failedDelta);
+    checkZero(label, "venueEventMaterializer.delta.ackFailedDelta", materializerDelta.ackFailedDelta);
+    checkZero(label, "venueEventMaterializer.delta.unsupportedDelta", materializerDelta.unsupportedDelta);
+    const accepted = Number(report.totalSuccess ?? 0);
+    const materialized = Number(materializerDelta.materializedDelta ?? 0);
+    if (materialized < accepted) {
+      failures.push(`${label}: durable-canonical accepted/materialized gap ${accepted - materialized} must be 0`);
+    }
+  }
+}
+
+function validateStreamDirectPartitionSpread(label, directDelta) {
+  if (minStreamDirectActivePartitions === undefined && maxStreamDirectPartitionSkew === undefined) return;
+
+  const partitions = Array.isArray(directDelta.partitionDeltas) ? directDelta.partitionDeltas : [];
+  if (partitions.length === 0) {
+    failures.push(`${label}: streamDirect.delta.partitionDeltas missing; cannot validate partition spread gates`);
+    return;
+  }
+
+  const active = partitions
+    .map((partition) => ({
+      partition: partition.partition,
+      acked: Number(partition.ackedDelta ?? 0),
+    }))
+    .filter((partition) => partition.acked > 0);
+
+  if (minStreamDirectActivePartitions !== undefined && active.length < minStreamDirectActivePartitions) {
+    failures.push(
+      `${label}: streamDirect active partitions ${active.length} < required ${formatNumber(minStreamDirectActivePartitions)}`,
+    );
+  }
+
+  if (maxStreamDirectPartitionSkew !== undefined) {
+    if (active.length < 2) {
+      failures.push(`${label}: streamDirect partition skew requires at least 2 active partitions, got ${active.length}`);
+      return;
+    }
+    const counts = active.map((partition) => partition.acked);
+    const min = Math.min(...counts);
+    const max = Math.max(...counts);
+    const skew = max / min;
+    if (skew > maxStreamDirectPartitionSkew) {
+      failures.push(
+        `${label}: streamDirect partition skew ${formatNumber(skew)} > required ${formatNumber(maxStreamDirectPartitionSkew)}`,
+      );
+    }
   }
 }
 
@@ -186,6 +292,26 @@ function checkProjectorHealth(label, status) {
   }
 }
 
+function hasBlockedInternalProbe(probes) {
+  return flattenProbeStatuses(probes).some((probe) => {
+    if (Number(probe?.status) === 403) return true;
+    const payload = probe?.json ?? probe;
+    return Number(payload?.status) === 403 || String(payload?.error ?? "").includes("internal HTTP route requires loopback access");
+  });
+}
+
+function flattenProbeStatuses(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap((entry) => flattenProbeStatuses(entry));
+  if (typeof value !== "object") return [];
+  return [
+    value,
+    ...flattenProbeStatuses(value.before),
+    ...flattenProbeStatuses(value.after),
+    ...flattenProbeStatuses(value.probes),
+  ];
+}
+
 function isMeasuredStressReport(json) {
   return Boolean(
     json &&
@@ -214,6 +340,11 @@ function reportMetric(report, unitMetricName, fallbackReportName) {
   if (Number.isFinite(unitMetric)) return unitMetric;
   const fallback = fallbackReportName ? Number(report[fallbackReportName]) : Number.NaN;
   return Number.isFinite(fallback) ? fallback : 0;
+}
+
+function latencyMetric(report, name) {
+  const value = Number(report.latencyMs?.[name] ?? report[name]);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function parseOptionalNumber(raw) {

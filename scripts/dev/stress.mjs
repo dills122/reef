@@ -33,7 +33,18 @@ const rateSchedule = env("DEV_STRESS_RATE_SCHEDULE", env("REEF_RATE_SCHEDULE", "
 const rateQueueDepth = env("DEV_STRESS_RATE_QUEUE_DEPTH", env("REEF_RATE_QUEUE_DEPTH", ""));
 const telemetryIntervalMs = Number(env("DEV_STRESS_TELEMETRY_INTERVAL_MS", "1000"));
 const minSuccessRatePct = Number(env("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "90"));
+const recommendationTargetAcceptedRps = parseOptionalNumber(
+  env("DEV_STRESS_RECOMMENDATION_TARGET_ACCEPTED_RPS", env("REEF_DO_TARGET_ACCEPTED_RPS", "")),
+);
+const recommendationTargetP95Ms = Number(
+  env("DEV_STRESS_RECOMMENDATION_TARGET_P95_MS", env("REEF_DO_TARGET_P95_MS", "100")),
+);
+const recommendationTargetP99Ms = Number(
+  env("DEV_STRESS_RECOMMENDATION_TARGET_P99_MS", env("REEF_DO_TARGET_P99_MS", "200")),
+);
+const recommendationThroughputTolerancePct = Number(env("DEV_STRESS_RECOMMENDATION_THROUGHPUT_TOLERANCE_PCT", "1"));
 const sweepWorkers = parseCsvInts(env("DEV_STRESS_SWEEP_WORKERS", ""));
+const repeatSamples = Math.max(1, Number(env("DEV_STRESS_REPEAT_SAMPLES", env("REEF_DO_STRESS_REPEAT_SAMPLES", "1"))) || 1);
 const rates = parseCsvInts(env("DEV_STRESS_RATES", "100,200,300,400"));
 const artifactDir = env("DEV_STRESS_ARTIFACT_DIR", "/tmp");
 const captureDbDiagnostics = env("DEV_STRESS_CAPTURE_DB_DIAGNOSTICS", "0") === "1";
@@ -48,6 +59,7 @@ const dbDiagnosticsLogSince = env("DEV_STRESS_DB_LOG_SINCE", "30m");
 const captureCommandAccounting = env("DEV_STRESS_CAPTURE_COMMAND_ACCOUNTING", "1") !== "0";
 const failOnAccountingGap = env("DEV_STRESS_FAIL_ON_ACCOUNTING_GAP", "0") === "1";
 const captureHotPath = env("DEV_STRESS_CAPTURE_HOT_PATH", "1") !== "0";
+const captureStreamAckHealth = env("DEV_STRESS_CAPTURE_STREAM_ACK_HEALTH", "1") !== "0";
 const captureStreamAckWorkerStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_WORKERS", "0") === "1";
 const failOnStreamAckWorkerFailures =
   env("DEV_STRESS_FAIL_ON_STREAM_ACK_WORKER_FAILURES", captureStreamAckWorkerStats ? "1" : "0") === "1";
@@ -133,11 +145,31 @@ try {
   for (const rate of rates) {
     if (sweepWorkers.length > 0) {
       for (const workerCount of sweepWorkers) {
-        const runId = runIdForStep({ rate, workerCount });
+        for (let sample = 1; sample <= repeatSamples; sample += 1) {
+          const runId = runIdForStep({ rate, workerCount, sample });
+          await runStressStep({
+            runtimeUrl,
+            duration,
+            workers: String(workerCount),
+            rate,
+            rateSchedule,
+            mode,
+            runId,
+            runKind,
+            scenarioId,
+            traceLimit,
+            actionMix,
+            reportOut: reportPathForStep({ rate, workerCount, sample }),
+          });
+        }
+      }
+    } else {
+      for (let sample = 1; sample <= repeatSamples; sample += 1) {
+        const runId = runIdForStep({ rate, workerCount: workers, sample });
         await runStressStep({
           runtimeUrl,
           duration,
-          workers: String(workerCount),
+          workers,
           rate,
           rateSchedule,
           mode,
@@ -146,25 +178,9 @@ try {
           scenarioId,
           traceLimit,
           actionMix,
-          reportOut: `${baseOut}-rate-${rate}-workers-${workerCount}.json`,
+          reportOut: reportPathForStep({ rate, workerCount: null, sample }),
         });
       }
-    } else {
-      const runId = runIdForStep({ rate, workerCount: workers });
-      await runStressStep({
-        runtimeUrl,
-        duration,
-        workers,
-        rate,
-        rateSchedule,
-        mode,
-        runId,
-        runKind,
-        scenarioId,
-        traceLimit,
-        actionMix,
-        reportOut: `${baseOut}-rate-${rate}.json`,
-      });
     }
   }
 } finally {
@@ -180,14 +196,18 @@ const reportFiles = [];
 for (const rate of rates) {
   if (sweepWorkers.length > 0) {
     for (const workerCount of sweepWorkers) {
-      const path = `${baseOut}-rate-${rate}-workers-${workerCount}.json`;
+      for (let sample = 1; sample <= repeatSamples; sample += 1) {
+        const path = reportPathForStep({ rate, workerCount, sample });
+        reportFiles.push(path);
+        console.log(`  ${path}`);
+      }
+    }
+  } else {
+    for (let sample = 1; sample <= repeatSamples; sample += 1) {
+      const path = reportPathForStep({ rate, workerCount: null, sample });
       reportFiles.push(path);
       console.log(`  ${path}`);
     }
-  } else {
-    const path = `${baseOut}-rate-${rate}.json`;
-    reportFiles.push(path);
-    console.log(`  ${path}`);
   }
 }
 console.log(`  ${telemetryOut}`);
@@ -272,6 +292,12 @@ function parseCsvInts(raw) {
     .filter((value) => Number.isFinite(value) && value > 0);
 }
 
+function parseOptionalNumber(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function parseCsvStrings(raw) {
   return String(raw ?? "")
     .split(",")
@@ -279,11 +305,17 @@ function parseCsvStrings(raw) {
     .filter(Boolean);
 }
 
-function runIdForStep({ rate, workerCount }) {
+function runIdForStep({ rate, workerCount, sample }) {
   return env(
     "DEV_STRESS_RUN_ID",
-    `${reportBaseName}-rate-${rate}-workers-${workerCount}-${Date.now()}`,
+    `${reportBaseName}-rate-${rate}-workers-${workerCount}-sample-${sample}-${Date.now()}`,
   );
+}
+
+function reportPathForStep({ rate, workerCount, sample }) {
+  const workerSuffix = workerCount === null || workerCount === undefined ? "" : `-workers-${workerCount}`;
+  const sampleSuffix = repeatSamples > 1 ? `-sample-${sample}` : "";
+  return `${baseOut}-rate-${rate}${workerSuffix}${sampleSuffix}.json`;
 }
 
 function resetDir(path) {
@@ -341,6 +373,7 @@ function resolveActionMix(profileName) {
 async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule, mode, runId, runKind, scenarioId, traceLimit, actionMix, reportOut }) {
   console.log(`step rate=${rate} rps workers=${workers} runId=${runId}`);
   const beforeAccounting = captureCommandAccounting ? await sampleCommandAccounting(runtimeUrl, runId) : null;
+  const beforeStreamAckHealth = captureStreamAckHealth ? await sampleStreamAckHealth(runtimeUrl) : null;
   const beforeStreamWorkers = captureStreamAckWorkerStats ? await sampleStreamAckWorkers() : null;
   const beforeProjector = captureStreamAckProjectorStats ? await sampleStreamAckProjectors() : null;
   const beforeStreamDirect = captureStreamDirectStats ? await sampleStreamDirect() : null;
@@ -404,6 +437,10 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterAccounting = await sampleCommandAccounting(runtimeUrl, runId);
       attachCommandAccounting({ reportOut, duration, runId, beforeAccounting, afterAccounting });
     }
+    if (captureStreamAckHealth) {
+      const afterStreamAckHealth = await sampleStreamAckHealth(runtimeUrl);
+      attachStreamAckHealth({ reportOut, beforeStreamAckHealth, afterStreamAckHealth });
+    }
     if (captureStreamAckWorkerStats) {
       const afterStreamWorkers = await waitForStreamAckWorkerDrain({
         reportOut,
@@ -450,6 +487,46 @@ async function sampleCommandAccounting(runtimeUrl, runId) {
     url: `${runtimeUrl}/internal/commands/accounting?runId=${encodedRunId}`,
     captureJson: true,
   });
+}
+
+async function sampleStreamAckHealth(runtimeUrl) {
+  return requestAppProbe({
+    name: "runtime.streamAckHealth",
+    url: `${runtimeUrl}/internal/stream-ack/health`,
+    captureJson: true,
+  });
+}
+
+function attachStreamAckHealth({ reportOut, beforeStreamAckHealth, afterStreamAckHealth }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    report.streamAckHealth = {
+      before: beforeStreamAckHealth?.json ?? null,
+      after: afterStreamAckHealth?.json ?? null,
+      delta: streamAckHealthDelta(beforeStreamAckHealth?.json, afterStreamAckHealth?.json),
+      probes: {
+        before: accountingProbeSummary(beforeStreamAckHealth),
+        after: accountingProbeSummary(afterStreamAckHealth),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+  } catch (error) {
+    console.warn(`  stream-ack health unavailable: ${error?.message ?? error}`);
+  }
+}
+
+function streamAckHealthDelta(before, after) {
+  if (!after) return {};
+  const beforeMetrics = before?.producerMetrics ?? {};
+  const afterMetrics = after?.producerMetrics ?? {};
+  return {
+    messagesDelta: numberDelta(before, after, "messages"),
+    publishAcceptedDelta: numberDelta(before, after, "publishAccepted"),
+    publishCompletedDelta: numberDelta(before, after, "publishCompleted"),
+    publishFailedDelta: numberDelta(before, after, "publishFailed"),
+    publishRejectedDelta: numberDelta(before, after, "publishRejected"),
+    producerMetrics: numericMapDelta(beforeMetrics, afterMetrics),
+  };
 }
 
 async function sampleStreamAckWorkers() {
@@ -673,12 +750,12 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     const pipelineTotal = streamAckPhases["api.streamAck.publishPipeline.total"];
     if (total || reserve || publishAck || markPublished || markPublishedBatch || enqueuePublished) {
       console.log(
-        `  stream-ack-api totalAvg=${formatPhaseAvg(total)} reserveAvg=${formatPhaseAvg(reserve)} publishAckAvg=${formatPhaseAvg(publishAck)} markPublishedAvg=${formatPhaseAvg(markPublished)} workerMarkPublishedBatchAvg=${formatPhaseAvg(markPublishedBatch)} enqueuePublishedAvg=${formatPhaseAvg(enqueuePublished)} asyncFlushAvg=${formatPhaseAvg(asyncFlush)}`,
+        `  stream-ack-api total=${formatPhaseAvgMax(total)} reserve=${formatPhaseAvgMax(reserve)} publishAck=${formatPhaseAvgMax(publishAck)} markPublished=${formatPhaseAvgMax(markPublished)} workerMarkPublishedBatch=${formatPhaseAvgMax(markPublishedBatch)} enqueuePublished=${formatPhaseAvgMax(enqueuePublished)} asyncFlush=${formatPhaseAvgMax(asyncFlush)}`,
       );
     }
     if (pipelineQueueWait || pipelineSlotWait || pipelineDelegateAck || pipelineTotal) {
       console.log(
-        `  stream-ack-publish-pipeline queueWaitAvg=${formatPhaseAvg(pipelineQueueWait)} slotWaitAvg=${formatPhaseAvg(pipelineSlotWait)} delegateAckAvg=${formatPhaseAvg(pipelineDelegateAck)} totalAvg=${formatPhaseAvg(pipelineTotal)}`,
+        `  stream-ack-publish-pipeline queueWait=${formatPhaseAvgMax(pipelineQueueWait)} slotWait=${formatPhaseAvgMax(pipelineSlotWait)} delegateAck=${formatPhaseAvgMax(pipelineDelegateAck)} total=${formatPhaseAvgMax(pipelineTotal)}`,
       );
     }
     const mutationTotal = phases["api.mutation.total"];
@@ -691,7 +768,7 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
     const writeResponse = phases["api.writeResponse"];
     if (mutationTotal || operation || runtimeTotal || engineSubmit) {
       console.log(
-        `  sync-hot-path totalAvg=${formatPhaseAvg(mutationTotal)} operationAvg=${formatPhaseAvg(operation)} parseAvg=${formatPhaseAvg(parseSubmit)} runtimeAvg=${formatPhaseAvg(runtimeTotal)} engineAvg=${formatPhaseAvg(engineSubmit)} persistAvg=${formatPhaseAvg(persistence)} serializeAvg=${formatPhaseAvg(serialize)} writeAvg=${formatPhaseAvg(writeResponse)}`,
+        `  sync-hot-path total=${formatPhaseAvgMax(mutationTotal)} operation=${formatPhaseAvgMax(operation)} parse=${formatPhaseAvgMax(parseSubmit)} runtime=${formatPhaseAvgMax(runtimeTotal)} engine=${formatPhaseAvgMax(engineSubmit)} persist=${formatPhaseAvgMax(persistence)} serialize=${formatPhaseAvgMax(serialize)} write=${formatPhaseAvgMax(writeResponse)}`,
       );
     }
   } catch (error) {
@@ -702,6 +779,24 @@ function attachHotPathPhases({ reportOut, afterHotPath }) {
 function formatPhaseAvg(phase) {
   if (!phase) return "n/a";
   return `${Number(phase.avgMs ?? 0).toFixed(2)}ms`;
+}
+
+function phaseAvgMs(phase) {
+  return phase ? Number(phase.avgMs ?? 0) : 0;
+}
+
+function phaseMaxMs(phase) {
+  return phase ? Number(phase.maxMs ?? 0) : 0;
+}
+
+function formatPhaseMax(phase) {
+  if (!phase) return "n/a";
+  return `${Number(phase.maxMs ?? 0).toFixed(2)}ms`;
+}
+
+function formatPhaseAvgMax(phase) {
+  if (!phase) return "n/a";
+  return `avg=${formatPhaseAvg(phase)},max=${formatPhaseMax(phase)}`;
 }
 
 function defaultStreamAckWorkerUrls(runtimeUrl) {
@@ -1136,6 +1231,24 @@ function venueEventMaterializerDelta(before, after, durationSeconds) {
     unsupportedDelta: Number(afterMetrics.unsupported ?? 0) - Number(beforeMetrics.unsupported ?? 0),
     materializedRps: durationSeconds > 0 ? materializedDelta / durationSeconds : 0,
   };
+}
+
+function numberDelta(before, after, key) {
+  return numberValue(after?.[key]) - numberValue(before?.[key]);
+}
+
+function numberValue(value) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function numericMapDelta(before, after) {
+  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  return Object.fromEntries(
+    [...keys]
+      .sort()
+      .map((key) => [key, numberValue(after?.[key]) - numberValue(before?.[key])]),
+  );
 }
 
 function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector }) {
@@ -1773,15 +1886,22 @@ function buildRecommendation(reportFiles) {
     try {
       const report = JSON.parse(readFileSync(path, "utf8"));
       const filename = basename(path);
-      const workerMatch = filename.match(/workers-(\d+)\.json$/);
+      const workerMatch = filename.match(/workers-(\d+)(?:-sample-(\d+))?\.json$/);
       const rateMatch = filename.match(/rate-(\d+)/);
+      const sampleMatch = filename.match(/sample-(\d+)\.json$/);
       const streamAckIssues = streamAckWorkerIssues(report);
       const directIssues = streamDirectIssues(report);
       const streamIssueCount = streamAckIssues.totalIssueCount + directIssues.totalIssueCount;
+      const streamAckPhases = report.streamAckApiPhases?.phases ?? {};
+      const publishPipelineTotal = streamAckPhases["api.streamAck.publishPipeline.total"];
+      const publishPipelineQueueWait = streamAckPhases["api.streamAck.publishPipeline.queueWait"];
+      const publishPipelineDelegateAck = streamAckPhases["api.streamAck.publishPipeline.delegateAck"];
+      const producerMetrics = report.streamAckHealth?.after?.producerMetrics ?? {};
       rows.push({
         path,
-        workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.workers ?? 0),
-        rate: rateMatch ? Number(rateMatch[1]) : Number(report.config?.ratePerSecond ?? 0),
+        workers: workerMatch ? Number(workerMatch[1]) : Number(report.config?.Workers ?? report.config?.workers ?? 0),
+        rate: rateMatch ? Number(rateMatch[1]) : Number(report.config?.RatePerSecond ?? report.config?.ratePerSecond ?? 0),
+        sample: sampleMatch ? Number(sampleMatch[1]) : 1,
         throughputRps: Number(report.throughputRps ?? 0),
         acceptedRps: Number(report.acceptedBusinessOpsRps ?? 0),
         p95Ms: Number(report.latencyMs?.p95 ?? 0),
@@ -1794,32 +1914,53 @@ function buildRecommendation(reportFiles) {
         streamAckIssueCount: streamIssueCount,
         streamDirectClean: directIssues.totalIssueCount === 0,
         streamDirectIssueCount: directIssues.totalIssueCount,
+        publishPipelineTotalAvgMs: phaseAvgMs(publishPipelineTotal),
+        publishPipelineTotalMaxMs: phaseMaxMs(publishPipelineTotal),
+        publishPipelineQueueWaitMaxMs: phaseMaxMs(publishPipelineQueueWait),
+        publishPipelineDelegateAckMaxMs: phaseMaxMs(publishPipelineDelegateAck),
+        producerRequestLatencyAvgMs: producerMetricValue(producerMetrics, "request-latency-avg"),
+        producerRequestLatencyMaxMs: producerMetricValue(producerMetrics, "request-latency-max"),
+        producerRecordQueueTimeMaxMs: producerMetricValue(producerMetrics, "record-queue-time-max"),
+        producerRequestsInFlight: producerMetricValue(producerMetrics, "requests-in-flight"),
       });
     } catch {
       // skip unreadable report
     }
   }
   if (rows.length === 0) return null;
-  const latencyTargetMs = 100;
-  const clean = rows.filter((row) => row.streamAckClean);
-  const acceptableClean = clean.filter((row) => row.p95Ms <= latencyTargetMs && row.p99Ms <= latencyTargetMs * 1.5);
-  const acceptable = rows.filter((row) => row.p95Ms <= latencyTargetMs && row.p99Ms <= latencyTargetMs * 1.5);
-  const candidates = acceptableClean.length > 0 ? acceptableClean : clean.length > 0 ? clean : acceptable.length > 0 ? acceptable : rows;
-  const scored = candidates.map((row) => ({
+  const targetP95Ms = Number.isFinite(recommendationTargetP95Ms) && recommendationTargetP95Ms > 0
+    ? recommendationTargetP95Ms
+    : 100;
+  const targetP99Ms = Number.isFinite(recommendationTargetP99Ms) && recommendationTargetP99Ms > 0
+    ? recommendationTargetP99Ms
+    : targetP95Ms * 2;
+  const targetAcceptedFloor = recommendationTargetAcceptedRps === undefined
+    ? 0
+    : recommendationTargetAcceptedRps * (1 - Math.max(0, recommendationThroughputTolerancePct) / 100);
+  const scored = rows.map((row) => ({
     ...row,
-    score:
-      row.acceptedRps -
-      Math.max(0, row.p95Ms-latencyTargetMs)*0.75 -
-      Math.max(0, row.p99Ms-latencyTargetMs*1.5)*0.5 -
-      row.streamAckIssueCount * 1000,
+    latencyClean: row.p95Ms <= targetP95Ms && row.p99Ms <= targetP99Ms,
+    throughputClean: targetAcceptedFloor <= 0 || row.acceptedRps >= targetAcceptedFloor,
+    successClean: row.successRatePct >= minSuccessRatePct,
+    qualificationRank: recommendationQualificationRank(row, targetP95Ms, targetP99Ms, targetAcceptedFloor),
+    score: recommendationScore(row, targetP95Ms, targetP99Ms, targetAcceptedFloor),
   }));
-  scored.sort((a, b) => {
-    if (a.score === b.score) return a.p95Ms - b.p95Ms;
-    return b.score - a.score;
-  });
+  scored.sort((a, b) => compareRecommendationRows(a, b));
   return {
     selectedAt: new Date().toISOString(),
-    latencyTargetMs,
+    policy: {
+      correctnessFirst: true,
+      targetAcceptedRps: recommendationTargetAcceptedRps ?? null,
+      throughputTolerancePct: recommendationThroughputTolerancePct,
+      targetAcceptedFloor,
+      targetP95Ms,
+      targetP99Ms,
+      minSuccessRatePct,
+      tieBreakers: ["qualification", "p99", "p95", "publishPipelineTotalMaxMs", "acceptedRps"],
+    },
+    latencyTargetMs: targetP95Ms,
+    targetP95Ms,
+    targetP99Ms,
     totalSamples: rows.length,
     workers: scored[0].workers,
     rate: scored[0].rate,
@@ -1829,9 +1970,64 @@ function buildRecommendation(reportFiles) {
     p99Ms: scored[0].p99Ms,
     streamAckClean: scored[0].streamAckClean,
     streamAckIssueCount: scored[0].streamAckIssueCount,
+    latencyClean: scored[0].latencyClean,
+    throughputClean: scored[0].throughputClean,
+    qualificationRank: scored[0].qualificationRank,
     score: scored[0].score,
     topSamples: scored.slice(0, 5),
   };
+}
+
+function recommendationQualificationRank(row, targetP95Ms, targetP99Ms, targetAcceptedFloor) {
+  const correctnessClean = row.streamAckClean && row.streamDirectClean;
+  const successClean = row.successRatePct >= minSuccessRatePct;
+  const latencyClean = row.p95Ms <= targetP95Ms && row.p99Ms <= targetP99Ms;
+  const throughputClean = targetAcceptedFloor <= 0 || row.acceptedRps >= targetAcceptedFloor;
+  if (correctnessClean && successClean && latencyClean && throughputClean) return 0;
+  if (correctnessClean && successClean && latencyClean) return 1;
+  if (correctnessClean && successClean && throughputClean) return 2;
+  if (correctnessClean && successClean) return 3;
+  if (correctnessClean) return 4;
+  return 5;
+}
+
+function recommendationScore(row, targetP95Ms, targetP99Ms, targetAcceptedFloor) {
+  const p95Over = Math.max(0, row.p95Ms - targetP95Ms);
+  const p99Over = Math.max(0, row.p99Ms - targetP99Ms);
+  const throughputUnder = Math.max(0, targetAcceptedFloor - row.acceptedRps);
+  return (
+    100_000 -
+    recommendationQualificationRank(row, targetP95Ms, targetP99Ms, targetAcceptedFloor) * 10_000 -
+    p95Over * 25 -
+    p99Over * 10 -
+    throughputUnder -
+    row.streamAckIssueCount * 1_000 -
+    row.streamDirectIssueCount * 1_000 -
+    row.p99Ms -
+    row.p95Ms * 0.5 -
+    row.publishPipelineTotalMaxMs * 0.05 +
+    row.acceptedRps * 0.001
+  );
+}
+
+function compareRecommendationRows(a, b) {
+  return (
+    a.qualificationRank - b.qualificationRank ||
+    a.p99Ms - b.p99Ms ||
+    a.p95Ms - b.p95Ms ||
+    a.publishPipelineTotalMaxMs - b.publishPipelineTotalMaxMs ||
+    b.acceptedRps - a.acceptedRps ||
+    a.workers - b.workers
+  );
+}
+
+function producerMetricValue(metrics, name) {
+  if (metrics[name] !== undefined) return Number(metrics[name] ?? 0);
+  const values = Object.entries(metrics ?? {})
+    .filter(([key]) => key.startsWith(`${name}[`))
+    .map(([, value]) => Number(value ?? 0))
+    .filter(Number.isFinite);
+  return values.length ? Math.max(...values) : 0;
 }
 
 function evaluateSuccessGuardrail(reportFiles, minSuccessRatePct) {
