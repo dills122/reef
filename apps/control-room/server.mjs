@@ -214,17 +214,17 @@ function readRun(runId) {
   const dir = runDir(safeRunId(runId));
   const recordPath = join(dir, "run.json");
   const evidence = readEvidenceForRun(dir);
+  const artifacts = listArtifacts(dir);
   try {
     const record = JSON.parse(readFileSync(recordPath, "utf8"));
     return {
       ...record,
       evidence,
       recentEvents: readRecentEvents(join(dir, "stdout.ndjson"), 200),
-      artifacts: listArtifacts(dir),
+      artifacts,
     };
   } catch {
-    if (evidence.length === 0) return null;
-    const artifacts = listArtifacts(dir);
+    if (evidence.length === 0 && artifacts.length === 0) return null;
     return {
       runId: safeRunId(runId),
       kind: "artifact",
@@ -267,6 +267,7 @@ function readEvidenceForRun(dir) {
         evidenceRows.push({
           path,
           name: relative(dir, path),
+          modifiedAt: statSync(path).mtime.toISOString(),
           evidence: canonicalEvidenceSummary(report),
           latencyMs: report.latencyMs || {},
           quality: report.quality || {},
@@ -277,7 +278,7 @@ function readEvidenceForRun(dir) {
       // Ignore partial reports while a run is still writing.
     }
   }
-  return evidenceRows;
+  return evidenceRows.sort((left, right) => String(left.modifiedAt).localeCompare(String(right.modifiedAt)));
 }
 
 function findJsonReports(dir) {

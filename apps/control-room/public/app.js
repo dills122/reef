@@ -1,5 +1,6 @@
 const state = {
   selectedRunId: "",
+  selectedRun: null,
   events: [],
   trend: [],
   source: null,
@@ -39,13 +40,16 @@ async function loadConfig() {
 
 async function refreshAll() {
   if (!state.connected) return;
-  const [snapshot, runs] = await Promise.all([
+  const runsPayload = await getJson("/api/runs");
+  const runs = runsPayload.runs || [];
+  autoSelectRun(runs);
+  const [snapshot, selected] = await Promise.all([
     getJson(`/api/snapshot?runId=${encodeURIComponent(state.selectedRunId)}`),
-    getJson("/api/runs"),
+    state.selectedRunId ? getJson(`/api/runs/${encodeURIComponent(state.selectedRunId)}`) : null,
   ]);
-  renderSnapshot(snapshot);
-  renderRuns(runs.runs || []);
-  const selected = state.selectedRunId ? await getJson(`/api/runs/${encodeURIComponent(state.selectedRunId)}`) : null;
+  state.selectedRun = selected;
+  renderSnapshot(snapshot, selected);
+  renderRuns(runs);
   renderEvidence(selected);
 }
 
@@ -89,7 +93,7 @@ function markDisconnected(error) {
   state.pollTimer = null;
 }
 
-function renderSnapshot(snapshot) {
+function renderSnapshot(snapshot, selectedRun) {
   const runtime = snapshot.probes?.runtime;
   const internalBlocked = Object.values(snapshot.probes || {}).some((probe) => probe?.status === 403);
   ids.runtimeStatus.textContent = runtime?.ok
@@ -102,23 +106,76 @@ function renderSnapshot(snapshot) {
   ids.lastProbe.textContent = snapshot.sampledAt || "not connected";
   ids.probeError.textContent = firstProbeError(snapshot) || "none";
   const metrics = snapshot.metrics || {};
-  setMetric("accepted", metrics.accepted);
-  setMetric("completed", metrics.completed);
-  setMetric("gap", metrics.accountingGap);
-  setMetric("worker-lag", metrics.workerLag);
-  setMetric("materialized", metrics.materialized);
-  setMetric("projected", metrics.projected);
+  const selectedMetrics = runDashboardMetrics(selectedRun);
+  if (selectedMetrics) {
+    setMetricLabels({
+      accepted: ["Attempted", "selected run"],
+      completed: ["Accepted", "selected run"],
+      gap: ["Success Rate", "end-to-end"],
+      "worker-lag": ["P95 Latency", "latest report"],
+      materialized: ["P99 Latency", "latest report"],
+      projected: ["System Failures", "latest report"],
+    });
+    setMetric("accepted", selectedMetrics.attempted);
+    setMetric("completed", selectedMetrics.accepted);
+    setMetric("gap", `${fmt(selectedMetrics.successRatePct)}%`);
+    setMetric("worker-lag", `${fmt(selectedMetrics.p95LatencyMs)}ms`);
+    setMetric("materialized", `${fmt(selectedMetrics.p99LatencyMs)}ms`);
+    setMetric("projected", selectedMetrics.systemFailures);
+  } else if (state.selectedRunId) {
+    const live = liveRuntimeMetrics(snapshot, metrics);
+    setMetricLabels({
+      accepted: ["Runtime Commands", "live platform"],
+      completed: ["Submit Commands", "live platform"],
+      gap: ["Modify Commands", "live platform"],
+      "worker-lag": ["Cancel Commands", "live platform"],
+      materialized: ["DB Active", "pool usage"],
+      projected: ["Projected", "read-model work"],
+    });
+    setMetric("accepted", live.commands);
+    setMetric("completed", live.submits);
+    setMetric("gap", live.modifies);
+    setMetric("worker-lag", live.cancels);
+    setMetric("materialized", live.dbActive);
+    setMetric("projected", live.projected);
+  } else {
+    setMetricLabels({
+      accepted: ["Accepted", "diagnostics"],
+      completed: ["Completed", "diagnostics"],
+      gap: ["Accounting Gap", "accepted minus terminal"],
+      "worker-lag": ["Worker Lag", "stream lag"],
+      materialized: ["Materialized", "canonical outcomes"],
+      projected: ["Projected", "read-model work"],
+    });
+    setMetric("accepted", metrics.accepted);
+    setMetric("completed", metrics.completed);
+    setMetric("gap", metrics.accountingGap);
+    setMetric("worker-lag", metrics.workerLag);
+    setMetric("materialized", metrics.materialized);
+    setMetric("projected", metrics.projected);
+  }
   const active = state.selectedRunId || "";
-  ids.activeRunLabel.textContent = active ? `selected ${active}` : "no run selected";
-  state.trend.push({
-    at: Date.now(),
-    accepted: Number(metrics.accepted || 0),
-    completed: Number(metrics.completed || 0),
-    materialized: Number(metrics.materialized || 0),
-    projected: Number(metrics.projected || 0),
-  });
-  state.trend = state.trend.slice(-90);
-  renderTrend();
+  const reportCount = selectedRun?.evidence?.length || 0;
+  ids.activeRunLabel.textContent = active
+    ? reportCount > 0
+      ? `selected ${active} · ${reportCount} reports`
+      : `selected ${active} · waiting for first report`
+    : "no run selected";
+  if (selectedMetrics) {
+    state.trend = buildRunTrend(selectedRun);
+    renderTrend("run");
+  } else {
+    const live = liveRuntimeMetrics(snapshot, metrics);
+    state.trend.push({
+      at: Date.now(),
+      accepted: live.commands,
+      completed: live.submits,
+      materialized: live.dbActive,
+      projected: live.projected,
+    });
+    state.trend = state.trend.slice(-90);
+    renderTrend("platform");
+  }
 }
 
 function renderRuns(runs) {
@@ -146,32 +203,70 @@ function renderEvidence(run) {
     ids.evidence.innerHTML = `<p class="muted">No run selected.</p>`;
     return;
   }
-  const rows = run.evidence || [];
+  const rows = sortEvidenceRows(run.evidence || []);
   if (rows.length === 0) {
-    ids.evidence.innerHTML = `<p class="muted">No report evidence yet.</p>`;
+    const artifactCount = run.artifacts?.length || 0;
+    ids.evidence.innerHTML = `
+      <div class="empty-state">
+        <strong>${escapeHtml(run.runId)}</strong>
+        <span>${artifactCount > 0 ? `${artifactCount} artifacts observed; waiting for the first report JSON.` : "No report evidence yet."}</span>
+      </div>
+    `;
     return;
+  }
+  const latest = runDashboardMetrics(run);
+  if (latest) {
+    const summary = document.createElement("div");
+    summary.className = "evidence-summary";
+    summary.innerHTML = `
+      <div>
+        <span class="field-label">Latest Report</span>
+        <strong>${escapeHtml(latest.name)}</strong>
+      </div>
+      <div>
+        <span class="field-label">Accepted</span>
+        <strong>${fmt(latest.accepted)} / ${fmt(latest.attempted)}</strong>
+      </div>
+      <div>
+        <span class="field-label">Trace Checks</span>
+        <strong>${fmt(latest.tracePass)} / ${fmt(latest.traceChecked)}</strong>
+      </div>
+      <div>
+        <span class="field-label">System Failures</span>
+        <strong>${fmt(latest.systemFailures)}</strong>
+      </div>
+    `;
+    ids.evidence.append(summary);
   }
   for (const row of rows) {
     const ev = row.evidence || {};
     const rates = ev.rates || {};
     const gaps = ev.gaps || {};
+    const quality = row.quality || {};
+    const traces = row.traceChecks || {};
     const el = document.createElement("div");
     el.className = "evidence-row";
     el.innerHTML = `
-      <strong>${escapeHtml(row.name)}</strong>
-      <span class="kv">
-        <span>attempted ${fmt(ev.attempted)}</span>
-        <span>accepted ${fmt(ev.accepted)}</span>
+      <div class="evidence-head">
+        <strong>${escapeHtml(row.name)}</strong>
+        <span>${escapeHtml(row.modifiedAt || "")}</span>
+      </div>
+      <div class="stat-grid">
+        <span><b>${fmt(ev.attempted)}</b><small>attempted</small></span>
+        <span><b>${fmt(ev.accepted)}</b><small>accepted</small></span>
+        <span><b>${fmt(quality.totalFailures)}</b><small>rejects</small></span>
+        <span><b>${fmt(quality.systemFailureCount)}</b><small>system fail</small></span>
+        <span><b>${fmt(rates.acceptedPerSecond)}</b><small>accepted/s</small></span>
+        <span><b>${fmt(ev.p95LatencyMs)}ms</b><small>p95</small></span>
+        <span><b>${fmt(ev.p99LatencyMs)}ms</b><small>p99</small></span>
+        <span><b>${fmt(traces.pass)} / ${fmt(traces.checked)}</b><small>trace</small></span>
+      </div>
+      <div class="kv">
         <span>materialized ${fmt(ev.materialized)}</span>
         <span>projected ${fmt(ev.projected)}</span>
-      </span>
-      <span class="kv">
-        <span>accepted/s ${fmt(rates.acceptedPerSecond)}</span>
         <span>mat gap ${fmt(gaps.acceptedToMaterialized)}</span>
         <span>proj gap ${fmt(gaps.materializedToProjected)}</span>
-        <span>p95 ${fmt(ev.p95LatencyMs)}ms</span>
-        <span>p99 ${fmt(ev.p99LatencyMs)}ms</span>
-      </span>
+      </div>
     `;
     ids.evidence.append(el);
   }
@@ -179,6 +274,8 @@ function renderEvidence(run) {
 
 function selectRun(runId) {
   state.selectedRunId = runId;
+  state.selectedRun = null;
+  state.trend = [];
   ids.logRun.textContent = runId;
   state.events = [];
   ids.log.textContent = "";
@@ -202,13 +299,20 @@ function openRunEventStream(runId) {
   };
 }
 
-function renderTrend() {
-  const series = [
-    ["accepted", "var(--blue)"],
-    ["completed", "var(--green)"],
-    ["materialized", "var(--cyan)"],
-    ["projected", "var(--amber)"],
-  ];
+function renderTrend(mode) {
+  const series =
+    mode === "run"
+      ? [
+          ["attempted", "var(--amber)", "attempted"],
+          ["accepted", "var(--green)", "accepted"],
+          ["failures", "var(--red)", "rejects"],
+        ]
+      : [
+          ["accepted", "var(--blue)", "accepted"],
+          ["completed", "var(--green)", "completed"],
+          ["materialized", "var(--cyan)", "materialized"],
+          ["projected", "var(--amber)", "projected"],
+        ];
   const width = 900;
   const height = 220;
   const pad = 24;
@@ -225,16 +329,104 @@ function renderTrend() {
       return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke" />`;
     })
     .join("");
+  const legend = series
+    .map(([, color, label], index) => {
+      const x = pad + index * 105;
+      return `
+        <line x1="${x}" y1="${height - 10}" x2="${x + 18}" y2="${height - 10}" stroke="${color}" stroke-width="3" />
+        <text x="${x + 24}" y="${height - 6}" fill="#c7d1d5" font-size="12">${label}</text>
+      `;
+    })
+    .join("");
   ids.trend.innerHTML = `
     <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#323a41" />
     <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#323a41" />
     ${paths}
     <text x="${pad}" y="18" fill="#9ba8ad" font-size="12">max ${maxValue}</text>
+    ${legend}
   `;
 }
 
 function setMetric(name, value) {
-  document.querySelector(`#metric-${name}`).textContent = fmt(value);
+  document.querySelector(`#metric-${name}`).textContent = typeof value === "string" ? value : fmt(value);
+}
+
+function setMetricLabels(labels) {
+  for (const [name, [label, hint]] of Object.entries(labels)) {
+    const labelEl = document.querySelector(`#label-${name}`);
+    const hintEl = document.querySelector(`#hint-${name}`);
+    if (labelEl) labelEl.textContent = label;
+    if (hintEl) hintEl.textContent = hint;
+  }
+}
+
+function liveRuntimeMetrics(snapshot, metrics) {
+  return {
+    commands: hotPathPhaseCount(snapshot, "api.mutation.total"),
+    submits: hotPathPhaseCount(snapshot, "api.orderService.submitOrder"),
+    modifies: hotPathPhaseCount(snapshot, "runtime.engine.modify"),
+    cancels: hotPathPhaseCount(snapshot, "runtime.engine.cancel"),
+    dbActive: Number(metrics.dbActive || 0),
+    projected: Number(metrics.projected || 0),
+  };
+}
+
+function hotPathPhaseCount(snapshot, phaseName) {
+  return Number(snapshot.probes?.hotPath?.json?.metrics?.phases?.[phaseName]?.count || 0);
+}
+
+function autoSelectRun(runs) {
+  if (state.selectedRunId && runs.some((run) => run.runId === state.selectedRunId)) return;
+  const newest = runs[0]?.runId || "";
+  if (!newest) {
+    state.selectedRunId = "";
+    state.selectedRun = null;
+    if (state.source) state.source.close();
+    state.source = null;
+    return;
+  }
+  state.selectedRunId = newest;
+  ids.logRun.textContent = newest;
+  openRunEventStream(newest);
+}
+
+function runDashboardMetrics(run) {
+  const row = sortEvidenceRows(run?.evidence || []).at(-1);
+  if (!row) return null;
+  const ev = row.evidence || {};
+  const quality = row.quality || {};
+  const trace = row.traceChecks || {};
+  return {
+    name: row.name,
+    attempted: Number(ev.attempted || quality.totalRequests || 0),
+    accepted: Number(ev.accepted || quality.totalSuccess || 0),
+    successRatePct: Number(quality.endToEndSuccessRatePct || 0),
+    p95LatencyMs: Number(ev.p95LatencyMs || row.latencyMs?.p95 || 0),
+    p99LatencyMs: Number(ev.p99LatencyMs || row.latencyMs?.p99 || 0),
+    systemFailures: Number(quality.systemFailureCount || 0),
+    traceChecked: Number(trace.checked || 0),
+    tracePass: Number(trace.pass || 0),
+  };
+}
+
+function buildRunTrend(run) {
+  return sortEvidenceRows(run?.evidence || []).map((row) => {
+    const ev = row.evidence || {};
+    const quality = row.quality || {};
+    return {
+      attempted: Number(ev.attempted || quality.totalRequests || 0),
+      accepted: Number(ev.accepted || quality.totalSuccess || 0),
+      failures: Number(quality.totalFailures || Math.max(0, Number(ev.attempted || 0) - Number(ev.accepted || 0))),
+    };
+  });
+}
+
+function sortEvidenceRows(rows) {
+  return rows.slice().sort((left, right) => {
+    const byModifiedAt = String(left.modifiedAt || "").localeCompare(String(right.modifiedAt || ""));
+    if (byModifiedAt !== 0) return byModifiedAt;
+    return String(left.name || "").localeCompare(String(right.name || ""));
+  });
 }
 
 async function getJson(path) {
