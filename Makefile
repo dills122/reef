@@ -81,6 +81,7 @@ test-bot-sdk:
 	node scripts/dev/report-taxonomy.test.mjs
 	node scripts/dev/stream-partition-spread.test.mjs
 	node scripts/dev/do-benchmark-check.test.mjs
+	node scripts/dev/do-materializer-10k-gate.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
 
 fmt-go:
