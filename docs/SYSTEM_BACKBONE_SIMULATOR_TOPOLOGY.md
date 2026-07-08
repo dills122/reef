@@ -31,91 +31,13 @@ Companion docs:
 
 ## Whole-System Shape
 
-```mermaid
-flowchart LR
-  subgraph Actors["Actors And Test Drivers"]
-    Manual["Manual user/API client"]
-    UI["Platform UI/control room"]
-    Sim["Go simulator/load tester"]
-    Bots["Bot SDK/harness"]
-    Scenario["scenario-plan/smoke"]
-  end
-
-  subgraph APILayer["Platform API Layer"]
-    API["platform-api"]
-    Boundary["boundary checks\nidentity, idempotency,\nrisk, rate, abuse"]
-    CommandStatus["command status lookup"]
-    Reads["query routes\norders, market data,\ntraces, events"]
-  end
-
-  subgraph DurableLogs["Durable Logs"]
-    CommandLog["accepted command stream/topic\nJetStream or Redpanda"]
-    EventLog["venue event batch stream/topic"]
-  end
-
-  subgraph Matching["Matching Plane"]
-    DirectConsumer["matching-engine direct consumer"]
-    HotBook["in-memory hot book"]
-    MatchingRules["price-time matching\ncancel/modify state"]
-    BatchPublisher["VenueEventBatch publisher"]
-  end
-
-  subgraph Persistence["Persistence And Projections"]
-    BoundaryDB["boundary-postgres"]
-    RuntimeDB["runtime Postgres\ncanonical facts"]
-    ProjectionDB["projection-postgres\nread models"]
-    ArenaDB["arena-postgres"]
-    Materializer["platform-materializer"]
-    Projectors["platform-projector-*"]
-  end
-
-  subgraph Evidence["Evidence And Operations"]
-    Reports["sim/stress reports"]
-    Telemetry["telemetry and DB diagnostics"]
-    Replay["replay/checksum gates"]
-    CI["CI schema/tests"]
-  end
-
-  Manual --> API
-  UI --> API
-  Sim --> API
-  Bots --> API
-  Scenario --> API
-
-  API --> Boundary
-  Boundary --> BoundaryDB
-  Boundary --> CommandLog
-  API --> CommandStatus
-  API --> Reads
-
-  CommandLog --> DirectConsumer
-  DirectConsumer --> HotBook
-  HotBook --> MatchingRules
-  MatchingRules --> BatchPublisher
-  BatchPublisher --> EventLog
-
-  EventLog --> Materializer
-  Materializer --> RuntimeDB
-  RuntimeDB --> Projectors
-  Projectors --> ProjectionDB
-  Reads --> RuntimeDB
-  Reads --> ProjectionDB
-  API --> ArenaDB
-  CommandStatus --> RuntimeDB
-  CommandStatus --> BoundaryDB
-
-  Sim --> Reports
-  Bots --> Reports
-  Scenario --> Reports
-  Reports --> Replay
-  RuntimeDB --> Replay
-  EventLog --> Replay
-  API --> Telemetry
-  RuntimeDB --> Telemetry
-  ProjectionDB --> Telemetry
-  BoundaryDB --> Telemetry
-  CI --> RuntimeDB
-```
+See [`SYSTEM_BACKBONE_SERVICES.md`](./SYSTEM_BACKBONE_SERVICES.md) §Backbone
+Shape for the canonical current-state diagram (API, durable ingress, matching
+engine, materializer, projections, and the settlement post-trade layer). This
+document adds the actor/evidence framing around that same core shape: the
+simulator, bots, UI, and manual clients all enter through `platform-api`
+alongside each other, and reports/telemetry/replay/CI evidence tooling reads
+from the same runtime/projection stores rather than from any private path.
 
 ## Infrastructure Backbone And Run Plane
 
@@ -280,14 +202,30 @@ Reef can currently claim:
   at `/admin/v1/analytics/run-exports`
 - migration/schema placement and Node dev tooling CI are guarding the current
   DB layout and dev scripts
+- cancel/modify commands are processed end-to-end on the direct
+  matching-engine stream path (dispatch, outcome, ack), with dedicated
+  processor coverage (`TestProcessorProcessesModifyAndCancelCommands`) and
+  separate matching-engine unit coverage for cancel/modify book semantics
+  (e.g. `TestCancelOrderRemovesRestingOrder`, `TestModifyOrderUpdatesPriceAndQuantity`)
+- settlement obligation materialization, cash/security ledger balance
+  projection with a per-settlement proof view, and the break/repair/resolution
+  workflow are implemented with admin repair endpoints and unit/integration
+  test coverage (`TradeSettlementObligationMaterializerTest`,
+  `SettlementLedgerProjectionTest`, `SettlementObligationProjectionTest`)
 
 ## Claims Still Pending
 
 Reef should not yet claim:
 
 - long-soak production-like durability for the direct Redpanda path
-- full cancel/modify parity on the direct matching-engine stream path
-- complete settlement and post-trade lifecycle proof under simulator load
+- crash/restart redelivery proof specifically exercised against modify/cancel
+  commands (today's redelivery tests are demonstrated with `SubmitOrder`
+  payloads; the general processor crash/restart mechanism is proven, not the
+  modify/cancel case specifically)
+- full settlement and post-trade lifecycle proof captured under sustained
+  simulator load (the settlement mechanism itself is built and tested; a
+  long-soak, simulator-driven run of the full obligation-to-ledger path has
+  not yet been captured as evidence)
 - restart/recovery proof across API, broker, engine, materializer, and projector
 - UI/control-room projection freshness under long remote pressure
 

@@ -301,5 +301,6 @@ These documents remain useful as evidence or design context, but they are no lon
 - `archive/SPRINT_POST_MATCH_ENGINES.md`
 - `BOT_ARENA_STRESS_BASELINE_2026-07-01.md`
 - May 2026 throughput and abuse-breaker baseline reports
+- `THROUGHPUT_SCALING_WORK_PLAN.md` — P2 (stream-ack ingress), P3 (stream idempotency/partition workers), and P5.5 (engine shards/hot book) are superseded by D-041 and the July 2026 stream-ack sunset and hot-book checkpoints (see `DECISIONS.md` and `PERFORMANCE_LEARNINGS.md`); it is still cited elsewhere (`ARCHITECTURE_THROUGHPUT_PLAN.md`, `ARCHITECTURE_THROUGHPUT_TRACKER.md`, `BOT_ARENA_PLAN.md`, `DECISIONS.md`) for the `7500`/`10000` completed-commands/sec per-instance target, which remains valid
 
 If one of these becomes active again, update this file and [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) with the reason.

@@ -45,12 +45,12 @@ This lets later commits move YAML into layered files while preserving the existi
 
 ## Migration Phases
 
-1. Centralize Compose invocation in scripts.
-2. Add `compose.base.yml` and `compose.local.yml` while keeping `docker-compose.yml` working.
-3. Move stream-ack and materializer shape into local overlays.
-4. Move benchmark-only no-DB/direct-stream settings into a benchmark overlay.
-5. Add hosted overlays only after the local split is stable.
-6. Add a guard that compares or validates resolved configs for the common Make targets.
+1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` and `make dev-compose-parity` exist and dev scripts call the shared Compose helper.
+2. Add `compose.base.yml` and `compose.local.yml` while keeping `docker-compose.yml` working. Done: both files exist, and `scripts/dev/compose-config-parity.mjs` (run by `make dev-compose-parity`) fails the build if `docker-compose.yml` config output diverges from `compose.base.yml` + `compose.local.yml` merged config. `docker-compose.yml` remains the full monolith kept in parity with the layered files rather than being removed.
+3. Move stream-ack and materializer shape into local overlays. Not started: no `compose.local.stream-ack.yml` exists.
+4. Move benchmark-only no-DB/direct-stream settings into a benchmark overlay. Not started: no `compose.local.benchmark.yml` exists.
+5. Add hosted overlays only after the local split is stable. Not started: no `compose.hosted*.yml` files exist.
+6. Add a guard that compares or validates resolved configs for the common Make targets. Not started as its own phase: the phase-2 parity script only checks the base/local split against the monolith; it does not yet cover the stream-ack, benchmark, or hosted overlays from phases 3-5.
 
 ## Guardrails
 

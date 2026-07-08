@@ -104,6 +104,8 @@ Status: done.
 
 ### P1: Add Run/Session Attribution
 
+Status: done. `run_id`, `run_kind`, and `scenario_id` columns exist on `command_log.commands` via migration `command_log/0009_run_metadata.sql`, and `retention_pins` accepts a `run_id` selector type.
+
 Add explicit run/session metadata before partitioning by run.
 
 Candidate columns:
@@ -125,6 +127,8 @@ Acceptance criteria:
 - prune can protect by `run_id` or retention pin
 
 ### P2: Split Payload From Hot Command Index
+
+Status: done. `command_log.command_payloads` exists via migration `command_log/0012_command_payloads.sql`, with the hot-path foreign key later dropped (`0013_drop_hot_path_foreign_keys.sql`) and integrity/audit views added (`0014_integrity_audit_views.sql`) to keep append, duplicate replay, and status lookup covered without the FK.
 
 Move request payload out of `commands` into `command_payloads`.
 
@@ -230,11 +234,13 @@ Required metrics:
 
 ## Next Slice
 
-Implement P1 run/session attribution in command-log intake and benchmark reports.
+P1 (run/session attribution) and P2 (payload split from the hot command index) are done; see the migration references under each phase above.
+
+Implement P3: archive terminal results by time into `command_results_archive` (or an equivalent archive table). No archive table exists yet.
 
 The smallest useful change:
 
-- add nullable/defaulted `run_id` metadata to `command_log.commands`
-- let intake/load-test scripts pass a run ID through request metadata or payload extraction
-- extend diagnostics/prune reports to show command-log growth by run ID
-- add retention pin selector `run_id`
+- add a partitioned `command_results_archive` table keyed by `completed_at`
+- add an archive job that copies terminal rows older than a live retention window and verifies row counts/checksums before prune deletes them
+- keep pinned commands excluded from archive-drop cleanup
+- decide and document whether archived commands remain queryable through the existing status API

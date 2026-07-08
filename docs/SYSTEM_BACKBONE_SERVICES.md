@@ -65,6 +65,12 @@ flowchart LR
     Materializer["platform-materializer\nVenueEventBatch materializer"]
   end
 
+  subgraph Settlement["Settlement (Post-Trade)"]
+    SettlementMaterializer["TradeSettlementObligationMaterializer\nobligations, instructions, attempts, breaks"]
+    SettlementFacts[("settlement fact store\nPostgres / in-memory")]
+    SettlementLedger["SettlementLedgerProjection\ncash/security balances + settlement proof"]
+  end
+
   API --> Boundary
   Boundary --> BoundaryDB
   Boundary --> JetStream
@@ -85,12 +91,20 @@ flowchart LR
   API --> RuntimeDB
   API --> ProjectionDB
   API --> ArenaDB
+  RuntimeDB --> SettlementMaterializer
+  SettlementMaterializer --> SettlementFacts
+  SettlementFacts --> SettlementLedger
+  SettlementLedger --> API
+  API -. admin repair/materialize .-> SettlementFacts
 ```
 
 The current direction is to keep matching hot-state private to the Go engine,
 use durable command/event streams for high-throughput handoff, and materialize
 compact canonical facts into Postgres after the engine has durably published
-venue event batches.
+venue event batches. Settlement runs as a downstream post-trade layer: it
+materializes obligations from settled trades already present in the canonical
+facts and derives cash/security ledger balances with a per-settlement proof
+view, with admin endpoints for obligation materialization and repair.
 
 ## Service Inventory
 
@@ -110,6 +124,14 @@ venue event batches.
 
 `redis`, `jaeger`, and `otel-collector` are optional local profiles. They are
 not required for the core durable command path.
+
+The `venue-event-materializer-scaled` compose profile runs four materializer
+instances (`platform-materializer`, `-1`, `-2`, `-3`) instead of one, for
+partitioned/scaled materialization testing.
+
+`services/stock-data` is a separate seed-time-only external stock reference
+service (its own README and HTTP API) but is not wired into any compose
+profile here and is not part of the core backbone inventory above.
 
 ## Runtime Roles
 
@@ -262,12 +284,18 @@ Current local evidence supports:
 - Redpanda direct consume plus `VenueEventBatch` materialization at `10k/sec`
   for a short local gate with command outcome counts, replay checks, and
   projection idempotency clean.
+- Cancel/modify command processing on the direct matching-engine stream path
+  (dispatch, outcome, ack) is implemented and covered by dedicated tests, with
+  separate matching-engine unit coverage for cancel/modify book semantics.
 
 Current proof still needed before a production-like claim:
 
 - longer remote soak on the durable direct path
 - restart/recovery proof for direct command consume and materializer offsets
-- cancel/modify direct-stream expansion beyond submit-focused slices
+- crash/restart redelivery proof exercised specifically against modify/cancel
+  commands, plus expansion of cancel/modify/fill/reject outcomes from
+  canonical rows into normalized downstream projections (today's redelivery
+  tests and orders projection both only cover submit)
 - stronger projection replay/audit coverage for full lifecycle views
 - explicit operational runbook for lag, backpressure, and repair
 

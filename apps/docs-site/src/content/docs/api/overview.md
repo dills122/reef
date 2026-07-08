@@ -43,7 +43,7 @@ Domain rejections (e.g. a business-rule reject) are distinguished from transport
 
 ## Command Processing Modes
 
-The runtime supports multiple internal processing modes behind the same external contract — `sync-result` (deterministic baseline), `captured-ack` (Postgres fallback), `stream-ack` (durable Kafka/JetStream-backed, the active high-throughput target), and `accepted-async`. Clients never need to know which mode is active; the response contract (`200`/`202` + status lookup) stays stable across modes.
+The runtime supports multiple internal processing modes behind the same external contract — `sync-result` (deterministic baseline), `captured-ack` (Postgres fallback), `stream-ack` (durable Kafka-compatible backing for the active high-throughput target, with JetStream retained as fallback/comparison), and `accepted-async`. Clients never need to know which mode is active; the response contract (`200`/`202` + status lookup) stays stable across modes.
 
 ## Routes At A Glance
 

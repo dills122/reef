@@ -10,8 +10,13 @@ This document defines constraints for the local Postgres model so scoped DB extr
 - `auth`
 - `admin`
 - `boundary`
-- `orchestration` (planned; scheduler/job-runner state)
-- `analytics` (planned; transformed query-optimized projections)
+- `settlement` (post-trade obligation/instruction/settlement/exception facts)
+- `arena` (bot registry, qualification, run records/results, enforcement events)
+- `stock_data` (per-game-seed stock snapshot facts)
+- `orchestration` (scheduler/job-runner state — live, not planned)
+- `analytics` (transformed query-optimized projections — `analytics.simulation_run_exports` is live; daily-fact/reporting tables remain planned)
+
+See [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md) for the full table-level breakdown of each schema.
 
 ## Guardrails
 
@@ -69,7 +74,7 @@ This document defines constraints for the local Postgres model so scoped DB extr
 - runtime table ownership: migrations create schema-qualified `runtime.*` tables and runtime routines
 - auth table ownership: migrations create schema-qualified `auth.*` role tables
 - boundary table ownership: migrations create schema-qualified `boundary.*` idempotency and command-capture tables
-- admin table bootstrap: admin-specific durable tables are still planned unless explicitly covered by runtime/auth storage
+- admin table bootstrap: migrations create schema-qualified `admin.post_trade_profiles` (`admin/0002_post_trade_profiles.sql`)
 - command log table ownership: migrations create schema-qualified `command_log.commands`; runtime wiring is available behind `EXTERNAL_API_COMMAND_LOG_MODE`
 - read-model bootstrap: planned under `read_model`
 - boundary/projection DB bootstrap: Docker starts `boundary-postgres` and `projection-postgres`, and the dev migration runner applies the same forward migrations to both proof-slice databases

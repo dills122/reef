@@ -1,5 +1,7 @@
 # Sprint Plan: Critical Correctness and Boundary Hardening
 
+Status: complete (June 2026) — historical record; all tasks and checkpoints below are done. See [`WORK_PLAN.md`](./WORK_PLAN.md#historical-planning-documents) for the current active execution ladder.
+
 ## Purpose
 
 This sprint hardens the current venue slice before broader simulator control

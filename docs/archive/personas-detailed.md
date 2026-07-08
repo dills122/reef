@@ -1,3 +1,5 @@
+Superseded by [`SIMULATOR_PERSONA_CONFIG.md`](../SIMULATOR_PERSONA_CONFIG.md), the polished and linked design doc that replaced this early braindump. Kept only as historical record of the original handoff draft.
+
 Absolutely — here’s a clean handoff overview for Codex.
 
 ## Codex Handoff: Simulator Persona + Session Config Design

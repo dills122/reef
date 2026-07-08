@@ -21,6 +21,8 @@ These documents define how Reef should be built as the repository grows into the
 - [Performance Learnings](../PERFORMANCE_LEARNINGS.md): performance budgets, benchmark discipline, and PR checklist for speed-impact changes
 - [Performance Library Investigation](../PERFORMANCE_LIBRARY_INVESTIGATION.md): runtime/Go library benchmark candidates and acceptance criteria
 
+`AGENTS.md`'s "Contract-First Files" also treats [`API_BOUNDARY_STORAGE_DECISIONS.md`](../API_BOUNDARY_STORAGE_DECISIONS.md) and [`DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](../DATA_DOMAIN_SCHEMA_BLUEPRINT.md) as normative before implementation — check that list too.
+
 ## How To Use These
 
 When adding a new module or service:

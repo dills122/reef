@@ -4,7 +4,7 @@
 
 Capture post-v1 simulator enhancements, known pitfalls, and an execution policy for balancing new feature delivery with refactor debt.
 
-## Current Status (as of 2026-05-23)
+## Current Status (as of 2026-05-23; reconciled 2026-07-08)
 
 Implemented:
 
@@ -26,12 +26,13 @@ Implemented:
 - worker sweep + recommendation artifact generation
 - strict-lifecycle min-live-order gating and adaptive recovery guardrails
 - initial runtime system tuning pass (indexes + runtime/db concurrency defaults)
+- quality-lane + capacity-lane throughput campaign automation and baseline publication (`make dev-throughput-campaign` / `scripts/dev/throughput-campaign.mjs`, plus `make dev-throughput-compare`; baselines archived in [`THROUGHPUT_CAMPAIGN_BASELINE_2026-05-23.md`](./archive/THROUGHPUT_CAMPAIGN_BASELINE_2026-05-23.md) and [`THROUGHPUT_CAMPAIGN_CLEAN_STACK_ENVELOPE_2026-05-23.md`](./archive/THROUGHPUT_CAMPAIGN_CLEAN_STACK_ENVELOPE_2026-05-23.md))
+- configurable circuit-breaker framework for junk-traffic throttling/blocking (reject-rate command circuit breaker with global/per-route toggles, `GET /internal/boundary/abuse/stats` telemetry, and long-soak trip validation; see "Next Effort: Abuse-Control Circuit Breakers" below for full delivered scope and evidence)
 
 Still pending for the next wave:
 
-- quality-lane + capacity-lane throughput campaign automation and baseline publication
 - stricter lifecycle-valid traffic shaping to consistently exceed `>=90%` success
-- configurable circuit-breaker framework for junk-traffic throttling/blocking
+- automated success-rate guardrails tied to throughput campaign targets for the quality/capacity lanes (the abuse-trip lane already gates on trip/block guardrails; quality/capacity lanes still report caps without a pass/fail gate)
 - deeper runtime hot-path optimization after lane baselines are locked
 
 ## Stress Findings (2026-05-23)
@@ -67,8 +68,8 @@ Finding:
 - [x] worker-sweep automation with recommendation output
 - [x] strict-lifecycle stress profile option (`strict-clean`)
 - [x] explicit reject taxonomy percentages in reports
-- [ ] throughput lane baseline pack (`quality` vs `capacity`) with published caps
-- [ ] automated success-rate guardrails tied to throughput campaign targets
+- [x] throughput lane baseline pack (`quality` vs `capacity`) with published caps
+- [ ] automated success-rate guardrails tied to throughput campaign targets (quality/capacity lanes; abuse-trip lane guardrail already exists)
 
 ## Nice-To-Haves (Future)
 

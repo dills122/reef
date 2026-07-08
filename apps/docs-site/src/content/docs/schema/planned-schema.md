@@ -1,11 +1,11 @@
 ---
 title: Planned Schema
-description: account, settlement, market_data, and analytics — design targets, not built yet.
+description: account and future analytics/archive surfaces that remain design targets.
 banner:
-  content: Mostly design baseline. Current runtime-backed read slices exist; dedicated account/settlement/market_data schemas remain future work.
+  content: Mostly design baseline. Live runtime, settlement, arena, stock-data, orchestration, analytics export, and market-data projection tables are covered in the source blueprint.
 ---
 
-These schemas are candidate table lists from the data blueprint. Names and columns will shift during implementation.
+These sections are candidate table lists or future expansion areas from the data blueprint. Names and columns will shift during implementation.
 
 ## Account Schema (Planned)
 
@@ -15,27 +15,31 @@ Candidate tables: `account.accounts`, `account.bots`, `account.bot_configs`, `ac
 
 Intake risk checks use a hot, bounded account/risk view before durable order acceptance; settlement performs final enforcement from matched facts and can block fulfillment, create exceptions, or disable bots.
 
-## Settlement Schema (Planned)
+## Settlement Expansion
 
-Consumes canonical venue facts and creates post-trade facts. Must not mutate matching history.
+The `settlement` schema is no longer purely planned: obligation, instruction, attempt, break, resource-position, resource-fail, and security-repair facts exist in migrations. This page only tracks broader future expansion beyond the current P2/instant-finality/resource-fail slices.
 
-Candidate tables: `settlement.obligations`, `settlement.allocations`, `settlement.confirmations`, `settlement.fulfillment_steps`, `settlement.breaks`, `settlement.repairs`, `settlement.exception_cases`.
+Future candidate areas: allocation, confirmation, clearing-specific fulfillment steps, richer exception queues, and operator-facing exception UI.
 
-The first allowed settlement slice is narrower than the full table list: `SettlementObligationCreated`, `SettlementBreakOpened` with `CASH_LEG_FAILED`, `SettlementRepairPosted`, and `SettlementResolved`. No account-ledger mutation, allocation, confirmation, clearing, or exception UI is part of that first slice.
+The current implementation still must not mutate matching history. It consumes canonical venue facts and creates post-trade facts downstream.
 
-## Market Data Schema (Partially Built)
+## Market Data Extraction
 
-A separate query/read domain from order entry. The current runtime-backed slice covers order lifecycle, top-of-book, bounded depth, public trade tape, intraday OHLCV bars, participant-scoped own-order reads, and data availability — see [Market Data API](../../api/market-data/). Remaining candidate tables: `market_data.book_snapshots`, `market_data.depth_snapshots`, `market_data.recent_trades`, `market_data.intraday_bars`, `market_data.historical_bars`, `market_data.feed_watermarks`.
+There is no dedicated `market_data` schema today. The current runtime-backed slice covers order lifecycle, top-of-book snapshots, bounded depth, public trade tape, participant-scoped own-order reads, and data availability — see [Market Data API](../../api/market-data/).
 
-## Analytics Schema (Planned)
+If a future extraction is justified, candidate tables remain `market_data.book_snapshots`, `market_data.depth_snapshots`, `market_data.recent_trades`, `market_data.intraday_bars`, `market_data.historical_bars`, and `market_data.feed_watermarks`.
+
+## Analytics Expansion
+
+`analytics.simulation_run_exports` exists today. The daily derived facts and views below remain planned.
 
 Daily derived tables: `analytics.trade_fact_daily` (partitioned by `market_date`), `analytics.order_lifecycle_fact_daily`, `analytics.event_counts_daily`, `analytics.exception_fact_daily`.
 
 Suggested views: `analytics.vw_intraday_tps`, `analytics.vw_order_to_trade_latency`, `analytics.vw_event_backlog_health`.
 
-## Orchestration Schema (Planned)
+## Orchestration Expansion
 
-`orchestration.scheduled_jobs`, `orchestration.job_runs`, `orchestration.job_artifacts`.
+`orchestration.scheduled_jobs`, `orchestration.job_runs`, and `orchestration.job_artifacts` exist today. Future work should add jobs only through that scheduler/job-runner boundary.
 
 ## Archive Layout (File Store, Planned)
 
@@ -52,6 +56,7 @@ Manifest minimum: run id, source reconciliation counts, file list, per-file row 
 - Numeric precision defaults for price/quantity per instrument class
 - When to introduce partitioning for `runtime_events` and `event_outbox`
 - Analytics schema in same instance vs. separate Postgres instance trigger point
+- Consolidation path for legacy canonical venue tables versus `runtime.canonical_command_outcomes`
 - UUIDv7 migration trigger and rollout plan
 
 ## Learn More

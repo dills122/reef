@@ -30,7 +30,7 @@ Reef will be built as a multi-app, multi-language platform with a modular-first 
 - **Go** for the matching/execution engine
 - **Go** currently powers the simulator/load-testing CLI
 - **Postgres** for canonical state
-- **NATS** as the preferred messaging backbone once async service boundaries are introduced
+- **Kafka-compatible durable log (Redpanda)** as the active messaging backbone for high-throughput accepted-command ingress and venue event streams, with **NATS/JetStream** retained as a fallback/comparison provider
 - **Protobuf** as the preferred shared contract format between Kotlin and Go services
 
 ## 3. System Shape
@@ -86,7 +86,7 @@ Design rule:
 
 Exploratory extension:
 - [`docs/BOT_ARENA_PLAN.md`](./docs/BOT_ARENA_PLAN.md) proposes a future tournament-style bot arena on top of the simulation control plane. The arena would use sandboxed bot execution, tested operator-controlled liquidity and background-flow bots, modular game modes, replayable runs, separate arena storage for competition metadata, and leaderboard analytics while preserving venue command-path parity.
-- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the target high-throughput venue-ingress path for bot-arena scale: JetStream as the durable accepted-command log, deterministic partition workers, and Postgres as the canonical venue outcome/event store.
+- [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./docs/STREAM_ACK_ARCHITECTURE_PLAN.md) defines the durable accepted-command contract for bot-arena scale. The active hot-ingress work now targets a Kafka-compatible durable log with matching-engine direct partition consumption, while JetStream remains a fallback/comparison provider and Postgres remains authoritative for canonical venue facts.
 
 ### 3.5 Admin operations surface (CLI first)
 
@@ -117,7 +117,8 @@ This keeps development manageable while still preserving realistic boundaries.
 
 ### Phase 2: asynchronous backbone
 Add:
-- NATS for command/event messaging where useful
+- Kafka-compatible durable command/event streams where high-throughput ingress and durable venue event batches are needed
+- NATS/JetStream where async workflow messaging or fallback/comparison stream-backed intake is useful
 - separate simulator process if not already split
 - more explicit read-model builders and background workers
 
@@ -614,8 +615,10 @@ Initial acceptable options:
 - HTTP/JSON
 - gRPC using protobuf
 
-Likely preferred medium-term option:
-- protobuf contracts with gRPC or NATS-backed messaging
+Likely preferred medium-term options:
+- protobuf contracts with gRPC for synchronous internal calls
+- Kafka-compatible durable streams for ordered high-throughput command/event logs
+- NATS/JetStream where lightweight async workflows or fallback/comparison stream-backed intake fit
 
 ## 14.1 Runner-first post-match architecture (Kotlin runtime modules first)
 
@@ -730,7 +733,7 @@ Scenarios should be:
 Use an in-process event bus inside the Kotlin runtime where appropriate. Keep complexity low.
 
 ### Expansion phase
-Introduce **NATS** as the lightweight async backbone.
+Introduce a Kafka-compatible durable log as the async backbone, first tested against **Redpanda**, with **NATS/JetStream** retained as a fallback/comparison provider.
 
 Potential uses:
 - durable accepted-command ingress for high-throughput `stream-ack` mode
@@ -740,7 +743,7 @@ Potential uses:
 - engine integration if desired
 - background workers
 
-For the bot-arena scaling track, NATS/JetStream is not only a fanout bus. It is the target retained command-ingress log for accepted commands, while Postgres remains authoritative for command results and venue lifecycle events.
+For the bot-arena scaling track, the durable log is not only a fanout bus. The Kafka-compatible provider (Redpanda) is the active target retained command-ingress log and venue event backbone for accepted commands, with NATS/JetStream retained as fallback/comparison; Postgres remains authoritative for command results and venue lifecycle events.
 
 ## 18. Shared Contracts
 
@@ -777,6 +780,7 @@ reef/
 
   packages/
     scenario-definitions/ # scenario definitions and fixtures
+    bot-sdk/              # first-party bot authoring contract, examples, fixtures
 
   scripts/
     dev/
@@ -784,6 +788,12 @@ reef/
 
   docs/
     steering/
+
+  infra/
+    hetzner-core/         # hosted core infra (tofu/server)
+    simulation-runner/    # remote-run simulation infra
+    local-kube/           # local kubernetes manifests
+    do-benchmark/         # DigitalOcean benchmark infra
 ```
 
 ## 20. Development Workflow Goals

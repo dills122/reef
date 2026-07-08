@@ -79,7 +79,7 @@ PR pipeline, in order, each stage blocking the next:
    - existing submitter, new bot: provision only a new bot secret slice under their existing identity
    - existing submitter, bot update: no new provisioning; the existing slice is reused, since only one bot version trades at a time and secrets are not version-scoped
 
-Identity mapping mechanism: the real OpenBao infra (`infra/hetzner-core/server/`, `codex/hetzner-core-infra` branch, not yet merged to master) bootstraps `secret/` as a KV v2 mount with **AppRole** auth only (`configure-openbao.sh`), used by `reef-platform-runtime` and `reef-simulator` to read `secret/data/bots/*` and their own service secrets at runtime. That AppRole path is unchanged by this workflow. This submission pipeline adds a **second, separate auth backend**: `auth/jwt` (or `auth/oidc`), configured to validate short-lived GitHub Actions OIDC tokens and map `actor`/`repository` claims to a narrow, provisioning-only OpenBao policy (create/update/delete under `secret/data/bots/*` only — no read access to other services' secrets, no access to the AppRole auth backend itself). No long-lived OpenBao token or AppRole secret is stored in GitHub Actions secrets for this flow. Enabling this JWT/OIDC auth backend and writing its policy is outstanding work in `infra/hetzner-core/server/scripts/configure-openbao.sh` (or an equivalent new script alongside it) — not done as part of this doc slice.
+Identity mapping mechanism: the real OpenBao infra (`infra/hetzner-core/server/`, merged to master 2026-07-05 via PR #45/`aa70ed4`; see "Infrastructure Architecture" below) bootstraps `secret/` as a KV v2 mount with **AppRole** auth (`configure-openbao.sh`), used by `reef-platform-runtime` and `reef-simulator` to read `secret/data/bots/*` and their own service secrets at runtime. That AppRole path is unchanged by this workflow. This submission pipeline adds a **second, separate auth backend**: `auth/jwt`, configured to validate short-lived GitHub Actions OIDC tokens and map `actor`/`repository` claims to a narrow, provisioning-only OpenBao policy (create/update/delete under `secret/data/bots/*` only — no read access to other services' secrets, no access to the AppRole auth backend itself). No long-lived OpenBao token or AppRole secret is stored in GitHub Actions secrets for this flow. This `auth/jwt` backend and its policy, the `OpenBaoProvisioningService.kt` client, and the `POST /internal/admin/arena/bots/openbao-provision` route all shipped together the same day in PR #64/`cc5fd72`. What remains is wiring `scripts/dev/bot-submission-provision-openbao.mjs` to call the real route instead of its current dry-run stub.
 
 Secret slice path: `secret/bots/<submitter-identity>/<bot-id>` — nested under the existing `secret/data/bots/*` / `secret/metadata/bots/*` policy wildcard already granted to `reef-platform-runtime`/`reef-simulator` (no policy rewrite needed for runtime reads, since the wildcard already matches the deeper path), with a per-submitter segment added for provisioning-time isolation. No version segment: only one version of a given bot is ever active/trading at once, so slice-per-version would add path churn without an isolation benefit; version history and which version last held the slice's active secrets are tracked in registry/audit rows, not in the OpenBao path.
 
@@ -139,9 +139,10 @@ The smoke registers a bot and bot version, quarantines that version through the 
 
 The current working direction is:
 
-- use TypeScript as the first public bot authoring SDK
+- use TypeScript as the first public bot authoring SDK — implemented as the TypeScript-only `ReefBotV1` (`packages/bot-sdk`)
+- use SES compartments as the first sandbox boundary — implemented in `packages/bot-sdk/src/hosted-runner.ts` (`createSesCompartmentFactoryV1`); container/WASM boundaries remain a possible later addition for a stronger threat model, not a currently open question
 - keep the durable bot-runtime contract language-neutral through protobuf-defined snapshots, actions, outcomes, and resource reports
-- use a dedicated gRPC/protobuf protocol between sandbox workers and the arena orchestrator
+- today's shipped runner-pool prototype (`scripts/dev/arena-runner-pool-smoke.mjs`, see `docs/BOT_ARENA_RUNNER_BENCH.md`) uses a JSON-line protocol over each worker's stdin/stdout; a dedicated gRPC/protobuf protocol between sandbox workers and the arena orchestrator remains a future intent, not yet decided or implemented — no arena proto files exist under `contracts/proto/` today
 - do not allow bot code to create REST or gRPC clients to Reef services
 - preserve venue command semantics, validation, idempotency, abuse controls, and audit metadata for every bot-originated action
 - model arena runs as real interactive markets with controlled market makers, controlled background traffic, and user competitor bots
@@ -210,7 +211,7 @@ For scale, the arena should define a dedicated bot-runtime communication layer u
 
 The venue command gateway should preserve `/api/v1` boundary semantics: validation, identity context, idempotency, rate limits, abuse controls, command capture, and audit metadata. The initial implementation can call the existing HTTP boundary for simplicity, but the scalable target can use a gRPC or in-process application boundary as long as command-path parity and boundary controls are preserved.
 
-For high-throughput arena runs, the scalable target is `stream-ack`: bot-originated actions pass the arena risk gate, publish to the retained JetStream command stream with a durable ack before acceptance, route by deterministic run/session/instrument partition, and reach canonical Postgres command results and lifecycle events before the worker acks the stream message.
+For high-throughput arena runs, the scalable target is durable stream-backed intake: bot-originated actions pass the arena risk gate, publish to the configured retained command log with a durable ack before acceptance, route by deterministic run/session/instrument partition, and reach canonical venue facts before the stream offset/message is acknowledged. The active venue-core hot-ingress target is Kafka-compatible Redpanda with matching-engine direct consumption; JetStream remains a fallback/comparison provider.
 
 Candidate ownership:
 
@@ -588,7 +589,7 @@ Concrete backbone/run-plane split — finalized 2026-07-05, ratified as [D-046](
 
 **Backbone** — one always-on Hetzner droplet (`cx33`, `nbg1`, OpenTofu-provisioned, private network `10.70.0.0/16`):
 
-- **OpenBao instance** — done. `infra/hetzner-core/server/docker-compose.yml:36-53`, AppRole bootstrapped via `configure-openbao.sh`. The `auth/jwt` backend for CI provisioning (see "Resolved Slice: Bot Submission Workflow And OpenBao Provisioning" above) is still outstanding on top of this.
+- **OpenBao instance** — done. `infra/hetzner-core/server/docker-compose.yml:36-53`, AppRole bootstrapped via `configure-openbao.sh`. The `auth/jwt` backend for CI provisioning (see "Resolved Slice: Bot Submission Workflow And OpenBao Provisioning" above) shipped the same day in PR #64/`cc5fd72`, along with `OpenBaoProvisioningService.kt` and the `openbao-provision` admin route. Only the CI script wiring (`bot-submission-provision-openbao.mjs`'s dry-run stub) remains open.
 - **Admin API** — done, as `platform-runtime` (`docker-compose.yml:67-88`). Same instance already handling arena registry/`ArenaControlPlaneService`/bot-submission OpenBao-provisioning route; also the natural home for any other admin/clerical game operations. Not a separate process.
 - **Reverse proxy** — done. Caddy (`docker-compose.yml:90-109`), gated behind `profiles: [public]`.
 - **Analytics microservice (API + DB)** — not built. Only a Postgres *schema* named `analytics` exists today, inside the single shared Postgres instance (`postgres/init/01-create-dbs.sh`). Needs its own API/service, holding leaderboard data, game results, aggregate data, and everything ingested from simulation runs.
@@ -635,7 +636,7 @@ The scale-out path should add distribution where it matters:
 - arena orchestrators scale by tournament/run count
 - matching engines scale by run, venue partition, or instrument group
 - replay and leaderboard jobs scale as asynchronous batch/read-model work
-- JetStream-backed `stream-ack` ingress is the target venue command path for high-throughput bot traffic
+- durable stream-backed ingress is the target venue command path for high-throughput bot traffic; the active provider target is Kafka-compatible Redpanda, with JetStream retained as fallback/comparison
 - NATS or another explicit queue/backbone can still be used for run scheduling and metrics fanout where those concerns justify it
 
 Scale unit:
@@ -693,6 +694,10 @@ First local stress baseline:
 - add deterministic replay assertions
 - add a small leaderboard report
 
+Detailed execution plan and benchmark evidence for this phase live in:
+- [`docs/BOT_ARENA_PHASE_1_READINESS_PLAN.md`](./BOT_ARENA_PHASE_1_READINESS_PLAN.md) — the detailed Phase 1 work order: current foundations, the concrete local arena run path, and the smoke gate that proves it uses normal Reef venue commands.
+- [`docs/BOT_ARENA_RUNNER_BENCH.md`](./BOT_ARENA_RUNNER_BENCH.md) — benchmark evidence and reproducible commands for the grouped TypeScript-capable bot runner shape this phase depends on.
+
 ### Phase 2: Sandbox Execution
 
 - execute bot bundles in the sandbox runtime
@@ -723,8 +728,6 @@ First local stress baseline:
 
 ## Open Questions
 
-- Should the first public SDK be TypeScript-only, or should the first contract be SDK-neutral with TypeScript as the only shipped SDK?
-- Should the first sandbox be SES, a container boundary, WASM, or a hybrid?
 - Where should the arena runtime protobuf contracts live relative to `contracts/proto/` and `packages/bot-sdk/`?
 - How much of the bot runtime should live in `services/simulator` versus a separate worker process?
 - What exact retention windows should apply to full snapshots, sampled snapshots, debug payloads, and replay artifacts?

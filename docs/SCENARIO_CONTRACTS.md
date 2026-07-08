@@ -86,7 +86,7 @@ P2 should consume or recreate one canonical trade equivalent to P1's completed t
    - `OBLIGATION_CREATED -> CASH_LEG_FAILED -> BROKEN`
 5. Operator/manual repair is posted:
    - `REPAIR_POSTED`
-   - first version is a simulated/manual repair event; no real account ledger mutation is required
+   - first version was a simulated/manual repair event with no real account ledger mutation required; `D-050` has since authorized real ledger mutation broadly, and obligation materialization now writes real append-only ledger entries for settled instant-post-trade obligations (see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md#obligation-materialization))
 6. Settlement resolves:
    - `RESOLVED`
    - use `SETTLED` only after full settlement/account-ledger modules exist
@@ -109,7 +109,7 @@ P2 is a scenario contract gate. The first implementation may use lightweight set
 trade -> obligation -> break -> repair -> resolved
 ```
 
-P2 does not authorize broad post-trade expansion by itself. Allocation, confirmation, full settlement, account ledger mutation, and operational exception workbenches remain later work unless separately planned.
+P2 did not by itself authorize broad post-trade expansion. `D-050` has since accepted that broader expansion — including real account ledger mutation via obligation materialization — for the `instant-post-trade` profile. Full allocation/confirmation workflows and operational exception workbenches remain later work unless separately planned; see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md) for current scope.
 
 Post-trade implementation may resume only through the P2-only settlement exception slice defined in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md#post-trade-re-entry-criteria).
 

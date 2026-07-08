@@ -20,16 +20,17 @@ Reef has moved past a repository skeleton, but most of the platform is still ear
 - Docker-first local setup, reset, smoke, stress, replay, and benchmark automation
 - First arena control-plane slice: bot registry, bot-version approval lifecycle, operator decisions, run records (see [Arena Overview](../../arena/overview/))
 - First conservative bot/user read slice: order lifecycle projection, top-of-book snapshots, bounded depth, public trade tape, intraday OHLCV bars, participant-scoped own-order reads, and data-availability inventory
+- First settlement/post-trade slices: obligation materialization, instant-finality facts, resource-position/fail tracking, repair actions, and ledger/proof projections
 
 ## Not Yet Built (Planned)
 
-- Platform UI and most post-trade lifecycle (allocation, confirmation, settlement, exceptions) — still early
-- Dedicated `account`, `settlement`, and `market_data` schemas beyond the current runtime-backed read slice — designed, not broadly implemented (see [Planned Schema](../../schema/planned-schema/))
+- Platform UI and broader post-trade lifecycle (allocation, confirmation, clearing workflows, exception UI) — still early
+- Dedicated `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice — designed, not broadly implemented (see [Planned Schema](../../schema/planned-schema/))
 - Analytics has an initial simulation-run export slice, but broader analytics facts/views remain planned
 - Public bot submissions and hosted sandbox execution at scale — arena is still built-in-bots/control-plane stage
-- Leaderboards and scoring beyond the control-plane source facts
-- Kafka-compatible durable command log as the default hot-ingress path — proven locally, not yet the default
-- Scenario live assertion harness and minimal P2 settlement exception facts — planned next locking gates
+- Leaderboard publication and scoring surfaces beyond the source facts
+- Kafka-compatible durable command log as the default hot-ingress path — proven locally, with longer remote evidence still pending
+- Scenario live assertion harness and full sustained simulator proof of the settlement path — planned next locking gates
 
 ## Active Architecture Direction
 

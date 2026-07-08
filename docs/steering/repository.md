@@ -23,7 +23,9 @@ For product and architecture priorities that should guide every change, read [`r
 - `services/simulator/` owns deterministic scenarios, seeded actors, replay, traffic generation, stress/load evidence, and trace validation.
 - `contracts/proto/` owns versionable inter-service contracts.
 - `packages/scenario-definitions/` owns reusable scenario inputs, seeds, clocks, actors, instruments, and correlation inputs.
+- `packages/bot-sdk/` owns the first-party bot authoring contract (`ReefBotV1`), examples, and fixtures; it does not create runtime routes, persistence tables, or direct service clients.
 - `scripts/` owns setup, reset, smoke, stress, replay, diagnostics, and performance comparison workflows.
+- `infra/` owns hosted and remote-run infrastructure (`hetzner-core/`, `simulation-runner/`, `local-kube/`, `do-benchmark/`), separate from the local Compose dev stack.
 
 ## Scripting Standard
 

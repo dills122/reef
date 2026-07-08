@@ -41,6 +41,8 @@ Language and surface-specific steering:
 - `docs/steering/inter-service-communication.md`
 - `docs/steering/external-api-boundary.md`
 
+`docs/steering/README.md` additionally curates `docs/ONBOARDING.md`, `docs/CURRENT_STATUS.md`, `docs/API_SURFACE_POLICY.md`, `docs/POST_MATCH_STANDARDS.md`, and `docs/PERFORMANCE_LIBRARY_INVESTIGATION.md` — check that list too.
+
 ## Architecture Boundaries
 
 Primary areas:
@@ -51,8 +53,10 @@ Primary areas:
 - `services/simulator/`: scenario execution, seeded simulation, replay, and traffic generation
 - `contracts/proto/`: versionable inter-service contracts
 - `packages/scenario-definitions/`: reusable scenario definitions and simulation inputs
+- `packages/bot-sdk/`: first-party bot authoring contract (`ReefBotV1`), examples, and fixtures
 - `docs/`: roadmap, delivery policy, architecture, decisions, steering, and operational notes
 - `scripts/`: local development, smoke, stress, admin, replay, and throughput automation
+- `infra/`: hosted/remote-run infrastructure (`hetzner-core/`, `simulation-runner/`, `local-kube/`, `do-benchmark/`), separate from local Compose dev stack
 
 When a change spans areas, preserve ownership boundaries and update shared contracts first.
 

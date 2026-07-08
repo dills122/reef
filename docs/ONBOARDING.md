@@ -9,7 +9,7 @@ Install and verify:
 - Git
 - Docker Desktop (or Docker Engine + Compose plugin)
 - Bun (preferred JS runtime for repo automation)
-- Go 1.23+ (needed for `make dev-stress`)
+- Go 1.24+ (needed for `make dev-stress`; `services/matching-engine` requires `go 1.24.0`, `services/simulator` requires `go 1.23.4` — install the higher 1.24+ floor to build both)
 - Java 21 (needed for direct local runtime development outside Docker)
 
 Quick checks:
