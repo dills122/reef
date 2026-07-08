@@ -179,6 +179,14 @@ The initial implemented snapshot is `runtime.market_data_snapshots`, kept live f
 
 Later, real-time feeds can be added from event streams or specialized market-data publishers. They should still consume canonical or event-stream facts, not the engine's mutable book internals directly.
 
+External stock snapshots used to seed new simulation/game state are a separate
+ingress concern, not part of the venue-local market-data API. The seed workflow
+may call an external stock-data provider once during game creation, then must
+persist the exact normalized seed snapshots for replay and audit. Simulation,
+matching, historical reads, and replay must consume those persisted seed facts
+instead of calling external providers. The provider selection and fallback plan
+lives in [`STOCK_DATA_SEEDING_PLAN.md`](./STOCK_DATA_SEEDING_PLAN.md).
+
 ## Read Surface Inventory
 
 `/api/v1/data/availability` is the canonical runtime inventory for bot/user read surfaces. Documentation should mirror that endpoint rather than invent a second source of truth.
