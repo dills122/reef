@@ -62,6 +62,7 @@ object PostgresSchemaRequirements {
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         val orders = PostgresSchemaObject.parse(names.orders)
+        val postTradeProfiles = PostgresSchemaObject.parse(names.adminPostTradeProfiles)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -83,7 +84,8 @@ object PostgresSchemaRequirements {
                 names.marketDataSnapshots,
                 names.marketDataSnapshotDirty,
                 names.authRoles,
-                names.authActorRoles
+                names.authActorRoles,
+                names.adminPostTradeProfiles
             ).map(PostgresSchemaObject::parse),
             functions = listOf(
                 names.validateReferenceDataFunction,
@@ -130,7 +132,14 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(marketDataSnapshots, "source_projection_name", "text"),
                 PostgresSchemaColumn(marketDataSnapshots, "instrument_id", "text"),
                 PostgresSchemaColumn(marketDataSnapshots, "last_partition_seq", "bigint"),
-                PostgresSchemaColumn(marketDataSnapshots, "lag", "bigint")
+                PostgresSchemaColumn(marketDataSnapshots, "lag", "bigint"),
+                PostgresSchemaColumn(postTradeProfiles, "profile_id", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "mode", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "settlement_cycle", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "netting_mode", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "ledger_posting_mode", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "policy_version", "integer"),
+                PostgresSchemaColumn(postTradeProfiles, "active", "boolean")
             )
         )
     }

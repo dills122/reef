@@ -12,6 +12,7 @@ import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PublicTradeTapeEntry
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
@@ -20,6 +21,7 @@ import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import java.sql.Connection
 import java.sql.PreparedStatement
+import java.sql.ResultSet
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
 
@@ -82,6 +84,11 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE SCHEMA IF NOT EXISTS ${names.adminSchemaName}
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.referenceInstruments} (
                       instrument_id TEXT PRIMARY KEY,
                       symbol TEXT NOT NULL
@@ -119,6 +126,27 @@ class PostgresRuntimePersistence(
                       role_id TEXT NOT NULL,
                       PRIMARY KEY (actor_id, role_id)
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.adminPostTradeProfiles} (
+                      profile_id TEXT PRIMARY KEY,
+                      mode TEXT NOT NULL,
+                      settlement_cycle TEXT NOT NULL,
+                      netting_mode TEXT NOT NULL,
+                      ledger_posting_mode TEXT NOT NULL,
+                      policy_version INTEGER NOT NULL CHECK (policy_version > 0),
+                      active BOOLEAN NOT NULL DEFAULT false,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_post_trade_profiles_active_one
+                    ON ${names.adminPostTradeProfiles}(active)
+                    WHERE active
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -1731,6 +1759,130 @@ class PostgresRuntimePersistence(
                 ps.executeUpdate()
             }
         }
+    }
+
+    override fun savePostTradeProfile(profile: PostTradeProfile) {
+        connection().use { conn ->
+            conn.autoCommit = false
+            try {
+                if (profile.active) {
+                    conn.prepareStatement("UPDATE ${names.adminPostTradeProfiles} SET active = false WHERE active").use { it.executeUpdate() }
+                }
+                conn.prepareStatement(
+                    """
+                    INSERT INTO ${names.adminPostTradeProfiles}(
+                      profile_id, mode, settlement_cycle, netting_mode, ledger_posting_mode, policy_version, active, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, now())
+                    ON CONFLICT (profile_id) DO UPDATE SET
+                      mode = EXCLUDED.mode,
+                      settlement_cycle = EXCLUDED.settlement_cycle,
+                      netting_mode = EXCLUDED.netting_mode,
+                      ledger_posting_mode = EXCLUDED.ledger_posting_mode,
+                      policy_version = EXCLUDED.policy_version,
+                      active = EXCLUDED.active,
+                      updated_at = now()
+                    """.trimIndent()
+                ).use { ps ->
+                    ps.setString(1, profile.profileId)
+                    ps.setString(2, profile.mode)
+                    ps.setString(3, profile.settlementCycle)
+                    ps.setString(4, profile.nettingMode)
+                    ps.setString(5, profile.ledgerPostingMode)
+                    ps.setInt(6, profile.policyVersion)
+                    ps.setBoolean(7, profile.active)
+                    ps.executeUpdate()
+                }
+                if (!profile.active && !hasActivePostTradeProfile(conn)) {
+                    conn.prepareStatement(
+                        "UPDATE ${names.adminPostTradeProfiles} SET active = true WHERE profile_id = ?"
+                    ).use { ps ->
+                        ps.setString(1, profile.profileId)
+                        ps.executeUpdate()
+                    }
+                }
+                conn.commit()
+            } catch (error: Throwable) {
+                conn.rollback()
+                throw error
+            } finally {
+                conn.autoCommit = true
+            }
+        }
+    }
+
+    override fun postTradeProfiles(): List<PostTradeProfile> {
+        return queryList(
+            """
+            SELECT profile_id, mode, settlement_cycle, netting_mode, ledger_posting_mode, policy_version, active
+            FROM ${names.adminPostTradeProfiles}
+            ORDER BY profile_id
+            """.trimIndent()
+        ) {
+            toPostTradeProfile()
+        }
+    }
+
+    override fun activePostTradeProfile(): PostTradeProfile {
+        return postTradeProfiles().firstOrNull { it.active }
+            ?: throw IllegalArgumentException("no active post-trade profile")
+    }
+
+    override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
+        connection().use { conn ->
+            conn.autoCommit = false
+            try {
+                val profile = queryPostTradeProfile(conn, profileId)
+                    ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
+                conn.prepareStatement("UPDATE ${names.adminPostTradeProfiles} SET active = false WHERE active").use { it.executeUpdate() }
+                conn.prepareStatement(
+                    "UPDATE ${names.adminPostTradeProfiles} SET active = true, updated_at = now() WHERE profile_id = ?"
+                ).use { ps ->
+                    ps.setString(1, profileId)
+                    ps.executeUpdate()
+                }
+                conn.commit()
+                return profile.copy(active = true)
+            } catch (error: Throwable) {
+                conn.rollback()
+                throw error
+            } finally {
+                conn.autoCommit = true
+            }
+        }
+    }
+
+    private fun queryPostTradeProfile(conn: Connection, profileId: String): PostTradeProfile? {
+        conn.prepareStatement(
+            """
+            SELECT profile_id, mode, settlement_cycle, netting_mode, ledger_posting_mode, policy_version, active
+            FROM ${names.adminPostTradeProfiles}
+            WHERE profile_id = ?
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, profileId)
+            ps.executeQuery().use { rs ->
+                return if (rs.next()) rs.toPostTradeProfile() else null
+            }
+        }
+    }
+
+    private fun hasActivePostTradeProfile(conn: Connection): Boolean {
+        conn.prepareStatement("SELECT 1 FROM ${names.adminPostTradeProfiles} WHERE active LIMIT 1").use { ps ->
+            ps.executeQuery().use { rs -> return rs.next() }
+        }
+    }
+
+    private fun ResultSet.toPostTradeProfile(): PostTradeProfile {
+        return PostTradeProfile(
+            profileId = getString("profile_id"),
+            mode = getString("mode"),
+            settlementCycle = getString("settlement_cycle"),
+            nettingMode = getString("netting_mode"),
+            ledgerPostingMode = getString("ledger_posting_mode"),
+            policyVersion = getInt("policy_version"),
+            active = getBoolean("active")
+        )
     }
 
     override fun instruments(): List<Instrument> = queryList("SELECT instrument_id, symbol FROM ${names.referenceInstruments}") {

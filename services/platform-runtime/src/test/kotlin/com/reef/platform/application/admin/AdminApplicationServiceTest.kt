@@ -9,6 +9,7 @@ import com.reef.platform.application.arena.ArenaControlPlaneService
 import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,6 +51,30 @@ class AdminApplicationServiceTest {
         assertEquals(1, service.listCalendarProfiles().size)
         assertEquals(1, service.listOverrideReasons().size)
         assertEquals("stopped", service.simulationState().status)
+    }
+
+    @Test
+    fun persistsPostTradeProfileActivationInRuntimePersistence() {
+        val persistence = InMemoryRuntimePersistence()
+        val service = AdminApplicationService(persistence)
+        val actor = AdminActor(actorId = "admin-cli", correlationId = "corr-profile", occurredAt = "2026-05-22T00:00:00Z")
+
+        service.upsertPostTradeProfile(
+            actor,
+            PostTradeProfile(
+                profileId = "custom-instant-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality"
+            )
+        )
+        service.activatePostTradeProfile(actor, "custom-instant-v1")
+
+        val restartedService = AdminApplicationService(persistence)
+
+        assertEquals("custom-instant-v1", restartedService.activePostTradeProfile().profileId)
+        assertEquals(3, restartedService.listPostTradeProfiles().size)
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.reef.platform.domain.IntradayBar
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
@@ -190,6 +191,10 @@ interface RuntimePersistence {
     fun saveAccount(account: Account)
     fun saveRole(role: RoleDefinition)
     fun saveActorRoleBinding(binding: ActorRoleBinding)
+    fun savePostTradeProfile(profile: PostTradeProfile)
+    fun postTradeProfiles(): List<PostTradeProfile>
+    fun activePostTradeProfile(): PostTradeProfile
+    fun activatePostTradeProfile(profileId: String): PostTradeProfile
     fun instruments(): List<Instrument>
     fun participants(): List<Participant>
     fun accounts(): List<Account>

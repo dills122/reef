@@ -31,16 +31,18 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.runtime_materialize_venue_event_batch", names.materializeVenueEventBatchFunction)
         assertEquals("auth.auth_roles", names.authRoles)
         assertEquals("auth.auth_actor_roles", names.authActorRoles)
+        assertEquals("admin.post_trade_profiles", names.adminPostTradeProfiles)
     }
 
     @Test
     fun blankSchemaNamesFallBackToDefaultSchemas() {
-        val names = PostgresRuntimeSqlNames(runtimeSchema = "", authSchema = "")
+        val names = PostgresRuntimeSqlNames(runtimeSchema = "", authSchema = "", adminSchema = "")
 
         listOf(
             names.orders,
             names.referenceInstruments,
-            names.authRoles
+            names.authRoles,
+            names.adminPostTradeProfiles
         ).forEach { qualifiedName ->
             assertFalse(qualifiedName.startsWith("."))
             assertFalse(qualifiedName.endsWith("."))
@@ -54,6 +56,9 @@ class PostgresRuntimeSqlNamesTest {
         }
         assertFailsWith<IllegalArgumentException> {
             PostgresRuntimeSqlNames(runtimeSchema = "runtime", authSchema = "auth.actor_roles")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            PostgresRuntimeSqlNames(runtimeSchema = "runtime", authSchema = "auth", adminSchema = "admin.policy")
         }
     }
 }

@@ -3,7 +3,6 @@ package com.reef.platform.admin
 import com.reef.platform.application.admin.AdminActor
 import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
-import com.reef.platform.application.admin.PostTradeProfile
 import com.reef.platform.application.admin.UpsertAccountCommand
 import com.reef.platform.application.admin.UpsertInstrumentCommand
 import com.reef.platform.application.admin.UpsertParticipantCommand
@@ -16,6 +15,7 @@ import com.reef.platform.api.JsonCodec
 import com.reef.platform.api.defaultAccountRiskControlStore
 import com.reef.platform.api.defaultCommandCircuitBreakerStore
 import com.reef.platform.api.defaultInstrumentPriceCollarStore
+import com.reef.platform.domain.PostTradeProfile
 
 class AdminCliAdapter(
     private val adminService: AdminApplicationService = AdminApplicationService(),

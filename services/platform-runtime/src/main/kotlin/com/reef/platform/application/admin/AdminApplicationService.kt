@@ -25,6 +25,7 @@ import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.Permission
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
@@ -62,16 +63,6 @@ data class CalendarProfile(
     val profileId: String,
     val timezone: String,
     val settlementCycle: String
-)
-
-data class PostTradeProfile(
-    val profileId: String,
-    val mode: String,
-    val settlementCycle: String,
-    val nettingMode: String,
-    val ledgerPostingMode: String,
-    val policyVersion: Int = 1,
-    val active: Boolean = false
 )
 
 data class OverrideReasonCode(
@@ -162,9 +153,7 @@ class AdminApplicationService(
     private val eventProducer = "platform-runtime-admin"
     private val eventSchemaVersion = "v1"
     private val calendarProfiles = linkedMapOf<String, CalendarProfile>()
-    private val postTradeProfiles = linkedMapOf<String, PostTradeProfile>()
     private val overrideReasons = linkedMapOf<String, OverrideReasonCode>()
-    private var activePostTradeProfileId = "ops-realistic-v1"
     private var simulationState = SimulationControlState(status = "stopped", scenario = "")
 
     init {
@@ -230,8 +219,8 @@ class AdminApplicationService(
     fun upsertPostTradeProfile(actor: AdminActor, profile: PostTradeProfile) {
         requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
         validatePostTradeProfile(profile)
-        val existing = postTradeProfiles[profile.profileId]
-        postTradeProfiles[profile.profileId] = profile.copy(active = existing?.active ?: false)
+        val existing = runtimePersistence.postTradeProfiles().firstOrNull { it.profileId == profile.profileId }
+        runtimePersistence.savePostTradeProfile(profile.copy(active = existing?.active ?: false))
         emitAudit(
             actor,
             "AdminPostTradeProfileUpserted",
@@ -241,19 +230,15 @@ class AdminApplicationService(
         )
     }
 
-    fun listPostTradeProfiles(): List<PostTradeProfile> = postTradeProfiles.values.map { profile ->
-        profile.copy(active = profile.profileId == activePostTradeProfileId)
-    }
+    fun listPostTradeProfiles(): List<PostTradeProfile> = runtimePersistence.postTradeProfiles()
 
-    fun activePostTradeProfile(): PostTradeProfile = postTradeProfiles.getValue(activePostTradeProfileId)
-        .copy(active = true)
+    fun activePostTradeProfile(): PostTradeProfile = runtimePersistence.activePostTradeProfile()
 
     fun activatePostTradeProfile(actor: AdminActor, profileId: String): PostTradeProfile {
         requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
-        val profile = postTradeProfiles[profileId] ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
-        activePostTradeProfileId = profileId
+        val profile = runtimePersistence.activatePostTradeProfile(profileId)
         emitAudit(actor, "AdminPostTradeProfileActivated", profileId, "policyVersion=${profile.policyVersion}")
-        return profile.copy(active = true)
+        return profile
     }
 
     fun upsertOverrideReason(actor: AdminActor, reason: OverrideReasonCode) {
@@ -504,24 +489,33 @@ class AdminApplicationService(
     }
 
     private fun seedPostTradeProfiles() {
-        postTradeProfiles["ops-realistic-v1"] = PostTradeProfile(
-            profileId = "ops-realistic-v1",
-            mode = "ops-realistic",
-            settlementCycle = "T+1",
-            nettingMode = "batch-netting",
-            ledgerPostingMode = "scheduled-finality",
-            policyVersion = 1,
-            active = true
-        )
-        postTradeProfiles["instant-post-trade-v1"] = PostTradeProfile(
-            profileId = "instant-post-trade-v1",
-            mode = "instant-post-trade",
-            settlementCycle = "T+0",
-            nettingMode = "gross-or-microbatch",
-            ledgerPostingMode = "near-instant-finality",
-            policyVersion = 1,
-            active = false
-        )
+        val existingIds = runtimePersistence.postTradeProfiles().map { it.profileId }.toSet()
+        if ("ops-realistic-v1" !in existingIds) {
+            runtimePersistence.savePostTradeProfile(
+                PostTradeProfile(
+                    profileId = "ops-realistic-v1",
+                    mode = "ops-realistic",
+                    settlementCycle = "T+1",
+                    nettingMode = "batch-netting",
+                    ledgerPostingMode = "scheduled-finality",
+                    policyVersion = 1,
+                    active = true
+                )
+            )
+        }
+        if ("instant-post-trade-v1" !in existingIds) {
+            runtimePersistence.savePostTradeProfile(
+                PostTradeProfile(
+                    profileId = "instant-post-trade-v1",
+                    mode = "instant-post-trade",
+                    settlementCycle = "T+0",
+                    nettingMode = "gross-or-microbatch",
+                    ledgerPostingMode = "near-instant-finality",
+                    policyVersion = 1,
+                    active = false
+                )
+            )
+        }
     }
 
     private fun validatePostTradeProfile(profile: PostTradeProfile) {

@@ -32,7 +32,8 @@ class PostgresSchemaRequirementsTest {
                 "runtime.market_data_snapshots",
                 "runtime.market_data_snapshot_dirty",
                 "auth.auth_roles",
-                "auth.auth_actor_roles"
+                "auth.auth_actor_roles",
+                "admin.post_trade_profiles"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
@@ -142,6 +143,21 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.market_data_snapshots" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "admin.post_trade_profiles.profile_id:text",
+                "admin.post_trade_profiles.mode:text",
+                "admin.post_trade_profiles.settlement_cycle:text",
+                "admin.post_trade_profiles.netting_mode:text",
+                "admin.post_trade_profiles.ledger_posting_mode:text",
+                "admin.post_trade_profiles.policy_version:integer",
+                "admin.post_trade_profiles.active:boolean"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "admin.post_trade_profiles" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

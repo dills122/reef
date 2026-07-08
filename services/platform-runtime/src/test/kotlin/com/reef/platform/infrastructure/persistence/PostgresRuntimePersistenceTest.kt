@@ -5,6 +5,7 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
@@ -16,6 +17,46 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PostgresRuntimePersistenceTest {
+    @Test
+    fun storesPostTradeProfilesAndActiveDefault() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "runtime-post-trade-profile-test")
+        val persistence = PostgresRuntimePersistence(dataSource)
+        val suffix = UUID.randomUUID().toString()
+        val opsProfile = "ops-$suffix"
+        val instantProfile = "instant-$suffix"
+
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = opsProfile,
+                mode = "ops-realistic",
+                settlementCycle = "T+1",
+                nettingMode = "batch-netting",
+                ledgerPostingMode = "scheduled-finality",
+                active = true
+            )
+        )
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = instantProfile,
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality"
+            )
+        )
+
+        assertEquals(opsProfile, persistence.activePostTradeProfile().profileId)
+
+        persistence.activatePostTradeProfile(instantProfile)
+
+        assertEquals(instantProfile, persistence.activePostTradeProfile().profileId)
+        assertTrue(persistence.postTradeProfiles().any { it.profileId == opsProfile && !it.active })
+    }
+
     @Test
     fun storesAndQueriesAcceptedArtifacts() {
         val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
