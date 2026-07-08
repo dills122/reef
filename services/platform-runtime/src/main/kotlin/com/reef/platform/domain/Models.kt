@@ -116,6 +116,17 @@ data class OwnOrderView(
     val status: String
 )
 
+data class OwnExecutionView(
+    val executionId: String,
+    val orderId: String,
+    val instrumentId: String,
+    val side: String,
+    val quantityUnits: String,
+    val executionPrice: String,
+    val currency: String,
+    val occurredAt: String
+)
+
 data class SubmitOrderResult(
     val accepted: EngineOrderAccepted? = null,
     val rejected: EngineOrderRejected? = null,

@@ -147,7 +147,7 @@ make dev-scenario-smoke ARGS="--pretty"
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --pretty"
 ```
 
-For the P1 live assertion path, add `--assertions`. The report records command completion, own-order final lifecycle and filled quantities, public trade tape facts, public depth non-leak proof, `/api/v1/data/availability` source/freshness metadata, and projection lag rows.
+For the P1 live assertion path, add `--assertions`. The report records command completion, own-order final lifecycle and filled quantities, participant-scoped fill proof from `/api/v1/orders/fills`, public trade tape facts, public depth non-leak proof, `/api/v1/data/availability` source/freshness metadata, and projection lag rows.
 
 ```bash
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --pretty"

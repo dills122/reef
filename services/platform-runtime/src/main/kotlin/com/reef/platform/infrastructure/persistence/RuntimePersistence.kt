@@ -4,6 +4,7 @@ import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
@@ -326,6 +327,13 @@ interface RuntimePersistence {
         instrumentId: String = "",
         limit: Int = 0
     ): List<OwnOrderView> {
+        return emptyList()
+    }
+    fun executionsForParticipant(
+        participantId: String,
+        instrumentId: String = "",
+        limit: Int = 0
+    ): List<OwnExecutionView> {
         return emptyList()
     }
     fun eventsForOrder(orderId: String): List<RuntimeEvent>

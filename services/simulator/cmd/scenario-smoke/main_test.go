@@ -145,6 +145,9 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
@@ -182,11 +185,11 @@ func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 	if len(report.Commands) != 3 {
 		t.Fatalf("commands: got %d want 3", len(report.Commands))
 	}
-	if len(report.Reads) != 6 {
-		t.Fatalf("reads: got %d want 6", len(report.Reads))
+	if len(report.Reads) != 9 {
+		t.Fatalf("reads: got %d want 9", len(report.Reads))
 	}
-	if len(report.Assertions) != 18 {
-		t.Fatalf("assertions: got %d want 18", len(report.Assertions))
+	if len(report.Assertions) != 25 {
+		t.Fatalf("assertions: got %d want 25", len(report.Assertions))
 	}
 	if len(report.ProjectionLag) == 0 {
 		t.Fatalf("expected projection lag rows")
@@ -269,6 +272,9 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicTradeIdentityLeak(t *testing.T) 
 			}[participantID]
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
@@ -322,6 +328,9 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
 			}[participantID]
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
@@ -384,6 +393,9 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
@@ -462,6 +474,9 @@ func TestScenarioSmokeLiveAssertionsFailOnReplayChecksumEvidence(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSON(orderID)))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1DataAvailabilityJSON()))
@@ -781,6 +796,18 @@ func p1OwnOrderHistoryJSONWithFilled(orderID string, filledOverride string) stri
 	return `{"meta":{"source":"runtime.orders + runtime.order_lifecycle_state","freshness":"dirty-tracked lifecycle projection"},"orders":[{"orderId":"` + orderID + `","status":"FILLED","filledQuantityUnits":"` + filled + `"}]}`
 }
 
+func p1OwnFillsJSON(participantID string) string {
+	fills := map[string]string{
+		"HIDDEN_SELLER_A": `{"executionId":"exec-p1-001","orderId":"p1_golden_hidden_cross_t1-ord-001","instrumentId":"XYZ","side":"SELL","quantityUnits":"40","executionPrice":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"},{"executionId":"exec-p1-002","orderId":"p1_golden_hidden_cross_t1-ord-001","instrumentId":"XYZ","side":"SELL","quantityUnits":"60","executionPrice":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"}`,
+		"VISIBLE_BUYER_B": `{"executionId":"exec-p1-001","orderId":"p1_golden_hidden_cross_t1-ord-002","instrumentId":"XYZ","side":"BUY","quantityUnits":"40","executionPrice":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:03Z"}`,
+		"VISIBLE_BUYER_C": `{"executionId":"exec-p1-002","orderId":"p1_golden_hidden_cross_t1-ord-003","instrumentId":"XYZ","side":"BUY","quantityUnits":"60","executionPrice":"100000000000","currency":"USD","occurredAt":"2026-03-14T18:00:07Z"}`,
+	}[participantID]
+	if fills == "" {
+		fills = ""
+	}
+	return `{"meta":{"source":"runtime.orders + runtime.executions","freshness":"durable execution rows scoped by participant order ownership"},"fills":[` + fills + `]}`
+}
+
 func p1DataAvailabilityJSON() string {
 	return p1DataAvailabilityJSONWithOrderHistorySource("runtime.orders + runtime.order_lifecycle_state")
 }
@@ -796,7 +823,8 @@ func p1DataAvailabilityJSONWithOrderHistorySource(orderHistorySource string) str
 		"surfaces":[
 			{"name":"marketDataDepth","endpoint":"/api/v1/market-data/depth/{instrumentId}","source":"runtime.order_lifecycle_state","freshness":"read-time bounded aggregation","scope":"public-market-data","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"},
 			{"name":"tradeTape","endpoint":"/api/v1/market-data/trades/{instrumentId}","source":"runtime.trades","freshness":"durable fact rows","scope":"public-market-data","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"},
-			{"name":"orderHistory","endpoint":"/api/v1/orders/history","source":"` + orderHistorySource + `","freshness":"dirty-tracked lifecycle projection","scope":"participant-own-orders","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"}
+			{"name":"orderHistory","endpoint":"/api/v1/orders/history","source":"` + orderHistorySource + `","freshness":"dirty-tracked lifecycle projection","scope":"participant-own-orders","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"},
+			{"name":"orderFills","endpoint":"/api/v1/orders/fills","source":"runtime.orders + runtime.executions","freshness":"durable execution rows scoped by participant order ownership","scope":"participant-own-orders","projectionName":"runtime-normalized-venue-outcomes","lag":0,"lastPartitionSequence":3,"lastUpdatedAt":"2026-03-14T18:00:30Z"}
 		]
 	}`
 }
@@ -834,6 +862,9 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSONWithFilled(orderID, options.filledQuantityByOrderID[orderID])))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(availabilityJSON))

@@ -191,11 +191,31 @@ class PlatformHttpServerBoundaryTest {
                     "X-Participant-Id" to "participant-1"
                 )
             )
+            val fillsDenied = get(
+                server.address.port,
+                "/api/v1/orders/fills?participantId=participant-2",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1"
+                )
+            )
+            val fillsAllowed = get(
+                server.address.port,
+                "/api/v1/orders/fills?participantId=participant-1",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1"
+                )
+            )
 
             assertEquals(403, denied.status)
             assertContains(denied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
             assertEquals(200, allowed.status)
             assertContains(allowed.body, "\"orders\"")
+            assertEquals(403, fillsDenied.status)
+            assertContains(fillsDenied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertEquals(200, fillsAllowed.status)
+            assertContains(fillsAllowed.body, "\"fills\"")
         } finally {
             server.stop(0)
         }

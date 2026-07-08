@@ -722,6 +722,22 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
         }
 
+        server.createContext("/api/v1/orders/fills") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val participantId = queryValue(exchange, "participantId")
+            val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/fills", participantId)
+            if (boundaryError != null) {
+                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                return@createContext
+            }
+            val instrumentId = queryValue(exchange, "instrumentId")
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, limit = limit))
+        }
+
         server.createContext("/trades") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -1202,6 +1218,8 @@ class PlatformHttpServer(
                 readOrdersResponse(request, "/api/v1/orders/current", openOnly = true)
             request.path == "/api/v1/orders/history" && request.method == "GET" ->
                 readOrdersResponse(request, "/api/v1/orders/history", openOnly = false)
+            request.path == "/api/v1/orders/fills" && request.method == "GET" ->
+                readOrderFillsResponse(request, "/api/v1/orders/fills")
             else -> legacySetupRoutes.handle(request)
         }
     }
@@ -1220,6 +1238,25 @@ class PlatformHttpServer(
             body = api.ownOrders(
                 participantId = participantId,
                 openOnly = openOnly,
+                instrumentId = queryValue(request.query, "instrumentId"),
+                limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+            )
+        )
+    }
+
+    private fun readOrderFillsResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse {
+        val participantId = queryValue(request.query, "participantId")
+        val boundaryError = boundary.checkParticipantRead(request.headers, route, participantId)
+        if (boundaryError != null) {
+            return PlatformHotPathResponse(
+                boundaryError.status,
+                boundary.toErrorJson(boundaryError, correlationId(request.headers))
+            )
+        }
+        return PlatformHotPathResponse(
+            status = 200,
+            body = api.ownExecutions(
+                participantId = participantId,
                 instrumentId = queryValue(request.query, "instrumentId"),
                 limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
             )

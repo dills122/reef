@@ -141,6 +141,25 @@ type ownOrderBody struct {
 	FilledQuantityUnits string `json:"filledQuantityUnits"`
 }
 
+type ownExecutionsBody struct {
+	Meta struct {
+		Source    string `json:"source"`
+		Freshness string `json:"freshness"`
+	} `json:"meta"`
+	Fills []ownExecutionBody `json:"fills"`
+}
+
+type ownExecutionBody struct {
+	ExecutionID    string `json:"executionId"`
+	OrderID        string `json:"orderId"`
+	InstrumentID   string `json:"instrumentId"`
+	Side           string `json:"side"`
+	QuantityUnits  string `json:"quantityUnits"`
+	ExecutionPrice string `json:"executionPrice"`
+	Currency       string `json:"currency"`
+	OccurredAt     string `json:"occurredAt"`
+}
+
 type settlementFactsReport struct {
 	ScenarioRunID string                 `json:"scenarioRunId"`
 	Obligations   []settlementObligation `json:"obligations"`
@@ -843,6 +862,7 @@ func kebabCase(value string) string {
 func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeReport) {
 	expected := []struct {
 		assertionID   string
+		fillID        string
 		participantID string
 		orderID       string
 		status        string
@@ -850,6 +870,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 	}{
 		{
 			assertionID:   "p1-hidden-sell-filled",
+			fillID:        "p1-hidden-sell-fills",
 			participantID: "HIDDEN_SELLER_A",
 			orderID:       "p1_golden_hidden_cross_t1-ord-001",
 			status:        "FILLED",
@@ -857,6 +878,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		},
 		{
 			assertionID:   "p1-first-visible-buy-filled",
+			fillID:        "p1-first-visible-buy-fills",
 			participantID: "VISIBLE_BUYER_B",
 			orderID:       "p1_golden_hidden_cross_t1-ord-002",
 			status:        "FILLED",
@@ -864,12 +886,16 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		},
 		{
 			assertionID:   "p1-second-visible-buy-filled",
+			fillID:        "p1-second-visible-buy-fills",
 			participantID: "VISIBLE_BUYER_C",
 			orderID:       "p1_golden_hidden_cross_t1-ord-003",
 			status:        "FILLED",
 			filled:        "60",
 		},
 	}
+	uniqueExecutionIDs := map[string]struct{}{}
+	ownFillIdentityLeaks := map[string]struct{}{}
+	allFillPricesExpected := true
 	for _, want := range expected {
 		read, orders, err := readOwnOrderHistory(cfg, client, want.participantID, "XYZ")
 		report.Reads = append(report.Reads, read)
@@ -901,6 +927,57 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		} else {
 			failAssertion(report, filledAssertionID, "own_order_filled_quantity", want.filled, observedFilled, read.Endpoint)
 		}
+
+		fillRead, fills, err := readOwnFills(cfg, client, want.participantID, "XYZ")
+		report.Reads = append(report.Reads, fillRead)
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Sprintf("%s failed", want.fillID))
+			report.Failures = append(report.Failures, scenarioFailure{
+				AssertionID: want.fillID,
+				Category:    "own_fill_read",
+				Message:     err.Error(),
+				ProofSource: fillRead.Endpoint,
+			})
+			continue
+		}
+		totalFilled := 0
+		for _, fill := range fills {
+			totalFilled += parsePositiveInt(fill.QuantityUnits)
+			if fill.ExecutionID != "" {
+				uniqueExecutionIDs[fill.ExecutionID] = struct{}{}
+			}
+			if fill.ExecutionPrice != "100000000000" {
+				allFillPricesExpected = false
+			}
+		}
+		if totalFilled == parsePositiveInt(want.filled) {
+			passAssertion(report, want.fillID+"-quantity", want.filled, fmt.Sprint(totalFilled), fillRead.Endpoint)
+		} else {
+			failAssertion(report, want.fillID+"-quantity", "own_fill_quantity", want.filled, fmt.Sprint(totalFilled), fillRead.Endpoint)
+		}
+		for _, leak := range leakedOwnFillCounterpartyFields(fillRead.Body) {
+			ownFillIdentityLeaks[leak] = struct{}{}
+		}
+	}
+	if len(uniqueExecutionIDs) == 2 {
+		passAssertion(report, "p1-own-fills-unique-execution-count", "2", "2", "/api/v1/orders/fills")
+	} else {
+		failAssertion(report, "p1-own-fills-unique-execution-count", "own_fill_execution_count", "2", fmt.Sprint(len(uniqueExecutionIDs)), "/api/v1/orders/fills")
+	}
+	if allFillPricesExpected {
+		passAssertion(report, "p1-own-fills-prices", "all 100000000000", "all 100000000000", "/api/v1/orders/fills")
+	} else {
+		failAssertion(report, "p1-own-fills-prices", "own_fill_price", "all 100000000000", "unexpected fill price", "/api/v1/orders/fills")
+	}
+	if len(ownFillIdentityLeaks) == 0 {
+		passAssertion(report, "p1-own-fills-counterparty-safe", "no counterparty identity", "no counterparty fields", "/api/v1/orders/fills")
+	} else {
+		leaks := make([]string, 0, len(ownFillIdentityLeaks))
+		for leak := range ownFillIdentityLeaks {
+			leaks = append(leaks, leak)
+		}
+		sort.Strings(leaks)
+		failAssertion(report, "p1-own-fills-counterparty-safe", "own_fill_visibility", "no counterparty identity", strings.Join(leaks, ","), "/api/v1/orders/fills")
 	}
 }
 
@@ -967,6 +1044,11 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 			source:      "runtime.orders + runtime.order_lifecycle_state",
 			freshness:   "dirty-tracked lifecycle projection",
 		},
+		"orderFills": {
+			assertionID: "p1-order-fills-source-declared",
+			source:      "runtime.orders + runtime.executions",
+			freshness:   "durable execution rows scoped by participant order ownership",
+		},
 		"marketDataDepth": {
 			assertionID: "p1-market-depth-source-declared",
 			source:      "runtime.order_lifecycle_state",
@@ -1002,9 +1084,9 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 	}
 	sort.Strings(missing)
 	if len(missing) == 0 {
-		passAssertion(report, "p1-read-surface-inventory", "orderHistory/marketDataDepth/tradeTape", "read surfaces available", endpoint)
+		passAssertion(report, "p1-read-surface-inventory", "orderHistory/orderFills/marketDataDepth/tradeTape", "read surfaces available", endpoint)
 	} else {
-		failAssertion(report, "p1-read-surface-inventory", "read_surface_inventory", "orderHistory/marketDataDepth/tradeTape", "missing "+strings.Join(missing, ","), endpoint)
+		failAssertion(report, "p1-read-surface-inventory", "read_surface_inventory", "orderHistory/orderFills/marketDataDepth/tradeTape", "missing "+strings.Join(missing, ","), endpoint)
 	}
 	for name, want := range required {
 		surface, ok := surfaces[name]
@@ -1176,6 +1258,17 @@ func leakedPublicIdentityFields(body string) []string {
 	return leaks
 }
 
+func leakedOwnFillCounterpartyFields(body string) []string {
+	fields := []string{"buyOrderId", "sellOrderId", "buyerParticipantId", "sellerParticipantId", "counterparty", "counterpartyParticipantId", "accountId"}
+	leaks := make([]string, 0)
+	for _, field := range fields {
+		if strings.Contains(body, `"`+field+`"`) {
+			leaks = append(leaks, field)
+		}
+	}
+	return leaks
+}
+
 func readOwnOrderHistory(cfg config, client *http.Client, participantID string, instrumentID string) (assertionRead, []ownOrderBody, error) {
 	endpoint := "/api/v1/orders/history"
 	query := url.Values{}
@@ -1205,6 +1298,37 @@ func readOwnOrderHistory(cfg config, client *http.Client, participantID string, 
 		return read, parsed.Orders, fmt.Errorf("own-order history returned %d", read.StatusCode)
 	}
 	return read, parsed.Orders, nil
+}
+
+func readOwnFills(cfg config, client *http.Client, participantID string, instrumentID string) (assertionRead, []ownExecutionBody, error) {
+	endpoint := "/api/v1/orders/fills"
+	query := url.Values{}
+	query.Set("participantId", participantID)
+	query.Set("instrumentId", instrumentID)
+	query.Set("limit", "50")
+	requestURL := absoluteURL(cfg.baseURL, endpoint) + "?" + query.Encode()
+	read := assertionRead{
+		Endpoint: endpoint,
+		Filters: map[string]string{
+			"participantId": participantID,
+			"instrumentId":  instrumentID,
+			"limit":         "50",
+		},
+	}
+	read, body, err := executeRead(client, requestURL, endpoint, read.Filters)
+	if err != nil {
+		return read, nil, err
+	}
+	var parsed ownExecutionsBody
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return read, nil, err
+	}
+	read.SourceType = parsed.Meta.Source
+	read.FreshnessModel = parsed.Meta.Freshness
+	if read.StatusCode != 200 {
+		return read, parsed.Fills, fmt.Errorf("own fills returned %d", read.StatusCode)
+	}
+	return read, parsed.Fills, nil
 }
 
 func parseCommandStatus(body string) commandStatusBody {
