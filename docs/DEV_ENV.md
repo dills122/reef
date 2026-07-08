@@ -637,6 +637,7 @@ HTTP boundary comparison knobs:
 Accepted-async no-DB isolation knobs:
 
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async` makes submit-order intake return a `202` command receipt after validation, idempotency reservation, and in-memory lane enqueue. It does not provide durable acceptance and is benchmark-only unless paired with a durable ingress design.
+- `make dev-stress-accepted-async-jfr` runs the accepted-async no-DB stress wrapper with JFR enabled on `platform-api`, then stops that container to flush `dumponexit` recording and copies the artifact to `DEV_JFR_ARTIFACT_DIR` (default `/tmp/reef-accepted-async-jfr`).
 - `EXTERNAL_API_ACCEPTED_ASYNC_LANES=16` sets in-memory worker lanes. Submit commands route by deterministic `instrumentId` lane scoring to preserve per-instrument order while avoiding obvious small-symbol-set modulo skew.
 - Accepted-async parses submit bodies once at intake and queues the parsed command object, not the raw request body, to reduce hot-path JSON parse and retained string overhead.
 - `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000` sets per-lane queued command capacity.
@@ -644,6 +645,7 @@ Accepted-async no-DB isolation knobs:
 - `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW=false` keeps startup validation from accepting in-flight windows above `128` unless the run is an explicit stress test.
 - `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`.
 - `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS=100000` caps retained completed/failed command status records for the in-memory accepted-async isolation path. Set it to `0` only when intentionally measuring unlimited status/idempotency retention.
+- JFR wrapper knobs: `DEV_JFR_ARTIFACT_DIR`, `DEV_JFR_CONTAINER_PATH`, `DEV_JFR_RECORDING_NAME`, `DEV_JFR_SETTINGS`, and `DEV_JFR_MAX_SIZE` control recording location and size.
 - `GET /internal/commands/async/stats` includes an `acceptedAsync` block with aggregate queued, in-flight, completed-waiting, processing, completed, failed, duplicate, and backpressure counters plus per-lane queue/drain/window counters for accepted-async no-DB diagnostics.
 
 Each stress report includes `hotPathPhases.phases` from `/internal/perf/hot-path`. For no-DB sync-result runs, start with `api.mutation.total`, `api.operation`, `api.parse.submitOrder`, `runtime.submitOrder.total`, `runtime.engine.submit`, `runtime.persistence.persistSubmitOutcome`, `api.response.serializeSubmitOrder`, and `api.writeResponse`. `runtime.engine.submit` measures the platform runtime gateway call to the engine, including transport and response parsing; compare it against the matching-engine-only harness before attributing that time to matching logic itself.
