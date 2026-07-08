@@ -20,7 +20,7 @@ Implemented:
 - `strategyProfiles` strict validation
 - `actorGroups` deterministic expansion
 - deterministic faults support for `reject_submit`, `reject_modify`, `reject_cancel`
-- replay pack/golden scenario regression harness (`make dev-replay`)
+- replay pack and P1/P2 golden scenario regression harness (`make dev-replay`, `make dev-scenario-golden-check`)
 - reject taxonomy breakdown in run summary
 - stress telemetry capture (Docker + runtime/engine endpoint probes)
 - worker sweep + recommendation artifact generation
