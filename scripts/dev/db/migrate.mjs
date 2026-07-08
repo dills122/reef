@@ -200,10 +200,45 @@ function sqlString(value) {
 
 function runPsql(sql, options = {}) {
   const { capture = false, target = migrationTargets()[0] } = options;
-  const args = composeArgs([
-    "exec",
-    "-T",
-    target.service,
+  const { cmd, args } = psqlCommand(target);
+  const captureOutput = capture || env("REEF_MIGRATION_RUNNER", "compose") === "kubectl";
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      cwd: repoRoot,
+      stdio: ["pipe", captureOutput ? "pipe" : "inherit", captureOutput ? "pipe" : "inherit"],
+      env: process.env,
+    });
+    let stdout = "";
+    let stderr = "";
+    if (captureOutput) {
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
+    }
+    child.stdin.on("error", (error) => {
+      if (error?.code !== "EPIPE") {
+        reject(error);
+      }
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(capture ? stdout : "");
+        return;
+      }
+      const tail = stderr ? `: ${stderr.trim()}` : "";
+      reject(new Error(`${cmd} ${args.join(" ")} failed with code ${code}${tail}`));
+    });
+    child.stdin.end(sql);
+  });
+}
+
+function psqlCommand(target) {
+  const psqlArgs = [
     "psql",
     "-U",
     target.user,
@@ -215,35 +250,30 @@ function runPsql(sql, options = {}) {
     "-q",
     "-t",
     "-A",
-  ]);
+  ];
 
-  return new Promise((resolve, reject) => {
-    const child = spawn("docker", args, {
-      cwd: repoRoot,
-      stdio: ["pipe", capture ? "pipe" : "inherit", capture ? "pipe" : "inherit"],
-      env: process.env,
-    });
-    let stdout = "";
-    let stderr = "";
-    if (capture) {
-      child.stdout.on("data", (chunk) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr += chunk;
-      });
+  if (env("REEF_MIGRATION_RUNNER", "compose") === "kubectl") {
+    const args = [];
+    const context = env("KUBE_CONTEXT", "");
+    if (context) {
+      args.push("--context", context);
     }
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve(capture ? stdout : "");
-        return;
-      }
-      const tail = capture && stderr ? `: ${stderr.trim()}` : "";
-      reject(new Error(`docker ${args.join(" ")} failed with code ${code}${tail}`));
-    });
-    child.stdin.end(sql);
-  });
+    args.push(
+      "-n",
+      env("KUBE_NAMESPACE", "reef-local"),
+      "exec",
+      "-i",
+      `statefulset/${target.service}`,
+      "--",
+      ...psqlArgs,
+    );
+    return { cmd: "kubectl", args };
+  }
+
+  return {
+    cmd: "docker",
+    args: composeArgs(["exec", "-T", target.service, ...psqlArgs]),
+  };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

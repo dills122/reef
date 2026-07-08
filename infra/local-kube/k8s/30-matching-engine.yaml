@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: matching-engine
+  namespace: reef-local
+spec:
+  selector:
+    app.kubernetes.io/name: matching-engine
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+    - name: grpc
+      port: 9081
+      targetPort: 9081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matching-engine
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: matching-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: matching-engine
+        app.kubernetes.io/part-of: reef
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-nats
+          image: nats:2.11-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until wget -qO- http://nats:8222/healthz >/dev/null; do sleep 2; done
+      containers:
+        - name: matching-engine
+          image: reef-matching-engine:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: MATCHING_ENGINE_ADDR
+              value: ":8081"
+            - name: MATCHING_ENGINE_ENABLE_GRPC
+              value: "1"
+            - name: MATCHING_ENGINE_GRPC_ADDR
+              value: ":9081"
+            - name: MATCHING_ENGINE_SHARD_ID
+              value: engine-0
+            - name: STREAM_ACK_LOG_PROVIDER
+              value: jetstream
+            - name: STREAM_ACK_NATS_URL
+              value: nats://nats:4222
+            - name: STREAM_ACK_COMMAND_STREAM
+              value: REEF_COMMANDS
+            - name: STREAM_ACK_SUBJECT_PREFIX
+              value: reef.cmd.v1
+            - name: STREAM_ACK_PARTITION_COUNT
+              value: "64"
+            - name: MATCHING_ENGINE_EVENT_STREAM
+              value: REEF_VENUE_EVENTS
+            - name: MATCHING_ENGINE_EVENT_SUBJECT_PREFIX
+              value: reef.venue.events.v1
+            - name: OTEL_SERVICE_NAME
+              value: reef-matching-engine
+          ports:
+            - containerPort: 8081
+              name: http
+            - containerPort: 9081
+              name: grpc
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+              ephemeral-storage: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3

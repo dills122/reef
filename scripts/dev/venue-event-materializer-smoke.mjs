@@ -22,6 +22,11 @@ const readApiUrl = env(
   "DEV_VENUE_EVENT_MATERIALIZER_READ_API_URL",
   `http://127.0.0.1:${env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", "8084")}`,
 );
+const readApiHeaders = {
+  "X-Client-Id": "materializer-smoke-client",
+  "X-Actor-Id": "materializer-smoke-user",
+  "X-Participant-Id": participantId,
+};
 const waitTimeoutSeconds = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
 const materializerTimeoutMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_TIMEOUT_MS", "60000"));
 const materializerPollMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_POLL_MS", "1000"));
@@ -62,7 +67,11 @@ setDefault("MARKET_DATA_PROJECTOR_BATCH_SIZE", "1000");
 setDefault("MARKET_DATA_PROJECTOR_POLL_MS", "10");
 
 console.log("starting Redpanda direct-stream materializer smoke stack...");
-await import("./stream-direct-nodb-up.mjs");
+if (env("DEV_VENUE_EVENT_MATERIALIZER_SKIP_STACK_UP", "0") === "1") {
+  console.log("skipping stack startup; using existing materializer smoke stack");
+} else {
+  await import("./stream-direct-nodb-up.mjs");
+}
 
 console.log("waiting for platform-api, matching-engine, materializer, and read projector health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeoutSeconds);
@@ -279,16 +288,19 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
 
   const currentOrders = await getJson(
     `${readApiUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&instrumentId=${encodeURIComponent(instrumentId)}&limit=10`,
+    readApiHeaders,
   );
   assertOwnOrderResponse("currentOrders", currentOrders, { openOnly: true });
 
   const orderHistory = await getJson(
     `${readApiUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&instrumentId=${encodeURIComponent(instrumentId)}&limit=10`,
+    readApiHeaders,
   );
   assertOwnOrderResponse("orderHistory", orderHistory, { openOnly: false });
 
   const snapshot = await getJson(
     `${readApiUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}?projectionName=${encodeURIComponent(marketDataProjectionName)}`,
+    readApiHeaders,
   );
   if (snapshot.snapshot?.bestBidPrice !== "150250000000" || snapshot.snapshot?.bestBidQuantity !== "100") {
     throw new Error(`market-data snapshot mismatch: ${JSON.stringify(snapshot)}`);
@@ -296,6 +308,7 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
 
   const depth = await getJson(
     `${readApiUrl}/api/v1/market-data/depth/${encodeURIComponent(instrumentId)}?levels=5&projectionName=${encodeURIComponent(depthProjectionName)}&sourceProjectionName=${encodeURIComponent(projectionName)}`,
+    readApiHeaders,
   );
   if (depth.depth?.bidLevels?.[0]?.price !== "150250000000" || depth.depth?.bidLevels?.[0]?.quantity !== "100") {
     throw new Error(`market-data depth mismatch: ${JSON.stringify(depth)}`);
@@ -303,6 +316,7 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
 
   const availability = await getJson(
     `${readApiUrl}/api/v1/data/availability?venueProjectionName=${encodeURIComponent(projectionName)}&marketDataProjectionName=${encodeURIComponent(marketDataProjectionName)}&source=venue-event-batch`,
+    readApiHeaders,
   );
   const surfaces = Array.isArray(availability.surfaces) ? availability.surfaces : [];
   assertAvailabilitySurface(surfaces, {
@@ -499,32 +513,57 @@ async function runProjectionPsql(sql) {
 }
 
 async function runPsql(service, sql) {
-  const output = await runCapture("docker", [
-    "compose",
-    "exec",
-    "-T",
-    service,
-    "psql",
-    "-U",
-    env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
-    "-d",
-    env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
-    "-At",
-    "-F",
-    "\t",
-    "-c",
-    sql,
-  ]);
+  const output = env("DEV_VENUE_EVENT_MATERIALIZER_PSQL_RUNNER", "compose") === "kubectl"
+    ? await runCapture("kubectl", [
+      ...kubectlContextArgs(),
+      "-n",
+      env("KUBE_NAMESPACE", "reef-local"),
+      "exec",
+      "-i",
+      `statefulset/${service}`,
+      "--",
+      "psql",
+      "-U",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
+      "-d",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
+      "-At",
+      "-F",
+      "\t",
+      "-c",
+      sql,
+    ])
+    : await runCapture("docker", [
+      "compose",
+      "exec",
+      "-T",
+      service,
+      "psql",
+      "-U",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
+      "-d",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
+      "-At",
+      "-F",
+      "\t",
+      "-c",
+      sql,
+    ]);
   return output;
 }
 
-async function getJson(url) {
-  const body = await getText(url);
+function kubectlContextArgs() {
+  const context = env("KUBE_CONTEXT", "");
+  return context ? ["--context", context] : [];
+}
+
+async function getJson(url, headers = {}) {
+  const body = await getText(url, headers);
   return JSON.parse(body || "{}");
 }
 
-async function getText(url) {
-  const response = await request("GET", url, null, {}, 5000);
+async function getText(url, headers = {}) {
+  const response = await request("GET", url, null, headers, 5000);
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new Error(`GET ${url} failed (${response.statusCode}): ${response.body}`);
   }
