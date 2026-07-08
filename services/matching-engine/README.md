@@ -122,3 +122,4 @@ Build guidance:
 - follow [`../../docs/steering/architecture.md`](../../docs/steering/architecture.md)
 - follow [`../../docs/steering/go.md`](../../docs/steering/go.md)
 - keep transport adapters thin and matching logic deterministic
+- track engine realism and hardening work in [`../../docs/MATCHING_ENGINE_HARDENING_RESEARCH.md`](../../docs/MATCHING_ENGINE_HARDENING_RESEARCH.md)
