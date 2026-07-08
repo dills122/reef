@@ -74,6 +74,7 @@ External boundary config:
 - `EXTERNAL_API_ABUSE_BREAKER_ROUTES` comma list (default `/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel`)
 - `EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES` optional comma list of `route:maxRejects/windowSeconds/blockSeconds` (example: `/api/v1/orders/modify:10/30/120`)
 - `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
+- `EXTERNAL_API_AUTHORIZATION_CACHE_TTL_MS` (default `1000`) bounds how long submit/cancel/modify hot paths reuse actor-role and role-permission reads before rechecking persistence.
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)

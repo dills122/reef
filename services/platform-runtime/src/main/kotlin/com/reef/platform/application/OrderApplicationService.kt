@@ -18,6 +18,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.infrastructure.engine.AsyncSubmitEngineGateway
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.engine.defaultEngineGateway
+import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
@@ -31,13 +32,18 @@ import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 
 class OrderApplicationService(
     private val engineGateway: EngineGateway = defaultEngineGateway(),
-    private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence()
+    private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence(),
+    private val authorizationCacheTtlMs: Long = RuntimeEnv.long("EXTERNAL_API_AUTHORIZATION_CACHE_TTL_MS", 1_000L, min = 0L),
+    private val clockMillis: () -> Long = System::currentTimeMillis
 ) {
     private val eventProducer = "platform-runtime"
     private val eventSchemaVersion = "v1"
+    private val roleCache = ConcurrentHashMap<String, AuthorizationCacheEntry<List<RoleDefinition>>>()
+    private val actorRoleCache = ConcurrentHashMap<String, AuthorizationCacheEntry<List<ActorRoleBinding>>>()
 
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         return HotPathMetrics.time("runtime.submitOrder.total") {
@@ -558,11 +564,11 @@ class OrderApplicationService(
         if (actorId.isBlank()) {
             return false
         }
-        val boundRoleIds = runtimePersistence.actorRoleBindings(actorId).map { it.roleId }.toSet()
+        val boundRoleIds = cachedActorRoleBindings(actorId).map { it.roleId }.toSet()
         if (boundRoleIds.isEmpty()) {
             return false
         }
-        val allowed = runtimePersistence.roles()
+        val allowed = cachedRoles()
             .asSequence()
             .filter { it.roleId in boundRoleIds }
             .flatMap { it.permissions.asSequence() }
@@ -683,9 +689,15 @@ class OrderApplicationService(
 
     fun createAccount(account: Account) = runtimePersistence.saveAccount(account)
 
-    fun createRole(role: RoleDefinition) = runtimePersistence.saveRole(role)
+    fun createRole(role: RoleDefinition) {
+        runtimePersistence.saveRole(role)
+        invalidateAuthorizationCache()
+    }
 
-    fun assignRole(binding: ActorRoleBinding) = runtimePersistence.saveActorRoleBinding(binding)
+    fun assignRole(binding: ActorRoleBinding) {
+        runtimePersistence.saveActorRoleBinding(binding)
+        actorRoleCache.remove(binding.actorId)
+    }
 
     fun instruments() = runtimePersistence.instruments()
 
@@ -696,6 +708,39 @@ class OrderApplicationService(
     fun roles() = runtimePersistence.roles()
 
     fun actorRoleBindings(actorId: String) = runtimePersistence.actorRoleBindings(actorId)
+
+    private fun cachedRoles(): List<RoleDefinition> {
+        if (authorizationCacheTtlMs <= 0) {
+            return runtimePersistence.roles()
+        }
+        val now = clockMillis()
+        val cached = roleCache[RolesCacheKey]
+        if (cached != null && cached.expiresAtEpochMs > now) {
+            return cached.value
+        }
+        val loaded = runtimePersistence.roles()
+        roleCache[RolesCacheKey] = AuthorizationCacheEntry(loaded, now + authorizationCacheTtlMs)
+        return loaded
+    }
+
+    private fun cachedActorRoleBindings(actorId: String): List<ActorRoleBinding> {
+        if (authorizationCacheTtlMs <= 0) {
+            return runtimePersistence.actorRoleBindings(actorId)
+        }
+        val now = clockMillis()
+        val cached = actorRoleCache[actorId]
+        if (cached != null && cached.expiresAtEpochMs > now) {
+            return cached.value
+        }
+        val loaded = runtimePersistence.actorRoleBindings(actorId)
+        actorRoleCache[actorId] = AuthorizationCacheEntry(loaded, now + authorizationCacheTtlMs)
+        return loaded
+    }
+
+    private fun invalidateAuthorizationCache() {
+        roleCache.clear()
+        actorRoleCache.clear()
+    }
 
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt
@@ -759,6 +804,13 @@ class OrderApplicationService(
 private data class ValidatedSubmitContext(
     val traceId: String,
     val outcome: PersistableSubmitOutcome? = null
+)
+
+private const val RolesCacheKey = "roles"
+
+private data class AuthorizationCacheEntry<T>(
+    val value: T,
+    val expiresAtEpochMs: Long
 )
 
 internal fun defaultRuntimePersistence(poolName: String = "runtime"): RuntimePersistence {
