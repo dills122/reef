@@ -764,6 +764,7 @@ func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
 	passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
 	if cfg.requireReplayCheck && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
 		assertP1ReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath)
+		assertP1HistoricalVisibilityProof(report, parsed, cfg.replayCheckReportPath)
 	}
 }
 
@@ -779,6 +780,34 @@ func replayFailures(parsed map[string]any) []string {
 		}
 	}
 	return failures
+}
+
+func assertP1HistoricalVisibilityProof(report *smokeReport, parsed map[string]any, proofSource string) {
+	visibility, ok := parsed["visibilityTimeline"].(map[string]any)
+	if !ok {
+		failAssertion(report, "p1-replay-hidden-depth-timeline-proof", "replay_visibility_timeline", "visibilityTimeline.publicDepthHiddenRestingExposed=false", "missing visibilityTimeline object", proofSource)
+		return
+	}
+	exposed, found := visibility["publicDepthHiddenRestingExposed"].(bool)
+	if !found {
+		failAssertion(report, "p1-replay-hidden-depth-timeline-proof", "replay_visibility_timeline", "visibilityTimeline.publicDepthHiddenRestingExposed=false", "missing publicDepthHiddenRestingExposed boolean", proofSource)
+		return
+	}
+	checkCount := replayVisibilityCheckCount(visibility)
+	if !exposed && checkCount > 0 {
+		passAssertion(report, "p1-replay-hidden-depth-timeline-proof", "hidden resting size never exposed in replayed public depth checks", fmt.Sprintf("%d public depth checks, exposed=false", checkCount), proofSource)
+		return
+	}
+	observed := fmt.Sprintf("%d public depth checks, exposed=%t", checkCount, exposed)
+	failAssertion(report, "p1-replay-hidden-depth-timeline-proof", "replay_visibility_timeline", "hidden resting size never exposed in replayed public depth checks", observed, proofSource)
+}
+
+func replayVisibilityCheckCount(visibility map[string]any) int {
+	raw, ok := visibility["publicDepthChecks"].([]any)
+	if !ok {
+		return 0
+	}
+	return len(raw)
 }
 
 func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string) {

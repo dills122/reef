@@ -394,7 +394,7 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
 
 func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 	replayPath := filepath.Join(t.TempDir(), "replay-check.json")
-	replayJSON := `{"pass":true,"checkedAt":"2026-03-14T18:00:30Z","report":{"batchCount":1,"storedCommandCount":3,"payloadOutcomeCount":3,"canonicalOutcomeCount":3,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"failures":[]}`
+	replayJSON := p1CleanReplayCheckJSON()
 	if err := os.WriteFile(replayPath, []byte(replayJSON), 0o644); err != nil {
 		t.Fatalf("write replay report: %v", err)
 	}
@@ -470,6 +470,39 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 	}
 	if !hasAssertion(report, "p1-replay-stored-command-count", "pass") {
 		t.Fatalf("missing replay counter assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p1-replay-hidden-depth-timeline-proof", "pass") {
+		t.Fatalf("missing hidden-depth replay timeline assertion: %+v", report.Assertions)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsRequireHiddenDepthReplayProof(t *testing.T) {
+	replayPath := filepath.Join(t.TempDir(), "replay-check.json")
+	replayJSON := `{"pass":true,"checkedAt":"2026-03-14T18:00:30Z","report":{"batchCount":1,"storedCommandCount":3,"payloadOutcomeCount":3,"canonicalOutcomeCount":3,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"failures":[]}`
+	if err := os.WriteFile(replayPath, []byte(replayJSON), 0o644); err != nil {
+		t.Fatalf("write replay report: %v", err)
+	}
+	server := p1AssertionServer(t, p1AssertionServerOptions{})
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+		"--replay-check-report", replayPath,
+		"--require-replay-check",
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected hidden-depth replay proof failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p1-replay-hidden-depth-timeline-proof") {
+		t.Fatalf("expected p1-replay-hidden-depth-timeline-proof failure: %+v", report.Failures)
 	}
 }
 
@@ -809,6 +842,10 @@ func TestScenarioSmokeReplayCheckReportRequiresAssertions(t *testing.T) {
 
 func p1OwnOrderHistoryJSON(orderID string) string {
 	return p1OwnOrderHistoryJSONWithFilled(orderID, "")
+}
+
+func p1CleanReplayCheckJSON() string {
+	return `{"pass":true,"checkedAt":"2026-03-14T18:00:30Z","report":{"batchCount":1,"storedCommandCount":3,"payloadOutcomeCount":3,"canonicalOutcomeCount":3,"duplicateReplayInserted":0,"checksumMismatchCount":0,"batchCommandCountMismatchCount":0,"payloadHashMismatchCount":0,"missingOutcomeCount":0,"extraOutcomeCount":0,"streamGapCount":0,"streamOverlapCount":0,"watermarkLagCount":0},"visibilityTimeline":{"scenarioId":"P1_GOLDEN_HIDDEN_CROSS_T1","publicDepthHiddenRestingExposed":false,"publicDepthChecks":[{"phase":"before-first-execution","instrumentId":"XYZ","price":"100000000000","hiddenRestingQuantityVisible":false}]},"failures":[]}`
 }
 
 func p1OwnOrderHistoryJSONWithFilled(orderID string, filledOverride string) string {

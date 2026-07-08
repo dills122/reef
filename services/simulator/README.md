@@ -153,7 +153,7 @@ For the P1 live assertion path, add `--assertions`. The report records command c
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --pretty"
 ```
 
-For a P1 lock gate, attach replay/checksum evidence and require it so a live report cannot pass without the replay proof:
+For a P1 lock gate, attach replay/checksum evidence and require it so a live report cannot pass without the replay proof. Strict P1 mode also requires the replay artifact to carry `visibilityTimeline.publicDepthHiddenRestingExposed=false` with at least one `visibilityTimeline.publicDepthChecks` row, because the live depth endpoint only proves current depth.
 
 ```bash
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --replay-check-report /tmp/reef-replay-check.json --require-replay-check --pretty"
