@@ -7,18 +7,15 @@ import {
   readdirSync,
   readFileSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { canonicalEvidenceSummary } from "../../scripts/dev/lib/report-taxonomy.mjs";
 import { deriveDevUrls, loadDotEnv } from "../../scripts/dev/lib/dev-utils.mjs";
 
 loadDotEnv();
 
 const appDir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(appDir, "../..");
 const publicDir = resolve(appDir, "public");
 const stateRoot = resolve(process.env.REEF_CONTROL_ROOM_STATE_DIR || "/tmp/reef-control-room");
 const runRoot = resolve(stateRoot, "runs");
@@ -26,8 +23,6 @@ const host = process.env.REEF_CONTROL_ROOM_HOST || "127.0.0.1";
 const port = Number(process.env.REEF_CONTROL_ROOM_PORT || "3015");
 const runtimeUrl = process.env.REEF_CONTROL_ROOM_RUNTIME_URL || deriveDevUrls().runtimeUrl;
 const engineUrl = process.env.REEF_CONTROL_ROOM_ENGINE_URL || deriveDevUrls().engineUrl;
-const jsRuntime = process.env.JS_RUNTIME || "bun";
-const activeRuns = new Map();
 
 mkdirSync(runRoot, { recursive: true });
 
@@ -57,9 +52,7 @@ async function routeApi(request, response, url) {
       engineUrl,
       stateRoot,
       runRoot,
-      jsRuntime,
-      localStressDefaults: defaultLocalStressOptions(),
-      remoteDefaults: defaultRemoteOptions(),
+      mode: "monitor-only",
     });
     return;
   }
@@ -88,182 +81,7 @@ async function routeApi(request, response, url) {
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/runs/local-stress") {
-    const body = await readJsonBody(request);
-    sendJson(response, 202, startLocalStressRun(body));
-    return;
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/runs/remote-simulation") {
-    const body = await readJsonBody(request);
-    sendJson(response, 202, startRemoteSimulationRun(body));
-    return;
-  }
-
   sendJson(response, 404, { error: "NOT_FOUND" });
-}
-
-function defaultLocalStressOptions() {
-  return {
-    rate: "100",
-    workers: "8",
-    duration: "15s",
-    mode: "strict-lifecycle",
-    profile: "default",
-    traceCheckLimit: "25",
-  };
-}
-
-function defaultRemoteOptions() {
-  return {
-    rate: "1000",
-    workers: "128",
-    duration: "60s",
-    profile: "stream-ack",
-    imageMode: "dockerhub",
-  };
-}
-
-function startLocalStressRun(options = {}) {
-  const defaults = defaultLocalStressOptions();
-  const runId = safeRunId(options.runId || `local-stress-${timestamp()}`);
-  const dir = runDir(runId);
-  mkdirSync(dir, { recursive: true });
-  const reportOut = join(dir, "local-stress.json");
-  const env = {
-    ...process.env,
-    JS_RUNTIME: jsRuntime,
-    DEV_STRESS_RUN_ID: runId,
-    DEV_STRESS_RATES: cleanCsv(options.rate, defaults.rate),
-    DEV_STRESS_WORKERS: cleanNumber(options.workers, defaults.workers),
-    DEV_STRESS_DURATION: cleanToken(options.duration, defaults.duration),
-    DEV_STRESS_MODE: cleanToken(options.mode, defaults.mode),
-    DEV_STRESS_PROFILE: cleanToken(options.profile, defaults.profile),
-    DEV_STRESS_TRACE_CHECK_LIMIT: cleanNonNegativeNumber(options.traceCheckLimit, defaults.traceCheckLimit),
-    DEV_STRESS_ARTIFACT_DIR: dir,
-    DEV_STRESS_REPORT_OUT: reportOut,
-    DEV_STRESS_CAPTURE_STREAM_ACK_HEALTH: "1",
-    DEV_STRESS_CAPTURE_HOT_PATH: "1",
-  };
-  return spawnRun({
-    runId,
-    kind: "local-stress",
-    command: "make",
-    args: ["dev-stress"],
-    env,
-    metadata: {
-      reportOut,
-      artifactDir: dir,
-      runtimeUrl,
-      options: {
-        rate: env.DEV_STRESS_RATES,
-        workers: env.DEV_STRESS_WORKERS,
-        duration: env.DEV_STRESS_DURATION,
-        mode: env.DEV_STRESS_MODE,
-        profile: env.DEV_STRESS_PROFILE,
-        traceCheckLimit: env.DEV_STRESS_TRACE_CHECK_LIMIT,
-      },
-    },
-  });
-}
-
-function startRemoteSimulationRun(options = {}) {
-  const defaults = defaultRemoteOptions();
-  const runId = safeRunId(options.runId || `sim-do-${timestamp()}`);
-  const dir = runDir(runId);
-  mkdirSync(dir, { recursive: true });
-  const args = [
-    "scripts/deploy/simulation-run.mjs",
-    "run",
-    "--run-id",
-    runId,
-    "--rate",
-    cleanCsv(options.rate, defaults.rate),
-    "--duration",
-    cleanToken(options.duration, defaults.duration),
-    "--workers",
-    cleanNumber(options.workers, defaults.workers),
-    "--profile",
-    cleanToken(options.profile, defaults.profile),
-    "--image-mode",
-    cleanToken(options.imageMode, defaults.imageMode),
-    "--report-root",
-    runRoot,
-  ];
-  return spawnRun({
-    runId,
-    kind: "remote-simulation",
-    command: jsRuntime,
-    args,
-    env: { ...process.env, JS_RUNTIME: jsRuntime },
-    metadata: {
-      artifactDir: dir,
-      options: {
-        rate: args[5],
-        duration: args[7],
-        workers: args[9],
-        profile: args[11],
-        imageMode: args[13],
-      },
-    },
-  });
-}
-
-function spawnRun({ runId, kind, command, args, env, metadata }) {
-  if (activeRuns.has(runId)) {
-    throw new Error(`run already active: ${runId}`);
-  }
-  const dir = runDir(runId);
-  const stdoutPath = join(dir, "stdout.ndjson");
-  const stderrPath = join(dir, "stderr.log");
-  const recordPath = join(dir, "run.json");
-  const startedAt = new Date().toISOString();
-  const record = {
-    runId,
-    kind,
-    status: "running",
-    command: [command, ...args],
-    startedAt,
-    completedAt: "",
-    exitCode: null,
-    ...metadata,
-  };
-  writeRunRecord(recordPath, record);
-  appendEvent(stdoutPath, { stream: "control", message: `started ${kind} ${runId}` });
-
-  const child = spawn(command, args, {
-    cwd: repoRoot,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  activeRuns.set(runId, { child, recordPath, stdoutPath, stderrPath });
-
-  child.stdout.on("data", (chunk) => appendLines(stdoutPath, "stdout", chunk));
-  child.stderr.on("data", (chunk) => {
-    appendLines(stdoutPath, "stderr", chunk);
-    appendText(stderrPath, chunk);
-  });
-  child.on("error", (error) => {
-    appendEvent(stdoutPath, { stream: "control", message: `spawn failed: ${error.message}` });
-    finalizeRun(runId, 1, "failed");
-  });
-  child.on("close", (code) => {
-    finalizeRun(runId, code ?? 1, code === 0 ? "completed" : "failed");
-  });
-
-  return summarizeRun(readRun(runId));
-}
-
-function finalizeRun(runId, exitCode, status) {
-  const active = activeRuns.get(runId);
-  if (!active) return;
-  const record = JSON.parse(readFileSync(active.recordPath, "utf8"));
-  record.status = status;
-  record.exitCode = exitCode;
-  record.completedAt = new Date().toISOString();
-  writeRunRecord(active.recordPath, record);
-  appendEvent(active.stdoutPath, { stream: "control", message: `finished status=${status} exit=${exitCode}` });
-  activeRuns.delete(runId);
 }
 
 async function buildSnapshot(runId) {
@@ -284,7 +102,6 @@ async function buildSnapshot(runId) {
     runtimeUrl,
     engineUrl,
     probes: byName,
-    activeRuns: [...activeRuns.keys()],
     currentRun: runId ? readRun(runId) : null,
     metrics: normalizeSnapshot(byName),
   };
@@ -414,7 +231,7 @@ function summarizeRun(run) {
   return {
     runId: run.runId,
     kind: run.kind,
-    status: activeRuns.has(run.runId) ? "running" : run.status,
+    status: run.status,
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     exitCode: run.exitCode,
@@ -533,34 +350,9 @@ async function serveStatic(response, rawPath) {
   }
 }
 
-async function readJsonBody(request) {
-  const chunks = [];
-  for await (const chunk of request) chunks.push(chunk);
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-}
-
 function sendJson(response, status, body) {
   response.writeHead(status, { "Content-Type": "application/json" });
   response.end(JSON.stringify(body, null, 2));
-}
-
-function appendLines(path, stream, chunk) {
-  for (const line of Buffer.from(chunk).toString("utf8").split(/\r?\n/)) {
-    if (line.trim()) appendEvent(path, { stream, message: line });
-  }
-}
-
-function appendEvent(path, event) {
-  appendText(path, `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`);
-}
-
-function appendText(path, text) {
-  writeFileSync(path, text, { flag: "a" });
-}
-
-function writeRunRecord(path, record) {
-  writeFileSync(path, JSON.stringify(record, null, 2));
 }
 
 function readRecentEvents(path, limit) {
@@ -583,33 +375,6 @@ function safeRunId(value) {
   const cleaned = String(value || "").replace(/[^a-zA-Z0-9_.:-]/g, "-").slice(0, 120);
   if (!cleaned) throw new Error("run id is required");
   return cleaned;
-}
-
-function cleanToken(value, fallback) {
-  const cleaned = String(value || fallback).trim().replace(/[^a-zA-Z0-9_.:-]/g, "");
-  return cleaned || fallback;
-}
-
-function cleanNumber(value, fallback) {
-  const number = Number(value || fallback);
-  return Number.isFinite(number) && number > 0 ? String(Math.floor(number)) : String(fallback);
-}
-
-function cleanNonNegativeNumber(value, fallback) {
-  const number = Number(value ?? fallback);
-  return Number.isFinite(number) && number >= 0 ? String(Math.floor(number)) : String(fallback);
-}
-
-function cleanCsv(value, fallback) {
-  const parts = String(value || fallback)
-    .split(",")
-    .map((part) => cleanNumber(part, ""))
-    .filter(Boolean);
-  return parts.length > 0 ? parts.join(",") : String(fallback);
-}
-
-function timestamp() {
-  return new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z");
 }
 
 function contentType(path) {

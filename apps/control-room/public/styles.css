@@ -116,41 +116,40 @@ h3 {
   color: var(--red);
 }
 
-.forms,
+.connection-grid,
 .metrics-grid,
 .two-column {
   display: grid;
   gap: 16px;
 }
 
-.forms {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.connection-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.run-form {
+.connection-grid > div {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
   padding: 12px;
 }
 
-label {
+.field-label {
   color: var(--muted);
-  display: grid;
   font-size: 12px;
-  gap: 5px;
 }
 
-input {
-  background: #11161a;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
-  font: inherit;
-  min-height: 34px;
-  padding: 7px 9px;
+.connection-grid strong {
+  font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
 }
 
 button {
@@ -256,7 +255,7 @@ pre {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .forms,
+  .connection-grid,
   .two-column {
     grid-template-columns: 1fr;
   }

@@ -3,8 +3,9 @@
 ## Decision
 
 Start with a dependency-free local Control Room served by a small Bun/Node
-control API. The first slice should make stress and simulation-run tests easier
-to observe without changing the existing CLI or report formats.
+read-only monitoring API. The first slice should make stress and simulation-run
+tests easier to observe without changing the existing CLI, report formats, or
+run launch workflows.
 
 ## Why This Shape
 
@@ -34,32 +35,36 @@ Good candidates for a later richer UI:
 - uPlot: a very small high-performance time-series chart library. It is a good
   fit if live run charts become dense.
 - Grafana + Prometheus: good for longer-term infrastructure metrics, history,
-  and alerting, but not ideal as the first run-control surface because Reef's
+  and alerting, but not ideal as the first Reef-specific monitor because the
   domain state is already in JSON reports and internal endpoints.
 
 The MVP intentionally avoids adding frontend dependencies until the control API
 contract stabilizes. It uses plain HTML, CSS, and browser APIs with SVG
-sparklines. That keeps local setup fast and makes the remote bridge work first.
+sparklines. That keeps local setup fast while preserving a narrow monitor-only
+boundary.
 
 ## Initial User Flow
 
 ```text
 open Control Room
+  -> connect or reconnect to the configured runtime URL
   -> inspect runtime diagnostic snapshot
-  -> launch a small local stress run
-  -> watch live logs and sampled telemetry
-  -> inspect generated report evidence
-  -> launch the same shape through make simulation-run for DigitalOcean
-  -> watch harness logs and fetched artifacts
+  -> watch sampled telemetry trend
+  -> inspect report evidence already written by CLI or remote harness runs
+  -> select a run artifact directory to tail existing logs
 ```
 
 ## Safety Boundaries
 
 - The control API binds to `127.0.0.1` by default.
-- Only allowlisted commands are supported.
-- Run artifacts are isolated under `/tmp/reef-control-room/runs/<run-id>/`.
-- Remote tests use the existing `make simulation-run` wrapper and do not expose
-  worker service ports directly.
+- The monitor does not expose any run-launch, shell, provisioning, or mutation
+  endpoints.
+- Local and remote tests still start from the existing CLI workflows.
+- Run artifacts are read from `/tmp/reef-control-room/runs/<run-id>/` by
+  default. Set `REEF_CONTROL_ROOM_STATE_DIR` if the monitor should read a
+  different artifact root.
+- Remote tests use the existing `make simulation-run` wrapper outside the
+  monitor. The monitor can read fetched artifacts after the harness writes them.
 
 ## Run
 
@@ -95,13 +100,9 @@ plain local stack startup.
 
 1. Start the local stack with the profile being tested.
 2. Start the control room.
-3. Launch a local stress run with conservative defaults:
-   - rate `100`
-   - workers `8`
-   - duration `15s`
-4. Confirm live logs, snapshot counters, and report evidence update.
-5. Launch a DigitalOcean simulation smoke through the same UI:
-   - rate `1000`
-   - workers `128`
-   - duration `60s`
-6. Confirm harness logs stream and fetched artifacts appear in run history.
+3. Click connect or reconnect and confirm runtime health updates.
+4. Run a local stress test from the existing CLI.
+5. Confirm snapshot counters, existing run logs, and report evidence update.
+6. Run a DigitalOcean simulation smoke from the existing CLI.
+7. Confirm fetched artifacts appear in run history once the harness writes them
+   under the configured artifact root.

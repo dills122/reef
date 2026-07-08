@@ -14,33 +14,31 @@ const ids = {
   log: document.querySelector("#log"),
   logRun: document.querySelector("#log-run"),
   trend: document.querySelector("#trend"),
+  runtimeUrl: document.querySelector("#runtime-url"),
+  lastProbe: document.querySelector("#last-probe"),
+  probeError: document.querySelector("#probe-error"),
+  connect: document.querySelector("#connect"),
+  pause: document.querySelector("#pause"),
 };
 
-document.querySelector("#refresh").addEventListener("click", () => refreshAll());
-document.querySelector("#local-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  startRun("/api/runs/local-stress", formData(event.currentTarget));
-});
-document.querySelector("#remote-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  startRun("/api/runs/remote-simulation", formData(event.currentTarget));
-});
+ids.connect.addEventListener("click", () => reconnect());
+ids.pause.addEventListener("click", () => pause());
 
 init();
-setInterval(refreshAll, 2000);
 
 async function init() {
+  state.connected = true;
   await loadConfig();
-  await refreshAll();
+  await reconnect();
 }
 
 async function loadConfig() {
   const config = await getJson("/api/config");
-  fillForm("#local-form", config.localStressDefaults || {});
-  fillForm("#remote-form", config.remoteDefaults || {});
+  ids.runtimeUrl.textContent = config.runtimeUrl || "unknown";
 }
 
 async function refreshAll() {
+  if (!state.connected) return;
   const [snapshot, runs] = await Promise.all([
     getJson(`/api/snapshot?runId=${encodeURIComponent(state.selectedRunId)}`),
     getJson("/api/runs"),
@@ -51,15 +49,44 @@ async function refreshAll() {
   renderEvidence(selected);
 }
 
-async function startRun(path, body) {
-  setBusy(true);
-  try {
-    const run = await postJson(path, body);
-    selectRun(run.runId);
-  } finally {
-    setBusy(false);
-    await refreshAll();
+async function reconnect() {
+  state.connected = true;
+  ids.connect.textContent = "Reconnect";
+  ids.pause.textContent = "Pause";
+  ids.probeError.textContent = "none";
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  if (state.source && state.selectedRunId) {
+    state.source.close();
+    state.source = null;
+    openRunEventStream(state.selectedRunId);
   }
+  state.trend = [];
+  try {
+    await refreshAll();
+  } catch (error) {
+    markDisconnected(error);
+  }
+  state.pollTimer = setInterval(() => refreshAll().catch(markDisconnected), 2000);
+}
+
+function pause() {
+  state.connected = false;
+  ids.pause.textContent = "Paused";
+  ids.connect.textContent = "Connect";
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  state.pollTimer = null;
+  if (state.source) state.source.close();
+  state.source = null;
+}
+
+function markDisconnected(error) {
+  state.connected = false;
+  ids.runtimeStatus.textContent = "monitor disconnected";
+  ids.runtimeStatus.className = "pill bad";
+  ids.probeError.textContent = String(error?.message || error).slice(0, 90);
+  ids.connect.textContent = "Reconnect";
+  if (state.pollTimer) clearInterval(state.pollTimer);
+  state.pollTimer = null;
 }
 
 function renderSnapshot(snapshot) {
@@ -72,6 +99,8 @@ function renderSnapshot(snapshot) {
     : "runtime offline";
   ids.runtimeStatus.className = `pill ${runtime?.ok && !internalBlocked ? "ok" : "bad"}`;
   ids.sampleTime.textContent = snapshot.sampledAt || "not sampled";
+  ids.lastProbe.textContent = snapshot.sampledAt || "not connected";
+  ids.probeError.textContent = firstProbeError(snapshot) || "none";
   const metrics = snapshot.metrics || {};
   setMetric("accepted", metrics.accepted);
   setMetric("completed", metrics.completed);
@@ -79,8 +108,8 @@ function renderSnapshot(snapshot) {
   setMetric("worker-lag", metrics.workerLag);
   setMetric("materialized", metrics.materialized);
   setMetric("projected", metrics.projected);
-  const active = snapshot.activeRuns?.[0] || state.selectedRunId || "";
-  ids.activeRunLabel.textContent = active ? `selected ${active}` : "no active run";
+  const active = state.selectedRunId || "";
+  ids.activeRunLabel.textContent = active ? `selected ${active}` : "no run selected";
   state.trend.push({
     at: Date.now(),
     accepted: Number(metrics.accepted || 0),
@@ -153,7 +182,13 @@ function selectRun(runId) {
   ids.logRun.textContent = runId;
   state.events = [];
   ids.log.textContent = "";
+  openRunEventStream(runId);
+  refreshAll();
+}
+
+function openRunEventStream(runId) {
   if (state.source) state.source.close();
+  if (!state.connected) return;
   state.source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
   state.source.onmessage = (event) => {
     const row = JSON.parse(event.data);
@@ -162,7 +197,9 @@ function selectRun(runId) {
     ids.log.textContent = state.events.map((item) => `${item.at} ${item.stream}: ${item.message}`).join("\n");
     ids.log.scrollTop = ids.log.scrollHeight;
   };
-  refreshAll();
+  state.source.onerror = () => {
+    if (state.connected) ids.probeError.textContent = "run log stream disconnected";
+  };
 }
 
 function renderTrend() {
@@ -200,36 +237,8 @@ function setMetric(name, value) {
   document.querySelector(`#metric-${name}`).textContent = fmt(value);
 }
 
-function formData(form) {
-  return Object.fromEntries(new FormData(form).entries());
-}
-
-function fillForm(selector, values) {
-  const form = document.querySelector(selector);
-  for (const [key, value] of Object.entries(values)) {
-    const input = form.elements.namedItem(key);
-    if (input) input.value = value;
-  }
-}
-
-function setBusy(value) {
-  document.querySelectorAll("button").forEach((button) => {
-    button.disabled = value;
-  });
-}
-
 async function getJson(path) {
   const response = await fetch(path);
-  if (!response.ok) throw new Error(`${path}: ${response.status}`);
-  return response.json();
-}
-
-async function postJson(path, body) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
   if (!response.ok) throw new Error(`${path}: ${response.status}`);
   return response.json();
 }
@@ -249,4 +258,11 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function firstProbeError(snapshot) {
+  for (const probe of Object.values(snapshot.probes || {})) {
+    if (probe?.error) return probe.error;
+  }
+  return "";
 }

@@ -19,28 +19,31 @@
     </header>
 
     <main class="shell">
-      <section class="panel command-panel">
+      <section class="panel monitor-panel">
         <div class="panel-title">
-          <h2>Run Controls</h2>
-          <button id="refresh" type="button">Refresh</button>
+          <h2>Connection</h2>
+          <div class="actions">
+            <button id="connect" type="button">Connect</button>
+            <button id="pause" type="button">Pause</button>
+          </div>
         </div>
-        <div class="forms">
-          <form id="local-form" class="run-form">
-            <h3>Local Stress</h3>
-            <label>Rate <input name="rate" value="100" inputmode="numeric" /></label>
-            <label>Workers <input name="workers" value="8" inputmode="numeric" /></label>
-            <label>Duration <input name="duration" value="15s" /></label>
-            <label>Mode <input name="mode" value="strict-lifecycle" /></label>
-            <button type="submit">Start Local</button>
-          </form>
-          <form id="remote-form" class="run-form">
-            <h3>DigitalOcean Smoke</h3>
-            <label>Rate <input name="rate" value="1000" inputmode="numeric" /></label>
-            <label>Workers <input name="workers" value="128" inputmode="numeric" /></label>
-            <label>Duration <input name="duration" value="60s" /></label>
-            <label>Profile <input name="profile" value="stream-ack" /></label>
-            <button type="submit">Start Remote</button>
-          </form>
+        <div class="connection-grid">
+          <div>
+            <span class="field-label">Runtime</span>
+            <strong id="runtime-url">unknown</strong>
+          </div>
+          <div>
+            <span class="field-label">Monitor Mode</span>
+            <strong>read-only</strong>
+          </div>
+          <div>
+            <span class="field-label">Last Probe</span>
+            <strong id="last-probe">not connected</strong>
+          </div>
+          <div>
+            <span class="field-label">Probe Error</span>
+            <strong id="probe-error">none</strong>
+          </div>
         </div>
       </section>
 
@@ -103,7 +106,7 @@
       <section class="panel">
         <div class="panel-title">
           <h2>Live Log</h2>
-          <span id="log-run" class="muted">select or start a run</span>
+          <span id="log-run" class="muted">select a run</span>
         </div>
         <pre id="log"></pre>
       </section>
