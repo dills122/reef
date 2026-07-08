@@ -161,7 +161,7 @@ The current gaps are:
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; it still needs crash/restart coverage and longer remote promotion evidence
-- the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and provider-neutral status lookup
+- the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and event-batch intermediate status authority; `/api/v1/commands/{commandId}` now exposes the provider-neutral public status vocabulary for stream references, in-flight work, canonical completions, rejects, and failures
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work

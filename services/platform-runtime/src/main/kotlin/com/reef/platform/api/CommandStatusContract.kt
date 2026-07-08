@@ -43,7 +43,8 @@ object CommandStatusResponse {
             "clientId" to view.clientId,
             "route" to view.route,
             "idempotencyKey" to view.idempotencyKey,
-            "status" to view.status.name,
+            "status" to view.publicStatus(),
+            "internalStatus" to view.status.name,
             "processingMode" to view.processingMode.configValue,
             "responseStatus" to view.responseStatus,
             "responsePayloadJson" to view.responsePayloadJson,
@@ -72,10 +73,26 @@ object CommandStatusResponse {
     fun acceptedJson(view: CommandStatusView): String {
         return JsonCodec.writeObject(
             "commandId" to view.commandId,
-            "status" to view.status.name,
+            "status" to "ACCEPTED",
             "processingMode" to view.processingMode.configValue,
             "statusUrl" to "/api/v1/commands/${view.commandId}"
         )
+    }
+
+    private fun CommandStatusView.publicStatus(): String {
+        if (canonicalMaterialized) {
+            return when {
+                engineResultStatus.equals("failed", ignoreCase = true) -> "FAILED"
+                engineResultStatus.equals("rejected", ignoreCase = true) -> "REJECTED"
+                else -> "COMPLETED"
+            }
+        }
+        return when (status) {
+            CommandLogStatus.RECEIVED -> "ACCEPTED"
+            CommandLogStatus.PROCESSING -> "IN_FLIGHT"
+            CommandLogStatus.COMPLETED -> "COMPLETED"
+            CommandLogStatus.FAILED -> "FAILED"
+        }
     }
 }
 

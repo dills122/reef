@@ -700,6 +700,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-status-1\"")
             assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
             assertContains(status.body, "\"processingMode\":\"captured-sync-engine\"")
             assertContains(status.body, "\"responseStatus\":200")
         } finally {
@@ -745,6 +746,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-status-canonical\"")
             assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
             assertContains(status.body, "\"processingMode\":\"stream-ack\"")
             assertContains(status.body, "\"canonicalMaterialized\":true")
             assertContains(status.body, "\"batchId\":\"batch-status-canonical\"")
@@ -823,6 +825,8 @@ class PlatformHttpServerBoundaryTest {
             val status = get(server.address.port, "/api/v1/commands/cmd-status-rejected", headers = apiReadHeaders())
 
             assertEquals(200, status.status)
+            assertContains(status.body, "\"status\":\"REJECTED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
             assertContains(status.body, "\"canonicalMaterialized\":true")
             assertContains(status.body, "\"resultStatus\":\"rejected\"")
             assertContains(status.body, "\"rejectCode\":\"ORDER_NOT_FOUND\"")
@@ -1166,12 +1170,13 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(202, response.status)
             assertContains(response.body, "\"commandId\":\"cmd-ack-1\"")
-            assertContains(response.body, "\"status\":\"RECEIVED\"")
+            assertContains(response.body, "\"status\":\"ACCEPTED\"")
             assertContains(response.body, "\"processingMode\":\"captured-ack\"")
             assertContains(response.body, "\"statusUrl\":\"/api/v1/commands/cmd-ack-1\"")
             assertEquals(0, gateway.submitCalls)
             assertEquals(200, status.status)
-            assertContains(status.body, "\"status\":\"RECEIVED\"")
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"internalStatus\":\"RECEIVED\"")
         } finally {
             server.stop(0)
         }
@@ -2195,7 +2200,8 @@ class PlatformHttpServerBoundaryTest {
             assertTrue(gateway.awaitFirstSubmit())
             assertEquals(200, status.status)
             assertContains(status.body, "\"processingMode\":\"accepted-async\"")
-            assertTrue(status.body.contains("\"status\":\"RECEIVED\"") || status.body.contains("\"status\":\"PROCESSING\""))
+            assertTrue(status.body.contains("\"status\":\"ACCEPTED\"") || status.body.contains("\"status\":\"IN_FLIGHT\""))
+            assertTrue(status.body.contains("\"internalStatus\":\"RECEIVED\"") || status.body.contains("\"internalStatus\":\"PROCESSING\""))
 
             gateway.release()
             val completed = waitForCommandStatus(
@@ -2630,7 +2636,8 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-stream-status-pending\"")
             assertContains(status.body, "\"source\":\"stream_reference\"")
-            assertContains(status.body, "\"status\":\"RECEIVED\"")
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"internalStatus\":\"RECEIVED\"")
             assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
         } finally {
             server.stop(0)
