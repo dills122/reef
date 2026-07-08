@@ -5,7 +5,9 @@ import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.partition.PartitionLaneHash
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import java.time.Instant
+import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
@@ -57,6 +59,10 @@ data class AcceptedAsyncCommandStats(
     val processing: Long,
     val completed: Long,
     val failed: Long,
+    val terminalStatusMaxRecords: Int,
+    val retainedTerminalStatusRecords: Long,
+    val retainedStatusRecords: Long,
+    val statusRecordsEvicted: Long,
     val lastReceivedAt: String,
     val lastCompletedAt: String,
     val lastFailedAt: String,
@@ -67,8 +73,10 @@ class AcceptedAsyncCommandIntake(
     private val api: PlatformApi,
     laneCount: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_LANES", 16, min = 1),
     private val queueCapacityPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY", 100_000, min = 1),
-    private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 1, min = 1).coerceAtMost(1),
-    private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L)
+    private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 32, min = 1),
+    private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L),
+    private val terminalStatusMaxRecords: Int =
+        RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS", 100_000, min = 0)
 ) : CommandStatusLookup {
     private val lanes: Array<Channel<AcceptedAsyncCommand>> =
         Array(laneCount) { Channel(queueCapacityPerLane) }
@@ -84,6 +92,8 @@ class AcceptedAsyncCommandIntake(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val recordsByCommandId = ConcurrentHashMap<String, AcceptedAsyncCommandRecord>()
     private val commandIdByIdempotency = ConcurrentHashMap<String, String>()
+    private val terminalCommandIds = ConcurrentHashMap.newKeySet<String>()
+    private val terminalStatusOrder = ConcurrentLinkedQueue<String>()
     private val started = AtomicBoolean(false)
     private val received = AtomicLong(0)
     private val duplicates = AtomicLong(0)
@@ -91,6 +101,8 @@ class AcceptedAsyncCommandIntake(
     private val processing = AtomicLong(0)
     private val completed = AtomicLong(0)
     private val failed = AtomicLong(0)
+    private val retainedTerminalStatusRecords = AtomicLong(0)
+    private val statusRecordsEvicted = AtomicLong(0)
     private val lastReceivedAtEpochMs = AtomicLong(0)
     private val lastCompletedAtEpochMs = AtomicLong(0)
     private val lastFailedAtEpochMs = AtomicLong(0)
@@ -159,6 +171,7 @@ class AcceptedAsyncCommandIntake(
                 updatedAtEpochMs = System.currentTimeMillis()
             )
             recordsByCommandId[command.commandId] = failed
+            markTerminalStatus(command.commandId)
             commandIdByIdempotency.remove(idempotencyKeyValue, command.commandId)
             return AcceptedAsyncCommandReceipt(accepted = false, backpressure = true, status = failed.toStatusView())
         }
@@ -207,6 +220,10 @@ class AcceptedAsyncCommandIntake(
             processing = processing.get(),
             completed = completed.get(),
             failed = failed.get(),
+            terminalStatusMaxRecords = terminalStatusMaxRecords,
+            retainedTerminalStatusRecords = retainedTerminalStatusRecords.get(),
+            retainedStatusRecords = recordsByCommandId.size.toLong(),
+            statusRecordsEvicted = statusRecordsEvicted.get(),
             lastReceivedAt = instantString(lastReceivedAtEpochMs.get()),
             lastCompletedAt = instantString(lastCompletedAtEpochMs.get()),
             lastFailedAt = instantString(lastFailedAtEpochMs.get()),
@@ -215,17 +232,26 @@ class AcceptedAsyncCommandIntake(
     }
 
     private suspend fun processLane(lane: Int, queue: Channel<AcceptedAsyncCommand>) {
-        for (command in queue) {
-            if (!started.get() || !scope.isActive) break
-            laneQueued.decrementAndGet(lane)
-            val pending = try {
-                submit(lane, command)
-            } catch (ex: Exception) {
-                fail(lane, command, ex)
-                continue
+        val pending = ArrayDeque<PendingAcceptedAsyncCommand>(inFlightPerLane)
+        laneLoop@ while (started.get() && scope.isActive) {
+            while (pending.size < inFlightPerLane) {
+                val command = receiveNext(queue, pending.isEmpty())
+                    ?: if (pending.isEmpty()) break@laneLoop else break
+                laneQueued.decrementAndGet(lane)
+                try {
+                    pending.addLast(submit(lane, command))
+                } catch (ex: Exception) {
+                    fail(lane, command, ex)
+                }
             }
-            complete(lane, pending)
+            val next = pending.pollFirst() ?: continue
+            complete(lane, next)
         }
+    }
+
+    private suspend fun receiveNext(queue: Channel<AcceptedAsyncCommand>, waitForCommand: Boolean): AcceptedAsyncCommand? {
+        if (!waitForCommand) return queue.tryReceive().getOrNull()
+        return queue.receiveCatching().getOrNull()
     }
 
     private fun submit(lane: Int, command: AcceptedAsyncCommand): PendingAcceptedAsyncCommand {
@@ -262,6 +288,7 @@ class AcceptedAsyncCommandIntake(
                     updatedAtEpochMs = System.currentTimeMillis()
                 )
             }
+            markTerminalStatus(command.record.commandId)
         } catch (ex: ExecutionException) {
             fail(lane, command, ex.cause ?: ex)
         } catch (ex: Exception) {
@@ -287,6 +314,7 @@ class AcceptedAsyncCommandIntake(
                 updatedAtEpochMs = System.currentTimeMillis()
             )
         }
+        markTerminalStatus(command.record.commandId)
     }
 
     private fun offer(lane: Int, queue: Channel<AcceptedAsyncCommand>, command: AcceptedAsyncCommand): Boolean {
@@ -314,10 +342,39 @@ class AcceptedAsyncCommandIntake(
         return "$clientId|$route|$idempotencyKey"
     }
 
+    private fun markTerminalStatus(commandId: String) {
+        if (terminalStatusMaxRecords <= 0) return
+        if (terminalCommandIds.add(commandId)) {
+            retainedTerminalStatusRecords.incrementAndGet()
+            terminalStatusOrder.add(commandId)
+        }
+        trimTerminalStatuses()
+    }
+
+    private fun trimTerminalStatuses() {
+        while (retainedTerminalStatusRecords.get() > terminalStatusMaxRecords) {
+            val commandId = terminalStatusOrder.poll() ?: return
+            val record = recordsByCommandId[commandId] ?: continue
+            if (!record.status.isTerminal()) continue
+            if (recordsByCommandId.remove(commandId, record)) {
+                val idempotencyKey = idempotencyKey(record.clientId, record.route, record.idempotencyKey)
+                commandIdByIdempotency.remove(idempotencyKey, commandId)
+                if (terminalCommandIds.remove(commandId)) {
+                    retainedTerminalStatusRecords.decrementAndGet()
+                }
+                statusRecordsEvicted.incrementAndGet()
+            }
+        }
+    }
+
     private fun instantString(epochMs: Long): String {
         if (epochMs <= 0) return ""
         return Instant.ofEpochMilli(epochMs).toString()
     }
+}
+
+private fun CommandLogStatus.isTerminal(): Boolean {
+    return this == CommandLogStatus.COMPLETED || this == CommandLogStatus.FAILED
 }
 
 private suspend fun <T> CompletableFuture<T>.awaitResult(): T =
