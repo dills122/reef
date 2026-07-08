@@ -16,6 +16,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.reference_instruments",
                 "runtime.reference_participants",
                 "runtime.reference_accounts",
+                "runtime.reference_venue_sessions",
                 "runtime.orders",
                 "runtime.executions",
                 "runtime.trades",
@@ -32,7 +33,8 @@ class PostgresSchemaRequirementsTest {
                 "runtime.market_data_snapshots",
                 "runtime.market_data_snapshot_dirty",
                 "auth.auth_roles",
-                "auth.auth_actor_roles"
+                "auth.auth_actor_roles",
+                "admin.post_trade_profiles"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
@@ -214,6 +216,31 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.market_data_snapshots" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "admin.post_trade_profiles.profile_id:text",
+                "admin.post_trade_profiles.mode:text",
+                "admin.post_trade_profiles.settlement_cycle:text",
+                "admin.post_trade_profiles.netting_mode:text",
+                "admin.post_trade_profiles.ledger_posting_mode:text",
+                "admin.post_trade_profiles.policy_version:integer",
+                "admin.post_trade_profiles.active:boolean"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "admin.post_trade_profiles" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.reference_venue_sessions.venue_session_id:text",
+                "runtime.reference_venue_sessions.post_trade_profile_id:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.reference_venue_sessions" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )
@@ -440,9 +467,13 @@ class PostgresSchemaRequirementsTest {
             requirements.tables.map { it.qualifiedName }.toSet()
         )
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.trade_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.post_trade_profile_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.reason" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.post_trade_policy_version" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.repairs.actor_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.repairs.post_trade_profile_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.resolutions.settlement_state" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.resolutions.post_trade_policy_version" })
     }
 
     @Test

@@ -5,6 +5,7 @@ object Permission {
     const val REFERENCE_WRITE = "reference.write"
     const val AUTH_ADMIN = "auth.admin"
     const val CALENDAR_ADMIN = "calendar.admin"
+    const val POST_TRADE_PROFILE_ADMIN = "post-trade-profile.admin"
     const val OVERRIDE_ADMIN = "override.admin"
     const val SIMULATION_CONTROL = "simulation.control"
     const val ARENA_ADMIN = "arena.admin"

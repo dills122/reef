@@ -15,6 +15,7 @@ import com.reef.platform.api.JsonCodec
 import com.reef.platform.api.defaultAccountRiskControlStore
 import com.reef.platform.api.defaultCommandCircuitBreakerStore
 import com.reef.platform.api.defaultInstrumentPriceCollarStore
+import com.reef.platform.domain.PostTradeProfile
 
 class AdminCliAdapter(
     private val adminService: AdminApplicationService = AdminApplicationService(),
@@ -179,6 +180,59 @@ class AdminCliAdapter(
                 val profiles = adminService.listCalendarProfiles()
                 """{"profilesCount":${profiles.size}}"""
             }
+            "post-trade-profile-upsert" -> {
+                if (args.size < 6) {
+                    return "usage: post-trade-profile-upsert <profileId> <mode> <settlementCycle> <nettingMode> <ledgerPostingMode> [policyVersion]"
+                }
+                val policyVersion = args.getOrNull(6)?.toIntOrNull() ?: 1
+                if (policyVersion <= 0 || (args.getOrNull(6) != null && args[6].toIntOrNull() == null)) {
+                    return "usage: post-trade-profile-upsert <profileId> <mode> <settlementCycle> <nettingMode> <ledgerPostingMode> [policyVersion]"
+                }
+                val profile = PostTradeProfile(
+                    profileId = args[1],
+                    mode = args[2],
+                    settlementCycle = args[3],
+                    nettingMode = args[4],
+                    ledgerPostingMode = args[5],
+                    policyVersion = policyVersion
+                )
+                adminService.upsertPostTradeProfile(actor, profile)
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "post-trade-profile-upsert",
+                    "profileId" to profile.profileId
+                )
+            }
+            "post-trade-profile-list" -> {
+                val profiles = adminService.listPostTradeProfiles()
+                JsonCodec.writeObject(
+                    "profilesCount" to profiles.size,
+                    "activeProfileId" to adminService.activePostTradeProfile().profileId
+                )
+            }
+            "post-trade-profile-activate" -> {
+                if (args.size < 2) return "usage: post-trade-profile-activate <profileId>"
+                val profile = adminService.activatePostTradeProfile(actor, args[1])
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "post-trade-profile-activate",
+                    "activeProfileId" to profile.profileId
+                )
+            }
+            "venue-session-profile-set" -> {
+                if (args.size < 3) return "usage: venue-session-profile-set <venueSessionId> <postTradeProfileId>"
+                val config = adminService.setVenueSessionPostTradeProfile(actor, args[1], args[2])
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "venue-session-profile-set",
+                    "venueSessionId" to config.venueSessionId,
+                    "postTradeProfileId" to config.postTradeProfileId
+                )
+            }
+            "venue-session-profile-list" -> {
+                val configs = adminService.listVenueSessionPostTradeProfiles()
+                JsonCodec.writeObject("venueSessionsCount" to configs.size)
+            }
             "override-upsert" -> {
                 if (args.size < 3) return "usage: override-upsert <code> <description>"
                 adminService.upsertOverrideReason(
@@ -237,6 +291,11 @@ class AdminCliAdapter(
               arena-bot-version-transition <botId> <versionId> <status> [reason]
               calendar-upsert <profileId> <timezone> <settlementCycle>
               calendar-list
+              post-trade-profile-upsert <profileId> <mode> <settlementCycle> <nettingMode> <ledgerPostingMode> [policyVersion]
+              post-trade-profile-list
+              post-trade-profile-activate <profileId>
+              venue-session-profile-set <venueSessionId> <postTradeProfileId>
+              venue-session-profile-list
               override-upsert <code> <description>
               override-list
               sim-start <scenario>

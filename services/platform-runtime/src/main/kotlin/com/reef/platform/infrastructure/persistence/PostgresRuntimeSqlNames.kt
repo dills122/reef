@@ -2,14 +2,17 @@ package com.reef.platform.infrastructure.persistence
 
 data class PostgresRuntimeSqlNames(
     private val runtimeSchema: String = "runtime",
-    private val authSchema: String = "auth"
+    private val authSchema: String = "auth",
+    private val adminSchema: String = "admin"
 ) {
     val runtimeSchemaName = schemaOrDefault(runtimeSchema, "runtime")
     val authSchemaName = schemaOrDefault(authSchema, "auth")
+    val adminSchemaName = schemaOrDefault(adminSchema, "admin")
 
     val referenceInstruments = qualify(runtimeSchemaName, "reference_instruments")
     val referenceParticipants = qualify(runtimeSchemaName, "reference_participants")
     val referenceAccounts = qualify(runtimeSchemaName, "reference_accounts")
+    val referenceVenueSessions = qualify(runtimeSchemaName, "reference_venue_sessions")
     val orders = qualify(runtimeSchemaName, "orders")
     val executions = qualify(runtimeSchemaName, "executions")
     val trades = qualify(runtimeSchemaName, "trades")
@@ -37,6 +40,7 @@ data class PostgresRuntimeSqlNames(
 
     val authRoles = qualify(authSchemaName, "auth_roles")
     val authActorRoles = qualify(authSchemaName, "auth_actor_roles")
+    val adminPostTradeProfiles = qualify(adminSchemaName, "post_trade_profiles")
 
     private fun schemaOrDefault(schema: String, defaultSchema: String): String {
         val candidate = schema.trim().ifBlank { defaultSchema }

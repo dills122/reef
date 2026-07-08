@@ -6,10 +6,12 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PersistedOrder
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -24,6 +26,10 @@ class NoopRuntimePersistence : RuntimePersistence {
     private val accounts = ConcurrentHashMap<String, Account>()
     private val roles = ConcurrentHashMap<String, RoleDefinition>()
     private val actorRoleBindings = ConcurrentHashMap<String, ActorRoleBinding>()
+    private val postTradeProfiles = ConcurrentHashMap<String, PostTradeProfile>()
+    private val venueSessionPostTradeProfiles = ConcurrentHashMap<String, VenueSessionPostTradeProfile>()
+    @Volatile
+    private var activePostTradeProfileId = ""
 
     override fun saveSubmitResult(commandId: String, result: SubmitOrderResult) {}
 
@@ -47,6 +53,42 @@ class NoopRuntimePersistence : RuntimePersistence {
 
     override fun saveActorRoleBinding(binding: ActorRoleBinding) {
         actorRoleBindings["${binding.actorId}|${binding.roleId}"] = binding
+    }
+
+    override fun savePostTradeProfile(profile: PostTradeProfile) {
+        postTradeProfiles[profile.profileId] = profile
+        if (profile.active || activePostTradeProfileId.isBlank()) {
+            activePostTradeProfileId = profile.profileId
+        }
+    }
+
+    override fun postTradeProfiles(): List<PostTradeProfile> {
+        return postTradeProfiles.values.map { it.copy(active = it.profileId == activePostTradeProfileId) }
+    }
+
+    override fun activePostTradeProfile(): PostTradeProfile {
+        val profile = postTradeProfiles[activePostTradeProfileId]
+            ?: throw IllegalArgumentException("no active post-trade profile")
+        return profile.copy(active = true)
+    }
+
+    override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
+        val profile = postTradeProfiles[profileId]
+            ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
+        activePostTradeProfileId = profileId
+        return profile.copy(active = true)
+    }
+
+    override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        venueSessionPostTradeProfiles[config.venueSessionId] = config
+    }
+
+    override fun venueSessionPostTradeProfileId(venueSessionId: String): String? {
+        return venueSessionPostTradeProfiles[venueSessionId]?.postTradeProfileId
+    }
+
+    override fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return venueSessionPostTradeProfiles.values.toList()
     }
 
     override fun instruments(): List<Instrument> = instruments.values.toList()

@@ -10,6 +10,7 @@ import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PublicTradeTapeEntry
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
@@ -17,6 +18,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
@@ -32,6 +34,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val accounts = linkedMapOf<String, Account>()
     private val roles = linkedMapOf<String, RoleDefinition>()
     private val actorRoleBindings = mutableListOf<ActorRoleBinding>()
+    private val postTradeProfiles = linkedMapOf<String, PostTradeProfile>()
+    private var activePostTradeProfileId = ""
+    private val venueSessionPostTradeProfiles = linkedMapOf<String, VenueSessionPostTradeProfile>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
@@ -76,6 +81,44 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun saveActorRoleBinding(binding: ActorRoleBinding) {
         actorRoleBindings.removeIf { it.actorId == binding.actorId && it.roleId == binding.roleId }
         actorRoleBindings.add(binding)
+    }
+
+    override fun savePostTradeProfile(profile: PostTradeProfile) {
+        postTradeProfiles[profile.profileId] = profile
+        if (profile.active) {
+            activePostTradeProfileId = profile.profileId
+        } else if (activePostTradeProfileId.isBlank()) {
+            activePostTradeProfileId = profile.profileId
+        }
+    }
+
+    override fun postTradeProfiles(): List<PostTradeProfile> {
+        return postTradeProfiles.values.map { it.copy(active = it.profileId == activePostTradeProfileId) }
+    }
+
+    override fun activePostTradeProfile(): PostTradeProfile {
+        val profile = postTradeProfiles[activePostTradeProfileId]
+            ?: throw IllegalArgumentException("no active post-trade profile")
+        return profile.copy(active = true)
+    }
+
+    override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
+        val profile = postTradeProfiles[profileId]
+            ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
+        activePostTradeProfileId = profileId
+        return profile.copy(active = true)
+    }
+
+    override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        venueSessionPostTradeProfiles[config.venueSessionId] = config
+    }
+
+    override fun venueSessionPostTradeProfileId(venueSessionId: String): String? {
+        return venueSessionPostTradeProfiles[venueSessionId]?.postTradeProfileId
+    }
+
+    override fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return venueSessionPostTradeProfiles.values.toList()
     }
 
     override fun instruments(): List<Instrument> {

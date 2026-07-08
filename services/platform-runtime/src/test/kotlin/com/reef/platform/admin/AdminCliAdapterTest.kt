@@ -69,6 +69,29 @@ class AdminCliAdapterTest {
         )
         assertContains(cli.execute(listOf("calendar-upsert", "us-default", "America/New_York", "T+1")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("calendar-list")), "\"profilesCount\":")
+        assertContains(
+            cli.execute(
+                listOf(
+                    "post-trade-profile-upsert",
+                    "custom-instant-v1",
+                    "instant-post-trade",
+                    "T+0",
+                    "gross-or-microbatch",
+                    "near-instant-finality"
+                )
+            ),
+            "\"profileId\":\"custom-instant-v1\""
+        )
+        assertContains(cli.execute(listOf("post-trade-profile-list")), "\"activeProfileId\":\"ops-realistic-v1\"")
+        assertContains(
+            cli.execute(listOf("post-trade-profile-activate", "custom-instant-v1")),
+            "\"activeProfileId\":\"custom-instant-v1\""
+        )
+        assertContains(
+            cli.execute(listOf("venue-session-profile-set", "session-1", "custom-instant-v1")),
+            "\"venueSessionId\":\"session-1\""
+        )
+        assertContains(cli.execute(listOf("venue-session-profile-list")), "\"venueSessionsCount\":1")
         assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("override-list")), "\"reasonsCount\":")
         assertContains(cli.execute(listOf("sim-start", "scenario-1")), "\"status\":\"ok\"")

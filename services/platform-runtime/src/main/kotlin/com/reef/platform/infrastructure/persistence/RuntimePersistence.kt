@@ -8,12 +8,14 @@ import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 
 data class ReferenceDataValidation(
     val instrumentExists: Boolean,
@@ -191,6 +193,13 @@ interface RuntimePersistence {
     fun saveAccount(account: Account)
     fun saveRole(role: RoleDefinition)
     fun saveActorRoleBinding(binding: ActorRoleBinding)
+    fun savePostTradeProfile(profile: PostTradeProfile)
+    fun postTradeProfiles(): List<PostTradeProfile>
+    fun activePostTradeProfile(): PostTradeProfile
+    fun activatePostTradeProfile(profileId: String): PostTradeProfile
+    fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile)
+    fun venueSessionPostTradeProfileId(venueSessionId: String): String?
+    fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile>
     fun instruments(): List<Instrument>
     fun participants(): List<Participant>
     fun accounts(): List<Account>

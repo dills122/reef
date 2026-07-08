@@ -65,11 +65,14 @@ object PostgresSchemaRequirements {
         val executions = PostgresSchemaObject.parse(names.executions)
         val trades = PostgresSchemaObject.parse(names.trades)
         val submitResults = PostgresSchemaObject.parse(names.submitResults)
+        val postTradeProfiles = PostgresSchemaObject.parse(names.adminPostTradeProfiles)
+        val venueSessions = PostgresSchemaObject.parse(names.referenceVenueSessions)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
                 names.referenceParticipants,
                 names.referenceAccounts,
+                names.referenceVenueSessions,
                 names.orders,
                 names.executions,
                 names.trades,
@@ -86,7 +89,8 @@ object PostgresSchemaRequirements {
                 names.marketDataSnapshots,
                 names.marketDataSnapshotDirty,
                 names.authRoles,
-                names.authActorRoles
+                names.authActorRoles,
+                names.adminPostTradeProfiles
             ).map(PostgresSchemaObject::parse),
             functions = listOf(
                 names.validateReferenceDataFunction,
@@ -170,7 +174,16 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(marketDataSnapshots, "best_ask_price_num", "numeric"),
                 PostgresSchemaColumn(marketDataSnapshots, "best_ask_quantity_num", "numeric"),
                 PostgresSchemaColumn(marketDataSnapshots, "last_partition_seq", "bigint"),
-                PostgresSchemaColumn(marketDataSnapshots, "lag", "bigint")
+                PostgresSchemaColumn(marketDataSnapshots, "lag", "bigint"),
+                PostgresSchemaColumn(postTradeProfiles, "profile_id", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "mode", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "settlement_cycle", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "netting_mode", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "ledger_posting_mode", "text"),
+                PostgresSchemaColumn(postTradeProfiles, "policy_version", "integer"),
+                PostgresSchemaColumn(postTradeProfiles, "active", "boolean"),
+                PostgresSchemaColumn(venueSessions, "venue_session_id", "text"),
+                PostgresSchemaColumn(venueSessions, "post_trade_profile_id", "text")
             )
         )
     }
@@ -194,16 +207,24 @@ object PostgresSchemaRequirements {
             columns = listOf(
                 PostgresSchemaColumn(obligationTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(obligationTable, "scenario_run_id", "text"),
+                PostgresSchemaColumn(obligationTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(obligationTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(obligationTable, "trade_id", "text"),
                 PostgresSchemaColumn(obligationTable, "occurred_at", "timestamp with time zone"),
                 PostgresSchemaColumn(breakTable, "settlement_break_id", "text"),
                 PostgresSchemaColumn(breakTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(breakTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(breakTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(breakTable, "reason", "text"),
                 PostgresSchemaColumn(repairTable, "settlement_repair_id", "text"),
                 PostgresSchemaColumn(repairTable, "settlement_break_id", "text"),
+                PostgresSchemaColumn(repairTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(repairTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(repairTable, "actor_id", "text"),
                 PostgresSchemaColumn(resolutionTable, "settlement_resolution_id", "text"),
                 PostgresSchemaColumn(resolutionTable, "settlement_repair_id", "text"),
+                PostgresSchemaColumn(resolutionTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(resolutionTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(resolutionTable, "settlement_state", "text"),
                 PostgresSchemaColumn(resolutionTable, "exception_state", "text")
             )

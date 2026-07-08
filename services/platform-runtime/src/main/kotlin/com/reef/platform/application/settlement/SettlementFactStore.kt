@@ -16,10 +16,14 @@ const val SettlementBreakOpenedState = "BROKEN"
 const val SettlementRepairPostedAction = "POST_CASH_LEG_REPAIR"
 const val SettlementRepairPostedActorType = "USER"
 const val SettlementResolvedState = "RESOLVED"
+const val DefaultPostTradeProfileId = "ops-realistic-v1"
+const val DefaultPostTradePolicyVersion = 1
 
 data class SettlementObligationCreatedFact(
     val settlementObligationId: String,
     val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
     val correlationId: String,
     val causationId: String,
     val tradeId: String,
@@ -37,6 +41,8 @@ data class SettlementBreakOpenedFact(
     val settlementBreakId: String,
     val settlementObligationId: String,
     val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
     val correlationId: String,
     val causationId: String,
     val reason: String = SettlementBreakOpenedReason,
@@ -49,6 +55,8 @@ data class SettlementRepairPostedFact(
     val settlementBreakId: String,
     val settlementObligationId: String,
     val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
     val correlationId: String,
     val causationId: String,
     val repairAction: String = SettlementRepairPostedAction,
@@ -63,6 +71,8 @@ data class SettlementResolvedFact(
     val settlementBreakId: String,
     val settlementRepairId: String,
     val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
     val correlationId: String,
     val causationId: String,
     val settlementState: String = SettlementResolvedState,
@@ -162,6 +172,8 @@ class PostgresSettlementFactStore(
                     CREATE TABLE IF NOT EXISTS ${names.obligations} (
                       settlement_obligation_id TEXT PRIMARY KEY,
                       scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
                       trade_id TEXT NOT NULL,
@@ -183,6 +195,8 @@ class PostgresSettlementFactStore(
                       settlement_break_id TEXT PRIMARY KEY,
                       settlement_obligation_id TEXT NOT NULL,
                       scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
                       reason TEXT NOT NULL CHECK (reason = 'CASH_LEG_FAILED'),
@@ -199,6 +213,8 @@ class PostgresSettlementFactStore(
                       settlement_break_id TEXT NOT NULL,
                       settlement_obligation_id TEXT NOT NULL,
                       scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
                       repair_action TEXT NOT NULL CHECK (repair_action = 'POST_CASH_LEG_REPAIR'),
@@ -217,6 +233,8 @@ class PostgresSettlementFactStore(
                       settlement_break_id TEXT NOT NULL,
                       settlement_repair_id TEXT NOT NULL,
                       scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
                       settlement_state TEXT NOT NULL CHECK (settlement_state = 'RESOLVED'),
@@ -226,6 +244,7 @@ class PostgresSettlementFactStore(
                     )
                     """.trimIndent()
                 )
+                ensureSettlementEvidenceColumns(stmt)
                 createIndexes(stmt = stmt)
             }
         }
@@ -272,28 +291,31 @@ class PostgresSettlementFactStore(
         conn.prepareStatement(
             """
             INSERT INTO ${names.obligations}(
-              settlement_obligation_id, scenario_run_id, correlation_id, causation_id, trade_id,
+              settlement_obligation_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+              correlation_id, causation_id, trade_id,
               buyer_participant_id, seller_participant_id, instrument_id, quantity, cash_amount,
               currency, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (settlement_obligation_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
             facts.forEach {
                 ps.setString(1, it.settlementObligationId)
                 ps.setString(2, it.scenarioRunId)
-                ps.setString(3, it.correlationId)
-                ps.setString(4, it.causationId)
-                ps.setString(5, it.tradeId)
-                ps.setString(6, it.buyerParticipantId)
-                ps.setString(7, it.sellerParticipantId)
-                ps.setString(8, it.instrumentId)
-                ps.setString(9, it.quantity)
-                ps.setString(10, it.cashAmount)
-                ps.setString(11, it.currency)
-                ps.setString(12, it.state)
-                ps.setTimestamp(13, Timestamp.from(it.occurredAt))
+                ps.setString(3, it.postTradeProfileId)
+                ps.setInt(4, it.postTradePolicyVersion)
+                ps.setString(5, it.correlationId)
+                ps.setString(6, it.causationId)
+                ps.setString(7, it.tradeId)
+                ps.setString(8, it.buyerParticipantId)
+                ps.setString(9, it.sellerParticipantId)
+                ps.setString(10, it.instrumentId)
+                ps.setString(11, it.quantity)
+                ps.setString(12, it.cashAmount)
+                ps.setString(13, it.currency)
+                ps.setString(14, it.state)
+                ps.setTimestamp(15, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
             ps.executeBatch()
@@ -305,9 +327,9 @@ class PostgresSettlementFactStore(
             """
             INSERT INTO ${names.breaks}(
               settlement_break_id, settlement_obligation_id, scenario_run_id, correlation_id,
-              causation_id, reason, state, occurred_at
+              causation_id, post_trade_profile_id, post_trade_policy_version, reason, state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (settlement_break_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -317,9 +339,11 @@ class PostgresSettlementFactStore(
                 ps.setString(3, it.scenarioRunId)
                 ps.setString(4, it.correlationId)
                 ps.setString(5, it.causationId)
-                ps.setString(6, it.reason)
-                ps.setString(7, it.state)
-                ps.setTimestamp(8, Timestamp.from(it.occurredAt))
+                ps.setString(6, it.postTradeProfileId)
+                ps.setInt(7, it.postTradePolicyVersion)
+                ps.setString(8, it.reason)
+                ps.setString(9, it.state)
+                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
             ps.executeBatch()
@@ -331,9 +355,10 @@ class PostgresSettlementFactStore(
             """
             INSERT INTO ${names.repairs}(
               settlement_repair_id, settlement_break_id, settlement_obligation_id, scenario_run_id,
-              correlation_id, causation_id, repair_action, actor_type, actor_id, occurred_at
+              correlation_id, causation_id, post_trade_profile_id, post_trade_policy_version,
+              repair_action, actor_type, actor_id, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (settlement_repair_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -344,10 +369,12 @@ class PostgresSettlementFactStore(
                 ps.setString(4, it.scenarioRunId)
                 ps.setString(5, it.correlationId)
                 ps.setString(6, it.causationId)
-                ps.setString(7, it.repairAction)
-                ps.setString(8, it.actorType)
-                ps.setString(9, it.actorId)
-                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
+                ps.setString(7, it.postTradeProfileId)
+                ps.setInt(8, it.postTradePolicyVersion)
+                ps.setString(9, it.repairAction)
+                ps.setString(10, it.actorType)
+                ps.setString(11, it.actorId)
+                ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
             ps.executeBatch()
@@ -359,9 +386,10 @@ class PostgresSettlementFactStore(
             """
             INSERT INTO ${names.resolutions}(
               settlement_resolution_id, settlement_obligation_id, settlement_break_id, settlement_repair_id,
-              scenario_run_id, correlation_id, causation_id, settlement_state, exception_state, occurred_at
+              scenario_run_id, correlation_id, causation_id, post_trade_profile_id, post_trade_policy_version,
+              settlement_state, exception_state, occurred_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (settlement_resolution_id) DO NOTHING
             """.trimIndent()
         ).use { ps ->
@@ -373,9 +401,11 @@ class PostgresSettlementFactStore(
                 ps.setString(5, it.scenarioRunId)
                 ps.setString(6, it.correlationId)
                 ps.setString(7, it.causationId)
-                ps.setString(8, it.settlementState)
-                ps.setString(9, it.exceptionState)
-                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
+                ps.setString(8, it.postTradeProfileId)
+                ps.setInt(9, it.postTradePolicyVersion)
+                ps.setString(10, it.settlementState)
+                ps.setString(11, it.exceptionState)
+                ps.setTimestamp(12, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
             ps.executeBatch()
@@ -387,7 +417,7 @@ class PostgresSettlementFactStore(
             """
             SELECT settlement_obligation_id, scenario_run_id, correlation_id, causation_id, trade_id,
                    buyer_participant_id, seller_participant_id, instrument_id, quantity, cash_amount,
-                   currency, state, occurred_at
+                   currency, state, occurred_at, post_trade_profile_id, post_trade_policy_version
             FROM ${names.obligations}
             WHERE scenario_run_id = ?
             ORDER BY occurred_at, settlement_obligation_id
@@ -406,7 +436,7 @@ class PostgresSettlementFactStore(
         conn.prepareStatement(
             """
             SELECT settlement_break_id, settlement_obligation_id, scenario_run_id, correlation_id,
-                   causation_id, reason, state, occurred_at
+                   causation_id, reason, state, occurred_at, post_trade_profile_id, post_trade_policy_version
             FROM ${names.breaks}
             WHERE scenario_run_id = ?
             ORDER BY occurred_at, settlement_break_id
@@ -425,7 +455,8 @@ class PostgresSettlementFactStore(
         conn.prepareStatement(
             """
             SELECT settlement_repair_id, settlement_break_id, settlement_obligation_id, scenario_run_id,
-                   correlation_id, causation_id, repair_action, actor_type, actor_id, occurred_at
+                   correlation_id, causation_id, repair_action, actor_type, actor_id, occurred_at,
+                   post_trade_profile_id, post_trade_policy_version
             FROM ${names.repairs}
             WHERE scenario_run_id = ?
             ORDER BY occurred_at, settlement_repair_id
@@ -444,7 +475,8 @@ class PostgresSettlementFactStore(
         conn.prepareStatement(
             """
             SELECT settlement_resolution_id, settlement_obligation_id, settlement_break_id, settlement_repair_id,
-                   scenario_run_id, correlation_id, causation_id, settlement_state, exception_state, occurred_at
+                   scenario_run_id, correlation_id, causation_id, settlement_state, exception_state, occurred_at,
+                   post_trade_profile_id, post_trade_policy_version
             FROM ${names.resolutions}
             WHERE scenario_run_id = ?
             ORDER BY occurred_at, settlement_resolution_id
@@ -464,6 +496,19 @@ class PostgresSettlementFactStore(
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_breaks_run ON ${names.breaks}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_repairs_run ON ${names.repairs}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_resolutions_run ON ${names.resolutions}(scenario_run_id, occurred_at)")
+    }
+
+    private fun ensureSettlementEvidenceColumns(stmt: java.sql.Statement) {
+        listOf(names.obligations, names.breaks, names.repairs, names.resolutions).forEach { table ->
+            stmt.execute(
+                "ALTER TABLE $table ADD COLUMN IF NOT EXISTS post_trade_profile_id " +
+                    "TEXT NOT NULL DEFAULT 'ops-realistic-v1'"
+            )
+            stmt.execute(
+                "ALTER TABLE $table ADD COLUMN IF NOT EXISTS post_trade_policy_version " +
+                    "INTEGER NOT NULL DEFAULT 1"
+            )
+        }
     }
 
     private fun connection(): Connection = dataSource.connection
@@ -493,9 +538,17 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
     val obligations = facts.obligations.associateBy { it.settlementObligationId }
     val breaks = facts.breaks.associateBy { it.settlementBreakId }
     val repairs = facts.repairs.associateBy { it.settlementRepairId }
+    val profileEvidence = (
+        facts.obligations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.breaks.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.repairs.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion }
+        ).toSet()
+    require(profileEvidence.size <= 1) { "settlement facts must use one post-trade profile per scenarioRunId" }
 
     facts.obligations.forEach {
         requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
         require(it.tradeId.isNotBlank()) { "tradeId is required" }
         require(it.buyerParticipantId.isNotBlank()) { "buyerParticipantId is required" }
         require(it.sellerParticipantId.isNotBlank()) { "sellerParticipantId is required" }
@@ -508,16 +561,25 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
 
     facts.breaks.forEach {
         requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
-        require(obligations.containsKey(it.settlementObligationId)) { "break must reference existing obligation" }
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        val obligation = obligations[it.settlementObligationId]
+        require(obligation != null) { "break must reference existing obligation" }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, obligation)) {
+            "break post-trade profile must match obligation"
+        }
         require(it.reason == SettlementBreakOpenedReason) { "break reason must be $SettlementBreakOpenedReason" }
         require(it.state == SettlementBreakOpenedState) { "break state must be $SettlementBreakOpenedState" }
     }
 
     facts.repairs.forEach {
         requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
         val breakFact = breaks[it.settlementBreakId]
         require(breakFact != null) { "repair must reference existing break" }
         require(breakFact?.settlementObligationId == it.settlementObligationId) { "repair obligation must match break obligation" }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, breakFact)) {
+            "repair post-trade profile must match break"
+        }
         require(it.repairAction == SettlementRepairPostedAction) { "repair action must be $SettlementRepairPostedAction" }
         require(it.actorType == SettlementRepairPostedActorType) { "repair actorType must be $SettlementRepairPostedActorType" }
         require(it.actorId.isNotBlank()) { "actorId is required" }
@@ -525,14 +587,47 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
 
     facts.resolutions.forEach {
         requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
         val repair = repairs[it.settlementRepairId]
         require(repair != null) { "resolution must reference existing repair" }
         require(repair?.settlementBreakId == it.settlementBreakId) { "resolution break must match repair break" }
         require(repair?.settlementObligationId == it.settlementObligationId) { "resolution obligation must match repair obligation" }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, repair)) {
+            "resolution post-trade profile must match repair"
+        }
         require(it.settlementState == SettlementResolvedState) { "settlementState must be $SettlementResolvedState" }
         require(it.exceptionState == SettlementResolvedState) { "exceptionState must be $SettlementResolvedState" }
     }
 }
+
+private fun requirePostTradeProfileEvidence(postTradeProfileId: String, postTradePolicyVersion: Int) {
+    require(postTradeProfileId.isNotBlank()) { "postTradeProfileId is required" }
+    require(postTradePolicyVersion > 0) { "postTradePolicyVersion must be positive" }
+}
+
+private fun profileMatchesParent(
+    postTradeProfileId: String,
+    postTradePolicyVersion: Int,
+    parent: SettlementObligationCreatedFact?
+): Boolean = parent != null &&
+    parent.postTradeProfileId == postTradeProfileId &&
+    parent.postTradePolicyVersion == postTradePolicyVersion
+
+private fun profileMatchesParent(
+    postTradeProfileId: String,
+    postTradePolicyVersion: Int,
+    parent: SettlementBreakOpenedFact?
+): Boolean = parent != null &&
+    parent.postTradeProfileId == postTradeProfileId &&
+    parent.postTradePolicyVersion == postTradePolicyVersion
+
+private fun profileMatchesParent(
+    postTradeProfileId: String,
+    postTradePolicyVersion: Int,
+    parent: SettlementRepairPostedFact?
+): Boolean = parent != null &&
+    parent.postTradeProfileId == postTradeProfileId &&
+    parent.postTradePolicyVersion == postTradePolicyVersion
 
 private fun requireCommon(
     factScenarioRunId: String,
@@ -549,6 +644,8 @@ private fun ResultSet.toObligation(): SettlementObligationCreatedFact {
     return SettlementObligationCreatedFact(
         settlementObligationId = getString(1),
         scenarioRunId = getString(2),
+        postTradeProfileId = getString(14),
+        postTradePolicyVersion = getInt(15),
         correlationId = getString(3),
         causationId = getString(4),
         tradeId = getString(5),
@@ -568,6 +665,8 @@ private fun ResultSet.toBreak(): SettlementBreakOpenedFact {
         settlementBreakId = getString(1),
         settlementObligationId = getString(2),
         scenarioRunId = getString(3),
+        postTradeProfileId = getString(9),
+        postTradePolicyVersion = getInt(10),
         correlationId = getString(4),
         causationId = getString(5),
         reason = getString(6),
@@ -582,6 +681,8 @@ private fun ResultSet.toRepair(): SettlementRepairPostedFact {
         settlementBreakId = getString(2),
         settlementObligationId = getString(3),
         scenarioRunId = getString(4),
+        postTradeProfileId = getString(11),
+        postTradePolicyVersion = getInt(12),
         correlationId = getString(5),
         causationId = getString(6),
         repairAction = getString(7),
@@ -598,6 +699,8 @@ private fun ResultSet.toResolution(): SettlementResolvedFact {
         settlementBreakId = getString(3),
         settlementRepairId = getString(4),
         scenarioRunId = getString(5),
+        postTradeProfileId = getString(11),
+        postTradePolicyVersion = getInt(12),
         correlationId = getString(6),
         causationId = getString(7),
         settlementState = getString(8),

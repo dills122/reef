@@ -20,6 +20,8 @@ import com.reef.platform.infrastructure.config.RuntimeEnv
  * validated config is guaranteed to match what actually gets constructed at startup.
  */
 data class PlatformRuntimeProfileConfig(
+    val deploymentProfileRaw: String,
+    val postTradeProfileRaw: String,
     val commandProcessingMode: CommandProcessingMode,
     val streamAckPublisherRaw: String,
     val streamAckLogProvider: StreamCommandLogProvider,
@@ -31,6 +33,13 @@ data class PlatformRuntimeProfileConfig(
     val marketDataProjectorEnabled: Boolean,
     val orderLifecycleProjectorEnabled: Boolean
 ) {
+    val effectivePostTradeProfileId: String
+        get() = postTradeProfileRaw.ifBlank { "ops-realistic-v1" }
+
+    val isLocalDeploymentProfile: Boolean
+        get() = deploymentProfileRaw.isBlank() ||
+            deploymentProfileRaw in setOf("local", "dev", "development", "test", "ci", "single-host", "hosted-single-host")
+
     /** Resolved publisher kind, mirroring [StreamCommandIntakeFactory.defaultPublisher] selection. */
     val resolvedPublisherKind: PlatformRuntimeProfilePublisherKind
         get() = when (streamAckPublisherRaw) {
@@ -55,6 +64,18 @@ data class PlatformRuntimeProfileConfig(
     companion object {
         fun fromEnv(lookup: (String) -> String? = { key -> System.getenv(key) }): PlatformRuntimeProfileConfig {
             return PlatformRuntimeProfileConfig(
+                deploymentProfileRaw = listOf(
+                    "PLATFORM_RUNTIME_PROFILE",
+                    "REEF_ENV",
+                    "REEF_DEPLOYMENT_ENV",
+                    "DEPLOYMENT_ENV",
+                    "ENVIRONMENT",
+                    "APP_ENV",
+                    "PROFILE"
+                ).firstNotNullOfOrNull { key -> lookup(key)?.trim()?.takeIf { it.isNotBlank() } }
+                    ?.lowercase()
+                    .orEmpty(),
+                postTradeProfileRaw = RuntimeEnv.string("POST_TRADE_PROFILE", "", lookup).trim(),
                 commandProcessingMode = CommandProcessingMode.fromEnv(lookup),
                 streamAckPublisherRaw = RuntimeEnv.string("STREAM_ACK_PUBLISHER", "", lookup).trim().lowercase(),
                 streamAckLogProvider = StreamCommandLogProvider.fromEnv(lookup),
@@ -87,16 +108,20 @@ class PlatformRuntimeProfileValidationException(val violations: List<String>) : 
 object PlatformRuntimeProfileValidator {
     /**
      * Returns every validation violation for the given config; an empty list means the profile is
-     * safe to run. Only meaningful when [CommandProcessingMode.StreamAck] is selected: other
-     * processing modes never build a stream-ack publisher/intake store or materializer/projector
-     * chain on top of one, so there is nothing for this validator to reject.
+     * safe to run. Settlement profile selection applies to every non-local runtime. Stream-ack
+     * publisher/intake/materializer checks only apply when [CommandProcessingMode.StreamAck] is
+     * selected.
      */
     fun violations(config: PlatformRuntimeProfileConfig): List<String> {
-        if (config.commandProcessingMode != CommandProcessingMode.StreamAck) {
-            return emptyList()
+        val issues = mutableListOf<String>()
+        if (!config.isLocalDeploymentProfile && config.postTradeProfileRaw.isBlank()) {
+            issues += "non-local runtime requires explicit POST_TRADE_PROFILE; local default is ${config.effectivePostTradeProfileId}"
         }
 
-        val issues = mutableListOf<String>()
+        if (config.commandProcessingMode != CommandProcessingMode.StreamAck) {
+            return issues
+        }
+
         val publisherKind = config.resolvedPublisherKind
         val intakeStoreKind = config.resolvedIntakeStoreKind
 
