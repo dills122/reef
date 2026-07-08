@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDeleteBatchSql,
+  buildDeleteOrphanRowsSql,
   buildEligibleCountSql,
+  buildOrphanCountSql,
   buildQueueCountsSql,
   buildRetentionPinExclusionPredicate,
   buildVacuumSql,
@@ -38,6 +40,19 @@ test("builds batched delete for terminal command history", () => {
   assert.match(sql, /DELETE FROM command_log\.commands commands/);
   assert.match(sql, /RETURNING commands\.command_id/);
   assert.match(sql, /idempotency_prefix/);
+});
+
+test("builds command-log orphan diagnostics and cleanup SQL", () => {
+  const countSql = buildOrphanCountSql();
+  const deleteSql = buildDeleteOrphanRowsSql();
+
+  assert.match(countSql, /FROM command_log\.command_integrity_violations/);
+  assert.match(countSql, /orphan_payload/);
+  assert.match(deleteSql, /DELETE FROM command_log\.command_payloads payloads/);
+  assert.match(deleteSql, /DELETE FROM command_log\.command_work_queue queue/);
+  assert.match(deleteSql, /DELETE FROM command_log\.command_results results/);
+  assert.match(deleteSql, /NOT EXISTS/);
+  assert.match(deleteSql, /SELECT COUNT\(\*\) FROM deleted_payloads/);
 });
 
 test("builds active queue count SQL", () => {

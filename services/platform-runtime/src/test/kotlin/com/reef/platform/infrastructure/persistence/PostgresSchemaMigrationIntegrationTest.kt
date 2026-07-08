@@ -61,6 +61,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0014_lifecycle_command_outcome_projection.sql',
                   'runtime/0015_market_data_snapshots.sql',
                   'runtime/0016_order_lifecycle_state.sql',
+                  'runtime/0027_audit_persistence_hardening.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -82,7 +83,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0010_drop_legacy_status_index.sql',
                   'command_log/0011_unlogged_active_queue.sql',
                   'command_log/0012_command_payloads.sql',
-                  'command_log/0013_drop_hot_path_foreign_keys.sql'
+                  'command_log/0013_drop_hot_path_foreign_keys.sql',
+                  'command_log/0014_integrity_audit_views.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -118,6 +120,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0011_unlogged_active_queue.sql",
                     "command_log/0012_command_payloads.sql",
                     "command_log/0013_drop_hot_path_foreign_keys.sql",
+                    "command_log/0014_integrity_audit_views.sql",
                     "runtime/0003_live_runtime_persistence.sql",
                     "runtime/0004_bulk_submit_outcomes.sql",
                     "runtime/0005_set_based_submit_outcomes.sql",
@@ -131,7 +134,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0013_scope_venue_event_batch_identity.sql",
                     "runtime/0014_lifecycle_command_outcome_projection.sql",
                     "runtime/0015_market_data_snapshots.sql",
-                    "runtime/0016_order_lifecycle_state.sql"
+                    "runtime/0016_order_lifecycle_state.sql",
+                    "runtime/0027_audit_persistence_hardening.sql"
                 ),
                 appliedMigrations
             )
@@ -147,6 +151,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 "boundary.instrument_price_collars",
                 "boundary.boundary_rejections",
                 "command_log.command_payloads",
+                "command_log.command_integrity_violations",
                 "command_log.command_results",
                 "command_log.command_work_queue",
                 "command_log.commands",
@@ -196,6 +201,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     'boundary_rejections',
                     'commands',
                     'command_payloads',
+                    'command_integrity_violations',
                     'command_work_queue',
                     'command_results',
                     'retention_pins'
@@ -251,7 +257,7 @@ class PostgresSchemaMigrationIntegrationTest {
                 SELECT routine_schema || '.' || routine_name AS routine_name
                 FROM information_schema.routines
                 WHERE routine_schema = 'command_log'
-                  AND routine_name = 'command_append'
+                  AND routine_name IN ('command_append', 'command_integrity_summary')
                 """.trimIndent()
             ).use { ps ->
                 ps.executeQuery().use { rs ->
@@ -261,7 +267,13 @@ class PostgresSchemaMigrationIntegrationTest {
                 }
             }
 
-            assertEquals(setOf("command_log.command_append"), commandLogFunctions)
+            assertEquals(
+                setOf(
+                    "command_log.command_append",
+                    "command_log.command_integrity_summary"
+                ),
+                commandLogFunctions
+            )
 
             val commandLogForeignKeys = conn.prepareStatement(
                 """

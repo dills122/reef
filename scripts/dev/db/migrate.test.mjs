@@ -41,6 +41,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0024_scope_command_outcome_projection_stream.sql",
       "runtime/0025_orders_client_order_lookup.sql",
       "runtime/0026_contiguous_command_outcome_projection_watermarks.sql",
+      "runtime/0027_audit_persistence_hardening.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -65,9 +66,33 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0011_unlogged_active_queue.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0012_command_payloads.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0013_drop_hot_path_foreign_keys.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0014_integrity_audit_views.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
+});
+
+test("audit hardening migration preserves first command outcome and counts actual canonical inserts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0027_audit_persistence_hardening.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ON CONFLICT \(command_id\) DO UPDATE SET\s+command_id = runtime\.submit_results\.command_id/);
+  assert.match(migration.sql, /runtime\.submit_results\.occurred_at = EXCLUDED\.occurred_at/);
+  assert.match(migration.sql, /SELECT COUNT\(\*\) INTO appended_count FROM insert_results/);
+  assert.match(migration.sql, /idx_order_lifecycle_state_book_numeric_price/);
+});
+
+test("command-log integrity audit migration replaces dropped hot-path foreign key checks", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "command_log/0014_integrity_audit_views.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE OR REPLACE VIEW command_log\.command_integrity_violations/);
+  assert.match(migration.sql, /orphan_payload/);
+  assert.match(migration.sql, /active_command_missing_queue/);
+  assert.match(migration.sql, /terminal_result_still_queued/);
+  assert.match(migration.sql, /CREATE OR REPLACE FUNCTION command_log\.command_integrity_summary/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {
