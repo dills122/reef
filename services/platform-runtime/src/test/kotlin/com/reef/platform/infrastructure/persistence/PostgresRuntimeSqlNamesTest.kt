@@ -23,6 +23,7 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.canonical_command_outcomes", names.canonicalCommandOutcomes)
         assertEquals("runtime.projection_watermarks", names.projectionWatermarks)
         assertEquals("runtime.reference_instruments", names.referenceInstruments)
+        assertEquals("runtime.reference_venue_sessions", names.referenceVenueSessions)
         assertEquals("runtime.runtime_persist_submit_outcome", names.persistSubmitOutcomeFunction)
         assertEquals("runtime.runtime_persist_submit_outcomes", names.persistSubmitOutcomesFunction)
         assertEquals("runtime.runtime_append_canonical_submit_outcomes", names.appendCanonicalSubmitOutcomesFunction)
@@ -31,16 +32,19 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.runtime_materialize_venue_event_batch", names.materializeVenueEventBatchFunction)
         assertEquals("auth.auth_roles", names.authRoles)
         assertEquals("auth.auth_actor_roles", names.authActorRoles)
+        assertEquals("admin.post_trade_profiles", names.adminPostTradeProfiles)
     }
 
     @Test
     fun blankSchemaNamesFallBackToDefaultSchemas() {
-        val names = PostgresRuntimeSqlNames(runtimeSchema = "", authSchema = "")
+        val names = PostgresRuntimeSqlNames(runtimeSchema = "", authSchema = "", adminSchema = "")
 
         listOf(
             names.orders,
             names.referenceInstruments,
-            names.authRoles
+            names.referenceVenueSessions,
+            names.authRoles,
+            names.adminPostTradeProfiles
         ).forEach { qualifiedName ->
             assertFalse(qualifiedName.startsWith("."))
             assertFalse(qualifiedName.endsWith("."))
@@ -54,6 +58,9 @@ class PostgresRuntimeSqlNamesTest {
         }
         assertFailsWith<IllegalArgumentException> {
             PostgresRuntimeSqlNames(runtimeSchema = "runtime", authSchema = "auth.actor_roles")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            PostgresRuntimeSqlNames(runtimeSchema = "runtime", authSchema = "auth", adminSchema = "admin.policy")
         }
     }
 }
