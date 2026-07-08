@@ -61,8 +61,10 @@ open Control Room
   endpoints.
 - Local and remote tests still start from the existing CLI workflows.
 - Run artifacts are read from `/tmp/reef-control-room/runs/<run-id>/` by
-  default. Set `REEF_CONTROL_ROOM_STATE_DIR` if the monitor should read a
-  different artifact root.
+  default. Directories with `run.json` use that metadata; directories with only
+  stress/report JSON files are shown as observed artifact runs. Set
+  `REEF_CONTROL_ROOM_STATE_DIR` if the monitor should read a different artifact
+  root.
 - Remote tests use the existing `make simulation-run` wrapper outside the
   monitor. The monitor can read fetched artifacts after the harness writes them.
 

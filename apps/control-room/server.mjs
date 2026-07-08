@@ -213,16 +213,31 @@ function listRuns() {
 function readRun(runId) {
   const dir = runDir(safeRunId(runId));
   const recordPath = join(dir, "run.json");
+  const evidence = readEvidenceForRun(dir);
   try {
     const record = JSON.parse(readFileSync(recordPath, "utf8"));
     return {
       ...record,
-      evidence: readEvidenceForRun(dir),
+      evidence,
       recentEvents: readRecentEvents(join(dir, "stdout.ndjson"), 200),
       artifacts: listArtifacts(dir),
     };
   } catch {
-    return null;
+    if (evidence.length === 0) return null;
+    const artifacts = listArtifacts(dir);
+    return {
+      runId: safeRunId(runId),
+      kind: "artifact",
+      status: "observed",
+      command: [],
+      startedAt: firstModifiedAt(artifacts),
+      completedAt: lastModifiedAt(artifacts),
+      exitCode: null,
+      artifactDir: dir,
+      evidence,
+      recentEvents: readRecentEvents(join(dir, "stdout.ndjson"), 200),
+      artifacts,
+    };
   }
 }
 
@@ -300,6 +315,21 @@ function listArtifacts(dir) {
   } catch {
     return [];
   }
+}
+
+function firstModifiedAt(artifacts) {
+  return artifacts
+    .map((artifact) => artifact.modifiedAt)
+    .filter(Boolean)
+    .sort()[0] || "";
+}
+
+function lastModifiedAt(artifacts) {
+  return artifacts
+    .map((artifact) => artifact.modifiedAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || "";
 }
 
 function streamRunEvents(response, runId) {
