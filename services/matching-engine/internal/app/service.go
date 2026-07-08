@@ -525,6 +525,56 @@ func (s *Service) BookStats(instrumentID string) BookStats {
 	}
 }
 
+func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
+	s.booksMu.RLock()
+	book, ok := s.books[instrumentID]
+	s.booksMu.RUnlock()
+	if !ok {
+		return Snapshot{}, false
+	}
+
+	snapshot := Snapshot{
+		Books: make(map[string]hotbook.Snapshot),
+	}
+	book.mu.Lock()
+	snapshot.Books[instrumentID] = book.book.Snapshot()
+	book.mu.Unlock()
+
+	s.ordersMu.RLock()
+	for _, record := range s.orders {
+		if record.InstrumentID != instrumentID {
+			continue
+		}
+		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
+			OrderID:           record.OrderID,
+			InstrumentID:      record.InstrumentID,
+			VenueSessionID:    record.VenueSessionID,
+			ParticipantID:     record.ParticipantID,
+			AccountID:         record.AccountID,
+			Side:              record.Side,
+			OriginalQuantity:  record.OriginalQuantity,
+			RemainingQuantity: record.RemainingQuantity,
+			LimitPrice:        record.LimitPrice,
+			Currency:          record.Currency,
+			Status:            record.Status,
+			LastUpdatedAt:     record.LastUpdatedAt,
+		})
+	}
+	s.ordersMu.RUnlock()
+	sort.Slice(snapshot.Orders, func(i, j int) bool {
+		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
+	})
+	snapshot.Metadata = SnapshotMetadata{
+		SnapshotVersion: "matching-service-snapshot-v1",
+		EngineVersion:   "matching-engine-app-v1",
+		BookCount:       1,
+		OrderCount:      len(snapshot.Orders),
+		BookKeys:        []string{instrumentID},
+	}
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+	return snapshot, true
+}
+
 func (s *Service) MatchAlgorithm(instrumentID string) MatchAlgorithm {
 	if algorithm, ok := s.matchingProfiles.Instruments[instrumentID]; ok && algorithm != "" {
 		return algorithm

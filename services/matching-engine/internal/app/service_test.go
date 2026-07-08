@@ -1138,6 +1138,39 @@ func TestBookStatsExposeOrderLevelCountsAndChecksum(t *testing.T) {
 	}
 }
 
+func TestSnapshotForInstrumentFiltersBookAndOrders(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-aapl-buy", "100", "150250000000")
+	msft := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-msft-buy",
+		InstrumentID:  "MSFT",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "250000000000",
+		Currency:      "USD",
+	})
+	if msft.Accepted == nil {
+		t.Fatalf("expected MSFT order to accept, got %#v", msft)
+	}
+
+	snapshot, ok := service.SnapshotForInstrument("AAPL")
+	if !ok {
+		t.Fatal("expected AAPL snapshot")
+	}
+	if snapshot.Metadata.BookCount != 1 || !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"AAPL"}) {
+		t.Fatalf("unexpected AAPL snapshot metadata: %#v", snapshot.Metadata)
+	}
+	if len(snapshot.Books) != 1 || snapshot.Books["AAPL"].Checksum == "" {
+		t.Fatalf("expected one AAPL book snapshot, got %#v", snapshot.Books)
+	}
+	if len(snapshot.Orders) != 1 || snapshot.Orders[0].OrderID != "ord-aapl-buy" {
+		t.Fatalf("expected only AAPL order in snapshot, got %#v", snapshot.Orders)
+	}
+	if _, ok := service.SnapshotForInstrument("UNKNOWN"); ok {
+		t.Fatal("expected missing instrument snapshot to miss")
+	}
+}
+
 func TestGoldenReplayBasicLifecycleCorpus(t *testing.T) {
 	service := NewService()
 

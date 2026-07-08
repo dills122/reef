@@ -118,6 +118,48 @@ func TestBookStatsRejectsMalformedPath(t *testing.T) {
 	}
 }
 
+func TestBookSnapshotEndpoint(t *testing.T) {
+	server := NewServer(app.NewService())
+	body := []byte(`{
+		"orderId":"ord-1",
+		"instrumentId":"AAPL",
+		"side":"BUY",
+		"quantityUnits":"100",
+		"limitPrice":"150250000000",
+		"currency":"USD"
+	}`)
+	server.Routes().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(body)))
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/books/AAPL/snapshot", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"bookKeys":["AAPL"]`)) {
+		t.Fatalf("expected AAPL snapshot metadata, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"orderId":"ord-1"`)) {
+		t.Fatalf("expected order in snapshot, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"checksum"`)) {
+		t.Fatalf("expected checksum in snapshot, got %s", rec.Body.String())
+	}
+}
+
+func TestBookSnapshotEndpointRejectsMissingBook(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/books/AAPL/snapshot", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
 func TestSubmitOrder(t *testing.T) {
 	server := NewServer(app.NewService())
 

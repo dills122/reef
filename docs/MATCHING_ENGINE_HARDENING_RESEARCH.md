@@ -240,3 +240,4 @@ Acceptance:
 - open order count and price-level count per side exist through `BookStats`
 - checksum exists through `BookStats`
 - internal HTTP exposure exists at `/internal/books/{instrumentId}/stats`
+- internal HTTP book snapshot exposure exists at `/internal/books/{instrumentId}/snapshot`
