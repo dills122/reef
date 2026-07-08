@@ -217,6 +217,7 @@ button:disabled {
 
 .charts-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
 }
 
 .command-chart {
@@ -225,6 +226,7 @@ button:disabled {
 
 .chart-panel {
   min-height: 288px;
+  min-width: 0;
 }
 
 #trend,
@@ -235,10 +237,13 @@ button:disabled {
   border-radius: 8px;
   display: block;
   height: 240px;
+  max-width: 100%;
+  min-width: 0;
   width: 100%;
 }
 
 .chart-details {
+  overflow: hidden;
   padding: 0;
 }
 
@@ -278,6 +283,7 @@ button:disabled {
 
 .chart-details > svg {
   margin: 0 16px 16px;
+  max-width: calc(100% - 32px);
   width: calc(100% - 32px);
 }
 
