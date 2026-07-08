@@ -81,12 +81,28 @@
         </article>
       </section>
 
-      <section class="panel chart-panel">
-        <div class="panel-title">
-          <h2>Live Trend</h2>
-          <span id="active-run-label" class="muted">no active run</span>
-        </div>
-        <svg id="trend" viewBox="0 0 900 220" role="img" aria-label="Live run trend"></svg>
+      <section class="charts-grid">
+        <details class="panel chart-panel chart-details command-chart" open>
+          <summary class="panel-title">
+            <h2>Command Trend</h2>
+            <span id="active-run-label" class="muted">no active run</span>
+          </summary>
+          <svg id="trend" viewBox="0 0 900 220" role="img" aria-label="Live run command trend"></svg>
+        </details>
+        <details class="panel chart-panel chart-details" open>
+          <summary class="panel-title">
+            <h2>Throughput</h2>
+            <span class="muted">attempted/s / accepted/s</span>
+          </summary>
+          <svg id="throughput-trend" viewBox="0 0 900 220" role="img" aria-label="Run throughput trend"></svg>
+        </details>
+        <details class="panel chart-panel chart-details" open>
+          <summary class="panel-title">
+            <h2>Latency</h2>
+            <span class="muted">p95 / p99</span>
+          </summary>
+          <svg id="latency-trend" viewBox="0 0 900 220" role="img" aria-label="Run latency trend"></svg>
+        </details>
       </section>
 
       <section class="two-column">

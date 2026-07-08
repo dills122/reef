@@ -120,7 +120,8 @@ h3 {
 
 .connection-grid,
 .metrics-grid,
-.two-column {
+.two-column,
+.charts-grid {
   display: grid;
   gap: 16px;
 }
@@ -214,17 +215,70 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.chart-panel {
-  min-height: 290px;
+.charts-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-#trend {
+.command-chart {
+  grid-column: 1 / -1;
+}
+
+.chart-panel {
+  min-height: 288px;
+}
+
+#trend,
+#throughput-trend,
+#latency-trend {
   background: #11161a;
   border: 1px solid var(--line);
   border-radius: 8px;
   display: block;
   height: 240px;
   width: 100%;
+}
+
+.chart-details {
+  padding: 0;
+}
+
+.chart-details > summary {
+  cursor: pointer;
+  justify-content: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 16px;
+}
+
+.chart-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chart-details > summary::before {
+  color: var(--muted);
+  content: "v";
+  font-size: 12px;
+}
+
+.chart-details > summary .muted {
+  margin-left: auto;
+}
+
+.chart-details:not([open]) {
+  min-height: 0;
+}
+
+.chart-details:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+.chart-details:not([open]) > summary::before {
+  content: ">";
+}
+
+.chart-details > svg {
+  margin: 0 16px 16px;
+  width: calc(100% - 32px);
 }
 
 .two-column {
@@ -387,9 +441,14 @@ pre {
   }
 
   .connection-grid,
+  .charts-grid,
   .two-column,
   .evidence-summary {
     grid-template-columns: 1fr;
+  }
+
+  .command-chart {
+    grid-column: auto;
   }
 }
 

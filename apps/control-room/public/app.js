@@ -17,6 +17,8 @@ const ids = {
   log: document.querySelector("#log"),
   logRun: document.querySelector("#log-run"),
   trend: document.querySelector("#trend"),
+  throughputTrend: document.querySelector("#throughput-trend"),
+  latencyTrend: document.querySelector("#latency-trend"),
   runtimeUrl: document.querySelector("#runtime-url"),
   lastProbe: document.querySelector("#last-probe"),
   probeError: document.querySelector("#probe-error"),
@@ -188,6 +190,8 @@ function renderSnapshot(snapshot, selectedRun) {
   if (selectedMetrics) {
     state.trend = buildRunTrend(selectedRun);
     renderTrend("run");
+    renderThroughputTrend();
+    renderLatencyTrend();
   } else {
     const live = liveRuntimeMetrics(snapshot, metrics);
     state.trend.push({
@@ -199,6 +203,8 @@ function renderSnapshot(snapshot, selectedRun) {
     });
     state.trend = state.trend.slice(-90);
     renderTrend("platform");
+    renderEmptyChart(ids.throughputTrend, "throughput appears after report evidence");
+    renderEmptyChart(ids.latencyTrend, "latency appears after report evidence");
   }
 }
 
@@ -338,37 +344,69 @@ function renderTrend(mode) {
           ["materialized", "var(--cyan)", "materialized"],
           ["projected", "var(--amber)", "projected"],
         ];
+  renderLineChart(ids.trend, state.trend, series);
+}
+
+function renderThroughputTrend() {
+  renderLineChart(ids.throughputTrend, state.trend, [
+    ["attemptedPerSecond", "var(--blue)", "attempted/s"],
+    ["acceptedPerSecond", "var(--green)", "accepted/s"],
+  ]);
+}
+
+function renderLatencyTrend() {
+  renderLineChart(ids.latencyTrend, state.trend, [
+    ["p95LatencyMs", "var(--amber)", "p95 ms"],
+    ["p99LatencyMs", "var(--red)", "p99 ms"],
+  ]);
+}
+
+function renderLineChart(target, points, series) {
   const width = 900;
   const height = 220;
   const pad = 24;
-  const maxValue = Math.max(1, ...state.trend.flatMap((point) => series.map(([key]) => Number(point[key] || 0))));
+  if (!target) return;
+  if (!points.length) {
+    renderEmptyChart(target, "waiting for data");
+    return;
+  }
+  const maxValue = Math.max(1, ...points.flatMap((point) => series.map(([key]) => Number(point[key] || 0))));
   const paths = series
     .map(([key, color]) => {
-      const points = state.trend
+      const pathPoints = points
         .map((point, index) => {
-          const x = pad + (index / Math.max(1, state.trend.length - 1)) * (width - pad * 2);
+          const x = pad + (index / Math.max(1, points.length - 1)) * (width - pad * 2);
           const y = height - pad - (Number(point[key] || 0) / maxValue) * (height - pad * 2);
           return `${x.toFixed(1)},${y.toFixed(1)}`;
         })
         .join(" ");
-      return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke" />`;
+      return `<polyline points="${pathPoints}" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke" />`;
     })
     .join("");
   const legend = series
     .map(([, color, label], index) => {
-      const x = pad + index * 105;
+      const x = pad + index * 120;
       return `
         <line x1="${x}" y1="${height - 10}" x2="${x + 18}" y2="${height - 10}" stroke="${color}" stroke-width="3" />
-        <text x="${x + 24}" y="${height - 6}" fill="#c7d1d5" font-size="12">${label}</text>
+        <text x="${x + 24}" y="${height - 6}" fill="#c7d1d5" font-size="12">${escapeHtml(label)}</text>
       `;
     })
     .join("");
-  ids.trend.innerHTML = `
+  target.innerHTML = `
     <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#323a41" />
     <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#323a41" />
     ${paths}
-    <text x="${pad}" y="18" fill="#9ba8ad" font-size="12">max ${maxValue}</text>
+    <text x="${pad}" y="18" fill="#9ba8ad" font-size="12">max ${fmt(maxValue)}</text>
     ${legend}
+  `;
+}
+
+function renderEmptyChart(target, message) {
+  if (!target) return;
+  target.innerHTML = `
+    <line x1="24" y1="196" x2="876" y2="196" stroke="#323a41" />
+    <line x1="24" y1="24" x2="24" y2="196" stroke="#323a41" />
+    <text x="450" y="112" text-anchor="middle" fill="#9ba8ad" font-size="14">${escapeHtml(message)}</text>
   `;
 }
 
@@ -447,6 +485,10 @@ function buildRunTrend(run) {
       attempted: Number(ev.attempted || quality.totalRequests || 0),
       accepted: Number(ev.accepted || quality.totalSuccess || 0),
       failures: Number(quality.totalFailures || Math.max(0, Number(ev.attempted || 0) - Number(ev.accepted || 0))),
+      attemptedPerSecond: Number(ev.rates?.attemptedPerSecond || 0),
+      acceptedPerSecond: Number(ev.rates?.acceptedPerSecond || 0),
+      p95LatencyMs: Number(ev.p95LatencyMs || row.latencyMs?.p95 || 0),
+      p99LatencyMs: Number(ev.p99LatencyMs || row.latencyMs?.p99 || 0),
     };
   });
 }
