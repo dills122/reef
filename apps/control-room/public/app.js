@@ -18,10 +18,12 @@ const ids = {
   runtimeUrl: document.querySelector("#runtime-url"),
   lastProbe: document.querySelector("#last-probe"),
   probeError: document.querySelector("#probe-error"),
+  refreshRuns: document.querySelector("#refresh-runs"),
   connect: document.querySelector("#connect"),
   pause: document.querySelector("#pause"),
 };
 
+ids.refreshRuns.addEventListener("click", () => refreshRunsNow());
 ids.connect.addEventListener("click", () => reconnect());
 ids.pause.addEventListener("click", () => pause());
 
@@ -38,11 +40,11 @@ async function loadConfig() {
   ids.runtimeUrl.textContent = config.runtimeUrl || "unknown";
 }
 
-async function refreshAll() {
-  if (!state.connected) return;
+async function refreshAll(options = {}) {
+  if (!state.connected && !options.allowPaused) return;
   const runsPayload = await getJson("/api/runs");
   const runs = runsPayload.runs || [];
-  autoSelectRun(runs);
+  autoSelectRun(runs, { preferNewest: Boolean(options.preferNewest) });
   const [snapshot, selected] = await Promise.all([
     getJson(`/api/snapshot?runId=${encodeURIComponent(state.selectedRunId)}`),
     state.selectedRunId ? getJson(`/api/runs/${encodeURIComponent(state.selectedRunId)}`) : null,
@@ -51,6 +53,20 @@ async function refreshAll() {
   renderSnapshot(snapshot, selected);
   renderRuns(runs);
   renderEvidence(selected);
+}
+
+async function refreshRunsNow() {
+  ids.refreshRuns.disabled = true;
+  ids.refreshRuns.textContent = "Refreshing...";
+  ids.probeError.textContent = "none";
+  try {
+    await refreshAll({ allowPaused: true, preferNewest: true });
+  } catch (error) {
+    markDisconnected(error);
+  } finally {
+    ids.refreshRuns.disabled = false;
+    ids.refreshRuns.textContent = "Refresh Runs";
+  }
 }
 
 async function reconnect() {
@@ -375,9 +391,9 @@ function hotPathPhaseCount(snapshot, phaseName) {
   return Number(snapshot.probes?.hotPath?.json?.metrics?.phases?.[phaseName]?.count || 0);
 }
 
-function autoSelectRun(runs) {
-  if (state.selectedRunId && runs.some((run) => run.runId === state.selectedRunId)) return;
+function autoSelectRun(runs, options = {}) {
   const newest = runs[0]?.runId || "";
+  if (!options.preferNewest && state.selectedRunId && runs.some((run) => run.runId === state.selectedRunId)) return;
   if (!newest) {
     state.selectedRunId = "";
     state.selectedRun = null;
@@ -385,7 +401,12 @@ function autoSelectRun(runs) {
     state.source = null;
     return;
   }
+  if (state.selectedRunId === newest) return;
   state.selectedRunId = newest;
+  state.selectedRun = null;
+  state.events = [];
+  state.trend = [];
+  ids.log.textContent = "";
   ids.logRun.textContent = newest;
   openRunEventStream(newest);
 }
