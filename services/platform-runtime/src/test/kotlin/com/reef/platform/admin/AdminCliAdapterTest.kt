@@ -88,6 +88,11 @@ class AdminCliAdapterTest {
             "\"activeProfileId\":\"custom-instant-v1\""
         )
         assertContains(
+            cli.execute(listOf("scenario-run-profile-set", "run-1", "custom-instant-v1")),
+            "\"scenarioRunId\":\"run-1\""
+        )
+        assertContains(cli.execute(listOf("scenario-run-profile-list")), "\"scenarioRunsCount\":1")
+        assertContains(
             cli.execute(listOf("venue-session-profile-set", "session-1", "custom-instant-v1")),
             "\"venueSessionId\":\"session-1\""
         )

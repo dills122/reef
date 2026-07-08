@@ -63,6 +63,12 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0016_order_lifecycle_state.sql',
                   'runtime/0027_audit_persistence_hardening.sql',
                   'runtime/0028_typed_top_of_book_facts.sql',
+                  'runtime/0029_typed_runtime_event_facts.sql',
+                  'runtime/0030_typed_submit_result_facts.sql',
+                  'runtime/0031_typed_execution_trade_facts.sql',
+                  'runtime/0032_typed_order_facts.sql',
+                  'runtime/0033_typed_canonical_time_facts.sql',
+                  'runtime/0034_post_trade_profile_references.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -142,7 +148,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0030_typed_submit_result_facts.sql",
                     "runtime/0031_typed_execution_trade_facts.sql",
                     "runtime/0032_typed_order_facts.sql",
-                    "runtime/0033_typed_canonical_time_facts.sql"
+                    "runtime/0033_typed_canonical_time_facts.sql",
+                    "runtime/0034_post_trade_profile_references.sql"
                 ),
                 appliedMigrations
             )

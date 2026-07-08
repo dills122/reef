@@ -16,6 +16,8 @@ class SettlementFactStoreTest {
         val stored = store.factsByScenarioRunId("run-p2")
 
         assertEquals(listOf("obl-1"), stored.obligations.map { it.settlementObligationId })
+        assertEquals(listOf("instruction-1"), stored.instructions.map { it.settlementInstructionId })
+        assertEquals(listOf("attempt-1"), stored.attempts.map { it.settlementAttemptId })
         assertEquals(listOf("break-1"), stored.breaks.map { it.settlementBreakId })
         assertEquals(listOf("repair-1"), stored.repairs.map { it.settlementRepairId })
         assertEquals(listOf("resolution-1"), stored.resolutions.map { it.settlementResolutionId })
@@ -60,6 +62,8 @@ class SettlementFactStoreTest {
         val stored = store.factsByScenarioRunId("run-p2")
 
         assertEquals(1, stored.obligations.size)
+        assertEquals(1, stored.instructions.size)
+        assertEquals(1, stored.attempts.size)
         assertEquals(1, stored.breaks.size)
         assertEquals(1, stored.repairs.size)
         assertEquals(1, stored.resolutions.size)
@@ -100,6 +104,34 @@ class SettlementFactStoreTest {
                             occurredAt = Instant.parse("2026-01-01T00:00:01Z")
                         )
                     )
+                )
+            )
+        }
+    }
+
+    @Test
+    fun rejectsAttemptWithoutObligation() {
+        val store = InMemorySettlementFactStore()
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(
+                    scenarioRunId = "run-p2",
+                    attempts = listOf(attemptStarted("run-p2").copy(settlementObligationId = "missing"))
+                )
+            )
+        }
+    }
+
+    @Test
+    fun rejectsInstructionWithoutObligation() {
+        val store = InMemorySettlementFactStore()
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(
+                    scenarioRunId = "run-p2",
+                    instructions = listOf(instructionCreated("run-p2").copy(settlementObligationId = "missing"))
                 )
             )
         }
@@ -224,6 +256,46 @@ class SettlementFactStoreTest {
     }
 
     @Test
+    fun rejectsAttemptWithWrongStateOrAttemptNumber() {
+        val store = InMemorySettlementFactStore()
+        store.appendFacts(
+            SettlementFactBundle(
+                scenarioRunId = "run-p2",
+                obligations = listOf(obligation("run-p2")),
+                instructions = listOf(instructionCreated("run-p2"))
+            )
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(scenarioRunId = "run-p2", attempts = listOf(attemptStarted("run-p2").copy(state = "OTHER")))
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(scenarioRunId = "run-p2", attempts = listOf(attemptStarted("run-p2").copy(attemptNumber = 0)))
+            )
+        }
+    }
+
+    @Test
+    fun rejectsInstructionWithWrongTypeOrState() {
+        val store = InMemorySettlementFactStore()
+        store.appendFacts(SettlementFactBundle(scenarioRunId = "run-p2", obligations = listOf(obligation("run-p2"))))
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(scenarioRunId = "run-p2", instructions = listOf(instructionCreated("run-p2").copy(instructionType = "FOP")))
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(scenarioRunId = "run-p2", instructions = listOf(instructionCreated("run-p2").copy(state = "OTHER")))
+            )
+        }
+    }
+
+    @Test
     fun rejectsRepairWithWrongActionActorTypeOrBlankActorId() {
         val store = InMemorySettlementFactStore()
         store.appendFacts(
@@ -308,6 +380,8 @@ class SettlementFactStoreTest {
         val names = PostgresSettlementSqlNames()
 
         assertEquals("settlement.obligations", names.obligations)
+        assertEquals("settlement.instructions", names.instructions)
+        assertEquals("settlement.attempts", names.attempts)
         assertEquals("settlement.breaks", names.breaks)
         assertEquals("settlement.repairs", names.repairs)
         assertEquals("settlement.resolutions", names.resolutions)
@@ -319,6 +393,10 @@ class SettlementFactStoreTest {
 
         assertFalse(names.obligations.startsWith("."))
         assertFalse(names.obligations.endsWith("."))
+        assertFalse(names.instructions.startsWith("."))
+        assertFalse(names.instructions.endsWith("."))
+        assertFalse(names.attempts.startsWith("."))
+        assertFalse(names.attempts.endsWith("."))
     }
 
     @Test
@@ -333,6 +411,8 @@ private fun p2Facts(scenarioRunId: String): SettlementFactBundle {
     return SettlementFactBundle(
         scenarioRunId = scenarioRunId,
         obligations = listOf(obligation(scenarioRunId)),
+        instructions = listOf(instructionCreated(scenarioRunId)),
+        attempts = listOf(attemptStarted(scenarioRunId)),
         breaks = listOf(breakOpened(scenarioRunId)),
         repairs = listOf(repair(scenarioRunId)),
         resolutions = listOf(resolution(scenarioRunId))
@@ -342,6 +422,12 @@ private fun p2Facts(scenarioRunId: String): SettlementFactBundle {
 private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: Int): SettlementFactBundle {
     return copy(
         obligations = obligations.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        instructions = instructions.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        attempts = attempts.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
         breaks = breaks.map {
@@ -359,6 +445,8 @@ private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: I
 private fun SettlementFactBundle.profileIds(): Set<String> {
     return (
         obligations.map { it.postTradeProfileId } +
+            instructions.map { it.postTradeProfileId } +
+            attempts.map { it.postTradeProfileId } +
             breaks.map { it.postTradeProfileId } +
             repairs.map { it.postTradeProfileId } +
             resolutions.map { it.postTradeProfileId }
@@ -368,6 +456,8 @@ private fun SettlementFactBundle.profileIds(): Set<String> {
 private fun SettlementFactBundle.policyVersions(): Set<Int> {
     return (
         obligations.map { it.postTradePolicyVersion } +
+            instructions.map { it.postTradePolicyVersion } +
+            attempts.map { it.postTradePolicyVersion } +
             breaks.map { it.postTradePolicyVersion } +
             repairs.map { it.postTradePolicyVersion } +
             resolutions.map { it.postTradePolicyVersion }
@@ -387,6 +477,29 @@ private fun obligation(scenarioRunId: String): SettlementObligationCreatedFact {
         quantity = "100",
         cashAmount = "15000.00",
         currency = "USD",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun instructionCreated(scenarioRunId: String): SettlementInstructionCreatedFact {
+    return SettlementInstructionCreatedFact(
+        settlementInstructionId = "instruction-1",
+        settlementObligationId = "obl-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "obl-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:00Z")
+    )
+}
+
+private fun attemptStarted(scenarioRunId: String): SettlementAttemptStartedFact {
+    return SettlementAttemptStartedFact(
+        settlementAttemptId = "attempt-1",
+        settlementObligationId = "obl-1",
+        settlementInstructionId = "instruction-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "instruction-1",
         occurredAt = Instant.parse("2026-01-01T00:00:00Z")
     )
 }

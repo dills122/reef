@@ -219,6 +219,20 @@ class AdminCliAdapter(
                     "activeProfileId" to profile.profileId
                 )
             }
+            "scenario-run-profile-set" -> {
+                if (args.size < 3) return "usage: scenario-run-profile-set <scenarioRunId> <postTradeProfileId>"
+                val config = adminService.setScenarioRunPostTradeProfile(actor, args[1], args[2])
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "scenario-run-profile-set",
+                    "scenarioRunId" to config.scenarioRunId,
+                    "postTradeProfileId" to config.postTradeProfileId
+                )
+            }
+            "scenario-run-profile-list" -> {
+                val configs = adminService.listScenarioRunPostTradeProfiles()
+                JsonCodec.writeObject("scenarioRunsCount" to configs.size)
+            }
             "venue-session-profile-set" -> {
                 if (args.size < 3) return "usage: venue-session-profile-set <venueSessionId> <postTradeProfileId>"
                 val config = adminService.setVenueSessionPostTradeProfile(actor, args[1], args[2])
@@ -294,6 +308,8 @@ class AdminCliAdapter(
               post-trade-profile-upsert <profileId> <mode> <settlementCycle> <nettingMode> <ledgerPostingMode> [policyVersion]
               post-trade-profile-list
               post-trade-profile-activate <profileId>
+              scenario-run-profile-set <scenarioRunId> <postTradeProfileId>
+              scenario-run-profile-list
               venue-session-profile-set <venueSessionId> <postTradeProfileId>
               venue-session-profile-list
               override-upsert <code> <description>

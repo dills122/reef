@@ -70,12 +70,14 @@ class AdminApplicationServiceTest {
             )
         )
         service.activatePostTradeProfile(actor, "custom-instant-v1")
+        service.setScenarioRunPostTradeProfile(actor, "run-1", "custom-instant-v1")
         service.setVenueSessionPostTradeProfile(actor, "session-1", "custom-instant-v1")
 
         val restartedService = AdminApplicationService(persistence)
 
         assertEquals("custom-instant-v1", restartedService.activePostTradeProfile().profileId)
         assertEquals(3, restartedService.listPostTradeProfiles().size)
+        assertEquals("custom-instant-v1", restartedService.listScenarioRunPostTradeProfiles().single().postTradeProfileId)
         assertEquals("custom-instant-v1", restartedService.listVenueSessionPostTradeProfiles().single().postTradeProfileId)
     }
 

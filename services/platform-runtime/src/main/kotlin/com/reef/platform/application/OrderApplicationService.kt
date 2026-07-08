@@ -172,7 +172,10 @@ class OrderApplicationService(
                 limitPrice = command.limitPrice,
                 currency = command.currency,
                 timeInForce = command.timeInForce,
-                acceptedAt = accepted.occurredAt
+                acceptedAt = accepted.occurredAt,
+                clientOrderId = command.clientOrderId,
+                runId = command.runId,
+                venueSessionId = command.venueSessionId
             )
             lifecycleEvents.add(
                 lifecycleEvent(
@@ -232,7 +235,10 @@ class OrderApplicationService(
                     limitPrice = command.limitPrice,
                     currency = command.currency,
                     timeInForce = command.timeInForce,
-                    acceptedAt = rejected.occurredAt
+                    acceptedAt = rejected.occurredAt,
+                    clientOrderId = command.clientOrderId,
+                    runId = command.runId,
+                    venueSessionId = command.venueSessionId
                 )
                 lifecycleEvents.add(
                     lifecycleEvent(

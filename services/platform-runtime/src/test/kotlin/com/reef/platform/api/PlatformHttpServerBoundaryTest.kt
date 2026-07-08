@@ -22,7 +22,9 @@ import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.domain.PostTradeProfile
+import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -36,6 +38,7 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
+import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
@@ -374,7 +377,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(1, captureStore.receivedCalls)
             assertEquals(1, captureStore.completedCalls)
             assertEquals(0, captureStore.failedCalls)
-            assertTrue(captureStore.lastReceivedPayload.contains("\"commandId\":\"cmd-capture-1\""))
+            assertEquals("cmd-capture-1", JsonCodec.parseObject(captureStore.lastReceivedPayload).string("commandId"))
         } finally {
             server.stop(0)
         }
@@ -1912,6 +1915,8 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, fetched.status)
             assertContains(fetched.body, "\"scenarioRunId\":\"p2-run-api\"")
             assertContains(fetched.body, "\"settlementObligationId\":\"obl-1\"")
+            assertContains(fetched.body, "\"settlementInstructionId\":\"instruction-1\"")
+            assertContains(fetched.body, "\"settlementAttemptId\":\"attempt-1\"")
             assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
             assertContains(fetched.body, "\"postTradePolicyVersion\":2")
             assertContains(fetched.body, "\"reason\":\"CASH_LEG_FAILED\"")
@@ -2032,6 +2037,181 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, fetched.status)
             assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
             assertContains(fetched.body, "\"postTradePolicyVersion\":6")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun settlementFactsEndpointUsesScenarioRunPostTradeProfileOverride() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = "scenario-instant-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality",
+                policyVersion = 8
+            )
+        )
+        persistence.saveScenarioRunPostTradeProfile(
+            ScenarioRunPostTradeProfile(
+                scenarioRunId = "p2-run-scenario-override",
+                postTradeProfileId = "scenario-instant-v1"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            runtimePersistence = persistence,
+            postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(persistence),
+            scenarioRunPostTradeProfileLookup = { persistence.scenarioRunPostTradeProfileId(it) }
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody(
+                    scenarioRunId = "p2-run-scenario-override",
+                    includePostTradeProfile = false
+                )
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-scenario-override")
+
+            assertEquals(200, posted.status)
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"postTradeProfileId\":\"scenario-instant-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":8")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun settlementFactsEndpointExplicitProfileWinsOverScenarioRunOverride() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = "scenario-instant-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality",
+                policyVersion = 8
+            )
+        )
+        persistence.saveScenarioRunPostTradeProfile(
+            ScenarioRunPostTradeProfile(
+                scenarioRunId = "p2-run-explicit-wins",
+                postTradeProfileId = "scenario-instant-v1"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            runtimePersistence = persistence,
+            postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(persistence),
+            scenarioRunPostTradeProfileLookup = { persistence.scenarioRunPostTradeProfileId(it) }
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody("p2-run-explicit-wins", includePostTradeProfile = true)
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-explicit-wins")
+
+            assertEquals(200, posted.status)
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":2")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun settlementMaterializeEndpointCreatesObligationsFromTrades() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = "scenario-instant-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality",
+                policyVersion = 9
+            )
+        )
+        persistence.saveScenarioRunPostTradeProfile(
+            ScenarioRunPostTradeProfile("run-materialize", "scenario-instant-v1")
+        )
+        persistence.saveAcceptedOrder(
+            persistedOrder("buy-order-materialize", "buyer-1", "BUY", "run-materialize", "session-fast")
+        )
+        persistence.saveAcceptedOrder(
+            persistedOrder("sell-order-materialize", "seller-1", "SELL", "run-materialize", "session-fast")
+        )
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-trade-materialize",
+                    tradeId = "trade-materialize",
+                    executionId = "exec-materialize",
+                    buyOrderId = "buy-order-materialize",
+                    sellOrderId = "sell-order-materialize",
+                    instrumentId = "AAPL",
+                    quantityUnits = "100",
+                    price = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-01-01T00:00:00Z"
+                )
+            )
+        )
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = settlementStore,
+            postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(persistence)
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            settlementObligationMaterializer = materializer,
+            runtimePersistence = persistence
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/obligations/materialize",
+                emptyMap(),
+                """{"scenarioRunId":"run-materialize"}"""
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
+            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize")
+
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"materializedObligations\":1")
+            assertContains(posted.body, "\"materializedInstructions\":1")
+            assertContains(posted.body, "\"materializedAttempts\":1")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"settlementObligationId\":\"settlement-obligation-trade-materialize\"")
+            assertContains(fetched.body, "\"settlementInstructionId\":\"settlement-instruction-settlement-obligation-trade-materialize-1\"")
+            assertContains(fetched.body, "\"settlementAttemptId\":\"settlement-attempt-settlement-obligation-trade-materialize-1\"")
+            assertContains(fetched.body, "\"postTradeProfileId\":\"scenario-instant-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":9")
+            assertContains(fetched.body, "\"cashAmount\":\"15025000000000\"")
+            assertEquals(200, obligations.status)
+            assertContains(obligations.body, "\"obligationsCount\":1")
+            assertContains(obligations.body, "\"settlementState\":\"ATTEMPT_STARTED\"")
+            assertContains(obligations.body, "\"exceptionState\":\"NONE\"")
+            assertContains(obligations.body, "\"settlementInstructionId\":\"settlement-instruction-settlement-obligation-trade-materialize-1\"")
+            assertContains(obligations.body, "\"settlementAttemptNumber\":1")
         } finally {
             server.stop(0)
         }
@@ -3481,10 +3661,12 @@ class PlatformHttpServerBoundaryTest {
         arenaAdminService: AdminApplicationService? = null,
         analyticsRunExportService: SimulationRunExportService? = null,
         settlementFactStore: SettlementFactStore? = null,
+        settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
         defaultPostTradeProfileId: String = DefaultPostTradeProfileId,
         defaultPostTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
         postTradeProfileResolver: PostTradeProfileResolver =
             PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
+        scenarioRunPostTradeProfileLookup: (String) -> String? = { null },
         venueSessionPostTradeProfileLookup: (String) -> String? = { null },
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
@@ -3536,9 +3718,11 @@ class PlatformHttpServerBoundaryTest {
             arenaAdminService = arenaAdminService,
             analyticsRunExportService = analyticsRunExportService,
             settlementFactStore = settlementFactStore,
+            settlementObligationMaterializer = settlementObligationMaterializer,
             defaultPostTradeProfileId = defaultPostTradeProfileId,
             defaultPostTradePolicyVersion = defaultPostTradePolicyVersion,
             postTradeProfileResolver = postTradeProfileResolver,
+            scenarioRunPostTradeProfileLookup = scenarioRunPostTradeProfileLookup,
             venueSessionPostTradeProfileLookup = venueSessionPostTradeProfileLookup,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
@@ -3757,6 +3941,27 @@ class PlatformHttpServerBoundaryTest {
                 "state":"OBLIGATION_CREATED",
                 "occurredAt":"2026-01-01T00:00:00Z"
               }],
+              "instructions":[{
+                "settlementInstructionId":"instruction-1",
+                "settlementObligationId":"obl-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"obl-1",
+                "instructionType":"DVP",
+                "state":"INSTRUCTION_CREATED",
+                "occurredAt":"2026-01-01T00:00:00Z"
+              }],
+              "attempts":[{
+                "settlementAttemptId":"attempt-1",
+                "settlementObligationId":"obl-1",
+                "settlementInstructionId":"instruction-1",
+                "scenarioRunId":"$scenarioRunId",
+                "correlationId":"corr-1",
+                "causationId":"instruction-1",
+                "attemptNumber":1,
+                "state":"ATTEMPT_STARTED",
+                "occurredAt":"2026-01-01T00:00:00Z"
+              }],
               "breaks":[{
                 "settlementBreakId":"break-1",
                 "settlementObligationId":"obl-1",
@@ -3902,6 +4107,31 @@ class PlatformHttpServerBoundaryTest {
         actorIds.forEach { actorId ->
             persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
         }
+    }
+
+    private fun persistedOrder(
+        orderId: String,
+        participantId: String,
+        side: String,
+        runId: String,
+        venueSessionId: String
+    ): PersistedOrder {
+        return PersistedOrder(
+            orderId = orderId,
+            engineOrderId = "eng-$orderId",
+            instrumentId = "AAPL",
+            participantId = participantId,
+            accountId = "account-$participantId",
+            side = side,
+            orderType = "LIMIT",
+            quantityUnits = "100",
+            limitPrice = "150250000000",
+            currency = "USD",
+            timeInForce = "DAY",
+            acceptedAt = "2026-01-01T00:00:00Z",
+            runId = runId,
+            venueSessionId = venueSessionId
+        )
     }
 
 }

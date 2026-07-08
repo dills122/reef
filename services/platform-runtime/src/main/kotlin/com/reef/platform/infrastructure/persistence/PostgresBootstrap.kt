@@ -66,12 +66,14 @@ object PostgresSchemaRequirements {
         val trades = PostgresSchemaObject.parse(names.trades)
         val submitResults = PostgresSchemaObject.parse(names.submitResults)
         val postTradeProfiles = PostgresSchemaObject.parse(names.adminPostTradeProfiles)
+        val scenarioRuns = PostgresSchemaObject.parse(names.referenceScenarioRuns)
         val venueSessions = PostgresSchemaObject.parse(names.referenceVenueSessions)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
                 names.referenceParticipants,
                 names.referenceAccounts,
+                names.referenceScenarioRuns,
                 names.referenceVenueSessions,
                 names.orders,
                 names.executions,
@@ -182,6 +184,8 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(postTradeProfiles, "ledger_posting_mode", "text"),
                 PostgresSchemaColumn(postTradeProfiles, "policy_version", "integer"),
                 PostgresSchemaColumn(postTradeProfiles, "active", "boolean"),
+                PostgresSchemaColumn(scenarioRuns, "scenario_run_id", "text"),
+                PostgresSchemaColumn(scenarioRuns, "post_trade_profile_id", "text"),
                 PostgresSchemaColumn(venueSessions, "venue_session_id", "text"),
                 PostgresSchemaColumn(venueSessions, "post_trade_profile_id", "text")
             )
@@ -194,16 +198,20 @@ object PostgresSchemaRequirements {
 
     fun settlementFacts(
         obligations: String,
+        instructions: String,
+        attempts: String,
         breaks: String,
         repairs: String,
         resolutions: String
     ): PostgresSchemaRequirement {
         val obligationTable = PostgresSchemaObject.parse(obligations)
+        val instructionTable = PostgresSchemaObject.parse(instructions)
+        val attemptTable = PostgresSchemaObject.parse(attempts)
         val breakTable = PostgresSchemaObject.parse(breaks)
         val repairTable = PostgresSchemaObject.parse(repairs)
         val resolutionTable = PostgresSchemaObject.parse(resolutions)
         return PostgresSchemaRequirement(
-            tables = listOf(obligationTable, breakTable, repairTable, resolutionTable),
+            tables = listOf(obligationTable, instructionTable, attemptTable, breakTable, repairTable, resolutionTable),
             columns = listOf(
                 PostgresSchemaColumn(obligationTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(obligationTable, "scenario_run_id", "text"),
@@ -211,6 +219,19 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(obligationTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(obligationTable, "trade_id", "text"),
                 PostgresSchemaColumn(obligationTable, "occurred_at", "timestamp with time zone"),
+                PostgresSchemaColumn(instructionTable, "settlement_instruction_id", "text"),
+                PostgresSchemaColumn(instructionTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(instructionTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(instructionTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(instructionTable, "instruction_type", "text"),
+                PostgresSchemaColumn(instructionTable, "state", "text"),
+                PostgresSchemaColumn(attemptTable, "settlement_attempt_id", "text"),
+                PostgresSchemaColumn(attemptTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(attemptTable, "settlement_instruction_id", "text"),
+                PostgresSchemaColumn(attemptTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(attemptTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(attemptTable, "attempt_number", "integer"),
+                PostgresSchemaColumn(attemptTable, "state", "text"),
                 PostgresSchemaColumn(breakTable, "settlement_break_id", "text"),
                 PostgresSchemaColumn(breakTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(breakTable, "post_trade_profile_id", "text"),

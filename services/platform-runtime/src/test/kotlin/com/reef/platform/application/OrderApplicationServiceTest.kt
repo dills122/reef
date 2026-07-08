@@ -47,7 +47,10 @@ class OrderApplicationServiceTest {
                 quantityUnits = "100",
                 limitPrice = "150250000000",
                 currency = "USD",
-                timeInForce = "DAY"
+                timeInForce = "DAY",
+                clientOrderId = "client-ord-1",
+                runId = "run-1",
+                venueSessionId = "session-1"
             )
         )
 
@@ -56,6 +59,9 @@ class OrderApplicationServiceTest {
         assertEquals("ord-1", gateway.lastCommand?.orderId)
         assertEquals("eng-ord-1", result.accepted?.engineOrderId)
         assertEquals("eng-ord-1", service.persistedOrder("ord-1")?.engineOrderId)
+        assertEquals("client-ord-1", service.persistedOrder("ord-1")?.clientOrderId)
+        assertEquals("run-1", service.persistedOrder("ord-1")?.runId)
+        assertEquals("session-1", service.persistedOrder("ord-1")?.venueSessionId)
         assertEquals(1, service.persistedExecutions("ord-1").size)
         assertEquals(1, service.persistedTrades("ord-1").size)
         assertEquals(3, service.persistedEvents("ord-1").size)

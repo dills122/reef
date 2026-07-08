@@ -30,6 +30,7 @@ import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
+import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
@@ -243,6 +244,30 @@ class AdminApplicationService(
         return profile
     }
 
+    fun setScenarioRunPostTradeProfile(
+        actor: AdminActor,
+        scenarioRunId: String,
+        postTradeProfileId: String
+    ): ScenarioRunPostTradeProfile {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
+        require(postTradeProfileId.isNotBlank()) { "postTradeProfileId is required" }
+        PostTradeProfileResolver.fromPersistence(runtimePersistence).resolve(scenarioRunProfileId = postTradeProfileId)
+        val config = ScenarioRunPostTradeProfile(scenarioRunId = scenarioRunId, postTradeProfileId = postTradeProfileId)
+        runtimePersistence.saveScenarioRunPostTradeProfile(config)
+        emitAudit(
+            actor,
+            "AdminScenarioRunPostTradeProfileSet",
+            scenarioRunId,
+            "postTradeProfileId=$postTradeProfileId"
+        )
+        return config
+    }
+
+    fun listScenarioRunPostTradeProfiles(): List<ScenarioRunPostTradeProfile> {
+        return runtimePersistence.scenarioRunPostTradeProfiles()
+    }
+
     fun setVenueSessionPostTradeProfile(
         actor: AdminActor,
         venueSessionId: String,
@@ -250,6 +275,7 @@ class AdminApplicationService(
     ): VenueSessionPostTradeProfile {
         requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
         require(venueSessionId.isNotBlank()) { "venueSessionId is required" }
+        require(postTradeProfileId.isNotBlank()) { "postTradeProfileId is required" }
         PostTradeProfileResolver.fromPersistence(runtimePersistence).resolve(venueSessionProfileId = postTradeProfileId)
         val config = VenueSessionPostTradeProfile(venueSessionId = venueSessionId, postTradeProfileId = postTradeProfileId)
         runtimePersistence.saveVenueSessionPostTradeProfile(config)

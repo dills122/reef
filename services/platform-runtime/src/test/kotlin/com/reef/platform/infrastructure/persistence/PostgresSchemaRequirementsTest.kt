@@ -16,6 +16,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.reference_instruments",
                 "runtime.reference_participants",
                 "runtime.reference_accounts",
+                "runtime.reference_scenario_runs",
                 "runtime.reference_venue_sessions",
                 "runtime.orders",
                 "runtime.executions",
@@ -231,6 +232,16 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "admin.post_trade_profiles" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.reference_scenario_runs.scenario_run_id:text",
+                "runtime.reference_scenario_runs.post_trade_profile_id:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.reference_scenario_runs" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )
@@ -454,20 +465,34 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
-    fun settlementFactsRequirementsCoverAllFourTables() {
+    fun settlementFactsRequirementsCoverAllSixTables() {
         val requirements = PostgresSchemaRequirements.settlementFacts(
             obligations = "settlement.obligations",
+            instructions = "settlement.instructions",
+            attempts = "settlement.attempts",
             breaks = "settlement.breaks",
             repairs = "settlement.repairs",
             resolutions = "settlement.resolutions"
         )
 
         assertEquals(
-            setOf("settlement.obligations", "settlement.breaks", "settlement.repairs", "settlement.resolutions"),
+            setOf(
+                "settlement.obligations",
+                "settlement.instructions",
+                "settlement.attempts",
+                "settlement.breaks",
+                "settlement.repairs",
+                "settlement.resolutions"
+            ),
             requirements.tables.map { it.qualifiedName }.toSet()
         )
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.trade_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.post_trade_profile_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.settlement_instruction_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.instruction_type" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_attempt_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_instruction_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.attempt_number" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.reason" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.post_trade_policy_version" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.repairs.actor_id" })

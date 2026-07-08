@@ -7,6 +7,7 @@ import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.VenueSessionPostTradeProfile
@@ -53,6 +54,12 @@ class PostgresRuntimePersistenceTest {
         assertEquals(opsProfile, persistence.activePostTradeProfile().profileId)
 
         persistence.activatePostTradeProfile(instantProfile)
+        persistence.saveScenarioRunPostTradeProfile(
+            ScenarioRunPostTradeProfile(
+                scenarioRunId = "run-$suffix",
+                postTradeProfileId = instantProfile
+            )
+        )
         persistence.saveVenueSessionPostTradeProfile(
             VenueSessionPostTradeProfile(
                 venueSessionId = "session-$suffix",
@@ -62,6 +69,7 @@ class PostgresRuntimePersistenceTest {
 
         assertEquals(instantProfile, persistence.activePostTradeProfile().profileId)
         assertTrue(persistence.postTradeProfiles().any { it.profileId == opsProfile && !it.active })
+        assertEquals(instantProfile, persistence.scenarioRunPostTradeProfileId("run-$suffix"))
         assertEquals(instantProfile, persistence.venueSessionPostTradeProfileId("session-$suffix"))
     }
 

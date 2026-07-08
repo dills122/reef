@@ -38,12 +38,17 @@ import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
 import com.reef.platform.application.settlement.PostTradeProfileResolver
+import com.reef.platform.application.settlement.SettlementAttemptStartedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
+import com.reef.platform.application.settlement.SettlementObligationProjection
+import com.reef.platform.application.settlement.SettlementObligationView
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
+import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
@@ -170,12 +175,14 @@ class PlatformHttpServer(
     private val arenaAdminService: AdminApplicationService? = null,
     private val analyticsRunExportService: SimulationRunExportService? = null,
     private val settlementFactStore: SettlementFactStore? = null,
+    private val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     private val defaultPostTradeProfileId: String =
         RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
     private val defaultPostTradePolicyVersion: Int =
         RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1),
     private val postTradeProfileResolver: PostTradeProfileResolver =
         PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
+    private val scenarioRunPostTradeProfileLookup: (String) -> String? = { null },
     private val venueSessionPostTradeProfileLookup: (String) -> String? = { null },
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
@@ -379,7 +386,9 @@ class PlatformHttpServer(
         arenaAdminService = deps.arenaAdminService,
         analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
+        settlementObligationMaterializer = deps.settlementObligationMaterializer,
         postTradeProfileResolver = deps.postTradeProfileResolver,
+        scenarioRunPostTradeProfileLookup = deps.scenarioRunPostTradeProfileLookup,
         venueSessionPostTradeProfileLookup = deps.venueSessionPostTradeProfileLookup,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
@@ -419,6 +428,18 @@ class PlatformHttpServer(
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
                 writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/obligations/materialize") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, materializeSettlementObligationsResponse(body))
             }
         }
 
@@ -652,6 +673,15 @@ class PlatformHttpServer(
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/facts/").trimEnd('/')
             writeHotPathResponse(exchange, settlementFactsResponse(scenarioRunId))
+        }
+
+        server.createContext("/api/v1/settlement/obligations/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/obligations/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementObligationsResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
@@ -3349,6 +3379,34 @@ class PlatformHttpServer(
         }
     }
 
+    private fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
+        val materializer = settlementObligationMaterializer
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
+        return try {
+            val json = JsonCodec.parseObject(body)
+            val result = materializer.materialize(
+                scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") },
+                venueSessionId = json.string("venueSessionId")
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "scenarioRunId" to result.scenarioRunId,
+                    "scannedTrades" to result.scannedTrades,
+                    "materializedObligations" to result.materializedObligations,
+                    "materializedInstructions" to result.materializedInstructions,
+                    "materializedAttempts" to result.materializedAttempts,
+                    "skippedTrades" to result.skippedTrades
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement materialization request")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement materialization failed")))
+        }
+    }
+
     private fun settlementFactsResponse(scenarioRunId: String): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
@@ -3364,11 +3422,40 @@ class PlatformHttpServer(
         }
     }
 
+    private fun settlementObligationsResponse(scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            val facts = store.factsByScenarioRunId(scenarioRunId)
+            val obligations = SettlementObligationProjection.project(facts)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "scenarioRunId" to scenarioRunId,
+                    "obligationsCount" to obligations.size,
+                    "obligations" to obligations.map { settlementObligationViewJson(it) }
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement obligation query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement obligation query failed")))
+        }
+    }
+
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
         val venueSessionId = json.string("venueSessionId")
+        val scenarioRunProfileId = json.string("postTradeProfileId").ifBlank {
+            scenarioRunId.takeIf { it.isNotBlank() }
+                ?.let { scenarioRunPostTradeProfileLookup(it) }
+                .orEmpty()
+        }
         val selection = postTradeProfileResolver.resolve(
-            scenarioRunProfileId = json.string("postTradeProfileId"),
+            scenarioRunProfileId = scenarioRunProfileId,
             venueSessionProfileId = venueSessionId.takeIf { it.isNotBlank() }
                 ?.let { venueSessionPostTradeProfileLookup(it) }
                 .orEmpty()
@@ -3383,6 +3470,12 @@ class PlatformHttpServer(
             scenarioRunId = scenarioRunId,
             obligations = json.objectDocuments("obligations").map {
                 obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            instructions = json.objectDocuments("instructions").map {
+                instructionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            attempts = json.objectDocuments("attempts").map {
+                attemptFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
             breaks = json.objectDocuments("breaks").map {
                 breakFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
@@ -3417,6 +3510,47 @@ class PlatformHttpServer(
             cashAmount = json.string("cashAmount"),
             currency = json.string("currency"),
             state = json.string("state").ifBlank { "OBLIGATION_CREATED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun attemptFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementAttemptStartedFact {
+        return SettlementAttemptStartedFact(
+            settlementAttemptId = json.string("settlementAttemptId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            settlementInstructionId = json.string("settlementInstructionId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            attemptNumber = positiveIntOrDefault(json, "attemptNumber", 1),
+            state = json.string("state").ifBlank { "ATTEMPT_STARTED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun instructionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementInstructionCreatedFact {
+        return SettlementInstructionCreatedFact(
+            settlementInstructionId = json.string("settlementInstructionId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            instructionType = json.string("instructionType").ifBlank { "DVP" },
+            state = json.string("state").ifBlank { "INSTRUCTION_CREATED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
     }
@@ -3523,6 +3657,35 @@ class PlatformHttpServer(
                     "occurredAt" to it.occurredAt.toString()
                 )
             },
+            "instructions" to facts.instructions.map {
+                mapOf(
+                    "settlementInstructionId" to it.settlementInstructionId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "instructionType" to it.instructionType,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "attempts" to facts.attempts.map {
+                mapOf(
+                    "settlementAttemptId" to it.settlementAttemptId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "settlementInstructionId" to it.settlementInstructionId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "attemptNumber" to it.attemptNumber,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "breaks" to facts.breaks.map {
                 mapOf(
                     "settlementBreakId" to it.settlementBreakId,
@@ -3574,6 +3737,33 @@ class PlatformHttpServer(
 
     private fun settlementFactBundleBody(facts: SettlementFactBundle): String {
         return jsonObjectBody(settlementFactBundleJson(facts))
+    }
+
+    private fun settlementObligationViewJson(view: SettlementObligationView): Map<String, Any?> {
+        return mapOf(
+            "settlementObligationId" to view.settlementObligationId,
+            "scenarioRunId" to view.scenarioRunId,
+            "postTradeProfileId" to view.postTradeProfileId,
+            "postTradePolicyVersion" to view.postTradePolicyVersion,
+            "tradeId" to view.tradeId,
+            "buyerParticipantId" to view.buyerParticipantId,
+            "sellerParticipantId" to view.sellerParticipantId,
+            "instrumentId" to view.instrumentId,
+            "quantity" to view.quantity,
+            "cashAmount" to view.cashAmount,
+            "currency" to view.currency,
+            "obligationState" to view.obligationState,
+            "settlementState" to view.settlementState,
+            "exceptionState" to view.exceptionState,
+            "settlementInstructionId" to view.settlementInstructionId,
+            "settlementAttemptId" to view.settlementAttemptId,
+            "settlementAttemptNumber" to view.settlementAttemptNumber,
+            "settlementBreakId" to view.settlementBreakId,
+            "settlementRepairId" to view.settlementRepairId,
+            "settlementResolutionId" to view.settlementResolutionId,
+            "occurredAt" to view.occurredAt.toString(),
+            "updatedAt" to view.updatedAt.toString()
+        )
     }
 
     private fun jsonObjectBody(fields: Map<String, Any?>): String {
@@ -4578,6 +4768,12 @@ private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
     PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
     val runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver")
+    val postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
+        runtimePersistence = runtimePersistence,
+        environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
+        environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
+    )
+    val settlementFactStore = defaultSettlementFactStore()
     val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
         StreamCommandIntakeFactory.defaultPublisher()
     } else {
@@ -4598,12 +4794,18 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService = defaultArenaAdminService(hooks),
         analyticsRunExportService = defaultAnalyticsRunExportService(),
-        settlementFactStore = defaultSettlementFactStore(),
-        postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
-            runtimePersistence = runtimePersistence,
-            environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
-            environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
-        ),
+        settlementFactStore = settlementFactStore,
+        settlementObligationMaterializer = settlementFactStore?.let {
+            TradeSettlementObligationMaterializer(
+                runtimePersistence = runtimePersistence,
+                settlementFactStore = it,
+                postTradeProfileResolver = postTradeProfileResolver
+            )
+        },
+        postTradeProfileResolver = postTradeProfileResolver,
+        scenarioRunPostTradeProfileLookup = { scenarioRunId ->
+            runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId)
+        },
         venueSessionPostTradeProfileLookup = { venueSessionId ->
             runtimePersistence.venueSessionPostTradeProfileId(venueSessionId)
         },
@@ -4703,11 +4905,13 @@ data class ServerBoundaryDeps(
     val arenaAdminService: AdminApplicationService? = null,
     val analyticsRunExportService: SimulationRunExportService? = null,
     val settlementFactStore: SettlementFactStore? = null,
+    val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     val postTradeProfileResolver: PostTradeProfileResolver =
         PostTradeProfileResolver.envOnly(
             RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
             RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1)
         ),
+    val scenarioRunPostTradeProfileLookup: (String) -> String? = { null },
     val venueSessionPostTradeProfileLookup: (String) -> String? = { null },
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
