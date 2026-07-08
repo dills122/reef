@@ -64,6 +64,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-sandbox-policy.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-runtime-config.test.mjs
+	$(JS_RUNTIME) scripts/dev/openbao-runtime-config.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-test-bot.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-ingest-bot-run-result.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs

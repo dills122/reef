@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
 
 loadDotEnv();
 
@@ -21,6 +22,8 @@ const config = {
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
   arenaAdminUrl: stringOption("--arena-admin-url", env("ARENA_ADMIN_API_URL", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", "")))),
+  openBaoAddr: stringOption("--openbao-addr", env("OPENBAO_ADDR", env("VAULT_ADDR", ""))),
+  openBaoToken: stringOption("--openbao-token", env("OPENBAO_TOKEN", env("VAULT_TOKEN", ""))),
   seedReference: args.includes("--seed-reference"),
   persistResults: args.includes("--persist-results"),
   actorId: stringOption("--actor-id", env("ADMIN_ACTOR_ID", "admin-cli")),
@@ -840,14 +843,11 @@ async function resolveRuntimeConfigForBot(bot) {
       },
     };
   }
-  const resolved = await resolveBotRuntimeConfig(descriptors, localOpenBaoSecretProvider(bot));
+  const provider = runtimeConfigSecretProviderForBot(bot);
+  const resolved = await resolveBotRuntimeConfig(descriptors, provider);
   return {
     values: resolved.values,
-    report: {
-      provider: "OpenBao",
-      descriptorCount: descriptors.length,
-      resolvedKeys: Object.keys(resolved.values).sort(),
-    },
+    report: runtimeConfigPreflightReport(provider, descriptors, resolved.values),
   };
 }
 
@@ -875,6 +875,16 @@ function localOpenBaoSecretProvider(bot) {
       return Object.freeze({ ...(bot.runtimeConfig.values ?? {}) });
     },
   };
+}
+
+function runtimeConfigSecretProviderForBot(bot) {
+  if (config.openBaoAddr.length > 0 && config.openBaoToken.length > 0) {
+    return createOpenBaoRuntimeSecretProvider({
+      baoAddr: config.openBaoAddr,
+      token: config.openBaoToken,
+    });
+  }
+  return localOpenBaoSecretProvider(bot);
 }
 
 async function loadRuntimeConfigResolver() {
