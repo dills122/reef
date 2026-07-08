@@ -44,6 +44,8 @@ import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
 import com.reef.platform.application.settlement.SettlementLedgerEntryFact
+import com.reef.platform.application.settlement.SettlementLedgerProjection
+import com.reef.platform.application.settlement.SettlementLedgerProjectionView
 import com.reef.platform.application.settlement.SettlementLegOutcomeFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationProjection
@@ -685,6 +687,15 @@ class PlatformHttpServer(
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/obligations/").trimEnd('/')
             writeHotPathResponse(exchange, settlementObligationsResponse(scenarioRunId))
+        }
+
+        server.createContext("/api/v1/settlement/ledger/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/ledger/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementLedgerResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
@@ -3452,6 +3463,22 @@ class PlatformHttpServer(
         }
     }
 
+    private fun settlementLedgerResponse(scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            val projection = SettlementLedgerProjection.project(store.factsByScenarioRunId(scenarioRunId))
+            PlatformHotPathResponse(200, settlementLedgerProjectionBody(projection))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement ledger query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement ledger query failed")))
+        }
+    }
+
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
         val venueSessionId = json.string("venueSessionId")
@@ -3872,6 +3899,52 @@ class PlatformHttpServer(
 
     private fun settlementFactBundleBody(facts: SettlementFactBundle): String {
         return jsonObjectBody(settlementFactBundleJson(facts))
+    }
+
+    private fun settlementLedgerProjectionBody(projection: SettlementLedgerProjectionView): String {
+        return jsonObjectBody(
+            mapOf(
+                "scenarioRunId" to projection.scenarioRunId,
+                "balancesCount" to projection.balances.size,
+                "settlementProofsCount" to projection.settlementProofs.size,
+                "balances" to projection.balances.map {
+                    mapOf(
+                        "scenarioRunId" to it.scenarioRunId,
+                        "participantId" to it.participantId,
+                        "accountId" to it.accountId,
+                        "assetType" to it.assetType,
+                        "assetId" to it.assetId,
+                        "debitQuantity" to it.debitQuantity,
+                        "creditQuantity" to it.creditQuantity,
+                        "netQuantity" to it.netQuantity,
+                        "ledgerEntryCount" to it.ledgerEntryCount,
+                        "updatedAt" to it.updatedAt.toString()
+                    )
+                },
+                "settlementProofs" to projection.settlementProofs.map {
+                    mapOf(
+                        "settlementId" to it.settlementId,
+                        "settlementObligationId" to it.settlementObligationId,
+                        "settlementInstructionId" to it.settlementInstructionId,
+                        "settlementAttemptId" to it.settlementAttemptId,
+                        "scenarioRunId" to it.scenarioRunId,
+                        "postTradeProfileId" to it.postTradeProfileId,
+                        "postTradePolicyVersion" to it.postTradePolicyVersion,
+                        "settlementState" to it.settlementState,
+                        "proofState" to it.proofState,
+                        "cashDebitQuantity" to it.cashDebitQuantity,
+                        "cashCreditQuantity" to it.cashCreditQuantity,
+                        "securityDebitQuantity" to it.securityDebitQuantity,
+                        "securityCreditQuantity" to it.securityCreditQuantity,
+                        "cashBalanced" to it.cashBalanced,
+                        "securityBalanced" to it.securityBalanced,
+                        "legOutcomeCount" to it.legOutcomeCount,
+                        "ledgerEntryCount" to it.ledgerEntryCount,
+                        "updatedAt" to it.updatedAt.toString()
+                    )
+                }
+            )
+        )
     }
 
     private fun settlementObligationViewJson(view: SettlementObligationView): Map<String, Any?> {
