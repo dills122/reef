@@ -201,7 +201,7 @@ func newTraceSampler(limit int) *traceSampler {
 }
 
 func (t *traceSampler) offer(traceID string) {
-	if t == nil || t.limit <= 0 {
+	if t == nil || t.limit <= 0 || strings.TrimSpace(traceID) == "" {
 		return
 	}
 	if atomic.AddInt64(&t.count, 1) > int64(t.limit) {
@@ -211,10 +211,10 @@ func (t *traceSampler) offer(traceID string) {
 }
 
 func (t *traceSampler) ids(limit int) []string {
-	out := make([]string, 0, limit)
-	if t == nil {
-		return out
+	if t == nil || limit <= 0 {
+		return []string{}
 	}
+	out := make([]string, 0, limit)
 	t.seen.Range(func(key, _ any) bool {
 		out = append(out, key.(string))
 		return len(out) < limit
@@ -1257,8 +1257,10 @@ func (a *summaryAccumulator) build(sessionID string, started, finished time.Time
 	report.DurationSeconds = finished.Sub(started).Seconds()
 	report.Config = cfg
 	report.LoadSchedule = loadSchedule
-	report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
-	report.AcceptedBusinessOpsRPS = float64(report.TotalSuccess) / report.DurationSeconds
+	if report.DurationSeconds > 0 {
+		report.ThroughputRPS = float64(report.TotalRequests) / report.DurationSeconds
+		report.AcceptedBusinessOpsRPS = float64(report.TotalSuccess) / report.DurationSeconds
+	}
 	report.Throughput = reporting.ComputeThroughput(report.TotalRequests, report.TotalSuccess, 0, report.DurationSeconds)
 	report.LatencyMs = computeLatency(a.allLatencies)
 	for action, values := range a.actionLatencies {
@@ -1902,6 +1904,9 @@ func printPrettySummary(report summary) {
 }
 
 func topProfileKeys(values map[string]profileSummary, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)

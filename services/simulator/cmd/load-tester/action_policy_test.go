@@ -91,6 +91,12 @@ func TestProfileForWorker(t *testing.T) {
 	}
 }
 
+func TestProfileForWorkerHandlesZeroWorkers(t *testing.T) {
+	if got := profileForWorker(0, 0, Config{}); got != profileNoise {
+		t.Fatalf("expected zero workers to fall back to noise profile, got %s", got)
+	}
+}
+
 func TestReverseTrades(t *testing.T) {
 	values := []trade{{TradeID: "1"}, {TradeID: "2"}, {TradeID: "3"}}
 	reverseTrades(values)
@@ -129,6 +135,9 @@ func TestRandomInt(t *testing.T) {
 	if got := randomInt(rng, 5, 5); got != 5 {
 		t.Errorf("randomInt(5,5) = %d, want 5", got)
 	}
+	if got := randomInt(rng, 10, 5); got != 10 {
+		t.Errorf("randomInt inverted bounds = %d, want 10", got)
+	}
 	for i := 0; i < 20; i++ {
 		got := randomInt(rng, 1, 10)
 		if got < 1 || got > 10 {
@@ -150,10 +159,34 @@ func TestProfileQuantity(t *testing.T) {
 	}
 }
 
+func TestProfileQuantityFallsBackWhenPreferredBandOutsideConfig(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	small := Config{QuantityMin: 1, QuantityMax: 10}
+	for _, profile := range []string{profileMarketMaker, profileInstitutional} {
+		for i := 0; i < 10; i++ {
+			got := profileQuantity(rng, small, profile)
+			if got < small.QuantityMin || got > small.QuantityMax {
+				t.Fatalf("profileQuantity(%s) outside config bounds: got=%d bounds=%d..%d", profile, got, small.QuantityMin, small.QuantityMax)
+			}
+		}
+	}
+
+	highRetail := Config{QuantityMin: 150, QuantityMax: 200}
+	for i := 0; i < 10; i++ {
+		got := profileQuantity(rng, highRetail, profileRetail)
+		if got < highRetail.QuantityMin || got > highRetail.QuantityMax {
+			t.Fatalf("profileQuantity(retail) outside high config bounds: got=%d bounds=%d..%d", got, highRetail.QuantityMin, highRetail.QuantityMax)
+		}
+	}
+}
+
 func TestRandomInt64(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	if got := randomInt64(rng, 5, 5); got != 5 {
 		t.Errorf("randomInt64(5,5) = %d, want 5", got)
+	}
+	if got := randomInt64(rng, 10, 5); got != 10 {
+		t.Errorf("randomInt64 inverted bounds = %d, want 10", got)
 	}
 	for i := 0; i < 20; i++ {
 		got := randomInt64(rng, 1, 100)
