@@ -39,6 +39,7 @@ Current deployment assumptions:
 - command intake work follows [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) for the current submit/cancel hot-path contract, accepted-but-not-completed semantics, and readiness gates
 - API/control-plane hardening follows [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): raw `/internal/*` remains local/migration only, external admin/data must use versioned gateway contracts, and non-local runtime profiles must fail closed on unsafe boundary defaults
 - raw internal HTTP caller status is inventoried in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
+- Bot Arena Phase 1 local evidence now has two named gates: `make dev-smoke-bot-arena-local-persist` for the positive live `/api/v1` path with persisted run results, and `make dev-smoke-bot-arena-local-negative` for deterministic freeze/disqualification evidence. Both persist via loopback-only admin calls from inside `platform-api`, keeping raw `/internal/*` off the host/public surface. Static operator evidence is generated with `make dev-render-bot-arena-report` and compared across run artifacts with `make dev-render-bot-arena-report-index`.
 
 ## Current Execution Checkpoint
 
@@ -145,6 +146,7 @@ Plan the failure matrix as subsystem slices, not as disconnected one-off tests:
 - no treating no-op publisher, raw accepted/sec, or accepted-but-unmaterialized counts as release evidence
 - no exposing raw `/internal/*` HTTP routes as product, bot, partner, public, or stable operator APIs
 - no snapshot/recovery claim until snapshot format, routing epoch metadata, and replay checksum inputs are specified
+- no live Bot Arena control-room/dashboard scope in this slice; keep that separate from the real-time stress monitoring dashboard workstream
 
 ## Completed Baseline
 
@@ -159,6 +161,7 @@ Implemented or materially started:
 - simulator/load tester with strict lifecycle, capacity baseline, persona/session config, deterministic replay, trace checks, and throughput reports
 - local Docker setup/reset/smoke/stress/replay automation
 - DigitalOcean benchmark harness and July 2026 throughput evidence
+- Bot Arena local positive/negative persisted gates and static operator report artifacts
 
 ## Active Gaps
 
@@ -171,6 +174,7 @@ The current gaps are:
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
 - first deterministic lifecycle scenarios are not locked end to end
 - post-trade workflows remain scenario-locked future work
+- Bot Arena hosted/backbone gate is not locked yet: local persisted gates are proven, but always-on backbone OpenBao/registry/export/backup flow still needs a named hosted smoke before public submission claims
 
 ## Active Execution Ladder
 

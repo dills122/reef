@@ -17,6 +17,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-reset dev-db-migrate
 .PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results
 .PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative
+.PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
@@ -88,6 +89,9 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/openbao-runtime-config.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-test-bot.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-ingest-bot-run-result.test.mjs
+	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.test.mjs
+	$(JS_RUNTIME) scripts/dev/arena-render-report-index.test.mjs
+	$(JS_RUNTIME) scripts/dev/arena-render-report.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
@@ -96,6 +100,9 @@ test-bot-sdk:
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs
 	node --check scripts/dev/arena-ingest-bot-run-result.mjs
+	node --check scripts/dev/arena-persist-report-local.mjs
+	node --check scripts/dev/arena-render-report-index.mjs
+	node --check scripts/dev/arena-render-report.mjs
 	node --check scripts/dev/arena-run-result-ingestion-smoke.mjs
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
 	node scripts/dev/report-taxonomy.test.mjs
@@ -213,11 +220,21 @@ dev-smoke-bot-arena-local:
 
 dev-smoke-bot-arena-local-persist:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --arena-admin-url=$(or $(ARENA_ADMIN_URL),$(or $(VENUE_URL),http://127.0.0.1:8080)) --seed-reference --persist-results --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json) $(ARGS)
+	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --seed-reference --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json) $(ARGS)
+	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.mjs --report=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json) --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.json)
 
 dev-smoke-bot-arena-local-negative:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --arena-admin-url=$(or $(ARENA_ADMIN_URL),$(or $(VENUE_URL),http://127.0.0.1:8080)) --seed-reference --persist-results --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --extra-bots=custom-too-many-orders --expect-freeze-bots=custom-too-many-orders --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json) $(ARGS)
+	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --seed-reference --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --extra-bots=custom-too-many-orders --expect-freeze-bots=custom-too-many-orders --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json) $(ARGS)
+	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.mjs --report=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json) --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json)
+
+dev-render-bot-arena-report:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/arena-render-report.mjs --report=$(or $(REPORT),/tmp/reef-arena-local-tick-run-persist.json) --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-persist.html) $(ARGS)
+
+dev-render-bot-arena-report-index:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/arena-render-report-index.mjs --reports=$(or $(REPORTS),/tmp/reef-arena-local-tick-run-persist.json,/tmp/reef-arena-local-tick-run-negative.json) --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-index.html) $(ARGS)
 
 dev-smoke-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
