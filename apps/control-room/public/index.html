@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reef Control Room</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Reef</p>
+        <h1>Control Room</h1>
+      </div>
+      <div class="status-strip">
+        <span id="runtime-status" class="pill">runtime unknown</span>
+        <span id="sample-time" class="muted">not sampled</span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="panel command-panel">
+        <div class="panel-title">
+          <h2>Run Controls</h2>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+        <div class="forms">
+          <form id="local-form" class="run-form">
+            <h3>Local Stress</h3>
+            <label>Rate <input name="rate" value="100" inputmode="numeric" /></label>
+            <label>Workers <input name="workers" value="8" inputmode="numeric" /></label>
+            <label>Duration <input name="duration" value="15s" /></label>
+            <label>Mode <input name="mode" value="strict-lifecycle" /></label>
+            <button type="submit">Start Local</button>
+          </form>
+          <form id="remote-form" class="run-form">
+            <h3>DigitalOcean Smoke</h3>
+            <label>Rate <input name="rate" value="1000" inputmode="numeric" /></label>
+            <label>Workers <input name="workers" value="128" inputmode="numeric" /></label>
+            <label>Duration <input name="duration" value="60s" /></label>
+            <label>Profile <input name="profile" value="stream-ack" /></label>
+            <button type="submit">Start Remote</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="metrics-grid">
+        <article class="metric">
+          <span>Accepted</span>
+          <strong id="metric-accepted">0</strong>
+          <small>run commands</small>
+        </article>
+        <article class="metric">
+          <span>Completed</span>
+          <strong id="metric-completed">0</strong>
+          <small>terminal commands</small>
+        </article>
+        <article class="metric">
+          <span>Accounting Gap</span>
+          <strong id="metric-gap">0</strong>
+          <small>accepted minus terminal</small>
+        </article>
+        <article class="metric">
+          <span>Worker Lag</span>
+          <strong id="metric-worker-lag">0</strong>
+          <small>stream lag</small>
+        </article>
+        <article class="metric">
+          <span>Materialized</span>
+          <strong id="metric-materialized">0</strong>
+          <small>canonical outcomes</small>
+        </article>
+        <article class="metric">
+          <span>Projected</span>
+          <strong id="metric-projected">0</strong>
+          <small>read-model work</small>
+        </article>
+      </section>
+
+      <section class="panel chart-panel">
+        <div class="panel-title">
+          <h2>Live Trend</h2>
+          <span id="active-run-label" class="muted">no active run</span>
+        </div>
+        <svg id="trend" viewBox="0 0 900 220" role="img" aria-label="Live run trend"></svg>
+      </section>
+
+      <section class="two-column">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Run History</h2>
+          </div>
+          <div id="run-list" class="run-list"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Evidence</h2>
+          </div>
+          <div id="evidence" class="evidence"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">
+          <h2>Live Log</h2>
+          <span id="log-run" class="muted">select or start a run</span>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
