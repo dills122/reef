@@ -38,12 +38,16 @@ import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
 import com.reef.platform.application.settlement.PostTradeProfileResolver
+import com.reef.platform.application.settlement.SettlementBreakOpenedReason
+import com.reef.platform.application.settlement.SettlementBreakOpenedReasonSecurity
 import com.reef.platform.application.settlement.SettlementAttemptStartedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
 import com.reef.platform.application.settlement.SettlementLedgerEntryFact
+import com.reef.platform.application.settlement.SettlementLedgerEntryTypeCash
+import com.reef.platform.application.settlement.SettlementLedgerEntryTypeSecurity
 import com.reef.platform.application.settlement.SettlementLedgerProjection
 import com.reef.platform.application.settlement.SettlementLedgerProjectionView
 import com.reef.platform.application.settlement.SettlementLegOutcomeFact
@@ -446,6 +450,18 @@ class PlatformHttpServer(
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
                 writeHotPathResponse(exchange, postCashSettlementRepairResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/repairs/security") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, postSecuritySettlementRepairResponse(body))
             }
         }
 
@@ -3407,6 +3423,38 @@ class PlatformHttpServer(
     }
 
     private fun postCashSettlementRepairResponse(body: String): PlatformHotPathResponse {
+        return postSettlementRepairResponse(
+            body = body,
+            repairKind = "cash",
+            expectedBreakReason = SettlementBreakOpenedReason,
+            assetType = SettlementLedgerEntryTypeCash,
+            defaultParticipantId = { it.buyerParticipantId },
+            defaultAssetId = { it.currency },
+            defaultQuantity = { it.cashAmount }
+        )
+    }
+
+    private fun postSecuritySettlementRepairResponse(body: String): PlatformHotPathResponse {
+        return postSettlementRepairResponse(
+            body = body,
+            repairKind = "security",
+            expectedBreakReason = SettlementBreakOpenedReasonSecurity,
+            assetType = SettlementLedgerEntryTypeSecurity,
+            defaultParticipantId = { it.sellerParticipantId },
+            defaultAssetId = { it.instrumentId },
+            defaultQuantity = { it.quantity }
+        )
+    }
+
+    private fun postSettlementRepairResponse(
+        body: String,
+        repairKind: String,
+        expectedBreakReason: String,
+        assetType: String,
+        defaultParticipantId: (SettlementObligationCreatedFact) -> String,
+        defaultAssetId: (SettlementObligationCreatedFact) -> String,
+        defaultQuantity: (SettlementObligationCreatedFact) -> String
+    ): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
         return try {
@@ -3420,6 +3468,7 @@ class PlatformHttpServer(
             val existing = store.factsByScenarioRunId(scenarioRunId)
             val breakFact = existing.breaks.firstOrNull { it.settlementBreakId == settlementBreakId }
                 ?: throw IllegalArgumentException("settlementBreakId not found")
+            require(breakFact.reason == expectedBreakReason) { "settlementBreakId is not a $repairKind break" }
             val obligation = existing.obligations.firstOrNull {
                 it.settlementObligationId == breakFact.settlementObligationId
             } ?: throw IllegalArgumentException("settlement obligation not found")
@@ -3427,13 +3476,13 @@ class PlatformHttpServer(
             val occurredAt = instantFrom(json.string("occurredAt").ifBlank { principal.occurredAt }, "occurredAt")
             val actorId = json.string("actorId").ifBlank { principal.actorId }
             require(actorId.isNotBlank()) { "actorId is required" }
-            val participantId = json.string("participantId").ifBlank { obligation.buyerParticipantId }
-            val assetId = json.string("assetId").ifBlank { json.string("currency").ifBlank { obligation.currency } }
-            val quantity = json.string("quantity").ifBlank { obligation.cashAmount }
+            val participantId = json.string("participantId").ifBlank { defaultParticipantId(obligation) }
+            val assetId = json.string("assetId").ifBlank { defaultAssetId(obligation) }
+            val quantity = json.string("quantity").ifBlank { defaultQuantity(obligation) }
             require(quantity.isNotBlank()) { "quantity is required" }
-            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-cash" }
+            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-$repairKind" }
             val resourcePositionId = json.string("resourcePositionId").ifBlank {
-                "resource-$settlementBreakId-cash-repair"
+                "resource-$settlementBreakId-$repairKind-repair"
             }
             val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
             val causationId = json.string("causationId").ifBlank { settlementBreakId }
@@ -3449,7 +3498,7 @@ class PlatformHttpServer(
                         causationId = causationId,
                         participantId = participantId,
                         accountId = accountId,
-                        assetType = "CASH",
+                        assetType = assetType,
                         assetId = assetId,
                         quantity = quantity,
                         occurredAt = occurredAt
