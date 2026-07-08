@@ -35,6 +35,25 @@ Immediate implications:
 
 Detailed evidence: [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 
+## DigitalOcean Materializer 10k Gate (July 8, 2026)
+
+The first c-16 DigitalOcean confirmation turned the direct-stream plus
+venue-event-materializer path into a named promotion gate instead of a one-off
+stress command.
+
+Evidence:
+
+- sample 1: `599957` accepted/materialized, `9998.74` accepted rps, p95 `99.35ms`, p99 `162.77ms`, accepted/materialized gap `0`.
+- sample 2: `599959` accepted/materialized, `9998.72` accepted rps, p95 `57.66ms`, p99 `114.58ms`, accepted/materialized gap `0`.
+- sample 3: `599888` accepted/materialized, `9988.10` accepted rps, p95 `69.10ms`, p99 `133.72ms`, accepted/materialized gap `0`.
+
+Immediate implications:
+
+1. The short c-16 `10k` materializer path is credible enough to make a gate.
+2. Do not raise the target until `10k` is boring under `5m`, `15m`, warm-state, and aged-state runs.
+3. Track WAL/table bytes per command, `pg_stat_activity` waits, `pg_stat_io`, Kafka producer queue/request latency, materializer batch behavior, and restart counts during every promotion run.
+4. Use `make do-materializer-10k-gate` so SLO, repeat-sample, and partition-spread gates stay consistent.
+
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.
