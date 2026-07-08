@@ -137,6 +137,29 @@ func (b *Book) LevelCount(side domain.Side) int {
 	return count
 }
 
+func (b *Book) ForEachCrossingResting(incomingSide domain.Side, limitPrice int64, visit func(RestingOrder) bool) {
+	if visit == nil {
+		return
+	}
+	if incomingSide == domain.SideBuy {
+		b.sells.levels.Scan(func(price int64, level *priceLevel) bool {
+			if price > limitPrice {
+				return false
+			}
+			return visitLevel(level, visit)
+		})
+		return
+	}
+	if incomingSide == domain.SideSell {
+		b.buys.levels.Reverse(func(price int64, level *priceLevel) bool {
+			if price < limitPrice {
+				return false
+			}
+			return visitLevel(level, visit)
+		})
+	}
+}
+
 func (b *Book) Snapshot() Snapshot {
 	snapshot := Snapshot{
 		NextSequence: b.nextSequence,
@@ -213,6 +236,15 @@ func (b *Book) removeNode(node *orderNode) {
 	node.prev = nil
 	node.next = nil
 	node.level = nil
+}
+
+func visitLevel(level *priceLevel, visit func(RestingOrder) bool) bool {
+	for node := level.head; node != nil; node = node.next {
+		if !visit(node.order) {
+			return false
+		}
+	}
+	return true
 }
 
 func newSideBook(side domain.Side) sideBook {

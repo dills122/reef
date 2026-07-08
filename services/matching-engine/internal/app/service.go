@@ -814,36 +814,22 @@ func (s *Service) reachableSelfTradeRestingRecords(book *orderBook, incoming *or
 		return nil
 	}
 	remaining := incoming.RemainingQuantity
-	opposite := domain.SideSell
-	if incoming.Side == domain.SideSell {
-		opposite = domain.SideBuy
-	}
-	snapshot := book.book.Snapshot()
-	orders := snapshot.Sells
-	if opposite == domain.SideBuy {
-		orders = snapshot.Buys
-	}
 	matches := make([]*orderRecord, 0)
-	for _, resting := range orders {
+	book.book.ForEachCrossingResting(incoming.Side, incoming.LimitPrice, func(resting hotbook.RestingOrder) bool {
 		if remaining <= 0 {
-			return matches
+			return false
 		}
 		restingRecord, ok := s.loadOrder(resting.OrderID)
 		if !ok || restingRecord.OrderID == incoming.OrderID {
-			continue
-		}
-		if incoming.Side == domain.SideBuy && incoming.LimitPrice < restingRecord.LimitPrice {
-			return matches
-		}
-		if incoming.Side == domain.SideSell && incoming.LimitPrice > restingRecord.LimitPrice {
-			return matches
+			return true
 		}
 		if sameSelfTradeIdentity(incoming, restingRecord) {
 			matches = append(matches, restingRecord)
-			continue
+			return true
 		}
 		remaining -= restingRecord.RemainingQuantity
-	}
+		return remaining > 0
+	})
 	return matches
 }
 

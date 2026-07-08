@@ -829,6 +829,43 @@ func TestSubmitOrderRejectsSelfTradeReachableAfterOtherLiquidity(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderSelfTradePreventionIgnoresNonCrossingPrice(t *testing.T) {
+	service := NewService()
+	own := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own-away",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "151000000000",
+		Currency:      "USD",
+	})
+	if own.Accepted == nil {
+		t.Fatalf("expected away sell to accept, got %#v", own)
+	}
+
+	buy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own-below",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if buy.Accepted == nil {
+		t.Fatalf("expected non-crossing own buy to rest, got %#v", buy)
+	}
+	if buy.Rejected != nil || len(buy.Trades) != 0 {
+		t.Fatalf("expected no self-trade rejection or trade, got %#v", buy)
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 || service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected both non-crossing own orders to rest")
+	}
+}
+
 func TestSubmitOrderAllowsDifferentParticipantCross(t *testing.T) {
 	service := NewService()
 	resting := service.SubmitOrder(domain.SubmitOrder{

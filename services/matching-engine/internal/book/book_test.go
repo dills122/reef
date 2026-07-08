@@ -92,6 +92,53 @@ func TestBookLevelCountTracksDistinctPrices(t *testing.T) {
 	}
 }
 
+func TestBookForEachCrossingRestingScansOnlyReachableSellLevels(t *testing.T) {
+	book := New()
+	book.Add(domain.SideSell, book.NewRestingOrder("s1", 99))
+	book.Add(domain.SideSell, book.NewRestingOrder("s2", 100))
+	book.Add(domain.SideSell, book.NewRestingOrder("s3", 101))
+	book.Add(domain.SideSell, book.NewRestingOrder("s4", 100))
+
+	ids := make([]string, 0, 3)
+	book.ForEachCrossingResting(domain.SideBuy, 100, func(order RestingOrder) bool {
+		ids = append(ids, order.OrderID)
+		return true
+	})
+
+	assertIDs(t, ids, []string{"s1", "s2", "s4"})
+}
+
+func TestBookForEachCrossingRestingScansOnlyReachableBuyLevels(t *testing.T) {
+	book := New()
+	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b2", 100))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b3", 99))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b4", 101))
+
+	ids := make([]string, 0, 3)
+	book.ForEachCrossingResting(domain.SideSell, 100, func(order RestingOrder) bool {
+		ids = append(ids, order.OrderID)
+		return true
+	})
+
+	assertIDs(t, ids, []string{"b1", "b4", "b2"})
+}
+
+func TestBookForEachCrossingRestingStopsWhenVisitorStops(t *testing.T) {
+	book := New()
+	book.Add(domain.SideSell, book.NewRestingOrder("s1", 99))
+	book.Add(domain.SideSell, book.NewRestingOrder("s2", 100))
+	book.Add(domain.SideSell, book.NewRestingOrder("s3", 100))
+
+	ids := make([]string, 0, 1)
+	book.ForEachCrossingResting(domain.SideBuy, 100, func(order RestingOrder) bool {
+		ids = append(ids, order.OrderID)
+		return false
+	})
+
+	assertIDs(t, ids, []string{"s1"})
+}
+
 func TestBookSnapshotRestorePreservesPriorityAndChecksum(t *testing.T) {
 	book := New()
 	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))
