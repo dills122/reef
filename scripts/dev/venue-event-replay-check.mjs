@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { env, loadDotEnv } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
@@ -6,6 +7,7 @@ loadDotEnv();
 const projectionName = env("DEV_VENUE_EVENT_REPLAY_CHECK_PROJECTION_NAME", "");
 const eventStream = env("DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM", "");
 const allowEmpty = env("DEV_VENUE_EVENT_REPLAY_CHECK_ALLOW_EMPTY", "false").toLowerCase() === "true";
+const visibilityTimeline = await loadVisibilityTimeline();
 
 const report = JSON.parse(await queryReplayReport());
 const failures = evaluateReport(report, { projectionName, allowEmpty });
@@ -17,6 +19,9 @@ const output = {
   report,
   failures,
 };
+if (visibilityTimeline) {
+  output.visibilityTimeline = visibilityTimeline;
+}
 
 console.log(JSON.stringify(output, null, 2));
 
@@ -239,6 +244,21 @@ function evaluateReport(report, options) {
     assertZero(failures, report, "watermarkLagCount", "projection watermark lag rows");
   }
   return failures;
+}
+
+async function loadVisibilityTimeline() {
+  const inline = env("DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_JSON", "");
+  const path = env("DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_PATH", "");
+  if (inline && path) {
+    throw new Error("set only one of DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_JSON or DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_PATH");
+  }
+  if (inline) {
+    return JSON.parse(inline);
+  }
+  if (path) {
+    return JSON.parse(await readFile(path, "utf8"));
+  }
+  return null;
 }
 
 function assertZero(failures, report, key, label) {
