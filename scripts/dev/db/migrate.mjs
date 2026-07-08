@@ -19,6 +19,7 @@ const domainOrder = [
   "settlement",
   "arena",
   "analytics",
+  "stock_data",
 ];
 
 export async function discoverMigrations(migrationsRoot = defaultMigrationsRoot) {
