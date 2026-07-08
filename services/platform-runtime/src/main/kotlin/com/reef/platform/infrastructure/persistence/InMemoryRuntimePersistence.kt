@@ -17,6 +17,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
@@ -34,6 +35,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val actorRoleBindings = mutableListOf<ActorRoleBinding>()
     private val postTradeProfiles = linkedMapOf<String, PostTradeProfile>()
     private var activePostTradeProfileId = ""
+    private val venueSessionPostTradeProfiles = linkedMapOf<String, VenueSessionPostTradeProfile>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
@@ -104,6 +106,18 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
         activePostTradeProfileId = profileId
         return profile.copy(active = true)
+    }
+
+    override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        venueSessionPostTradeProfiles[config.venueSessionId] = config
+    }
+
+    override fun venueSessionPostTradeProfileId(venueSessionId: String): String? {
+        return venueSessionPostTradeProfiles[venueSessionId]?.postTradeProfileId
+    }
+
+    override fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return venueSessionPostTradeProfiles.values.toList()
     }
 
     override fun instruments(): List<Instrument> {

@@ -16,6 +16,7 @@ class PostgresSchemaRequirementsTest {
                 "runtime.reference_instruments",
                 "runtime.reference_participants",
                 "runtime.reference_accounts",
+                "runtime.reference_venue_sessions",
                 "runtime.orders",
                 "runtime.executions",
                 "runtime.trades",
@@ -158,6 +159,16 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "admin.post_trade_profiles" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.reference_venue_sessions.venue_session_id:text",
+                "runtime.reference_venue_sessions.post_trade_profile_id:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.reference_venue_sessions" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

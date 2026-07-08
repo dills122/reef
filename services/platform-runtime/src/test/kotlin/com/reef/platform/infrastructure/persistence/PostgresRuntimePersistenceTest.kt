@@ -9,6 +9,7 @@ import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,9 +53,16 @@ class PostgresRuntimePersistenceTest {
         assertEquals(opsProfile, persistence.activePostTradeProfile().profileId)
 
         persistence.activatePostTradeProfile(instantProfile)
+        persistence.saveVenueSessionPostTradeProfile(
+            VenueSessionPostTradeProfile(
+                venueSessionId = "session-$suffix",
+                postTradeProfileId = instantProfile
+            )
+        )
 
         assertEquals(instantProfile, persistence.activePostTradeProfile().profileId)
         assertTrue(persistence.postTradeProfiles().any { it.profileId == opsProfile && !it.active })
+        assertEquals(instantProfile, persistence.venueSessionPostTradeProfileId("session-$suffix"))
     }
 
     @Test

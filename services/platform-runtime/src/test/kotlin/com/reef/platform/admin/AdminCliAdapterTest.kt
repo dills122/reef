@@ -87,6 +87,11 @@ class AdminCliAdapterTest {
             cli.execute(listOf("post-trade-profile-activate", "custom-instant-v1")),
             "\"activeProfileId\":\"custom-instant-v1\""
         )
+        assertContains(
+            cli.execute(listOf("venue-session-profile-set", "session-1", "custom-instant-v1")),
+            "\"venueSessionId\":\"session-1\""
+        )
+        assertContains(cli.execute(listOf("venue-session-profile-list")), "\"venueSessionsCount\":1")
         assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("override-list")), "\"reasonsCount\":")
         assertContains(cli.execute(listOf("sim-start", "scenario-1")), "\"status\":\"ok\"")

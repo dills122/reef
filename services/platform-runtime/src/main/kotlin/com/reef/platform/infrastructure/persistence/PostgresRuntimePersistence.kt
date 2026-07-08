@@ -18,6 +18,7 @@ import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -108,6 +109,15 @@ class PostgresRuntimePersistence(
                     CREATE TABLE IF NOT EXISTS ${names.referenceAccounts} (
                       account_id TEXT PRIMARY KEY,
                       participant_id TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.referenceVenueSessions} (
+                      venue_session_id TEXT PRIMARY KEY,
+                      post_trade_profile_id TEXT NOT NULL,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
                     """.trimIndent()
                 )
@@ -1849,6 +1859,52 @@ class PostgresRuntimePersistence(
             } finally {
                 conn.autoCommit = true
             }
+        }
+    }
+
+    override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.referenceVenueSessions}(venue_session_id, post_trade_profile_id, updated_at)
+                VALUES (?, ?, now())
+                ON CONFLICT (venue_session_id) DO UPDATE SET
+                  post_trade_profile_id = EXCLUDED.post_trade_profile_id,
+                  updated_at = now()
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, config.venueSessionId)
+                ps.setString(2, config.postTradeProfileId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun venueSessionPostTradeProfileId(venueSessionId: String): String? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                "SELECT post_trade_profile_id FROM ${names.referenceVenueSessions} WHERE venue_session_id = ?"
+            ).use { ps ->
+                ps.setString(1, venueSessionId)
+                ps.executeQuery().use { rs ->
+                    return if (rs.next()) rs.getString("post_trade_profile_id") else null
+                }
+            }
+        }
+    }
+
+    override fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return queryList(
+            """
+            SELECT venue_session_id, post_trade_profile_id
+            FROM ${names.referenceVenueSessions}
+            ORDER BY venue_session_id
+            """.trimIndent()
+        ) {
+            VenueSessionPostTradeProfile(
+                venueSessionId = getString("venue_session_id"),
+                postTradeProfileId = getString("post_trade_profile_id")
+            )
         }
     }
 

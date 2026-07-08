@@ -21,6 +21,7 @@ import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.application.arena.RegisterArenaRunCommand
+import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
@@ -29,6 +30,7 @@ import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
@@ -239,6 +241,29 @@ class AdminApplicationService(
         val profile = runtimePersistence.activatePostTradeProfile(profileId)
         emitAudit(actor, "AdminPostTradeProfileActivated", profileId, "policyVersion=${profile.policyVersion}")
         return profile
+    }
+
+    fun setVenueSessionPostTradeProfile(
+        actor: AdminActor,
+        venueSessionId: String,
+        postTradeProfileId: String
+    ): VenueSessionPostTradeProfile {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        require(venueSessionId.isNotBlank()) { "venueSessionId is required" }
+        PostTradeProfileResolver.fromPersistence(runtimePersistence).resolve(venueSessionProfileId = postTradeProfileId)
+        val config = VenueSessionPostTradeProfile(venueSessionId = venueSessionId, postTradeProfileId = postTradeProfileId)
+        runtimePersistence.saveVenueSessionPostTradeProfile(config)
+        emitAudit(
+            actor,
+            "AdminVenueSessionPostTradeProfileSet",
+            venueSessionId,
+            "postTradeProfileId=$postTradeProfileId"
+        )
+        return config
+    }
+
+    fun listVenueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return runtimePersistence.venueSessionPostTradeProfiles()
     }
 
     fun upsertOverrideReason(actor: AdminActor, reason: OverrideReasonCode) {

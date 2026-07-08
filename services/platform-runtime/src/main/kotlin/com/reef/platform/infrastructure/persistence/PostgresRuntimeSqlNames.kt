@@ -12,6 +12,7 @@ data class PostgresRuntimeSqlNames(
     val referenceInstruments = qualify(runtimeSchemaName, "reference_instruments")
     val referenceParticipants = qualify(runtimeSchemaName, "reference_participants")
     val referenceAccounts = qualify(runtimeSchemaName, "reference_accounts")
+    val referenceVenueSessions = qualify(runtimeSchemaName, "reference_venue_sessions")
     val orders = qualify(runtimeSchemaName, "orders")
     val executions = qualify(runtimeSchemaName, "executions")
     val trades = qualify(runtimeSchemaName, "trades")

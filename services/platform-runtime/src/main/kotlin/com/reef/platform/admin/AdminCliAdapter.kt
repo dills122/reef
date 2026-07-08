@@ -219,6 +219,20 @@ class AdminCliAdapter(
                     "activeProfileId" to profile.profileId
                 )
             }
+            "venue-session-profile-set" -> {
+                if (args.size < 3) return "usage: venue-session-profile-set <venueSessionId> <postTradeProfileId>"
+                val config = adminService.setVenueSessionPostTradeProfile(actor, args[1], args[2])
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "command" to "venue-session-profile-set",
+                    "venueSessionId" to config.venueSessionId,
+                    "postTradeProfileId" to config.postTradeProfileId
+                )
+            }
+            "venue-session-profile-list" -> {
+                val configs = adminService.listVenueSessionPostTradeProfiles()
+                JsonCodec.writeObject("venueSessionsCount" to configs.size)
+            }
             "override-upsert" -> {
                 if (args.size < 3) return "usage: override-upsert <code> <description>"
                 adminService.upsertOverrideReason(
@@ -280,6 +294,8 @@ class AdminCliAdapter(
               post-trade-profile-upsert <profileId> <mode> <settlementCycle> <nettingMode> <ledgerPostingMode> [policyVersion]
               post-trade-profile-list
               post-trade-profile-activate <profileId>
+              venue-session-profile-set <venueSessionId> <postTradeProfileId>
+              venue-session-profile-list
               override-upsert <code> <description>
               override-list
               sim-start <scenario>

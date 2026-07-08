@@ -23,6 +23,7 @@ class PostgresRuntimeSqlNamesTest {
         assertEquals("runtime.canonical_command_outcomes", names.canonicalCommandOutcomes)
         assertEquals("runtime.projection_watermarks", names.projectionWatermarks)
         assertEquals("runtime.reference_instruments", names.referenceInstruments)
+        assertEquals("runtime.reference_venue_sessions", names.referenceVenueSessions)
         assertEquals("runtime.runtime_persist_submit_outcome", names.persistSubmitOutcomeFunction)
         assertEquals("runtime.runtime_persist_submit_outcomes", names.persistSubmitOutcomesFunction)
         assertEquals("runtime.runtime_append_canonical_submit_outcomes", names.appendCanonicalSubmitOutcomesFunction)
@@ -41,6 +42,7 @@ class PostgresRuntimeSqlNamesTest {
         listOf(
             names.orders,
             names.referenceInstruments,
+            names.referenceVenueSessions,
             names.authRoles,
             names.adminPostTradeProfiles
         ).forEach { qualifiedName ->

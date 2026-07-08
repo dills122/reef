@@ -1969,6 +1969,55 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun settlementFactsEndpointUsesVenueSessionPostTradeProfileOverride() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = "instant-post-trade-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality",
+                policyVersion = 6
+            )
+        )
+        persistence.saveVenueSessionPostTradeProfile(
+            com.reef.platform.domain.VenueSessionPostTradeProfile(
+                venueSessionId = "session-fast",
+                postTradeProfileId = "instant-post-trade-v1"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            runtimePersistence = persistence,
+            postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(persistence),
+            venueSessionPostTradeProfileLookup = { persistence.venueSessionPostTradeProfileId(it) }
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody(
+                    scenarioRunId = "p2-run-venue-override",
+                    includePostTradeProfile = false,
+                    venueSessionId = "session-fast"
+                )
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-venue-override")
+
+            assertEquals(200, posted.status)
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":6")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
         val breakerStore = RecordingCommandCircuitBreakerStore()
         val persistence = InMemoryRuntimePersistence()
@@ -3416,6 +3465,7 @@ class PlatformHttpServerBoundaryTest {
         defaultPostTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
         postTradeProfileResolver: PostTradeProfileResolver =
             PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
+        venueSessionPostTradeProfileLookup: (String) -> String? = { null },
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
@@ -3469,6 +3519,7 @@ class PlatformHttpServerBoundaryTest {
             defaultPostTradeProfileId = defaultPostTradeProfileId,
             defaultPostTradePolicyVersion = defaultPostTradePolicyVersion,
             postTradeProfileResolver = postTradeProfileResolver,
+            venueSessionPostTradeProfileLookup = venueSessionPostTradeProfileLookup,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
@@ -3650,7 +3701,8 @@ class PlatformHttpServerBoundaryTest {
 
     private fun p2SettlementFactsBody(
         scenarioRunId: String,
-        includePostTradeProfile: Boolean = true
+        includePostTradeProfile: Boolean = true,
+        venueSessionId: String = ""
     ): String {
         val postTradeProfile = if (includePostTradeProfile) {
             """
@@ -3660,9 +3712,15 @@ class PlatformHttpServerBoundaryTest {
         } else {
             ""
         }
+        val venueSession = if (venueSessionId.isNotBlank()) {
+            """"venueSessionId":"$venueSessionId","""
+        } else {
+            ""
+        }
         return """
             {
               "scenarioRunId":"$scenarioRunId",
+              $venueSession
               $postTradeProfile
               "obligations":[{
                 "settlementObligationId":"obl-1",
