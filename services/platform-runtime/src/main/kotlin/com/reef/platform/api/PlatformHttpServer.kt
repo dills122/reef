@@ -3473,7 +3473,9 @@ class PlatformHttpServer(
                 it.settlementObligationId == breakFact.settlementObligationId
             } ?: throw IllegalArgumentException("settlement obligation not found")
             val principal = currentAdminPrincipal()
-            val occurredAt = instantFrom(json.string("occurredAt").ifBlank { principal.occurredAt }, "occurredAt")
+            val occurredAtRaw = json.string("occurredAt")
+            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
+            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
             val actorId = json.string("actorId").ifBlank { principal.actorId }
             require(actorId.isNotBlank()) { "actorId is required" }
             val participantId = json.string("participantId").ifBlank { defaultParticipantId(obligation) }

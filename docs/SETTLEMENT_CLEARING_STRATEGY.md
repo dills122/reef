@@ -187,7 +187,7 @@ Obligation materialization:
 - resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
 - constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts
 - repair reattempts: a `SettlementRepairPosted` fact against the open break lets the next materialization create attempt `N+1`; successful repaired attempts emit the normal four ledger entries, one `SETTLED` fact, and a `SettlementResolved` fact for the repaired break
-- repair command behavior: the first command paths post either buyer cash or seller security `resourcePosition` facts plus `SettlementRepairPosted` against an existing break; they require `scenarioRunId`, `settlementBreakId`, `accountId`, and `actorId`, and can default participant, asset, quantity, profile, and policy version from the broken obligation
+- repair command behavior: the first command paths post either buyer cash or seller security `resourcePosition` facts plus `SettlementRepairPosted` against an existing break; they require `scenarioRunId`, `settlementBreakId`, `accountId`, `actorId`, and deterministic `occurredAt`, and can default participant, asset, quantity, profile, and policy version from the broken obligation
 
 ## Data Model Direction
 

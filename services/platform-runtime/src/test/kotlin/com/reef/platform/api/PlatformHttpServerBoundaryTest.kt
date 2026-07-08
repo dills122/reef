@@ -2329,6 +2329,19 @@ class PlatformHttpServerBoundaryTest {
             assertContains(obligations.body, "\"securityLegState\":\"LEG_SUCCEEDED\"")
             assertContains(obligations.body, "\"ledgerEntryCount\":0")
 
+            val missingOccurredAtRepair = post(
+                server.address.port,
+                "/internal/admin/settlement/repairs/cash",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-materialize-fail",
+                  "settlementBreakId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
+                  "accountId":"account-buyer-1",
+                  "actorId":"ops-user-1"
+                }
+                """.trimIndent()
+            )
             val repairPosted = post(
                 server.address.port,
                 "/internal/admin/settlement/repairs/cash",
@@ -2356,6 +2369,8 @@ class PlatformHttpServerBoundaryTest {
             val repairedObligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
             val repairedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize-fail")
 
+            assertEquals(400, missingOccurredAtRepair.status)
+            assertContains(missingOccurredAtRepair.body, "\"error\":\"occurredAt is required\"")
             assertEquals(200, repairPosted.status)
             assertContains(repairPosted.body, "\"resourcePositionId\":\"resource-run-materialize-fail-buyer-cash-repair\"")
             assertContains(repairPosted.body, "\"settlementRepairId\":\"repair-run-materialize-fail-1\"")
