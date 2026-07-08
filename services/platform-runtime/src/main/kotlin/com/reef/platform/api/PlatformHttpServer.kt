@@ -45,6 +45,8 @@ import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
+import com.reef.platform.application.settlement.SettlementLedgerDirectionCredit
+import com.reef.platform.application.settlement.SettlementLedgerDirectionDebit
 import com.reef.platform.application.settlement.SettlementLedgerEntryFact
 import com.reef.platform.application.settlement.SettlementLedgerEntryTypeCash
 import com.reef.platform.application.settlement.SettlementLedgerEntryTypeSecurity
@@ -54,6 +56,9 @@ import com.reef.platform.application.settlement.SettlementLegOutcomeFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationProjection
 import com.reef.platform.application.settlement.SettlementObligationView
+import com.reef.platform.application.settlement.SettlementOperatorActionFact
+import com.reef.platform.application.settlement.SettlementOperatorActionForceSettle
+import com.reef.platform.application.settlement.SettlementOperatorActionReverseLedgerEntry
 import com.reef.platform.application.settlement.SettlementRepairPostedActionCash
 import com.reef.platform.application.settlement.SettlementRepairPostedActionSecurity
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
@@ -469,6 +474,30 @@ class PlatformHttpServer(
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
                 writeHotPathResponse(exchange, postSecuritySettlementRepairResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/force-settle") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, forceSettleResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/reverse-ledger-entry") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, reverseSettlementLedgerEntryResponse(body))
             }
         }
 
@@ -3562,6 +3591,250 @@ class PlatformHttpServer(
         }
     }
 
+    private fun forceSettleResponse(body: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        val materializer = settlementObligationMaterializer
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
+        return try {
+            val json = JsonCodec.parseObject(body)
+            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
+            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
+            val settlementBreakId = json.string("settlementBreakId")
+            require(settlementBreakId.isNotBlank()) { "settlementBreakId is required" }
+            val accountId = json.string("accountId")
+            require(accountId.isNotBlank()) { "accountId is required" }
+            val reasonNote = json.string("reasonNote")
+            require(reasonNote.isNotBlank()) { "reasonNote is required" }
+            val occurredAtRaw = json.string("occurredAt")
+            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
+            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
+            val existing = store.factsByScenarioRunId(scenarioRunId)
+            val breakFact = existing.breaks.firstOrNull { it.settlementBreakId == settlementBreakId }
+                ?: throw IllegalArgumentException("settlementBreakId not found")
+            val obligation = existing.obligations.firstOrNull { it.settlementObligationId == breakFact.settlementObligationId }
+                ?: throw IllegalArgumentException("settlement obligation not found")
+            val principal = currentAdminPrincipal()
+            val actorId = json.string("actorId").ifBlank { principal.actorId }
+            require(actorId.isNotBlank()) { "actorId is required" }
+            val isCashBreak = breakFact.reason == SettlementBreakOpenedReason
+            val repairKind = if (isCashBreak) "cash" else "security"
+            val resourceAssetType = if (isCashBreak) SettlementLedgerEntryTypeCash else SettlementLedgerEntryTypeSecurity
+            val resourceParticipantId = json.string("participantId").ifBlank {
+                if (isCashBreak) obligation.buyerParticipantId else obligation.sellerParticipantId
+            }
+            val resourceAssetId = json.string("assetId").ifBlank {
+                if (isCashBreak) obligation.currency else obligation.instrumentId
+            }
+            val resourceQuantity = json.string("quantity").ifBlank {
+                if (isCashBreak) obligation.cashAmount else obligation.quantity
+            }
+            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
+            val operatorActionId = json.string("settlementOperatorActionId").ifBlank {
+                "operator-force-settle-$settlementBreakId"
+            }
+            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-force-settle" }
+            val resourcePositionId = json.string("resourcePositionId").ifBlank {
+                "resource-$settlementBreakId-force-settle"
+            }
+            val auditFacts = SettlementFactBundle(
+                scenarioRunId = scenarioRunId,
+                operatorActions = listOf(
+                    SettlementOperatorActionFact(
+                        settlementOperatorActionId = operatorActionId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = settlementBreakId,
+                        action = SettlementOperatorActionForceSettle,
+                        targetId = settlementBreakId,
+                        reasonNote = reasonNote,
+                        actorId = actorId,
+                        occurredAt = occurredAt
+                    )
+                ),
+                resourcePositions = listOf(
+                    SettlementResourcePositionFact(
+                        resourcePositionId = resourcePositionId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = operatorActionId,
+                        participantId = resourceParticipantId,
+                        accountId = accountId,
+                        assetType = resourceAssetType,
+                        assetId = resourceAssetId,
+                        quantity = resourceQuantity,
+                        occurredAt = occurredAt
+                    )
+                ),
+                repairs = listOf(
+                    SettlementRepairPostedFact(
+                        settlementRepairId = repairId,
+                        settlementBreakId = settlementBreakId,
+                        settlementObligationId = obligation.settlementObligationId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = operatorActionId,
+                        repairAction = if (isCashBreak) SettlementRepairPostedActionCash else SettlementRepairPostedActionSecurity,
+                        actorId = actorId,
+                        occurredAt = occurredAt
+                    )
+                )
+            )
+            store.appendFacts(auditFacts)
+            val result = materializer.materialize(scenarioRunId = scenarioRunId, venueSessionId = json.string("venueSessionId"))
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "repairKind" to repairKind,
+                    "facts" to settlementFactBundleJson(auditFacts),
+                    "materialization" to mapOf(
+                        "scenarioRunId" to result.scenarioRunId,
+                        "materializedAttempts" to result.materializedAttempts,
+                        "materializedLedgerEntries" to result.materializedLedgerEntries,
+                        "materializedSettlements" to result.materializedSettlements,
+                        "materializedResolutions" to result.materializedResolutions
+                    )
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid force settle")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "force settle failed")))
+        }
+    }
+
+    private fun reverseSettlementLedgerEntryResponse(body: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        return try {
+            val json = JsonCodec.parseObject(body)
+            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
+            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
+            val targetLedgerEntryId = json.string("ledgerEntryId").ifBlank { json.string("targetLedgerEntryId") }
+            require(targetLedgerEntryId.isNotBlank()) { "ledgerEntryId is required" }
+            val reasonNote = json.string("reasonNote")
+            require(reasonNote.isNotBlank()) { "reasonNote is required" }
+            val occurredAtRaw = json.string("occurredAt")
+            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
+            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
+            val existing = store.factsByScenarioRunId(scenarioRunId)
+            val target = existing.ledgerEntries.firstOrNull { it.ledgerEntryId == targetLedgerEntryId }
+                ?: throw IllegalArgumentException("ledgerEntryId not found")
+            val obligation = existing.obligations.firstOrNull { it.settlementObligationId == target.settlementObligationId }
+                ?: throw IllegalArgumentException("settlement obligation not found")
+            val nextAttemptNumber = existing.attempts
+                .filter { it.settlementObligationId == target.settlementObligationId }
+                .maxOfOrNull { it.attemptNumber }
+                ?.plus(1)
+                ?: 1
+            val principal = currentAdminPrincipal()
+            val actorId = json.string("actorId").ifBlank { principal.actorId }
+            require(actorId.isNotBlank()) { "actorId is required" }
+            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
+            val operatorActionId = json.string("settlementOperatorActionId").ifBlank {
+                "operator-reverse-ledger-$targetLedgerEntryId"
+            }
+            val instructionId = json.string("settlementInstructionId").ifBlank {
+                "settlement-instruction-reversal-$targetLedgerEntryId"
+            }
+            val attemptId = json.string("settlementAttemptId").ifBlank {
+                "settlement-attempt-reversal-$targetLedgerEntryId"
+            }
+            val reversalLedgerEntryId = json.string("reversalLedgerEntryId").ifBlank {
+                "settlement-ledger-reversal-$targetLedgerEntryId"
+            }
+            val facts = SettlementFactBundle(
+                scenarioRunId = scenarioRunId,
+                operatorActions = listOf(
+                    SettlementOperatorActionFact(
+                        settlementOperatorActionId = operatorActionId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = target.postTradeProfileId,
+                        postTradePolicyVersion = target.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = targetLedgerEntryId,
+                        action = SettlementOperatorActionReverseLedgerEntry,
+                        targetId = targetLedgerEntryId,
+                        reasonNote = reasonNote,
+                        actorId = actorId,
+                        occurredAt = occurredAt
+                    )
+                ),
+                instructions = listOf(
+                    SettlementInstructionCreatedFact(
+                        settlementInstructionId = instructionId,
+                        settlementObligationId = target.settlementObligationId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = target.postTradeProfileId,
+                        postTradePolicyVersion = target.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = operatorActionId,
+                        occurredAt = occurredAt
+                    )
+                ),
+                attempts = listOf(
+                    SettlementAttemptStartedFact(
+                        settlementAttemptId = attemptId,
+                        settlementObligationId = target.settlementObligationId,
+                        settlementInstructionId = instructionId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = target.postTradeProfileId,
+                        postTradePolicyVersion = target.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = instructionId,
+                        attemptNumber = nextAttemptNumber,
+                        occurredAt = occurredAt
+                    )
+                ),
+                ledgerEntries = listOf(
+                    SettlementLedgerEntryFact(
+                        ledgerEntryId = reversalLedgerEntryId,
+                        settlementObligationId = target.settlementObligationId,
+                        settlementInstructionId = instructionId,
+                        settlementAttemptId = attemptId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = target.postTradeProfileId,
+                        postTradePolicyVersion = target.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = operatorActionId,
+                        participantId = target.participantId,
+                        accountId = target.accountId,
+                        assetType = target.assetType,
+                        assetId = target.assetId,
+                        direction = oppositeLedgerDirection(target.direction),
+                        quantity = target.quantity,
+                        occurredAt = occurredAt
+                    )
+                )
+            )
+            require(obligation.postTradeProfileId == target.postTradeProfileId) { "ledger entry profile must match obligation" }
+            store.appendFacts(facts)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid ledger reversal")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "ledger reversal failed")))
+        }
+    }
+
+    private fun oppositeLedgerDirection(direction: String): String {
+        return when (direction) {
+            SettlementLedgerDirectionDebit -> SettlementLedgerDirectionCredit
+            SettlementLedgerDirectionCredit -> SettlementLedgerDirectionDebit
+            else -> throw IllegalArgumentException("ledger entry direction must be DEBIT or CREDIT")
+        }
+    }
+
     private fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
         val materializer = settlementObligationMaterializer
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
@@ -3746,6 +4019,9 @@ class PlatformHttpServer(
             },
             resolutions = json.objectDocuments("resolutions").map {
                 resolutionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            operatorActions = json.objectDocuments("operatorActions").map {
+                operatorActionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             }
         )
     }
@@ -3971,6 +4247,28 @@ class PlatformHttpServer(
         )
     }
 
+    private fun operatorActionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementOperatorActionFact {
+        return SettlementOperatorActionFact(
+            settlementOperatorActionId = json.string("settlementOperatorActionId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            action = json.string("action"),
+            targetId = json.string("targetId"),
+            reasonNote = json.string("reasonNote"),
+            actorType = json.string("actorType").ifBlank { "USER" },
+            actorId = json.string("actorId"),
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
     private fun positiveIntOrDefault(json: JsonDocument, key: String, defaultValue: Int): Int {
         val raw = json.string(key)
         if (raw.isBlank()) return defaultValue
@@ -4154,6 +4452,22 @@ class PlatformHttpServer(
                     "exceptionState" to it.exceptionState,
                     "occurredAt" to it.occurredAt.toString()
                 )
+            },
+            "operatorActions" to facts.operatorActions.map {
+                mapOf(
+                    "settlementOperatorActionId" to it.settlementOperatorActionId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "action" to it.action,
+                    "targetId" to it.targetId,
+                    "reasonNote" to it.reasonNote,
+                    "actorType" to it.actorType,
+                    "actorId" to it.actorId,
+                    "occurredAt" to it.occurredAt.toString()
+                )
             }
         )
     }
@@ -4227,6 +4541,7 @@ class PlatformHttpServer(
                 "breaksCount" to proof.breaksCount,
                 "repairsCount" to proof.repairsCount,
                 "resolutionsCount" to proof.resolutionsCount,
+                "operatorActionsCount" to proof.operatorActionsCount,
                 "profilePolicies" to proof.profilePolicies.map {
                     mapOf(
                         "postTradeProfileId" to it.postTradeProfileId,

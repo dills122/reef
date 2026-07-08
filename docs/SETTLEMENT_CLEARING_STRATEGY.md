@@ -172,6 +172,8 @@ Obligation materialization:
 - internal command: `POST /internal/admin/settlement/obligations/materialize`
 - cash repair command: `POST /internal/admin/settlement/repairs/cash`
 - security repair command: `POST /internal/admin/settlement/repairs/security`
+- force-settle command: `POST /internal/admin/settlement/force-settle`
+- reverse-ledger command: `POST /internal/admin/settlement/reverse-ledger-entry`
 - input: `scenarioRunId`/`runId`, optional `venueSessionId`
 - source: persisted runtime trades plus accepted buy/sell orders
 - deterministic obligation id: `settlement-obligation-{tradeId}`
@@ -191,6 +193,9 @@ Obligation materialization:
 - repair reattempts: a `SettlementRepairPosted` fact against the open break lets the next materialization create attempt `N+1`; successful repaired attempts emit the normal four ledger entries, one `SETTLED` fact, and a `SettlementResolved` fact for the repaired break
 - repair command behavior: the first command paths post either buyer cash or seller security `resourcePosition` facts plus `SettlementRepairPosted` against an existing break; they require `scenarioRunId`, `settlementBreakId`, `accountId`, `actorId`, and deterministic `occurredAt`, and can default participant, asset, quantity, profile, and policy version from the broken obligation
 - repair actions: cash breaks use `POST_CASH_LEG_REPAIR`; security breaks use `POST_SECURITY_LEG_REPAIR`
+- operator actions: force-settle and reverse-ledger-entry write `SettlementOperatorAction` audit facts with required `reasonNote`, `actorId`, and deterministic `occurredAt`
+- force-settle behavior: posts an operator action plus the needed resource/repair facts, then re-runs materialization so finality still goes through normal instruction, attempt, leg outcome, ledger proof, `SETTLED`, and `RESOLVED` facts
+- reverse-ledger-entry behavior: posts an operator action plus one opposite-direction ledger entry on a new operator attempt, preserving the original settlement proof row while adjusting replayable balances through append-only compensation
 
 ## Data Model Direction
 

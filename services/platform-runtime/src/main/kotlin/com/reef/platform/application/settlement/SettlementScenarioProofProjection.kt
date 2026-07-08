@@ -18,6 +18,7 @@ data class SettlementScenarioProofView(
     val breaksCount: Int,
     val repairsCount: Int,
     val resolutionsCount: Int,
+    val operatorActionsCount: Int,
     val profilePolicies: List<SettlementProofProfilePolicyView>,
     val causationGaps: List<SettlementProofGapView>,
     val obligations: List<SettlementProofObligationView>,
@@ -114,8 +115,8 @@ object SettlementScenarioProofProjection {
             checksumAlgorithm = "SHA-256",
             checksum = sha256(checksumInput),
             factsCount = facts.resourcePositions.size + facts.obligations.size + facts.instructions.size +
-                facts.attempts.size + facts.legOutcomes.size + facts.ledgerEntries.size + facts.settlements.size +
-                facts.breaks.size + facts.repairs.size + facts.resolutions.size,
+            facts.attempts.size + facts.legOutcomes.size + facts.ledgerEntries.size + facts.settlements.size +
+                facts.breaks.size + facts.repairs.size + facts.resolutions.size + facts.operatorActions.size,
             obligationsCount = facts.obligations.size,
             instructionsCount = facts.instructions.size,
             attemptsCount = facts.attempts.size,
@@ -125,6 +126,7 @@ object SettlementScenarioProofProjection {
             breaksCount = facts.breaks.size,
             repairsCount = facts.repairs.size,
             resolutionsCount = facts.resolutions.size,
+            operatorActionsCount = facts.operatorActions.size,
             profilePolicies = profilePolicies,
             causationGaps = causationGaps,
             obligations = obligations,
@@ -377,6 +379,20 @@ object SettlementScenarioProofProjection {
                     ).joinToString("|")
                 )
             }
+            facts.operatorActions
+                .sortedWith(compareBy<SettlementOperatorActionFact> { it.occurredAt }.thenBy { it.settlementOperatorActionId })
+                .forEach {
+                    appendLine(
+                        listOf(
+                            "operatorAction",
+                            it.settlementOperatorActionId,
+                            it.action,
+                            it.targetId,
+                            it.reasonNote,
+                            it.actorId
+                        ).joinToString("|")
+                    )
+                }
             obligations.forEach {
                 appendLine(
                     listOf(
@@ -443,7 +459,8 @@ object SettlementScenarioProofProjection {
                 facts.settlements.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.breaks.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.repairs.map { it.postTradeProfileId to it.postTradePolicyVersion } +
-                facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion }
+                facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.operatorActions.map { it.postTradeProfileId to it.postTradePolicyVersion }
             )
             .groupingBy { it }
             .eachCount()
@@ -473,7 +490,8 @@ object SettlementScenarioProofProjection {
                 facts.settlements.map { it.occurredAt } +
                 facts.breaks.map { it.occurredAt } +
                 facts.repairs.map { it.occurredAt } +
-                facts.resolutions.map { it.occurredAt }
+                facts.resolutions.map { it.occurredAt } +
+                facts.operatorActions.map { it.occurredAt }
             ).maxOrNull() ?: Instant.EPOCH
     }
 }

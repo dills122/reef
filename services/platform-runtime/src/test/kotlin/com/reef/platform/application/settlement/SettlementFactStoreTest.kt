@@ -130,6 +130,33 @@ class SettlementFactStoreTest {
     }
 
     @Test
+    fun appendsAndReadsOperatorActionFacts() {
+        val store = InMemorySettlementFactStore()
+        val facts = p2Facts("run-p2").copy(
+            operatorActions = listOf(
+                SettlementOperatorActionFact(
+                    settlementOperatorActionId = "operator-action-1",
+                    scenarioRunId = "run-p2",
+                    correlationId = "corr-1",
+                    causationId = "break-1",
+                    action = SettlementOperatorActionForceSettle,
+                    targetId = "break-1",
+                    reasonNote = "operator override for scenario",
+                    actorId = "ops-1",
+                    occurredAt = Instant.parse("2026-01-01T00:00:04Z")
+                )
+            )
+        )
+
+        store.appendFacts(facts)
+        val stored = store.factsByScenarioRunId("run-p2")
+
+        assertEquals(listOf("operator-action-1"), stored.operatorActions.map { it.settlementOperatorActionId })
+        assertEquals(listOf("FORCE_SETTLE"), stored.operatorActions.map { it.action })
+        assertEquals(listOf("operator override for scenario"), stored.operatorActions.map { it.reasonNote })
+    }
+
+    @Test
     fun rejectsDuplicateFactIdWithDifferentPayload() {
         val store = InMemorySettlementFactStore()
         val facts = p2Facts("run-p2")

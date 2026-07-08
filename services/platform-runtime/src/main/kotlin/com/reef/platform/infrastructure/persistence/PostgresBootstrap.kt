@@ -206,7 +206,8 @@ object PostgresSchemaRequirements {
         settlements: String,
         breaks: String,
         repairs: String,
-        resolutions: String
+        resolutions: String,
+        operatorActions: String
     ): PostgresSchemaRequirement {
         val resourcePositionTable = PostgresSchemaObject.parse(resourcePositions)
         val obligationTable = PostgresSchemaObject.parse(obligations)
@@ -218,6 +219,7 @@ object PostgresSchemaRequirements {
         val breakTable = PostgresSchemaObject.parse(breaks)
         val repairTable = PostgresSchemaObject.parse(repairs)
         val resolutionTable = PostgresSchemaObject.parse(resolutions)
+        val operatorActionTable = PostgresSchemaObject.parse(operatorActions)
         return PostgresSchemaRequirement(
             tables = listOf(
                 resourcePositionTable,
@@ -229,7 +231,8 @@ object PostgresSchemaRequirements {
                 settlementTable,
                 breakTable,
                 repairTable,
-                resolutionTable
+                resolutionTable,
+                operatorActionTable
             ),
             columns = listOf(
                 PostgresSchemaColumn(resourcePositionTable, "resource_position_id", "text"),
@@ -288,7 +291,14 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(resolutionTable, "post_trade_profile_id", "text"),
                 PostgresSchemaColumn(resolutionTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(resolutionTable, "settlement_state", "text"),
-                PostgresSchemaColumn(resolutionTable, "exception_state", "text")
+                PostgresSchemaColumn(resolutionTable, "exception_state", "text"),
+                PostgresSchemaColumn(operatorActionTable, "settlement_operator_action_id", "text"),
+                PostgresSchemaColumn(operatorActionTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(operatorActionTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(operatorActionTable, "action", "text"),
+                PostgresSchemaColumn(operatorActionTable, "target_id", "text"),
+                PostgresSchemaColumn(operatorActionTable, "reason_note", "text"),
+                PostgresSchemaColumn(operatorActionTable, "actor_id", "text")
             )
         )
     }

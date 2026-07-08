@@ -15,6 +15,7 @@ class SettlementScenarioProofProjectionTest {
         assertEquals("SHA-256", proof.checksumAlgorithm)
         assertEquals(64, proof.checksum.length)
         assertEquals(15, proof.factsCount)
+        assertEquals(0, proof.operatorActionsCount)
         assertEquals(1, proof.profilePolicies.size)
         assertEquals("instant-post-trade-v1", proof.profilePolicies.single().postTradeProfileId)
         assertEquals(2, proof.profilePolicies.single().postTradePolicyVersion)
