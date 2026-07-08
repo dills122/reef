@@ -309,6 +309,33 @@ func TestScenarioSmokeLiveAssertionsFailOnPublicTradeIdentityLeak(t *testing.T) 
 	}
 }
 
+func TestScenarioSmokeLiveAssertionsFailOnOwnFillCounterpartyLeak(t *testing.T) {
+	server := p1AssertionServer(t, p1AssertionServerOptions{
+		ownFillsJSONByParticipant: map[string]string{
+			"VISIBLE_BUYER_B": `{"meta":{"source":"runtime.orders + runtime.executions","freshness":"durable execution rows scoped by participant order ownership"},"fills":[{"executionId":"exec-p1-001","orderId":"p1_golden_hidden_cross_t1-ord-002","instrumentId":"XYZ","side":"BUY","quantityUnits":"40","executionPrice":"100000000000","currency":"USD","counterpartyParticipantId":"HIDDEN_SELLER_A","occurredAt":"2026-03-14T18:00:03Z"}]}`,
+		},
+	})
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected own fill counterparty leak failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p1-own-fills-counterparty-safe") {
+		t.Fatalf("expected p1-own-fills-counterparty-safe failure: %+v", report.Failures)
+	}
+}
+
 func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -830,8 +857,9 @@ func p1DataAvailabilityJSONWithOrderHistorySource(orderHistorySource string) str
 }
 
 type p1AssertionServerOptions struct {
-	filledQuantityByOrderID map[string]string
-	dataAvailabilityJSON    string
+	filledQuantityByOrderID   map[string]string
+	ownFillsJSONByParticipant map[string]string
+	dataAvailabilityJSON      string
 }
 
 func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest.Server {
@@ -863,8 +891,13 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSONWithFilled(orderID, options.filledQuantityByOrderID[orderID])))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
+			participantID := r.URL.Query().Get("participantId")
+			responseJSON := p1OwnFillsJSON(participantID)
+			if options.ownFillsJSONByParticipant != nil && options.ownFillsJSONByParticipant[participantID] != "" {
+				responseJSON = options.ownFillsJSONByParticipant[participantID]
+			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(p1OwnFillsJSON(r.URL.Query().Get("participantId"))))
+			_, _ = w.Write([]byte(responseJSON))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/data/availability":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(availabilityJSON))
