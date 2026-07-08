@@ -192,6 +192,7 @@ Later, real-time feeds can be added from event streams or specialized market-dat
 | `/api/v1/market-data/bars/{instrumentId}` | bot/user | `runtime.trades` | durable fact aggregation | bounded aggregation over durable trade rows | none beyond trade persistence completeness | public market data | active |
 | `/api/v1/orders/current` | bot/user | `runtime.orders + runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
 | `/api/v1/orders/history` | bot/user | `runtime.orders + runtime.order_lifecycle_state` | projection-backed participant read | dirty-tracked lifecycle projection | lifecycle projection watermark | participant own orders | active |
+| `/api/v1/settlement/facts/{scenarioRunId}` | user/admin/test harness | `settlement append-only fact store` | durable fact read | durable fact rows | none beyond settlement fact persistence completeness | scenario settlement evidence | active |
 | `/orders`, `/trades`, `/events`, `/traces` legacy/internal surfaces | admin/test | runtime tables | direct runtime-table read | current local runtime state | varies by source | internal/admin | diagnostic |
 | venue-session-specific depth | bot/user | planned projected lifecycle facts with session key | not built | not available | not available | public market data | deferred |
 | account balances, holds, buying power | bot/user | planned account ledger/projection | not built | not available | not available | participant/account scope | deferred |

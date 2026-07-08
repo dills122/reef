@@ -26,6 +26,7 @@ const waitTimeoutSeconds = Number(env("DEV_WAIT_TIMEOUT_SECONDS", "120"));
 const materializerTimeoutMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_TIMEOUT_MS", "60000"));
 const materializerPollMs = Number(env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_POLL_MS", "1000"));
 const expectOrderRead = env("DEV_VENUE_EVENT_MATERIALIZER_EXPECT_ORDER_ROW", "1") !== "0";
+const assertReplayIdempotency = env("DEV_VENUE_EVENT_MATERIALIZER_ASSERT_REPLAY_IDEMPOTENCY", "1") !== "0";
 const projectionName = env("DEV_VENUE_EVENT_MATERIALIZER_PROJECTION_NAME", `runtime-normalized-venue-outcomes-${smokeId}`);
 const marketDataProjectionName = env("DEV_VENUE_EVENT_MATERIALIZER_MARKET_DATA_PROJECTION_NAME", `market-data-top-of-book-${smokeId}`);
 const depthProjectionName = env("DEV_VENUE_EVENT_MATERIALIZER_DEPTH_PROJECTION_NAME", `market-data-depth-${smokeId}`);
@@ -112,6 +113,12 @@ if (afterMaterialized <= beforeMaterialized) {
   throw new Error(`materializer stats did not advance: before=${beforeMaterialized} after=${afterMaterialized}`);
 }
 
+let replayIdempotencyProof = null;
+if (assertReplayIdempotency) {
+  console.log("rewinding projection watermark and proving idempotent replay produces no duplicate read-model rows...");
+  replayIdempotencyProof = await assertProjectionReplayIdempotent(outcome);
+}
+
 console.log("venue event materializer smoke passed");
 console.log(JSON.stringify({
   smokeId,
@@ -120,6 +127,7 @@ console.log(JSON.stringify({
   resultStatus: outcome.result_status,
   materializedDelta: afterMaterialized - beforeMaterialized,
   readApiProof,
+  replayIdempotencyProof,
   projectionName,
   marketDataProjectionName,
 }, null, 2));
@@ -329,6 +337,82 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
     depthBidLevels: depth.depth.bidLevels.length,
     availabilitySurfaces: surfaces.length,
     readApiUrl,
+  };
+}
+
+/**
+ * Gate 5 (WORK_PLAN.md "Run short local durable gates before any long soak"):
+ * "projection replay/idempotency applies no duplicate read-model rows."
+ *
+ * The venue-event-batch projector (STREAM_ACK_PROJECTOR_ENABLED=true) is already
+ * running continuously against this stack. This rewinds the live projection
+ * watermark for this command's partition below its stream_sequence, so the
+ * running projector background loop naturally re-processes the same canonical
+ * command outcome it already projected, then asserts the projected read-model
+ * row counts for this command/order are unchanged (still exactly one row each)
+ * instead of duplicated, and that the watermark re-advances past the outcome.
+ */
+async function assertProjectionReplayIdempotent(outcome) {
+  const partition = Number(outcome.partition_id);
+  const streamSequence = Number(outcome.stream_sequence);
+  if (!Number.isFinite(partition) || !Number.isFinite(streamSequence)) {
+    throw new Error(`canonical outcome missing numeric partition/sequence for replay idempotency check: ${JSON.stringify(outcome)}`);
+  }
+
+  const before = await readProjectedRowCounts(outcome.command_id);
+
+  await runProjectionPsql(`
+    UPDATE runtime.projection_watermarks
+    SET last_partition_seq = 0, last_error = ''
+    WHERE projection_name = '${sqlLiteral(projectionName)}'
+      AND partition_id = ${partition}
+  `);
+
+  const started = Date.now();
+  let last = "";
+  while (Date.now() - started < materializerTimeoutMs) {
+    const watermarkRows = await queryProjectionRows(`
+      SELECT last_partition_seq
+      FROM runtime.projection_watermarks
+      WHERE projection_name = '${sqlLiteral(projectionName)}'
+        AND partition_id = ${partition}
+    `, ["last_partition_seq"]);
+    if (watermarkRows.length === 1 && Number(watermarkRows[0].last_partition_seq) >= streamSequence) {
+      break;
+    }
+    last = `watermark not yet re-advanced past ${streamSequence}: ${JSON.stringify(watermarkRows)}`;
+    await sleep(materializerPollMs);
+  }
+  if (Date.now() - started >= materializerTimeoutMs) {
+    throw new Error(`timeout waiting for projector to replay rewound watermark (${last})`);
+  }
+
+  const after = await readProjectedRowCounts(outcome.command_id);
+  for (const key of ["submitResults", "runtimeEvents", "orders"]) {
+    if (before[key] !== after[key]) {
+      throw new Error(`projection replay produced duplicate ${key} rows for ${outcome.command_id}: before=${before[key]} after=${after[key]}`);
+    }
+    if (after[key] !== 1) {
+      throw new Error(`expected exactly one ${key} row for ${outcome.command_id} after replay, got ${after[key]}`);
+    }
+  }
+  return { commandId: outcome.command_id, partition, streamSequence, before, after };
+}
+
+async function readProjectedRowCounts(commandId) {
+  const submitResults = await queryProjectionRows(`
+    SELECT COUNT(*) AS count FROM runtime.submit_results WHERE command_id = '${sqlLiteral(commandId)}'
+  `, ["count"]);
+  const runtimeEvents = await queryProjectionRows(`
+    SELECT COUNT(*) AS count FROM runtime.runtime_events WHERE trace_id = '${sqlLiteral(commandId)}'
+  `, ["count"]);
+  const orders = await queryProjectionRows(`
+    SELECT COUNT(*) AS count FROM runtime.orders WHERE order_id = '${sqlLiteral(orderId)}'
+  `, ["count"]);
+  return {
+    submitResults: Number(submitResults[0]?.count ?? 0),
+    runtimeEvents: Number(runtimeEvents[0]?.count ?? 0),
+    orders: Number(orders[0]?.count ?? 0),
   };
 }
 

@@ -10,6 +10,14 @@
       "role": "market-maker",
       "entryPath": "packages/bot-sdk/examples/simple-market-maker.ts",
       "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-simple",
+        "values": {
+          "instrumentId": "AAPL",
+          "orderSize": 10,
+          "spread": 1
+        }
+      },
       "scoreEligible": false,
       "publicLeaderboard": false
     },
@@ -20,6 +28,14 @@
       "role": "market-maker",
       "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
       "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-lifecycle-safe",
+        "values": {
+          "instrumentId": "AAPL",
+          "orderSize": 10,
+          "spread": 1
+        }
+      },
       "scoreEligible": false,
       "publicLeaderboard": false
     },
@@ -30,6 +46,14 @@
       "role": "market-maker",
       "entryPath": "packages/bot-sdk/examples/refreshing-market-maker.ts",
       "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-refreshing",
+        "values": {
+          "instrumentId": "AAPL",
+          "orderSize": 10,
+          "spread": 1
+        }
+      },
       "scoreEligible": false,
       "publicLeaderboard": false
     },
@@ -40,6 +64,12 @@
       "role": "npc",
       "entryPath": "packages/bot-sdk/examples/multi-symbol-strategy-bot.ts",
       "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-momentum",
+        "values": {
+          "orderSize": 10
+        }
+      },
       "scoreEligible": false,
       "publicLeaderboard": false
     },

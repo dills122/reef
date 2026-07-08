@@ -10,11 +10,13 @@ import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 loadDotEnv();
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
+const resolveBotRuntimeConfig = await loadRuntimeConfigResolver();
 const args = process.argv.slice(2);
 const config = {
   runId: stringOption("--run-id", `arena-local-tick-${Date.now()}`),
   mode: stringOption("--mode", "packages/scenario-definitions/arena/equity-sprint.v1.json"),
   extraBots: csvOption("--extra-bots", ""),
+  expectFreezeBots: csvOption("--expect-freeze-bots", ""),
   compartment: stringOption("--compartment", "ses"),
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
@@ -56,61 +58,75 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  return { ...entry, riskProfile };
+  return { ...entry, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
 });
 
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
-const worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
-const startedAt = performance.now();
+let worker;
 
-try {
-  if (config.submitMode === "live") {
-    await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
-    if (config.seedReference) {
-      await seedReferenceData(selectedBots);
+async function main() {
+  worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
+  const startedAt = performance.now();
+
+  try {
+    if (config.submitMode === "live") {
+      await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+      if (config.seedReference) {
+        await seedReferenceData(selectedBots);
+      }
+    }
+    await worker.start();
+    const bots = [];
+    for (const bot of selectedBots) {
+      bots.push({
+        ...bot,
+        artifact: buildArtifact(bot.entryPath, bot.runnerKey),
+        runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
+      });
+    }
+    for (const bot of bots) {
+      const load = await worker.request({
+        type: "loadBot",
+        botKey: bot.runnerKey,
+        source: bot.artifact.source,
+        fileName: bot.artifact.fileName,
+        executionLimits: {
+          tickTimeoutMs: bot.riskProfile.maxTickLatencyMs,
+          lifecycleTimeoutMs: bot.riskProfile.maxTickLatencyMs,
+        },
+      });
+      if (!load.ok) {
+        throw new Error(`loadBot failed for ${bot.botId}: ${JSON.stringify(load.issues ?? load.error)}`);
+      }
+    }
+
+    const sessionReports = [];
+    const enforcementEvents = [];
+    for (const bot of bots) {
+      const result = await runBotSession(bot);
+      sessionReports.push(result);
+      enforcementEvents.push(...enforceBot(bot, result));
+    }
+
+    const botResults = scoreBots(sessionReports, enforcementEvents);
+    const venueReadback = await collectVenueReadback(botResults);
+    const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
+    report.persistence = await persistArenaResults(report);
+    mkdirSync(dirname(config.out), { recursive: true });
+    writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
+    assertExpectedFreezeBots(report);
+    console.log(`arena local tick run complete: ${resolve(config.out)}`);
+    console.log(
+      `status=${report.status} bots=${botResults.length} ticks=${report.totals.ticks} venueCommands=${report.totals.venueCommands} submitted=${report.totals.submittedCommands} freezes=${enforcementEvents.filter((event) => event.decision === "freeze").length}`,
+    );
+    for (const entry of report.leaderboard) {
+      console.log(`rank=${entry.rank} bot=${entry.botId} score=${entry.score} disqualified=${entry.disqualified}`);
+    }
+  } finally {
+    if (worker !== undefined) {
+      await worker.shutdown();
     }
   }
-  await worker.start();
-  const bots = selectedBots.map((bot) => ({ ...bot, artifact: buildArtifact(bot.entryPath, bot.runnerKey) }));
-  for (const bot of bots) {
-    const load = await worker.request({
-      type: "loadBot",
-      botKey: bot.runnerKey,
-      source: bot.artifact.source,
-      fileName: bot.artifact.fileName,
-      executionLimits: {
-        tickTimeoutMs: bot.riskProfile.maxTickLatencyMs,
-        lifecycleTimeoutMs: bot.riskProfile.maxTickLatencyMs,
-      },
-    });
-    if (!load.ok) {
-      throw new Error(`loadBot failed for ${bot.botId}: ${JSON.stringify(load.issues ?? load.error)}`);
-    }
-  }
-
-  const sessionReports = [];
-  const enforcementEvents = [];
-  for (const bot of bots) {
-    const result = await runBotSession(bot);
-    sessionReports.push(result);
-    enforcementEvents.push(...enforceBot(bot, result));
-  }
-
-  const botResults = scoreBots(sessionReports, enforcementEvents);
-  const venueReadback = await collectVenueReadback(botResults);
-  const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
-  report.persistence = await persistArenaResults(report);
-  mkdirSync(dirname(config.out), { recursive: true });
-  writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
-  console.log(`arena local tick run complete: ${resolve(config.out)}`);
-  console.log(
-    `status=${report.status} bots=${botResults.length} ticks=${report.totals.ticks} venueCommands=${report.totals.venueCommands} submitted=${report.totals.submittedCommands} freezes=${enforcementEvents.filter((event) => event.decision === "freeze").length}`,
-  );
-  for (const entry of report.leaderboard) {
-    console.log(`rank=${entry.rank} bot=${entry.botId} score=${entry.score} disqualified=${entry.disqualified}`);
-  }
-} finally {
-  await worker.shutdown();
 }
 
 async function runBotSession(bot) {
@@ -211,6 +227,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
       riskProfile: session.bot.riskProfile === undefined ? undefined : session.bot.riskProfile,
+      runtimeConfigPreflight: session.bot.runtimeConfigPreflight.report,
       scoreEligible: session.bot.scoreEligible,
       publicLeaderboard: session.bot.publicLeaderboard,
       ticksRun: counters.ticks,
@@ -255,6 +272,9 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
     },
+    expectations: {
+      freezeBots: config.expectFreezeBots,
+    },
     runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
     status: enforcementEvents.some((event) => event.decision === "freeze") ? "completed_with_freezes" : "completed",
     elapsedMs,
@@ -285,6 +305,19 @@ function rankBotResults(results) {
     .map((result, index) => ({ rank: index + 1, ...result }));
 }
 
+function assertExpectedFreezeBots(report) {
+  for (const botId of config.expectFreezeBots) {
+    const events = report.enforcementEvents.filter((event) => event.botId === botId && event.decision === "freeze");
+    if (events.length === 0) {
+      throw new Error(`expected freeze event for bot ${botId}`);
+    }
+    const result = report.botResults.find((candidate) => candidate.botId === botId);
+    if (result === undefined || !result.disqualified || result.freezeCount < 1) {
+      throw new Error(`expected disqualified result for frozen bot ${botId}: ${JSON.stringify(result)}`);
+    }
+  }
+}
+
 async function collectVenueReadback(botResults) {
   if (config.submitMode !== "live") {
     return { mode: config.submitMode, skipped: true };
@@ -295,7 +328,7 @@ async function collectVenueReadback(botResults) {
   for (const instrumentId of mode.instruments ?? ["AAPL"]) {
     snapshots.push({
       instrumentId,
-      ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`)),
+      ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`, readbackHeaders())),
     });
   }
   const ownOrders = [];
@@ -303,8 +336,8 @@ async function collectVenueReadback(botResults) {
     ownOrders.push({
       botId: result.botId,
       participantId: `participant-${result.runnerKey}`,
-      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`),
-      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`),
+      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`, readbackHeaders()),
+      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`, readbackHeaders()),
     });
   }
   return {
@@ -323,10 +356,10 @@ async function collectVenueReadback(botResults) {
 async function waitForDataAvailability(baseUrl) {
   const url = `${baseUrl}/api/v1/data/availability`;
   const deadline = Date.now() + config.projectionDrainTimeoutMs;
-  let latest = await getJson(url);
+  let latest = await getJson(url, readbackHeaders());
   while (config.projectionDrainTimeoutMs > 0 && Date.now() <= deadline && !availabilityDrained(latest)) {
     await sleep(config.projectionDrainPollMs);
-    latest = await getJson(url);
+    latest = await getJson(url, readbackHeaders());
   }
   if (config.requireProjectionDrain && !availabilityDrained(latest)) {
     throw new Error(`projection drain requirement failed: ${JSON.stringify(latest.body)}`);
@@ -337,6 +370,10 @@ async function waitForDataAvailability(baseUrl) {
 function availabilityDrained(availability) {
   const projections = availability.body?.projections;
   return Array.isArray(projections) && projections.every((projection) => Number(projection.lag ?? 0) === 0);
+}
+
+function readbackHeaders() {
+  return { "X-Client-Id": "arena-local-readback" };
 }
 
 async function persistArenaResults(report) {
@@ -780,11 +817,129 @@ function fixtureForBot(bot) {
     participantId: `participant-${bot.runnerKey}`,
     accountId: `account-${bot.runnerKey}`,
     correlationId: `${mode.modeId}-${bot.runnerKey}`,
+    config: {
+      ...(baseFixture.config ?? {}),
+      ...bot.runtimeConfigPreflight.values,
+    },
   };
   if (bot.runnerKey === "multi-symbol" || bot.runnerKey === "technical") {
     return withMultiSymbolData(fixture);
   }
   return fixture;
+}
+
+async function resolveRuntimeConfigForBot(bot) {
+  const descriptors = runtimeConfigDescriptorsForBot(bot);
+  if (descriptors.length === 0) {
+    return {
+      values: Object.freeze({}),
+      report: {
+        provider: "OpenBao",
+        descriptorCount: 0,
+        resolvedKeys: [],
+      },
+    };
+  }
+  const resolved = await resolveBotRuntimeConfig(descriptors, localOpenBaoSecretProvider(bot));
+  return {
+    values: resolved.values,
+    report: {
+      provider: "OpenBao",
+      descriptorCount: descriptors.length,
+      resolvedKeys: Object.keys(resolved.values).sort(),
+    },
+  };
+}
+
+function runtimeConfigDescriptorsForBot(bot) {
+  const runtimeConfig = bot.runtimeConfig;
+  if (runtimeConfig === undefined) return [];
+  const values = runtimeConfig.values ?? {};
+  return Object.keys(values).sort().map((key) => ({
+    key,
+    provider: "OpenBao",
+    secretPath: runtimeConfig.secretPath,
+    required: true,
+    valueType: typeof values[key],
+    description: `local arena ${bot.botId} ${key}`,
+  }));
+}
+
+function localOpenBaoSecretProvider(bot) {
+  return {
+    provider: "OpenBao",
+    async readSecret(path) {
+      if (path !== bot.runtimeConfig?.secretPath) {
+        return undefined;
+      }
+      return Object.freeze({ ...(bot.runtimeConfig.values ?? {}) });
+    },
+  };
+}
+
+async function loadRuntimeConfigResolver() {
+  if (process.versions.bun !== undefined) {
+    const runtimeConfigModuleUrl = new URL("../../packages/bot-sdk/src/runtime-config.ts", import.meta.url);
+    const { resolveBotRuntimeConfigV1 } = await import(runtimeConfigModuleUrl.href);
+    return resolveBotRuntimeConfigV1;
+  }
+  return resolveBotRuntimeConfigLocalV1;
+}
+
+async function resolveBotRuntimeConfigLocalV1(descriptors, secretProvider) {
+  const values = {};
+  const seenKeys = new Set();
+
+  for (const descriptor of descriptors) {
+    validateRuntimeConfigDescriptor(descriptor, secretProvider);
+    if (seenKeys.has(descriptor.key)) {
+      throw new Error(`Duplicate bot runtime config key ${descriptor.key}.`);
+    }
+    seenKeys.add(descriptor.key);
+
+    const secret = await secretProvider.readSecret(descriptor.secretPath);
+    const value = runtimeConfigValueFromSecret(descriptor, secret);
+    if (value === undefined) {
+      if (descriptor.required) {
+        throw new Error(`Missing required bot runtime config ${descriptor.key}.`);
+      }
+      continue;
+    }
+    values[descriptor.key] = assertRuntimeConfigValueType(descriptor, value);
+  }
+
+  return { values: Object.freeze({ ...values }) };
+}
+
+function validateRuntimeConfigDescriptor(descriptor, secretProvider) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(descriptor.key)) {
+    throw new Error(`Invalid bot runtime config key ${descriptor.key}.`);
+  }
+  if (descriptor.provider !== secretProvider.provider) {
+    throw new Error(`Runtime config provider mismatch for ${descriptor.key}.`);
+  }
+  if (descriptor.provider !== "OpenBao") {
+    throw new Error(`Unsupported bot runtime config provider ${descriptor.provider}.`);
+  }
+  if (descriptor.secretPath.trim() === "") {
+    throw new Error(`Runtime config secretPath is required for ${descriptor.key}.`);
+  }
+}
+
+function runtimeConfigValueFromSecret(descriptor, secret) {
+  if (secret === undefined) return undefined;
+  if (typeof secret === "string" || typeof secret === "number" || typeof secret === "boolean") {
+    return secret;
+  }
+  return secret[descriptor.key];
+}
+
+function assertRuntimeConfigValueType(descriptor, value) {
+  const expected = descriptor.valueType ?? typeof value;
+  if (typeof value !== expected) {
+    throw new Error(`Bot runtime config ${descriptor.key} must be ${expected}.`);
+  }
+  return value;
 }
 
 function withMultiSymbolData(fixture) {
@@ -905,7 +1060,13 @@ function csvOption(name, fallback) {
   return stringOption(name, fallback).split(",").map((value) => value.trim()).filter(Boolean);
 }
 
+function localVersionId(entry) {
+  return `${entry.versionId}-${config.runId}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
 function optionValue(name) {
   const arg = args.find((candidate) => candidate.startsWith(`${name}=`));
   return arg === undefined ? undefined : arg.slice(name.length + 1);
 }
+
+await main();
