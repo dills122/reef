@@ -362,6 +362,18 @@ Add:
 make dev-smoke-bot-arena-local
 ```
 
+Persisted local gate:
+
+```bash
+make dev-smoke-bot-arena-local-persist
+```
+
+The persisted local gate first runs the same live arena path through `/api/v1`,
+then posts the resulting report from inside the `platform-api` container through
+loopback-only `/internal/admin/arena/*` routes. This keeps raw internal routes
+off the host/public surface while still proving arena run-result persistence,
+enforcement-event persistence, and leaderboard readback.
+
 Expected proof:
 
 - stack is reachable
@@ -372,8 +384,31 @@ Expected proof:
 - command status reaches terminal states
 - data availability report is captured
 - final scoring report is written
+- operator HTML report renders leaderboard, bot results, enforcement events,
+  command accounting, persistence readback, and projection-drain evidence
 - run results are persisted
 - leaderboard returns deterministic ranking for the fixed seed
+
+First operator-facing UI artifact:
+
+```bash
+make dev-render-bot-arena-report \
+  REPORT=/tmp/reef-arena-local-tick-run-persist.json \
+  OUT=/tmp/reef-arena-local-tick-run-persist.html
+```
+
+Multiple run artifacts can be compared with:
+
+```bash
+make dev-render-bot-arena-report-index \
+  REPORTS=/tmp/reef-arena-local-tick-run-persist.json,/tmp/reef-arena-local-tick-run-negative.json \
+  OUT=/tmp/reef-arena-local-tick-run-index.html
+```
+
+This is the Phase 1 UI foothold: a static run report generated from the arena
+JSON artifact plus a static report index for comparing positive, negative, and
+future hosted artifacts. It is intentionally separate from a live control room
+so Phase 1 can prove run evidence before adding a browser-operated workflow.
 
 ## Explicit Non-Goals For Phase 1
 
@@ -382,7 +417,7 @@ Expected proof:
 - real GitHub OIDC to OpenBao provisioning
 - full analytics microservice
 - production scheduler
-- control-room UI
+- live control-room UI
 - multi-cloud run-plane deployment polish
 - full account ledger, buying power, or settlement expansion
 - broad tournament/season mechanics
