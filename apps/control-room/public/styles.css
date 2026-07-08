@@ -235,11 +235,10 @@ button:disabled {
   background: #11161a;
   border: 1px solid var(--line);
   border-radius: 8px;
+  box-sizing: border-box;
   display: block;
   height: 240px;
-  max-width: 100%;
   min-width: 0;
-  width: 100%;
 }
 
 .chart-details {
@@ -282,8 +281,7 @@ button:disabled {
 }
 
 .chart-details > svg {
-  margin: 0 16px 16px;
-  max-width: calc(100% - 32px);
+  margin: 0 16px 16px 16px;
   width: calc(100% - 32px);
 }
 
