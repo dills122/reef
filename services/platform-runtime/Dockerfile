@@ -12,8 +12,13 @@ FROM eclipse-temurin:21-jre
 LABEL org.opencontainers.image.source="https://github.com/dills122/reef"
 LABEL org.opencontainers.image.description="Reef platform runtime"
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-COPY --from=build /app/build/install/platform-runtime /app/platform-runtime
+RUN groupadd --system --gid 10001 reef \
+    && useradd --system --uid 10001 --gid reef --home-dir /app --shell /usr/sbin/nologin reef \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build --chown=reef:reef /app/build/install/platform-runtime /app/platform-runtime
+USER 10001:10001
 
 EXPOSE 8080
 ENTRYPOINT ["/app/platform-runtime/bin/platform-runtime"]

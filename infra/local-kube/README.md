@@ -81,10 +81,19 @@ the cluster already has the desired local image tags.
 
 The manifests set pod resource requests, limits, ephemeral-storage limits,
 `automountServiceAccountToken: false`, baseline namespace pod security
-enforcement, and compatible container security contexts for app pods. The k3d
-cluster disables its load balancer container, Traefik, and ServiceLB because
-this workflow uses local port-forwards rather than ingress or load balancer
-services.
+enforcement, and compatible container security contexts for app, NATS, and
+Redpanda pods. The app images run as a non-root user and mount a bounded
+`/tmp` volume so their root filesystems can stay read-only.
+
+The local Postgres StatefulSets intentionally remain a local exception: the
+official image performs first-run data directory permission setup against the
+PVC before PostgreSQL drops privileges. Keep these databases isolated to the
+k3d development namespace and do not treat this manifest as a hosted production
+database baseline.
+
+The k3d cluster disables its load balancer container, Traefik, and ServiceLB
+because this workflow uses local port-forwards rather than ingress or load
+balancer services.
 
 If pods are repeatedly evicted with `DiskPressure`, inspect Docker VM usage
 before retrying:
