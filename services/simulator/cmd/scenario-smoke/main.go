@@ -28,6 +28,7 @@ type config struct {
 	assertions                bool
 	settlementFactsReportPath string
 	replayCheckReportPath     string
+	requireReplayCheck        bool
 	seedReference             bool
 	timeout                   time.Duration
 	statusTimeout             time.Duration
@@ -281,6 +282,15 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 		}
 		if cfg.replayCheckReportPath != "" {
 			attachReplayChecksumEvidence(cfg, &report)
+		} else if cfg.requireReplayCheck {
+			failAssertion(
+				&report,
+				"p1-replay-checksum-clean",
+				"replay_checksum",
+				"clean replay check report attached",
+				"missing --replay-check-report",
+				"--replay-check-report",
+			)
 		}
 		report.Pass = len(report.Errors) == 0
 	}
@@ -320,6 +330,7 @@ func parseConfig(args []string) (config, error) {
 	fs.BoolVar(&cfg.assertions, "assertions", false, "run first-wave live scenario assertions after command submission")
 	fs.StringVar(&cfg.settlementFactsReportPath, "settlement-facts-report", "", "optional P2 settlement assertion JSON artifact")
 	fs.StringVar(&cfg.replayCheckReportPath, "replay-check-report", "", "optional JSON output from dev-venue-event-replay-check to attach to assertion report")
+	fs.BoolVar(&cfg.requireReplayCheck, "require-replay-check", false, "fail assertion report unless --replay-check-report is attached and clean")
 	fs.BoolVar(&cfg.seedReference, "seed-reference", cfg.seedReference, "seed scenario reference/auth data in live mode")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP request timeout")
 	fs.DurationVar(&cfg.statusTimeout, "status-timeout", cfg.statusTimeout, "command status polling timeout")
@@ -339,6 +350,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if cfg.replayCheckReportPath != "" && !cfg.assertions {
 		return cfg, errors.New("--replay-check-report requires --assertions")
+	}
+	if cfg.requireReplayCheck && !cfg.assertions {
+		return cfg, errors.New("--require-replay-check requires --assertions")
 	}
 	if cfg.timeout <= 0 {
 		return cfg, errors.New("timeout must be > 0")
@@ -720,15 +734,18 @@ func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
 	report.ArtifactPaths = append(report.ArtifactPaths, cfg.replayCheckReportPath)
 	pass, _ := parsed["pass"].(bool)
 	failures := replayFailures(parsed)
-	if pass && len(failures) == 0 {
-		passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	if !pass || len(failures) > 0 {
+		observed := "pass false"
+		if len(failures) > 0 {
+			observed = strings.Join(failures, "; ")
+		}
+		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
 		return
 	}
-	observed := "pass false"
-	if len(failures) > 0 {
-		observed = strings.Join(failures, "; ")
+	passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	if cfg.requireReplayCheck && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
+		assertP1ReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath)
 	}
-	failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
 }
 
 func replayFailures(parsed map[string]any) []string {
@@ -743,6 +760,84 @@ func replayFailures(parsed map[string]any) []string {
 		}
 	}
 	return failures
+}
+
+func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string) {
+	replayReport, ok := parsed["report"].(map[string]any)
+	if !ok {
+		failAssertion(report, "p1-replay-counter-report-present", "replay_checksum", "replay report counters", "missing report object", proofSource)
+		return
+	}
+	minimums := map[string]float64{
+		"batchCount":            1,
+		"storedCommandCount":    3,
+		"payloadOutcomeCount":   3,
+		"canonicalOutcomeCount": 3,
+	}
+	for key, minimum := range minimums {
+		value, found := replayCounter(replayReport, key)
+		if found && value >= minimum {
+			passAssertion(report, "p1-replay-"+kebabCase(key), fmt.Sprintf(">= %.0f", minimum), fmt.Sprintf("%.0f", value), proofSource)
+		} else {
+			observed := "missing"
+			if found {
+				observed = fmt.Sprintf("%.0f", value)
+			}
+			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", fmt.Sprintf(">= %.0f", minimum), observed, proofSource)
+		}
+	}
+	zeroCounters := []string{
+		"duplicateReplayInserted",
+		"checksumMismatchCount",
+		"batchCommandCountMismatchCount",
+		"payloadHashMismatchCount",
+		"missingOutcomeCount",
+		"extraOutcomeCount",
+		"streamGapCount",
+		"streamOverlapCount",
+		"watermarkLagCount",
+	}
+	for _, key := range zeroCounters {
+		value, found := replayCounter(replayReport, key)
+		if found && value == 0 {
+			passAssertion(report, "p1-replay-"+kebabCase(key), "0", "0", proofSource)
+		} else {
+			observed := "missing"
+			if found {
+				observed = fmt.Sprintf("%.0f", value)
+			}
+			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", "0", observed, proofSource)
+		}
+	}
+}
+
+func replayCounter(report map[string]any, key string) (float64, bool) {
+	value, ok := report[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case int:
+		return float64(typed), true
+	case json.Number:
+		number, err := typed.Float64()
+		return number, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func kebabCase(value string) string {
+	var out strings.Builder
+	for index, char := range value {
+		if index > 0 && char >= 'A' && char <= 'Z' {
+			out.WriteByte('-')
+		}
+		out.WriteRune(char)
+	}
+	return strings.ToLower(out.String())
 }
 
 func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeReport) {

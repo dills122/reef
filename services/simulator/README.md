@@ -153,6 +153,12 @@ For the P1 live assertion path, add `--assertions`. The report records command c
 make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --pretty"
 ```
 
+For a P1 lock gate, attach replay/checksum evidence and require it so a live report cannot pass without the replay proof:
+
+```bash
+make dev-scenario-smoke ARGS="--live --base-url http://127.0.0.1:8080 --assertions --replay-check-report /tmp/reef-replay-check.json --require-replay-check --pretty"
+```
+
 For the P2 settlement assertion path, seed the narrow settlement fact bundle before the assertion smoke so the report reads the runtime API rather than an offline artifact:
 
 ```bash
