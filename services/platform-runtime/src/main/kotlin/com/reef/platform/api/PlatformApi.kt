@@ -19,6 +19,7 @@ import com.reef.platform.infrastructure.persistence.MarketDataSnapshot
 import com.reef.platform.infrastructure.persistence.OrderLifecycleState
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -190,6 +191,10 @@ class PlatformApi(
 
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return orderService.canonicalCommandOutcome(commandId)
+    }
+
+    fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
+        return orderService.venueEventBatchCommandReference(commandId)
     }
 
     fun submitOrderResponse(outcome: PersistableSubmitOutcome): String {

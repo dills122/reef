@@ -61,6 +61,22 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayRouteMapIncludesRiskControlAliases() {
+        assertEquals(
+            AdminGatewayRoute("/internal/admin/account-risk/controls", "admin"),
+            adminGatewayRouteFor("/admin/v1/risk/account-controls")
+        )
+        assertEquals(
+            AdminGatewayRoute("/internal/admin/circuit-breakers", "admin"),
+            adminGatewayRouteFor("/admin/v1/risk/circuit-breakers")
+        )
+        assertEquals(
+            AdminGatewayRoute("/internal/admin/price-collars", "admin"),
+            adminGatewayRouteFor("/admin/v1/risk/price-collars")
+        )
+    }
+
+    @Test
     fun apiV1SubmitReturnsBoundaryErrorEnvelopeWhenClientIdMissing() {
         val server = testServer()
         try {
@@ -127,7 +143,29 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, readiness.status)
             assertContains(readiness.body, "\"status\":\"ok\"")
             assertContains(readiness.body, "\"internalHttpMode\":\"localonly\"")
+            assertContains(readiness.body, "\"pipeline\"")
+            assertContains(readiness.body, "\"commandProcessingMode\":\"sync-result\"")
             assertContains(readiness.body, "\"dependencies\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun readyzDegradesWhenStreamAckPipelineIsNotConfigured() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.StreamAck
+        )
+        try {
+            val readiness = get(server.address.port, "/readyz")
+
+            assertEquals(200, readiness.status)
+            assertContains(readiness.body, "\"status\":\"degraded\"")
+            assertContains(readiness.body, "\"commandProcessingMode\":\"stream-ack\"")
+            assertContains(readiness.body, "\"streamAckRequired\":true")
+            assertContains(readiness.body, "\"streamPipelineConfigured\":false")
+            assertContains(readiness.body, "\"streamReady\":false")
         } finally {
             server.stop(0)
         }
@@ -701,6 +739,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-status-1\"")
             assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
             assertContains(status.body, "\"processingMode\":\"captured-sync-engine\"")
             assertContains(status.body, "\"responseStatus\":200")
         } finally {
@@ -746,6 +785,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-status-canonical\"")
             assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
             assertContains(status.body, "\"processingMode\":\"stream-ack\"")
             assertContains(status.body, "\"canonicalMaterialized\":true")
             assertContains(status.body, "\"batchId\":\"batch-status-canonical\"")
@@ -755,6 +795,40 @@ class PlatformHttpServerBoundaryTest {
             assertContains(status.body, "\"participantId\":\"participant-1\"")
             assertContains(status.body, "\"orderId\":\"ord-cmd-status-canonical\"")
             assertContains(status.body, "\"clientId\":\"client-1\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusEndpointReturnsEventPublishedForDurableVenueEventBatchBeforeCanonicalOutcome() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.recordVenueEventBatch(
+            venueEventBatch(
+                batchId = "batch-status-event-published",
+                commandId = "cmd-status-event-published",
+                resultStatus = "accepted"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = NoopCommandCaptureStore(),
+            runtimePersistence = persistence
+        )
+        try {
+            val status = get(server.address.port, "/api/v1/commands/cmd-status-event-published", headers = apiReadHeaders())
+
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-status-event-published\"")
+            assertContains(status.body, "\"status\":\"EVENT_PUBLISHED\"")
+            assertContains(status.body, "\"internalStatus\":\"PROCESSING\"")
+            assertContains(status.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(status.body, "\"responseStatus\":202")
+            assertContains(status.body, "\"canonicalMaterialized\":false")
+            assertContains(status.body, "\"batchId\":\"batch-status-event-published\"")
+            assertContains(status.body, "\"resultStatus\":\"accepted\"")
+            assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
+            assertContains(status.body, "\"source\":\"event_batch\"")
         } finally {
             server.stop(0)
         }
@@ -824,6 +898,8 @@ class PlatformHttpServerBoundaryTest {
             val status = get(server.address.port, "/api/v1/commands/cmd-status-rejected", headers = apiReadHeaders())
 
             assertEquals(200, status.status)
+            assertContains(status.body, "\"status\":\"REJECTED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
             assertContains(status.body, "\"canonicalMaterialized\":true")
             assertContains(status.body, "\"resultStatus\":\"rejected\"")
             assertContains(status.body, "\"rejectCode\":\"ORDER_NOT_FOUND\"")
@@ -1167,12 +1243,13 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(202, response.status)
             assertContains(response.body, "\"commandId\":\"cmd-ack-1\"")
-            assertContains(response.body, "\"status\":\"RECEIVED\"")
+            assertContains(response.body, "\"status\":\"ACCEPTED\"")
             assertContains(response.body, "\"processingMode\":\"captured-ack\"")
             assertContains(response.body, "\"statusUrl\":\"/api/v1/commands/cmd-ack-1\"")
             assertEquals(0, gateway.submitCalls)
             assertEquals(200, status.status)
-            assertContains(status.body, "\"status\":\"RECEIVED\"")
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"internalStatus\":\"RECEIVED\"")
         } finally {
             server.stop(0)
         }
@@ -2196,7 +2273,8 @@ class PlatformHttpServerBoundaryTest {
             assertTrue(gateway.awaitFirstSubmit())
             assertEquals(200, status.status)
             assertContains(status.body, "\"processingMode\":\"accepted-async\"")
-            assertTrue(status.body.contains("\"status\":\"RECEIVED\"") || status.body.contains("\"status\":\"PROCESSING\""))
+            assertTrue(status.body.contains("\"status\":\"ACCEPTED\"") || status.body.contains("\"status\":\"IN_FLIGHT\""))
+            assertTrue(status.body.contains("\"internalStatus\":\"RECEIVED\"") || status.body.contains("\"internalStatus\":\"PROCESSING\""))
 
             gateway.release()
             val completed = waitForCommandStatus(
@@ -2631,7 +2709,8 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, status.status)
             assertContains(status.body, "\"commandId\":\"cmd-stream-status-pending\"")
             assertContains(status.body, "\"source\":\"stream_reference\"")
-            assertContains(status.body, "\"status\":\"RECEIVED\"")
+            assertContains(status.body, "\"status\":\"ACCEPTED\"")
+            assertContains(status.body, "\"internalStatus\":\"RECEIVED\"")
             assertContains(status.body, "\"commandType\":\"SubmitOrder\"")
         } finally {
             server.stop(0)
@@ -2737,10 +2816,11 @@ class PlatformHttpServerBoundaryTest {
     @Test
     fun streamAckRequiresRoutingMetadataBeforePublish() {
         val publisher = RecordingStreamCommandPublisher()
+        val intakeStore = InMemoryStreamCommandIntakeStore()
         val server = testServerWithGateway(
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
             commandProcessingMode = CommandProcessingMode.StreamAck,
-            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandIntakeStore = intakeStore,
             streamCommandPublisher = publisher
         )
         try {
@@ -2757,6 +2837,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(400, response.status)
             assertContains(response.body, "\"code\":\"STREAM_ROUTING_METADATA_REQUIRED\"")
             assertEquals(0, publisher.published.size)
+            assertEquals(null, intakeStore.findByCommandId("cmd-stream-missing-routing"))
         } finally {
             server.stop(0)
         }

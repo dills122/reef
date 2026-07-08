@@ -435,6 +435,12 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_payload_json_gin
+                    ON ${names.canonicalVenueEventBatches} USING GIN (payload_json jsonb_path_ops)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalCommandOutcomes} (
                       command_id TEXT PRIMARY KEY,
                       batch_id TEXT NOT NULL,
@@ -2548,6 +2554,68 @@ class PostgresRuntimePersistence(
                 ps.executeQuery().use { rs ->
                     if (!rs.next()) return null
                     return CanonicalCommandOutcome(
+                        commandId = rs.getString("command_id"),
+                        batchId = rs.getString("batch_id"),
+                        shardId = rs.getString("shard_id"),
+                        partition = rs.getInt("partition_id"),
+                        commandStream = rs.getString("command_stream"),
+                        eventStream = rs.getString("event_stream"),
+                        streamSequence = rs.getLong("stream_sequence"),
+                        deliveredCount = rs.getLong("delivered_count"),
+                        commandType = rs.getString("command_type"),
+                        payloadHash = rs.getString("payload_hash"),
+                        instrumentId = rs.getString("instrument_id"),
+                        orderId = rs.getString("order_id"),
+                        resultStatus = rs.getString("result_status"),
+                        rejectCode = rs.getString("reject_code"),
+                        resultPayloadJson = rs.getString("result_payload")
+                    )
+                }
+            }
+        }
+    }
+
+    override fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  outcome->>'commandId' AS command_id,
+                  b.batch_id,
+                  b.shard_id,
+                  b.partition_id,
+                  b.command_stream,
+                  b.event_stream,
+                  COALESCE((outcome->>'streamSequence')::BIGINT, 0) AS stream_sequence,
+                  COALESCE((outcome->>'deliveredCount')::BIGINT, 0) AS delivered_count,
+                  COALESCE(outcome->>'commandType', '') AS command_type,
+                  COALESCE(outcome->>'payloadHash', '') AS payload_hash,
+                  COALESCE(outcome->>'instrumentId', '') AS instrument_id,
+                  COALESCE(outcome->>'orderId', '') AS order_id,
+                  COALESCE(outcome->>'status', '') AS result_status,
+                  COALESCE(outcome->>'rejectCode', outcome#>>'{result,rejected,code}', '') AS reject_code,
+                  COALESCE(outcome->'result', '{}'::jsonb)::TEXT AS result_payload
+                FROM ${names.canonicalVenueEventBatches} b
+                CROSS JOIN LATERAL jsonb_array_elements(
+                  CASE
+                    WHEN jsonb_typeof(b.payload_json->'outcomes') = 'array' THEN b.payload_json->'outcomes'
+                    ELSE '[]'::jsonb
+                  END
+                ) AS outcomes(outcome)
+                WHERE b.payload_json @> jsonb_build_object(
+                    'outcomes',
+                    jsonb_build_array(jsonb_build_object('commandId', ?))
+                  )
+                  AND outcome->>'commandId' = ?
+                ORDER BY b.materialized_at DESC
+                LIMIT 1
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.setString(2, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return VenueEventBatchCommandReference(
                         commandId = rs.getString("command_id"),
                         batchId = rs.getString("batch_id"),
                         shardId = rs.getString("shard_id"),
