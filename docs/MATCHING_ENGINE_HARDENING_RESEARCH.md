@@ -46,8 +46,9 @@ Coinbase documents self-trade prevention where two orders from the same user do 
 Reef status:
 
 - participant/account metadata exists on submit command payloads
-- engine order records do not yet retain participant/account identity
-- engine currently allows self-crossing orders to match
+- engine order records retain participant/account identity
+- default self-trade prevention rejects the newest/taker order before mutation
+- alternate STP modes such as cancel oldest, decrement-and-cancel, and cancel both remain future work
 
 Reference:
 
@@ -97,7 +98,7 @@ Strong areas:
 
 Gaps before calling it production-ready:
 
-- no self-trade prevention
+- default self-trade prevention exists; alternate STP modes remain pending
 - explicit session state gates exist behind service options
 - engine-level max quantity, max notional, and price collar controls exist behind service options
 - in-memory snapshot/restore/replay checksum proof exists; durable artifact metadata remains pending
@@ -178,7 +179,8 @@ Acceptance:
 - engine order records retain participant/account identity
 - default STP mode is deterministic and documented
 - tests cover same-account and different-account crossing orders
-- event output records whether STP cancelled, decremented, or rejected an order
+- event output records self-trade rejects through stable `SELF_TRADE_PREVENTION` code
+- alternate STP modes remain pending
 
 ### 5. Session State Gates
 

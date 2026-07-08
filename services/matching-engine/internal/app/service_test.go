@@ -641,6 +641,127 @@ func TestSubmitOrderRejectsWhenSessionNotOpen(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderRejectsSelfTradePreventionWithoutMutation(t *testing.T) {
+	service := NewService()
+	resting := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if resting.Accepted == nil {
+		t.Fatalf("expected resting own sell to accept, got %#v", resting)
+	}
+
+	cross := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150500000000",
+		Currency:      "USD",
+	})
+	if cross.Rejected == nil {
+		t.Fatalf("expected self-trade prevention reject, got %#v", cross)
+	}
+	if cross.Rejected.Code != "SELF_TRADE_PREVENTION" {
+		t.Fatalf("expected self-trade prevention code, got %#v", cross.Rejected)
+	}
+	if _, ok := service.OrderState("ord-buy-own"); ok {
+		t.Fatal("expected rejected self-trade taker to avoid order state")
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 {
+		t.Fatal("expected resting order to remain after self-trade reject")
+	}
+}
+
+func TestSubmitOrderRejectsSelfTradeReachableAfterOtherLiquidity(t *testing.T) {
+	service := NewService()
+	other := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-other",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-2",
+		AccountID:     "account-2",
+		Side:          domain.SideSell,
+		QuantityUnits: "50",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if other.Accepted == nil {
+		t.Fatalf("expected other resting sell to accept, got %#v", other)
+	}
+	own := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if own.Accepted == nil {
+		t.Fatalf("expected own resting sell to accept, got %#v", own)
+	}
+
+	cross := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "120",
+		LimitPrice:    "150500000000",
+		Currency:      "USD",
+	})
+	if cross.Rejected == nil || cross.Rejected.Code != "SELF_TRADE_PREVENTION" {
+		t.Fatalf("expected depth-reachable self-trade prevention reject, got %#v", cross)
+	}
+	if len(cross.Trades) != 0 {
+		t.Fatalf("expected self-trade reject to avoid partial execution, got %#v", cross.Trades)
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 2 {
+		t.Fatal("expected both resting sells to remain after self-trade reject")
+	}
+}
+
+func TestSubmitOrderAllowsDifferentParticipantCross(t *testing.T) {
+	service := NewService()
+	resting := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-other",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-2",
+		AccountID:     "account-2",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if resting.Accepted == nil {
+		t.Fatalf("expected resting sell to accept, got %#v", resting)
+	}
+
+	cross := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-new",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150500000000",
+		Currency:      "USD",
+	})
+	if len(cross.Trades) != 1 {
+		t.Fatalf("expected different participant cross to trade, got %#v", cross)
+	}
+}
+
 func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{
@@ -1214,6 +1335,52 @@ func TestModifyOrderRejectsMarketIntegrityControlWithoutMutation(t *testing.T) {
 	}
 	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
 		t.Fatalf("expected original buy liquidity to remain")
+	}
+}
+
+func TestModifyOrderRejectsSelfTradePreventionWithoutMutation(t *testing.T) {
+	service := NewService()
+	ownSell := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150300000000",
+		Currency:      "USD",
+	})
+	if ownSell.Accepted == nil {
+		t.Fatalf("expected own sell to accept, got %#v", ownSell)
+	}
+	buy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if buy.Accepted == nil {
+		t.Fatalf("expected non-crossing own buy to accept, got %#v", buy)
+	}
+
+	modify := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-own",
+		QuantityUnits: "100",
+		LimitPrice:    "150300000000",
+	})
+	if modify.Rejected == nil || modify.Rejected.Code != "SELF_TRADE_PREVENTION" {
+		t.Fatalf("expected modify self-trade prevention reject, got %#v", modify)
+	}
+	state, ok := service.OrderState("ord-buy-own")
+	if !ok || state.LimitPrice != "150000000000" || state.RemainingQuantity != "100" {
+		t.Fatalf("expected rejected modify to preserve buy state, got %#v", state)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 1 || service.RestingOrders("AAPL", domain.SideSell) != 1 {
+		t.Fatalf("expected rejected modify to preserve both resting orders")
 	}
 }
 

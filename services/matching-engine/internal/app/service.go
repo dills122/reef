@@ -36,6 +36,8 @@ type orderRecord struct {
 	OrderID           string
 	InstrumentID      string
 	VenueSessionID    string
+	ParticipantID     string
+	AccountID         string
 	Side              domain.Side
 	OriginalQuantity  int64
 	RemainingQuantity int64
@@ -67,6 +69,8 @@ type SnapshotOrderRecord struct {
 	OrderID           string             `json:"orderId"`
 	InstrumentID      string             `json:"instrumentId"`
 	VenueSessionID    string             `json:"venueSessionId"`
+	ParticipantID     string             `json:"participantId"`
+	AccountID         string             `json:"accountId"`
 	Side              domain.Side        `json:"side"`
 	OriginalQuantity  int64              `json:"originalQuantity"`
 	RemainingQuantity int64              `json:"remainingQuantity"`
@@ -189,6 +193,8 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 		OrderID:           cmd.OrderID,
 		InstrumentID:      cmd.InstrumentID,
 		VenueSessionID:    cmd.VenueSessionID,
+		ParticipantID:     cmd.ParticipantID,
+		AccountID:         cmd.AccountID,
 		Side:              cmd.Side,
 		OriginalQuantity:  quantityUnits,
 		RemainingQuantity: quantityUnits,
@@ -199,6 +205,10 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	}
 	if !s.reserveOrder(record) {
 		return rejectedResult("evt-reject-duplicate-order-id", cmd.OrderID, "DUPLICATE_ORDER_ID", "orderId already exists", now)
+	}
+	if s.selfTradeWouldOccur(book, record) {
+		s.releaseOrder(record.OrderID)
+		return rejectedResult("evt-reject-self-trade-"+cmd.OrderID, cmd.OrderID, "SELF_TRADE_PREVENTION", "order would trade with resting order from same participant or account", now)
 	}
 	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 
@@ -291,6 +301,15 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	}
 
 	resetPriority := limitPrice != record.LimitPrice || quantityUnits > record.OriginalQuantity
+	if resetPriority {
+		proposed := *record
+		proposed.OriginalQuantity = quantityUnits
+		proposed.RemainingQuantity = quantityUnits - alreadyFilled
+		proposed.LimitPrice = limitPrice
+		if s.selfTradeWouldOccur(book, &proposed) {
+			return rejectedResult("evt-reject-self-trade-"+cmd.OrderID, cmd.OrderID, "SELF_TRADE_PREVENTION", "modified order would trade with resting order from same participant or account", now)
+		}
+	}
 	if resetPriority {
 		s.removeRestingOrder(book, record)
 	}
@@ -418,6 +437,8 @@ func (s *Service) Snapshot() Snapshot {
 			OrderID:           record.OrderID,
 			InstrumentID:      record.InstrumentID,
 			VenueSessionID:    record.VenueSessionID,
+			ParticipantID:     record.ParticipantID,
+			AccountID:         record.AccountID,
 			Side:              record.Side,
 			OriginalQuantity:  record.OriginalQuantity,
 			RemainingQuantity: record.RemainingQuantity,
@@ -472,6 +493,8 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 			OrderID:           order.OrderID,
 			InstrumentID:      order.InstrumentID,
 			VenueSessionID:    order.VenueSessionID,
+			ParticipantID:     order.ParticipantID,
+			AccountID:         order.AccountID,
 			Side:              order.Side,
 			OriginalQuantity:  order.OriginalQuantity,
 			RemainingQuantity: order.RemainingQuantity,
@@ -543,6 +566,56 @@ func (s *Service) sessionState(venueSessionID string) SessionState {
 	return SessionStateOpen
 }
 
+func (s *Service) selfTradeWouldOccur(book *orderBook, incoming *orderRecord) bool {
+	if incoming == nil || !hasSelfTradeIdentity(incoming) {
+		return false
+	}
+	remaining := incoming.RemainingQuantity
+	opposite := domain.SideSell
+	if incoming.Side == domain.SideSell {
+		opposite = domain.SideBuy
+	}
+	snapshot := book.book.Snapshot()
+	orders := snapshot.Sells
+	if opposite == domain.SideBuy {
+		orders = snapshot.Buys
+	}
+	for _, resting := range orders {
+		if remaining <= 0 {
+			return false
+		}
+		restingRecord, ok := s.loadOrder(resting.OrderID)
+		if !ok || restingRecord.OrderID == incoming.OrderID {
+			continue
+		}
+		if incoming.Side == domain.SideBuy && incoming.LimitPrice < restingRecord.LimitPrice {
+			return false
+		}
+		if incoming.Side == domain.SideSell && incoming.LimitPrice > restingRecord.LimitPrice {
+			return false
+		}
+		if sameSelfTradeIdentity(incoming, restingRecord) {
+			return true
+		}
+		remaining -= restingRecord.RemainingQuantity
+	}
+	return false
+}
+
+func hasSelfTradeIdentity(record *orderRecord) bool {
+	return strings.TrimSpace(record.ParticipantID) != "" || strings.TrimSpace(record.AccountID) != ""
+}
+
+func sameSelfTradeIdentity(a *orderRecord, b *orderRecord) bool {
+	if strings.TrimSpace(a.ParticipantID) != "" && a.ParticipantID == b.ParticipantID {
+		return true
+	}
+	if strings.TrimSpace(a.AccountID) != "" && a.AccountID == b.AccountID {
+		return true
+	}
+	return false
+}
+
 func (s Snapshot) withoutChecksum() Snapshot {
 	s.Checksum = ""
 	return s
@@ -576,6 +649,10 @@ func serviceSnapshotChecksum(snapshot Snapshot) string {
 		builder.WriteString(order.InstrumentID)
 		builder.WriteByte(':')
 		builder.WriteString(order.VenueSessionID)
+		builder.WriteByte(':')
+		builder.WriteString(order.ParticipantID)
+		builder.WriteByte(':')
+		builder.WriteString(order.AccountID)
 		builder.WriteByte(':')
 		builder.WriteString(string(order.Side))
 		builder.WriteByte(':')
@@ -896,6 +973,12 @@ func (s *Service) reserveOrder(record *orderRecord) bool {
 	}
 	s.orders[record.OrderID] = record
 	return true
+}
+
+func (s *Service) releaseOrder(orderID string) {
+	s.ordersMu.Lock()
+	defer s.ordersMu.Unlock()
+	delete(s.orders, orderID)
 }
 
 func envInt(name string, fallback int) int {
