@@ -74,6 +74,38 @@ The clean `7500 rps`, `384` worker, `5m` DO soak on July 3, 2026 proved that the
 
 Do not keep rerunning `7500/384` at the same shape. The next gate is `2000 completed/sec` sustained for a minimum `5m` soak, with accepted throughput close to completed throughput, bounded worker lag, and projection lag either bounded or explicitly non-gating in the test mode. Once `2000/sec` is stable and boring, the promotion ladder is `5000/sec`, then `7500/sec`, then larger ceiling probes.
 
+## Current Direct Materializer Promotion Gate
+
+The Redpanda/Kafka-compatible direct-stream plus venue-event-materializer path
+has superseded the July 3 generic stream-worker shape for venue-core throughput
+promotion. The July 8, 2026 c-16 short gate proved `10k` accepted/materialized
+rps over three `60s` samples with zero failures and zero accepted/materialized
+gap:
+
+- sample 1: `599957` accepted/materialized, `9998.74` accepted rps, p95 `99.35ms`, p99 `162.77ms`
+- sample 2: `599959` accepted/materialized, `9998.72` accepted rps, p95 `57.66ms`, p99 `114.58ms`
+- sample 3: `599888` accepted/materialized, `9988.10` accepted rps, p95 `69.10ms`, p99 `133.72ms`
+
+Use `make do-materializer-10k-gate` as the named gate for this path. The
+default `short` tier is the c-16 `10k / 60s / 1024 workers / 3 samples` shape
+with p95 <= `100ms`, p99 <= `200ms`, attempted and accepted rps >= `9900`,
+all `16` direct-stream partitions active, partition skew <= `4`, and final
+accepted/direct-acked/materialized gaps equal to `0`. DB WAL, activity-wait,
+WAL-setting, and `pg_stat_io` diagnostics must also be present in the artifact
+bundle.
+
+Promotion ladder:
+
+1. `short`: `60s`, `3` samples. Required after code changes to the materializer path or gate scripts.
+2. `soak-5m`: `5m`, `2` samples. First longer remote soak.
+3. `soak-15m`: `15m`, `1` sample. Only after `soak-5m` is clean.
+
+Longer soaks must compare clean, warm, and aged-state behavior before raising
+the target above `10k`. Watch WAL bytes/command, table bytes/command,
+Postgres activity waits, `pg_stat_io`, Kafka producer queue/request latency,
+materializer batch size/fetch rate, checkpoint/autovacuum pressure, and
+container restart counts.
+
 ## Backpressure Policy Modes
 
 Stream-ack drain backpressure has two explicit policies:

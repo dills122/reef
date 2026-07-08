@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -130,6 +130,39 @@ assert.equal(partitionGateResult.status, 1);
 assert.match(partitionGateResult.stderr, /streamDirect active partitions 2 < required 3\.00/);
 assert.match(partitionGateResult.stderr, /streamDirect partition skew 9\.00 > required 4\.00/);
 
+const diagnosticsGateArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-diagnostics-"));
+writeMaterializerReport(diagnosticsGateArtifactDir, "rate-10000.json", 10000, 1000);
+writeTelemetry(diagnosticsGateArtifactDir);
+writeMaterializerDbDiagnostics(diagnosticsGateArtifactDir);
+const diagnosticsGateResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", diagnosticsGateArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer",
+    REEF_DO_REQUIRED_RATES: "10000",
+    REEF_DO_REQUIRE_DB_DIAGNOSTICS: "1",
+    REEF_DO_REQUIRE_PG_STAT_IO: "1",
+  },
+  encoding: "utf8",
+});
+assert.equal(diagnosticsGateResult.status, 0, diagnosticsGateResult.stderr);
+
+const missingDiagnosticsArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-missing-diagnostics-"));
+writeMaterializerReport(missingDiagnosticsArtifactDir, "rate-10000.json", 10000, 1000);
+writeTelemetry(missingDiagnosticsArtifactDir);
+const missingDiagnosticsResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", missingDiagnosticsArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer",
+    REEF_DO_REQUIRED_RATES: "10000",
+    REEF_DO_REQUIRE_DB_DIAGNOSTICS: "1",
+  },
+  encoding: "utf8",
+});
+assert.equal(missingDiagnosticsResult.status, 1);
+assert.match(missingDiagnosticsResult.stderr, /missing materializer DB diagnostics summary/);
+
 function writeReport(name, rate, values) {
   writeFileSync(
     join(artifactDir, name),
@@ -255,6 +288,51 @@ function writeMaterializerReport(dir, name, rate, total, options = {}) {
       2,
     ),
   );
+}
+
+function writeMaterializerDbDiagnostics(dir) {
+  writeFileSync(
+    join(dir, "venue-event-materializer-stress-diagnostics-summary.json"),
+    JSON.stringify(
+      {
+        services: {
+          postgres: {
+            ok: true,
+            unitMetrics: {
+              walBytes: 2048,
+              walBytesPerAcceptedCommand: 2.048,
+            },
+            wal: {
+              walBytes: 2048,
+            },
+            topTablesByBytes: [{ table: "runtime.canonical_command_outcomes", totalBytesDelta: 1024 }],
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  const diagnosticsDir = join(dir, "venue-event-materializer-stress-diagnostics");
+  mkdirSync(diagnosticsDir);
+  for (const file of [
+    "pre-db-diagnostics.json",
+    "post-db-diagnostics.json",
+    "pre-pg_stat_wal.csv",
+    "post-pg_stat_wal.csv",
+    "pre-pg_stat_database.csv",
+    "post-pg_stat_database.csv",
+    "pre-pg_stat_activity_waits.csv",
+    "post-pg_stat_activity_waits.csv",
+    "pre-pg_settings_wal.csv",
+    "post-pg_settings_wal.csv",
+    "pre-table-stats.csv",
+    "post-table-stats.csv",
+    "pre-pg_stat_io.csv",
+    "post-pg_stat_io.csv",
+  ]) {
+    writeFileSync(join(diagnosticsDir, file), file.endsWith(".json") ? "{}\n" : "name,value\n");
+  }
 }
 
 function writeBlockedStreamAckReport(dir, name, rate) {

@@ -2775,7 +2775,9 @@ class PlatformHttpServer(
         capturedStatus?.let { return it }
         if (commandProcessingMode == CommandProcessingMode.StreamAck) {
             streamCommandIntakeStore?.findByCommandId(commandId)?.let { reference ->
-                return reference.toStatusView()
+                if (reference.streamSequence > 0L) {
+                    return reference.toStatusView()
+                }
             }
         }
         return null
