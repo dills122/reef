@@ -9,6 +9,7 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.VenueSessionPostTradeProfile
@@ -27,6 +28,7 @@ class NoopRuntimePersistence : RuntimePersistence {
     private val roles = ConcurrentHashMap<String, RoleDefinition>()
     private val actorRoleBindings = ConcurrentHashMap<String, ActorRoleBinding>()
     private val postTradeProfiles = ConcurrentHashMap<String, PostTradeProfile>()
+    private val scenarioRunPostTradeProfiles = ConcurrentHashMap<String, ScenarioRunPostTradeProfile>()
     private val venueSessionPostTradeProfiles = ConcurrentHashMap<String, VenueSessionPostTradeProfile>()
     @Volatile
     private var activePostTradeProfileId = ""
@@ -77,6 +79,18 @@ class NoopRuntimePersistence : RuntimePersistence {
             ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
         activePostTradeProfileId = profileId
         return profile.copy(active = true)
+    }
+
+    override fun saveScenarioRunPostTradeProfile(config: ScenarioRunPostTradeProfile) {
+        scenarioRunPostTradeProfiles[config.scenarioRunId] = config
+    }
+
+    override fun scenarioRunPostTradeProfileId(scenarioRunId: String): String? {
+        return scenarioRunPostTradeProfiles[scenarioRunId]?.postTradeProfileId
+    }
+
+    override fun scenarioRunPostTradeProfiles(): List<ScenarioRunPostTradeProfile> {
+        return scenarioRunPostTradeProfiles.values.toList()
     }
 
     override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {

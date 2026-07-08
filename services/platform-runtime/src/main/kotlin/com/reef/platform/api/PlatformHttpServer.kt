@@ -176,6 +176,7 @@ class PlatformHttpServer(
         RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1),
     private val postTradeProfileResolver: PostTradeProfileResolver =
         PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
+    private val scenarioRunPostTradeProfileLookup: (String) -> String? = { null },
     private val venueSessionPostTradeProfileLookup: (String) -> String? = { null },
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
@@ -380,6 +381,7 @@ class PlatformHttpServer(
         analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
         postTradeProfileResolver = deps.postTradeProfileResolver,
+        scenarioRunPostTradeProfileLookup = deps.scenarioRunPostTradeProfileLookup,
         venueSessionPostTradeProfileLookup = deps.venueSessionPostTradeProfileLookup,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
@@ -3367,8 +3369,13 @@ class PlatformHttpServer(
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
         val venueSessionId = json.string("venueSessionId")
+        val scenarioRunProfileId = json.string("postTradeProfileId").ifBlank {
+            scenarioRunId.takeIf { it.isNotBlank() }
+                ?.let { scenarioRunPostTradeProfileLookup(it) }
+                .orEmpty()
+        }
         val selection = postTradeProfileResolver.resolve(
-            scenarioRunProfileId = json.string("postTradeProfileId"),
+            scenarioRunProfileId = scenarioRunProfileId,
             venueSessionProfileId = venueSessionId.takeIf { it.isNotBlank() }
                 ?.let { venueSessionPostTradeProfileLookup(it) }
                 .orEmpty()
@@ -4604,6 +4611,9 @@ private fun defaultBoundary(): ServerBoundaryDeps {
             environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
             environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
         ),
+        scenarioRunPostTradeProfileLookup = { scenarioRunId ->
+            runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId)
+        },
         venueSessionPostTradeProfileLookup = { venueSessionId ->
             runtimePersistence.venueSessionPostTradeProfileId(venueSessionId)
         },
@@ -4708,6 +4718,7 @@ data class ServerBoundaryDeps(
             RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
             RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1)
         ),
+    val scenarioRunPostTradeProfileLookup: (String) -> String? = { null },
     val venueSessionPostTradeProfileLookup: (String) -> String? = { null },
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,

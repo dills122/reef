@@ -26,6 +26,7 @@ class AdminCliIntegrationTest {
         assertContains(cli.execute(listOf("calendar-upsert", "us-default", "America/New_York", "T+1")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("post-trade-profile-list")), "\"activeProfileId\":\"ops-realistic-v1\"")
         assertContains(cli.execute(listOf("post-trade-profile-activate", "instant-post-trade-v1")), "\"activeProfileId\":\"instant-post-trade-v1\"")
+        assertContains(cli.execute(listOf("scenario-run-profile-set", "run-1", "instant-post-trade-v1")), "\"postTradeProfileId\":\"instant-post-trade-v1\"")
         assertContains(cli.execute(listOf("venue-session-profile-set", "session-1", "instant-post-trade-v1")), "\"postTradeProfileId\":\"instant-post-trade-v1\"")
         assertContains(cli.execute(listOf("override-upsert", "MANUAL_REPAIR", "manual operational repair")), "\"status\":\"ok\"")
         assertContains(cli.execute(listOf("sim-start", "scenario-1")), "\"status\":\"ok\"")

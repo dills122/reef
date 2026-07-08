@@ -63,12 +63,14 @@ object PostgresSchemaRequirements {
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         val orders = PostgresSchemaObject.parse(names.orders)
         val postTradeProfiles = PostgresSchemaObject.parse(names.adminPostTradeProfiles)
+        val scenarioRuns = PostgresSchemaObject.parse(names.referenceScenarioRuns)
         val venueSessions = PostgresSchemaObject.parse(names.referenceVenueSessions)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
                 names.referenceParticipants,
                 names.referenceAccounts,
+                names.referenceScenarioRuns,
                 names.referenceVenueSessions,
                 names.orders,
                 names.executions,
@@ -142,6 +144,8 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(postTradeProfiles, "ledger_posting_mode", "text"),
                 PostgresSchemaColumn(postTradeProfiles, "policy_version", "integer"),
                 PostgresSchemaColumn(postTradeProfiles, "active", "boolean"),
+                PostgresSchemaColumn(scenarioRuns, "scenario_run_id", "text"),
+                PostgresSchemaColumn(scenarioRuns, "post_trade_profile_id", "text"),
                 PostgresSchemaColumn(venueSessions, "venue_session_id", "text"),
                 PostgresSchemaColumn(venueSessions, "post_trade_profile_id", "text")
             )

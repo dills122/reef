@@ -14,6 +14,7 @@ import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.EngineOrderAccepted
@@ -36,6 +37,7 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val actorRoleBindings = mutableListOf<ActorRoleBinding>()
     private val postTradeProfiles = linkedMapOf<String, PostTradeProfile>()
     private var activePostTradeProfileId = ""
+    private val scenarioRunPostTradeProfiles = linkedMapOf<String, ScenarioRunPostTradeProfile>()
     private val venueSessionPostTradeProfiles = linkedMapOf<String, VenueSessionPostTradeProfile>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
@@ -107,6 +109,18 @@ class InMemoryRuntimePersistence : RuntimePersistence {
             ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
         activePostTradeProfileId = profileId
         return profile.copy(active = true)
+    }
+
+    override fun saveScenarioRunPostTradeProfile(config: ScenarioRunPostTradeProfile) {
+        scenarioRunPostTradeProfiles[config.scenarioRunId] = config
+    }
+
+    override fun scenarioRunPostTradeProfileId(scenarioRunId: String): String? {
+        return scenarioRunPostTradeProfiles[scenarioRunId]?.postTradeProfileId
+    }
+
+    override fun scenarioRunPostTradeProfiles(): List<ScenarioRunPostTradeProfile> {
+        return scenarioRunPostTradeProfiles.values.toList()
     }
 
     override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {

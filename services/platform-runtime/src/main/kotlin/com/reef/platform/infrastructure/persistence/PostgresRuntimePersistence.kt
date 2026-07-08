@@ -17,6 +17,7 @@ import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.VenueSessionPostTradeProfile
@@ -110,6 +111,15 @@ class PostgresRuntimePersistence(
                     CREATE TABLE IF NOT EXISTS ${names.referenceAccounts} (
                       account_id TEXT PRIMARY KEY,
                       participant_id TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.referenceScenarioRuns} (
+                      scenario_run_id TEXT PRIMARY KEY,
+                      post_trade_profile_id TEXT NOT NULL,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
                     """.trimIndent()
                 )
@@ -1860,6 +1870,52 @@ class PostgresRuntimePersistence(
             } finally {
                 conn.autoCommit = true
             }
+        }
+    }
+
+    override fun saveScenarioRunPostTradeProfile(config: ScenarioRunPostTradeProfile) {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.referenceScenarioRuns}(scenario_run_id, post_trade_profile_id, updated_at)
+                VALUES (?, ?, now())
+                ON CONFLICT (scenario_run_id) DO UPDATE SET
+                  post_trade_profile_id = EXCLUDED.post_trade_profile_id,
+                  updated_at = now()
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, config.scenarioRunId)
+                ps.setString(2, config.postTradeProfileId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    override fun scenarioRunPostTradeProfileId(scenarioRunId: String): String? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                "SELECT post_trade_profile_id FROM ${names.referenceScenarioRuns} WHERE scenario_run_id = ?"
+            ).use { ps ->
+                ps.setString(1, scenarioRunId)
+                ps.executeQuery().use { rs ->
+                    return if (rs.next()) rs.getString("post_trade_profile_id") else null
+                }
+            }
+        }
+    }
+
+    override fun scenarioRunPostTradeProfiles(): List<ScenarioRunPostTradeProfile> {
+        return queryList(
+            """
+            SELECT scenario_run_id, post_trade_profile_id
+            FROM ${names.referenceScenarioRuns}
+            ORDER BY scenario_run_id
+            """.trimIndent()
+        ) {
+            ScenarioRunPostTradeProfile(
+                scenarioRunId = getString("scenario_run_id"),
+                postTradeProfileId = getString("post_trade_profile_id")
+            )
         }
     }
 
