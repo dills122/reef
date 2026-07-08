@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
+import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 
 data class CommandStatusView(
     val commandId: String,
@@ -43,7 +44,8 @@ object CommandStatusResponse {
             "clientId" to view.clientId,
             "route" to view.route,
             "idempotencyKey" to view.idempotencyKey,
-            "status" to view.status.name,
+            "status" to view.publicStatus(),
+            "internalStatus" to view.status.name,
             "processingMode" to view.processingMode.configValue,
             "responseStatus" to view.responseStatus,
             "responsePayloadJson" to view.responsePayloadJson,
@@ -72,10 +74,29 @@ object CommandStatusResponse {
     fun acceptedJson(view: CommandStatusView): String {
         return JsonCodec.writeObject(
             "commandId" to view.commandId,
-            "status" to view.status.name,
+            "status" to "ACCEPTED",
             "processingMode" to view.processingMode.configValue,
             "statusUrl" to "/api/v1/commands/${view.commandId}"
         )
+    }
+
+    private fun CommandStatusView.publicStatus(): String {
+        if (canonicalMaterialized) {
+            return when {
+                engineResultStatus.equals("failed", ignoreCase = true) -> "FAILED"
+                engineResultStatus.equals("rejected", ignoreCase = true) -> "REJECTED"
+                else -> "COMPLETED"
+            }
+        }
+        if (source == "event_batch") {
+            return "EVENT_PUBLISHED"
+        }
+        return when (status) {
+            CommandLogStatus.RECEIVED -> "ACCEPTED"
+            CommandLogStatus.PROCESSING -> "IN_FLIGHT"
+            CommandLogStatus.COMPLETED -> "COMPLETED"
+            CommandLogStatus.FAILED -> "FAILED"
+        }
     }
 }
 
@@ -160,6 +181,37 @@ fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
         rejectCode = rejectCode,
         resultPayloadJson = resultPayloadJson,
         source = "canonical_outcome"
+    )
+}
+
+fun VenueEventBatchCommandReference.toStatusView(): CommandStatusView {
+    return CommandStatusView(
+        commandId = commandId,
+        clientId = "",
+        route = "",
+        idempotencyKey = "",
+        status = CommandLogStatus.PROCESSING,
+        processingMode = CommandProcessingMode.StreamAck,
+        responseStatus = 202,
+        responsePayloadJson = "",
+        lastError = "",
+        canonicalMaterialized = false,
+        engineResultStatus = resultStatus,
+        batchId = batchId,
+        shardId = shardId,
+        partition = partition,
+        commandStream = commandStream,
+        eventStream = eventStream,
+        streamSequence = streamSequence,
+        deliveredCount = deliveredCount,
+        commandType = commandType,
+        payloadHash = payloadHash,
+        instrumentId = instrumentId,
+        participantId = commandStatusParticipantId(resultPayloadJson),
+        orderId = orderId,
+        rejectCode = rejectCode,
+        resultPayloadJson = resultPayloadJson,
+        source = "event_batch"
     )
 }
 

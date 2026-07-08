@@ -164,6 +164,24 @@ data class CanonicalCommandOutcome(
     val resultPayloadJson: String
 )
 
+data class VenueEventBatchCommandReference(
+    val commandId: String,
+    val batchId: String,
+    val shardId: String,
+    val partition: Int,
+    val commandStream: String,
+    val eventStream: String,
+    val streamSequence: Long,
+    val deliveredCount: Long,
+    val commandType: String,
+    val payloadHash: String,
+    val instrumentId: String,
+    val orderId: String,
+    val resultStatus: String,
+    val rejectCode: String,
+    val resultPayloadJson: String
+)
+
 interface RuntimePersistence {
     fun saveSubmitResult(commandId: String, result: SubmitOrderResult)
     fun submitResult(commandId: String): SubmitOrderResult?
@@ -248,6 +266,9 @@ interface RuntimePersistence {
         return 0
     }
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return null
+    }
+    fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
         return null
     }
     fun rebuildOrderLifecycleState(): Long {

@@ -28,6 +28,7 @@ import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
+import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.util.concurrent.CompletableFuture
 
@@ -308,6 +309,12 @@ class OrderApplicationService(
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return HotPathMetrics.time("runtime.persistence.canonicalCommandOutcome") {
             runtimePersistence.canonicalCommandOutcome(commandId)
+        }
+    }
+
+    fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
+        return HotPathMetrics.time("runtime.persistence.venueEventBatchCommandReference") {
+            runtimePersistence.venueEventBatchCommandReference(commandId)
         }
     }
 
