@@ -22,6 +22,7 @@ import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.ScenarioRunPostTradeProfile
 import com.reef.platform.domain.Account
@@ -37,6 +38,7 @@ import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
+import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
@@ -2132,6 +2134,77 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun settlementMaterializeEndpointCreatesObligationsFromTrades() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = "scenario-instant-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality",
+                policyVersion = 9
+            )
+        )
+        persistence.saveScenarioRunPostTradeProfile(
+            ScenarioRunPostTradeProfile("run-materialize", "scenario-instant-v1")
+        )
+        persistence.saveAcceptedOrder(
+            persistedOrder("buy-order-materialize", "buyer-1", "BUY", "run-materialize", "session-fast")
+        )
+        persistence.saveAcceptedOrder(
+            persistedOrder("sell-order-materialize", "seller-1", "SELL", "run-materialize", "session-fast")
+        )
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-trade-materialize",
+                    tradeId = "trade-materialize",
+                    executionId = "exec-materialize",
+                    buyOrderId = "buy-order-materialize",
+                    sellOrderId = "sell-order-materialize",
+                    instrumentId = "AAPL",
+                    quantityUnits = "100",
+                    price = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-01-01T00:00:00Z"
+                )
+            )
+        )
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = settlementStore,
+            postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(persistence)
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            settlementObligationMaterializer = materializer,
+            runtimePersistence = persistence
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/obligations/materialize",
+                emptyMap(),
+                """{"scenarioRunId":"run-materialize"}"""
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
+
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"materializedObligations\":1")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"settlementObligationId\":\"settlement-obligation-trade-materialize\"")
+            assertContains(fetched.body, "\"postTradeProfileId\":\"scenario-instant-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":9")
+            assertContains(fetched.body, "\"cashAmount\":\"15025000000000\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
         val breakerStore = RecordingCommandCircuitBreakerStore()
         val persistence = InMemoryRuntimePersistence()
@@ -3575,6 +3648,7 @@ class PlatformHttpServerBoundaryTest {
         arenaAdminService: AdminApplicationService? = null,
         analyticsRunExportService: SimulationRunExportService? = null,
         settlementFactStore: SettlementFactStore? = null,
+        settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
         defaultPostTradeProfileId: String = DefaultPostTradeProfileId,
         defaultPostTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
         postTradeProfileResolver: PostTradeProfileResolver =
@@ -3631,6 +3705,7 @@ class PlatformHttpServerBoundaryTest {
             arenaAdminService = arenaAdminService,
             analyticsRunExportService = analyticsRunExportService,
             settlementFactStore = settlementFactStore,
+            settlementObligationMaterializer = settlementObligationMaterializer,
             defaultPostTradeProfileId = defaultPostTradeProfileId,
             defaultPostTradePolicyVersion = defaultPostTradePolicyVersion,
             postTradeProfileResolver = postTradeProfileResolver,
@@ -3998,6 +4073,31 @@ class PlatformHttpServerBoundaryTest {
         actorIds.forEach { actorId ->
             persistence.saveActorRoleBinding(ActorRoleBinding(actorId, "order_trader"))
         }
+    }
+
+    private fun persistedOrder(
+        orderId: String,
+        participantId: String,
+        side: String,
+        runId: String,
+        venueSessionId: String
+    ): PersistedOrder {
+        return PersistedOrder(
+            orderId = orderId,
+            engineOrderId = "eng-$orderId",
+            instrumentId = "AAPL",
+            participantId = participantId,
+            accountId = "account-$participantId",
+            side = side,
+            orderType = "LIMIT",
+            quantityUnits = "100",
+            limitPrice = "150250000000",
+            currency = "USD",
+            timeInForce = "DAY",
+            acceptedAt = "2026-01-01T00:00:00Z",
+            runId = runId,
+            venueSessionId = venueSessionId
+        )
     }
 
 }

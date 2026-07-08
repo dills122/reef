@@ -151,7 +151,10 @@ object PlatformCommandParsers {
             quantityUnits = json.string("quantityUnits"),
             limitPrice = json.string("limitPrice"),
             currency = json.string("currency"),
-            timeInForce = json.string("timeInForce")
+            timeInForce = json.string("timeInForce"),
+            clientOrderId = json.string("clientOrderId"),
+            runId = json.string("runId").ifBlank { json.string("scenarioRunId") },
+            venueSessionId = json.string("venueSessionId")
         )
     }
 

@@ -153,7 +153,7 @@ Rules:
 - `ops-realistic-v1` should be the default for standalone platform operation.
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
-- Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, and the P2 settlement fact slice with profile evidence fields.
+- Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
 
 Policy storage:
 
@@ -163,6 +163,15 @@ Policy storage:
 - venue/session override: `runtime.reference_venue_sessions.post_trade_profile_id`
 - explicit scenario/request override: scenario definition or settlement fact field `postTradeProfileId`
 - evidence field on obligations/ledger entries: `postTradeProfileId` and `postTradePolicyVersion`
+
+Obligation materialization:
+
+- internal command: `POST /internal/admin/settlement/obligations/materialize`
+- input: `scenarioRunId`/`runId`, optional `venueSessionId`
+- source: persisted runtime trades plus accepted buy/sell orders
+- deterministic obligation id: `settlement-obligation-{tradeId}`
+- cash amount: venue fixed-point price nanos multiplied by quantity units
+- idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 
 ## Data Model Direction
 

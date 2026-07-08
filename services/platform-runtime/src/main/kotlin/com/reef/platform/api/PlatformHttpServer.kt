@@ -44,6 +44,7 @@ import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
+import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
@@ -170,6 +171,7 @@ class PlatformHttpServer(
     private val arenaAdminService: AdminApplicationService? = null,
     private val analyticsRunExportService: SimulationRunExportService? = null,
     private val settlementFactStore: SettlementFactStore? = null,
+    private val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     private val defaultPostTradeProfileId: String =
         RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
     private val defaultPostTradePolicyVersion: Int =
@@ -380,6 +382,7 @@ class PlatformHttpServer(
         arenaAdminService = deps.arenaAdminService,
         analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
+        settlementObligationMaterializer = deps.settlementObligationMaterializer,
         postTradeProfileResolver = deps.postTradeProfileResolver,
         scenarioRunPostTradeProfileLookup = deps.scenarioRunPostTradeProfileLookup,
         venueSessionPostTradeProfileLookup = deps.venueSessionPostTradeProfileLookup,
@@ -421,6 +424,18 @@ class PlatformHttpServer(
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
                 writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+            }
+        }
+
+        server.createContext("/internal/admin/settlement/obligations/materialize") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, materializeSettlementObligationsResponse(body))
             }
         }
 
@@ -3351,6 +3366,32 @@ class PlatformHttpServer(
         }
     }
 
+    private fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
+        val materializer = settlementObligationMaterializer
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
+        return try {
+            val json = JsonCodec.parseObject(body)
+            val result = materializer.materialize(
+                scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") },
+                venueSessionId = json.string("venueSessionId")
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "scenarioRunId" to result.scenarioRunId,
+                    "scannedTrades" to result.scannedTrades,
+                    "materializedObligations" to result.materializedObligations,
+                    "skippedTrades" to result.skippedTrades
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement materialization request")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement materialization failed")))
+        }
+    }
+
     private fun settlementFactsResponse(scenarioRunId: String): PlatformHotPathResponse {
         val store = settlementFactStore
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
@@ -4585,6 +4626,12 @@ private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
     PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
     val runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver")
+    val postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
+        runtimePersistence = runtimePersistence,
+        environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
+        environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
+    )
+    val settlementFactStore = defaultSettlementFactStore()
     val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
         StreamCommandIntakeFactory.defaultPublisher()
     } else {
@@ -4605,12 +4652,15 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService = defaultArenaAdminService(hooks),
         analyticsRunExportService = defaultAnalyticsRunExportService(),
-        settlementFactStore = defaultSettlementFactStore(),
-        postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
-            runtimePersistence = runtimePersistence,
-            environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
-            environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
-        ),
+        settlementFactStore = settlementFactStore,
+        settlementObligationMaterializer = settlementFactStore?.let {
+            TradeSettlementObligationMaterializer(
+                runtimePersistence = runtimePersistence,
+                settlementFactStore = it,
+                postTradeProfileResolver = postTradeProfileResolver
+            )
+        },
+        postTradeProfileResolver = postTradeProfileResolver,
         scenarioRunPostTradeProfileLookup = { scenarioRunId ->
             runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId)
         },
@@ -4713,6 +4763,7 @@ data class ServerBoundaryDeps(
     val arenaAdminService: AdminApplicationService? = null,
     val analyticsRunExportService: SimulationRunExportService? = null,
     val settlementFactStore: SettlementFactStore? = null,
+    val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
     val postTradeProfileResolver: PostTradeProfileResolver =
         PostTradeProfileResolver.envOnly(
             RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },

@@ -16,7 +16,10 @@ data class SubmitOrderCommand(
     val quantityUnits: String,
     val limitPrice: String,
     val currency: String,
-    val timeInForce: String
+    val timeInForce: String,
+    val clientOrderId: String = "",
+    val runId: String = "",
+    val venueSessionId: String = ""
 )
 
 data class CancelOrderCommand(
