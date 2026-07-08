@@ -1143,6 +1143,7 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
             "ledger entry direction must be DEBIT or CREDIT"
         }
         require(it.quantity.isNotBlank()) { "ledger entry quantity is required" }
+        it.quantity.toSettlementQuantity()
     }
 
     facts.settlements.forEach {
@@ -1179,6 +1180,12 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         require(ledgerProof.any { entry -> entry.assetType == SettlementLedgerEntryTypeSecurity && entry.direction == SettlementLedgerDirectionCredit }) {
             "settlement requires security credit ledger entry"
         }
+        val cashDebit = ledgerProof.sumByAssetAndDirection(SettlementLedgerEntryTypeCash, SettlementLedgerDirectionDebit)
+        val cashCredit = ledgerProof.sumByAssetAndDirection(SettlementLedgerEntryTypeCash, SettlementLedgerDirectionCredit)
+        require(cashDebit.compareTo(cashCredit) == 0) { "settlement cash ledger entries must balance" }
+        val securityDebit = ledgerProof.sumByAssetAndDirection(SettlementLedgerEntryTypeSecurity, SettlementLedgerDirectionDebit)
+        val securityCredit = ledgerProof.sumByAssetAndDirection(SettlementLedgerEntryTypeSecurity, SettlementLedgerDirectionCredit)
+        require(securityDebit.compareTo(securityCredit) == 0) { "settlement security ledger entries must balance" }
         require(it.settlementState == SettlementSettledState) { "settlementState must be $SettlementSettledState" }
     }
 

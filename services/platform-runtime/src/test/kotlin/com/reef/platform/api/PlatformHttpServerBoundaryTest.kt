@@ -2194,6 +2194,7 @@ class PlatformHttpServerBoundaryTest {
             )
             val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
             val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize")
+            val ledger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"materializedObligations\":1")
@@ -2220,6 +2221,15 @@ class PlatformHttpServerBoundaryTest {
             assertContains(obligations.body, "\"cashLegState\":\"LEG_SUCCEEDED\"")
             assertContains(obligations.body, "\"securityLegState\":\"LEG_SUCCEEDED\"")
             assertContains(obligations.body, "\"ledgerEntryCount\":4")
+            assertEquals(200, ledger.status)
+            assertContains(ledger.body, "\"balancesCount\":4")
+            assertContains(ledger.body, "\"settlementProofsCount\":1")
+            assertContains(ledger.body, "\"participantId\":\"buyer-1\"")
+            assertContains(ledger.body, "\"assetType\":\"CASH\"")
+            assertContains(ledger.body, "\"netQuantity\":\"-15025000000000\"")
+            assertContains(ledger.body, "\"proofState\":\"PROVEN\"")
+            assertContains(ledger.body, "\"cashBalanced\":true")
+            assertContains(ledger.body, "\"securityBalanced\":true")
         } finally {
             server.stop(0)
         }

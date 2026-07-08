@@ -84,6 +84,20 @@ class SettlementFactStoreTest {
     }
 
     @Test
+    fun rejectsSettlementWhenLedgerProofDoesNotBalance() {
+        val store = InMemorySettlementFactStore()
+        val facts = finalityFacts("run-finality").copy(
+            ledgerEntries = finalityFacts("run-finality").ledgerEntries.map {
+                if (it.ledgerEntryId == "ledger-seller-cash-credit") it.copy(quantity = "14999.99") else it
+            }
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(facts)
+        }
+    }
+
+    @Test
     fun rejectsMixedPostTradeProfileEvidenceInScenarioRun() {
         val store = InMemorySettlementFactStore()
 
