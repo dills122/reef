@@ -214,9 +214,10 @@ Goal:
 
 Acceptance:
 
-- fixture runner executes command NDJSON or JSON
-- expected outcomes and final checksum are asserted
-- fixtures include partial fills, modify/cancel, self-trade prevention, and session gates as those features land
+- first in-code golden corpus covers rest, sweep, partial residual, modify, cancel, and final book state
+- fixture runner for command NDJSON or JSON remains pending
+- expected durable event batches and final checksum literals remain pending
+- fixtures should include self-trade prevention and session gates as those features land
 
 ### 8. Engine Observability
 

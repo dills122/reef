@@ -838,6 +838,95 @@ func TestBookStatsExposeOrderLevelCountsAndChecksum(t *testing.T) {
 	}
 }
 
+func TestGoldenReplayBasicLifecycleCorpus(t *testing.T) {
+	service := NewService()
+
+	submitSell1 := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "gold-sell-1",
+		VenueSessionID: "gold-session",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-a",
+		AccountID:      "account-a",
+		Side:           domain.SideSell,
+		QuantityUnits:  "100",
+		LimitPrice:     "150100000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:00Z",
+	})
+	if submitSell1.Accepted == nil || len(submitSell1.Trades) != 0 {
+		t.Fatalf("expected first sell to rest, got %#v", submitSell1)
+	}
+
+	submitSell2 := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "gold-sell-2",
+		VenueSessionID: "gold-session",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-b",
+		AccountID:      "account-b",
+		Side:           domain.SideSell,
+		QuantityUnits:  "80",
+		LimitPrice:     "150000000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:01Z",
+	})
+	if submitSell2.Accepted == nil || len(submitSell2.Trades) != 0 {
+		t.Fatalf("expected second sell to rest, got %#v", submitSell2)
+	}
+
+	submitBuy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "gold-buy-1",
+		VenueSessionID: "gold-session",
+		InstrumentID:   "AAPL",
+		ParticipantID:  "participant-c",
+		AccountID:      "account-c",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "150",
+		LimitPrice:     "150200000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:02Z",
+	})
+	if len(submitBuy.Trades) != 2 {
+		t.Fatalf("expected buy to sweep two sell orders, got %#v", submitBuy.Trades)
+	}
+	if submitBuy.Trades[0].SellOrderID != "gold-sell-2" || submitBuy.Trades[0].QuantityUnits != "80" || submitBuy.Trades[0].Price != "150000000000" {
+		t.Fatalf("unexpected first golden trade: %#v", submitBuy.Trades[0])
+	}
+	if submitBuy.Trades[1].SellOrderID != "gold-sell-1" || submitBuy.Trades[1].QuantityUnits != "70" || submitBuy.Trades[1].Price != "150100000000" {
+		t.Fatalf("unexpected second golden trade: %#v", submitBuy.Trades[1])
+	}
+
+	modifyResidualSell := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "gold-sell-1",
+		QuantityUnits: "90",
+		LimitPrice:    "150100000000",
+		OccurredAt:    "2026-03-14T18:00:03Z",
+	})
+	if modifyResidualSell.Accepted == nil {
+		t.Fatalf("expected residual sell modify to accept, got %#v", modifyResidualSell)
+	}
+
+	cancelResidualSell := service.CancelOrder(domain.CancelOrder{
+		OrderID:    "gold-sell-1",
+		OccurredAt: "2026-03-14T18:00:04Z",
+	})
+	if cancelResidualSell.Accepted == nil {
+		t.Fatalf("expected residual sell cancel to accept, got %#v", cancelResidualSell)
+	}
+
+	stats := service.BookStats("AAPL")
+	if stats.BuyOrders != 0 || stats.SellOrders != 0 || stats.BuyPriceLevels != 0 || stats.SellPriceLevels != 0 {
+		t.Fatalf("expected golden corpus to end with empty book, got %#v", stats)
+	}
+	buyState, ok := service.OrderState("gold-buy-1")
+	if !ok || buyState.Status != domain.OrderStatusFilled || buyState.RemainingQuantity != "0" {
+		t.Fatalf("unexpected golden buy state: %#v", buyState)
+	}
+	sellState, ok := service.OrderState("gold-sell-1")
+	if !ok || sellState.Status != domain.OrderStatusCancelled || sellState.RemainingQuantity != "0" {
+		t.Fatalf("unexpected golden residual sell state: %#v", sellState)
+	}
+}
+
 func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
