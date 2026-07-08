@@ -52,6 +52,7 @@ import com.reef.platform.application.settlement.SettlementObligationProjection
 import com.reef.platform.application.settlement.SettlementObligationView
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
+import com.reef.platform.application.settlement.SettlementResourcePositionFact
 import com.reef.platform.application.settlement.SettlementSettledFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
@@ -3414,6 +3415,7 @@ class PlatformHttpServer(
                     "materializedLegOutcomes" to result.materializedLegOutcomes,
                     "materializedLedgerEntries" to result.materializedLedgerEntries,
                     "materializedSettlements" to result.materializedSettlements,
+                    "materializedBreaks" to result.materializedBreaks,
                     "skippedTrades" to result.skippedTrades
                 )
             )
@@ -3501,6 +3503,9 @@ class PlatformHttpServer(
         )
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
+            resourcePositions = json.objectDocuments("resourcePositions").map {
+                resourcePositionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
             obligations = json.objectDocuments("obligations").map {
                 obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
@@ -3528,6 +3533,28 @@ class PlatformHttpServer(
             resolutions = json.objectDocuments("resolutions").map {
                 resolutionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             }
+        )
+    }
+
+    private fun resourcePositionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementResourcePositionFact {
+        return SettlementResourcePositionFact(
+            resourcePositionId = json.string("resourcePositionId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId"),
+            assetType = json.string("assetType"),
+            assetId = json.string("assetId"),
+            quantity = json.string("quantity"),
+            occurredAt = requiredInstant(json, "occurredAt")
         )
     }
 
@@ -3749,6 +3776,22 @@ class PlatformHttpServer(
     private fun settlementFactBundleJson(facts: SettlementFactBundle): Map<String, Any?> {
         return mapOf(
             "scenarioRunId" to facts.scenarioRunId,
+            "resourcePositions" to facts.resourcePositions.map {
+                mapOf(
+                    "resourcePositionId" to it.resourcePositionId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "participantId" to it.participantId,
+                    "accountId" to it.accountId,
+                    "assetType" to it.assetType,
+                    "assetId" to it.assetId,
+                    "quantity" to it.quantity,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "obligations" to facts.obligations.map {
                 mapOf(
                     "settlementObligationId" to it.settlementObligationId,
@@ -3914,9 +3957,11 @@ class PlatformHttpServer(
                         "accountId" to it.accountId,
                         "assetType" to it.assetType,
                         "assetId" to it.assetId,
+                        "openingQuantity" to it.openingQuantity,
                         "debitQuantity" to it.debitQuantity,
                         "creditQuantity" to it.creditQuantity,
                         "netQuantity" to it.netQuantity,
+                        "availableQuantity" to it.availableQuantity,
                         "ledgerEntryCount" to it.ledgerEntryCount,
                         "updatedAt" to it.updatedAt.toString()
                     )

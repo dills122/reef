@@ -197,6 +197,7 @@ object PostgresSchemaRequirements {
     }
 
     fun settlementFacts(
+        resourcePositions: String,
         obligations: String,
         instructions: String,
         attempts: String,
@@ -207,6 +208,7 @@ object PostgresSchemaRequirements {
         repairs: String,
         resolutions: String
     ): PostgresSchemaRequirement {
+        val resourcePositionTable = PostgresSchemaObject.parse(resourcePositions)
         val obligationTable = PostgresSchemaObject.parse(obligations)
         val instructionTable = PostgresSchemaObject.parse(instructions)
         val attemptTable = PostgresSchemaObject.parse(attempts)
@@ -218,6 +220,7 @@ object PostgresSchemaRequirements {
         val resolutionTable = PostgresSchemaObject.parse(resolutions)
         return PostgresSchemaRequirement(
             tables = listOf(
+                resourcePositionTable,
                 obligationTable,
                 instructionTable,
                 attemptTable,
@@ -229,6 +232,15 @@ object PostgresSchemaRequirements {
                 resolutionTable
             ),
             columns = listOf(
+                PostgresSchemaColumn(resourcePositionTable, "resource_position_id", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "scenario_run_id", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(resourcePositionTable, "participant_id", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "account_id", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "asset_type", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "asset_id", "text"),
+                PostgresSchemaColumn(resourcePositionTable, "quantity", "text"),
                 PostgresSchemaColumn(obligationTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(obligationTable, "scenario_run_id", "text"),
                 PostgresSchemaColumn(obligationTable, "post_trade_profile_id", "text"),

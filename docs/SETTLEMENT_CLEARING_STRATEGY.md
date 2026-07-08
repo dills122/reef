@@ -154,7 +154,7 @@ Rules:
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
-- The current materializer creates deterministic settlement instructions, attempts, cash/security leg outcome facts, append-only ledger proof entries, and `SETTLED` facts for `instant-post-trade` obligations. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
+- The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations. If no opening resource facts are seeded for a scenario, instant mode remains unconstrained for fast simulation. If resource facts are seeded, it checks buyer cash and seller securities before finality, emits failed leg outcomes plus a break on insufficiency, and only writes append-only ledger proof entries plus `SETTLED` facts when both legs pass. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
 - The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, derives replayable account/asset balance and settlement-proof views from those entries, but it does not yet apply micro-batch netting, model allocation/confirmation/affirmation, or create clearing/novation records.
 - Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
 
@@ -181,6 +181,8 @@ Obligation materialization:
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 - ledger query surface: `GET /api/v1/settlement/ledger/{scenarioRunId}` returns replayable participant/account/asset balances plus per-settlement proof totals derived from append-only ledger facts
+- resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
+- constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts
 
 ## Data Model Direction
 

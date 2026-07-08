@@ -2236,6 +2236,103 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun settlementMaterializeEndpointCreatesBreakWhenSeededResourcesAreInsufficient() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveAcceptedOrder(
+            persistedOrder("buy-order-materialize-fail", "buyer-1", "BUY", "run-materialize-fail", "session-fast")
+        )
+        persistence.saveAcceptedOrder(
+            persistedOrder("sell-order-materialize-fail", "seller-1", "SELL", "run-materialize-fail", "session-fast")
+        )
+        persistence.saveTrades(
+            listOf(
+                TradeCreated(
+                    eventId = "evt-trade-materialize-fail",
+                    tradeId = "trade-materialize-fail",
+                    executionId = "exec-materialize-fail",
+                    buyOrderId = "buy-order-materialize-fail",
+                    sellOrderId = "sell-order-materialize-fail",
+                    instrumentId = "AAPL",
+                    quantityUnits = "100",
+                    price = "150250000000",
+                    currency = "USD",
+                    occurredAt = "2026-01-01T00:00:00Z"
+                )
+            )
+        )
+        val resolver = PostTradeProfileResolver.envOnly(
+            profileId = "instant-post-trade-v1",
+            policyVersion = 4
+        )
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = settlementStore,
+            postTradeProfileResolver = resolver
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            settlementObligationMaterializer = materializer,
+            runtimePersistence = persistence,
+            defaultPostTradeProfileId = "instant-post-trade-v1",
+            defaultPostTradePolicyVersion = 4,
+            postTradeProfileResolver = resolver
+        )
+        try {
+            val seeded = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-materialize-fail",
+                  "resourcePositions":[
+                    {
+                      "resourcePositionId":"resource-run-materialize-fail-seller-security",
+                      "correlationId":"corr-resource-fail",
+                      "causationId":"seed-resource-fail",
+                      "participantId":"seller-1",
+                      "accountId":"account-seller-1",
+                      "assetType":"SECURITY",
+                      "assetId":"AAPL",
+                      "quantity":"100",
+                      "occurredAt":"2025-12-31T23:59:59Z"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/obligations/materialize",
+                emptyMap(),
+                """{"scenarioRunId":"run-materialize-fail"}"""
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize-fail")
+            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
+
+            assertEquals(200, seeded.status)
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"materializedLedgerEntries\":0")
+            assertContains(posted.body, "\"materializedSettlements\":0")
+            assertContains(posted.body, "\"materializedBreaks\":1")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"resourcePositionId\":\"resource-run-materialize-fail-seller-security\"")
+            assertContains(fetched.body, "\"legType\":\"CASH\"")
+            assertContains(fetched.body, "\"state\":\"LEG_FAILED\"")
+            assertContains(fetched.body, "\"reason\":\"CASH_LEG_FAILED\"")
+            assertEquals(200, obligations.status)
+            assertContains(obligations.body, "\"settlementState\":\"BROKEN\"")
+            assertContains(obligations.body, "\"cashLegState\":\"LEG_FAILED\"")
+            assertContains(obligations.body, "\"securityLegState\":\"LEG_SUCCEEDED\"")
+            assertContains(obligations.body, "\"ledgerEntryCount\":0")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
         val breakerStore = RecordingCommandCircuitBreakerStore()
         val persistence = InMemoryRuntimePersistence()

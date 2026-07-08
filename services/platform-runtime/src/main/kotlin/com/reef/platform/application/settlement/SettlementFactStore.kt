@@ -17,12 +17,14 @@ const val SettlementAttemptStartedState = "ATTEMPT_STARTED"
 const val SettlementLegTypeCash = "CASH"
 const val SettlementLegTypeSecurity = "SECURITY"
 const val SettlementLegSucceededState = "LEG_SUCCEEDED"
+const val SettlementLegFailedState = "LEG_FAILED"
 const val SettlementLedgerEntryTypeCash = "CASH"
 const val SettlementLedgerEntryTypeSecurity = "SECURITY"
 const val SettlementLedgerDirectionDebit = "DEBIT"
 const val SettlementLedgerDirectionCredit = "CREDIT"
 const val SettlementSettledState = "SETTLED"
 const val SettlementBreakOpenedReason = "CASH_LEG_FAILED"
+const val SettlementBreakOpenedReasonSecurity = "SECURITY_LEG_FAILED"
 const val SettlementBreakOpenedState = "BROKEN"
 const val SettlementRepairPostedAction = "POST_CASH_LEG_REPAIR"
 const val SettlementRepairPostedActorType = "USER"
@@ -72,6 +74,21 @@ data class SettlementAttemptStartedFact(
     val causationId: String,
     val attemptNumber: Int = 1,
     val state: String = SettlementAttemptStartedState,
+    val occurredAt: Instant
+)
+
+data class SettlementResourcePositionFact(
+    val resourcePositionId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val participantId: String,
+    val accountId: String,
+    val assetType: String,
+    val assetId: String,
+    val quantity: String,
     val occurredAt: Instant
 )
 
@@ -168,6 +185,7 @@ data class SettlementResolvedFact(
 
 data class SettlementFactBundle(
     val scenarioRunId: String,
+    val resourcePositions: List<SettlementResourcePositionFact> = emptyList(),
     val obligations: List<SettlementObligationCreatedFact> = emptyList(),
     val instructions: List<SettlementInstructionCreatedFact> = emptyList(),
     val attempts: List<SettlementAttemptStartedFact> = emptyList(),
@@ -179,7 +197,7 @@ data class SettlementFactBundle(
     val resolutions: List<SettlementResolvedFact> = emptyList()
 ) {
     fun isEmpty(): Boolean =
-        obligations.isEmpty() && instructions.isEmpty() && attempts.isEmpty() &&
+        resourcePositions.isEmpty() && obligations.isEmpty() && instructions.isEmpty() && attempts.isEmpty() &&
             legOutcomes.isEmpty() && ledgerEntries.isEmpty() && settlements.isEmpty() &&
             breaks.isEmpty() && repairs.isEmpty() && resolutions.isEmpty()
 }
@@ -190,6 +208,7 @@ interface SettlementFactStore {
 }
 
 class InMemorySettlementFactStore : SettlementFactStore {
+    private val resourcePositions = ConcurrentHashMap<String, SettlementResourcePositionFact>()
     private val obligations = ConcurrentHashMap<String, SettlementObligationCreatedFact>()
     private val instructions = ConcurrentHashMap<String, SettlementInstructionCreatedFact>()
     private val attempts = ConcurrentHashMap<String, SettlementAttemptStartedFact>()
@@ -204,6 +223,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
         if (facts.isEmpty()) return facts
         val existing = factsByScenarioRunId(facts.scenarioRunId)
         validateSettlementFacts(existing.merge(facts))
+        facts.resourcePositions.forEach { resourcePositions.putIfAbsent(it.resourcePositionId, it) }
         facts.obligations.forEach { obligations.putIfAbsent(it.settlementObligationId, it) }
         facts.instructions.forEach { instructions.putIfAbsent(it.settlementInstructionId, it) }
         facts.attempts.forEach { attempts.putIfAbsent(it.settlementAttemptId, it) }
@@ -220,6 +240,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
         require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
+            resourcePositions = resourcePositions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             obligations = obligations.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             instructions = instructions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             attempts = attempts.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
@@ -237,6 +258,7 @@ data class PostgresSettlementSqlNames(
     private val schema: String = "settlement"
 ) {
     val schemaName = schemaOrDefault(schema)
+    val resourcePositions = qualify("resource_positions")
     val obligations = qualify("obligations")
     val instructions = qualify("instructions")
     val attempts = qualify("attempts")
@@ -271,6 +293,7 @@ class PostgresSettlementFactStore(
                 PostgresSchemaValidator.validate(
                     conn,
                     PostgresSchemaRequirements.settlementFacts(
+                        resourcePositions = names.resourcePositions,
                         obligations = names.obligations,
                         instructions = names.instructions,
                         attempts = names.attempts,
@@ -286,6 +309,25 @@ class PostgresSettlementFactStore(
             }
             conn.createStatement().use { stmt ->
                 stmt.execute("CREATE SCHEMA IF NOT EXISTS ${names.schemaName}")
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.resourcePositions} (
+                      resource_position_id TEXT PRIMARY KEY,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      participant_id TEXT NOT NULL,
+                      account_id TEXT NOT NULL,
+                      asset_type TEXT NOT NULL CHECK (asset_type IN ('CASH', 'SECURITY')),
+                      asset_id TEXT NOT NULL,
+                      quantity TEXT NOT NULL,
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
                 stmt.execute(
                     """
                     CREATE TABLE IF NOT EXISTS ${names.obligations} (
@@ -356,7 +398,7 @@ class PostgresSettlementFactStore(
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
                       leg_type TEXT NOT NULL CHECK (leg_type IN ('CASH', 'SECURITY')),
-                      state TEXT NOT NULL CHECK (state = 'LEG_SUCCEEDED'),
+                      state TEXT NOT NULL CHECK (state IN ('LEG_SUCCEEDED', 'LEG_FAILED')),
                       occurred_at TIMESTAMPTZ NOT NULL,
                       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
@@ -413,7 +455,7 @@ class PostgresSettlementFactStore(
                       post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
-                      reason TEXT NOT NULL CHECK (reason = 'CASH_LEG_FAILED'),
+                      reason TEXT NOT NULL CHECK (reason IN ('CASH_LEG_FAILED', 'SECURITY_LEG_FAILED')),
                       state TEXT NOT NULL CHECK (state = 'BROKEN'),
                       occurred_at TIMESTAMPTZ NOT NULL,
                       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -472,6 +514,7 @@ class PostgresSettlementFactStore(
             try {
                 val existing = factsByScenarioRunId(conn, facts.scenarioRunId)
                 validateSettlementFacts(existing.merge(facts))
+                insertResourcePositions(conn, facts.resourcePositions)
                 insertObligations(conn, facts.obligations)
                 insertInstructions(conn, facts.instructions)
                 insertAttempts(conn, facts.attempts)
@@ -500,6 +543,7 @@ class PostgresSettlementFactStore(
     private fun factsByScenarioRunId(conn: Connection, scenarioRunId: String): SettlementFactBundle {
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
+            resourcePositions = queryResourcePositions(conn, scenarioRunId),
             obligations = queryObligations(conn, scenarioRunId),
             instructions = queryInstructions(conn, scenarioRunId),
             attempts = queryAttempts(conn, scenarioRunId),
@@ -510,6 +554,36 @@ class PostgresSettlementFactStore(
             repairs = queryRepairs(conn, scenarioRunId),
             resolutions = queryResolutions(conn, scenarioRunId)
         )
+    }
+
+    private fun insertResourcePositions(conn: Connection, facts: List<SettlementResourcePositionFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.resourcePositions}(
+              resource_position_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+              correlation_id, causation_id, participant_id, account_id, asset_type, asset_id, quantity, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (resource_position_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.resourcePositionId)
+                ps.setString(2, it.scenarioRunId)
+                ps.setString(3, it.postTradeProfileId)
+                ps.setInt(4, it.postTradePolicyVersion)
+                ps.setString(5, it.correlationId)
+                ps.setString(6, it.causationId)
+                ps.setString(7, it.participantId)
+                ps.setString(8, it.accountId)
+                ps.setString(9, it.assetType)
+                ps.setString(10, it.assetId)
+                ps.setString(11, it.quantity)
+                ps.setTimestamp(12, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
     }
 
     private fun insertObligations(conn: Connection, facts: List<SettlementObligationCreatedFact>) {
@@ -794,6 +868,25 @@ class PostgresSettlementFactStore(
         }
     }
 
+    private fun queryResourcePositions(conn: Connection, scenarioRunId: String): List<SettlementResourcePositionFact> {
+        conn.prepareStatement(
+            """
+            SELECT resource_position_id, scenario_run_id, post_trade_profile_id, post_trade_policy_version,
+                   correlation_id, causation_id, participant_id, account_id, asset_type, asset_id, quantity, occurred_at
+            FROM ${names.resourcePositions}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, resource_position_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementResourcePositionFact>()
+                while (rs.next()) records.add(rs.toResourcePosition())
+                return records
+            }
+        }
+    }
+
     private fun queryObligations(conn: Connection, scenarioRunId: String): List<SettlementObligationCreatedFact> {
         conn.prepareStatement(
             """
@@ -975,6 +1068,7 @@ class PostgresSettlementFactStore(
     }
 
     private fun createIndexes(stmt: java.sql.Statement) {
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_resource_positions_run ON ${names.resourcePositions}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_obligations_run ON ${names.obligations}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_instructions_run ON ${names.instructions}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_attempts_run ON ${names.attempts}(scenario_run_id, occurred_at)")
@@ -988,6 +1082,7 @@ class PostgresSettlementFactStore(
 
     private fun ensureSettlementEvidenceColumns(stmt: java.sql.Statement) {
         listOf(
+            names.resourcePositions,
             names.obligations,
             names.instructions,
             names.attempts,
@@ -1022,6 +1117,7 @@ class PostgresSettlementFactStore(
 private fun SettlementFactBundle.merge(next: SettlementFactBundle): SettlementFactBundle {
     require(scenarioRunId == next.scenarioRunId) { "settlement fact scenarioRunId mismatch" }
     return copy(
+        resourcePositions = resourcePositions.byId(next.resourcePositions) { it.resourcePositionId },
         obligations = obligations.byId(next.obligations) { it.settlementObligationId },
         instructions = instructions.byId(next.instructions) { it.settlementInstructionId },
         attempts = attempts.byId(next.attempts) { it.settlementAttemptId },
@@ -1053,6 +1149,7 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
     val breaks = facts.breaks.associateBy { it.settlementBreakId }
     val repairs = facts.repairs.associateBy { it.settlementRepairId }
     val profileEvidence = (
+        facts.resourcePositions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
         facts.obligations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.instructions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.attempts.map { it.postTradeProfileId to it.postTradePolicyVersion } +
@@ -1064,6 +1161,20 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
             facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion }
         ).toSet()
     require(profileEvidence.size <= 1) { "settlement facts must use one post-trade profile per scenarioRunId" }
+
+    facts.resourcePositions.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.resourcePositionId.isNotBlank()) { "resourcePositionId is required" }
+        require(it.participantId.isNotBlank()) { "resource position participantId is required" }
+        require(it.accountId.isNotBlank()) { "resource position accountId is required" }
+        require(it.assetType in setOf(SettlementLedgerEntryTypeCash, SettlementLedgerEntryTypeSecurity)) {
+            "resource position assetType must be CASH or SECURITY"
+        }
+        require(it.assetId.isNotBlank()) { "resource position assetId is required" }
+        require(it.quantity.isNotBlank()) { "resource position quantity is required" }
+        it.quantity.toSettlementQuantity()
+    }
 
     facts.obligations.forEach {
         requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
@@ -1119,7 +1230,9 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
             "leg outcome post-trade profile must match attempt"
         }
         require(it.legType in setOf(SettlementLegTypeCash, SettlementLegTypeSecurity)) { "legType must be CASH or SECURITY" }
-        require(it.state == SettlementLegSucceededState) { "leg outcome state must be $SettlementLegSucceededState" }
+        require(it.state in setOf(SettlementLegSucceededState, SettlementLegFailedState)) {
+            "leg outcome state must be $SettlementLegSucceededState or $SettlementLegFailedState"
+        }
     }
 
     facts.ledgerEntries.forEach {
@@ -1157,7 +1270,10 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, attempt)) {
             "settlement post-trade profile must match attempt"
         }
-        val legTypes = legOutcomesByAttempt[it.settlementAttemptId].orEmpty().map { leg -> leg.legType }.toSet()
+        val legTypes = legOutcomesByAttempt[it.settlementAttemptId].orEmpty()
+            .filter { leg -> leg.state == SettlementLegSucceededState }
+            .map { leg -> leg.legType }
+            .toSet()
         require(legTypes.containsAll(setOf(SettlementLegTypeCash, SettlementLegTypeSecurity))) {
             "settlement requires cash and security leg outcomes"
         }
@@ -1197,7 +1313,9 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, obligation)) {
             "break post-trade profile must match obligation"
         }
-        require(it.reason == SettlementBreakOpenedReason) { "break reason must be $SettlementBreakOpenedReason" }
+        require(it.reason in setOf(SettlementBreakOpenedReason, SettlementBreakOpenedReasonSecurity)) {
+            "break reason must be $SettlementBreakOpenedReason or $SettlementBreakOpenedReasonSecurity"
+        }
         require(it.state == SettlementBreakOpenedState) { "break state must be $SettlementBreakOpenedState" }
     }
 
@@ -1284,6 +1402,23 @@ private fun requireCommon(
     require(factScenarioRunId == expectedScenarioRunId) { "fact scenarioRunId must match bundle scenarioRunId" }
     require(correlationId.isNotBlank()) { "correlationId is required" }
     require(causationId.isNotBlank()) { "causationId is required" }
+}
+
+private fun ResultSet.toResourcePosition(): SettlementResourcePositionFact {
+    return SettlementResourcePositionFact(
+        resourcePositionId = getString(1),
+        scenarioRunId = getString(2),
+        postTradeProfileId = getString(3),
+        postTradePolicyVersion = getInt(4),
+        correlationId = getString(5),
+        causationId = getString(6),
+        participantId = getString(7),
+        accountId = getString(8),
+        assetType = getString(9),
+        assetId = getString(10),
+        quantity = getString(11),
+        occurredAt = getTimestamp(12).toInstant()
+    )
 }
 
 private fun ResultSet.toObligation(): SettlementObligationCreatedFact {

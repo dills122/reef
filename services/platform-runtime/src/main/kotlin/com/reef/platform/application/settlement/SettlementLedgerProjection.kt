@@ -17,9 +17,11 @@ data class SettlementLedgerBalanceView(
     val accountId: String,
     val assetType: String,
     val assetId: String,
+    val openingQuantity: String,
     val debitQuantity: String,
     val creditQuantity: String,
     val netQuantity: String,
+    val availableQuantity: String,
     val ledgerEntryCount: Int,
     val updatedAt: Instant
 )
@@ -55,26 +57,40 @@ object SettlementLedgerProjection {
     }
 
     private fun projectBalances(facts: SettlementFactBundle): List<SettlementLedgerBalanceView> {
-        return facts.ledgerEntries
-            .groupBy { BalanceKey(it.participantId, it.accountId, it.assetType, it.assetId) }
-            .map { (key, entries) ->
+        val positionsByKey = facts.resourcePositions.groupBy {
+            BalanceKey(it.participantId, it.accountId, it.assetType, it.assetId)
+        }
+        val entriesByKey = facts.ledgerEntries.groupBy {
+            BalanceKey(it.participantId, it.accountId, it.assetType, it.assetId)
+        }
+        return (positionsByKey.keys + entriesByKey.keys)
+            .map { key ->
+                val positions = positionsByKey[key].orEmpty()
+                val entries = entriesByKey[key].orEmpty()
+                val opening = positions.sumPositions()
                 val debit = entries
                     .filter { it.direction == SettlementLedgerDirectionDebit }
                     .sumQuantities()
                 val credit = entries
                     .filter { it.direction == SettlementLedgerDirectionCredit }
                     .sumQuantities()
+                val net = credit - debit
                 SettlementLedgerBalanceView(
                     scenarioRunId = facts.scenarioRunId,
                     participantId = key.participantId,
                     accountId = key.accountId,
                     assetType = key.assetType,
                     assetId = key.assetId,
+                    openingQuantity = opening.toSettlementQuantityString(),
                     debitQuantity = debit.toSettlementQuantityString(),
                     creditQuantity = credit.toSettlementQuantityString(),
-                    netQuantity = (credit - debit).toSettlementQuantityString(),
+                    netQuantity = net.toSettlementQuantityString(),
+                    availableQuantity = (opening + net).toSettlementQuantityString(),
                     ledgerEntryCount = entries.size,
-                    updatedAt = entries.maxOf { it.occurredAt }
+                    updatedAt = (
+                        positions.map { it.occurredAt } +
+                            entries.map { it.occurredAt }
+                        ).maxOrNull() ?: Instant.EPOCH
                 )
             }
             .sortedWith(
@@ -83,6 +99,38 @@ object SettlementLedgerProjection {
                     .thenBy { it.assetType }
                     .thenBy { it.assetId }
             )
+    }
+
+    fun availableQuantity(
+        facts: SettlementFactBundle,
+        participantId: String,
+        accountId: String,
+        assetType: String,
+        assetId: String,
+        additionalLedgerEntries: List<SettlementLedgerEntryFact> = emptyList()
+    ): BigDecimal {
+        val opening = facts.resourcePositions
+            .filter {
+                it.participantId == participantId &&
+                    it.accountId == accountId &&
+                    it.assetType == assetType &&
+                    it.assetId == assetId
+            }
+            .sumPositions()
+        val entries = (facts.ledgerEntries + additionalLedgerEntries)
+            .filter {
+                it.participantId == participantId &&
+                    it.accountId == accountId &&
+                    it.assetType == assetType &&
+                    it.assetId == assetId
+            }
+        val debit = entries
+            .filter { it.direction == SettlementLedgerDirectionDebit }
+            .sumQuantities()
+        val credit = entries
+            .filter { it.direction == SettlementLedgerDirectionCredit }
+            .sumQuantities()
+        return opening + credit - debit
     }
 
     private fun projectProofs(facts: SettlementFactBundle): List<SettlementLedgerProofView> {
@@ -142,6 +190,10 @@ object SettlementLedgerProjection {
         val assetType: String,
         val assetId: String
     )
+}
+
+internal fun List<SettlementResourcePositionFact>.sumPositions(): BigDecimal {
+    return fold(BigDecimal.ZERO) { sum, position -> sum + position.quantity.toSettlementQuantity() }
 }
 
 internal fun List<SettlementLedgerEntryFact>.sumByAssetAndDirection(assetType: String, direction: String): BigDecimal {

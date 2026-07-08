@@ -16,6 +16,7 @@ data class SettlementObligationMaterializationResult(
     val materializedLegOutcomes: Int,
     val materializedLedgerEntries: Int,
     val materializedSettlements: Int,
+    val materializedBreaks: Int,
     val skippedTrades: Int
 )
 
@@ -34,6 +35,9 @@ class TradeSettlementObligationMaterializer(
         val legOutcomes = mutableListOf<SettlementLegOutcomeFact>()
         val ledgerEntries = mutableListOf<SettlementLedgerEntryFact>()
         val settlements = mutableListOf<SettlementSettledFact>()
+        val breaks = mutableListOf<SettlementBreakOpenedFact>()
+        val existingFacts = settlementFactStore.factsByScenarioRunId(scenarioRunId)
+        val resourceChecksEnabled = existingFacts.resourcePositions.isNotEmpty()
         var skipped = 0
 
         trades.forEach { trade ->
@@ -83,17 +87,46 @@ class TradeSettlementObligationMaterializer(
             if (selection.mode == InstantPostTradeMode) {
                 val instruction = instructionFact(obligation)
                 val attempt = attemptFact(obligation, instruction)
+                val proposedLedgerEntries = ledgerEntryFacts(obligation, instruction, attempt, buyOrder, sellOrder)
+                val availability = if (resourceChecksEnabled) {
+                    resourceAvailability(
+                        facts = existingFacts,
+                        pendingLedgerEntries = ledgerEntries,
+                        obligation = obligation,
+                        buyOrder = buyOrder,
+                        sellOrder = sellOrder
+                    )
+                } else {
+                    SettlementResourceAvailability(cashAvailable = true, securityAvailable = true)
+                }
                 instructions += instruction
                 attempts += attempt
-                legOutcomes += legOutcomeFacts(obligation, instruction, attempt)
-                ledgerEntries += ledgerEntryFacts(obligation, instruction, attempt, buyOrder, sellOrder)
-                settlements += settlementFact(obligation, instruction, attempt)
+                legOutcomes += legOutcomeFacts(
+                    obligation = obligation,
+                    instruction = instruction,
+                    attempt = attempt,
+                    cashState = if (availability.cashAvailable) SettlementLegSucceededState else SettlementLegFailedState,
+                    securityState = if (availability.securityAvailable) SettlementLegSucceededState else SettlementLegFailedState
+                )
+                if (availability.cashAvailable && availability.securityAvailable) {
+                    ledgerEntries += proposedLedgerEntries
+                    settlements += settlementFact(obligation, instruction, attempt)
+                } else {
+                    breaks += breakFact(
+                        obligation = obligation,
+                        reason = if (!availability.cashAvailable) {
+                            SettlementBreakOpenedReason
+                        } else {
+                            SettlementBreakOpenedReasonSecurity
+                        }
+                    )
+                }
             }
         }
 
         if (
             obligations.isNotEmpty() || instructions.isNotEmpty() || attempts.isNotEmpty() ||
-            legOutcomes.isNotEmpty() || ledgerEntries.isNotEmpty() || settlements.isNotEmpty()
+            legOutcomes.isNotEmpty() || ledgerEntries.isNotEmpty() || settlements.isNotEmpty() || breaks.isNotEmpty()
         ) {
             settlementFactStore.appendFacts(
                 SettlementFactBundle(
@@ -103,7 +136,8 @@ class TradeSettlementObligationMaterializer(
                     attempts = attempts,
                     legOutcomes = legOutcomes,
                     ledgerEntries = ledgerEntries,
-                    settlements = settlements
+                    settlements = settlements,
+                    breaks = breaks
                 )
             )
         }
@@ -116,6 +150,7 @@ class TradeSettlementObligationMaterializer(
             materializedLegOutcomes = legOutcomes.size,
             materializedLedgerEntries = ledgerEntries.size,
             materializedSettlements = settlements.size,
+            materializedBreaks = breaks.size,
             skippedTrades = skipped
         )
     }
@@ -181,7 +216,9 @@ class TradeSettlementObligationMaterializer(
     private fun legOutcomeFacts(
         obligation: SettlementObligationCreatedFact,
         instruction: SettlementInstructionCreatedFact,
-        attempt: SettlementAttemptStartedFact
+        attempt: SettlementAttemptStartedFact,
+        cashState: String = SettlementLegSucceededState,
+        securityState: String = SettlementLegSucceededState
     ): List<SettlementLegOutcomeFact> {
         return listOf(
             SettlementLegOutcomeFact(
@@ -195,6 +232,7 @@ class TradeSettlementObligationMaterializer(
                 correlationId = obligation.correlationId,
                 causationId = attempt.settlementAttemptId,
                 legType = SettlementLegTypeCash,
+                state = cashState,
                 occurredAt = obligation.occurredAt
             ),
             SettlementLegOutcomeFact(
@@ -208,6 +246,7 @@ class TradeSettlementObligationMaterializer(
                 correlationId = obligation.correlationId,
                 causationId = attempt.settlementAttemptId,
                 legType = SettlementLegTypeSecurity,
+                state = securityState,
                 occurredAt = obligation.occurredAt
             )
         )
@@ -323,6 +362,49 @@ class TradeSettlementObligationMaterializer(
         )
     }
 
+    private fun breakFact(obligation: SettlementObligationCreatedFact, reason: String): SettlementBreakOpenedFact {
+        return SettlementBreakOpenedFact(
+            settlementBreakId = "settlement-break-${obligation.settlementObligationId}-1",
+            settlementObligationId = obligation.settlementObligationId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = obligation.settlementObligationId,
+            reason = reason,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun resourceAvailability(
+        facts: SettlementFactBundle,
+        pendingLedgerEntries: List<SettlementLedgerEntryFact>,
+        obligation: SettlementObligationCreatedFact,
+        buyOrder: PersistedOrder,
+        sellOrder: PersistedOrder
+    ): SettlementResourceAvailability {
+        val buyerCash = SettlementLedgerProjection.availableQuantity(
+            facts = facts,
+            participantId = buyOrder.participantId,
+            accountId = buyOrder.accountId,
+            assetType = SettlementLedgerEntryTypeCash,
+            assetId = obligation.currency,
+            additionalLedgerEntries = pendingLedgerEntries
+        )
+        val sellerSecurity = SettlementLedgerProjection.availableQuantity(
+            facts = facts,
+            participantId = sellOrder.participantId,
+            accountId = sellOrder.accountId,
+            assetType = SettlementLedgerEntryTypeSecurity,
+            assetId = obligation.instrumentId,
+            additionalLedgerEntries = pendingLedgerEntries
+        )
+        return SettlementResourceAvailability(
+            cashAvailable = buyerCash >= obligation.cashAmount.toSettlementQuantity(),
+            securityAvailable = sellerSecurity >= obligation.quantity.toSettlementQuantity()
+        )
+    }
+
     private fun cashAmount(trade: TradeCreated): String {
         val quantity = trade.quantityUnits.toBigIntegerOrNull()
             ?: throw IllegalArgumentException("trade quantityUnits must be an integer")
@@ -352,3 +434,8 @@ class TradeSettlementObligationMaterializer(
         const val InstantPostTradeMode = "instant-post-trade"
     }
 }
+
+private data class SettlementResourceAvailability(
+    val cashAvailable: Boolean,
+    val securityAvailable: Boolean
+)

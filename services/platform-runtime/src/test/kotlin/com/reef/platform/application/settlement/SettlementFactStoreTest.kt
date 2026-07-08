@@ -439,6 +439,7 @@ class SettlementFactStoreTest {
     fun defaultsPostgresSettlementNamesToSettlementSchema() {
         val names = PostgresSettlementSqlNames()
 
+        assertEquals("settlement.resource_positions", names.resourcePositions)
         assertEquals("settlement.obligations", names.obligations)
         assertEquals("settlement.instructions", names.instructions)
         assertEquals("settlement.attempts", names.attempts)
@@ -552,6 +553,9 @@ private fun ledgerEntry(
 
 private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: Int): SettlementFactBundle {
     return copy(
+        resourcePositions = resourcePositions.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
         obligations = obligations.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
@@ -584,7 +588,8 @@ private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: I
 
 private fun SettlementFactBundle.profileIds(): Set<String> {
     return (
-        obligations.map { it.postTradeProfileId } +
+        resourcePositions.map { it.postTradeProfileId } +
+            obligations.map { it.postTradeProfileId } +
             instructions.map { it.postTradeProfileId } +
             attempts.map { it.postTradeProfileId } +
             legOutcomes.map { it.postTradeProfileId } +
@@ -598,7 +603,8 @@ private fun SettlementFactBundle.profileIds(): Set<String> {
 
 private fun SettlementFactBundle.policyVersions(): Set<Int> {
     return (
-        obligations.map { it.postTradePolicyVersion } +
+        resourcePositions.map { it.postTradePolicyVersion } +
+            obligations.map { it.postTradePolicyVersion } +
             instructions.map { it.postTradePolicyVersion } +
             attempts.map { it.postTradePolicyVersion } +
             legOutcomes.map { it.postTradePolicyVersion } +
