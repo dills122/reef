@@ -139,8 +139,8 @@ Drain-accounted worker sweep:
 |---|---|---|---|---|
 | A1 | Runtime phase timing diagnostics | In progress | feature | Internal hot-path endpoint added for boundary/engine/persistence timing |
 | A2 | DB pool/write-path diagnostics in stress telemetry | Done | feature | Hikari endpoint, telemetry probe, and reusable pre/post table/checkpoint diagnostics are available |
-| A3 | Command log schema and interface | Not started | feature | First DB slice to add |
-| A4 | Command capture append mode | Not started | feature | Preserve 100% capture |
+| A3 | Command log schema and interface | Done | feature | `command_log` migrations, storage contracts, Postgres/in-memory implementations, and schema migration tests exist |
+| A4 | Command capture append mode | Done | feature | Command capture can append to `command_log`; captured-ack now uses command-log append as the canonical durable intake path |
 | A5 | Command processing mode flags | Done | feature | `sync-result`, `captured-sync-engine`, `captured-ack` |
 | A6 | Async batched runtime persistence | In progress | architecture | Captured-ack and stream/direct paths have profile-specific batched submit persistence; generic `RuntimePersistenceMode=async-batched` remains open |
 | A7 | Runtime event/table partitioning | Not started | architecture | Long-soak stability |
@@ -169,24 +169,24 @@ Drain-accounted worker sweep:
 | A30 | Stream-ack idempotency guard | Done | reliability | Scoped key plus payload hash; same body replays, different body conflicts |
 | A31 | Stream partition worker and ack rule | In progress | architecture | Platform stream workers still process submit only; matching-engine direct consumers process submit/modify/cancel and publish durable event batches before offset commit |
 | A32 | Canonical event log and projection watermarks | In progress | architecture | Submit projection watermarks and lag are exposed through partition-owned projectors; broader leaderboard/UI projections remain follow-up |
-| A33 | Stream-ack crash/replay test matrix | Planned | reliability | Publish retry, redelivery before/after DB commit, deterministic replay, projection rebuild |
+| A33 | Stream-ack crash/replay test matrix | In progress | reliability | `make dev-smoke-venue-event-crash-gate` and `scripts/dev/venue-event-crash-gate.mjs` exist; remaining work is making the named crash cases boring enough to gate promotion |
 | A34 | Stream-ack role split and partition ownership | Done | architecture | Local deploy-shaped profile starts separate API, worker, and projector containers; workers own explicit non-overlapping partition ranges |
 | A35 | Canonical append store | Done | architecture | Submit workers append canonical command results and venue events before ack; normalized submit writes moved out of the worker path |
 | A36 | Async market-simulation projections | In progress | architecture | `platform-projector-0` through `platform-projector-3` materialize normalized submit read tables from canonical facts with partition-scoped watermarks; broader order/trade/status/timeline/leaderboard/run projections remain follow-up |
 | A37 | Engine shard deployment shape | Deferred | architecture | Map partition ranges to engine shards after canonical append/projection separation unless profiling proves engine bottleneck |
-| A38 | DigitalOcean benchmark harness | Planned | validation | Test intent and evidence plan documented; next slice is OpenTofu + host-control scaffold for deployed API/workers/projectors/engine/NATS/Postgres evidence |
+| A38 | DigitalOcean benchmark harness | In progress | validation | `infra/do-benchmark`, `scripts/dev/do-benchmark-host.sh`, `make do-benchmark`, and report validation exist; remaining work is stable promotion evidence and eventual `infra/simulation-runner` replacement for the bridge harness |
 
 ## Milestone Checklist
 
 ### M1: Observability Before Rewrite
 
-- [ ] Add phase timing around boundary validation.
+- [x] Add phase timing around boundary validation.
 - [x] Add phase timing around idempotency lookup/save.
 - [x] Add phase timing around command capture.
 - [x] Add phase timing around engine round-trip.
 - [x] Add phase timing around runtime persistence.
-- [ ] Add phase timing around response serialization.
-- [ ] Surface phase timing in stress report summary.
+- [x] Add phase timing around response serialization.
+- [x] Surface phase timing in stress report summary.
 - [x] Add Hikari pool active/idle/wait metrics or debug endpoint.
 - [x] Add DB diagnostics snapshot to `dev-stress-diagnostics` for pool and table growth.
 - [x] Add checkpoint/WAL-growth evidence to stress diagnostics.
@@ -201,7 +201,7 @@ Exit criteria:
 
 - [x] Add `command_log` schema migration.
 - [x] Add append-only `command_log.commands` table.
-- [ ] Add minimal indexes:
+- [x] Add minimal indexes:
   - [x] unique `(client_id, route, idempotency_key)`
   - [x] unique `command_id`
   - [x] processing index `(status, received_at)`

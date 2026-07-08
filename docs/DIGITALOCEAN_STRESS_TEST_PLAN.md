@@ -343,9 +343,9 @@ The next DO soak should not rerun the failed shape. This branch applies a batch 
 - Benchmark truth gate: DO report validation now fails when actual attempted or accepted throughput is below `REEF_DO_MIN_ATTEMPTED_RPS` / `REEF_DO_MIN_ACCEPTED_RPS`, defaulting to `2000` for the current milestone.
 - Evidence: stress reports include worker batch publish-repair timing so the next run shows whether this path remains hot.
 
-## OpenTofu Harness Plan
+## OpenTofu Harness Status
 
-Add an intentionally small stack under something like:
+The bridge harness has been implemented as an intentionally small stack:
 
 ```text
 infra/do-benchmark/
@@ -359,7 +359,7 @@ infra/do-benchmark/
 scripts/dev/do-benchmark-host.sh
 ```
 
-The first infrastructure stack should include:
+The current infrastructure stack includes:
 
 - one `digitalocean_droplet`
 - one `digitalocean_firewall`
@@ -370,7 +370,7 @@ The first infrastructure stack should include:
 - Docker and benchmark dependencies installed by cloud-init
 - output for public IPv4 and SSH user
 
-The host-control script should support:
+The host-control script supports the operational lifecycle:
 
 - `up`
 - `status`
@@ -385,7 +385,9 @@ The host-control script should support:
 - `run-destroy`
 - `destroy`
 
-`run` should start the stack and execute the benchmark sequence without destroying the Droplet. `check` should rerun local report gates against fetched artifacts without touching DigitalOcean resources. `run-destroy` should execute the same sequence, fetch artifacts, and destroy only after fetch succeeds or after enough failure artifacts have been collected to diagnose the run. `fetch-destroy` should be available for manual cleanup after failed or interrupted runs.
+`run` starts the stack and executes the benchmark sequence without destroying the Droplet. `check` reruns local report gates against fetched artifacts without touching DigitalOcean resources. `run-destroy` executes the same sequence, fetches artifacts, validates reports, and destroys resources when the lifecycle completes. `fetch-destroy` is available for manual cleanup after failed or interrupted runs.
+
+Remaining work is promotion evidence and run-plane cleanup, not initial harness creation: keep using this bridge for benchmark proof while `infra/simulation-runner/` evolves into the dedicated simulation run-plane.
 
 ## Reference Pattern From Liars Dice
 

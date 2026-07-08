@@ -873,3 +873,28 @@ Primary references:
 - [`docs/WORK_PLAN.md`](./WORK_PLAN.md)
 - [`docs/CURRENT_STATUS.md`](./CURRENT_STATUS.md)
 - [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+
+### D-050: Settlement Instant-Post-Trade Profile
+
+Status: accepted
+
+Summary:
+- Reef keeps one post-trade domain model with policy/timing profiles rather than separate realistic and game-specific settlement models.
+- `ops-realistic` remains the industry-baseline profile: T+1 default, trade-date allocation/confirmation/affirmation pressure, clearing/novation, netting, DvP-style settlement attempts, fails, and repair.
+- `instant-post-trade` is the public/docs/API profile name for near-instant clearing and settlement. `clear-lite` may remain informal shorthand only.
+- instant-post-trade may auto-affirm, auto-clear, auto-net, and auto-settle, but it must still emit the same lifecycle events and preserve audit, replay, ledger, policy-version, and failure-injection semantics.
+- instant-post-trade must not directly mutate final balances or bypass settlement/account ledger rules.
+- normal instant-post-trade happy paths should settle matched trades in the same simulator tick; unmatched failures, risk holds, reference-data problems, and explicit scenario rules can leave obligations pending or failed.
+- settlement timing, cutoff, netting, failure, and ledger behavior must be policy-versioned and recorded on scenario runs and obligations.
+- Bot Arena is an optional consumer of settlement profiles, not a required dependency for realistic platform operation.
+- `ops-realistic-v1` is the default for standalone real-like platform operation; simulator/game runs may override to `instant-post-trade-v1`.
+- profile resolution order is scenario/run override, then venue/session override, then platform default, then hard default `ops-realistic-v1`.
+- non-local standalone platform boot should require explicit `POST_TRADE_PROFILE`.
+- first implementation should keep P2 settlement assertion compatibility while expanding toward auto allocation/confirmation/affirmation, auto clearing acceptance/novation, gross settlement first, per-tick micro-batch netting later, settlement obligation, seeded failure, repair, synchronous typed account-ledger posting, settled ledger state, resolved exception state, score calculation, and async read projections.
+- default game scoring haircut is `100%` for same-tick pending, `50%` for held or repair-pending obligations, and `0%` for rejected or voided obligations.
+
+Primary references:
+- [`docs/SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
+- [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
+- [`docs/SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
+- [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)

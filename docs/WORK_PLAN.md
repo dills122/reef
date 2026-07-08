@@ -17,6 +17,7 @@ Active execution planning starts from:
 - [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md)
 - [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
+- [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
 - [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
@@ -96,6 +97,7 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - bot/user read-surface claims match `/api/v1/data/availability` and the read-surface inventory in [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md).
 
 5. Promote only clean local gates to the DigitalOcean/OpenTofu harness.
+   - the bridge harness exists under `infra/do-benchmark/` with `scripts/dev/do-benchmark-host.sh`, `make do-benchmark`, and local report checks; the remaining requirement is clean promotion evidence, not initial scaffold creation.
    - first remote tier is `2000` completed/sec for at least `5m`.
    - next tiers are `5000`, then `7500`, only after the lower tier is stable.
    - reports must include attempted, accepted, direct-acked, materialized, projected, lag, p95/p99, restart counts, and artifact paths.
@@ -164,8 +166,6 @@ The current gaps are:
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
 - direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; local API publish-marker recovery and engine/materializer/projector crash gates passed, but longer remote promotion evidence remains open
-- the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and provider-neutral status lookup
-- direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; it still needs crash/restart coverage and longer remote promotion evidence
 - the submit/cancel intake contract needs implementation-ready proof around duplicate idempotency, accepted-but-not-completed accounting, and event-batch intermediate status authority; hot-path cancel routing metadata is now covered by stream envelope and HTTP boundary tests, and `/api/v1/commands/{commandId}` exposes the provider-neutral public status vocabulary for stream references, in-flight work, canonical completions, rejects, and failures
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
 - first deterministic lifecycle scenarios are not locked end to end
