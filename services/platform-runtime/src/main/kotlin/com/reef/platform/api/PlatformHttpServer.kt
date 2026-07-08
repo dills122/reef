@@ -42,6 +42,8 @@ import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
+import com.reef.platform.application.settlement.SettlementObligationProjection
+import com.reef.platform.application.settlement.SettlementObligationView
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
@@ -669,6 +671,15 @@ class PlatformHttpServer(
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/facts/").trimEnd('/')
             writeHotPathResponse(exchange, settlementFactsResponse(scenarioRunId))
+        }
+
+        server.createContext("/api/v1/settlement/obligations/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/obligations/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementObligationsResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
@@ -3407,6 +3418,30 @@ class PlatformHttpServer(
         }
     }
 
+    private fun settlementObligationsResponse(scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            val facts = store.factsByScenarioRunId(scenarioRunId)
+            val obligations = SettlementObligationProjection.project(facts)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "scenarioRunId" to scenarioRunId,
+                    "obligationsCount" to obligations.size,
+                    "obligations" to obligations.map { settlementObligationViewJson(it) }
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement obligation query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement obligation query failed")))
+        }
+    }
+
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
         val venueSessionId = json.string("venueSessionId")
@@ -3622,6 +3657,30 @@ class PlatformHttpServer(
 
     private fun settlementFactBundleBody(facts: SettlementFactBundle): String {
         return jsonObjectBody(settlementFactBundleJson(facts))
+    }
+
+    private fun settlementObligationViewJson(view: SettlementObligationView): Map<String, Any?> {
+        return mapOf(
+            "settlementObligationId" to view.settlementObligationId,
+            "scenarioRunId" to view.scenarioRunId,
+            "postTradeProfileId" to view.postTradeProfileId,
+            "postTradePolicyVersion" to view.postTradePolicyVersion,
+            "tradeId" to view.tradeId,
+            "buyerParticipantId" to view.buyerParticipantId,
+            "sellerParticipantId" to view.sellerParticipantId,
+            "instrumentId" to view.instrumentId,
+            "quantity" to view.quantity,
+            "cashAmount" to view.cashAmount,
+            "currency" to view.currency,
+            "obligationState" to view.obligationState,
+            "settlementState" to view.settlementState,
+            "exceptionState" to view.exceptionState,
+            "settlementBreakId" to view.settlementBreakId,
+            "settlementRepairId" to view.settlementRepairId,
+            "settlementResolutionId" to view.settlementResolutionId,
+            "occurredAt" to view.occurredAt.toString(),
+            "updatedAt" to view.updatedAt.toString()
+        )
     }
 
     private fun jsonObjectBody(fields: Map<String, Any?>): String {

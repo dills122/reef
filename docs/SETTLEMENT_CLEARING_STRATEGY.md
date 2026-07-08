@@ -172,6 +172,7 @@ Obligation materialization:
 - deterministic obligation id: `settlement-obligation-{tradeId}`
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
+- query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 
 ## Data Model Direction
 

@@ -377,7 +377,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(1, captureStore.receivedCalls)
             assertEquals(1, captureStore.completedCalls)
             assertEquals(0, captureStore.failedCalls)
-            assertTrue(captureStore.lastReceivedPayload.contains("\"commandId\":\"cmd-capture-1\""))
+            assertEquals("cmd-capture-1", JsonCodec.parseObject(captureStore.lastReceivedPayload).string("commandId"))
         } finally {
             server.stop(0)
         }
@@ -2191,6 +2191,7 @@ class PlatformHttpServerBoundaryTest {
                 """{"scenarioRunId":"run-materialize"}"""
             )
             val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
+            val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"materializedObligations\":1")
@@ -2199,6 +2200,10 @@ class PlatformHttpServerBoundaryTest {
             assertContains(fetched.body, "\"postTradeProfileId\":\"scenario-instant-v1\"")
             assertContains(fetched.body, "\"postTradePolicyVersion\":9")
             assertContains(fetched.body, "\"cashAmount\":\"15025000000000\"")
+            assertEquals(200, obligations.status)
+            assertContains(obligations.body, "\"obligationsCount\":1")
+            assertContains(obligations.body, "\"settlementState\":\"OBLIGATION_CREATED\"")
+            assertContains(obligations.body, "\"exceptionState\":\"NONE\"")
         } finally {
             server.stop(0)
         }
