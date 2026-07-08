@@ -7,7 +7,10 @@ const internalRouteHeaders = { "X-Reef-Internal-Route": "true" };
 async function post(path, payload) {
   const res = await fetch(`${runtimeUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...internalRouteHeaders },
+    headers: {
+      "content-type": "application/json",
+      ...(path.startsWith("/admin/v1/") ? adminGatewayHeaders(path) : internalRouteHeaders),
+    },
     body: JSON.stringify(payload),
   });
   const text = await res.text();
@@ -15,6 +18,14 @@ async function post(path, payload) {
     throw new Error(`${path} failed (${res.status}): ${text}`);
   }
   console.log(text);
+}
+
+function adminGatewayHeaders(path) {
+  if (!path.startsWith("/admin/v1/")) {
+    return {};
+  }
+  const token = process.env.ADMIN_API_TOKEN ?? "";
+  return token.trim() === "" ? {} : { Authorization: `Bearer ${token}` };
 }
 
 async function get(path) {
@@ -147,7 +158,7 @@ switch (command) {
     }
     {
       const options = parseAccountRiskOptions(args.slice(3));
-      await post("/internal/admin/account-risk/controls", {
+      await post("/admin/v1/risk/account-controls", {
         scopeType: args[0],
         scopeId: args[1],
         decision: args[2],
@@ -168,7 +179,7 @@ switch (command) {
       usage();
       process.exit(1);
     }
-    await post("/internal/admin/circuit-breakers", {
+    await post("/admin/v1/risk/circuit-breakers", {
       scopeType: args[0],
       scopeId: args[1],
       action: args[2],
@@ -187,7 +198,7 @@ switch (command) {
     }
     {
       const options = parsePriceCollarOptions(args.slice(3));
-      await post("/internal/admin/price-collars", {
+      await post("/admin/v1/risk/price-collars", {
         instrumentId: args[0],
         minPrice: args[1] === "*" ? "" : args[1],
         maxPrice: args[2] === "*" ? "" : args[2],

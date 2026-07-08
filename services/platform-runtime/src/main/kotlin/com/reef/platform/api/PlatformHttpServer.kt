@@ -78,6 +78,22 @@ private data class CachedStreamCommandDrainBackpressureSnapshot(
     val snapshot: StreamCommandDrainBackpressureSnapshot
 )
 
+internal data class AdminGatewayRoute(
+    val internalPath: String,
+    val tokenFamily: String
+)
+
+internal fun adminGatewayRouteFor(path: String): AdminGatewayRoute? = when (path) {
+    "/admin/v1/arena/bots" -> AdminGatewayRoute("/internal/admin/arena/bots", "arena")
+    "/admin/v1/arena/bots/openbao-provision" ->
+        AdminGatewayRoute("/internal/admin/arena/bots/openbao-provision", "arena")
+    "/admin/v1/analytics/run-exports" -> AdminGatewayRoute("/internal/admin/analytics/run-exports", "analytics")
+    "/admin/v1/risk/account-controls" -> AdminGatewayRoute("/internal/admin/account-risk/controls", "admin")
+    "/admin/v1/risk/circuit-breakers" -> AdminGatewayRoute("/internal/admin/circuit-breakers", "admin")
+    "/admin/v1/risk/price-collars" -> AdminGatewayRoute("/internal/admin/price-collars", "admin")
+    else -> null
+}
+
 private data class PreparedApiV1Mutation(
     val route: String,
     val clientId: String,
@@ -394,16 +410,17 @@ class PlatformHttpServer(
             }
         }
 
-        server.createContext("/admin/v1/arena/bots") { exchange ->
-            handleAdminGatewayRoute(exchange, "arena")
-        }
-
-        server.createContext("/admin/v1/arena/bots/openbao-provision") { exchange ->
-            handleAdminGatewayRoute(exchange, "arena")
-        }
-
-        server.createContext("/admin/v1/analytics/run-exports") { exchange ->
-            handleAdminGatewayRoute(exchange, "analytics")
+        for (path in listOf(
+            "/admin/v1/arena/bots",
+            "/admin/v1/arena/bots/openbao-provision",
+            "/admin/v1/analytics/run-exports",
+            "/admin/v1/risk/account-controls",
+            "/admin/v1/risk/circuit-breakers",
+            "/admin/v1/risk/price-collars"
+        )) {
+            server.createContext(path) { exchange ->
+                handleAdminGatewayRoute(exchange)
+            }
         }
 
         if (runtimeRole.publicHttpEnabled) {
@@ -846,18 +863,55 @@ class PlatformHttpServer(
             System.err.println("readiness_stream_health_check_failed message=${ex.message ?: "unknown"}")
             null
         }
-        val streamReady = streamCommandHealthCheck == null || streamSnapshot?.available == true
+        val streamAckRequired = commandProcessingMode == CommandProcessingMode.StreamAck
+        val streamPipelineConfigured = !streamAckRequired ||
+            (streamCommandIntakeStore != null && streamCommandPublisher != null && streamCommandHealthCheck != null)
+        val streamHealthReady = if (streamCommandHealthCheck == null) {
+            !streamAckRequired
+        } else {
+            streamSnapshot?.available == true
+        }
+        val streamReady = streamPipelineConfigured && streamHealthReady
         val status = if (dbPoolsReady && streamReady) "ok" else "degraded"
         return JsonCodec.writeObject(
             "status" to status,
             "role" to runtimeRole.configValue,
             "internalHttpMode" to internalHttpExposureMode.name.lowercase(),
+            "pipeline" to mapOf(
+                "commandProcessingMode" to commandProcessingMode.configValue,
+                "streamAckRequired" to streamAckRequired,
+                "streamPipelineConfigured" to streamPipelineConfigured,
+                "streamCommandStream" to streamCommandConfig.streamName,
+                "streamSubjectPrefix" to streamCommandConfig.subjectPrefix,
+                "streamPartitionCount" to streamCommandConfig.partitionCount,
+                "streamMarkPublishedMode" to streamCommandMarkPublishedMode,
+                "streamWorkerEnabled" to streamCommandWorkerEnabled,
+                "streamWorkerPartitions" to streamCommandWorkerPartitions,
+                "venueEventMaterializerEnabled" to venueEventMaterializerEnabled,
+                "venueEventMaterializerBatchSize" to venueEventMaterializerBatchSize,
+                "streamAckProjectorEnabled" to streamAckProjectorEnabled,
+                "streamAckProjectionName" to streamAckProjectionName,
+                "streamAckProjectionSource" to streamAckProjectionSource.configValue,
+                "streamAckProjectionEventStream" to streamAckProjectionEventStream,
+                "streamAckProjectorPartitions" to streamAckProjectorPartitions,
+                "marketDataProjectorEnabled" to marketDataProjectorEnabled,
+                "orderLifecycleProjectorEnabled" to orderLifecycleProjectorEnabled,
+                "commandStatusSources" to listOf(
+                    "canonical_outcome",
+                    "event_batch",
+                    "command_log",
+                    "stream_reference"
+                )
+            ),
             "dependencies" to mapOf(
                 "dbPoolsReady" to dbPoolsReady,
                 "dbPoolCount" to dbPoolSnapshots.size,
                 "dbPoolWaiters" to dbPoolSnapshots.sumOf { it.threadsAwaitingConnection },
                 "streamReady" to streamReady,
+                "streamPipelineConfigured" to streamPipelineConfigured,
+                "streamHealthReady" to streamHealthReady,
                 "streamAvailable" to (streamSnapshot?.available ?: false),
+                "streamHealthError" to (streamSnapshot?.error ?: ""),
                 "accountRiskControlStore" to (accountRiskControlStore != null),
                 "commandCircuitBreakerStore" to (commandCircuitBreakerStore != null),
                 "instrumentPriceCollarStore" to (instrumentPriceCollarStore != null),
@@ -991,19 +1045,14 @@ class PlatformHttpServer(
         )
     }
 
-    private fun handleAdminGatewayRoute(exchange: HttpExchange, tokenFamily: String) {
-        if (!authorizeAdminGateway(exchange, tokenFamily)) return
-        val internalPath = when (exchange.requestURI.path) {
-            "/admin/v1/arena/bots" -> "/internal/admin/arena/bots"
-            "/admin/v1/arena/bots/openbao-provision" -> "/internal/admin/arena/bots/openbao-provision"
-            "/admin/v1/analytics/run-exports" -> "/internal/admin/analytics/run-exports"
-            else -> ""
-        }
-        if (internalPath.isBlank()) {
+    private fun handleAdminGatewayRoute(exchange: HttpExchange) {
+        val route = adminGatewayRouteFor(exchange.requestURI.path)
+        if (route == null) {
             exchange.sendResponseHeaders(404, -1)
             exchange.close()
             return
         }
+        if (!authorizeAdminGateway(exchange, route.tokenFamily)) return
         val body = if (exchange.requestMethod == "POST") {
             readRequestBody(exchange) ?: return
         } else {
@@ -1012,7 +1061,7 @@ class PlatformHttpServer(
         withAdminRequestPrincipal(exchange) {
             val response = diagnosticRoutes.handle(
                 method = exchange.requestMethod,
-                path = internalPath,
+                path = route.internalPath,
                 query = exchange.requestURI.query,
                 body = body
             ) ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
@@ -1023,6 +1072,7 @@ class PlatformHttpServer(
     private fun authorizeAdminGateway(exchange: HttpExchange, tokenFamily: String): Boolean {
         val envName = when (tokenFamily) {
             "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
+            "admin" -> "ADMIN_API_TOKEN"
             else -> "ARENA_ADMIN_API_TOKEN"
         }
         val token = RuntimeEnv.string(envName, "")
@@ -2539,6 +2589,9 @@ class PlatformHttpServer(
         try {
             api.canonicalCommandOutcome(commandId)?.let { outcome ->
                 return outcome.toStatusView().withReadScopeFrom(capturedStatus)
+            }
+            api.venueEventBatchCommandReference(commandId)?.let { reference ->
+                return reference.toStatusView().withReadScopeFrom(capturedStatus)
             }
         } catch (ex: Exception) {
             System.err.println("canonical_command_status_lookup_failed commandId=$commandId message=${ex.message ?: "unknown"}")
