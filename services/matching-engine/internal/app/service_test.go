@@ -988,6 +988,39 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	}
 }
 
+func TestServiceSnapshotSupportsShardOwnershipHandoff(t *testing.T) {
+	oldOwner := NewService()
+	submitRestingSell(t, oldOwner, "AAPL", "handoff-sell-1", "100", "150000000000")
+	submitRestingSell(t, oldOwner, "AAPL", "handoff-sell-2", "100", "150100000000")
+	snapshot := oldOwner.Snapshot()
+
+	newOwner, ok := Restore(snapshot)
+	if !ok {
+		t.Fatal("expected new owner restore to succeed")
+	}
+	if newOwner.Snapshot().Checksum != snapshot.Checksum {
+		t.Fatalf("new owner checksum drifted after restore: got %s want %s", newOwner.Snapshot().Checksum, snapshot.Checksum)
+	}
+
+	tail := domain.SubmitOrder{
+		OrderID:       "handoff-buy-tail",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "150",
+		LimitPrice:    "150200000000",
+		Currency:      "USD",
+		OccurredAt:    "2026-03-14T19:00:00Z",
+	}
+	oldResult := oldOwner.SubmitOrder(tail)
+	newResult := newOwner.SubmitOrder(tail)
+	if !reflect.DeepEqual(newResult, oldResult) {
+		t.Fatalf("handoff owner replay result drifted: got %#v want %#v", newResult, oldResult)
+	}
+	if newOwner.Snapshot().Checksum != oldOwner.Snapshot().Checksum {
+		t.Fatalf("handoff owner checksum drifted: got %s want %s", newOwner.Snapshot().Checksum, oldOwner.Snapshot().Checksum)
+	}
+}
+
 func TestServiceRestoreRejectsSnapshotChecksumMismatch(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")

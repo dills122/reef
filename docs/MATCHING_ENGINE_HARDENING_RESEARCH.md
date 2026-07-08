@@ -104,7 +104,7 @@ Gaps before calling it production-ready:
 - in-memory snapshot/restore/replay checksum proof exists with versioned metadata; stream offset metadata remains pending
 - no formal lifecycle conformance matrix
 - per-instrument matching algorithm profile exists for `FIFO`; non-FIFO algorithms remain unsupported
-- no engine ownership-transfer or failover proof
+- unit-level snapshot ownership handoff proof exists; live drain/fencing proof remains pending
 - engine-local book stats expose order counts, price-level counts, and checksum through an internal HTTP endpoint
 
 ## Recommended Pivot
