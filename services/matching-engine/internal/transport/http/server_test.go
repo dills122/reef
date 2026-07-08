@@ -61,6 +61,63 @@ func TestStreamDirectStatsEnabled(t *testing.T) {
 	}
 }
 
+func TestBookStatsEndpoint(t *testing.T) {
+	server := NewServer(app.NewService())
+	body := []byte(`{
+		"orderId":"ord-1",
+		"instrumentId":"AAPL",
+		"side":"BUY",
+		"quantityUnits":"100",
+		"limitPrice":"150250000000",
+		"currency":"USD"
+	}`)
+	server.Routes().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/orders/submit", bytes.NewReader(body)))
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/books/AAPL/stats", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"instrumentId":"AAPL"`)) {
+		t.Fatalf("expected AAPL book stats, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"buyOrders":1`)) {
+		t.Fatalf("expected buy order count, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"buyPriceLevels":1`)) {
+		t.Fatalf("expected buy price level count, got %s", rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"checksum"`)) {
+		t.Fatalf("expected checksum in book stats, got %s", rec.Body.String())
+	}
+}
+
+func TestBookStatsRejectsWrongMethod(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/books/AAPL/stats", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rec.Code)
+	}
+}
+
+func TestBookStatsRejectsMalformedPath(t *testing.T) {
+	server := NewServer(app.NewService())
+
+	req := httptest.NewRequest(http.MethodGet, "/internal/books/AAPL/depth/stats", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}
+
 func TestSubmitOrder(t *testing.T) {
 	server := NewServer(app.NewService())
 

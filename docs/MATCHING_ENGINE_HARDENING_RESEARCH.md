@@ -105,7 +105,7 @@ Gaps before calling it production-ready:
 - no formal lifecycle conformance matrix
 - no per-instrument matching algorithm profile
 - no engine ownership-transfer or failover proof
-- engine-local book stats expose order counts, price-level counts, and checksum; transport exposure remains pending
+- engine-local book stats expose order counts, price-level counts, and checksum through an internal HTTP endpoint
 
 ## Recommended Pivot
 
@@ -233,4 +233,4 @@ Acceptance:
 - current batch id and ack lag exist in stream-direct stats
 - open order count and price-level count per side exist through `BookStats`
 - checksum exists through `BookStats`
-- transport/admin exposure remains pending
+- internal HTTP exposure exists at `/internal/books/{instrumentId}/stats`
