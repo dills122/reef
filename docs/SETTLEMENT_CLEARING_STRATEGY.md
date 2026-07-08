@@ -172,6 +172,8 @@ Obligation materialization:
 - internal command: `POST /internal/admin/settlement/obligations/materialize`
 - cash repair command: `POST /internal/admin/settlement/repairs/cash`
 - security repair command: `POST /internal/admin/settlement/repairs/security`
+- force-settle command: `POST /internal/admin/settlement/force-settle`
+- reverse-ledger command: `POST /internal/admin/settlement/reverse-ledger-entry`
 - input: `scenarioRunId`/`runId`, optional `venueSessionId`
 - source: persisted runtime trades plus accepted buy/sell orders
 - deterministic obligation id: `settlement-obligation-{tradeId}`
@@ -184,11 +186,16 @@ Obligation materialization:
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 - ledger query surface: `GET /api/v1/settlement/ledger/{scenarioRunId}` returns replayable participant/account/asset balances plus per-settlement proof totals derived from append-only ledger facts
+- proof query surface: `GET /api/v1/settlement/proof/{scenarioRunId}` returns one replay proof with trade/obligation/attempt/ledger identifiers, final balances, settlement proof rows, profile/policy evidence, `CLEAN`/`GAPPED` proof status, causation-gap checks, fact counts, and a deterministic checksum
+- score query surface: `GET /api/v1/settlement/score/{scenarioRunId}` returns participant scoring inputs from the same facts: settled balances, pending value, haircut-adjusted pending value, blocked unsettled value, fail counts, aged-fail counts, repair-pending counts, and penalty points; optional `asOf` and `agedFailAfterSeconds` query parameters let scenario-clock checks age open fails deterministically
 - resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
 - constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts
 - repair reattempts: a `SettlementRepairPosted` fact against the open break lets the next materialization create attempt `N+1`; successful repaired attempts emit the normal four ledger entries, one `SETTLED` fact, and a `SettlementResolved` fact for the repaired break
 - repair command behavior: the first command paths post either buyer cash or seller security `resourcePosition` facts plus `SettlementRepairPosted` against an existing break; they require `scenarioRunId`, `settlementBreakId`, `accountId`, `actorId`, and deterministic `occurredAt`, and can default participant, asset, quantity, profile, and policy version from the broken obligation
 - repair actions: cash breaks use `POST_CASH_LEG_REPAIR`; security breaks use `POST_SECURITY_LEG_REPAIR`
+- operator actions: force-settle and reverse-ledger-entry write `SettlementOperatorAction` audit facts with required `reasonNote`, `actorId`, and deterministic `occurredAt`
+- force-settle behavior: posts an operator action plus the needed resource/repair facts, then re-runs materialization so finality still goes through normal instruction, attempt, leg outcome, ledger proof, `SETTLED`, and `RESOLVED` facts
+- reverse-ledger-entry behavior: posts an operator action plus one opposite-direction ledger entry on a new operator attempt, preserving the original settlement proof row while adjusting replayable balances through append-only compensation
 
 ## Data Model Direction
 
@@ -293,6 +300,7 @@ SettlementObligationCreated
    - netting compression
    - settlement replay proof
    - one JSON scenario proof report with trade IDs, obligation IDs, ledger entry IDs, final balances, causation chain, and checksum
+   - current implementation has proof and score read projections for gross settlement, including derived aged-fail penalties from scenario clock; netting compression remains follow-up work
 
 ## Discussion Points
 

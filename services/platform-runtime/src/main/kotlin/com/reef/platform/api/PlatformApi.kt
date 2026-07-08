@@ -191,6 +191,26 @@ class PlatformApi(
                     scope = "scenario-settlement-evidence",
                     requiredQuery = emptyList(),
                     optionalQuery = emptyList()
+                ),
+                surfaceAvailability(
+                    name = "settlementProof",
+                    endpoint = "/api/v1/settlement/proof/{scenarioRunId}",
+                    source = "settlement append-only fact store + replayable ledger projection",
+                    freshness = "rebuildable proof projection",
+                    status = venueStatus,
+                    scope = "scenario-settlement-evidence",
+                    requiredQuery = emptyList(),
+                    optionalQuery = emptyList()
+                ),
+                surfaceAvailability(
+                    name = "settlementScore",
+                    endpoint = "/api/v1/settlement/score/{scenarioRunId}",
+                    source = "settlement append-only fact store + ledger/obligation projections",
+                    freshness = "rebuildable scoring projection",
+                    status = venueStatus,
+                    scope = "scenario-settlement-score",
+                    requiredQuery = emptyList(),
+                    optionalQuery = emptyList()
                 )
             )
         )
