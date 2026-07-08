@@ -5,6 +5,7 @@ import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
@@ -171,6 +172,35 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     remainingQuantityUnits = state.remainingQuantityUnits,
                     limitPrice = state.limitPrice,
                     status = state.status
+                )
+            }
+        return if (boundedLimit > 0) views.take(boundedLimit) else views
+    }
+
+    override fun executionsForParticipant(
+        participantId: String,
+        instrumentId: String,
+        limit: Int
+    ): List<OwnExecutionView> {
+        val boundedLimit = limit.coerceIn(0, 500)
+        val participantOrders = orders.values
+            .filter { it.participantId == participantId }
+            .filter { instrumentId.isBlank() || it.instrumentId == instrumentId }
+            .associateBy { it.orderId }
+        val views = executions
+            .filter { participantOrders.containsKey(it.orderId) }
+            .sortedWith(compareBy<ExecutionCreated> { it.occurredAt }.thenBy { it.executionId })
+            .mapNotNull { execution ->
+                val order = participantOrders[execution.orderId] ?: return@mapNotNull null
+                OwnExecutionView(
+                    executionId = execution.executionId,
+                    orderId = execution.orderId,
+                    instrumentId = execution.instrumentId,
+                    side = order.side,
+                    quantityUnits = execution.quantityUnits,
+                    executionPrice = execution.executionPrice,
+                    currency = execution.currency,
+                    occurredAt = execution.occurredAt
                 )
             }
         return if (boundedLimit > 0) views.take(boundedLimit) else views

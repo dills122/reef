@@ -629,6 +629,9 @@ class OrderApplicationService(
     fun ordersForParticipant(participantId: String, openOnly: Boolean, instrumentId: String = "", limit: Int = 0) =
         runtimePersistence.ordersForParticipant(participantId, openOnly, instrumentId, limit)
 
+    fun executionsForParticipant(participantId: String, instrumentId: String = "", limit: Int = 0) =
+        runtimePersistence.executionsForParticipant(participantId, instrumentId, limit)
+
     fun persistedEvents(orderId: String) = runtimePersistence.eventsForOrder(orderId)
 
     fun persistedTraceEvents(traceId: String) = runtimePersistence.eventsForTrace(traceId)

@@ -8,6 +8,7 @@ import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.IntradayBar
 import com.reef.platform.domain.NonLifecycleRejectCodes
+import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
@@ -3528,6 +3529,44 @@ class PostgresRuntimePersistence(
                 remainingQuantityUnits = getString("remaining_quantity_units"),
                 limitPrice = getString("limit_price"),
                 status = getString("status")
+            )
+        }
+    }
+
+    override fun executionsForParticipant(
+        participantId: String,
+        instrumentId: String,
+        limit: Int
+    ): List<OwnExecutionView> {
+        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND e.instrument_id = ?"
+        val boundedLimit = limit.coerceIn(0, 500)
+        val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
+        val params = buildList {
+            add(participantId)
+            if (instrumentId.isNotBlank()) add(instrumentId)
+            if (boundedLimit > 0) add(boundedLimit.toString())
+        }
+        return projectionQueryList(
+            """
+            SELECT e.execution_id, e.order_id, e.instrument_id, o.side, e.quantity_units, e.execution_price, e.currency, e.occurred_at
+            FROM ${names.executions} e
+            JOIN ${names.orders} o ON o.order_id = e.order_id
+            WHERE o.participant_id = ?
+            $instrumentFilter
+            ORDER BY e.occurred_at, e.execution_id
+            $limitClause
+            """.trimIndent(),
+            *params.toTypedArray()
+        ) {
+            OwnExecutionView(
+                executionId = getString("execution_id"),
+                orderId = getString("order_id"),
+                instrumentId = getString("instrument_id"),
+                side = getString("side"),
+                quantityUnits = getString("quantity_units"),
+                executionPrice = getString("execution_price"),
+                currency = getString("currency"),
+                occurredAt = getString("occurred_at")
             )
         }
     }
