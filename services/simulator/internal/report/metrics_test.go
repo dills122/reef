@@ -42,6 +42,17 @@ func TestSummarizeRejectTaxonomy(t *testing.T) {
 	}
 }
 
+func TestSummarizeRejectTaxonomyNonPositiveLimit(t *testing.T) {
+	rows := SummarizeRejectTaxonomy(map[string]int64{"INVALID_STATE": 3}, 5, 4, 0)
+	if rows != nil {
+		t.Fatalf("expected nil rows for zero limit, got %+v", rows)
+	}
+	rows = SummarizeRejectTaxonomy(map[string]int64{"INVALID_STATE": 3}, 5, 4, -1)
+	if rows != nil {
+		t.Fatalf("expected nil rows for negative limit, got %+v", rows)
+	}
+}
+
 func TestTopErrorsSortsByCountThenName(t *testing.T) {
 	rows := TopErrors(map[string]int64{"B_ERR": 2, "A_ERR": 2, "C_ERR": 5}, 10)
 	if len(rows) != 3 {
@@ -62,6 +73,17 @@ func TestTopErrorsAppliesLimit(t *testing.T) {
 	}
 	if rows[0].Error != "C" || rows[1].Error != "B" {
 		t.Fatalf("expected top-2 by count, got %+v", rows)
+	}
+}
+
+func TestTopErrorsNonPositiveLimit(t *testing.T) {
+	rows := TopErrors(map[string]int64{"A": 1}, 0)
+	if rows != nil {
+		t.Fatalf("expected nil rows for zero limit, got %+v", rows)
+	}
+	rows = TopErrors(map[string]int64{"A": 1}, -1)
+	if rows != nil {
+		t.Fatalf("expected nil rows for negative limit, got %+v", rows)
 	}
 }
 

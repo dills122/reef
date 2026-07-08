@@ -73,6 +73,9 @@ func ComputeLatency(values []float64) LatencySummary {
 }
 
 func TopErrors(m map[string]int64, limit int) []ErrorSummary {
+	if limit <= 0 {
+		return nil
+	}
 	out := make([]ErrorSummary, 0, len(m))
 	for k, v := range m {
 		out = append(out, ErrorSummary{Error: k, Count: v})
@@ -90,7 +93,7 @@ func TopErrors(m map[string]int64, limit int) []ErrorSummary {
 }
 
 func SummarizeRejectTaxonomy(rejectCodes map[string]int64, totalFailures int64, totalRejects int64, limit int) []RejectTaxonomySummary {
-	if len(rejectCodes) == 0 {
+	if len(rejectCodes) == 0 || limit <= 0 {
 		return nil
 	}
 	keys := make([]string, 0, len(rejectCodes))

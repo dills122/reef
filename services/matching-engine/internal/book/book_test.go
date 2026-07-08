@@ -106,6 +106,36 @@ func TestBookRestoreRejectsChecksumMismatch(t *testing.T) {
 	}
 }
 
+func TestBookRestoreRejectsDuplicateOrderID(t *testing.T) {
+	snapshot := Snapshot{
+		NextSequence: 2,
+		Buys: []SnapshotOrder{
+			{OrderID: "dup", Side: domain.SideBuy, LimitPrice: 101, Sequence: 0},
+		},
+		Sells: []SnapshotOrder{
+			{OrderID: "dup", Side: domain.SideSell, LimitPrice: 102, Sequence: 1},
+		},
+	}
+
+	if _, ok := Restore(snapshot); ok {
+		t.Fatal("expected duplicate order ID snapshot restore to fail")
+	}
+}
+
+func TestBookRestoreRejectsReusedNextSequence(t *testing.T) {
+	snapshot := Snapshot{
+		NextSequence: 1,
+		Buys: []SnapshotOrder{
+			{OrderID: "b1", Side: domain.SideBuy, LimitPrice: 101, Sequence: 0},
+			{OrderID: "b2", Side: domain.SideBuy, LimitPrice: 100, Sequence: 1},
+		},
+	}
+
+	if _, ok := Restore(snapshot); ok {
+		t.Fatal("expected snapshot restore to fail when next sequence is already used")
+	}
+}
+
 func popIDs(t *testing.T, book *Book, side domain.Side, count int) []string {
 	t.Helper()
 	ids := make([]string, 0, count)

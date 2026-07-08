@@ -17,6 +17,11 @@ type terminalOrderRetention struct {
 	head  int
 }
 
+type terminalOrderRetentionSnapshot struct {
+	order []string
+	head  int
+}
+
 // track records that record just reached a terminal state and, if that
 // pushes the tracked count past limit, calls evict for each order ID that
 // falls out of the retention window (skipping record's own ID, which the
@@ -48,4 +53,20 @@ func (t *terminalOrderRetention) track(record *orderRecord, evict func(orderID s
 		t.order = append([]string(nil), t.order[t.head:]...)
 		t.head = 0
 	}
+}
+
+func (t *terminalOrderRetention) snapshot() terminalOrderRetentionSnapshot {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return terminalOrderRetentionSnapshot{
+		order: append([]string(nil), t.order...),
+		head:  t.head,
+	}
+}
+
+func (t *terminalOrderRetention) restore(snapshot terminalOrderRetentionSnapshot) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.order = append([]string(nil), snapshot.order...)
+	t.head = snapshot.head
 }

@@ -172,4 +172,44 @@ assert.equal(expandedCancelAll.length, 1);
 assert.equal(expandedCancelAll[0].type, "cancel_order");
 assert.equal(expandedCancelAll[0].order.orderId, "open-aapl");
 
+const badSubmitPrice = toVenueCommandRequestsV1(
+  [{ type: "submit_limit", order: { instrumentId: "AAPL", side: "BUY", quantity: 10, limitPrice: Number.NaN } }],
+  {
+    runId: "run-1",
+    venueSessionId: "session-1",
+    actorId: "bot-actor-1",
+    participantId: "participant-1",
+    accountId: "account-1",
+    botId: "simple-market-maker",
+    botVersion: "1.0.0",
+    correlationId: "corr-1",
+    occurredAt: "2026-07-04T14:30:00.000Z",
+    commandIdPrefix: "cmd-simple-mm",
+    traceIdPrefix: "trace-simple-mm",
+    idempotencyKeyPrefix: "idem-simple-mm",
+  },
+);
+assert.equal(badSubmitPrice.ok, false);
+assert.equal(badSubmitPrice.denial.code, "NOT_ALLOWED");
+
+const badModifyPrice = toVenueCommandRequestsV1(
+  [{ type: "modify_order", order: { orderId: "open-aapl", instrumentId: "AAPL", quantity: 10, limitPrice: -1 } }],
+  {
+    runId: "run-1",
+    venueSessionId: "session-1",
+    actorId: "bot-actor-1",
+    participantId: "participant-1",
+    accountId: "account-1",
+    botId: "simple-market-maker",
+    botVersion: "1.0.0",
+    correlationId: "corr-1",
+    occurredAt: "2026-07-04T14:30:00.000Z",
+    commandIdPrefix: "cmd-simple-mm",
+    traceIdPrefix: "trace-simple-mm",
+    idempotencyKeyPrefix: "idem-simple-mm",
+  },
+);
+assert.equal(badModifyPrice.ok, false);
+assert.equal(badModifyPrice.denial.code, "NOT_ALLOWED");
+
 console.log("bot SDK venue adapter smoke checks passed");
