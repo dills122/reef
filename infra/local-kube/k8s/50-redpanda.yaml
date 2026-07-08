@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: reef-local
+spec:
+  selector:
+    app.kubernetes.io/name: redpanda
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: pandaproxy
+      port: 8082
+      targetPort: 8082
+    - name: schema-registry
+      port: 8081
+      targetPort: 8081
+    - name: admin
+      port: 9644
+      targetPort: 9644
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  namespace: reef-local
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redpanda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redpanda
+        app.kubernetes.io/part-of: reef
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redpanda
+          image: redpandadata/redpanda:v26.1.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          args:
+            - redpanda
+            - start
+            - --overprovisioned
+            - --smp
+            - "1"
+            - --memory
+            - 1G
+            - --reserve-memory
+            - 0M
+            - --node-id
+            - "0"
+            - --check=false
+            - --kafka-addr
+            - PLAINTEXT://0.0.0.0:9092
+            - --advertise-kafka-addr
+            - PLAINTEXT://redpanda:9092
+            - --pandaproxy-addr
+            - 0.0.0.0:8082
+            - --advertise-pandaproxy-addr
+            - redpanda:8082
+            - --schema-registry-addr
+            - 0.0.0.0:8081
+          ports:
+            - containerPort: 9092
+              name: kafka
+            - containerPort: 8082
+              name: pandaproxy
+            - containerPort: 8081
+              name: schema-registry
+            - containerPort: 9644
+              name: admin
+          readinessProbe:
+            exec:
+              command: ["rpk", "cluster", "info", "--brokers=localhost:9092"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: ["rpk", "cluster", "info", "--brokers=localhost:9092"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi

@@ -5,3 +5,6 @@ metadata:
   labels:
     app.kubernetes.io/part-of: reef
     reef.openai.local/profile: local-kube
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

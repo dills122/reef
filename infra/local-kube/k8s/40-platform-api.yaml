@@ -30,6 +30,10 @@ spec:
         app.kubernetes.io/name: platform-api
         app.kubernetes.io/part-of: reef
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-primary-postgres
           image: postgres:16-alpine
@@ -63,6 +67,10 @@ spec:
         - name: platform-api
           image: reef-platform-runtime:local-kube
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: PLATFORM_RUNTIME_ROLE
               value: api
@@ -157,12 +165,21 @@ spec:
             - name: RUNTIME_DB_POOL_CONN_TIMEOUT_MS
               value: "2000"
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp
+              value: -XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=70 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp
           ports:
             - containerPort: 8080
               name: http
             - containerPort: 8090
               name: stream-ingress
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+              ephemeral-storage: 1Gi
           readinessProbe:
             httpGet:
               path: /healthz

@@ -43,6 +43,10 @@ spec:
         app.kubernetes.io/name: postgres
         app.kubernetes.io/part-of: reef
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -83,6 +87,15 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -133,6 +146,10 @@ spec:
         app.kubernetes.io/name: projection-postgres
         app.kubernetes.io/part-of: reef
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -173,6 +190,15 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -223,6 +249,10 @@ spec:
         app.kubernetes.io/name: boundary-postgres
         app.kubernetes.io/part-of: reef
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -263,6 +293,15 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 2Gi
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -313,6 +352,10 @@ spec:
         app.kubernetes.io/name: arena-postgres
         app.kubernetes.io/part-of: reef
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -353,6 +396,15 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+              ephemeral-storage: 1Gi
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

@@ -18,8 +18,15 @@ The first slice supports the synchronous API smoke path:
 - matching-engine
 - platform-api
 
-Redpanda, stream-ack workers, projectors, materializers, observability, and
-scaled profiles are follow-up slices.
+The materializer slice additionally supports:
+
+- Redpanda
+- matching-engine direct stream consume/publish
+- platform materializer
+- one platform projector/read API
+
+Stream-ack workers, scaled projectors/materializers, observability, and hosted
+security hardening are follow-up slices.
 
 ## Prerequisites
 
@@ -33,6 +40,9 @@ scaled profiles are follow-up slices.
 ```sh
 make kube-up
 make kube-smoke
+make kube-reset
+make kube-materializer-up
+make kube-smoke-venue-event-materializer
 make kube-status
 make kube-port-forward
 make kube-down
@@ -49,14 +59,44 @@ deployments.
 - `http://127.0.0.1:8080` for `platform-api`
 - `http://127.0.0.1:8081` for `matching-engine`
 
+`make kube-smoke-venue-event-materializer` starts the Redpanda direct-stream
+materializer profile, then reuses the Compose materializer proof with kube
+URLs and `kubectl exec -i` Postgres queries.
+
 ## Useful Environment
 
 ```sh
 JS_RUNTIME=node make kube-up
-KUBE_BUILD_IMAGES=0 make kube-apply
+KUBE_BUILD_IMAGES=0 make kube-up
+KUBE_BUILD_IMAGES=0 KUBE_IMPORT_IMAGES=0 make kube-apply
 KUBE_WAIT_TIMEOUT_SECONDS=600 make kube-up
 REEF_PLATFORM_API_HOST_PORT=18080 REEF_MATCHING_ENGINE_HOST_PORT=18081 make kube-smoke
 ```
+
+Use `KUBE_BUILD_IMAGES=0` to reuse existing local Docker images while still
+importing them into a fresh k3d cluster. Use `KUBE_IMPORT_IMAGES=0` only when
+the cluster already has the desired local image tags.
+
+## Local Resource Notes
+
+The manifests set pod resource requests, limits, ephemeral-storage limits,
+`automountServiceAccountToken: false`, baseline namespace pod security
+enforcement, and compatible container security contexts for app pods. The k3d
+cluster disables its load balancer container, Traefik, and ServiceLB because
+this workflow uses local port-forwards rather than ingress or load balancer
+services.
+
+If pods are repeatedly evicted with `DiskPressure`, inspect Docker VM usage
+before retrying:
+
+```sh
+docker system df
+kubectl --context k3d-reef-local describe node k3d-reef-local-server-0
+```
+
+`docker builder prune` is usually safe for reclaiming build cache. Pruning
+unused Docker volumes can reclaim much more space, but may delete unrelated
+local database or broker data, so keep it a manual operator decision.
 
 ## Scope Guardrails
 

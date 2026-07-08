@@ -62,7 +62,11 @@ setDefault("MARKET_DATA_PROJECTOR_BATCH_SIZE", "1000");
 setDefault("MARKET_DATA_PROJECTOR_POLL_MS", "10");
 
 console.log("starting Redpanda direct-stream materializer smoke stack...");
-await import("./stream-direct-nodb-up.mjs");
+if (env("DEV_VENUE_EVENT_MATERIALIZER_SKIP_STACK_UP", "0") === "1") {
+  console.log("skipping stack startup; using existing materializer smoke stack");
+} else {
+  await import("./stream-direct-nodb-up.mjs");
+}
 
 console.log("waiting for platform-api, matching-engine, materializer, and read projector health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeoutSeconds);
@@ -499,23 +503,48 @@ async function runProjectionPsql(sql) {
 }
 
 async function runPsql(service, sql) {
-  const output = await runCapture("docker", [
-    "compose",
-    "exec",
-    "-T",
-    service,
-    "psql",
-    "-U",
-    env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
-    "-d",
-    env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
-    "-At",
-    "-F",
-    "\t",
-    "-c",
-    sql,
-  ]);
+  const output = env("DEV_VENUE_EVENT_MATERIALIZER_PSQL_RUNNER", "compose") === "kubectl"
+    ? await runCapture("kubectl", [
+      ...kubectlContextArgs(),
+      "-n",
+      env("KUBE_NAMESPACE", "reef-local"),
+      "exec",
+      "-i",
+      `statefulset/${service}`,
+      "--",
+      "psql",
+      "-U",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
+      "-d",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
+      "-At",
+      "-F",
+      "\t",
+      "-c",
+      sql,
+    ])
+    : await runCapture("docker", [
+      "compose",
+      "exec",
+      "-T",
+      service,
+      "psql",
+      "-U",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_USER", "reef"),
+      "-d",
+      env("DEV_VENUE_EVENT_MATERIALIZER_DB_NAME", "reef"),
+      "-At",
+      "-F",
+      "\t",
+      "-c",
+      sql,
+    ]);
   return output;
+}
+
+function kubectlContextArgs() {
+  const context = env("KUBE_CONTEXT", "");
+  return context ? ["--context", context] : [];
 }
 
 async function getJson(url) {

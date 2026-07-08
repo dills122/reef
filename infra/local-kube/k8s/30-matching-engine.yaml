@@ -30,6 +30,10 @@ spec:
         app.kubernetes.io/name: matching-engine
         app.kubernetes.io/part-of: reef
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
@@ -49,6 +53,10 @@ spec:
         - name: matching-engine
           image: reef-matching-engine:local-kube
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: MATCHING_ENGINE_ADDR
               value: ":8081"
@@ -79,6 +87,15 @@ spec:
               name: http
             - containerPort: 9081
               name: grpc
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+              ephemeral-storage: 512Mi
           readinessProbe:
             httpGet:
               path: /health
