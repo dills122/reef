@@ -43,11 +43,14 @@ import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
+import com.reef.platform.application.settlement.SettlementLedgerEntryFact
+import com.reef.platform.application.settlement.SettlementLegOutcomeFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationProjection
 import com.reef.platform.application.settlement.SettlementObligationView
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
+import com.reef.platform.application.settlement.SettlementSettledFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
 import com.reef.platform.infrastructure.config.RuntimeEnv
@@ -3397,6 +3400,9 @@ class PlatformHttpServer(
                     "materializedObligations" to result.materializedObligations,
                     "materializedInstructions" to result.materializedInstructions,
                     "materializedAttempts" to result.materializedAttempts,
+                    "materializedLegOutcomes" to result.materializedLegOutcomes,
+                    "materializedLedgerEntries" to result.materializedLedgerEntries,
+                    "materializedSettlements" to result.materializedSettlements,
                     "skippedTrades" to result.skippedTrades
                 )
             )
@@ -3477,6 +3483,15 @@ class PlatformHttpServer(
             attempts = json.objectDocuments("attempts").map {
                 attemptFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
+            legOutcomes = json.objectDocuments("legOutcomes").map {
+                legOutcomeFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            ledgerEntries = json.objectDocuments("ledgerEntries").map {
+                ledgerEntryFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            settlements = json.objectDocuments("settlements").map {
+                settlementFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
             breaks = json.objectDocuments("breaks").map {
                 breakFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
@@ -3551,6 +3566,75 @@ class PlatformHttpServer(
             causationId = json.string("causationId"),
             instructionType = json.string("instructionType").ifBlank { "DVP" },
             state = json.string("state").ifBlank { "INSTRUCTION_CREATED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun legOutcomeFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementLegOutcomeFact {
+        return SettlementLegOutcomeFact(
+            settlementLegOutcomeId = json.string("settlementLegOutcomeId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            settlementInstructionId = json.string("settlementInstructionId"),
+            settlementAttemptId = json.string("settlementAttemptId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            legType = json.string("legType"),
+            state = json.string("state").ifBlank { "LEG_SUCCEEDED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun ledgerEntryFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementLedgerEntryFact {
+        return SettlementLedgerEntryFact(
+            ledgerEntryId = json.string("ledgerEntryId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            settlementInstructionId = json.string("settlementInstructionId"),
+            settlementAttemptId = json.string("settlementAttemptId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            participantId = json.string("participantId"),
+            accountId = json.string("accountId"),
+            assetType = json.string("assetType"),
+            assetId = json.string("assetId"),
+            direction = json.string("direction"),
+            quantity = json.string("quantity"),
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun settlementFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementSettledFact {
+        return SettlementSettledFact(
+            settlementId = json.string("settlementId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            settlementInstructionId = json.string("settlementInstructionId"),
+            settlementAttemptId = json.string("settlementAttemptId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            settlementState = json.string("settlementState").ifBlank { "SETTLED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
     }
@@ -3686,6 +3770,57 @@ class PlatformHttpServer(
                     "occurredAt" to it.occurredAt.toString()
                 )
             },
+            "legOutcomes" to facts.legOutcomes.map {
+                mapOf(
+                    "settlementLegOutcomeId" to it.settlementLegOutcomeId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "settlementInstructionId" to it.settlementInstructionId,
+                    "settlementAttemptId" to it.settlementAttemptId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "legType" to it.legType,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "ledgerEntries" to facts.ledgerEntries.map {
+                mapOf(
+                    "ledgerEntryId" to it.ledgerEntryId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "settlementInstructionId" to it.settlementInstructionId,
+                    "settlementAttemptId" to it.settlementAttemptId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "participantId" to it.participantId,
+                    "accountId" to it.accountId,
+                    "assetType" to it.assetType,
+                    "assetId" to it.assetId,
+                    "direction" to it.direction,
+                    "quantity" to it.quantity,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "settlements" to facts.settlements.map {
+                mapOf(
+                    "settlementId" to it.settlementId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "settlementInstructionId" to it.settlementInstructionId,
+                    "settlementAttemptId" to it.settlementAttemptId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "settlementState" to it.settlementState,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "breaks" to facts.breaks.map {
                 mapOf(
                     "settlementBreakId" to it.settlementBreakId,
@@ -3758,6 +3893,10 @@ class PlatformHttpServer(
             "settlementInstructionId" to view.settlementInstructionId,
             "settlementAttemptId" to view.settlementAttemptId,
             "settlementAttemptNumber" to view.settlementAttemptNumber,
+            "settlementId" to view.settlementId,
+            "cashLegState" to view.cashLegState,
+            "securityLegState" to view.securityLegState,
+            "ledgerEntryCount" to view.ledgerEntryCount,
             "settlementBreakId" to view.settlementBreakId,
             "settlementRepairId" to view.settlementRepairId,
             "settlementResolutionId" to view.settlementResolutionId,

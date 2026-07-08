@@ -40,6 +40,9 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals(1, result.materializedObligations)
         assertEquals(1, result.materializedInstructions)
         assertEquals(1, result.materializedAttempts)
+        assertEquals(2, result.materializedLegOutcomes)
+        assertEquals(4, result.materializedLedgerEntries)
+        assertEquals(1, result.materializedSettlements)
         assertEquals(0, result.skippedTrades)
         assertEquals("settlement-obligation-trade-1", obligation.settlementObligationId)
         assertEquals("scenario-instant-v1", obligation.postTradeProfileId)
@@ -52,6 +55,17 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals("settlement-attempt-settlement-obligation-trade-1-1", facts.attempts.single().settlementAttemptId)
         assertEquals("settlement-obligation-trade-1", facts.attempts.single().settlementObligationId)
         assertEquals(facts.instructions.single().settlementInstructionId, facts.attempts.single().settlementInstructionId)
+        assertEquals(setOf(SettlementLegTypeCash, SettlementLegTypeSecurity), facts.legOutcomes.map { it.legType }.toSet())
+        assertEquals(
+            setOf(
+                "settlement-ledger-settlement-attempt-settlement-obligation-trade-1-1-buyer-cash-debit",
+                "settlement-ledger-settlement-attempt-settlement-obligation-trade-1-1-seller-cash-credit",
+                "settlement-ledger-settlement-attempt-settlement-obligation-trade-1-1-seller-security-debit",
+                "settlement-ledger-settlement-attempt-settlement-obligation-trade-1-1-buyer-security-credit"
+            ),
+            facts.ledgerEntries.map { it.ledgerEntryId }.toSet()
+        )
+        assertEquals("settlement-final-settlement-obligation-trade-1", facts.settlements.single().settlementId)
     }
 
     @Test
@@ -82,6 +96,9 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals(6, obligation.postTradePolicyVersion)
         assertEquals(1, facts.instructions.size)
         assertEquals(1, facts.attempts.size)
+        assertEquals(2, facts.legOutcomes.size)
+        assertEquals(4, facts.ledgerEntries.size)
+        assertEquals(1, facts.settlements.size)
     }
 
     @Test
@@ -98,9 +115,15 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals(1, result.materializedObligations)
         assertEquals(0, result.materializedInstructions)
         assertEquals(0, result.materializedAttempts)
+        assertEquals(0, result.materializedLegOutcomes)
+        assertEquals(0, result.materializedLedgerEntries)
+        assertEquals(0, result.materializedSettlements)
         assertEquals(DefaultPostTradeProfileId, facts.obligations.single().postTradeProfileId)
         assertEquals(emptyList(), facts.instructions)
         assertEquals(emptyList(), facts.attempts)
+        assertEquals(emptyList(), facts.legOutcomes)
+        assertEquals(emptyList(), facts.ledgerEntries)
+        assertEquals(emptyList(), facts.settlements)
     }
 
     @Test
@@ -122,8 +145,12 @@ class TradeSettlementObligationMaterializerTest {
 
         assertEquals(1, result.materializedInstructions)
         assertEquals(1, result.materializedAttempts)
+        assertEquals(2, result.materializedLegOutcomes)
+        assertEquals(4, result.materializedLedgerEntries)
+        assertEquals(1, result.materializedSettlements)
         assertEquals("instant-post-trade-v1", facts.instructions.single().postTradeProfileId)
         assertEquals("instant-post-trade-v1", facts.attempts.single().postTradeProfileId)
+        assertEquals("instant-post-trade-v1", facts.settlements.single().postTradeProfileId)
         assertEquals(4, facts.attempts.single().postTradePolicyVersion)
     }
 

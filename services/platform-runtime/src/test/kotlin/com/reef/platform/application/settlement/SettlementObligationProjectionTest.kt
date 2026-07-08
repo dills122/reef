@@ -23,6 +23,10 @@ class SettlementObligationProjectionTest {
         assertEquals("", view.settlementInstructionId)
         assertEquals("", view.settlementAttemptId)
         assertEquals(0, view.settlementAttemptNumber)
+        assertEquals("", view.settlementId)
+        assertEquals("", view.cashLegState)
+        assertEquals("", view.securityLegState)
+        assertEquals(0, view.ledgerEntryCount)
         assertEquals("break-1", view.settlementBreakId)
         assertEquals("repair-1", view.settlementRepairId)
         assertEquals("resolution-1", view.settlementResolutionId)
@@ -43,6 +47,7 @@ class SettlementObligationProjectionTest {
         assertEquals("", view.settlementInstructionId)
         assertEquals("", view.settlementAttemptId)
         assertEquals(0, view.settlementAttemptNumber)
+        assertEquals("", view.settlementId)
         assertEquals("", view.settlementBreakId)
     }
 
@@ -62,7 +67,36 @@ class SettlementObligationProjectionTest {
         assertEquals("instruction-1", view.settlementInstructionId)
         assertEquals("attempt-1", view.settlementAttemptId)
         assertEquals(1, view.settlementAttemptNumber)
+        assertEquals("", view.settlementId)
         assertEquals(Instant.parse("2026-01-01T00:00:01Z"), view.updatedAt)
+    }
+
+    @Test
+    fun projectsSettledStateOnlyFromFinalityProof() {
+        val view = SettlementObligationProjection.project(
+            SettlementFactBundle(
+                scenarioRunId = "run-1",
+                obligations = listOf(obligation()),
+                instructions = listOf(instructionCreated()),
+                attempts = listOf(attemptStarted()),
+                legOutcomes = listOf(legOutcome("cash-leg-1", SettlementLegTypeCash), legOutcome("security-leg-1", SettlementLegTypeSecurity)),
+                ledgerEntries = listOf(
+                    ledgerEntry("ledger-buyer-cash-debit", SettlementLedgerEntryTypeCash, SettlementLedgerDirectionDebit),
+                    ledgerEntry("ledger-seller-cash-credit", SettlementLedgerEntryTypeCash, SettlementLedgerDirectionCredit),
+                    ledgerEntry("ledger-seller-security-debit", SettlementLedgerEntryTypeSecurity, SettlementLedgerDirectionDebit),
+                    ledgerEntry("ledger-buyer-security-credit", SettlementLedgerEntryTypeSecurity, SettlementLedgerDirectionCredit)
+                ),
+                settlements = listOf(settled())
+            )
+        ).single()
+
+        assertEquals("SETTLED", view.settlementState)
+        assertEquals("NONE", view.exceptionState)
+        assertEquals("settlement-1", view.settlementId)
+        assertEquals("LEG_SUCCEEDED", view.cashLegState)
+        assertEquals("LEG_SUCCEEDED", view.securityLegState)
+        assertEquals(4, view.ledgerEntryCount)
+        assertEquals(Instant.parse("2026-01-01T00:00:02Z"), view.updatedAt)
     }
 
     @Test
@@ -125,6 +159,58 @@ class SettlementObligationProjectionTest {
             correlationId = "corr-1",
             causationId = "obl-1",
             occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun legOutcome(id: String, legType: String): SettlementLegOutcomeFact {
+        return SettlementLegOutcomeFact(
+            settlementLegOutcomeId = id,
+            settlementObligationId = "obl-1",
+            settlementInstructionId = "instruction-1",
+            settlementAttemptId = "attempt-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "attempt-1",
+            legType = legType,
+            occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun ledgerEntry(id: String, assetType: String, direction: String): SettlementLedgerEntryFact {
+        return SettlementLedgerEntryFact(
+            ledgerEntryId = id,
+            settlementObligationId = "obl-1",
+            settlementInstructionId = "instruction-1",
+            settlementAttemptId = "attempt-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "attempt-1",
+            participantId = "participant-1",
+            accountId = "account-1",
+            assetType = assetType,
+            assetId = if (assetType == SettlementLedgerEntryTypeCash) "USD" else "AAPL",
+            direction = direction,
+            quantity = "100",
+            occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+        )
+    }
+
+    private fun settled(): SettlementSettledFact {
+        return SettlementSettledFact(
+            settlementId = "settlement-1",
+            settlementObligationId = "obl-1",
+            settlementInstructionId = "instruction-1",
+            settlementAttemptId = "attempt-1",
+            scenarioRunId = "run-1",
+            postTradeProfileId = "instant-post-trade-v1",
+            postTradePolicyVersion = 2,
+            correlationId = "corr-1",
+            causationId = "attempt-1",
+            occurredAt = Instant.parse("2026-01-01T00:00:02Z")
         )
     }
 
