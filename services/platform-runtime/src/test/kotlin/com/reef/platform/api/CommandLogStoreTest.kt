@@ -465,6 +465,57 @@ class PostgresCommandLogStoreIntegrationTest {
         recoveredStore.markCompleted(record.commandId, 200, """{"accepted":true}""")
     }
 
+    @Test
+    fun postgresStoreArchivesOldTerminalResultsAndKeepsExactStatusLookupWhenConfigured() {
+        val store = postgresStoreOrNull(bootstrapMode = PostgresBootstrapMode.Compat) ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(
+            commandId = "cmd-archive-terminal-$suffix",
+            idempotencyKey = "idem-archive-terminal-$suffix"
+        ).copy(runId = "run-archive-terminal-$suffix")
+        val completedAt = Instant.parse("1799-01-01T00:00:00Z")
+
+        assertTrue(store.append(record).appended)
+        store.markProcessing(record.commandId)
+        store.markCompleted(record.commandId, 200, """{"accepted":true}""")
+        forceCompletedAt(record.commandId, completedAt) ?: return
+
+        val archived = store.archiveTerminalResults(Instant.parse("1800-01-01T00:00:00Z"), 100)
+        val byCommandId = store.findByCommandId(record.commandId)
+        val byIdempotency = store.findByIdempotency(record.clientId, record.route, record.idempotencyKey)
+        val accounting = store.accountingSnapshot(record.runId)
+
+        assertTrue(archived.archivedCount >= 1L)
+        assertFalse(liveResultExists(record.commandId) ?: return)
+        assertEquals(1L, archivedResultCount(record.commandId) ?: return)
+        assertEquals(CommandLogStatus.COMPLETED, byCommandId?.status)
+        assertEquals(CommandLogStatus.COMPLETED, byIdempotency?.status)
+        assertEquals(1L, accounting.terminal)
+        assertEquals(0L, accounting.accountingGap)
+    }
+
+    @Test
+    fun postgresStoreDoesNotArchivePinnedTerminalResultsWhenConfigured() {
+        val store = postgresStoreOrNull(bootstrapMode = PostgresBootstrapMode.Compat) ?: return
+        val suffix = UUID.randomUUID().toString()
+        val record = commandLogRecord(
+            commandId = "cmd-archive-pinned-$suffix",
+            idempotencyKey = "idem-archive-pinned-$suffix"
+        )
+
+        assertTrue(store.append(record).appended)
+        store.markProcessing(record.commandId)
+        store.markCompleted(record.commandId, 200, """{"accepted":true}""")
+        forceCompletedAt(record.commandId, Instant.parse("1799-01-01T00:00:00Z")) ?: return
+        insertRetentionPin(record.commandId) ?: return
+
+        store.archiveTerminalResults(Instant.parse("1800-01-01T00:00:00Z"), 100)
+
+        assertTrue(liveResultExists(record.commandId) ?: return)
+        assertEquals(0L, archivedResultCount(record.commandId) ?: return)
+        assertEquals(CommandLogStatus.COMPLETED, store.findByCommandId(record.commandId)?.status)
+    }
+
     private fun postgresStoreOrNull(
         appendMode: PostgresCommandLogAppendMode = PostgresCommandLogAppendMode.Inline,
         payloadMode: PostgresCommandLogPayloadMode = PostgresCommandLogPayloadMode.SideTable,
@@ -509,6 +560,90 @@ class PostgresCommandLogStoreIntegrationTest {
                         commandRowPayloadJson = rs.getString("command_payload_json"),
                         payloadRowPayloadJson = rs.getString("payload_row_payload_json")
                     )
+                }
+            }
+        }
+    }
+
+    private fun forceCompletedAt(commandId: String, completedAt: Instant): Boolean? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE command_log.command_results
+                SET completed_at = ?::timestamptz
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, completedAt.toString())
+                ps.setString(2, commandId)
+                ps.executeUpdate()
+            }
+        }
+        return true
+    }
+
+    private fun insertRetentionPin(commandId: String): Boolean? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO command_log.retention_pins(pin_id, selector_type, selector_value, reason)
+                VALUES (?, 'command_id', ?, 'archive integration test')
+                ON CONFLICT (selector_type, selector_value) DO NOTHING
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, "pin-${UUID.randomUUID()}")
+                ps.setString(2, commandId)
+                ps.executeUpdate()
+            }
+        }
+        return true
+    }
+
+    private fun liveResultExists(commandId: String): Boolean? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT EXISTS (
+                  SELECT 1
+                  FROM command_log.command_results
+                  WHERE command_id = ?
+                ) AS result_exists
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return rs.getBoolean("result_exists")
+                }
+            }
+        }
+    }
+
+    private fun archivedResultCount(commandId: String): Long? {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return null
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return null
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return null
+        DriverManager.getConnection(jdbcUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT COUNT(*) AS result_count
+                FROM command_log.command_results_archive
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return rs.getLong("result_count")
                 }
             }
         }

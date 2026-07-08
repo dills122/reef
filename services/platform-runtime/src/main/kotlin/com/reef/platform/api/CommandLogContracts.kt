@@ -57,6 +57,12 @@ data class CommandTerminalUpdate(
     val errorMessage: String = ""
 )
 
+data class CommandResultsArchiveResult(
+    val candidateCount: Long,
+    val archivedCount: Long,
+    val deletedLiveCount: Long
+)
+
 interface CommandLogStore {
     fun append(record: CommandLogRecord): CommandLogAppendResult
     fun findByCommandId(commandId: String): CommandLogRecord?

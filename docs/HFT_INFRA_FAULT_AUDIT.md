@@ -136,7 +136,8 @@ Target:
 - Keep active queue tables small and derived.
 
 Progress:
-- `command_log.command_results_archive` now provides the first partitioned terminal-history target keyed by `completed_at`; archive movement and partition-drop automation are still pending.
+- `command_log.command_results_archive` now provides the first partitioned terminal-history target keyed by `completed_at`.
+- `PostgresCommandLogStore.archiveTerminalResults(...)` moves bounded unpinned batches from live results to archive while preserving exact status lookup/accounting; operator scheduling and partition-drop automation are still pending.
 
 ## Immediate Work Plan
 
