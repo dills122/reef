@@ -141,7 +141,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0029_typed_runtime_event_facts.sql",
                     "runtime/0030_typed_submit_result_facts.sql",
                     "runtime/0031_typed_execution_trade_facts.sql",
-                    "runtime/0032_typed_order_facts.sql"
+                    "runtime/0032_typed_order_facts.sql",
+                    "runtime/0033_typed_canonical_time_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -507,6 +508,41 @@ class PostgresSchemaMigrationIntegrationTest {
                     "venue_session_id:text"
                 ),
                 orderColumns
+            )
+
+            val canonicalTypedTimeColumns = conn.prepareStatement(
+                """
+                SELECT table_name || '.' || column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND (
+                    (table_name = 'canonical_command_results' AND column_name IN (
+                      'accepted_at_ts',
+                      'completed_at_ts'
+                    ))
+                    OR (table_name = 'canonical_venue_events' AND column_name = 'emitted_at_ts')
+                    OR (table_name = 'canonical_venue_event_batches' AND column_name = 'created_at_ts')
+                    OR (table_name = 'canonical_command_outcomes' AND column_name = 'occurred_at_ts')
+                  )
+                ORDER BY table_name, column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "canonical_command_outcomes.occurred_at_ts:timestamp with time zone",
+                    "canonical_command_results.accepted_at_ts:timestamp with time zone",
+                    "canonical_command_results.completed_at_ts:timestamp with time zone",
+                    "canonical_venue_event_batches.created_at_ts:timestamp with time zone",
+                    "canonical_venue_events.emitted_at_ts:timestamp with time zone"
+                ),
+                canonicalTypedTimeColumns
             )
 
             val topOfBookColumns = conn.prepareStatement(

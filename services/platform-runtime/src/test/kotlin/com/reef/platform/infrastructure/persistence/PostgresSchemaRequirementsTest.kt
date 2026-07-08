@@ -127,7 +127,9 @@ class PostgresSchemaRequirementsTest {
                 "runtime.canonical_command_results.command_id:text",
                 "runtime.canonical_command_results.partition_seq:bigint",
                 "runtime.canonical_command_results.stream_seq:bigint",
-                "runtime.canonical_command_results.result_payload:jsonb"
+                "runtime.canonical_command_results.result_payload:jsonb",
+                "runtime.canonical_command_results.accepted_at_ts:timestamp with time zone",
+                "runtime.canonical_command_results.completed_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_command_results" }
@@ -138,7 +140,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.canonical_venue_events.event_id:text",
                 "runtime.canonical_venue_events.event_seq:bigint",
-                "runtime.canonical_venue_events.payload:jsonb"
+                "runtime.canonical_venue_events.payload:jsonb",
+                "runtime.canonical_venue_events.emitted_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_venue_events" }
@@ -149,7 +152,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.canonical_venue_event_batches.batch_id:text",
                 "runtime.canonical_venue_event_batches.payload_checksum:text",
-                "runtime.canonical_venue_event_batches.payload_json:jsonb"
+                "runtime.canonical_venue_event_batches.payload_json:jsonb",
+                "runtime.canonical_venue_event_batches.created_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_venue_event_batches" }
@@ -160,7 +164,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.canonical_command_outcomes.command_id:text",
                 "runtime.canonical_command_outcomes.stream_sequence:bigint",
-                "runtime.canonical_command_outcomes.result_payload:jsonb"
+                "runtime.canonical_command_outcomes.result_payload:jsonb",
+                "runtime.canonical_command_outcomes.occurred_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_command_outcomes" }

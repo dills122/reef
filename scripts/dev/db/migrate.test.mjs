@@ -47,6 +47,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0030_typed_submit_result_facts.sql",
       "runtime/0031_typed_execution_trade_facts.sql",
       "runtime/0032_typed_order_facts.sql",
+      "runtime/0033_typed_canonical_time_facts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -167,6 +168,21 @@ test("typed order migration adds native order facts", async () => {
   assert.match(migration.sql, /CREATE TRIGGER orders_set_typed_facts/);
   assert.match(migration.sql, /idx_orders_participant_client_order_accepted_typed/);
   assert.match(migration.sql, /idx_orders_accepted_typed/);
+});
+
+test("typed canonical time migration adds native audit timestamps", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0033_typed_canonical_time_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.canonical_command_results/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS accepted_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS completed_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS emitted_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS created_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /CREATE TRIGGER canonical_command_outcomes_set_typed_facts/);
+  assert.match(migration.sql, /idx_canonical_command_outcomes_occurred_typed/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

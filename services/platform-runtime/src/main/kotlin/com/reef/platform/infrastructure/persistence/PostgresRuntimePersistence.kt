@@ -505,8 +505,17 @@ class PostgresRuntimePersistence(
                       engine_shard_id TEXT NOT NULL,
                       result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      accepted_at_ts TIMESTAMPTZ,
+                      completed_at_ts TIMESTAMPTZ,
                       UNIQUE (stream_name, stream_seq)
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.canonicalCommandResults}
+                    ADD COLUMN IF NOT EXISTS accepted_at_ts TIMESTAMPTZ,
+                    ADD COLUMN IF NOT EXISTS completed_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -525,6 +534,13 @@ class PostgresRuntimePersistence(
                 }
                 stmt.execute(
                     """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_results_completed_typed
+                    ON ${names.canonicalCommandResults}(completed_at_ts, partition_id, partition_seq)
+                    WHERE completed_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEvents} (
                       event_id TEXT PRIMARY KEY,
                       run_id TEXT NOT NULL,
@@ -540,8 +556,15 @@ class PostgresRuntimePersistence(
                       deterministic_event_index INTEGER NOT NULL,
                       payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                       emitted_at TEXT NOT NULL,
-                      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      emitted_at_ts TIMESTAMPTZ
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.canonicalVenueEvents}
+                    ADD COLUMN IF NOT EXISTS emitted_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 if (streamAckCanonicalEventRowsEnabled && streamAckCanonicalQueryIndexesEnabled) {
@@ -560,6 +583,13 @@ class PostgresRuntimePersistence(
                 }
                 stmt.execute(
                     """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_events_emitted_typed
+                    ON ${names.canonicalVenueEvents}(emitted_at_ts, partition_id, event_seq)
+                    WHERE emitted_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEventBatches} (
                       batch_id TEXT NOT NULL,
                       shard_id TEXT NOT NULL,
@@ -575,9 +605,16 @@ class PostgresRuntimePersistence(
                       payload_json JSONB NOT NULL,
                       created_at TEXT NOT NULL,
                       materialized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      created_at_ts TIMESTAMPTZ,
                       UNIQUE (event_stream, batch_id),
                       UNIQUE (event_stream, partition_id, first_sequence, last_sequence)
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.canonicalVenueEventBatches}
+                    ADD COLUMN IF NOT EXISTS created_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -590,6 +627,13 @@ class PostgresRuntimePersistence(
                     """
                     CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_payload_json_gin
                     ON ${names.canonicalVenueEventBatches} USING GIN (payload_json jsonb_path_ops)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_created_typed
+                    ON ${names.canonicalVenueEventBatches}(created_at_ts, event_stream, batch_id)
+                    WHERE created_at_ts IS NOT NULL
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -611,8 +655,15 @@ class PostgresRuntimePersistence(
                       reject_code TEXT NOT NULL,
                       result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
                       materialized_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      occurred_at_ts TIMESTAMPTZ,
                       UNIQUE (event_stream, batch_id, stream_sequence)
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.canonicalCommandOutcomes}
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -625,6 +676,13 @@ class PostgresRuntimePersistence(
                     """
                     CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_partition_seq
                     ON ${names.canonicalCommandOutcomes}(partition_id, stream_sequence)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_occurred_typed
+                    ON ${names.canonicalCommandOutcomes}(occurred_at_ts, partition_id, stream_sequence)
+                    WHERE occurred_at_ts IS NOT NULL
                     """.trimIndent()
                 )
                 stmt.execute(
