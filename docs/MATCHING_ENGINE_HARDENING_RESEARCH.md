@@ -103,7 +103,7 @@ Gaps before calling it production-ready:
 - explicit session state gates exist behind service options
 - engine-level max quantity, max notional, and price collar controls exist behind service options
 - local `json.gz` snapshot file round trip exists with versioned metadata; stream offset metadata remains pending
-- no formal lifecycle conformance matrix
+- lifecycle conformance matrix covers terminal rejects and no-mutation guarantees
 - per-instrument matching algorithm profile exists for `FIFO`; non-FIFO algorithms remain unsupported
 - unit-level snapshot ownership handoff proof exists; live drain/fencing proof remains pending
 - engine-local book stats expose order counts, price-level counts, and checksum through an internal HTTP endpoint
