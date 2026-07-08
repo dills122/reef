@@ -99,7 +99,7 @@ Gaps before calling it production-ready:
 
 - no self-trade prevention
 - no explicit session state gates
-- no engine-level price collar, max quantity, or notional controls
+- engine-level max quantity, max notional, and price collar controls exist behind service options
 - no implemented snapshot/replay/checksum recovery proof
 - no formal lifecycle conformance matrix
 - no per-instrument matching algorithm profile
@@ -200,10 +200,10 @@ Goal:
 
 Acceptance:
 
-- max order quantity
-- optional max notional
-- optional price collar around configured reference price
-- stable reject codes and no book mutation on rejects
+- max order quantity exists behind `WithOrderControls`
+- optional max notional exists behind `WithOrderControls`
+- optional price collar around configured reference price exists behind `WithOrderControls`
+- stable reject codes and no book mutation on rejects are tested
 
 ### 7. Golden Replay Corpus
 

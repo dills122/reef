@@ -550,6 +550,61 @@ func TestSubmitOrderRejectsDuplicateOrderIDWithoutMutatingBook(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderRejectsMarketIntegrityControlBreaches(t *testing.T) {
+	service := NewService(WithOrderControls(OrderControls{
+		MaxQuantityUnits: 100,
+		MaxNotional:      15_100_000_000_000,
+		PriceCollars: map[string]PriceCollar{
+			"AAPL": {ReferencePrice: 150_000_000_000, BandBps: 100},
+		},
+	}))
+
+	tests := []domain.SubmitOrder{
+		{
+			OrderID:       "ord-too-large",
+			InstrumentID:  "AAPL",
+			Side:          domain.SideBuy,
+			QuantityUnits: "101",
+			LimitPrice:    "150000000000",
+			Currency:      "USD",
+		},
+		{
+			OrderID:       "ord-too-much-notional",
+			InstrumentID:  "AAPL",
+			Side:          domain.SideBuy,
+			QuantityUnits: "100",
+			LimitPrice:    "152000000000",
+			Currency:      "USD",
+		},
+		{
+			OrderID:       "ord-outside-collar",
+			InstrumentID:  "AAPL",
+			Side:          domain.SideSell,
+			QuantityUnits: "50",
+			LimitPrice:    "153000000000",
+			Currency:      "USD",
+		},
+	}
+
+	for _, cmd := range tests {
+		t.Run(cmd.OrderID, func(t *testing.T) {
+			result := service.SubmitOrder(cmd)
+			if result.Rejected == nil {
+				t.Fatalf("expected market integrity rejection, got %#v", result)
+			}
+			if result.Rejected.Code != "MARKET_INTEGRITY_CONTROL" {
+				t.Fatalf("expected market integrity code, got %#v", result.Rejected)
+			}
+			if _, ok := service.OrderState(cmd.OrderID); ok {
+				t.Fatalf("expected rejected order %s to avoid order state", cmd.OrderID)
+			}
+		})
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 || service.RestingOrders("AAPL", domain.SideSell) != 0 {
+		t.Fatalf("expected rejected market-control orders to avoid book mutation")
+	}
+}
+
 func TestCancelOrderRemovesRestingOrder(t *testing.T) {
 	service := NewService()
 	service.SubmitOrder(domain.SubmitOrder{
@@ -912,6 +967,37 @@ func TestModifyOrderRejectsQuantityAtOrBelowAlreadyFilled(t *testing.T) {
 	}
 }
 
+func TestModifyOrderRejectsMarketIntegrityControlWithoutMutation(t *testing.T) {
+	service := NewService(WithOrderControls(OrderControls{
+		MaxQuantityUnits: 120,
+		MaxNotional:      20_000_000_000_000,
+		PriceCollars: map[string]PriceCollar{
+			"AAPL": {ReferencePrice: 150_000_000_000, BandBps: 100},
+		},
+	}))
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+
+	result := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "121",
+		LimitPrice:    "150250000000",
+	})
+	if result.Rejected == nil {
+		t.Fatalf("expected market integrity rejection, got %#v", result)
+	}
+	if result.Rejected.Code != "MARKET_INTEGRITY_CONTROL" {
+		t.Fatalf("expected market integrity code, got %#v", result.Rejected)
+	}
+
+	state, ok := service.OrderState("ord-buy-1")
+	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" || state.LimitPrice != "150250000000" {
+		t.Fatalf("expected original order state to remain unchanged, got %#v", state)
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected original buy liquidity to remain")
+	}
+}
+
 func TestModifyOrderRejectsTerminalOrderWithoutChangingState(t *testing.T) {
 	service := NewService()
 	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150250000000")
@@ -1180,6 +1266,21 @@ func TestEnvInt(t *testing.T) {
 	os.Setenv(name, "not-a-number")
 	if got := envInt(name, 5); got != 5 {
 		t.Errorf("envInt invalid fallback = %d, want 5", got)
+	}
+}
+
+func TestMarketIntegrityHelpers(t *testing.T) {
+	if !exceedsNotional(10, 11, 100) {
+		t.Fatal("expected notional over max to be detected")
+	}
+	if exceedsNotional(10, 10, 100) {
+		t.Fatal("expected notional at max to pass")
+	}
+	if !priceWithinCollar(101, PriceCollar{ReferencePrice: 100, BandBps: 100}) {
+		t.Fatal("expected price inside one-percent collar")
+	}
+	if priceWithinCollar(102, PriceCollar{ReferencePrice: 100, BandBps: 100}) {
+		t.Fatal("expected price outside one-percent collar")
 	}
 }
 

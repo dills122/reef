@@ -17,6 +17,7 @@ type Service struct {
 	ordersMu          sync.RWMutex
 	orders            map[string]*orderRecord
 	now               func() time.Time
+	orderControls     OrderControls
 	terminalRetention terminalOrderRetention
 }
 
@@ -40,6 +41,17 @@ type orderRecord struct {
 	terminalTracked   bool
 }
 
+type OrderControls struct {
+	MaxQuantityUnits int64
+	MaxNotional      int64
+	PriceCollars     map[string]PriceCollar
+}
+
+type PriceCollar struct {
+	ReferencePrice int64
+	BandBps        int64
+}
+
 type Option func(*Service)
 
 func WithClock(clock func() time.Time) Option {
@@ -55,6 +67,12 @@ func WithTerminalOrderRetentionLimit(limit int) Option {
 		if limit > 0 {
 			s.terminalRetention.limit = limit
 		}
+	}
+}
+
+func WithOrderControls(controls OrderControls) Option {
+	return func(s *Service) {
+		s.orderControls = controls
 	}
 }
 
@@ -101,6 +119,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	limitPrice, ok := parsePositiveInt(cmd.LimitPrice)
 	if !ok {
 		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
+	}
+	if rejection := s.validateOrderControls(cmd.OrderID, cmd.InstrumentID, quantityUnits, limitPrice, now); rejection != nil {
+		return *rejection
 	}
 
 	result := acceptedResult("accepted", cmd.OrderID, now)
@@ -198,6 +219,9 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	if !ok {
 		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
 	}
+	if rejection := s.validateOrderControls(cmd.OrderID, record.InstrumentID, quantityUnits, limitPrice, now); rejection != nil {
+		return *rejection
+	}
 
 	alreadyFilled := record.OriginalQuantity - record.RemainingQuantity
 	if quantityUnits <= alreadyFilled {
@@ -240,6 +264,22 @@ func (s *Service) nowFormatted() string {
 		return time.Now().UTC().Format(time.RFC3339)
 	}
 	return s.now().UTC().Format(time.RFC3339)
+}
+
+func (s *Service) validateOrderControls(orderID string, instrumentID string, quantityUnits int64, limitPrice int64, occurredAt string) *domain.SubmitOrderResult {
+	if s.orderControls.MaxQuantityUnits > 0 && quantityUnits > s.orderControls.MaxQuantityUnits {
+		result := rejectedResult("evt-reject-max-quantity-"+orderID, orderID, "MARKET_INTEGRITY_CONTROL", "quantityUnits exceeds configured maximum", occurredAt)
+		return &result
+	}
+	if s.orderControls.MaxNotional > 0 && exceedsNotional(quantityUnits, limitPrice, s.orderControls.MaxNotional) {
+		result := rejectedResult("evt-reject-max-notional-"+orderID, orderID, "MARKET_INTEGRITY_CONTROL", "order notional exceeds configured maximum", occurredAt)
+		return &result
+	}
+	if collar, ok := s.orderControls.PriceCollars[instrumentID]; ok && !priceWithinCollar(limitPrice, collar) {
+		result := rejectedResult("evt-reject-price-collar-"+orderID, orderID, "MARKET_INTEGRITY_CONTROL", "limitPrice is outside configured price collar", occurredAt)
+		return &result
+	}
+	return nil
 }
 
 // validOccurredAt reports whether a caller-supplied occurredAt is either
@@ -535,6 +575,21 @@ func minInt64(a int64, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func exceedsNotional(quantityUnits int64, limitPrice int64, maxNotional int64) bool {
+	if quantityUnits <= 0 || limitPrice <= 0 || maxNotional <= 0 {
+		return false
+	}
+	return limitPrice > maxNotional/quantityUnits
+}
+
+func priceWithinCollar(limitPrice int64, collar PriceCollar) bool {
+	if collar.ReferencePrice <= 0 || collar.BandBps < 0 {
+		return true
+	}
+	band := (collar.ReferencePrice * collar.BandBps) / 10000
+	return limitPrice >= collar.ReferencePrice-band && limitPrice <= collar.ReferencePrice+band
 }
 
 func newOrderBook() *orderBook {
