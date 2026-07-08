@@ -1,0 +1,179 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-api
+  namespace: reef-local
+spec:
+  selector:
+    app.kubernetes.io/name: platform-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: stream-ingress
+      port: 8090
+      targetPort: 8090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-api
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-api
+        app.kubernetes.io/part-of: reef
+    spec:
+      initContainers:
+        - name: wait-for-primary-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-boundary-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h boundary-postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-projection-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-arena-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h arena-postgres -U reef -d reef; do sleep 2; done
+      containers:
+        - name: platform-api
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: api
+            - name: PLATFORM_RUNTIME_PORT
+              value: "8080"
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-api
+            - name: ENGINE_TRANSPORT
+              value: grpc
+            - name: MATCHING_ENGINE_BASE_URL
+              value: http://matching-engine:8081
+            - name: MATCHING_ENGINE_GRPC_TARGET
+              value: matching-engine:9081
+            - name: ENGINE_GRPC_DEADLINE_MS
+              value: "2000"
+            - name: ENGINE_GRPC_STREAM_LANES
+              value: "16"
+            - name: ENGINE_GRPC_STREAM_QUEUE_CAPACITY
+              value: "100000"
+            - name: RUNTIME_PERSISTENCE
+              value: postgres
+            - name: RUNTIME_DB_BOOTSTRAP_MODE
+              value: validate
+            - name: RUNTIME_POSTGRES_JDBC_URL
+              value: jdbc:postgresql://postgres:5432/reef?currentSchema=runtime
+            - name: RUNTIME_POSTGRES_USER
+              value: reef
+            - name: RUNTIME_POSTGRES_PASSWORD
+              value: reef
+            - name: RUNTIME_PROJECTION_POSTGRES_JDBC_URL
+              value: jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime
+            - name: RUNTIME_PROJECTION_POSTGRES_USER
+              value: reef
+            - name: RUNTIME_PROJECTION_POSTGRES_PASSWORD
+              value: reef
+            - name: RUNTIME_DB_URL
+              value: jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary
+            - name: RUNTIME_DB_USER
+              value: reef
+            - name: RUNTIME_DB_PASSWORD
+              value: reef
+            - name: ARENA_POSTGRES_JDBC_URL
+              value: jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena
+            - name: ARENA_POSTGRES_USER
+              value: reef
+            - name: ARENA_POSTGRES_PASSWORD
+              value: reef
+            - name: EXTERNAL_API_IDEMPOTENCY_STORE
+              value: postgres
+            - name: EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE
+              value: allow-all
+            - name: EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE
+              value: allow-all
+            - name: EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE
+              value: allow-all
+            - name: EXTERNAL_API_BOUNDARY_REJECTION_LOG
+              value: auto
+            - name: EXTERNAL_API_COMMAND_CAPTURE_MODE
+              value: postgres
+            - name: EXTERNAL_API_COMMAND_LOG_MODE
+              value: disabled
+            - name: EXTERNAL_API_COMMAND_PROCESSING_MODE
+              value: sync-result
+            - name: EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "false"
+            - name: STREAM_ACK_NATS_URL
+              value: nats://nats:4222
+            - name: STREAM_ACK_LOG_PROVIDER
+              value: jetstream
+            - name: STREAM_ACK_COMMAND_STREAM
+              value: REEF_COMMANDS
+            - name: STREAM_ACK_SUBJECT_PREFIX
+              value: reef.cmd.v1
+            - name: STREAM_ACK_PARTITION_COUNT
+              value: "64"
+            - name: PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED
+              value: "true"
+            - name: PLATFORM_INTERNAL_HTTP_MODE
+              value: local
+            - name: PLATFORM_HTTP_SERVER
+              value: jdk
+            - name: PLATFORM_HTTP_THREADS
+              value: "64"
+            - name: RUNTIME_DB_POOL_MAX
+              value: "48"
+            - name: RUNTIME_DB_POOL_MIN_IDLE
+              value: "16"
+            - name: RUNTIME_DB_POOL_CONN_TIMEOUT_MS
+              value: "2000"
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8090
+              name: stream-ingress
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3

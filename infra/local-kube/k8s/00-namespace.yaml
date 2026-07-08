@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: reef-local
+  labels:
+    app.kubernetes.io/part-of: reef
+    reef.openai.local/profile: local-kube

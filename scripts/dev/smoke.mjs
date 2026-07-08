@@ -20,7 +20,7 @@ async function postJson(url, payload, headers = {}) {
 function isAcceptedResponse(body) {
   try {
     const parsed = JSON.parse(body);
-    return String(parsed.status ?? "").toLowerCase() === "accepted" || parsed.accepted === true;
+    return String(parsed.status ?? "").toLowerCase() === "accepted" || parsed.accepted === true || parsed.accepted != null;
   } catch (_error) {
     return body.includes('"accepted"');
   }

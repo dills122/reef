@@ -8,6 +8,7 @@ own local development only.
 | Area | Path | Status | Purpose |
 |---|---|---|---|
 | Local dev stack | `../compose.base.yml`, `../compose.local.yml` | Active | Local developer workflow, smoke tests, stress profiles, and CI-style local validation. |
+| Local Kubernetes | `local-kube/` | Experimental | k3d/kubectl prototype for Kubernetes-shaped local runtime validation. |
 | Hetzner backbone | `hetzner-core/` | Active | Always-on control plane: OpenBao, Admin API, Caddy, runtime/admin/analytics Postgres, backups, and lightweight smoke/admin workflows. |
 | DO benchmark harness | `do-benchmark/` | Active bridge | Current ephemeral DigitalOcean worker implementation used by `scripts/deploy/simulation-run.mjs`. |
 | Simulation runner | `simulation-runner/` | Planned target | Dedicated run-plane shape that should eventually own its own OpenTofu, server Compose bundle, and deploy script. |
@@ -18,6 +19,8 @@ Hosted backbone Compose is intentionally separate from local developer Compose:
 
 - local dev uses the root layered Compose files through `make dev-up`,
   `make dev-up-stream-ack`, and related targets
+- local Kubernetes uses `infra/local-kube/` through `make kube-up` and related
+  targets while it is experimental
 - Hetzner backbone uses `hetzner-core/server/docker-compose.yml` plus
   `docker-compose.stream-ack.yml` when the stream-ack profile is needed
 - the future DO simulation run plane should get its own
