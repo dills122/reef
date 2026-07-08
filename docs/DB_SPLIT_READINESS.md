@@ -125,6 +125,7 @@ Immediate low-risk hardening from that audit is included in the command-log migr
    - Checkpoint: `runtime/0029_typed_runtime_event_facts.sql` adds typed runtime event identity/time companion columns, typed ordering indexes, and a trigger to keep new writes populated.
    - Checkpoint: `runtime/0030_typed_submit_result_facts.sql` adds typed command-result event/time companion columns, typed audit indexes, and a trigger for persisted submit outcomes.
    - Checkpoint: `runtime/0031_typed_execution_trade_facts.sql` adds typed execution/trade event, time, quantity, and price companion columns plus typed history and intraday-bar indexes.
+   - Checkpoint: `runtime/0032_typed_order_facts.sql` adds typed order accepted-time, quantity, and limit-price companion columns plus typed order-history indexes.
 4. Reconcile the runtime event schema so `runtime.runtime_events` has one intentional typed contract instead of the current `0002` typed backbone followed by `0003` text compatibility.
 5. Add a physical partition plan for high-volume append/canonical history tables before production-scale retention and replay data accumulates.
 6. Mark `runtime.canonical_command_results` as legacy/compat or consolidate canonical command consumers onto `runtime.canonical_command_outcomes`.

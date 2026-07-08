@@ -56,6 +56,7 @@ Implemented here:
 - Recent-event reads now prefer native timestamp ordering with deterministic text/id fallback.
 - `runtime/0030_typed_submit_result_facts.sql` applies the same typed companion pattern to `runtime.submit_results` for command-result audit facts.
 - `runtime/0031_typed_execution_trade_facts.sql` adds typed execution/trade event, time, quantity, and price companion facts for fills, trade tape, and intraday bars.
+- `runtime/0032_typed_order_facts.sql` adds typed accepted-time, quantity, and limit-price companion facts for accepted orders.
 
 ### 3. High-volume append tables are not physically partitioned
 
@@ -172,11 +173,12 @@ Target:
 - Added typed runtime event identity/time companion facts and native recent-event indexes in `runtime/0029_typed_runtime_event_facts.sql`.
 - Added typed submit-result event/time companion facts and native audit indexes in `runtime/0030_typed_submit_result_facts.sql`.
 - Added typed execution/trade market facts and native history/bar indexes in `runtime/0031_typed_execution_trade_facts.sql`.
+- Added typed accepted-order facts and native order-history indexes in `runtime/0032_typed_order_facts.sql`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
 ### Next service-spanning work
 
-- Typed runtime facts beyond top-of-book, runtime event, submit-result, execution, and trade companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
+- Typed runtime facts beyond top-of-book, runtime event, submit-result, execution, trade, and order companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
 - Final runtime event schema reconciliation once the compatibility text surface can be retired.
 - Physical partition plan and measured migration path.
 - Canonical command model cleanup.

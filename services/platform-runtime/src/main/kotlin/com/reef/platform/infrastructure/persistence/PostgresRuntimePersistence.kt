@@ -136,8 +136,19 @@ class PostgresRuntimePersistence(
                       limit_price TEXT NOT NULL,
                       currency TEXT NOT NULL,
                       time_in_force TEXT NOT NULL,
-                      accepted_at TEXT NOT NULL
+                      accepted_at TEXT NOT NULL,
+                      quantity_units_num NUMERIC,
+                      limit_price_num NUMERIC,
+                      accepted_at_ts TIMESTAMPTZ
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.orders}
+                    ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC,
+                    ADD COLUMN IF NOT EXISTS limit_price_num NUMERIC,
+                    ADD COLUMN IF NOT EXISTS accepted_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -159,6 +170,28 @@ class PostgresRuntimePersistence(
                     CREATE INDEX IF NOT EXISTS idx_orders_participant_client_order_id
                     ON ${names.orders}(participant_id, client_order_id)
                     WHERE client_order_id <> ''
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_orders_participant_instrument_accepted_typed
+                    ON ${names.orders}(participant_id, instrument_id, accepted_at_ts)
+                    WHERE accepted_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_orders_participant_client_order_accepted_typed
+                    ON ${names.orders}(participant_id, client_order_id, accepted_at_ts DESC)
+                    WHERE client_order_id <> ''
+                      AND accepted_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_orders_accepted_typed
+                    ON ${names.orders}(accepted_at_ts, order_id)
+                    WHERE accepted_at_ts IS NOT NULL
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -3574,7 +3607,7 @@ class PostgresRuntimePersistence(
                 """
                 SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
                 FROM ${names.orders} WHERE participant_id = ? AND client_order_id = ?
-                ORDER BY accepted_at DESC
+                ORDER BY accepted_at_ts DESC NULLS LAST, accepted_at DESC, order_id DESC
                 LIMIT 1
                 """.trimIndent()
             ).use { ps ->
@@ -3607,7 +3640,7 @@ class PostgresRuntimePersistence(
     override fun acceptedOrders(): List<PersistedOrder> = projectionQueryList(
         """
         SELECT order_id, engine_order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force, accepted_at, client_order_id, run_id, venue_session_id
-        FROM ${names.orders} ORDER BY accepted_at
+        FROM ${names.orders} ORDER BY accepted_at_ts NULLS LAST, accepted_at, order_id
         """.trimIndent()
     ) {
         PersistedOrder(

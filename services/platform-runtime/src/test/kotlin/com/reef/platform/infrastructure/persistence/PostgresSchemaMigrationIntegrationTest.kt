@@ -140,7 +140,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0028_typed_top_of_book_facts.sql",
                     "runtime/0029_typed_runtime_event_facts.sql",
                     "runtime/0030_typed_submit_result_facts.sql",
-                    "runtime/0031_typed_execution_trade_facts.sql"
+                    "runtime/0031_typed_execution_trade_facts.sql",
+                    "runtime/0032_typed_order_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -468,6 +469,44 @@ class PostgresSchemaMigrationIntegrationTest {
                     "trades.quantity_units_num:numeric"
                 ),
                 executionTradeColumns
+            )
+
+            val orderColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'orders'
+                  AND column_name IN (
+                    'accepted_at',
+                    'accepted_at_ts',
+                    'quantity_units_num',
+                    'limit_price_num',
+                    'client_order_id',
+                    'run_id',
+                    'venue_session_id'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "accepted_at:text",
+                    "accepted_at_ts:timestamp with time zone",
+                    "client_order_id:text",
+                    "limit_price_num:numeric",
+                    "quantity_units_num:numeric",
+                    "run_id:text",
+                    "venue_session_id:text"
+                ),
+                orderColumns
             )
 
             val topOfBookColumns = conn.prepareStatement(

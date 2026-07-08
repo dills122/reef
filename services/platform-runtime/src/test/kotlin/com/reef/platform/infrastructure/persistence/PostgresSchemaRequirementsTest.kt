@@ -52,6 +52,21 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.orders.client_order_id:text",
+                "runtime.orders.run_id:text",
+                "runtime.orders.venue_session_id:text",
+                "runtime.orders.quantity_units_num:numeric",
+                "runtime.orders.limit_price_num:numeric",
+                "runtime.orders.accepted_at:text",
+                "runtime.orders.accepted_at_ts:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.orders" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.executions.event_id:text",
                 "runtime.executions.event_id_uuid:uuid",
                 "runtime.executions.quantity_units_num:numeric",
