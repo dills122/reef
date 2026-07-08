@@ -15,6 +15,7 @@ const config = {
   runId: stringOption("--run-id", `arena-local-tick-${Date.now()}`),
   mode: stringOption("--mode", "packages/scenario-definitions/arena/equity-sprint.v1.json"),
   extraBots: csvOption("--extra-bots", ""),
+  expectFreezeBots: csvOption("--expect-freeze-bots", ""),
   compartment: stringOption("--compartment", "ses"),
   submitMode: stringOption("--submit-mode", "dry-run"),
   venueUrl: stringOption("--venue-url", env("BOT_SDK_VENUE_URL", env("RUNTIME_BASE_URL", ""))),
@@ -56,61 +57,68 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  return { ...entry, riskProfile };
+  return { ...entry, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
 });
 
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
-const worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
-const startedAt = performance.now();
+let worker;
 
-try {
-  if (config.submitMode === "live") {
-    await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
-    if (config.seedReference) {
-      await seedReferenceData(selectedBots);
+async function main() {
+  worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
+  const startedAt = performance.now();
+
+  try {
+    if (config.submitMode === "live") {
+      await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+      if (config.seedReference) {
+        await seedReferenceData(selectedBots);
+      }
+    }
+    await worker.start();
+    const bots = selectedBots.map((bot) => ({ ...bot, artifact: buildArtifact(bot.entryPath, bot.runnerKey) }));
+    for (const bot of bots) {
+      const load = await worker.request({
+        type: "loadBot",
+        botKey: bot.runnerKey,
+        source: bot.artifact.source,
+        fileName: bot.artifact.fileName,
+        executionLimits: {
+          tickTimeoutMs: bot.riskProfile.maxTickLatencyMs,
+          lifecycleTimeoutMs: bot.riskProfile.maxTickLatencyMs,
+        },
+      });
+      if (!load.ok) {
+        throw new Error(`loadBot failed for ${bot.botId}: ${JSON.stringify(load.issues ?? load.error)}`);
+      }
+    }
+
+    const sessionReports = [];
+    const enforcementEvents = [];
+    for (const bot of bots) {
+      const result = await runBotSession(bot);
+      sessionReports.push(result);
+      enforcementEvents.push(...enforceBot(bot, result));
+    }
+
+    const botResults = scoreBots(sessionReports, enforcementEvents);
+    const venueReadback = await collectVenueReadback(botResults);
+    const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
+    report.persistence = await persistArenaResults(report);
+    mkdirSync(dirname(config.out), { recursive: true });
+    writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
+    assertExpectedFreezeBots(report);
+    console.log(`arena local tick run complete: ${resolve(config.out)}`);
+    console.log(
+      `status=${report.status} bots=${botResults.length} ticks=${report.totals.ticks} venueCommands=${report.totals.venueCommands} submitted=${report.totals.submittedCommands} freezes=${enforcementEvents.filter((event) => event.decision === "freeze").length}`,
+    );
+    for (const entry of report.leaderboard) {
+      console.log(`rank=${entry.rank} bot=${entry.botId} score=${entry.score} disqualified=${entry.disqualified}`);
+    }
+  } finally {
+    if (worker !== undefined) {
+      await worker.shutdown();
     }
   }
-  await worker.start();
-  const bots = selectedBots.map((bot) => ({ ...bot, artifact: buildArtifact(bot.entryPath, bot.runnerKey) }));
-  for (const bot of bots) {
-    const load = await worker.request({
-      type: "loadBot",
-      botKey: bot.runnerKey,
-      source: bot.artifact.source,
-      fileName: bot.artifact.fileName,
-      executionLimits: {
-        tickTimeoutMs: bot.riskProfile.maxTickLatencyMs,
-        lifecycleTimeoutMs: bot.riskProfile.maxTickLatencyMs,
-      },
-    });
-    if (!load.ok) {
-      throw new Error(`loadBot failed for ${bot.botId}: ${JSON.stringify(load.issues ?? load.error)}`);
-    }
-  }
-
-  const sessionReports = [];
-  const enforcementEvents = [];
-  for (const bot of bots) {
-    const result = await runBotSession(bot);
-    sessionReports.push(result);
-    enforcementEvents.push(...enforceBot(bot, result));
-  }
-
-  const botResults = scoreBots(sessionReports, enforcementEvents);
-  const venueReadback = await collectVenueReadback(botResults);
-  const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
-  report.persistence = await persistArenaResults(report);
-  mkdirSync(dirname(config.out), { recursive: true });
-  writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
-  console.log(`arena local tick run complete: ${resolve(config.out)}`);
-  console.log(
-    `status=${report.status} bots=${botResults.length} ticks=${report.totals.ticks} venueCommands=${report.totals.venueCommands} submitted=${report.totals.submittedCommands} freezes=${enforcementEvents.filter((event) => event.decision === "freeze").length}`,
-  );
-  for (const entry of report.leaderboard) {
-    console.log(`rank=${entry.rank} bot=${entry.botId} score=${entry.score} disqualified=${entry.disqualified}`);
-  }
-} finally {
-  await worker.shutdown();
 }
 
 async function runBotSession(bot) {
@@ -255,6 +263,9 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
     },
+    expectations: {
+      freezeBots: config.expectFreezeBots,
+    },
     runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
     status: enforcementEvents.some((event) => event.decision === "freeze") ? "completed_with_freezes" : "completed",
     elapsedMs,
@@ -285,6 +296,19 @@ function rankBotResults(results) {
     .map((result, index) => ({ rank: index + 1, ...result }));
 }
 
+function assertExpectedFreezeBots(report) {
+  for (const botId of config.expectFreezeBots) {
+    const events = report.enforcementEvents.filter((event) => event.botId === botId && event.decision === "freeze");
+    if (events.length === 0) {
+      throw new Error(`expected freeze event for bot ${botId}`);
+    }
+    const result = report.botResults.find((candidate) => candidate.botId === botId);
+    if (result === undefined || !result.disqualified || result.freezeCount < 1) {
+      throw new Error(`expected disqualified result for frozen bot ${botId}: ${JSON.stringify(result)}`);
+    }
+  }
+}
+
 async function collectVenueReadback(botResults) {
   if (config.submitMode !== "live") {
     return { mode: config.submitMode, skipped: true };
@@ -295,7 +319,7 @@ async function collectVenueReadback(botResults) {
   for (const instrumentId of mode.instruments ?? ["AAPL"]) {
     snapshots.push({
       instrumentId,
-      ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`)),
+      ...(await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`, readbackHeaders())),
     });
   }
   const ownOrders = [];
@@ -303,8 +327,8 @@ async function collectVenueReadback(botResults) {
     ownOrders.push({
       botId: result.botId,
       participantId: `participant-${result.runnerKey}`,
-      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`),
-      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`),
+      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`, readbackHeaders()),
+      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`, readbackHeaders()),
     });
   }
   return {
@@ -323,10 +347,10 @@ async function collectVenueReadback(botResults) {
 async function waitForDataAvailability(baseUrl) {
   const url = `${baseUrl}/api/v1/data/availability`;
   const deadline = Date.now() + config.projectionDrainTimeoutMs;
-  let latest = await getJson(url);
+  let latest = await getJson(url, readbackHeaders());
   while (config.projectionDrainTimeoutMs > 0 && Date.now() <= deadline && !availabilityDrained(latest)) {
     await sleep(config.projectionDrainPollMs);
-    latest = await getJson(url);
+    latest = await getJson(url, readbackHeaders());
   }
   if (config.requireProjectionDrain && !availabilityDrained(latest)) {
     throw new Error(`projection drain requirement failed: ${JSON.stringify(latest.body)}`);
@@ -337,6 +361,10 @@ async function waitForDataAvailability(baseUrl) {
 function availabilityDrained(availability) {
   const projections = availability.body?.projections;
   return Array.isArray(projections) && projections.every((projection) => Number(projection.lag ?? 0) === 0);
+}
+
+function readbackHeaders() {
+  return { "X-Client-Id": "arena-local-readback" };
 }
 
 async function persistArenaResults(report) {
@@ -905,7 +933,13 @@ function csvOption(name, fallback) {
   return stringOption(name, fallback).split(",").map((value) => value.trim()).filter(Boolean);
 }
 
+function localVersionId(entry) {
+  return `${entry.versionId}-${config.runId}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
 function optionValue(name) {
   const arg = args.find((candidate) => candidate.startsWith(`${name}=`));
   return arg === undefined ? undefined : arg.slice(name.length + 1);
 }
+
+await main();
