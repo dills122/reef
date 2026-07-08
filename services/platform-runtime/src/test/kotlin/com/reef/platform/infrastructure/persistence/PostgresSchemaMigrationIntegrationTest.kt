@@ -91,7 +91,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0011_unlogged_active_queue.sql',
                   'command_log/0012_command_payloads.sql',
                   'command_log/0013_drop_hot_path_foreign_keys.sql',
-                  'command_log/0014_integrity_audit_views.sql'
+                  'command_log/0014_integrity_audit_views.sql',
+                  'command_log/0015_command_results_archive.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -128,6 +129,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0012_command_payloads.sql",
                     "command_log/0013_drop_hot_path_foreign_keys.sql",
                     "command_log/0014_integrity_audit_views.sql",
+                    "command_log/0015_command_results_archive.sql",
                     "runtime/0003_live_runtime_persistence.sql",
                     "runtime/0004_bulk_submit_outcomes.sql",
                     "runtime/0005_set_based_submit_outcomes.sql",
@@ -167,6 +169,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "command_log.command_payloads",
                 "command_log.command_integrity_violations",
                 "command_log.command_results",
+                "command_log.command_results_archive",
+                "command_log.command_results_archive_default",
                 "command_log.command_work_queue",
                 "command_log.commands",
                 "command_log.retention_pins",
@@ -218,6 +222,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'command_integrity_violations',
                     'command_work_queue',
                     'command_results',
+                    'command_results_archive',
+                    'command_results_archive_default',
                     'retention_pins'
                   )
                 """.trimIndent()
@@ -309,6 +315,26 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertTrue(commandLogForeignKeys.isEmpty(), "unexpected command-log hot-path foreign keys: $commandLogForeignKeys")
+
+            val commandResultsArchivePartitions = conn.prepareStatement(
+                """
+                SELECT parent.relname || ':' || child.relname AS partition_name
+                FROM pg_inherits
+                JOIN pg_class parent ON parent.oid = pg_inherits.inhparent
+                JOIN pg_class child ON child.oid = pg_inherits.inhrelid
+                JOIN pg_namespace namespace ON namespace.oid = parent.relnamespace
+                WHERE namespace.nspname = 'command_log'
+                  AND parent.relname = 'command_results_archive'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("partition_name"))
+                    rows
+                }
+            }
+
+            assertEquals(setOf("command_results_archive:command_results_archive_default"), commandResultsArchivePartitions)
 
             val commandCaptureColumns = conn.prepareStatement(
                 """

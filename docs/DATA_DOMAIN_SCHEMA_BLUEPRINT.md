@@ -232,10 +232,14 @@ Append-only durable inbound command capture, independent of `boundary` and `runt
 4. `command_log.command_results` (`command_log/0003`, `0004`, `0005`)
 - terminal outcomes only: `command_id text pk`, `response_status int not null`, `response_payload_json jsonb default '{}'`, `completed_at timestamptz default now()`, `status text default 'COMPLETED' check (in ('COMPLETED','FAILED'))`, `attempt_count int default 0`, `last_error text default ''`.
 
-5. `command_log.retention_pins` (`command_log/0007`, `0009`)
+5. `command_log.command_results_archive` (`command_log/0015`)
+- partitioned terminal-history archive, range partitioned by `completed_at`: `command_id text`, `status text default 'COMPLETED' check (in ('COMPLETED','FAILED'))`, `attempt_count int default 0`, `last_error text default ''`, `response_status int not null`, `response_payload_json jsonb default '{}'`, `completed_at timestamptz`, `archived_at timestamptz default now()`, primary key `(completed_at, command_id)`.
+- `command_log.command_results_archive_default` is the bootstrap default partition; operators can add/drop time-bucket partitions around it as archive retention matures.
+
+6. `command_log.retention_pins` (`command_log/0007`, `0009`)
 - named retention pins protecting rows from prune: `pin_id text pk`, `selector_type text check (in ('command_id','idempotency_prefix','trace_id','correlation_id','client_id','run_id'))`, `selector_value text`, `reason text default ''`, `created_at timestamptz default now()`, `updated_at timestamptz default now()`, unique `(selector_type, selector_value)`.
 
-6. `command_log.command_integrity_violations` (view, `command_log/0014`) / `command_log.command_integrity_summary()` (function)
+7. `command_log.command_integrity_violations` (view, `command_log/0014`) / `command_log.command_integrity_summary()` (function)
 - read-only cross-table integrity diagnostics (orphaned payload/queue/result rows, active commands missing queue rows, terminal results still queued) that replace the visibility lost when hot-path same-schema foreign keys were dropped (`command_log/0013`).
 
 Routine: `command_log.command_append(...)` performs append + duplicate-replay + work-queue enqueue in one call; same-schema foreign keys from the child tables back to `commands` were intentionally dropped (`command_log/0013`) to keep hot insert/delete paths cheap.

@@ -458,6 +458,7 @@ object PostgresSchemaRequirements {
         payloads: String = "command_log.command_payloads",
         workQueue: String = "command_log.command_work_queue",
         results: String = "command_log.command_results",
+        resultsArchive: String = "command_log.command_results_archive",
         retentionPins: String = "command_log.retention_pins",
         appendFunction: String = "command_log.command_append"
     ): PostgresSchemaRequirement {
@@ -465,9 +466,10 @@ object PostgresSchemaRequirements {
         val payloadTable = PostgresSchemaObject.parse(payloads)
         val queueTable = PostgresSchemaObject.parse(workQueue)
         val resultTable = PostgresSchemaObject.parse(results)
+        val resultArchiveTable = PostgresSchemaObject.parse(resultsArchive)
         val retentionPinTable = PostgresSchemaObject.parse(retentionPins)
         return PostgresSchemaRequirement(
-            tables = listOf(commandTable, payloadTable, queueTable, resultTable, retentionPinTable),
+            tables = listOf(commandTable, payloadTable, queueTable, resultTable, resultArchiveTable, retentionPinTable),
             functions = listOf(PostgresSchemaObject.parse(appendFunction)),
             columns = listOf(
                 listOf(
@@ -514,6 +516,16 @@ object PostgresSchemaRequirements {
                     "response_payload_json",
                     "completed_at"
                 ).map { column -> PostgresSchemaColumn(resultTable, column) },
+                listOf(
+                    "command_id",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "response_status",
+                    "response_payload_json",
+                    "completed_at",
+                    "archived_at"
+                ).map { column -> PostgresSchemaColumn(resultArchiveTable, column) },
                 listOf(
                     "pin_id",
                     "selector_type",

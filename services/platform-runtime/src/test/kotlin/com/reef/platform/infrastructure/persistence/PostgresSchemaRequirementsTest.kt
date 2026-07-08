@@ -563,6 +563,7 @@ class PostgresSchemaRequirementsTest {
                 "command_log.command_payloads",
                 "command_log.command_work_queue",
                 "command_log.command_results",
+                "command_log.command_results_archive",
                 "command_log.retention_pins"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
@@ -606,6 +607,14 @@ class PostgresSchemaRequirementsTest {
                 "command_log.command_results.response_status",
                 "command_log.command_results.response_payload_json",
                 "command_log.command_results.completed_at",
+                "command_log.command_results_archive.command_id",
+                "command_log.command_results_archive.status",
+                "command_log.command_results_archive.attempt_count",
+                "command_log.command_results_archive.last_error",
+                "command_log.command_results_archive.response_status",
+                "command_log.command_results_archive.response_payload_json",
+                "command_log.command_results_archive.completed_at",
+                "command_log.command_results_archive.archived_at",
                 "command_log.retention_pins.pin_id",
                 "command_log.retention_pins.selector_type",
                 "command_log.retention_pins.selector_value",

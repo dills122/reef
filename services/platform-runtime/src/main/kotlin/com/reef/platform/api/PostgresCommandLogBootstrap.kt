@@ -20,6 +20,7 @@ internal object PostgresCommandLogBootstrap {
                         payloads = names.commandPayloads,
                         workQueue = names.commandWorkQueue,
                         results = names.commandResults,
+                        resultsArchive = names.commandResultsArchive,
                         retentionPins = names.retentionPins,
                         appendFunction = names.commandAppendFunction
                     )
@@ -153,6 +154,40 @@ internal object PostgresCommandLogBootstrap {
                     """
                     CREATE INDEX IF NOT EXISTS idx_command_log_results_status_completed
                     ON ${names.commandResults}(status, completed_at, command_id)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandResultsArchive} (
+                      command_id TEXT NOT NULL,
+                      status TEXT NOT NULL DEFAULT 'COMPLETED',
+                      attempt_count INTEGER NOT NULL DEFAULT 0,
+                      last_error TEXT NOT NULL DEFAULT '',
+                      response_status INTEGER NOT NULL,
+                      response_payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      completed_at TIMESTAMPTZ NOT NULL,
+                      archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                      CHECK (status IN ('COMPLETED', 'FAILED')),
+                      PRIMARY KEY (completed_at, command_id)
+                    ) PARTITION BY RANGE (completed_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.commandResultsArchiveDefault}
+                    PARTITION OF ${names.commandResultsArchive} DEFAULT
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_command_log_results_archive_command
+                    ON ${names.commandResultsArchive}(command_id, completed_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_command_log_results_archive_status_completed
+                    ON ${names.commandResultsArchive}(status, completed_at, command_id)
                     """.trimIndent()
                 )
                 stmt.execute(

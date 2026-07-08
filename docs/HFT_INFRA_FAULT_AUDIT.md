@@ -135,6 +135,9 @@ Target:
 - Prefer market date, venue session, run, event stream, or command partition key depending on table.
 - Keep active queue tables small and derived.
 
+Progress:
+- `command_log.command_results_archive` now provides the first partitioned terminal-history target keyed by `completed_at`; archive movement and partition-drop automation are still pending.
+
 ## Immediate Work Plan
 
 1. Fix engine book/session isolation and tests.

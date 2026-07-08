@@ -236,11 +236,12 @@ Required metrics:
 
 P1 (run/session attribution) and P2 (payload split from the hot command index) are done; see the migration references under each phase above.
 
-Implement P3: archive terminal results by time into `command_results_archive` (or an equivalent archive table). No archive table exists yet.
+Implement the remaining P3 worker: archive terminal results by time into `command_results_archive`.
+
+The archive target now exists as a `completed_at` range-partitioned table with a default partition so archive writes have a safe landing zone before operators add time-bucket partitions.
 
 The smallest useful change:
 
-- add a partitioned `command_results_archive` table keyed by `completed_at`
 - add an archive job that copies terminal rows older than a live retention window and verifies row counts/checksums before prune deletes them
 - keep pinned commands excluded from archive-drop cleanup
 - decide and document whether archived commands remain queryable through the existing status API
