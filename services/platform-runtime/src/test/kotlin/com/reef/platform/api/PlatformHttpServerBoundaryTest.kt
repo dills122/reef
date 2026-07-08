@@ -17,6 +17,8 @@ import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.application.arena.RegisterArenaRunCommand
+import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
+import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.domain.Account
@@ -1888,9 +1890,38 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, fetched.status)
             assertContains(fetched.body, "\"scenarioRunId\":\"p2-run-api\"")
             assertContains(fetched.body, "\"settlementObligationId\":\"obl-1\"")
+            assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":2")
             assertContains(fetched.body, "\"reason\":\"CASH_LEG_FAILED\"")
             assertContains(fetched.body, "\"repairAction\":\"POST_CASH_LEG_REPAIR\"")
             assertContains(fetched.body, "\"settlementState\":\"RESOLVED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun settlementFactsEndpointUsesConfiguredPostTradeProfileDefault() {
+        val settlementStore = InMemorySettlementFactStore()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            defaultPostTradeProfileId = "instant-post-trade-v1",
+            defaultPostTradePolicyVersion = 4
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody("p2-run-default", includePostTradeProfile = false)
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-default")
+
+            assertEquals(200, posted.status)
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":4")
         } finally {
             server.stop(0)
         }
@@ -3340,6 +3371,8 @@ class PlatformHttpServerBoundaryTest {
         arenaAdminService: AdminApplicationService? = null,
         analyticsRunExportService: SimulationRunExportService? = null,
         settlementFactStore: SettlementFactStore? = null,
+        defaultPostTradeProfileId: String = DefaultPostTradeProfileId,
+        defaultPostTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
@@ -3390,6 +3423,8 @@ class PlatformHttpServerBoundaryTest {
             arenaAdminService = arenaAdminService,
             analyticsRunExportService = analyticsRunExportService,
             settlementFactStore = settlementFactStore,
+            defaultPostTradeProfileId = defaultPostTradeProfileId,
+            defaultPostTradePolicyVersion = defaultPostTradePolicyVersion,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
@@ -3569,10 +3604,22 @@ class PlatformHttpServerBoundaryTest {
         """.trimIndent()
     }
 
-    private fun p2SettlementFactsBody(scenarioRunId: String): String {
+    private fun p2SettlementFactsBody(
+        scenarioRunId: String,
+        includePostTradeProfile: Boolean = true
+    ): String {
+        val postTradeProfile = if (includePostTradeProfile) {
+            """
+              "postTradeProfileId":"instant-post-trade-v1",
+              "postTradePolicyVersion":2,
+            """.trimIndent()
+        } else {
+            ""
+        }
         return """
             {
               "scenarioRunId":"$scenarioRunId",
+              $postTradeProfile
               "obligations":[{
                 "settlementObligationId":"obl-1",
                 "scenarioRunId":"$scenarioRunId",

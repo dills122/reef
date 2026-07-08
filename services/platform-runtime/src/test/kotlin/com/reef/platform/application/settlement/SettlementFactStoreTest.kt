@@ -19,6 +19,35 @@ class SettlementFactStoreTest {
         assertEquals(listOf("break-1"), stored.breaks.map { it.settlementBreakId })
         assertEquals(listOf("repair-1"), stored.repairs.map { it.settlementRepairId })
         assertEquals(listOf("resolution-1"), stored.resolutions.map { it.settlementResolutionId })
+        assertEquals(listOf(DefaultPostTradeProfileId), stored.obligations.map { it.postTradeProfileId })
+        assertEquals(listOf(DefaultPostTradePolicyVersion), stored.obligations.map { it.postTradePolicyVersion })
+    }
+
+    @Test
+    fun storesPostTradeProfileEvidenceAcrossSettlementChain() {
+        val store = InMemorySettlementFactStore()
+        val facts = p2Facts("run-p2").withProfile("instant-post-trade-v1", 3)
+
+        store.appendFacts(facts)
+        val stored = store.factsByScenarioRunId("run-p2")
+
+        assertEquals(setOf("instant-post-trade-v1"), stored.profileIds())
+        assertEquals(setOf(3), stored.policyVersions())
+    }
+
+    @Test
+    fun rejectsMixedPostTradeProfileEvidenceInScenarioRun() {
+        val store = InMemorySettlementFactStore()
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(
+                    scenarioRunId = "run-p2",
+                    obligations = listOf(obligation("run-p2")),
+                    breaks = listOf(breakOpened("run-p2").copy(postTradeProfileId = "instant-post-trade-v1"))
+                )
+            )
+        }
     }
 
     @Test
@@ -308,6 +337,41 @@ private fun p2Facts(scenarioRunId: String): SettlementFactBundle {
         repairs = listOf(repair(scenarioRunId)),
         resolutions = listOf(resolution(scenarioRunId))
     )
+}
+
+private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: Int): SettlementFactBundle {
+    return copy(
+        obligations = obligations.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        breaks = breaks.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        repairs = repairs.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        resolutions = resolutions.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        }
+    )
+}
+
+private fun SettlementFactBundle.profileIds(): Set<String> {
+    return (
+        obligations.map { it.postTradeProfileId } +
+            breaks.map { it.postTradeProfileId } +
+            repairs.map { it.postTradeProfileId } +
+            resolutions.map { it.postTradeProfileId }
+        ).toSet()
+}
+
+private fun SettlementFactBundle.policyVersions(): Set<Int> {
+    return (
+        obligations.map { it.postTradePolicyVersion } +
+            breaks.map { it.postTradePolicyVersion } +
+            repairs.map { it.postTradePolicyVersion } +
+            resolutions.map { it.postTradePolicyVersion }
+        ).toSet()
 }
 
 private fun obligation(scenarioRunId: String): SettlementObligationCreatedFact {

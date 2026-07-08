@@ -32,6 +32,8 @@ import com.reef.platform.application.arena.OpenBaoClientException
 import com.reef.platform.application.arena.OpenBaoProvisioningConfig
 import com.reef.platform.application.arena.OpenBaoProvisioningService
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
+import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
+import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
@@ -167,6 +169,10 @@ class PlatformHttpServer(
     private val arenaAdminService: AdminApplicationService? = null,
     private val analyticsRunExportService: SimulationRunExportService? = null,
     private val settlementFactStore: SettlementFactStore? = null,
+    private val defaultPostTradeProfileId: String =
+        RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
+    private val defaultPostTradePolicyVersion: Int =
+        RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1),
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
@@ -3317,19 +3323,40 @@ class PlatformHttpServer(
 
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
+        val postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId }
+        val postTradePolicyVersion = positiveIntOrDefault(
+            json = json,
+            key = "postTradePolicyVersion",
+            defaultValue = defaultPostTradePolicyVersion
+        )
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
-            obligations = json.objectDocuments("obligations").map { obligationFact(it, scenarioRunId) },
-            breaks = json.objectDocuments("breaks").map { breakFact(it, scenarioRunId) },
-            repairs = json.objectDocuments("repairs").map { repairFact(it, scenarioRunId) },
-            resolutions = json.objectDocuments("resolutions").map { resolutionFact(it, scenarioRunId) }
+            obligations = json.objectDocuments("obligations").map {
+                obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            breaks = json.objectDocuments("breaks").map {
+                breakFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            repairs = json.objectDocuments("repairs").map {
+                repairFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            resolutions = json.objectDocuments("resolutions").map {
+                resolutionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            }
         )
     }
 
-    private fun obligationFact(json: JsonDocument, scenarioRunId: String): SettlementObligationCreatedFact {
+    private fun obligationFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementObligationCreatedFact {
         return SettlementObligationCreatedFact(
             settlementObligationId = json.string("settlementObligationId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             tradeId = json.string("tradeId"),
@@ -3344,11 +3371,18 @@ class PlatformHttpServer(
         )
     }
 
-    private fun breakFact(json: JsonDocument, scenarioRunId: String): SettlementBreakOpenedFact {
+    private fun breakFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementBreakOpenedFact {
         return SettlementBreakOpenedFact(
             settlementBreakId = json.string("settlementBreakId"),
             settlementObligationId = json.string("settlementObligationId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             reason = json.string("reason").ifBlank { "CASH_LEG_FAILED" },
@@ -3357,12 +3391,19 @@ class PlatformHttpServer(
         )
     }
 
-    private fun repairFact(json: JsonDocument, scenarioRunId: String): SettlementRepairPostedFact {
+    private fun repairFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementRepairPostedFact {
         return SettlementRepairPostedFact(
             settlementRepairId = json.string("settlementRepairId"),
             settlementBreakId = json.string("settlementBreakId"),
             settlementObligationId = json.string("settlementObligationId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             repairAction = json.string("repairAction").ifBlank { "POST_CASH_LEG_REPAIR" },
@@ -3372,19 +3413,34 @@ class PlatformHttpServer(
         )
     }
 
-    private fun resolutionFact(json: JsonDocument, scenarioRunId: String): SettlementResolvedFact {
+    private fun resolutionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementResolvedFact {
         return SettlementResolvedFact(
             settlementResolutionId = json.string("settlementResolutionId"),
             settlementObligationId = json.string("settlementObligationId"),
             settlementBreakId = json.string("settlementBreakId"),
             settlementRepairId = json.string("settlementRepairId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             settlementState = json.string("settlementState").ifBlank { "RESOLVED" },
             exceptionState = json.string("exceptionState").ifBlank { "RESOLVED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
+    }
+
+    private fun positiveIntOrDefault(json: JsonDocument, key: String, defaultValue: Int): Int {
+        val raw = json.string(key)
+        if (raw.isBlank()) return defaultValue
+        val parsed = raw.toIntOrNull()
+        require(parsed != null && parsed > 0) { "$key must be a positive integer" }
+        return parsed
     }
 
     private fun requiredInstant(json: JsonDocument, key: String): Instant {
@@ -3402,6 +3458,8 @@ class PlatformHttpServer(
                 mapOf(
                     "settlementObligationId" to it.settlementObligationId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "tradeId" to it.tradeId,
@@ -3420,6 +3478,8 @@ class PlatformHttpServer(
                     "settlementBreakId" to it.settlementBreakId,
                     "settlementObligationId" to it.settlementObligationId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "reason" to it.reason,
@@ -3433,6 +3493,8 @@ class PlatformHttpServer(
                     "settlementBreakId" to it.settlementBreakId,
                     "settlementObligationId" to it.settlementObligationId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "repairAction" to it.repairAction,
@@ -3448,6 +3510,8 @@ class PlatformHttpServer(
                     "settlementBreakId" to it.settlementBreakId,
                     "settlementRepairId" to it.settlementRepairId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "settlementState" to it.settlementState,

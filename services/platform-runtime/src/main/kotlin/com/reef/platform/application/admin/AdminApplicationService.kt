@@ -64,6 +64,16 @@ data class CalendarProfile(
     val settlementCycle: String
 )
 
+data class PostTradeProfile(
+    val profileId: String,
+    val mode: String,
+    val settlementCycle: String,
+    val nettingMode: String,
+    val ledgerPostingMode: String,
+    val policyVersion: Int = 1,
+    val active: Boolean = false
+)
+
 data class OverrideReasonCode(
     val code: String,
     val description: String
@@ -152,10 +162,13 @@ class AdminApplicationService(
     private val eventProducer = "platform-runtime-admin"
     private val eventSchemaVersion = "v1"
     private val calendarProfiles = linkedMapOf<String, CalendarProfile>()
+    private val postTradeProfiles = linkedMapOf<String, PostTradeProfile>()
     private val overrideReasons = linkedMapOf<String, OverrideReasonCode>()
+    private var activePostTradeProfileId = "ops-realistic-v1"
     private var simulationState = SimulationControlState(status = "stopped", scenario = "")
 
     init {
+        seedPostTradeProfiles()
         runtimePersistence.saveRole(
             RoleDefinition(
                 roleId = "system_admin",
@@ -213,6 +226,35 @@ class AdminApplicationService(
     }
 
     fun listCalendarProfiles(): List<CalendarProfile> = calendarProfiles.values.toList()
+
+    fun upsertPostTradeProfile(actor: AdminActor, profile: PostTradeProfile) {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        validatePostTradeProfile(profile)
+        val existing = postTradeProfiles[profile.profileId]
+        postTradeProfiles[profile.profileId] = profile.copy(active = existing?.active ?: false)
+        emitAudit(
+            actor,
+            "AdminPostTradeProfileUpserted",
+            profile.profileId,
+            "mode=${profile.mode},settlementCycle=${profile.settlementCycle},nettingMode=${profile.nettingMode}," +
+                "ledgerPostingMode=${profile.ledgerPostingMode},policyVersion=${profile.policyVersion}"
+        )
+    }
+
+    fun listPostTradeProfiles(): List<PostTradeProfile> = postTradeProfiles.values.map { profile ->
+        profile.copy(active = profile.profileId == activePostTradeProfileId)
+    }
+
+    fun activePostTradeProfile(): PostTradeProfile = postTradeProfiles.getValue(activePostTradeProfileId)
+        .copy(active = true)
+
+    fun activatePostTradeProfile(actor: AdminActor, profileId: String): PostTradeProfile {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        val profile = postTradeProfiles[profileId] ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
+        activePostTradeProfileId = profileId
+        emitAudit(actor, "AdminPostTradeProfileActivated", profileId, "policyVersion=${profile.policyVersion}")
+        return profile.copy(active = true)
+    }
 
     fun upsertOverrideReason(actor: AdminActor, reason: OverrideReasonCode) {
         requirePermission(actor, Permission.OVERRIDE_ADMIN)
@@ -459,6 +501,38 @@ class AdminApplicationService(
 
     private fun arenaStore(): ArenaBotRegistryStore {
         return arenaRegistryStore ?: error("arena registry store is not configured")
+    }
+
+    private fun seedPostTradeProfiles() {
+        postTradeProfiles["ops-realistic-v1"] = PostTradeProfile(
+            profileId = "ops-realistic-v1",
+            mode = "ops-realistic",
+            settlementCycle = "T+1",
+            nettingMode = "batch-netting",
+            ledgerPostingMode = "scheduled-finality",
+            policyVersion = 1,
+            active = true
+        )
+        postTradeProfiles["instant-post-trade-v1"] = PostTradeProfile(
+            profileId = "instant-post-trade-v1",
+            mode = "instant-post-trade",
+            settlementCycle = "T+0",
+            nettingMode = "gross-or-microbatch",
+            ledgerPostingMode = "near-instant-finality",
+            policyVersion = 1,
+            active = false
+        )
+    }
+
+    private fun validatePostTradeProfile(profile: PostTradeProfile) {
+        require(profile.profileId.isNotBlank()) { "post-trade profileId is required" }
+        require(profile.mode in setOf("ops-realistic", "instant-post-trade")) {
+            "post-trade profile mode must be ops-realistic or instant-post-trade"
+        }
+        require(profile.settlementCycle.isNotBlank()) { "post-trade settlementCycle is required" }
+        require(profile.nettingMode.isNotBlank()) { "post-trade nettingMode is required" }
+        require(profile.ledgerPostingMode.isNotBlank()) { "post-trade ledgerPostingMode is required" }
+        require(profile.policyVersion > 0) { "post-trade policyVersion must be positive" }
     }
 
     private fun syncArenaBotRiskControl(command: ArenaBotVersionDecisionCommand, updated: ArenaBotVersion) {
