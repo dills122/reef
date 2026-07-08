@@ -23,6 +23,25 @@ These are query/read projections unless a decision explicitly promotes a field i
 
 Current read APIs use these runtime facts/projections for public trade tape, intraday bars, top-of-book/depth, and participant-scoped own-order reads. Dedicated `market_data` schema objects remain a planned extraction target.
 
+Settlement obligation materialization reads persisted `runtime.trades` plus accepted buy/sell orders as canonical trade evidence. Settlement writes append-only post-trade facts downstream; runtime trade and matching history are not mutated.
+
+## Settlement Fact Store
+
+The first settlement slice is scenario-scoped and evidence-oriented. Current fact families cover:
+
+- resource positions
+- obligations
+- instructions
+- attempts
+- leg outcomes
+- ledger entries
+- settlements
+- breaks
+- repairs
+- resolutions
+
+Public read APIs expose the append-only facts, projected obligation state, and replayable ledger proof through [Settlement APIs](../../api/settlement/). Full post-trade tables for allocation, confirmation, clearing, novation, and netting remain planned.
+
 ## Event & Outbox
 
 **`runtime.runtime_events`** — `event_id uuid pk`, `event_type text`, `order_id uuid`, `trace_id uuid`, `causation_id uuid`, `correlation_id uuid`, `actor_id text`, `producer text`, `schema_version text`, `sequence_number bigint`, `payload_json jsonb`, `occurred_at timestamptz`, `created_at timestamptz`. Indexes: `(occurred_at)`, `(trace_id, sequence_number)`, `(order_id, occurred_at)`.

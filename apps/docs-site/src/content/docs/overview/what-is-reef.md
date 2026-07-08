@@ -5,34 +5,35 @@ banner:
   content: Pre-release. Architecture and scope described here are the target direction, not a finished product — see Current Status for what's actually built.
 ---
 
-Reef is a **simulation-first institutional trading venue and post-trade platform**, modeled after dark-pool venue design and the broader post-trade lifecycle (allocation, confirmation, settlement, exceptions). It is not a retail trading app, and it is not aiming at real exchange connectivity, real broker/custodian integrations, or regulatory completeness.
+Reef is a **simulation-first institutional trading venue and post-trade platform**. Think of it as a local market-infrastructure lab: orders enter through a controlled API, match inside a hidden book, create trades, then leave a trail that can be replayed and audited.
 
-The goal is a platform that is realistic enough in architecture to teach real market-infrastructure concepts, while staying local-first, inspectable, and replayable.
+It is not a retail trading app. It is also not trying to connect to real exchanges, brokers, or custodians. The point is to make the shape of a serious trading venue understandable without losing the ability to run everything locally.
 
 ## Two Layers
 
-**Core platform** — order intake, hidden order book and matching, trade creation, allocations, confirmations, settlement, exceptions, audit trails. Behaves like a real system; no demo-only shortcuts.
+**Core platform** - accepts orders, runs matching, records trades, builds settlement evidence, and keeps audit trails. It should behave like a real system, even when a feature starts small.
 
-**Simulation control plane** — scenario definitions, participant bots, seeded randomness, market clock, replay/reset, fault injection. Drives the core platform through the *same* command/API paths a manual user would use — simulation actors never bypass the boundary or write to domain tables directly.
+**Simulation control plane** - creates the action: scenario definitions, participant bots, seeded randomness, market clock, replay/reset, and fault injection. It drives the core platform through the *same* command/API paths a manual user would use. No hidden table writes, no demo shortcuts.
 
 ## Operating Modes
 
-- **Manual mode** — a person submits orders, reviews trades, works exceptions through the UI.
-- **Scenario mode** — a predefined, seeded scenario drives deterministic, replayable activity.
-- **Live simulation mode** — bots and synthetic actors generate continuous market activity, including the emerging Bot Arena competitors.
+- **Manual mode** - a person submits orders, reviews trades, and eventually works exception queues.
+- **Scenario mode** - a predefined, seeded story drives deterministic activity that can be replayed.
+- **Live simulation mode** - bots and synthetic actors generate ongoing market activity, including Bot Arena competitors.
 
 ## Where The Bot Arena Fits
 
-The [Bot Arena](../../arena/overview/) is an exploratory extension of the simulation control plane: user-authored bots compete in deterministic simulated markets, using the same venue command paths as everything else. It is planning-stage/early-build, not a finished game — see [Arena Overview](../../arena/overview/) for current status.
+The [Bot Arena](../../arena/overview/) turns the simulation layer into a game: user-authored bots compete in deterministic markets, but their orders still enter through the real venue boundary. That keeps the game fun without turning it into a separate toy system. It is early-build, not a finished game.
 
 ## Technology Direction
 
-- **Astro** — this documentation/marketing site
-- **Kotlin** (Ktor-leaning) — platform runtime: API boundary, workflow orchestration, persistence, read models
-- **Go** — matching/execution engine, and the current simulator/load-testing CLI
-- **Postgres** — canonical relational state, compact canonical event materialization
-- **Kafka-compatible durable streams** (NATS JetStream as fallback/comparison) — high-throughput command ingress and venue event batches
-- **Protobuf** — cross-language contracts between Kotlin and Go
+- **Astro** - this docs site.
+- **Kotlin** - platform runtime: API boundary, workflow orchestration, persistence, read models.
+- **Go** - matching engine plus simulator/load tooling.
+- **Postgres** - durable facts, projections, and audit-friendly storage.
+- **Kafka-compatible streams** - target durable command intake and event-batch backbone.
+- **Protobuf** - shared contracts between Kotlin and Go.
+- **Stock-data service** - seed-time external price snapshots that are persisted before replay.
 
 ## Learn More
 
