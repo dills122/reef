@@ -184,6 +184,8 @@ Obligation materialization:
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
 - ledger query surface: `GET /api/v1/settlement/ledger/{scenarioRunId}` returns replayable participant/account/asset balances plus per-settlement proof totals derived from append-only ledger facts
+- proof query surface: `GET /api/v1/settlement/proof/{scenarioRunId}` returns one replay proof with trade/obligation/attempt/ledger identifiers, final balances, settlement proof rows, profile/policy evidence, `CLEAN`/`GAPPED` proof status, causation-gap checks, fact counts, and a deterministic checksum
+- score query surface: `GET /api/v1/settlement/score/{scenarioRunId}` returns participant scoring inputs from the same facts: settled balances, pending value, haircut-adjusted pending value, blocked unsettled value, fail counts, aged-fail counts, repair-pending counts, and penalty points; optional `asOf` and `agedFailAfterSeconds` query parameters let scenario-clock checks age open fails deterministically
 - resource seeding: `resourcePositions` in the settlement facts endpoint establish opening participant/account/asset availability for realistic instant-mode checks
 - constrained instant failures: insufficient buyer cash emits a `CASH` leg outcome with `LEG_FAILED` and a `CASH_LEG_FAILED` break; insufficient seller securities emits a `SECURITY` leg outcome with `LEG_FAILED` and a `SECURITY_LEG_FAILED` break; failed attempts do not emit settlement ledger entries or `SETTLED` facts
 - repair reattempts: a `SettlementRepairPosted` fact against the open break lets the next materialization create attempt `N+1`; successful repaired attempts emit the normal four ledger entries, one `SETTLED` fact, and a `SettlementResolved` fact for the repaired break
@@ -293,6 +295,7 @@ SettlementObligationCreated
    - netting compression
    - settlement replay proof
    - one JSON scenario proof report with trade IDs, obligation IDs, ledger entry IDs, final balances, causation chain, and checksum
+   - current implementation has proof and score read projections for gross settlement, including derived aged-fail penalties from scenario clock; netting compression remains follow-up work
 
 ## Discussion Points
 

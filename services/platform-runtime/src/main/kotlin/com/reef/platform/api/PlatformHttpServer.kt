@@ -59,6 +59,11 @@ import com.reef.platform.application.settlement.SettlementRepairPostedActionSecu
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
 import com.reef.platform.application.settlement.SettlementResourcePositionFact
+import com.reef.platform.application.settlement.SettlementScenarioProofProjection
+import com.reef.platform.application.settlement.SettlementScenarioProofView
+import com.reef.platform.application.settlement.SettlementScoreProjection
+import com.reef.platform.application.settlement.SettlementScoreProjectionOptions
+import com.reef.platform.application.settlement.SettlementScoreProjectionView
 import com.reef.platform.application.settlement.SettlementSettledFact
 import com.reef.platform.application.settlement.TradeSettlementObligationMaterializer
 import com.reef.platform.application.defaultRuntimePersistence
@@ -727,6 +732,24 @@ class PlatformHttpServer(
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/ledger/").trimEnd('/')
             writeHotPathResponse(exchange, settlementLedgerResponse(scenarioRunId))
+        }
+
+        server.createContext("/api/v1/settlement/proof/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/proof/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementProofResponse(scenarioRunId))
+        }
+
+        server.createContext("/api/v1/settlement/score/") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/score/").trimEnd('/')
+            writeHotPathResponse(exchange, settlementScoreResponse(exchange, scenarioRunId))
         }
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
@@ -3627,6 +3650,51 @@ class PlatformHttpServer(
         }
     }
 
+    private fun settlementProofResponse(scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            val projection = SettlementScenarioProofProjection.project(store.factsByScenarioRunId(scenarioRunId))
+            PlatformHotPathResponse(200, settlementScenarioProofBody(projection))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement proof query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement proof query failed")))
+        }
+    }
+
+    private fun settlementScoreResponse(exchange: HttpExchange, scenarioRunId: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        if (scenarioRunId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
+        }
+        return try {
+            val projection = SettlementScoreProjection.project(
+                facts = store.factsByScenarioRunId(scenarioRunId),
+                options = SettlementScoreProjectionOptions(
+                    asOf = queryValue(exchange, "asOf").takeIf { it.isNotBlank() }?.let { instantFrom(it, "asOf") },
+                    agedFailAfterSeconds = queryValue(exchange, "agedFailAfterSeconds")
+                        .takeIf { it.isNotBlank() }
+                        ?.let {
+                            val parsed = it.toLongOrNull()
+                            require(parsed != null && parsed >= 0L) { "agedFailAfterSeconds must be a non-negative integer" }
+                            parsed
+                        }
+                        ?: com.reef.platform.application.settlement.SettlementScoreDefaultAgedFailAfterSeconds
+                )
+            )
+            PlatformHotPathResponse(200, settlementScoreProjectionBody(projection))
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement score query")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement score query failed")))
+        }
+    }
+
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
         val venueSessionId = json.string("venueSessionId")
@@ -4138,6 +4206,118 @@ class PlatformHttpServer(
                         "updatedAt" to it.updatedAt.toString()
                     )
                 }
+            )
+        )
+    }
+
+    private fun settlementScenarioProofBody(proof: SettlementScenarioProofView): String {
+        return jsonObjectBody(
+            mapOf(
+                "scenarioRunId" to proof.scenarioRunId,
+                "proofStatus" to proof.proofStatus,
+                "checksumAlgorithm" to proof.checksumAlgorithm,
+                "checksum" to proof.checksum,
+                "factsCount" to proof.factsCount,
+                "obligationsCount" to proof.obligationsCount,
+                "instructionsCount" to proof.instructionsCount,
+                "attemptsCount" to proof.attemptsCount,
+                "legOutcomesCount" to proof.legOutcomesCount,
+                "ledgerEntriesCount" to proof.ledgerEntriesCount,
+                "settlementsCount" to proof.settlementsCount,
+                "breaksCount" to proof.breaksCount,
+                "repairsCount" to proof.repairsCount,
+                "resolutionsCount" to proof.resolutionsCount,
+                "profilePolicies" to proof.profilePolicies.map {
+                    mapOf(
+                        "postTradeProfileId" to it.postTradeProfileId,
+                        "postTradePolicyVersion" to it.postTradePolicyVersion,
+                        "factCount" to it.factCount
+                    )
+                },
+                "causationGapsCount" to proof.causationGaps.size,
+                "causationGaps" to proof.causationGaps.map {
+                    mapOf(
+                        "factType" to it.factType,
+                        "factId" to it.factId,
+                        "missingReferenceType" to it.missingReferenceType,
+                        "missingReferenceId" to it.missingReferenceId
+                    )
+                },
+                "obligations" to proof.obligations.map {
+                    mapOf(
+                        "settlementObligationId" to it.settlementObligationId,
+                        "tradeId" to it.tradeId,
+                        "buyerParticipantId" to it.buyerParticipantId,
+                        "sellerParticipantId" to it.sellerParticipantId,
+                        "instrumentId" to it.instrumentId,
+                        "quantity" to it.quantity,
+                        "cashAmount" to it.cashAmount,
+                        "currency" to it.currency,
+                        "settlementInstructionIds" to it.settlementInstructionIds,
+                        "settlementAttemptIds" to it.settlementAttemptIds,
+                        "ledgerEntryIds" to it.ledgerEntryIds,
+                        "settlementIds" to it.settlementIds,
+                        "settlementBreakIds" to it.settlementBreakIds,
+                        "settlementRepairIds" to it.settlementRepairIds,
+                        "settlementResolutionIds" to it.settlementResolutionIds
+                    )
+                },
+                "balances" to proof.balances.map {
+                    mapOf(
+                        "participantId" to it.participantId,
+                        "accountId" to it.accountId,
+                        "assetType" to it.assetType,
+                        "assetId" to it.assetId,
+                        "availableQuantity" to it.availableQuantity,
+                        "ledgerEntryCount" to it.ledgerEntryCount
+                    )
+                },
+                "settlementProofs" to proof.settlementProofs.map {
+                    mapOf(
+                        "settlementId" to it.settlementId,
+                        "settlementObligationId" to it.settlementObligationId,
+                        "settlementAttemptId" to it.settlementAttemptId,
+                        "cashBalanced" to it.cashBalanced,
+                        "securityBalanced" to it.securityBalanced,
+                        "ledgerEntryCount" to it.ledgerEntryCount
+                    )
+                },
+                "updatedAt" to proof.updatedAt.toString()
+            )
+        )
+    }
+
+    private fun settlementScoreProjectionBody(projection: SettlementScoreProjectionView): String {
+        return jsonObjectBody(
+            mapOf(
+                "scenarioRunId" to projection.scenarioRunId,
+                "asOf" to projection.asOf.toString(),
+                "agedFailAfterSeconds" to projection.agedFailAfterSeconds,
+                "participantsCount" to projection.participants.size,
+                "participants" to projection.participants.map {
+                    mapOf(
+                        "scenarioRunId" to it.scenarioRunId,
+                        "participantId" to it.participantId,
+                        "cashBalances" to it.cashBalances.map { balance ->
+                            mapOf("assetId" to balance.assetId, "availableQuantity" to balance.availableQuantity)
+                        },
+                        "securityBalances" to it.securityBalances.map { balance ->
+                            mapOf("assetId" to balance.assetId, "availableQuantity" to balance.availableQuantity)
+                        },
+                        "pendingValue" to it.pendingValue,
+                        "haircutAdjustedPendingValue" to it.haircutAdjustedPendingValue,
+                        "blockedUnsettledValue" to it.blockedUnsettledValue,
+                        "scorePenaltyPoints" to it.scorePenaltyPoints,
+                        "settledObligationCount" to it.settledObligationCount,
+                        "pendingObligationCount" to it.pendingObligationCount,
+                        "failedObligationCount" to it.failedObligationCount,
+                        "agedFailCount" to it.agedFailCount,
+                        "openBreakCount" to it.openBreakCount,
+                        "repairPendingCount" to it.repairPendingCount,
+                        "updatedAt" to it.updatedAt.toString()
+                    )
+                },
+                "updatedAt" to projection.updatedAt.toString()
             )
         )
     }

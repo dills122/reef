@@ -117,6 +117,10 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"freshness\":\"durable fact rows\"")
             assertContains(response.body, "\"name\":\"settlementFacts\"")
             assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"settlementProof\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/proof/{scenarioRunId}\"")
+            assertContains(response.body, "\"name\":\"settlementScore\"")
+            assertContains(response.body, "\"endpoint\":\"/api/v1/settlement/score/{scenarioRunId}\"")
         } finally {
             server.stop(0)
         }
@@ -2195,6 +2199,8 @@ class PlatformHttpServerBoundaryTest {
             val fetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize")
             val obligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize")
             val ledger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize")
+            val proof = get(server.address.port, "/api/v1/settlement/proof/run-materialize")
+            val score = get(server.address.port, "/api/v1/settlement/score/run-materialize")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"materializedObligations\":1")
@@ -2230,6 +2236,20 @@ class PlatformHttpServerBoundaryTest {
             assertContains(ledger.body, "\"proofState\":\"PROVEN\"")
             assertContains(ledger.body, "\"cashBalanced\":true")
             assertContains(ledger.body, "\"securityBalanced\":true")
+            assertEquals(200, proof.status)
+            assertContains(proof.body, "\"proofStatus\":\"CLEAN\"")
+            assertContains(proof.body, "\"checksumAlgorithm\":\"SHA-256\"")
+            assertContains(proof.body, "\"profilePolicies\"")
+            assertContains(proof.body, "\"causationGapsCount\":0")
+            assertContains(proof.body, "\"ledgerEntryIds\"")
+            assertContains(proof.body, "\"settlement-ledger-settlement-attempt-settlement-obligation-trade-materialize-1-buyer-cash-debit\"")
+            assertEquals(200, score.status)
+            assertContains(score.body, "\"agedFailAfterSeconds\":86400")
+            assertContains(score.body, "\"participantsCount\":2")
+            assertContains(score.body, "\"participantId\":\"buyer-1\"")
+            assertContains(score.body, "\"pendingValue\":\"0\"")
+            assertContains(score.body, "\"scorePenaltyPoints\":0")
+            assertContains(score.body, "\"agedFailCount\":0")
         } finally {
             server.stop(0)
         }
