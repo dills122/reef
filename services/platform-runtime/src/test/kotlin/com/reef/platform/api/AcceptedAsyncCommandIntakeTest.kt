@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AcceptedAsyncCommandIntakeTest {
@@ -127,6 +128,104 @@ class AcceptedAsyncCommandIntakeTest {
         } finally {
             intake.stop()
         }
+    }
+
+    @Test
+    fun terminalStatusesAreBoundedByRetentionMaxRecords() {
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 1,
+            statusRetentionMaxRecords = 1,
+            statusRetentionTtlMs = 0L
+        )
+
+        intake.start()
+        try {
+            assertTrue(enqueue(intake, "cmd-retention-1", "ord-retention-1", "idem-retention-1").accepted)
+            assertTrue(waitFor { gateway.pendingCount() == 1 })
+            gateway.completeNextAccepted()
+            assertTrue(waitFor { intake.findCommandStatus("cmd-retention-1")?.status == CommandLogStatus.COMPLETED })
+
+            assertTrue(enqueue(intake, "cmd-retention-2", "ord-retention-2", "idem-retention-2").accepted)
+            assertTrue(waitFor { gateway.pendingCount() == 1 })
+            gateway.completeNextAccepted()
+            assertTrue(waitFor { intake.findCommandStatus("cmd-retention-2")?.status == CommandLogStatus.COMPLETED })
+
+            assertNull(intake.findCommandStatus("cmd-retention-1"))
+            assertNull(intake.findCommandStatus("client-1", "/api/v1/orders/submit", "idem-retention-1"))
+            assertEquals(1, intake.stats().retainedStatuses)
+            assertEquals(1, intake.stats().retentionEvicted)
+
+            val reused = enqueue(intake, "cmd-retention-3", "ord-retention-3", "idem-retention-1")
+            assertTrue(reused.accepted, "evicted idempotency key should be reusable")
+        } finally {
+            intake.stop()
+        }
+    }
+
+    @Test
+    fun terminalStatusesExpireByRetentionTtl() {
+        var now = 1_000L
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 1,
+            statusRetentionMaxRecords = 10,
+            statusRetentionTtlMs = 100L,
+            clockMillis = { now }
+        )
+
+        intake.start()
+        try {
+            assertTrue(enqueue(intake, "cmd-retention-ttl-1", "ord-retention-ttl-1", "idem-retention-ttl-1").accepted)
+            assertTrue(waitFor { gateway.pendingCount() == 1 })
+            gateway.completeNextAccepted()
+            assertTrue(waitFor { intake.findCommandStatus("cmd-retention-ttl-1")?.status == CommandLogStatus.COMPLETED })
+
+            now += 100L
+            assertTrue(enqueue(intake, "cmd-retention-ttl-2", "ord-retention-ttl-2", "idem-retention-ttl-2").accepted)
+            assertTrue(waitFor { gateway.pendingCount() == 1 })
+            gateway.completeNextAccepted()
+            assertTrue(waitFor { intake.findCommandStatus("cmd-retention-ttl-2")?.status == CommandLogStatus.COMPLETED })
+
+            assertNull(intake.findCommandStatus("cmd-retention-ttl-1"))
+            assertEquals(1, intake.stats().retainedStatuses)
+            assertEquals(1, intake.stats().retentionEvicted)
+        } finally {
+            intake.stop()
+        }
+    }
+
+    private fun enqueue(
+        intake: AcceptedAsyncCommandIntake,
+        commandId: String,
+        orderId: String,
+        idempotencyKey: String
+    ): AcceptedAsyncCommandReceipt {
+        return intake.enqueueSubmit(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = idempotencyKey,
+            correlationId = "corr-$commandId",
+            body = validSubmitBody(commandId, "trace-$commandId", orderId)
+        )
     }
 
     private fun seededPersistence(): InMemoryRuntimePersistence {

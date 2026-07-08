@@ -7,6 +7,7 @@ import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -58,6 +59,10 @@ data class AcceptedAsyncCommandStats(
     val processing: Long,
     val completed: Long,
     val failed: Long,
+    val retainedStatuses: Long,
+    val retentionMaxRecords: Int,
+    val retentionTtlMs: Long,
+    val retentionEvicted: Long,
     val lastReceivedAt: String,
     val lastCompletedAt: String,
     val lastFailedAt: String,
@@ -69,7 +74,18 @@ class AcceptedAsyncCommandIntake(
     laneCount: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_LANES", 16, min = 1),
     private val queueCapacityPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY", 100_000, min = 1),
     private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 32, min = 1),
-    private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L)
+    private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L),
+    private val statusRetentionMaxRecords: Int = RuntimeEnv.int(
+        "EXTERNAL_API_ACCEPTED_ASYNC_STATUS_RETENTION_MAX_RECORDS",
+        1_000_000,
+        min = 1
+    ),
+    private val statusRetentionTtlMs: Long = RuntimeEnv.long(
+        "EXTERNAL_API_ACCEPTED_ASYNC_STATUS_RETENTION_TTL_MS",
+        900_000L,
+        min = 0L
+    ),
+    private val clockMillis: () -> Long = System::currentTimeMillis
 ) : CommandStatusLookup {
     private val lanes: Array<Channel<AcceptedAsyncCommand>> =
         Array(laneCount) { Channel(queueCapacityPerLane) }
@@ -85,6 +101,7 @@ class AcceptedAsyncCommandIntake(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val recordsByCommandId = ConcurrentHashMap<String, AcceptedAsyncCommandRecord>()
     private val commandIdByIdempotency = ConcurrentHashMap<String, String>()
+    private val retainedTerminalStatuses = ConcurrentLinkedQueue<AcceptedAsyncRetentionEntry>()
     private val started = AtomicBoolean(false)
     private val received = AtomicLong(0)
     private val duplicates = AtomicLong(0)
@@ -92,6 +109,8 @@ class AcceptedAsyncCommandIntake(
     private val processing = AtomicLong(0)
     private val completed = AtomicLong(0)
     private val failed = AtomicLong(0)
+    private val retainedStatuses = AtomicLong(0)
+    private val retentionEvicted = AtomicLong(0)
     private val lastReceivedAtEpochMs = AtomicLong(0)
     private val lastCompletedAtEpochMs = AtomicLong(0)
     private val lastFailedAtEpochMs = AtomicLong(0)
@@ -121,18 +140,7 @@ class AcceptedAsyncCommandIntake(
         val command = HotPathMetrics.time("api.acceptedAsync.parseSubmitOrder") {
             PlatformCommandParsers.submitOrder(body)
         }
-        val idempotencyKeyValue = idempotencyKey(clientId, route, idempotencyKey)
-        val existingCommandId = commandIdByIdempotency.putIfAbsent(idempotencyKeyValue, command.commandId)
-        if (existingCommandId != null) {
-            duplicates.incrementAndGet()
-            return AcceptedAsyncCommandReceipt(
-                accepted = false,
-                duplicate = true,
-                status = recordsByCommandId[existingCommandId]?.toStatusView()
-            )
-        }
-
-        val now = System.currentTimeMillis()
+        val now = clockMillis()
         val lane = laneFor(command.instrumentId)
         val record = AcceptedAsyncCommandRecord(
             commandId = command.commandId,
@@ -146,7 +154,33 @@ class AcceptedAsyncCommandIntake(
             lastError = "",
             updatedAtEpochMs = now
         )
-        recordsByCommandId[command.commandId] = record
+        val existingRecord = recordsByCommandId.putIfAbsent(command.commandId, record)
+        if (existingRecord != null) {
+            duplicates.incrementAndGet()
+            return AcceptedAsyncCommandReceipt(
+                accepted = false,
+                duplicate = true,
+                status = existingRecord.toStatusView()
+            )
+        }
+        val idempotencyKeyValue = idempotencyKey(clientId, route, idempotencyKey)
+        while (true) {
+            val existingCommandId = commandIdByIdempotency.putIfAbsent(idempotencyKeyValue, command.commandId)
+            if (existingCommandId == null) {
+                break
+            }
+            val existingStatus = recordsByCommandId[existingCommandId]?.toStatusView()
+            if (existingStatus != null) {
+                recordsByCommandId.remove(command.commandId, record)
+                duplicates.incrementAndGet()
+                return AcceptedAsyncCommandReceipt(
+                    accepted = false,
+                    duplicate = true,
+                    status = existingStatus
+                )
+            }
+            commandIdByIdempotency.remove(idempotencyKeyValue, existingCommandId)
+        }
         val accepted = HotPathMetrics.time("api.acceptedAsync.enqueue") {
             offer(lane, lanes[lane], AcceptedAsyncCommand(record, body))
         }
@@ -157,9 +191,9 @@ class AcceptedAsyncCommandIntake(
                 status = CommandLogStatus.FAILED,
                 responseStatus = 429,
                 lastError = "accepted-async lane queue is full",
-                updatedAtEpochMs = System.currentTimeMillis()
+                updatedAtEpochMs = clockMillis()
             )
-            recordsByCommandId[command.commandId] = failed
+            recordsByCommandId.remove(command.commandId, record)
             commandIdByIdempotency.remove(idempotencyKeyValue, command.commandId)
             return AcceptedAsyncCommandReceipt(accepted = false, backpressure = true, status = failed.toStatusView())
         }
@@ -171,6 +205,7 @@ class AcceptedAsyncCommandIntake(
     }
 
     override fun findCommandStatus(commandId: String): CommandStatusView? {
+        evictTerminalStatuses(clockMillis())
         return recordsByCommandId[commandId]?.toStatusView()
     }
 
@@ -180,6 +215,7 @@ class AcceptedAsyncCommandIntake(
     }
 
     fun stats(): AcceptedAsyncCommandStats {
+        evictTerminalStatuses(clockMillis())
         val laneStats = lanes.indices.map { lane ->
             AcceptedAsyncLaneStats(
                 lane = lane,
@@ -208,6 +244,10 @@ class AcceptedAsyncCommandIntake(
             processing = processing.get(),
             completed = completed.get(),
             failed = failed.get(),
+            retainedStatuses = retainedStatuses.get(),
+            retentionMaxRecords = statusRetentionMaxRecords,
+            retentionTtlMs = statusRetentionTtlMs,
+            retentionEvicted = retentionEvicted.get(),
             lastReceivedAt = instantString(lastReceivedAtEpochMs.get()),
             lastCompletedAt = instantString(lastCompletedAtEpochMs.get()),
             lastFailedAt = instantString(lastFailedAtEpochMs.get()),
@@ -239,7 +279,7 @@ class AcceptedAsyncCommandIntake(
         recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
             processing.incrementAndGet()
             laneProcessing.incrementAndGet(lane)
-            record.copy(status = CommandLogStatus.PROCESSING, updatedAtEpochMs = System.currentTimeMillis())
+            record.copy(status = CommandLogStatus.PROCESSING, updatedAtEpochMs = clockMillis())
         }
         val future = HotPathMetrics.time("acceptedAsync.prepareSubmitOrder") {
             api.prepareSubmitOrderAsync(command.body)
@@ -255,19 +295,22 @@ class AcceptedAsyncCommandIntake(
                 api.persistSubmitOutcomes(listOf(outcome))
             }
             val payload = api.submitOrderResponse(outcome)
-            recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
+            val completedRecord = recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
                 processing.decrementAndGet()
                 laneProcessing.decrementAndGet(lane)
                 completed.incrementAndGet()
                 laneCompleted.incrementAndGet(lane)
-                lastCompletedAtEpochMs.set(System.currentTimeMillis())
+                lastCompletedAtEpochMs.set(clockMillis())
                 record.copy(
                     status = CommandLogStatus.COMPLETED,
                     responseStatus = 200,
                     responsePayloadJson = payload,
                     lastError = "",
-                    updatedAtEpochMs = System.currentTimeMillis()
+                    updatedAtEpochMs = clockMillis()
                 )
+            }
+            if (completedRecord != null) {
+                retainTerminalStatus(completedRecord)
             }
         } catch (ex: ExecutionException) {
             fail(lane, command, ex.cause ?: ex)
@@ -278,21 +321,56 @@ class AcceptedAsyncCommandIntake(
 
     private fun fail(lane: Int, command: AcceptedAsyncCommand, error: Throwable) {
         val message = error.message ?: error::class.simpleName ?: "unknown"
-        recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
+        val failedRecord = recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
             if (record.status == CommandLogStatus.PROCESSING) {
                 processing.decrementAndGet()
                 laneProcessing.decrementAndGet(lane)
             }
             failed.incrementAndGet()
             laneFailed.incrementAndGet(lane)
-            lastFailedAtEpochMs.set(System.currentTimeMillis())
+            lastFailedAtEpochMs.set(clockMillis())
             record.copy(
                 status = CommandLogStatus.FAILED,
                 responseStatus = 503,
                 responsePayloadJson = "{}",
                 lastError = message,
-                updatedAtEpochMs = System.currentTimeMillis()
+                updatedAtEpochMs = clockMillis()
             )
+        }
+        if (failedRecord != null) {
+            retainTerminalStatus(failedRecord)
+        }
+    }
+
+    private fun retainTerminalStatus(record: AcceptedAsyncCommandRecord) {
+        retainedTerminalStatuses.add(AcceptedAsyncRetentionEntry(record.commandId, record.updatedAtEpochMs))
+        retainedStatuses.incrementAndGet()
+        evictTerminalStatuses(clockMillis())
+    }
+
+    private fun evictTerminalStatuses(now: Long) {
+        while (true) {
+            val next = retainedTerminalStatuses.peek() ?: return
+            val overLimit = retainedStatuses.get() > statusRetentionMaxRecords
+            val expired = statusRetentionTtlMs > 0 && now - next.updatedAtEpochMs >= statusRetentionTtlMs
+            if (!overLimit && !expired) return
+            val polled = retainedTerminalStatuses.poll() ?: return
+            val record = recordsByCommandId[polled.commandId]
+            if (record != null &&
+                record.updatedAtEpochMs == polled.updatedAtEpochMs &&
+                record.status.isTerminal()
+            ) {
+                if (recordsByCommandId.remove(polled.commandId, record)) {
+                    commandIdByIdempotency.remove(
+                        idempotencyKey(record.clientId, record.route, record.idempotencyKey),
+                        record.commandId
+                    )
+                    retainedStatuses.decrementAndGet()
+                    retentionEvicted.incrementAndGet()
+                }
+            } else {
+                retainedStatuses.decrementAndGet()
+            }
         }
     }
 
@@ -349,6 +427,11 @@ private data class PendingAcceptedAsyncCommand(
     val future: CompletableFuture<PersistableSubmitOutcome>
 )
 
+private data class AcceptedAsyncRetentionEntry(
+    val commandId: String,
+    val updatedAtEpochMs: Long
+)
+
 private data class AcceptedAsyncCommandRecord(
     val commandId: String,
     val clientId: String,
@@ -375,3 +458,6 @@ private data class AcceptedAsyncCommandRecord(
         )
     }
 }
+
+private fun CommandLogStatus.isTerminal(): Boolean =
+    this == CommandLogStatus.COMPLETED || this == CommandLogStatus.FAILED
