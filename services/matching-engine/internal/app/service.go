@@ -204,7 +204,10 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 		return rejectedResult("evt-reject-invalid-modify-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must remain above already filled quantity", now)
 	}
 
-	s.removeRestingOrder(book, record)
+	resetPriority := limitPrice != record.LimitPrice || quantityUnits > record.OriginalQuantity
+	if resetPriority {
+		s.removeRestingOrder(book, record)
+	}
 
 	record.OriginalQuantity = quantityUnits
 	record.RemainingQuantity = quantityUnits - alreadyFilled
@@ -214,7 +217,7 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 
 	result := acceptedResult("modified", cmd.OrderID, now)
 
-	if record.RemainingQuantity > 0 {
+	if resetPriority && record.RemainingQuantity > 0 {
 		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 		s.match(book, incoming, record.Side, &result, now)
 		if record.RemainingQuantity > 0 {

@@ -815,9 +815,39 @@ func TestModifyOrderMatchesWhenNewPriceCrossesBook(t *testing.T) {
 	}
 }
 
-func TestModifyOrderResetsPriorityAtSamePrice(t *testing.T) {
+func TestModifyOrderResetsPriorityWhenQuantityIncreases(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-2", "100", "150250000000")
+
+	modified := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-1",
+		QuantityUnits: "120",
+		LimitPrice:    "150250000000",
+	})
+	if modified.Accepted == nil {
+		t.Fatalf("expected accepted modify result, got %#v", modified)
+	}
+
+	match := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-1",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if len(match.Trades) != 1 {
+		t.Fatalf("expected one trade, got %#v", match.Trades)
+	}
+	if match.Trades[0].BuyOrderID != "ord-buy-2" {
+		t.Fatalf("quantity increase should reset same-price priority behind existing order, got %#v", match.Trades[0])
+	}
+}
+
+func TestModifyOrderPreservesPriorityWhenQuantityDecreases(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "120", "150250000000")
 	submitRestingBuy(t, service, "ord-buy-2", "100", "150250000000")
 
 	modified := service.ModifyOrder(domain.ModifyOrder{
@@ -840,8 +870,8 @@ func TestModifyOrderResetsPriorityAtSamePrice(t *testing.T) {
 	if len(match.Trades) != 1 {
 		t.Fatalf("expected one trade, got %#v", match.Trades)
 	}
-	if match.Trades[0].BuyOrderID != "ord-buy-2" {
-		t.Fatalf("modify should reset same-price priority behind existing order, got %#v", match.Trades[0])
+	if match.Trades[0].BuyOrderID != "ord-buy-1" {
+		t.Fatalf("quantity decrease should preserve same-price priority, got %#v", match.Trades[0])
 	}
 }
 

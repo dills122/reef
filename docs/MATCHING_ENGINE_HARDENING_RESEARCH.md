@@ -30,7 +30,8 @@ CME Globex documents multiple product-level matching algorithms: FIFO, FIFO with
 Reef status:
 
 - current engine is FIFO only
-- modify currently behaves as cancel/replace and resets priority
+- modify resets priority on price change or quantity increase
+- modify preserves priority on same-price quantity decrease
 - no per-instrument `matchAlgorithm` profile yet
 - pro-rata and LMM behavior should be deferred until FIFO plus controls are fully proven
 
@@ -162,8 +163,8 @@ Acceptance:
 
 - price change resets priority
 - quantity increase resets priority
-- quantity decrease policy is documented and tested
-- same-price cancel/replace behavior remains deterministic
+- same-price quantity decrease preserves priority
+- same-price priority behavior remains deterministic
 
 ### 4. Self-Trade Prevention
 
@@ -228,4 +229,3 @@ Acceptance:
 - current batch id and ack lag
 - open order count and price-level count per side
 - checksum/debug endpoint or admin-only inspection path
-
