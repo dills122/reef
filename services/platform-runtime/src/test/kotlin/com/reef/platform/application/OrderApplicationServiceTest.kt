@@ -16,6 +16,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.ReferenceDataValidation
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -211,6 +212,40 @@ class OrderApplicationServiceTest {
 
         service.assignRole(ActorRoleBinding("trader-new", "order_trader"))
         val accepted = service.submitOrder(submitCommand("cmd-auth-cache-hit", "ord-auth-cache-hit", "trader-new"))
+
+        assertNotNull(accepted.accepted)
+        assertEquals(1, gateway.submitCalls)
+    }
+
+    @Test
+    fun submitOrderReusesReferenceDataCacheForSameTriple() {
+        val gateway = RecordingEngineGateway()
+        val persistence = CountingRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+        seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-ref-cache")
+
+        service.submitOrder(submitCommand("cmd-ref-cache-1", "ord-ref-cache-1", "trader-ref-cache"))
+        service.submitOrder(submitCommand("cmd-ref-cache-2", "ord-ref-cache-2", "trader-ref-cache"))
+
+        assertEquals(2, gateway.submitCalls)
+        assertEquals(1, persistence.referenceDataReads)
+    }
+
+    @Test
+    fun referenceDataWritesInvalidateReferenceDataCache() {
+        val gateway = RecordingEngineGateway()
+        val persistence = CountingRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+        service.createInstrument(Instrument("AAPL", "AAPL"))
+        service.createParticipant(Participant("participant-1", "Participant 1"))
+        seedOrderAuthorization(service, "trader-ref-cache")
+
+        val rejected = service.submitOrder(submitCommand("cmd-ref-cache-miss", "ord-ref-cache-miss", "trader-ref-cache"))
+        assertEquals("REFERENCE_DATA_ERROR", rejected.rejected?.code)
+
+        service.createAccount(Account("account-1", "participant-1"))
+        val accepted = service.submitOrder(submitCommand("cmd-ref-cache-hit", "ord-ref-cache-hit", "trader-ref-cache"))
 
         assertNotNull(accepted.accepted)
         assertEquals(1, gateway.submitCalls)
@@ -418,6 +453,7 @@ private class CountingRuntimePersistence(
 ) : RuntimePersistence by delegate {
     var roleReads = 0
     var actorRoleBindingReads = 0
+    var referenceDataReads = 0
 
     override fun roles(): List<RoleDefinition> {
         roleReads += 1
@@ -427,6 +463,15 @@ private class CountingRuntimePersistence(
     override fun actorRoleBindings(actorId: String): List<ActorRoleBinding> {
         actorRoleBindingReads += 1
         return delegate.actorRoleBindings(actorId)
+    }
+
+    override fun validateReferenceData(
+        instrumentId: String,
+        participantId: String,
+        accountId: String
+    ): ReferenceDataValidation {
+        referenceDataReads += 1
+        return delegate.validateReferenceData(instrumentId, participantId, accountId)
     }
 }
 

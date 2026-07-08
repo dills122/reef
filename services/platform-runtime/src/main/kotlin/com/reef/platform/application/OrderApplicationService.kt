@@ -27,6 +27,7 @@ import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.ProjectionStatus
+import com.reef.platform.infrastructure.persistence.ReferenceDataValidation
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
 import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
@@ -38,12 +39,14 @@ class OrderApplicationService(
     private val engineGateway: EngineGateway = defaultEngineGateway(),
     private val runtimePersistence: RuntimePersistence = defaultRuntimePersistence(),
     private val authorizationCacheTtlMs: Long = RuntimeEnv.long("EXTERNAL_API_AUTHORIZATION_CACHE_TTL_MS", 1_000L, min = 0L),
+    private val referenceDataCacheTtlMs: Long = RuntimeEnv.long("EXTERNAL_API_REFERENCE_DATA_CACHE_TTL_MS", 1_000L, min = 0L),
     private val clockMillis: () -> Long = System::currentTimeMillis
 ) {
     private val eventProducer = "platform-runtime"
     private val eventSchemaVersion = "v1"
-    private val roleCache = ConcurrentHashMap<String, AuthorizationCacheEntry<List<RoleDefinition>>>()
-    private val actorRoleCache = ConcurrentHashMap<String, AuthorizationCacheEntry<List<ActorRoleBinding>>>()
+    private val roleCache = ConcurrentHashMap<String, HotPathCacheEntry<List<RoleDefinition>>>()
+    private val actorRoleCache = ConcurrentHashMap<String, HotPathCacheEntry<List<ActorRoleBinding>>>()
+    private val referenceDataCache = ConcurrentHashMap<String, HotPathCacheEntry<ReferenceDataValidation>>()
 
     fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         return HotPathMetrics.time("runtime.submitOrder.total") {
@@ -683,11 +686,20 @@ class OrderApplicationService(
         sourceProjectionName: String = "runtime-normalized-venue-outcomes"
     ) = runtimePersistence.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
 
-    fun createInstrument(instrument: Instrument) = runtimePersistence.saveInstrument(instrument)
+    fun createInstrument(instrument: Instrument) {
+        runtimePersistence.saveInstrument(instrument)
+        invalidateReferenceDataCache()
+    }
 
-    fun createParticipant(participant: Participant) = runtimePersistence.saveParticipant(participant)
+    fun createParticipant(participant: Participant) {
+        runtimePersistence.saveParticipant(participant)
+        invalidateReferenceDataCache()
+    }
 
-    fun createAccount(account: Account) = runtimePersistence.saveAccount(account)
+    fun createAccount(account: Account) {
+        runtimePersistence.saveAccount(account)
+        invalidateReferenceDataCache()
+    }
 
     fun createRole(role: RoleDefinition) {
         runtimePersistence.saveRole(role)
@@ -719,7 +731,7 @@ class OrderApplicationService(
             return cached.value
         }
         val loaded = runtimePersistence.roles()
-        roleCache[RolesCacheKey] = AuthorizationCacheEntry(loaded, now + authorizationCacheTtlMs)
+        roleCache[RolesCacheKey] = HotPathCacheEntry(loaded, now + authorizationCacheTtlMs)
         return loaded
     }
 
@@ -733,7 +745,7 @@ class OrderApplicationService(
             return cached.value
         }
         val loaded = runtimePersistence.actorRoleBindings(actorId)
-        actorRoleCache[actorId] = AuthorizationCacheEntry(loaded, now + authorizationCacheTtlMs)
+        actorRoleCache[actorId] = HotPathCacheEntry(loaded, now + authorizationCacheTtlMs)
         return loaded
     }
 
@@ -744,7 +756,7 @@ class OrderApplicationService(
 
     private fun validateReferenceData(command: SubmitOrderCommand): SubmitOrderResult? {
         val now = command.occurredAt
-        val validation = runtimePersistence.validateReferenceData(
+        val validation = cachedReferenceDataValidation(
             instrumentId = command.instrumentId,
             participantId = command.participantId,
             accountId = command.accountId
@@ -799,6 +811,29 @@ class OrderApplicationService(
 
         return null
     }
+
+    private fun cachedReferenceDataValidation(
+        instrumentId: String,
+        participantId: String,
+        accountId: String
+    ): ReferenceDataValidation {
+        if (referenceDataCacheTtlMs <= 0) {
+            return runtimePersistence.validateReferenceData(instrumentId, participantId, accountId)
+        }
+        val now = clockMillis()
+        val key = "$instrumentId|$participantId|$accountId"
+        val cached = referenceDataCache[key]
+        if (cached != null && cached.expiresAtEpochMs > now) {
+            return cached.value
+        }
+        val loaded = runtimePersistence.validateReferenceData(instrumentId, participantId, accountId)
+        referenceDataCache[key] = HotPathCacheEntry(loaded, now + referenceDataCacheTtlMs)
+        return loaded
+    }
+
+    private fun invalidateReferenceDataCache() {
+        referenceDataCache.clear()
+    }
 }
 
 private data class ValidatedSubmitContext(
@@ -808,7 +843,7 @@ private data class ValidatedSubmitContext(
 
 private const val RolesCacheKey = "roles"
 
-private data class AuthorizationCacheEntry<T>(
+private data class HotPathCacheEntry<T>(
     val value: T,
     val expiresAtEpochMs: Long
 )
