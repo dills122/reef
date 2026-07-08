@@ -2743,10 +2743,11 @@ class PlatformHttpServerBoundaryTest {
     @Test
     fun streamAckRequiresRoutingMetadataBeforePublish() {
         val publisher = RecordingStreamCommandPublisher()
+        val intakeStore = InMemoryStreamCommandIntakeStore()
         val server = testServerWithGateway(
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
             commandProcessingMode = CommandProcessingMode.StreamAck,
-            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandIntakeStore = intakeStore,
             streamCommandPublisher = publisher
         )
         try {
@@ -2763,6 +2764,7 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(400, response.status)
             assertContains(response.body, "\"code\":\"STREAM_ROUTING_METADATA_REQUIRED\"")
             assertEquals(0, publisher.published.size)
+            assertEquals(null, intakeStore.findByCommandId("cmd-stream-missing-routing"))
         } finally {
             server.stop(0)
         }

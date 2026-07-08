@@ -39,6 +39,34 @@ class StreamCommandIntakeTest {
     }
 
     @Test
+    fun submitAndCancelForSameBookUseSamePartitionLane() {
+        val config = StreamCommandConfig(
+            streamName = "REEF_COMMANDS",
+            subjectPrefix = "reef.cmd.v1",
+            partitionCount = 16
+        )
+        val submit = StreamCommandEnvelopeBuilder.fromRequest(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-submit",
+            body = validStreamSubmitBody(),
+            config = config
+        )
+        val cancel = StreamCommandEnvelopeBuilder.fromRequest(
+            clientId = "client-1",
+            route = "/api/v1/orders/cancel",
+            idempotencyKey = "idem-cancel",
+            body = validStreamCancelBody(),
+            config = config
+        )
+
+        val submitEnvelope = assertIs<EitherBoundaryError.Envelope>(submit).envelope
+        val cancelEnvelope = assertIs<EitherBoundaryError.Envelope>(cancel).envelope
+        assertEquals(submitEnvelope.partition, cancelEnvelope.partition)
+        assertTrue(cancelEnvelope.subject.matches(Regex("""reef\.cmd\.v1\.p\d{2}\.session-1\.AAPL\.CancelOrder""")))
+    }
+
+    @Test
     fun envelopeBuilderRejectsMissingRoutingMetadata() {
         val result = StreamCommandEnvelopeBuilder.fromRequest(
             clientId = "client-1",
@@ -330,6 +358,23 @@ class StreamCommandIntakeTest {
               "limitPrice":"150250000000",
               "currency":"USD",
               "timeInForce":"DAY"
+            }
+        """.trimIndent()
+    }
+
+    private fun validStreamCancelBody(): String {
+        return """
+            {
+              "commandId":"cmd-cancel-1",
+              "traceId":"trace-cancel-1",
+              "correlationId":"corr-1",
+              "causationId":"cause-1",
+              "actorId":"bot-1",
+              "runId":"run-1",
+              "venueSessionId":"session-1",
+              "orderId":"ord-1",
+              "instrumentId":"AAPL",
+              "reason":"test"
             }
         """.trimIndent()
     }
