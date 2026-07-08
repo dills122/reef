@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -740,6 +741,78 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 	}
 	if resting := service.RestingOrders("AAPL", domain.SideSell); resting != 1 {
 		t.Fatalf("expected restored sell liquidity after rollback, got %d", resting)
+	}
+}
+
+func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
+	service := NewService()
+	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150000000000")
+	submitRestingSell(t, service, "AAPL", "ord-sell-2", "100", "150100000000")
+	firstMatch := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-buy-1",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "80",
+		LimitPrice:     "150500000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:00Z",
+	})
+	if len(firstMatch.Trades) != 1 {
+		t.Fatalf("expected seed trade, got %#v", firstMatch.Trades)
+	}
+	submitRestingBuy(t, service, "ord-buy-resting", "100", "149900000000")
+	modified := service.ModifyOrder(domain.ModifyOrder{
+		OrderID:       "ord-buy-resting",
+		QuantityUnits: "90",
+		LimitPrice:    "149900000000",
+		OccurredAt:    "2026-03-14T18:00:01Z",
+	})
+	if modified.Accepted == nil {
+		t.Fatalf("expected seed modify to accept, got %#v", modified)
+	}
+
+	snapshot := service.Snapshot()
+	if snapshot.Checksum == "" {
+		t.Fatal("expected service snapshot checksum")
+	}
+	restored, ok := Restore(snapshot)
+	if !ok {
+		t.Fatal("expected service restore to succeed")
+	}
+	if restored.Snapshot().Checksum != snapshot.Checksum {
+		t.Fatalf("expected restored checksum %s, got %s", snapshot.Checksum, restored.Snapshot().Checksum)
+	}
+
+	tail := domain.SubmitOrder{
+		OrderID:        "ord-sell-tail",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideSell,
+		QuantityUnits:  "120",
+		LimitPrice:     "149800000000",
+		Currency:       "USD",
+		OccurredAt:     "2026-03-14T18:00:02Z",
+	}
+	uninterruptedResult := service.SubmitOrder(tail)
+	restoredResult := restored.SubmitOrder(tail)
+	if !reflect.DeepEqual(restoredResult, uninterruptedResult) {
+		t.Fatalf("restored replay result drifted: got %#v want %#v", restoredResult, uninterruptedResult)
+	}
+	if restored.Snapshot().Checksum != service.Snapshot().Checksum {
+		t.Fatalf("restored replay checksum drifted: got %s want %s", restored.Snapshot().Checksum, service.Snapshot().Checksum)
+	}
+}
+
+func TestServiceRestoreRejectsSnapshotChecksumMismatch(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+
+	snapshot := service.Snapshot()
+	snapshot.Orders[0].RemainingQuantity = 99
+
+	if _, ok := Restore(snapshot); ok {
+		t.Fatal("expected tampered service snapshot restore to fail")
 	}
 }
 

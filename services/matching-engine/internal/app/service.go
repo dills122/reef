@@ -1,7 +1,10 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,6 +55,25 @@ type OrderControls struct {
 type PriceCollar struct {
 	ReferencePrice int64
 	BandBps        int64
+}
+
+type Snapshot struct {
+	Books    map[string]hotbook.Snapshot `json:"books"`
+	Orders   []SnapshotOrderRecord       `json:"orders"`
+	Checksum string                      `json:"checksum"`
+}
+
+type SnapshotOrderRecord struct {
+	OrderID           string             `json:"orderId"`
+	InstrumentID      string             `json:"instrumentId"`
+	VenueSessionID    string             `json:"venueSessionId"`
+	Side              domain.Side        `json:"side"`
+	OriginalQuantity  int64              `json:"originalQuantity"`
+	RemainingQuantity int64              `json:"remainingQuantity"`
+	LimitPrice        int64              `json:"limitPrice"`
+	Currency          string             `json:"currency"`
+	Status            domain.OrderStatus `json:"status"`
+	LastUpdatedAt     string             `json:"lastUpdatedAt"`
 }
 
 type SessionState string
@@ -361,6 +383,87 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 	}, true
 }
 
+func (s *Service) Snapshot() Snapshot {
+	snapshot := Snapshot{
+		Books: make(map[string]hotbook.Snapshot),
+	}
+
+	s.booksMu.RLock()
+	bookIDs := make([]string, 0, len(s.books))
+	for instrumentID := range s.books {
+		bookIDs = append(bookIDs, instrumentID)
+	}
+	sort.Strings(bookIDs)
+	for _, instrumentID := range bookIDs {
+		book := s.books[instrumentID]
+		book.mu.Lock()
+		snapshot.Books[instrumentID] = book.book.Snapshot()
+		book.mu.Unlock()
+	}
+	s.booksMu.RUnlock()
+
+	s.ordersMu.RLock()
+	snapshot.Orders = make([]SnapshotOrderRecord, 0, len(s.orders))
+	for _, record := range s.orders {
+		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
+			OrderID:           record.OrderID,
+			InstrumentID:      record.InstrumentID,
+			VenueSessionID:    record.VenueSessionID,
+			Side:              record.Side,
+			OriginalQuantity:  record.OriginalQuantity,
+			RemainingQuantity: record.RemainingQuantity,
+			LimitPrice:        record.LimitPrice,
+			Currency:          record.Currency,
+			Status:            record.Status,
+			LastUpdatedAt:     record.LastUpdatedAt,
+		})
+	}
+	s.ordersMu.RUnlock()
+	sort.Slice(snapshot.Orders, func(i, j int) bool {
+		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
+	})
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+	return snapshot
+}
+
+func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
+	if snapshot.Checksum != "" && snapshot.Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
+		return nil, false
+	}
+	service := NewService(options...)
+	for instrumentID, bookSnapshot := range snapshot.Books {
+		restored, ok := hotbook.Restore(bookSnapshot)
+		if !ok {
+			return nil, false
+		}
+		service.books[instrumentID] = &orderBook{book: restored}
+	}
+	seenOrderIDs := make(map[string]bool, len(snapshot.Orders))
+	for _, order := range snapshot.Orders {
+		if order.OrderID == "" || seenOrderIDs[order.OrderID] {
+			return nil, false
+		}
+		seenOrderIDs[order.OrderID] = true
+		record := &orderRecord{
+			OrderID:           order.OrderID,
+			InstrumentID:      order.InstrumentID,
+			VenueSessionID:    order.VenueSessionID,
+			Side:              order.Side,
+			OriginalQuantity:  order.OriginalQuantity,
+			RemainingQuantity: order.RemainingQuantity,
+			LimitPrice:        order.LimitPrice,
+			Currency:          order.Currency,
+			Status:            order.Status,
+			LastUpdatedAt:     order.LastUpdatedAt,
+		}
+		service.orders[record.OrderID] = record
+	}
+	if service.Snapshot().Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
+		return nil, false
+	}
+	return service, true
+}
+
 func (s *Service) bookFor(instrumentID string) *orderBook {
 	s.booksMu.RLock()
 	existing, ok := s.books[instrumentID]
@@ -414,6 +517,59 @@ func (s *Service) sessionState(venueSessionID string) SessionState {
 		return s.sessionControls.DefaultState
 	}
 	return SessionStateOpen
+}
+
+func (s Snapshot) withoutChecksum() Snapshot {
+	s.Checksum = ""
+	return s
+}
+
+func serviceSnapshotChecksum(snapshot Snapshot) string {
+	var builder strings.Builder
+	bookIDs := make([]string, 0, len(snapshot.Books))
+	for instrumentID := range snapshot.Books {
+		bookIDs = append(bookIDs, instrumentID)
+	}
+	sort.Strings(bookIDs)
+	for _, instrumentID := range bookIDs {
+		book := snapshot.Books[instrumentID]
+		builder.WriteString("book:")
+		builder.WriteString(instrumentID)
+		builder.WriteByte(':')
+		builder.WriteString(book.Checksum)
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(book.NextSequence, 10))
+		builder.WriteByte(';')
+	}
+	orders := append([]SnapshotOrderRecord(nil), snapshot.Orders...)
+	sort.Slice(orders, func(i, j int) bool {
+		return orders[i].OrderID < orders[j].OrderID
+	})
+	for _, order := range orders {
+		builder.WriteString("order:")
+		builder.WriteString(order.OrderID)
+		builder.WriteByte(':')
+		builder.WriteString(order.InstrumentID)
+		builder.WriteByte(':')
+		builder.WriteString(order.VenueSessionID)
+		builder.WriteByte(':')
+		builder.WriteString(string(order.Side))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(order.OriginalQuantity, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(order.RemainingQuantity, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(order.LimitPrice, 10))
+		builder.WriteByte(':')
+		builder.WriteString(order.Currency)
+		builder.WriteByte(':')
+		builder.WriteString(string(order.Status))
+		builder.WriteByte(':')
+		builder.WriteString(order.LastUpdatedAt)
+		builder.WriteByte(';')
+	}
+	sum := sha256.Sum256([]byte(builder.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 // BatchRollback captures a pre-mutation snapshot of the order book(s) and
