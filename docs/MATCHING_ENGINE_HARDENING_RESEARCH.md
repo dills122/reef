@@ -101,7 +101,7 @@ Gaps before calling it production-ready:
 - default self-trade prevention exists; alternate STP modes remain pending
 - explicit session state gates exist behind service options
 - engine-level max quantity, max notional, and price collar controls exist behind service options
-- in-memory snapshot/restore/replay checksum proof exists with versioned metadata; stream offset metadata remains pending
+- local `json.gz` snapshot file round trip exists with versioned metadata; stream offset metadata remains pending
 - no formal lifecycle conformance matrix
 - per-instrument matching algorithm profile exists for `FIFO`; non-FIFO algorithms remain unsupported
 - unit-level snapshot ownership handoff proof exists; live drain/fencing proof remains pending
@@ -142,6 +142,7 @@ Acceptance:
 - checksum mismatch fails closed
 - in-memory snapshot includes book identity, order records, and checksum
 - snapshot metadata includes version, engine version, book count, order count, and book keys
+- local gzip-compressed JSON snapshot file read/write helpers exist
 - durable artifact metadata still needs command/event sequence or offset fields
 - no external state-store dependency is introduced
 

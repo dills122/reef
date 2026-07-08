@@ -1021,6 +1021,31 @@ func TestServiceSnapshotSupportsShardOwnershipHandoff(t *testing.T) {
 	}
 }
 
+func TestSnapshotFileRoundTrip(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "snapshot-buy-1", "100", "150250000000")
+	snapshot := service.Snapshot()
+	path := t.TempDir() + "/book-snapshot.json.gz"
+
+	if err := WriteSnapshotFile(path, snapshot); err != nil {
+		t.Fatalf("write snapshot file: %v", err)
+	}
+	readSnapshot, err := ReadSnapshotFile(path)
+	if err != nil {
+		t.Fatalf("read snapshot file: %v", err)
+	}
+	if !reflect.DeepEqual(readSnapshot, snapshot) {
+		t.Fatalf("snapshot file round trip drifted: got %#v want %#v", readSnapshot, snapshot)
+	}
+	restored, ok := Restore(readSnapshot)
+	if !ok {
+		t.Fatal("expected snapshot file restore to succeed")
+	}
+	if restored.Snapshot().Checksum != snapshot.Checksum {
+		t.Fatalf("expected restored checksum %s, got %s", snapshot.Checksum, restored.Snapshot().Checksum)
+	}
+}
+
 func TestServiceRestoreRejectsSnapshotChecksumMismatch(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
