@@ -1856,14 +1856,18 @@ func printPrettySummary(report summary) {
 	}
 
 	fmt.Printf("Trace Checks\n")
-	fmt.Printf("  checked=%d pass=%d fail=%d\n", report.TraceChecks.Checked, report.TraceChecks.Pass, report.TraceChecks.Fail)
-	fmt.Printf("  pass-rate=%.2f%%\n", tracePassRate)
-	if len(report.TraceChecks.FailedTraceID) > 0 {
-		limit := len(report.TraceChecks.FailedTraceID)
-		if limit > 5 {
-			limit = 5
+	if traceChecksSkipped(report) {
+		fmt.Printf("  skipped (trace-check-limit=%d)\n", report.Config.TraceCheckLimit)
+	} else {
+		fmt.Printf("  checked=%d pass=%d fail=%d\n", report.TraceChecks.Checked, report.TraceChecks.Pass, report.TraceChecks.Fail)
+		fmt.Printf("  pass-rate=%.2f%%\n", tracePassRate)
+		if len(report.TraceChecks.FailedTraceID) > 0 {
+			limit := len(report.TraceChecks.FailedTraceID)
+			if limit > 5 {
+				limit = 5
+			}
+			fmt.Printf("  failed trace sample: %s\n", strings.Join(report.TraceChecks.FailedTraceID[:limit], ", "))
 		}
-		fmt.Printf("  failed trace sample: %s\n", strings.Join(report.TraceChecks.FailedTraceID[:limit], ", "))
 	}
 	fmt.Printf("\n")
 
@@ -1901,6 +1905,14 @@ func printPrettySummary(report summary) {
 		}
 		fmt.Printf("\n")
 	}
+}
+
+func traceChecksSkipped(report summary) bool {
+	return report.Config.TraceCheckLimit <= 0 &&
+		report.TraceChecks.Checked == 0 &&
+		report.TraceChecks.Pass == 0 &&
+		report.TraceChecks.Fail == 0 &&
+		len(report.TraceChecks.FailedTraceID) == 0
 }
 
 func topProfileKeys(values map[string]profileSummary, limit int) []string {

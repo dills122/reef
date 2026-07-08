@@ -157,7 +157,8 @@ class KafkaStreamCommandPublisher(
                     publishInFlight = inFlight.get(),
                     publishMaxInFlight = maxInFlight,
                     publishAckLastMs = lastPublishAckMs.get(),
-                    publishAckMaxMs = maxPublishAckMs.get()
+                    publishAckMaxMs = maxPublishAckMs.get(),
+                    producerMetrics = producerMetricsSnapshot()
                 )
             }
         } catch (ex: Exception) {
@@ -169,6 +170,7 @@ class KafkaStreamCommandPublisher(
                 publishMaxInFlight = maxInFlight,
                 publishAckLastMs = lastPublishAckMs.get(),
                 publishAckMaxMs = maxPublishAckMs.get(),
+                producerMetrics = producerMetricsSnapshot(),
                 error = ex.message ?: "unknown"
             )
         }
@@ -226,7 +228,61 @@ class KafkaStreamCommandPublisher(
         lastPublishAckMs.set(elapsedMs)
         maxPublishAckMs.accumulateAndGet(elapsedMs, ::maxOf)
     }
+
+    private fun producerMetricsSnapshot(): Map<String, Double> {
+        return try {
+            producer.metrics()
+                .filterKeys { metricName -> metricName.name() in KAFKA_PRODUCER_METRIC_NAMES }
+                .mapKeys { (metricName, _) ->
+                    if (metricName.tags().isEmpty()) {
+                        metricName.name()
+                    } else {
+                        val tagToken = metricName.tags().entries
+                            .sortedBy { it.key }
+                            .joinToString(",") { "${it.key}=${it.value}" }
+                        "${metricName.name()}[$tagToken]"
+                    }
+                }
+                .mapValues { (_, metric) ->
+                    metric.metricValue().toString().toDoubleOrNull()?.takeIf { it.isFinite() } ?: 0.0
+                }
+                .toSortedMap()
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
 }
+
+private val KAFKA_PRODUCER_METRIC_NAMES = setOf(
+    "batch-size-avg",
+    "batch-size-max",
+    "batch-split-rate",
+    "batch-split-total",
+    "buffer-available-bytes",
+    "buffer-exhausted-rate",
+    "buffer-exhausted-total",
+    "bufferpool-wait-ratio",
+    "bufferpool-wait-time-ns-total",
+    "compression-rate-avg",
+    "metadata-age",
+    "produce-throttle-time-avg",
+    "produce-throttle-time-max",
+    "record-error-rate",
+    "record-error-total",
+    "record-queue-time-avg",
+    "record-queue-time-max",
+    "record-retry-rate",
+    "record-retry-total",
+    "record-send-rate",
+    "record-send-total",
+    "record-size-avg",
+    "record-size-max",
+    "records-per-request-avg",
+    "request-latency-avg",
+    "request-latency-max",
+    "requests-in-flight",
+    "waiting-threads"
+)
 
 class KafkaStreamCommandSource(
     private val bootstrapServers: String = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),

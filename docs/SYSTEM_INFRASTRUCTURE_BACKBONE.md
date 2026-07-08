@@ -306,9 +306,11 @@ Current implementation is still partly the older benchmark harness:
 - `scripts/dev/do-benchmark-host.sh`
 - `scripts/deploy/simulation-run.mjs`
 
-That bridge starts the root local stream-ack Compose profile on the disposable
-DigitalOcean worker. It should stay clearly separate from the Hetzner backbone
-Compose files under `infra/hetzner-core/server/`.
+That bridge starts a root local benchmark Compose profile on the disposable
+DigitalOcean worker. The historical default remains `stream-ack`; set
+`REEF_DO_BENCHMARK_PROFILE=materializer` for the current direct-stream plus
+venue-event-materializer durable-canonical path. It should stay clearly
+separate from the Hetzner backbone Compose files under `infra/hetzner-core/server/`.
 
 Target implementation should mirror the Hetzner backbone pattern:
 

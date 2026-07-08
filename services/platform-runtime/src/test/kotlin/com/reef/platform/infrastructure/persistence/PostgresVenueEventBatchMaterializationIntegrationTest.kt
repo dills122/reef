@@ -34,6 +34,15 @@ class PostgresVenueEventBatchMaterializationIntegrationTest {
         assertEquals("rejected", outcome.resultStatus)
         assertEquals("ORDER_ALREADY_FILLED", outcome.rejectCode)
 
+        val reference = persistence.venueEventBatchCommandReference("cmd-$suffix")
+        assertNotNull(reference)
+        assertEquals("batch-$suffix", reference.batchId)
+        assertEquals("engine-0", reference.shardId)
+        assertEquals(4, reference.partition)
+        assertEquals(1001L, reference.streamSequence)
+        assertEquals("CancelOrder", reference.commandType)
+        assertEquals("ORDER_ALREADY_FILLED", reference.rejectCode)
+
         assertFailsWith<Exception> {
             persistence.materializeVenueEventBatch(batch.copy(payloadChecksum = "different-$suffix"))
         }

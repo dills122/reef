@@ -40,7 +40,7 @@ func sampleSummary() summary {
 		StartedAt:              time.Date(2026, 7, 7, 0, 0, 0, 0, time.UTC),
 		FinishedAt:             time.Date(2026, 7, 7, 0, 1, 0, 0, time.UTC),
 		DurationSeconds:        60,
-		Config:                 Config{Mode: "strict-lifecycle", Workers: 4, RatePerSecond: 100, PrettySummary: true, ProfileMixMM: 25, ProfileMixInst: 25, ProfileMixRetail: 25, ProfileMixNoise: 25},
+		Config:                 Config{Mode: "strict-lifecycle", Workers: 4, RatePerSecond: 100, TraceCheckLimit: 10, PrettySummary: true, ProfileMixMM: 25, ProfileMixInst: 25, ProfileMixRetail: 25, ProfileMixNoise: 25},
 		ThroughputRPS:          10.5,
 		AcceptedBusinessOpsRPS: 9.5,
 		TotalRequests:          100,
@@ -135,6 +135,33 @@ func TestPrintSummaryPrettyMode(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected pretty summary output to contain %q; got:\n%s", want, out)
 		}
+	}
+	if !strings.Contains(out, "checked=10 pass=8 fail=2") {
+		t.Errorf("expected active trace check counts, got:\n%s", out)
+	}
+	if strings.Contains(out, "skipped (trace-check-limit=0)") {
+		t.Errorf("did not expect active trace checks to be reported as skipped, got:\n%s", out)
+	}
+}
+
+func TestPrintPrettySummaryReportsDisabledTraceChecksAsSkipped(t *testing.T) {
+	report := sampleSummary()
+	report.Config.TraceCheckLimit = 0
+	report.TraceChecks = traceChecks{FailedTraceID: []string{}}
+
+	out := captureStdout(t, func() { printPrettySummary(report) })
+
+	if !strings.Contains(out, "Trace Checks") {
+		t.Errorf("expected Trace Checks section, got:\n%s", out)
+	}
+	if !strings.Contains(out, "skipped (trace-check-limit=0)") {
+		t.Errorf("expected disabled trace checks to be reported as skipped, got:\n%s", out)
+	}
+	if strings.Contains(out, "checked=0 pass=0 fail=0") {
+		t.Errorf("did not expect disabled trace checks to print zero-count diagnostics, got:\n%s", out)
+	}
+	if strings.Contains(out, "pass-rate=0.00%") {
+		t.Errorf("did not expect disabled trace checks to print a zero pass rate, got:\n%s", out)
 	}
 }
 

@@ -23,6 +23,7 @@ const venueProjectionName = env("DEV_READ_SURFACE_CHECK_VENUE_PROJECTION_NAME", 
 const marketDataProjectionName = env("DEV_READ_SURFACE_CHECK_MARKET_DATA_PROJECTION_NAME", "");
 const source = env("DEV_READ_SURFACE_CHECK_SOURCE", "");
 const docPath = env("DEV_READ_SURFACE_CHECK_DOC_PATH", "docs/TRADING_MARKET_DATA_BOUNDARIES.md");
+const clientId = env("DEV_READ_SURFACE_CHECK_CLIENT_ID", "read-surface-check-client");
 
 const query = new URLSearchParams();
 if (venueProjectionName) query.set("venueProjectionName", venueProjectionName);
@@ -41,7 +42,8 @@ const warnings = [];
 // conservative") row, with the endpoint, source, and visibility scope
 // matching the doc's claim.
 for (const surface of liveSurfaces) {
-  const docRow = docRows.find((row) => row.endpoint === surface.endpoint);
+  const surfaceEndpointKey = normalizeEndpoint(surface.endpoint);
+  const docRow = docRows.find((row) => row.endpointKey === surfaceEndpointKey);
   if (!docRow) {
     failures.push(`live surface "${surface.name}" (${surface.endpoint}) has no matching row in ${docPath}`);
     continue;
@@ -69,9 +71,9 @@ for (const surface of liveSurfaces) {
 // the doc cannot claim a surface is active after it has been removed/renamed.
 for (const row of docRows) {
   if (!/^active/i.test(row.gateStatus)) continue;
-  if (!row.endpoint.startsWith("/api/v1/")) continue;
+  if (!row.endpointKey.startsWith("/api/v1/")) continue;
   if (row.endpoint === "/api/v1/data/availability") continue;
-  const liveSurface = liveSurfaces.find((surface) => surface.endpoint === row.endpoint);
+  const liveSurface = liveSurfaces.find((surface) => normalizeEndpoint(surface.endpoint) === row.endpointKey);
   if (!liveSurface) {
     failures.push(`${docPath} claims "${row.endpoint}" is active but the live runtime does not report it in /api/v1/data/availability`);
   }
@@ -100,6 +102,16 @@ function normalizeCell(value) {
     .toLowerCase();
 }
 
+function displayCell(value) {
+  return String(value ?? "")
+    .replace(/`/g, "")
+    .trim();
+}
+
+function normalizeEndpoint(value) {
+  return displayCell(value).toLowerCase();
+}
+
 function normalizeScope(value) {
   return normalizeCell(value).replace(/-/g, " ").replace(/\s+/g, " ");
 }
@@ -119,8 +131,10 @@ function parseInventoryTable(markdown) {
       .slice(1, -1)
       .map((cell) => cell.trim());
     if (cells.length < 8) continue;
+    const endpoint = displayCell(cells[0]);
     rows.push({
-      endpoint: normalizeCell(cells[0]),
+      endpoint,
+      endpointKey: normalizeEndpoint(endpoint),
       audience: cells[1],
       source: cells[2],
       sourceType: cells[3],
@@ -142,7 +156,7 @@ function getText(url) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const transport = parsed.protocol === "https:" ? https : http;
-    const req = transport.request(parsed, { method: "GET", timeout: 5000 }, (res) => {
+    const req = transport.request(parsed, { method: "GET", timeout: 5000, headers: { "X-Client-Id": clientId } }, (res) => {
       let data = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => {

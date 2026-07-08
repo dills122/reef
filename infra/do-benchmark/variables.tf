@@ -13,7 +13,7 @@ variable "droplet_name" {
 variable "region" {
   description = "DigitalOcean region slug."
   type        = string
-  default     = "sfo3"
+  default     = "sfo2"
 }
 
 variable "size" {

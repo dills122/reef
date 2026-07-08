@@ -673,12 +673,6 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
-                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_payload_json_gin
-                    ON ${names.canonicalVenueEventBatches} USING GIN (payload_json jsonb_path_ops)
-                    """.trimIndent()
-                )
-                stmt.execute(
-                    """
                     CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_created_typed
                     ON ${names.canonicalVenueEventBatches}(created_at_ts, event_stream, batch_id)
                     WHERE created_at_ts IS NOT NULL
@@ -3055,39 +3049,27 @@ class PostgresRuntimePersistence(
             conn.prepareStatement(
                 """
                 SELECT
-                  outcome->>'commandId' AS command_id,
-                  b.batch_id,
-                  b.shard_id,
-                  b.partition_id,
-                  b.command_stream,
-                  b.event_stream,
-                  COALESCE((outcome->>'streamSequence')::BIGINT, 0) AS stream_sequence,
-                  COALESCE((outcome->>'deliveredCount')::BIGINT, 0) AS delivered_count,
-                  COALESCE(outcome->>'commandType', '') AS command_type,
-                  COALESCE(outcome->>'payloadHash', '') AS payload_hash,
-                  COALESCE(outcome->>'instrumentId', '') AS instrument_id,
-                  COALESCE(outcome->>'orderId', '') AS order_id,
-                  COALESCE(outcome->>'status', '') AS result_status,
-                  COALESCE(outcome->>'rejectCode', outcome#>>'{result,rejected,code}', '') AS reject_code,
-                  COALESCE(outcome->'result', '{}'::jsonb)::TEXT AS result_payload
-                FROM ${names.canonicalVenueEventBatches} b
-                CROSS JOIN LATERAL jsonb_array_elements(
-                  CASE
-                    WHEN jsonb_typeof(b.payload_json->'outcomes') = 'array' THEN b.payload_json->'outcomes'
-                    ELSE '[]'::jsonb
-                  END
-                ) AS outcomes(outcome)
-                WHERE b.payload_json @> jsonb_build_object(
-                    'outcomes',
-                    jsonb_build_array(jsonb_build_object('commandId', ?))
-                  )
-                  AND outcome->>'commandId' = ?
-                ORDER BY b.materialized_at DESC
+                  command_id,
+                  batch_id,
+                  shard_id,
+                  partition_id,
+                  command_stream,
+                  event_stream,
+                  stream_sequence,
+                  delivered_count,
+                  command_type,
+                  payload_hash,
+                  instrument_id,
+                  order_id,
+                  result_status,
+                  reject_code,
+                  result_payload::TEXT AS result_payload
+                FROM ${names.canonicalCommandOutcomes}
+                WHERE command_id = ?
                 LIMIT 1
                 """.trimIndent()
             ).use { ps ->
                 ps.setString(1, commandId)
-                ps.setString(2, commandId)
                 ps.executeQuery().use { rs ->
                     if (!rs.next()) return null
                     return VenueEventBatchCommandReference(

@@ -1,8 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import "./stream-ack-up.mjs";
-
+setDefault("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
 setDefault("DEV_STRESS_PROFILE", "stream-submit");
 setDefault("DEV_STRESS_RATES", "1000,2500,5000");
@@ -18,6 +17,7 @@ setDefault("DEV_STRESS_ARTIFACT_DIR", "/tmp/reef-stream-ack-stress");
 setDefault("DEV_STRESS_REPORT_OUT", "/tmp/reef-stream-ack-stress/stream-ack-stress.json");
 setDefaultGeneratedSessionConfig();
 
+await import("./stream-ack-up.mjs");
 await import("./stress.mjs");
 
 function setDefault(name, value) {

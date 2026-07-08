@@ -4,6 +4,10 @@ import { join } from "node:path";
 import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
+import { selectPartitionSpreadInstruments } from "./lib/stream-partition-spread.mjs";
+
+const MATERIALIZER_STRESS_SESSION_ID = "venue-event-materializer-mixed-lifecycle-stress";
+const MATERIALIZER_STRESS_RUN_ID = "venue-event-materializer-mixed-lifecycle-stress";
 
 loadDotEnv();
 
@@ -34,6 +38,7 @@ setDefault("MATCHING_ENGINE_DIRECT_STREAM_PARTITIONS", "0..15");
 setValue("STREAM_ACK_WORKER_ENABLED", "false");
 setDefault("STREAM_ACK_PROJECTOR_ENABLED", "false");
 setValue("MATCHING_ENGINE_DIRECT_STREAM_ENABLED", "true");
+setValue("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("MATCHING_ENGINE_DIRECT_STREAM_BATCH_SIZE", "500");
 setDefault("MATCHING_ENGINE_DIRECT_STREAM_FETCH_TIMEOUT_MS", "100");
 setDefault("MATCHING_ENGINE_DIRECT_STREAM_POLL_MS", "1");
@@ -77,6 +82,7 @@ setDefault("DEV_STRESS_VENUE_EVENT_MATERIALIZER_DRAIN_POLL_MS", "1000");
 setDefault("DEV_STRESS_VENUE_EVENT_MATERIALIZER_PROBE_TIMEOUT_MS", "15000");
 setDefault("DEV_STRESS_CAPTURE_DB_DIAGNOSTICS", "1");
 setDefault("DEV_STRESS_DB_SERVICES", "postgres");
+setDefault("DEV_STRESS_RUN_ID", MATERIALIZER_STRESS_RUN_ID);
 setDefault("DEV_STRESS_MIN_SUCCESS_RATE_PCT", "95");
 setDefault("DEV_STRESS_ARTIFACT_DIR", "/tmp/reef-venue-event-materializer-stress");
 setDefault("DEV_STRESS_REPORT_OUT", "/tmp/reef-venue-event-materializer-stress/venue-event-materializer-stress.json");
@@ -89,6 +95,7 @@ console.log(`  rates=${process.env.DEV_STRESS_RATES}`);
 console.log(`  workers=${process.env.DEV_STRESS_SWEEP_WORKERS || process.env.DEV_STRESS_WORKERS}`);
 console.log(`  duration=${process.env.DEV_STRESS_DURATION}`);
 console.log(`  profile=${process.env.DEV_STRESS_PROFILE}`);
+console.log(`  routingRunId=${process.env.DEV_STRESS_RUN_ID}`);
 console.log(`  materializerBatchSize=${process.env.VENUE_EVENT_MATERIALIZER_BATCH_SIZE}`);
 console.log(`  materializerUrls=${process.env.DEV_STRESS_VENUE_EVENT_MATERIALIZER_URLS}`);
 console.log(`  materializerDrainWaitMs=${process.env.DEV_STRESS_VENUE_EVENT_MATERIALIZER_DRAIN_WAIT_MS}`);
@@ -174,9 +181,13 @@ function writeMaterializerSpreadSessionConfig() {
 
 function materializerSpreadSessionConfig() {
   const instrumentCount = Number(process.env.DEV_STRESS_MATERIALIZER_INSTRUMENTS || "64");
-  const equities = Array.from({ length: Math.max(1, instrumentCount) }, (_, index) => {
-    const number = index + 1;
-    const symbol = `STK${String(number).padStart(3, "0")}`;
+  const instruments = selectPartitionSpreadInstruments({
+    runId: env("DEV_STRESS_RUN_ID", MATERIALIZER_STRESS_RUN_ID),
+    venueSessionId: MATERIALIZER_STRESS_SESSION_ID,
+    requestedCount: Math.max(1, instrumentCount),
+    partitionCount: Number(env("STREAM_ACK_PARTITION_COUNT", "16")),
+  });
+  const equities = instruments.map(({ number, symbol }) => {
     const base = 100_000_000_000 + number * 1_000_000_000;
     return [
       `    - symbol: ${symbol}`,
@@ -191,8 +202,8 @@ function materializerSpreadSessionConfig() {
   }).join("\n");
 
   return `session:
-  name: venue-event-materializer-mixed-lifecycle-stress
-  scenarioRunId: venue-event-materializer-mixed-lifecycle-stress
+  name: ${MATERIALIZER_STRESS_SESSION_ID}
+  scenarioRunId: ${MATERIALIZER_STRESS_RUN_ID}
   seed: 727272
   mode: strict-lifecycle
 
