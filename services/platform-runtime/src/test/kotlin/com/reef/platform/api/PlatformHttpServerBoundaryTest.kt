@@ -2317,6 +2317,7 @@ class PlatformHttpServerBoundaryTest {
             assertContains(posted.body, "\"materializedLedgerEntries\":0")
             assertContains(posted.body, "\"materializedSettlements\":0")
             assertContains(posted.body, "\"materializedBreaks\":1")
+            assertContains(posted.body, "\"materializedResolutions\":0")
             assertEquals(200, fetched.status)
             assertContains(fetched.body, "\"resourcePositionId\":\"resource-run-materialize-fail-seller-security\"")
             assertContains(fetched.body, "\"legType\":\"CASH\"")
@@ -2327,6 +2328,70 @@ class PlatformHttpServerBoundaryTest {
             assertContains(obligations.body, "\"cashLegState\":\"LEG_FAILED\"")
             assertContains(obligations.body, "\"securityLegState\":\"LEG_SUCCEEDED\"")
             assertContains(obligations.body, "\"ledgerEntryCount\":0")
+
+            val repairPosted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-materialize-fail",
+                  "resourcePositions":[
+                    {
+                      "resourcePositionId":"resource-run-materialize-fail-buyer-cash-repair",
+                      "correlationId":"corr-resource-repair",
+                      "causationId":"seed-resource-repair",
+                      "participantId":"buyer-1",
+                      "accountId":"account-buyer-1",
+                      "assetType":"CASH",
+                      "assetId":"USD",
+                      "quantity":"15025000000000",
+                      "occurredAt":"2026-01-01T00:00:01Z"
+                    }
+                  ],
+                  "repairs":[
+                    {
+                      "settlementRepairId":"repair-run-materialize-fail-1",
+                      "settlementBreakId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
+                      "settlementObligationId":"settlement-obligation-trade-materialize-fail",
+                      "correlationId":"corr-repair-materialize-fail",
+                      "causationId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
+                      "repairAction":"POST_CASH_LEG_REPAIR",
+                      "actorType":"USER",
+                      "actorId":"ops-user-1",
+                      "occurredAt":"2026-01-01T00:00:02Z"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+            val repaired = post(
+                server.address.port,
+                "/internal/admin/settlement/obligations/materialize",
+                emptyMap(),
+                """{"scenarioRunId":"run-materialize-fail"}"""
+            )
+            val repairedFetched = get(server.address.port, "/api/v1/settlement/facts/run-materialize-fail")
+            val repairedObligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-fail")
+            val repairedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize-fail")
+
+            assertEquals(200, repairPosted.status)
+            assertEquals(200, repaired.status)
+            assertContains(repaired.body, "\"materializedAttempts\":1")
+            assertContains(repaired.body, "\"materializedLedgerEntries\":4")
+            assertContains(repaired.body, "\"materializedSettlements\":1")
+            assertContains(repaired.body, "\"materializedResolutions\":1")
+            assertEquals(200, repairedFetched.status)
+            assertContains(repairedFetched.body, "\"settlementAttemptId\":\"settlement-attempt-settlement-obligation-trade-materialize-fail-2\"")
+            assertContains(repairedFetched.body, "\"settlementResolutionId\":\"settlement-resolution-settlement-break-settlement-obligation-trade-materialize-fail-1-repair-run-materialize-fail-1\"")
+            assertEquals(200, repairedObligations.status)
+            assertContains(repairedObligations.body, "\"settlementState\":\"SETTLED\"")
+            assertContains(repairedObligations.body, "\"exceptionState\":\"RESOLVED\"")
+            assertContains(repairedObligations.body, "\"settlementAttemptNumber\":2")
+            assertContains(repairedObligations.body, "\"ledgerEntryCount\":4")
+            assertEquals(200, repairedLedger.status)
+            assertContains(repairedLedger.body, "\"settlementProofsCount\":1")
+            assertContains(repairedLedger.body, "\"proofState\":\"PROVEN\"")
         } finally {
             server.stop(0)
         }

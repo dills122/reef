@@ -17,6 +17,7 @@ data class SettlementObligationMaterializationResult(
     val materializedLedgerEntries: Int,
     val materializedSettlements: Int,
     val materializedBreaks: Int,
+    val materializedResolutions: Int,
     val skippedTrades: Int
 )
 
@@ -36,6 +37,7 @@ class TradeSettlementObligationMaterializer(
         val ledgerEntries = mutableListOf<SettlementLedgerEntryFact>()
         val settlements = mutableListOf<SettlementSettledFact>()
         val breaks = mutableListOf<SettlementBreakOpenedFact>()
+        val resolutions = mutableListOf<SettlementResolvedFact>()
         val existingFacts = settlementFactStore.factsByScenarioRunId(scenarioRunId)
         val resourceChecksEnabled = existingFacts.resourcePositions.isNotEmpty()
         var skipped = 0
@@ -83,10 +85,13 @@ class TradeSettlementObligationMaterializer(
                 profileId = selection.profileId,
                 policyVersion = selection.policyVersion
             )
-            obligations += obligation
+            if (existingFacts.obligations.none { it.settlementObligationId == obligation.settlementObligationId }) {
+                obligations += obligation
+            }
             if (selection.mode == InstantPostTradeMode) {
-                val instruction = instructionFact(obligation)
-                val attempt = attemptFact(obligation, instruction)
+                val plan = instantSettlementPlan(existingFacts, obligation) ?: return@forEach
+                val instruction = instructionFact(obligation, plan.attemptNumber, plan.occurredAt)
+                val attempt = attemptFact(obligation, instruction, plan.attemptNumber, plan.occurredAt)
                 val proposedLedgerEntries = ledgerEntryFacts(obligation, instruction, attempt, buyOrder, sellOrder)
                 val availability = if (resourceChecksEnabled) {
                     resourceAvailability(
@@ -111,9 +116,18 @@ class TradeSettlementObligationMaterializer(
                 if (availability.cashAvailable && availability.securityAvailable) {
                     ledgerEntries += proposedLedgerEntries
                     settlements += settlementFact(obligation, instruction, attempt)
+                    plan.repair?.let {
+                        resolutions += resolutionFact(
+                            obligation = obligation,
+                            breakFact = plan.breakFact!!,
+                            repair = it,
+                            attempt = attempt
+                        )
+                    }
                 } else {
                     breaks += breakFact(
                         obligation = obligation,
+                        attempt = attempt,
                         reason = if (!availability.cashAvailable) {
                             SettlementBreakOpenedReason
                         } else {
@@ -126,7 +140,8 @@ class TradeSettlementObligationMaterializer(
 
         if (
             obligations.isNotEmpty() || instructions.isNotEmpty() || attempts.isNotEmpty() ||
-            legOutcomes.isNotEmpty() || ledgerEntries.isNotEmpty() || settlements.isNotEmpty() || breaks.isNotEmpty()
+            legOutcomes.isNotEmpty() || ledgerEntries.isNotEmpty() || settlements.isNotEmpty() ||
+            breaks.isNotEmpty() || resolutions.isNotEmpty()
         ) {
             settlementFactStore.appendFacts(
                 SettlementFactBundle(
@@ -137,7 +152,8 @@ class TradeSettlementObligationMaterializer(
                     legOutcomes = legOutcomes,
                     ledgerEntries = ledgerEntries,
                     settlements = settlements,
-                    breaks = breaks
+                    breaks = breaks,
+                    resolutions = resolutions
                 )
             )
         }
@@ -151,6 +167,7 @@ class TradeSettlementObligationMaterializer(
             materializedLedgerEntries = ledgerEntries.size,
             materializedSettlements = settlements.size,
             materializedBreaks = breaks.size,
+            materializedResolutions = resolutions.size,
             skippedTrades = skipped
         )
     }
@@ -182,25 +199,31 @@ class TradeSettlementObligationMaterializer(
         )
     }
 
-    private fun instructionFact(obligation: SettlementObligationCreatedFact): SettlementInstructionCreatedFact {
+    private fun instructionFact(
+        obligation: SettlementObligationCreatedFact,
+        attemptNumber: Int = 1,
+        occurredAt: Instant = obligation.occurredAt
+    ): SettlementInstructionCreatedFact {
         return SettlementInstructionCreatedFact(
-            settlementInstructionId = "settlement-instruction-${obligation.settlementObligationId}-1",
+            settlementInstructionId = "settlement-instruction-${obligation.settlementObligationId}-$attemptNumber",
             settlementObligationId = obligation.settlementObligationId,
             scenarioRunId = obligation.scenarioRunId,
             postTradeProfileId = obligation.postTradeProfileId,
             postTradePolicyVersion = obligation.postTradePolicyVersion,
             correlationId = obligation.correlationId,
             causationId = obligation.settlementObligationId,
-            occurredAt = obligation.occurredAt
+            occurredAt = occurredAt
         )
     }
 
     private fun attemptFact(
         obligation: SettlementObligationCreatedFact,
-        instruction: SettlementInstructionCreatedFact
+        instruction: SettlementInstructionCreatedFact,
+        attemptNumber: Int = 1,
+        occurredAt: Instant = obligation.occurredAt
     ): SettlementAttemptStartedFact {
         return SettlementAttemptStartedFact(
-            settlementAttemptId = "settlement-attempt-${obligation.settlementObligationId}-1",
+            settlementAttemptId = "settlement-attempt-${obligation.settlementObligationId}-$attemptNumber",
             settlementObligationId = obligation.settlementObligationId,
             settlementInstructionId = instruction.settlementInstructionId,
             scenarioRunId = obligation.scenarioRunId,
@@ -208,8 +231,8 @@ class TradeSettlementObligationMaterializer(
             postTradePolicyVersion = obligation.postTradePolicyVersion,
             correlationId = obligation.correlationId,
             causationId = instruction.settlementInstructionId,
-            attemptNumber = 1,
-            occurredAt = obligation.occurredAt
+            attemptNumber = attemptNumber,
+            occurredAt = occurredAt
         )
     }
 
@@ -233,7 +256,7 @@ class TradeSettlementObligationMaterializer(
                 causationId = attempt.settlementAttemptId,
                 legType = SettlementLegTypeCash,
                 state = cashState,
-                occurredAt = obligation.occurredAt
+                occurredAt = attempt.occurredAt
             ),
             SettlementLegOutcomeFact(
                 settlementLegOutcomeId = "settlement-leg-${attempt.settlementAttemptId}-security",
@@ -247,7 +270,7 @@ class TradeSettlementObligationMaterializer(
                 causationId = attempt.settlementAttemptId,
                 legType = SettlementLegTypeSecurity,
                 state = securityState,
-                occurredAt = obligation.occurredAt
+                occurredAt = attempt.occurredAt
             )
         )
     }
@@ -339,7 +362,7 @@ class TradeSettlementObligationMaterializer(
             assetId = assetId,
             direction = direction,
             quantity = quantity,
-            occurredAt = obligation.occurredAt
+            occurredAt = attempt.occurredAt
         )
     }
 
@@ -358,21 +381,82 @@ class TradeSettlementObligationMaterializer(
             postTradePolicyVersion = obligation.postTradePolicyVersion,
             correlationId = obligation.correlationId,
             causationId = attempt.settlementAttemptId,
-            occurredAt = obligation.occurredAt
+            occurredAt = attempt.occurredAt
         )
     }
 
-    private fun breakFact(obligation: SettlementObligationCreatedFact, reason: String): SettlementBreakOpenedFact {
+    private fun breakFact(
+        obligation: SettlementObligationCreatedFact,
+        attempt: SettlementAttemptStartedFact,
+        reason: String
+    ): SettlementBreakOpenedFact {
         return SettlementBreakOpenedFact(
-            settlementBreakId = "settlement-break-${obligation.settlementObligationId}-1",
+            settlementBreakId = "settlement-break-${obligation.settlementObligationId}-${attempt.attemptNumber}",
             settlementObligationId = obligation.settlementObligationId,
             scenarioRunId = obligation.scenarioRunId,
             postTradeProfileId = obligation.postTradeProfileId,
             postTradePolicyVersion = obligation.postTradePolicyVersion,
             correlationId = obligation.correlationId,
-            causationId = obligation.settlementObligationId,
+            causationId = attempt.settlementAttemptId,
             reason = reason,
-            occurredAt = obligation.occurredAt
+            occurredAt = attempt.occurredAt
+        )
+    }
+
+    private fun resolutionFact(
+        obligation: SettlementObligationCreatedFact,
+        breakFact: SettlementBreakOpenedFact,
+        repair: SettlementRepairPostedFact,
+        attempt: SettlementAttemptStartedFact
+    ): SettlementResolvedFact {
+        return SettlementResolvedFact(
+            settlementResolutionId = "settlement-resolution-${breakFact.settlementBreakId}-${repair.settlementRepairId}",
+            settlementObligationId = obligation.settlementObligationId,
+            settlementBreakId = breakFact.settlementBreakId,
+            settlementRepairId = repair.settlementRepairId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = attempt.settlementAttemptId,
+            occurredAt = attempt.occurredAt
+        )
+    }
+
+    private fun instantSettlementPlan(
+        facts: SettlementFactBundle,
+        obligation: SettlementObligationCreatedFact
+    ): SettlementAttemptPlan? {
+        val existingSettled = facts.settlements.any { it.settlementObligationId == obligation.settlementObligationId }
+        val latestBreak = facts.breaks
+            .filter { it.settlementObligationId == obligation.settlementObligationId }
+            .maxWithOrNull(compareBy<SettlementBreakOpenedFact> { it.occurredAt }.thenBy { it.settlementBreakId })
+        val latestResolution = latestBreak?.let { breakFact ->
+            facts.resolutions
+                .filter { it.settlementBreakId == breakFact.settlementBreakId }
+                .maxWithOrNull(compareBy<SettlementResolvedFact> { it.occurredAt }.thenBy { it.settlementResolutionId })
+        }
+        if (existingSettled && latestBreak == null) return null
+        if (latestResolution != null) return null
+        if (latestBreak == null) {
+            return SettlementAttemptPlan(attemptNumber = 1, occurredAt = obligation.occurredAt)
+        }
+
+        val latestRepair = facts.repairs
+            .filter { it.settlementBreakId == latestBreak.settlementBreakId }
+            .maxWithOrNull(compareBy<SettlementRepairPostedFact> { it.occurredAt }.thenBy { it.settlementRepairId })
+            ?: return null
+        val latestAttempt = facts.attempts
+            .filter { it.settlementObligationId == obligation.settlementObligationId }
+            .maxWithOrNull(compareBy<SettlementAttemptStartedFact> { it.attemptNumber }.thenBy { it.settlementAttemptId })
+        if (latestAttempt != null && !latestAttempt.occurredAt.isBefore(latestRepair.occurredAt)) {
+            return null
+        }
+        return SettlementAttemptPlan(
+            attemptNumber = (latestAttempt?.attemptNumber ?: 1) + 1,
+            occurredAt = latestRepair.occurredAt,
+            breakFact = latestBreak,
+            repair = latestRepair
         )
     }
 
@@ -438,4 +522,11 @@ class TradeSettlementObligationMaterializer(
 private data class SettlementResourceAvailability(
     val cashAvailable: Boolean,
     val securityAvailable: Boolean
+)
+
+private data class SettlementAttemptPlan(
+    val attemptNumber: Int,
+    val occurredAt: Instant,
+    val breakFact: SettlementBreakOpenedFact? = null,
+    val repair: SettlementRepairPostedFact? = null
 )

@@ -3416,6 +3416,7 @@ class PlatformHttpServer(
                     "materializedLedgerEntries" to result.materializedLedgerEntries,
                     "materializedSettlements" to result.materializedSettlements,
                     "materializedBreaks" to result.materializedBreaks,
+                    "materializedResolutions" to result.materializedResolutions,
                     "skippedTrades" to result.skippedTrades
                 )
             )
