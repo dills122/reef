@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/dills122/reef/services/matching-engine/internal/app"
 	"github.com/dills122/reef/services/matching-engine/internal/domain"
@@ -29,6 +30,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/internal/stream-direct/stats", s.handleStreamDirectStats)
+	mux.HandleFunc("/internal/books/", s.handleBookInternal)
 	mux.HandleFunc("/orders/submit", s.handleSubmitOrder)
 	mux.HandleFunc("/orders/cancel", s.handleCancelOrder)
 	mux.HandleFunc("/orders/modify", s.handleModifyOrder)
@@ -58,6 +60,51 @@ func (s *Server) handleStreamDirectStats(w http.ResponseWriter, r *http.Request)
 		"enabled":    true,
 		"partitions": s.streamDirectStats(),
 	})
+}
+
+func (s *Server) handleBookInternal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	relativePath := strings.TrimPrefix(r.URL.Path, "/internal/books/")
+	if relativePath == r.URL.Path {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "book path must be /internal/books/{instrumentId}/stats or /internal/books/{instrumentId}/snapshot",
+		})
+		return
+	}
+	switch {
+	case strings.HasSuffix(relativePath, "/stats"):
+		instrumentID := strings.TrimSuffix(relativePath, "/stats")
+		if instrumentID == "" || strings.Contains(instrumentID, "/") {
+			writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "book stats path must be /internal/books/{instrumentId}/stats",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, s.service.BookStats(instrumentID))
+	case strings.HasSuffix(relativePath, "/snapshot"):
+		instrumentID := strings.TrimSuffix(relativePath, "/snapshot")
+		if instrumentID == "" || strings.Contains(instrumentID, "/") {
+			writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "book snapshot path must be /internal/books/{instrumentId}/snapshot",
+			})
+			return
+		}
+		snapshot, ok := s.service.SnapshotForInstrument(instrumentID)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{
+				"error": "book not found",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, snapshot)
+	default:
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "book path must be /internal/books/{instrumentId}/stats or /internal/books/{instrumentId}/snapshot",
+		})
+	}
 }
 
 func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {

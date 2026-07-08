@@ -1,7 +1,10 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +20,10 @@ type Service struct {
 	ordersMu          sync.RWMutex
 	orders            map[string]*orderRecord
 	now               func() time.Time
+	orderControls     OrderControls
+	sessionControls   SessionControls
+	matchingProfiles  MatchingProfiles
+	stpMode           SelfTradePreventionMode
 	terminalRetention terminalOrderRetention
 }
 
@@ -30,6 +37,9 @@ type orderBook struct {
 type orderRecord struct {
 	OrderID           string
 	InstrumentID      string
+	VenueSessionID    string
+	ParticipantID     string
+	AccountID         string
 	Side              domain.Side
 	OriginalQuantity  int64
 	RemainingQuantity int64
@@ -38,6 +48,87 @@ type orderRecord struct {
 	Status            domain.OrderStatus
 	LastUpdatedAt     string
 	terminalTracked   bool
+}
+
+type OrderControls struct {
+	MaxQuantityUnits int64
+	MaxNotional      int64
+	PriceCollars     map[string]PriceCollar
+}
+
+type PriceCollar struct {
+	ReferencePrice int64
+	BandBps        int64
+}
+
+type Snapshot struct {
+	Metadata SnapshotMetadata            `json:"metadata"`
+	Books    map[string]hotbook.Snapshot `json:"books"`
+	Orders   []SnapshotOrderRecord       `json:"orders"`
+	Checksum string                      `json:"checksum"`
+}
+
+type SnapshotMetadata struct {
+	SnapshotVersion string   `json:"snapshotVersion"`
+	EngineVersion   string   `json:"engineVersion"`
+	BookCount       int      `json:"bookCount"`
+	OrderCount      int      `json:"orderCount"`
+	BookKeys        []string `json:"bookKeys"`
+}
+
+type SnapshotOrderRecord struct {
+	OrderID           string             `json:"orderId"`
+	InstrumentID      string             `json:"instrumentId"`
+	VenueSessionID    string             `json:"venueSessionId"`
+	ParticipantID     string             `json:"participantId"`
+	AccountID         string             `json:"accountId"`
+	Side              domain.Side        `json:"side"`
+	OriginalQuantity  int64              `json:"originalQuantity"`
+	RemainingQuantity int64              `json:"remainingQuantity"`
+	LimitPrice        int64              `json:"limitPrice"`
+	Currency          string             `json:"currency"`
+	Status            domain.OrderStatus `json:"status"`
+	LastUpdatedAt     string             `json:"lastUpdatedAt"`
+}
+
+type BookStats struct {
+	InstrumentID    string `json:"instrumentId"`
+	BuyOrders       int    `json:"buyOrders"`
+	SellOrders      int    `json:"sellOrders"`
+	BuyPriceLevels  int    `json:"buyPriceLevels"`
+	SellPriceLevels int    `json:"sellPriceLevels"`
+	Checksum        string `json:"checksum"`
+}
+
+type MatchAlgorithm string
+
+const (
+	MatchAlgorithmFIFO MatchAlgorithm = "FIFO"
+)
+
+type MatchingProfiles struct {
+	DefaultAlgorithm MatchAlgorithm
+	Instruments      map[string]MatchAlgorithm
+}
+
+type SelfTradePreventionMode string
+
+const (
+	SelfTradePreventionCancelNewest SelfTradePreventionMode = "CANCEL_NEWEST"
+	SelfTradePreventionCancelOldest SelfTradePreventionMode = "CANCEL_OLDEST"
+)
+
+type SessionState string
+
+const (
+	SessionStateOpen   SessionState = "OPEN"
+	SessionStateHalted SessionState = "HALTED"
+	SessionStateClosed SessionState = "CLOSED"
+)
+
+type SessionControls struct {
+	DefaultState SessionState
+	States       map[string]SessionState
 }
 
 type Option func(*Service)
@@ -55,6 +146,30 @@ func WithTerminalOrderRetentionLimit(limit int) Option {
 		if limit > 0 {
 			s.terminalRetention.limit = limit
 		}
+	}
+}
+
+func WithOrderControls(controls OrderControls) Option {
+	return func(s *Service) {
+		s.orderControls = controls
+	}
+}
+
+func WithSessionControls(controls SessionControls) Option {
+	return func(s *Service) {
+		s.sessionControls = controls
+	}
+}
+
+func WithMatchingProfiles(profiles MatchingProfiles) Option {
+	return func(s *Service) {
+		s.matchingProfiles = profiles
+	}
+}
+
+func WithSelfTradePreventionMode(mode SelfTradePreventionMode) Option {
+	return func(s *Service) {
+		s.stpMode = mode
 	}
 }
 
@@ -88,6 +203,12 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if cmd.InstrumentID == "" {
 		return rejectedResult("evt-reject-missing-instrument", cmd.OrderID, "VALIDATION_ERROR", "instrumentId is required", now)
 	}
+	if rejection := s.validateMatchingProfile(cmd.OrderID, cmd.InstrumentID, now); rejection != nil {
+		return *rejection
+	}
+	if rejection := s.validateSessionForSubmit(cmd.OrderID, cmd.VenueSessionID, now); rejection != nil {
+		return *rejection
+	}
 
 	if cmd.Side != domain.SideBuy && cmd.Side != domain.SideSell {
 		return rejectedResult("evt-reject-invalid-side", cmd.OrderID, "VALIDATION_ERROR", "side must be BUY or SELL", now)
@@ -102,6 +223,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	if !ok {
 		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
 	}
+	if rejection := s.validateOrderControls(cmd.OrderID, cmd.InstrumentID, quantityUnits, limitPrice, now); rejection != nil {
+		return *rejection
+	}
 
 	result := acceptedResult("accepted", cmd.OrderID, now)
 
@@ -112,6 +236,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	record := &orderRecord{
 		OrderID:           cmd.OrderID,
 		InstrumentID:      cmd.InstrumentID,
+		VenueSessionID:    cmd.VenueSessionID,
+		ParticipantID:     cmd.ParticipantID,
+		AccountID:         cmd.AccountID,
 		Side:              cmd.Side,
 		OriginalQuantity:  quantityUnits,
 		RemainingQuantity: quantityUnits,
@@ -122,6 +249,10 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 	}
 	if !s.reserveOrder(record) {
 		return rejectedResult("evt-reject-duplicate-order-id", cmd.OrderID, "DUPLICATE_ORDER_ID", "orderId already exists", now)
+	}
+	if accepted, rejection := s.applySelfTradePrevention(book, record, now); !accepted {
+		s.releaseOrder(record.OrderID)
+		return rejection
 	}
 	incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 
@@ -147,6 +278,9 @@ func (s *Service) CancelOrder(cmd domain.CancelOrder) domain.SubmitOrderResult {
 	record, ok := s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	if rejection := s.validateSessionForCancel(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
+		return *rejection
 	}
 	book := s.bookFor(record.InstrumentID)
 	book.mu.Lock()
@@ -181,6 +315,12 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
 	}
+	if rejection := s.validateMatchingProfile(cmd.OrderID, record.InstrumentID, now); rejection != nil {
+		return *rejection
+	}
+	if rejection := s.validateSessionForModify(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
+		return *rejection
+	}
 	book := s.bookFor(record.InstrumentID)
 	book.mu.Lock()
 	defer book.mu.Unlock()
@@ -198,13 +338,28 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	if !ok {
 		return rejectedResult("evt-reject-invalid-price", cmd.OrderID, "VALIDATION_ERROR", "limitPrice must be a positive integer", now)
 	}
+	if rejection := s.validateOrderControls(cmd.OrderID, record.InstrumentID, quantityUnits, limitPrice, now); rejection != nil {
+		return *rejection
+	}
 
 	alreadyFilled := record.OriginalQuantity - record.RemainingQuantity
 	if quantityUnits <= alreadyFilled {
 		return rejectedResult("evt-reject-invalid-modify-quantity", cmd.OrderID, "VALIDATION_ERROR", "quantityUnits must remain above already filled quantity", now)
 	}
 
-	s.removeRestingOrder(book, record)
+	resetPriority := limitPrice != record.LimitPrice || quantityUnits > record.OriginalQuantity
+	if resetPriority {
+		proposed := *record
+		proposed.OriginalQuantity = quantityUnits
+		proposed.RemainingQuantity = quantityUnits - alreadyFilled
+		proposed.LimitPrice = limitPrice
+		if accepted, rejection := s.applySelfTradePrevention(book, &proposed, now); !accepted {
+			return rejection
+		}
+	}
+	if resetPriority {
+		s.removeRestingOrder(book, record)
+	}
 
 	record.OriginalQuantity = quantityUnits
 	record.RemainingQuantity = quantityUnits - alreadyFilled
@@ -214,7 +369,7 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 
 	result := acceptedResult("modified", cmd.OrderID, now)
 
-	if record.RemainingQuantity > 0 {
+	if resetPriority && record.RemainingQuantity > 0 {
 		incoming := book.book.NewRestingOrder(cmd.OrderID, record.LimitPrice)
 		s.match(book, incoming, record.Side, &result, now)
 		if record.RemainingQuantity > 0 {
@@ -237,6 +392,22 @@ func (s *Service) nowFormatted() string {
 		return time.Now().UTC().Format(time.RFC3339)
 	}
 	return s.now().UTC().Format(time.RFC3339)
+}
+
+func (s *Service) validateOrderControls(orderID string, instrumentID string, quantityUnits int64, limitPrice int64, occurredAt string) *domain.SubmitOrderResult {
+	if s.orderControls.MaxQuantityUnits > 0 && quantityUnits > s.orderControls.MaxQuantityUnits {
+		result := rejectedResult("evt-reject-max-quantity-"+orderID, orderID, "MARKET_INTEGRITY_CONTROL", "quantityUnits exceeds configured maximum", occurredAt)
+		return &result
+	}
+	if s.orderControls.MaxNotional > 0 && exceedsNotional(quantityUnits, limitPrice, s.orderControls.MaxNotional) {
+		result := rejectedResult("evt-reject-max-notional-"+orderID, orderID, "MARKET_INTEGRITY_CONTROL", "order notional exceeds configured maximum", occurredAt)
+		return &result
+	}
+	if collar, ok := s.orderControls.PriceCollars[instrumentID]; ok && !priceWithinCollar(limitPrice, collar) {
+		result := rejectedResult("evt-reject-price-collar-"+orderID, orderID, "MARKET_INTEGRITY_CONTROL", "limitPrice is outside configured price collar", occurredAt)
+		return &result
+	}
+	return nil
 }
 
 // validOccurredAt reports whether a caller-supplied occurredAt is either
@@ -287,6 +458,176 @@ func (s *Service) OrderState(orderID string) (domain.OrderState, bool) {
 	}, true
 }
 
+func (s *Service) Snapshot() Snapshot {
+	snapshot := Snapshot{
+		Books: make(map[string]hotbook.Snapshot),
+	}
+
+	s.booksMu.RLock()
+	bookIDs := make([]string, 0, len(s.books))
+	for instrumentID := range s.books {
+		bookIDs = append(bookIDs, instrumentID)
+	}
+	sort.Strings(bookIDs)
+	for _, instrumentID := range bookIDs {
+		book := s.books[instrumentID]
+		book.mu.Lock()
+		snapshot.Books[instrumentID] = book.book.Snapshot()
+		book.mu.Unlock()
+	}
+	s.booksMu.RUnlock()
+
+	s.ordersMu.RLock()
+	snapshot.Orders = make([]SnapshotOrderRecord, 0, len(s.orders))
+	for _, record := range s.orders {
+		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
+			OrderID:           record.OrderID,
+			InstrumentID:      record.InstrumentID,
+			VenueSessionID:    record.VenueSessionID,
+			ParticipantID:     record.ParticipantID,
+			AccountID:         record.AccountID,
+			Side:              record.Side,
+			OriginalQuantity:  record.OriginalQuantity,
+			RemainingQuantity: record.RemainingQuantity,
+			LimitPrice:        record.LimitPrice,
+			Currency:          record.Currency,
+			Status:            record.Status,
+			LastUpdatedAt:     record.LastUpdatedAt,
+		})
+	}
+	s.ordersMu.RUnlock()
+	sort.Slice(snapshot.Orders, func(i, j int) bool {
+		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
+	})
+	snapshot.Metadata = SnapshotMetadata{
+		SnapshotVersion: "matching-service-snapshot-v1",
+		EngineVersion:   "matching-engine-app-v1",
+		BookCount:       len(snapshot.Books),
+		OrderCount:      len(snapshot.Orders),
+		BookKeys:        bookIDs,
+	}
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+	return snapshot
+}
+
+func (s *Service) BookStats(instrumentID string) BookStats {
+	book := s.bookFor(instrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
+	snapshot := book.book.Snapshot()
+	return BookStats{
+		InstrumentID:    instrumentID,
+		BuyOrders:       book.book.Len(domain.SideBuy),
+		SellOrders:      book.book.Len(domain.SideSell),
+		BuyPriceLevels:  book.book.LevelCount(domain.SideBuy),
+		SellPriceLevels: book.book.LevelCount(domain.SideSell),
+		Checksum:        snapshot.Checksum,
+	}
+}
+
+func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
+	s.booksMu.RLock()
+	book, ok := s.books[instrumentID]
+	s.booksMu.RUnlock()
+	if !ok {
+		return Snapshot{}, false
+	}
+
+	snapshot := Snapshot{
+		Books: make(map[string]hotbook.Snapshot),
+	}
+	book.mu.Lock()
+	snapshot.Books[instrumentID] = book.book.Snapshot()
+	book.mu.Unlock()
+
+	s.ordersMu.RLock()
+	for _, record := range s.orders {
+		if record.InstrumentID != instrumentID {
+			continue
+		}
+		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
+			OrderID:           record.OrderID,
+			InstrumentID:      record.InstrumentID,
+			VenueSessionID:    record.VenueSessionID,
+			ParticipantID:     record.ParticipantID,
+			AccountID:         record.AccountID,
+			Side:              record.Side,
+			OriginalQuantity:  record.OriginalQuantity,
+			RemainingQuantity: record.RemainingQuantity,
+			LimitPrice:        record.LimitPrice,
+			Currency:          record.Currency,
+			Status:            record.Status,
+			LastUpdatedAt:     record.LastUpdatedAt,
+		})
+	}
+	s.ordersMu.RUnlock()
+	sort.Slice(snapshot.Orders, func(i, j int) bool {
+		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
+	})
+	snapshot.Metadata = SnapshotMetadata{
+		SnapshotVersion: "matching-service-snapshot-v1",
+		EngineVersion:   "matching-engine-app-v1",
+		BookCount:       1,
+		OrderCount:      len(snapshot.Orders),
+		BookKeys:        []string{instrumentID},
+	}
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+	return snapshot, true
+}
+
+func (s *Service) MatchAlgorithm(instrumentID string) MatchAlgorithm {
+	if algorithm, ok := s.matchingProfiles.Instruments[instrumentID]; ok && algorithm != "" {
+		return algorithm
+	}
+	if s.matchingProfiles.DefaultAlgorithm != "" {
+		return s.matchingProfiles.DefaultAlgorithm
+	}
+	return MatchAlgorithmFIFO
+}
+
+func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
+	if !validSnapshotMetadata(snapshot) {
+		return nil, false
+	}
+	if snapshot.Checksum != "" && snapshot.Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
+		return nil, false
+	}
+	service := NewService(options...)
+	for instrumentID, bookSnapshot := range snapshot.Books {
+		restored, ok := hotbook.Restore(bookSnapshot)
+		if !ok {
+			return nil, false
+		}
+		service.books[instrumentID] = &orderBook{book: restored}
+	}
+	seenOrderIDs := make(map[string]bool, len(snapshot.Orders))
+	for _, order := range snapshot.Orders {
+		if order.OrderID == "" || seenOrderIDs[order.OrderID] {
+			return nil, false
+		}
+		seenOrderIDs[order.OrderID] = true
+		record := &orderRecord{
+			OrderID:           order.OrderID,
+			InstrumentID:      order.InstrumentID,
+			VenueSessionID:    order.VenueSessionID,
+			ParticipantID:     order.ParticipantID,
+			AccountID:         order.AccountID,
+			Side:              order.Side,
+			OriginalQuantity:  order.OriginalQuantity,
+			RemainingQuantity: order.RemainingQuantity,
+			LimitPrice:        order.LimitPrice,
+			Currency:          order.Currency,
+			Status:            order.Status,
+			LastUpdatedAt:     order.LastUpdatedAt,
+		}
+		service.orders[record.OrderID] = record
+	}
+	if service.Snapshot().Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
+		return nil, false
+	}
+	return service, true
+}
+
 func (s *Service) bookFor(instrumentID string) *orderBook {
 	s.booksMu.RLock()
 	existing, ok := s.books[instrumentID]
@@ -303,6 +644,223 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 	book := newOrderBook()
 	s.books[instrumentID] = book
 	return book
+}
+
+func (s *Service) validateSessionForSubmit(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
+	state := s.sessionState(venueSessionID)
+	if state == SessionStateOpen {
+		return nil
+	}
+	result := rejectedResult("evt-reject-session-state-"+orderID, orderID, "SESSION_STATE_REJECT", "venue session is not open for submit", occurredAt)
+	return &result
+}
+
+func (s *Service) validateSessionForModify(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
+	state := s.sessionState(venueSessionID)
+	if state == SessionStateOpen {
+		return nil
+	}
+	result := rejectedResult("evt-reject-session-state-"+orderID, orderID, "SESSION_STATE_REJECT", "venue session is not open for modify", occurredAt)
+	return &result
+}
+
+func (s *Service) validateSessionForCancel(orderID string, venueSessionID string, occurredAt string) *domain.SubmitOrderResult {
+	state := s.sessionState(venueSessionID)
+	if state != SessionStateClosed {
+		return nil
+	}
+	result := rejectedResult("evt-reject-session-state-"+orderID, orderID, "SESSION_STATE_REJECT", "venue session is closed for cancel", occurredAt)
+	return &result
+}
+
+func (s *Service) sessionState(venueSessionID string) SessionState {
+	if state, ok := s.sessionControls.States[venueSessionID]; ok && state != "" {
+		return state
+	}
+	if s.sessionControls.DefaultState != "" {
+		return s.sessionControls.DefaultState
+	}
+	return SessionStateOpen
+}
+
+func (s *Service) validateMatchingProfile(orderID string, instrumentID string, occurredAt string) *domain.SubmitOrderResult {
+	algorithm := s.MatchAlgorithm(instrumentID)
+	if algorithm == MatchAlgorithmFIFO {
+		return nil
+	}
+	result := rejectedResult("evt-reject-match-algorithm-"+orderID, orderID, "UNSUPPORTED_MATCH_ALGORITHM", "matching algorithm is not supported", occurredAt)
+	return &result
+}
+
+func (s *Service) applySelfTradePrevention(book *orderBook, incoming *orderRecord, occurredAt string) (bool, domain.SubmitOrderResult) {
+	matches := s.reachableSelfTradeRestingRecords(book, incoming)
+	if len(matches) == 0 {
+		return true, domain.SubmitOrderResult{}
+	}
+	if s.selfTradePreventionMode() == SelfTradePreventionCancelOldest {
+		for _, restingRecord := range matches {
+			s.removeRestingOrder(book, restingRecord)
+			restingRecord.RemainingQuantity = 0
+			restingRecord.Status = domain.OrderStatusCancelled
+			restingRecord.LastUpdatedAt = occurredAt
+			s.trackTerminalOrder(restingRecord)
+		}
+		return true, domain.SubmitOrderResult{}
+	}
+	return false, rejectedResult("evt-reject-self-trade-"+incoming.OrderID, incoming.OrderID, "SELF_TRADE_PREVENTION", "order would trade with resting order from same participant or account", occurredAt)
+}
+
+func (s *Service) selfTradePreventionMode() SelfTradePreventionMode {
+	if s.stpMode != "" {
+		return s.stpMode
+	}
+	return SelfTradePreventionCancelNewest
+}
+
+func (s *Service) reachableSelfTradeRestingRecords(book *orderBook, incoming *orderRecord) []*orderRecord {
+	if incoming == nil || !hasSelfTradeIdentity(incoming) {
+		return nil
+	}
+	remaining := incoming.RemainingQuantity
+	opposite := domain.SideSell
+	if incoming.Side == domain.SideSell {
+		opposite = domain.SideBuy
+	}
+	snapshot := book.book.Snapshot()
+	orders := snapshot.Sells
+	if opposite == domain.SideBuy {
+		orders = snapshot.Buys
+	}
+	matches := make([]*orderRecord, 0)
+	for _, resting := range orders {
+		if remaining <= 0 {
+			return matches
+		}
+		restingRecord, ok := s.loadOrder(resting.OrderID)
+		if !ok || restingRecord.OrderID == incoming.OrderID {
+			continue
+		}
+		if incoming.Side == domain.SideBuy && incoming.LimitPrice < restingRecord.LimitPrice {
+			return matches
+		}
+		if incoming.Side == domain.SideSell && incoming.LimitPrice > restingRecord.LimitPrice {
+			return matches
+		}
+		if sameSelfTradeIdentity(incoming, restingRecord) {
+			matches = append(matches, restingRecord)
+			continue
+		}
+		remaining -= restingRecord.RemainingQuantity
+	}
+	return matches
+}
+
+func hasSelfTradeIdentity(record *orderRecord) bool {
+	return strings.TrimSpace(record.ParticipantID) != "" || strings.TrimSpace(record.AccountID) != ""
+}
+
+func sameSelfTradeIdentity(a *orderRecord, b *orderRecord) bool {
+	if strings.TrimSpace(a.ParticipantID) != "" && a.ParticipantID == b.ParticipantID {
+		return true
+	}
+	if strings.TrimSpace(a.AccountID) != "" && a.AccountID == b.AccountID {
+		return true
+	}
+	return false
+}
+
+func (s Snapshot) withoutChecksum() Snapshot {
+	s.Checksum = ""
+	return s
+}
+
+func validSnapshotMetadata(snapshot Snapshot) bool {
+	if snapshot.Metadata.SnapshotVersion == "" && snapshot.Metadata.EngineVersion == "" {
+		return true
+	}
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v1" || snapshot.Metadata.EngineVersion == "" {
+		return false
+	}
+	if snapshot.Metadata.BookCount != len(snapshot.Books) || snapshot.Metadata.OrderCount != len(snapshot.Orders) {
+		return false
+	}
+	if len(snapshot.Metadata.BookKeys) != len(snapshot.Books) {
+		return false
+	}
+	keys := make([]string, 0, len(snapshot.Books))
+	for key := range snapshot.Books {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for i, key := range keys {
+		if snapshot.Metadata.BookKeys[i] != key {
+			return false
+		}
+	}
+	return true
+}
+
+func serviceSnapshotChecksum(snapshot Snapshot) string {
+	var builder strings.Builder
+	builder.WriteString("metadata:")
+	builder.WriteString(snapshot.Metadata.SnapshotVersion)
+	builder.WriteByte(':')
+	builder.WriteString(snapshot.Metadata.EngineVersion)
+	builder.WriteByte(':')
+	builder.WriteString(strconv.Itoa(snapshot.Metadata.BookCount))
+	builder.WriteByte(':')
+	builder.WriteString(strconv.Itoa(snapshot.Metadata.OrderCount))
+	builder.WriteByte(':')
+	builder.WriteString(strings.Join(snapshot.Metadata.BookKeys, ","))
+	builder.WriteByte(';')
+	bookIDs := make([]string, 0, len(snapshot.Books))
+	for instrumentID := range snapshot.Books {
+		bookIDs = append(bookIDs, instrumentID)
+	}
+	sort.Strings(bookIDs)
+	for _, instrumentID := range bookIDs {
+		book := snapshot.Books[instrumentID]
+		builder.WriteString("book:")
+		builder.WriteString(instrumentID)
+		builder.WriteByte(':')
+		builder.WriteString(book.Checksum)
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(book.NextSequence, 10))
+		builder.WriteByte(';')
+	}
+	orders := append([]SnapshotOrderRecord(nil), snapshot.Orders...)
+	sort.Slice(orders, func(i, j int) bool {
+		return orders[i].OrderID < orders[j].OrderID
+	})
+	for _, order := range orders {
+		builder.WriteString("order:")
+		builder.WriteString(order.OrderID)
+		builder.WriteByte(':')
+		builder.WriteString(order.InstrumentID)
+		builder.WriteByte(':')
+		builder.WriteString(order.VenueSessionID)
+		builder.WriteByte(':')
+		builder.WriteString(order.ParticipantID)
+		builder.WriteByte(':')
+		builder.WriteString(order.AccountID)
+		builder.WriteByte(':')
+		builder.WriteString(string(order.Side))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(order.OriginalQuantity, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(order.RemainingQuantity, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(order.LimitPrice, 10))
+		builder.WriteByte(':')
+		builder.WriteString(order.Currency)
+		builder.WriteByte(':')
+		builder.WriteString(string(order.Status))
+		builder.WriteByte(':')
+		builder.WriteString(order.LastUpdatedAt)
+		builder.WriteByte(';')
+	}
+	sum := sha256.Sum256([]byte(builder.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 // BatchRollback captures a pre-mutation snapshot of the order book(s) and
@@ -534,6 +1092,21 @@ func minInt64(a int64, b int64) int64 {
 	return b
 }
 
+func exceedsNotional(quantityUnits int64, limitPrice int64, maxNotional int64) bool {
+	if quantityUnits <= 0 || limitPrice <= 0 || maxNotional <= 0 {
+		return false
+	}
+	return limitPrice > maxNotional/quantityUnits
+}
+
+func priceWithinCollar(limitPrice int64, collar PriceCollar) bool {
+	if collar.ReferencePrice <= 0 || collar.BandBps < 0 {
+		return true
+	}
+	band := (collar.ReferencePrice * collar.BandBps) / 10000
+	return limitPrice >= collar.ReferencePrice-band && limitPrice <= collar.ReferencePrice+band
+}
+
 func newOrderBook() *orderBook {
 	return &orderBook{
 		book: hotbook.New(),
@@ -590,6 +1163,12 @@ func (s *Service) reserveOrder(record *orderRecord) bool {
 	}
 	s.orders[record.OrderID] = record
 	return true
+}
+
+func (s *Service) releaseOrder(orderID string) {
+	s.ordersMu.Lock()
+	defer s.ordersMu.Unlock()
+	delete(s.orders, orderID)
 }
 
 func envInt(name string, fallback int) int {

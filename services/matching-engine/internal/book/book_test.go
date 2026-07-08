@@ -69,6 +69,29 @@ func TestBookDeletesEmptyPriceLevelAndExposesNextBest(t *testing.T) {
 	}
 }
 
+func TestBookLevelCountTracksDistinctPrices(t *testing.T) {
+	book := New()
+	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b2", 101))
+	book.Add(domain.SideBuy, book.NewRestingOrder("b3", 100))
+
+	if got := book.LevelCount(domain.SideBuy); got != 2 {
+		t.Fatalf("expected two buy price levels, got %d", got)
+	}
+	if !book.Remove("b1") {
+		t.Fatal("expected b1 remove")
+	}
+	if got := book.LevelCount(domain.SideBuy); got != 2 {
+		t.Fatalf("expected price level with b2 to remain, got %d", got)
+	}
+	if !book.Remove("b2") {
+		t.Fatal("expected b2 remove")
+	}
+	if got := book.LevelCount(domain.SideBuy); got != 1 {
+		t.Fatalf("expected empty price level to be deleted, got %d", got)
+	}
+}
+
 func TestBookSnapshotRestorePreservesPriorityAndChecksum(t *testing.T) {
 	book := New()
 	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))
