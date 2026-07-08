@@ -2331,37 +2331,18 @@ class PlatformHttpServerBoundaryTest {
 
             val repairPosted = post(
                 server.address.port,
-                "/internal/admin/settlement/facts",
+                "/internal/admin/settlement/repairs/cash",
                 emptyMap(),
                 """
                 {
                   "scenarioRunId":"run-materialize-fail",
-                  "resourcePositions":[
-                    {
-                      "resourcePositionId":"resource-run-materialize-fail-buyer-cash-repair",
-                      "correlationId":"corr-resource-repair",
-                      "causationId":"seed-resource-repair",
-                      "participantId":"buyer-1",
-                      "accountId":"account-buyer-1",
-                      "assetType":"CASH",
-                      "assetId":"USD",
-                      "quantity":"15025000000000",
-                      "occurredAt":"2026-01-01T00:00:01Z"
-                    }
-                  ],
-                  "repairs":[
-                    {
-                      "settlementRepairId":"repair-run-materialize-fail-1",
-                      "settlementBreakId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
-                      "settlementObligationId":"settlement-obligation-trade-materialize-fail",
-                      "correlationId":"corr-repair-materialize-fail",
-                      "causationId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
-                      "repairAction":"POST_CASH_LEG_REPAIR",
-                      "actorType":"USER",
-                      "actorId":"ops-user-1",
-                      "occurredAt":"2026-01-01T00:00:02Z"
-                    }
-                  ]
+                  "settlementRepairId":"repair-run-materialize-fail-1",
+                  "resourcePositionId":"resource-run-materialize-fail-buyer-cash-repair",
+                  "settlementBreakId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
+                  "accountId":"account-buyer-1",
+                  "quantity":"15025000000000",
+                  "actorId":"ops-user-1",
+                  "occurredAt":"2026-01-01T00:00:02Z"
                 }
                 """.trimIndent()
             )
@@ -2376,6 +2357,8 @@ class PlatformHttpServerBoundaryTest {
             val repairedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize-fail")
 
             assertEquals(200, repairPosted.status)
+            assertContains(repairPosted.body, "\"resourcePositionId\":\"resource-run-materialize-fail-buyer-cash-repair\"")
+            assertContains(repairPosted.body, "\"settlementRepairId\":\"repair-run-materialize-fail-1\"")
             assertEquals(200, repaired.status)
             assertContains(repaired.body, "\"materializedAttempts\":1")
             assertContains(repaired.body, "\"materializedLedgerEntries\":4")

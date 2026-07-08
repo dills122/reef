@@ -437,6 +437,18 @@ class PlatformHttpServer(
             }
         }
 
+        server.createContext("/internal/admin/settlement/repairs/cash") { exchange ->
+            if (!allowInternalHttpRoute(exchange)) return@createContext
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val body = readRequestBody(exchange) ?: return@createContext
+            withAdminRequestPrincipal(exchange) {
+                writeHotPathResponse(exchange, postCashSettlementRepairResponse(body))
+            }
+        }
+
         server.createContext("/internal/admin/settlement/obligations/materialize") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
             if (exchange.requestMethod != "POST") {
@@ -3394,6 +3406,82 @@ class PlatformHttpServer(
         }
     }
 
+    private fun postCashSettlementRepairResponse(body: String): PlatformHotPathResponse {
+        val store = settlementFactStore
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
+        return try {
+            val json = JsonCodec.parseObject(body)
+            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
+            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
+            val settlementBreakId = json.string("settlementBreakId")
+            require(settlementBreakId.isNotBlank()) { "settlementBreakId is required" }
+            val accountId = json.string("accountId")
+            require(accountId.isNotBlank()) { "accountId is required" }
+            val existing = store.factsByScenarioRunId(scenarioRunId)
+            val breakFact = existing.breaks.firstOrNull { it.settlementBreakId == settlementBreakId }
+                ?: throw IllegalArgumentException("settlementBreakId not found")
+            val obligation = existing.obligations.firstOrNull {
+                it.settlementObligationId == breakFact.settlementObligationId
+            } ?: throw IllegalArgumentException("settlement obligation not found")
+            val principal = currentAdminPrincipal()
+            val occurredAt = instantFrom(json.string("occurredAt").ifBlank { principal.occurredAt }, "occurredAt")
+            val actorId = json.string("actorId").ifBlank { principal.actorId }
+            require(actorId.isNotBlank()) { "actorId is required" }
+            val participantId = json.string("participantId").ifBlank { obligation.buyerParticipantId }
+            val assetId = json.string("assetId").ifBlank { json.string("currency").ifBlank { obligation.currency } }
+            val quantity = json.string("quantity").ifBlank { obligation.cashAmount }
+            require(quantity.isNotBlank()) { "quantity is required" }
+            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-cash" }
+            val resourcePositionId = json.string("resourcePositionId").ifBlank {
+                "resource-$settlementBreakId-cash-repair"
+            }
+            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
+            val causationId = json.string("causationId").ifBlank { settlementBreakId }
+            val facts = SettlementFactBundle(
+                scenarioRunId = scenarioRunId,
+                resourcePositions = listOf(
+                    SettlementResourcePositionFact(
+                        resourcePositionId = resourcePositionId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = causationId,
+                        participantId = participantId,
+                        accountId = accountId,
+                        assetType = "CASH",
+                        assetId = assetId,
+                        quantity = quantity,
+                        occurredAt = occurredAt
+                    )
+                ),
+                repairs = listOf(
+                    SettlementRepairPostedFact(
+                        settlementRepairId = repairId,
+                        settlementBreakId = settlementBreakId,
+                        settlementObligationId = obligation.settlementObligationId,
+                        scenarioRunId = scenarioRunId,
+                        postTradeProfileId = breakFact.postTradeProfileId,
+                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
+                        correlationId = correlationId,
+                        causationId = causationId,
+                        actorId = actorId,
+                        occurredAt = occurredAt
+                    )
+                )
+            )
+            store.appendFacts(facts)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement repair")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement repair failed")))
+        }
+    }
+
     private fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
         val materializer = settlementObligationMaterializer
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
@@ -3767,8 +3855,12 @@ class PlatformHttpServer(
     }
 
     private fun requiredInstant(json: JsonDocument, key: String): Instant {
+        return instantFrom(json.string(key), key)
+    }
+
+    private fun instantFrom(value: String, key: String): Instant {
         return try {
-            Instant.parse(json.string(key))
+            Instant.parse(value)
         } catch (_: Exception) {
             throw IllegalArgumentException("$key must be RFC3339")
         }
