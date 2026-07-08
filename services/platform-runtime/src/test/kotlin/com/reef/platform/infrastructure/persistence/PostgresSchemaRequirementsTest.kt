@@ -53,7 +53,9 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "runtime.runtime_events.event_id:text",
+                "runtime.runtime_events.event_id_uuid:uuid",
                 "runtime.runtime_events.occurred_at:text",
+                "runtime.runtime_events.occurred_at_ts:timestamp with time zone",
                 "runtime.runtime_events.actor_id:text",
                 "runtime.runtime_events.payload_json:jsonb",
                 "runtime.runtime_events.sequence_number:bigint"

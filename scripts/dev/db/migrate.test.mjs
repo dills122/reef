@@ -43,6 +43,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0026_contiguous_command_outcome_projection_watermarks.sql",
       "runtime/0027_audit_persistence_hardening.sql",
       "runtime/0028_typed_top_of_book_facts.sql",
+      "runtime/0029_typed_runtime_event_facts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -107,6 +108,19 @@ test("typed top-of-book migration adds native numeric facts and indexes", async 
   assert.match(migration.sql, /idx_order_lifecycle_state_book_ask_native/);
   assert.match(migration.sql, /limit_price_num AS price_num/);
   assert.match(migration.sql, /best_bid_price_num = EXCLUDED\.best_bid_price_num/);
+});
+
+test("typed runtime event migration adds native UUID and timestamp facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0029_typed_runtime_event_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS event_id_uuid UUID/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /CREATE OR REPLACE FUNCTION runtime\.runtime_events_set_typed_facts/);
+  assert.match(migration.sql, /CREATE TRIGGER runtime_events_set_typed_facts/);
+  assert.match(migration.sql, /idx_runtime_events_occurred_typed/);
+  assert.match(migration.sql, /idx_runtime_events_order_occurred_typed/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

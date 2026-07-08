@@ -217,7 +217,9 @@ class PostgresRuntimePersistence(
                       schema_version TEXT NOT NULL,
                       sequence_number BIGINT NOT NULL,
                       payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-                      occurred_at TEXT NOT NULL
+                      occurred_at TEXT NOT NULL,
+                      event_id_uuid UUID,
+                      occurred_at_ts TIMESTAMPTZ
                     )
                     """.trimIndent()
                 )
@@ -231,6 +233,13 @@ class PostgresRuntimePersistence(
                     """
                     ALTER TABLE ${names.runtimeEvents}
                     ADD COLUMN IF NOT EXISTS payload_json JSONB NOT NULL DEFAULT '{}'::jsonb
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.runtimeEvents}
+                    ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -257,6 +266,20 @@ class PostgresRuntimePersistence(
                     """
                     CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_event
                     ON ${names.runtimeEvents}(occurred_at DESC, event_id DESC)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_occurred_typed
+                    ON ${names.runtimeEvents}(occurred_at_ts DESC, event_id_uuid DESC)
+                    WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_order_occurred_typed
+                    ON ${names.runtimeEvents}(order_id, occurred_at_ts DESC, event_id_uuid DESC)
+                    WHERE occurred_at_ts IS NOT NULL
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -3780,7 +3803,7 @@ class PostgresRuntimePersistence(
     )
 
     override fun recentEvents(limit: Int): List<RuntimeEvent> = queryEvents(
-        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at DESC, event_id DESC LIMIT ?::integer",
+        "SELECT * FROM ${names.runtimeEvents} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
         limit.coerceIn(0, 500).toString()
     ).asReversed()
 

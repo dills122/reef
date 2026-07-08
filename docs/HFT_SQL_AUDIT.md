@@ -50,6 +50,11 @@ Target:
 - Restore typed event identity/time in a forward migration.
 - Update Kotlin bootstrap validation, mappers, replay queries, and event save/read tests in the same slice.
 
+Implemented here:
+- `runtime/0029_typed_runtime_event_facts.sql` adds typed `event_id_uuid` and `occurred_at_ts` companion columns while preserving the existing text columns.
+- A `runtime.runtime_events_set_typed_facts()` trigger backfills those typed facts for new event inserts from both Kotlin and database persistence routines.
+- Recent-event reads now prefer native timestamp ordering with deterministic text/id fallback.
+
 ### 3. High-volume append tables are not physically partitioned
 
 Priority: P1
@@ -162,12 +167,13 @@ Target:
 - Added command-log integrity diagnostics in `command_log/0014_integrity_audit_views.sql`.
 - Added orphan-child cleanup to `scripts/dev/command-log-prune.mjs`.
 - Added typed top-of-book projection facts and native lifecycle book indexes in `runtime/0028_typed_top_of_book_facts.sql`.
+- Added typed runtime event identity/time companion facts and native recent-event indexes in `runtime/0029_typed_runtime_event_facts.sql`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
 ### Next service-spanning work
 
-- Typed runtime facts beyond top-of-book projection columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
-- Runtime event typed schema reconciliation.
+- Typed runtime facts beyond top-of-book and runtime event companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
+- Final runtime event schema reconciliation once the compatibility text surface can be retired.
 - Physical partition plan and measured migration path.
 - Canonical command model cleanup.
 - Risk/collar typed constraints.

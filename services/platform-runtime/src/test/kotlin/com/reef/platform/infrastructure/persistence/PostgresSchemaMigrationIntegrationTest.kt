@@ -137,7 +137,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0015_market_data_snapshots.sql",
                     "runtime/0016_order_lifecycle_state.sql",
                     "runtime/0027_audit_persistence_hardening.sql",
-                    "runtime/0028_typed_top_of_book_facts.sql"
+                    "runtime/0028_typed_top_of_book_facts.sql",
+                    "runtime/0029_typed_runtime_event_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -350,7 +351,9 @@ class PostgresSchemaMigrationIntegrationTest {
                   AND table_name = 'runtime_events'
                   AND column_name IN (
                     'event_id',
+                    'event_id_uuid',
                     'occurred_at',
+                    'occurred_at_ts',
                     'actor_id',
                     'payload_json',
                     'sequence_number'
@@ -369,7 +372,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 listOf(
                     "actor_id:text",
                     "event_id:text",
+                    "event_id_uuid:uuid",
                     "occurred_at:text",
+                    "occurred_at_ts:timestamp with time zone",
                     "payload_json:jsonb",
                     "sequence_number:bigint"
                 ),
