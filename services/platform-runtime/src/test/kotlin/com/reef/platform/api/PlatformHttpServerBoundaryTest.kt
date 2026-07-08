@@ -126,7 +126,29 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(200, readiness.status)
             assertContains(readiness.body, "\"status\":\"ok\"")
             assertContains(readiness.body, "\"internalHttpMode\":\"localonly\"")
+            assertContains(readiness.body, "\"pipeline\"")
+            assertContains(readiness.body, "\"commandProcessingMode\":\"sync-result\"")
             assertContains(readiness.body, "\"dependencies\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun readyzDegradesWhenStreamAckPipelineIsNotConfigured() {
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            commandProcessingMode = CommandProcessingMode.StreamAck
+        )
+        try {
+            val readiness = get(server.address.port, "/readyz")
+
+            assertEquals(200, readiness.status)
+            assertContains(readiness.body, "\"status\":\"degraded\"")
+            assertContains(readiness.body, "\"commandProcessingMode\":\"stream-ack\"")
+            assertContains(readiness.body, "\"streamAckRequired\":true")
+            assertContains(readiness.body, "\"streamPipelineConfigured\":false")
+            assertContains(readiness.body, "\"streamReady\":false")
         } finally {
             server.stop(0)
         }

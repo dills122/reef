@@ -846,18 +846,55 @@ class PlatformHttpServer(
             System.err.println("readiness_stream_health_check_failed message=${ex.message ?: "unknown"}")
             null
         }
-        val streamReady = streamCommandHealthCheck == null || streamSnapshot?.available == true
+        val streamAckRequired = commandProcessingMode == CommandProcessingMode.StreamAck
+        val streamPipelineConfigured = !streamAckRequired ||
+            (streamCommandIntakeStore != null && streamCommandPublisher != null && streamCommandHealthCheck != null)
+        val streamHealthReady = if (streamCommandHealthCheck == null) {
+            !streamAckRequired
+        } else {
+            streamSnapshot?.available == true
+        }
+        val streamReady = streamPipelineConfigured && streamHealthReady
         val status = if (dbPoolsReady && streamReady) "ok" else "degraded"
         return JsonCodec.writeObject(
             "status" to status,
             "role" to runtimeRole.configValue,
             "internalHttpMode" to internalHttpExposureMode.name.lowercase(),
+            "pipeline" to mapOf(
+                "commandProcessingMode" to commandProcessingMode.configValue,
+                "streamAckRequired" to streamAckRequired,
+                "streamPipelineConfigured" to streamPipelineConfigured,
+                "streamCommandStream" to streamCommandConfig.streamName,
+                "streamSubjectPrefix" to streamCommandConfig.subjectPrefix,
+                "streamPartitionCount" to streamCommandConfig.partitionCount,
+                "streamMarkPublishedMode" to streamCommandMarkPublishedMode,
+                "streamWorkerEnabled" to streamCommandWorkerEnabled,
+                "streamWorkerPartitions" to streamCommandWorkerPartitions,
+                "venueEventMaterializerEnabled" to venueEventMaterializerEnabled,
+                "venueEventMaterializerBatchSize" to venueEventMaterializerBatchSize,
+                "streamAckProjectorEnabled" to streamAckProjectorEnabled,
+                "streamAckProjectionName" to streamAckProjectionName,
+                "streamAckProjectionSource" to streamAckProjectionSource.configValue,
+                "streamAckProjectionEventStream" to streamAckProjectionEventStream,
+                "streamAckProjectorPartitions" to streamAckProjectorPartitions,
+                "marketDataProjectorEnabled" to marketDataProjectorEnabled,
+                "orderLifecycleProjectorEnabled" to orderLifecycleProjectorEnabled,
+                "commandStatusSources" to listOf(
+                    "canonical_outcome",
+                    "event_batch",
+                    "command_log",
+                    "stream_reference"
+                )
+            ),
             "dependencies" to mapOf(
                 "dbPoolsReady" to dbPoolsReady,
                 "dbPoolCount" to dbPoolSnapshots.size,
                 "dbPoolWaiters" to dbPoolSnapshots.sumOf { it.threadsAwaitingConnection },
                 "streamReady" to streamReady,
+                "streamPipelineConfigured" to streamPipelineConfigured,
+                "streamHealthReady" to streamHealthReady,
                 "streamAvailable" to (streamSnapshot?.available ?: false),
+                "streamHealthError" to (streamSnapshot?.error ?: ""),
                 "accountRiskControlStore" to (accountRiskControlStore != null),
                 "commandCircuitBreakerStore" to (commandCircuitBreakerStore != null),
                 "instrumentPriceCollarStore" to (instrumentPriceCollarStore != null),
