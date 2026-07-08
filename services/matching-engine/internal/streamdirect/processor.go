@@ -256,30 +256,35 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	lastSeq := uint64(0)
 	checksumInput := strings.Builder{}
 
-	instrumentIDs := make([]string, 0, len(deliveries))
+	bookScopes := make([]app.BookScope, 0, len(deliveries))
+	deliveryVenueSessionIDs := make([]string, len(deliveries))
 	deliveryInstrumentIDs := make([]string, len(deliveries))
 	deliveryCommandTypes := make([]string, len(deliveries))
-	seenInstruments := make(map[string]bool, len(deliveries))
+	seenScopes := make(map[string]bool, len(deliveries))
 	for i, delivery := range deliveries {
 		subject := delivery.Subject()
+		venueSessionID := venueSessionIDFromSubject(subject)
 		instrumentID := instrumentIDFromSubject(subject)
+		deliveryVenueSessionIDs[i] = venueSessionID
 		deliveryInstrumentIDs[i] = instrumentID
 		deliveryCommandTypes[i] = commandTypeFromSubject(subject)
-		if instrumentID == "" || seenInstruments[instrumentID] {
+		scope := app.BookScope{VenueSessionID: venueSessionID, InstrumentID: instrumentID}
+		if instrumentID == "" || seenScopes[scope.Key()] {
 			continue
 		}
-		seenInstruments[instrumentID] = true
-		instrumentIDs = append(instrumentIDs, instrumentID)
+		seenScopes[scope.Key()] = true
+		bookScopes = append(bookScopes, scope)
 	}
-	// Snapshot every touched instrument's book/order records *before* any
+	// Snapshot every touched session/instrument book/order records *before* any
 	// command in this batch mutates them, so a subsequent failed publish can
 	// roll the engine's live state back to exactly this point.
-	rollback := p.service.BeginBatch(instrumentIDs)
+	rollback := p.service.BeginBatch(bookScopes)
 
 	for i, delivery := range deliveries {
+		venueSessionID := deliveryVenueSessionIDs[i]
 		instrumentID := deliveryInstrumentIDs[i]
 		commandType := deliveryCommandTypes[i]
-		outcome, supported := p.processDelivery(delivery, commandType, instrumentID)
+		outcome, supported := p.processDelivery(delivery, commandType, venueSessionID, instrumentID)
 
 		var fact CommandOutcomeFact
 		switch {
@@ -323,7 +328,8 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		outcomes = append(outcomes, fact)
 		ackable = append(ackable, delivery)
 		if fact.OrderID != "" {
-			touchedOrderIDs[fact.InstrumentID] = append(touchedOrderIDs[fact.InstrumentID], fact.OrderID)
+			scope := app.BookScope{VenueSessionID: outcome.VenueSessionID, InstrumentID: fact.InstrumentID}
+			touchedOrderIDs[scope.Key()] = append(touchedOrderIDs[scope.Key()], fact.OrderID)
 		}
 	}
 
@@ -381,14 +387,15 @@ func bestEffortCommandID(data []byte) string {
 }
 
 type processedOutcome struct {
-	CommandID    string
-	InstrumentID string
-	OrderID      string
-	Result       domain.SubmitOrderResult
-	DecodeError  string
+	CommandID      string
+	VenueSessionID string
+	InstrumentID   string
+	OrderID        string
+	Result         domain.SubmitOrderResult
+	DecodeError    string
 }
 
-func (p *Processor) processDelivery(delivery CommandDelivery, commandType string, instrumentID string) (processedOutcome, bool) {
+func (p *Processor) processDelivery(delivery CommandDelivery, commandType string, venueSessionID string, instrumentID string) (processedOutcome, bool) {
 	switch commandType {
 	case "SubmitOrder":
 		var command domain.SubmitOrder
@@ -398,13 +405,17 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 				DecodeError: fmt.Sprintf("decode submit command: %v", err),
 			}, true
 		}
+		if command.VenueSessionID == "" {
+			command.VenueSessionID = venueSessionID
+		}
 		result := p.service.SubmitOrder(command)
 		result.AcceptedOrder = acceptedOrderFact(command, result)
 		return processedOutcome{
-			CommandID:    command.CommandID,
-			InstrumentID: command.InstrumentID,
-			OrderID:      command.OrderID,
-			Result:       result,
+			CommandID:      command.CommandID,
+			VenueSessionID: command.VenueSessionID,
+			InstrumentID:   command.InstrumentID,
+			OrderID:        command.OrderID,
+			Result:         result,
 		}, true
 	case "ModifyOrder":
 		var command domain.ModifyOrder
@@ -415,10 +426,11 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 			}, true
 		}
 		return processedOutcome{
-			CommandID:    command.CommandID,
-			InstrumentID: instrumentID,
-			OrderID:      command.OrderID,
-			Result:       p.service.ModifyOrder(command),
+			CommandID:      command.CommandID,
+			VenueSessionID: venueSessionID,
+			InstrumentID:   instrumentID,
+			OrderID:        command.OrderID,
+			Result:         p.service.ModifyOrder(command),
 		}, true
 	case "CancelOrder":
 		var command domain.CancelOrder
@@ -429,10 +441,11 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 			}, true
 		}
 		return processedOutcome{
-			CommandID:    command.CommandID,
-			InstrumentID: instrumentID,
-			OrderID:      command.OrderID,
-			Result:       p.service.CancelOrder(command),
+			CommandID:      command.CommandID,
+			VenueSessionID: venueSessionID,
+			InstrumentID:   instrumentID,
+			OrderID:        command.OrderID,
+			Result:         p.service.CancelOrder(command),
 		}, true
 	default:
 		return processedOutcome{CommandID: bestEffortCommandID(delivery.Data())}, false
@@ -526,6 +539,14 @@ func commandTypeFromSubject(subject string) string {
 		return subject[index+1:]
 	}
 	return subject
+}
+
+func venueSessionIDFromSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[len(parts)-3]
 }
 
 func instrumentIDFromSubject(subject string) string {

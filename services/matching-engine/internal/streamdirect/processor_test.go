@@ -316,6 +316,72 @@ func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 	}
 }
 
+func TestProcessorDoesNotMatchSameInstrumentAcrossVenueSessions(t *testing.T) {
+	sell := newFakeDelivery("reef.cmd.v1.p00.session-1.STK001.SubmitOrder", 23, map[string]string{
+		"commandId":      "cmd-session-1-sell",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-session-1-sell",
+		"venueSessionId": "session-1",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "SELL",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "100000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	})
+	buy := newFakeDelivery("reef.cmd.v1.p01.session-2.STK001.SubmitOrder", 24, map[string]string{
+		"commandId":      "cmd-session-2-buy",
+		"occurredAt":     "2026-07-04T00:00:01Z",
+		"orderId":        "ord-session-2-buy",
+		"venueSessionId": "session-2",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-2",
+		"accountId":      "account-2",
+		"actorId":        "actor-2",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "101000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	})
+	service := app.NewService()
+	source := &fakeSource{deliveries: []CommandDelivery{sell, buy}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(service, source, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	processed, err := processor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	if processed != 2 || len(publisher.batches) != 1 {
+		t.Fatalf("expected one two-command batch, processed=%d batches=%d", processed, len(publisher.batches))
+	}
+	batch := publisher.batches[0]
+	if len(batch.Outcomes) != 2 {
+		t.Fatalf("expected two outcomes, got %#v", batch.Outcomes)
+	}
+	for _, outcome := range batch.Outcomes {
+		if outcome.Status != "accepted" || len(outcome.Result.Trades) != 0 || len(outcome.Result.Executions) != 0 {
+			t.Fatalf("expected accepted non-trading outcome across sessions, got %#v", outcome)
+		}
+	}
+	if got := service.RestingOrdersInSession("session-1", "STK001", domain.SideSell); got != 1 {
+		t.Fatalf("expected session-1 sell liquidity to remain, got %d", got)
+	}
+	if got := service.RestingOrdersInSession("session-2", "STK001", domain.SideBuy); got != 1 {
+		t.Fatalf("expected session-2 buy liquidity to rest separately, got %d", got)
+	}
+}
+
 func TestProcessorPublishesFailedOutcomeForUnsupportedCommands(t *testing.T) {
 	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 12, map[string]string{
 		"commandId": "cmd-cancel-1",
