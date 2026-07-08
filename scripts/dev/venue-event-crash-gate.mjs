@@ -47,6 +47,8 @@ setValue("VENUE_EVENT_MATERIALIZER_TEST_FAIL_ACK_ONCE", "false");
 setValue("VENUE_EVENT_MATERIALIZER_TEST_STOP_AFTER_ACK_FAILURE", "false");
 setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_ACK_ONCE", "false");
 setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_ACK_FAILURE", "false");
+setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_PUBLISH_ONCE", "false");
+setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE", "false");
 setValue("STREAM_ACK_PROJECTOR_TEST_FAIL_AFTER_ROWS_ONCE", "false");
 setValue("STREAM_ACK_PROJECTOR_TEST_STOP_AFTER_FAILURE", "false");
 setValue("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer"]));
@@ -81,10 +83,13 @@ const partitionInstruments = selectPartitionInstruments();
 const materializerStoppedCommands = partitionInstruments.map((instrument, index) =>
   commandSpec(`materializer-stopped-p${instrument.partition}`, index % 2 === 0 ? "BUY" : "SELL", "150250000000", instrument.instrumentId),
 );
+const enginePrePublishFailureCommands = partitionInstruments.map((instrument, index) =>
+  commandSpec(`engine-prepublish-fail-p${instrument.partition}`, index % 2 === 0 ? "BUY" : "SELL", "150255000000", instrument.instrumentId),
+);
 const engineStoppedCommands = partitionInstruments.map((instrument, index) =>
   commandSpec(`engine-stopped-p${instrument.partition}`, index % 2 === 0 ? "BUY" : "SELL", "150260000000", instrument.instrumentId),
 );
-const commands = [...materializerStoppedCommands, ...engineStoppedCommands];
+const commands = [...materializerStoppedCommands, ...enginePrePublishFailureCommands, ...engineStoppedCommands];
 await seedReferenceData(commands);
 
 const engineBefore = await enginePublished();
@@ -102,6 +107,29 @@ await waitForEnginePublishedAtLeast(engineBefore + materializerStoppedCommands.l
 console.log("restarting matching-engine after event-batch publication...");
 await dockerCompose(["restart", "matching-engine"]);
 await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
+
+console.log(`stopping engine, then submitting ${enginePrePublishFailureCommands.length} commands for pre-publish failure...`);
+await dockerCompose(["stop", "matching-engine"]);
+for (const command of enginePrePublishFailureCommands) {
+  await submitOrder(command);
+}
+
+console.log("starting engine with one-shot event-batch publish failure hook...");
+setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_PUBLISH_ONCE", "true");
+setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE", "true");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "matching-engine"]);
+await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
+const enginePublishFailureStats = await waitForEnginePublishFailure({
+  minFailed: 1,
+  minNacked: 1,
+});
+
+console.log("restarting engine without event-batch publish failure hook...");
+setValue("MATCHING_ENGINE_DIRECT_TEST_FAIL_PUBLISH_ONCE", "false");
+setValue("MATCHING_ENGINE_DIRECT_TEST_STOP_AFTER_PUBLISH_FAILURE", "false");
+await dockerCompose(["up", "-d", "--force-recreate", "--wait", "matching-engine"]);
+await waitForHttp(`${engineUrl}/health`, waitTimeoutSeconds);
+await waitForEnginePublishedAtLeast(enginePrePublishFailureCommands.length);
 
 console.log(`stopping engine, then submitting ${engineStoppedCommands.length} commands into durable broker backlog...`);
 await dockerCompose(["stop", "matching-engine"]);
@@ -177,6 +205,9 @@ console.log(JSON.stringify({
   partitionCoverage: partitionCoverage(outcomes),
   injectedAckFailure: {
     engine: {
+      prePublishFailed: enginePublishFailureStats.failed,
+      prePublishNacked: enginePublishFailureStats.nacked,
+      prePublishLastErrors: enginePublishFailureStats.lastErrors,
       failed: engineAckFailureStats.failed,
       published: engineAckFailureStats.published,
       acked: engineAckFailureStats.acked,
@@ -322,6 +353,19 @@ async function waitForEngineAckFailure({ minFailed, minPublished }) {
     return summary.failed >= minFailed &&
       summary.published >= minPublished &&
       summary.lastErrors.includes("injected matching-engine ack failure before command offset commit");
+  });
+  return summary;
+}
+
+async function waitForEnginePublishFailure({ minFailed, minNacked }) {
+  let summary = {};
+  await waitForCondition(`engine publish failure failed >= ${minFailed}`, async () => {
+    const stats = await internalGetJson(`${engineUrl}/internal/stream-direct/stats`);
+    summary = summarizeEngineStats(stats);
+    return summary.failed >= minFailed &&
+      summary.nacked >= minNacked &&
+      summary.published === 0 &&
+      summary.lastErrors.includes("injected matching-engine event-batch publish failure before command offset commit");
   });
   return summary;
 }

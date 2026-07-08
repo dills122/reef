@@ -71,13 +71,16 @@ This checkpoint is done only when Reef can prove, with named local gates and the
    - no-op publisher, stream-direct no-DB, JetStream stream-ack, Redpanda/Kafka-compatible stream-ack, and materializer profiles must reject unsafe settings before runs.
    - bounded in-memory intake retention is required for no-DB ceiling profiles.
 
-3. Add named crash/restart tests for the direct durable path.
+3. Maintain and extend named crash/restart tests for the direct durable path.
    - API publishes then exits before boundary published-marker update.
    - matching engine publishes `VenueEventBatch` then exits before command offset commit.
    - matching engine fails before event-batch publish, leaving command offset uncommitted.
    - materializer commits compact canonical rows then exits before event-batch offset commit.
    - projector exits mid-batch and replays idempotently.
    - local gate target: `make dev-smoke-venue-event-crash-gate` starts the Redpanda direct-stream materializer profile, selects commands that cover all four direct-stream partitions, stops/restarts engine/materializer/projector roles around accepted commands, injects one engine command-ack failure after durable event-batch publish, injects one materializer ack/offset failure after canonical commit, injects one projector failure after read-model rows commit but before watermark commit, waits for canonical/projection drain, then runs `scripts/dev/venue-event-replay-check.mjs`.
+   - 2026-07-08 local evidence: this gate passed with 12 accepted commands across partitions 0, 1, 2, and 3, final engine ack lag 0, final materializer lag 0, replay/checksum mismatches 0, duplicate replay inserts 0; see [`DURABLE_DIRECT_CRASH_GATE_RESULTS_2026-07-08.md`](./DURABLE_DIRECT_CRASH_GATE_RESULTS_2026-07-08.md).
+   - API publish-marker recovery is covered by HTTP-path tests that retry after publish ack before marker update, republish, converge the marker, and stop republishing once the marker is durable.
+   - remaining promotion gap: longer remote soak evidence.
 
 4. Run short local durable gates before any long soak.
    - durable publish acknowledgement succeeds before `202`.
@@ -160,6 +163,8 @@ The current gaps are:
 
 - durable hot-ingress throughput is still below the target once durable publish acknowledgements and completion semantics are enforced
 - generic stream workers calling the engine per command are transitional, not the target hot matching architecture
+- direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; local API publish-marker recovery and engine/materializer/projector crash gates passed, but longer remote promotion evidence remains open
+- the submit/cancel intake contract needs implementation-ready proof around hot-path cancel metadata, duplicate idempotency, accepted-but-not-completed accounting, and provider-neutral status lookup
 - direct matching-engine command consumption exists and compact persistence from durable venue event batches has local proof; it still needs crash/restart coverage and longer remote promotion evidence
 - the submit/cancel intake contract needs implementation-ready proof around duplicate idempotency, accepted-but-not-completed accounting, and event-batch intermediate status authority; hot-path cancel routing metadata is now covered by stream envelope and HTTP boundary tests, and `/api/v1/commands/{commandId}` exposes the provider-neutral public status vocabulary for stream references, in-flight work, canonical completions, rejects, and failures
 - API/control-plane hardening still needs the follow-up backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog), especially account/object authorization, migration of remaining raw `/internal/*` callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, deeper `/readyz`, and deterministic stream lane keys
