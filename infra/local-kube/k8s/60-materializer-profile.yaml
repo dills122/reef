@@ -61,6 +61,8 @@ spec:
               value: "8080"
             - name: OTEL_SERVICE_NAME
               value: reef-platform-materializer
+            - name: EXTERNAL_API_COMMAND_PROCESSING_MODE
+              value: stream-ack
             - name: PLATFORM_HTTP_SERVER
               value: jdk
             - name: PLATFORM_INTERNAL_HTTP_MODE
@@ -155,6 +157,141 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: platform-read-api
+  namespace: reef-local
+spec:
+  selector:
+    app.kubernetes.io/name: platform-read-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-read-api
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-read-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-read-api
+        app.kubernetes.io/part-of: reef
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-projection-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+      containers:
+        - name: platform-read-api
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: api
+            - name: PLATFORM_RUNTIME_PORT
+              value: "8080"
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-read-api
+            - name: EXTERNAL_API_COMMAND_PROCESSING_MODE
+              value: stream-ack
+            - name: PLATFORM_HTTP_SERVER
+              value: jdk
+            - name: PLATFORM_INTERNAL_HTTP_MODE
+              value: local
+            - name: RUNTIME_PERSISTENCE
+              value: postgres
+            - name: RUNTIME_DB_BOOTSTRAP_MODE
+              value: validate
+            - name: RUNTIME_POSTGRES_JDBC_URL
+              value: jdbc:postgresql://postgres:5432/reef?currentSchema=runtime
+            - name: RUNTIME_POSTGRES_USER
+              value: reef
+            - name: RUNTIME_POSTGRES_PASSWORD
+              value: reef
+            - name: RUNTIME_PROJECTION_POSTGRES_JDBC_URL
+              value: jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime
+            - name: RUNTIME_PROJECTION_POSTGRES_USER
+              value: reef
+            - name: RUNTIME_PROJECTION_POSTGRES_PASSWORD
+              value: reef
+            - name: RUNTIME_DB_URL
+              value: jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary
+            - name: RUNTIME_DB_USER
+              value: reef
+            - name: RUNTIME_DB_PASSWORD
+              value: reef
+            - name: STREAM_ACK_LOG_PROVIDER
+              value: redpanda
+            - name: STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS
+              value: redpanda:9092
+            - name: STREAM_ACK_COMMAND_STREAM
+              value: REEF_KUBE_MATERIALIZER_COMMANDS
+            - name: STREAM_ACK_SUBJECT_PREFIX
+              value: reef.kube.materializer.cmd.v1
+            - name: STREAM_ACK_PARTITION_COUNT
+              value: "4"
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "false"
+            - name: EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED
+              value: "false"
+            - name: EXTERNAL_API_IDEMPOTENCY_STORE
+              value: inmemory
+            - name: EXTERNAL_API_COMMAND_CAPTURE_MODE
+              value: disabled
+            - name: EXTERNAL_API_COMMAND_LOG_MODE
+              value: disabled
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=70 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 150m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: platform-projector-0
   namespace: reef-local
 spec:
@@ -208,6 +345,8 @@ spec:
               value: "8080"
             - name: OTEL_SERVICE_NAME
               value: reef-platform-projector-0
+            - name: EXTERNAL_API_COMMAND_PROCESSING_MODE
+              value: stream-ack
             - name: PLATFORM_HTTP_SERVER
               value: jdk
             - name: PLATFORM_INTERNAL_HTTP_MODE
@@ -236,12 +375,16 @@ spec:
               value: reef
             - name: STREAM_ACK_LOG_PROVIDER
               value: redpanda
+            - name: STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS
+              value: redpanda:9092
+            - name: STREAM_ACK_PARTITION_COUNT
+              value: "4"
             - name: STREAM_ACK_WORKER_ENABLED
               value: "false"
             - name: STREAM_ACK_PROJECTOR_ENABLED
               value: "true"
             - name: STREAM_ACK_PROJECTOR_PARTITIONS
-              value: 0..3
+              value: 0,1,2,3
             - name: STREAM_ACK_PROJECTION_SOURCE
               value: venue-event-batch
             - name: STREAM_ACK_PROJECTION_NAME

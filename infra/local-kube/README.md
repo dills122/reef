@@ -23,7 +23,7 @@ The materializer slice additionally supports:
 - Redpanda
 - matching-engine direct stream consume/publish
 - platform materializer
-- one platform projector/read API
+- one platform projector worker plus a projection-backed read API
 
 Stream-ack workers, scaled projectors/materializers, observability, and hosted
 security hardening are follow-up slices.

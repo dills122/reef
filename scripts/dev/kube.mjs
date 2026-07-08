@@ -111,7 +111,8 @@ async function materializerUp() {
   await kubectl(["set", "image", "deployment/platform-api", `platform-api=${config.runtimeImage}`]);
   await kubectl(["set", "image", "deployment/platform-materializer", `platform-materializer=${config.runtimeImage}`]);
   await kubectl(["set", "image", "deployment/platform-projector-0", `platform-projector-0=${config.runtimeImage}`]);
-  await waitDeployments(["matching-engine", "platform-api", "platform-materializer", "platform-projector-0"]);
+  await kubectl(["set", "image", "deployment/platform-read-api", `platform-read-api=${config.runtimeImage}`]);
+  await waitDeployments(["matching-engine", "platform-api", "platform-materializer", "platform-projector-0", "platform-read-api"]);
 }
 
 async function configureMaterializerProfile() {
@@ -217,7 +218,7 @@ async function materializerSmoke() {
     ["svc/platform-api", config.runtimeHostPort, 8080],
     ["svc/matching-engine", config.engineHostPort, 8081],
     ["svc/platform-materializer", env("REEF_PLATFORM_MATERIALIZER_HOST_PORT", "8091"), 8080],
-    ["svc/platform-projector-0", env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", "8084"), 8080],
+    ["svc/platform-read-api", env("REEF_PLATFORM_PROJECTOR_0_HOST_PORT", "8084"), 8080],
   ]);
   const smokeId = env("DEV_VENUE_EVENT_MATERIALIZER_SMOKE_ID", "kube-materializer-smoke");
   try {
