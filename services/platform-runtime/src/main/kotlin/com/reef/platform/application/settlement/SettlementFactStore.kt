@@ -26,7 +26,9 @@ const val SettlementSettledState = "SETTLED"
 const val SettlementBreakOpenedReason = "CASH_LEG_FAILED"
 const val SettlementBreakOpenedReasonSecurity = "SECURITY_LEG_FAILED"
 const val SettlementBreakOpenedState = "BROKEN"
-const val SettlementRepairPostedAction = "POST_CASH_LEG_REPAIR"
+const val SettlementRepairPostedActionCash = "POST_CASH_LEG_REPAIR"
+const val SettlementRepairPostedActionSecurity = "POST_SECURITY_LEG_REPAIR"
+const val SettlementRepairPostedAction = SettlementRepairPostedActionCash
 const val SettlementRepairPostedActorType = "USER"
 const val SettlementResolvedState = "RESOLVED"
 const val DefaultPostTradeProfileId = "ops-realistic-v1"
@@ -473,7 +475,7 @@ class PostgresSettlementFactStore(
                       post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
                       correlation_id TEXT NOT NULL,
                       causation_id TEXT NOT NULL,
-                      repair_action TEXT NOT NULL CHECK (repair_action = 'POST_CASH_LEG_REPAIR'),
+                      repair_action TEXT NOT NULL CHECK (repair_action IN ('POST_CASH_LEG_REPAIR', 'POST_SECURITY_LEG_REPAIR')),
                       actor_type TEXT NOT NULL CHECK (actor_type = 'USER'),
                       actor_id TEXT NOT NULL,
                       occurred_at TIMESTAMPTZ NOT NULL,
@@ -1328,7 +1330,16 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, breakFact)) {
             "repair post-trade profile must match break"
         }
-        require(it.repairAction == SettlementRepairPostedAction) { "repair action must be $SettlementRepairPostedAction" }
+        require(it.repairAction in setOf(SettlementRepairPostedActionCash, SettlementRepairPostedActionSecurity)) {
+            "repair action must be $SettlementRepairPostedActionCash or $SettlementRepairPostedActionSecurity"
+        }
+        require(
+            when (breakFact?.reason) {
+                SettlementBreakOpenedReason -> it.repairAction == SettlementRepairPostedActionCash
+                SettlementBreakOpenedReasonSecurity -> it.repairAction == SettlementRepairPostedActionSecurity
+                else -> false
+            }
+        ) { "repair action must match break reason" }
         require(it.actorType == SettlementRepairPostedActorType) { "repair actorType must be $SettlementRepairPostedActorType" }
         require(it.actorId.isNotBlank()) { "actorId is required" }
     }

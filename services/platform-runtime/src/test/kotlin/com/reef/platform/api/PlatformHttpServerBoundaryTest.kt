@@ -2342,6 +2342,20 @@ class PlatformHttpServerBoundaryTest {
                 }
                 """.trimIndent()
             )
+            val wrongRepairRoute = post(
+                server.address.port,
+                "/internal/admin/settlement/repairs/security",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-materialize-fail",
+                  "settlementBreakId":"settlement-break-settlement-obligation-trade-materialize-fail-1",
+                  "accountId":"account-seller-1",
+                  "actorId":"ops-user-1",
+                  "occurredAt":"2026-01-01T00:00:01Z"
+                }
+                """.trimIndent()
+            )
             val repairPosted = post(
                 server.address.port,
                 "/internal/admin/settlement/repairs/cash",
@@ -2371,9 +2385,12 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(400, missingOccurredAtRepair.status)
             assertContains(missingOccurredAtRepair.body, "\"error\":\"occurredAt is required\"")
+            assertEquals(400, wrongRepairRoute.status)
+            assertContains(wrongRepairRoute.body, "\"error\":\"settlementBreakId is not a security break\"")
             assertEquals(200, repairPosted.status)
             assertContains(repairPosted.body, "\"resourcePositionId\":\"resource-run-materialize-fail-buyer-cash-repair\"")
             assertContains(repairPosted.body, "\"settlementRepairId\":\"repair-run-materialize-fail-1\"")
+            assertContains(repairPosted.body, "\"repairAction\":\"POST_CASH_LEG_REPAIR\"")
             assertEquals(200, repaired.status)
             assertContains(repaired.body, "\"materializedAttempts\":1")
             assertContains(repaired.body, "\"materializedLedgerEntries\":4")
@@ -2480,6 +2497,20 @@ class PlatformHttpServerBoundaryTest {
             assertContains(brokenObligations.body, "\"cashLegState\":\"LEG_SUCCEEDED\"")
             assertContains(brokenObligations.body, "\"securityLegState\":\"LEG_FAILED\"")
 
+            val wrongRepairRoute = post(
+                server.address.port,
+                "/internal/admin/settlement/repairs/cash",
+                emptyMap(),
+                """
+                {
+                  "scenarioRunId":"run-materialize-security-fail",
+                  "settlementBreakId":"settlement-break-settlement-obligation-trade-materialize-security-fail-1",
+                  "accountId":"account-buyer-1",
+                  "actorId":"ops-user-1",
+                  "occurredAt":"2026-01-01T00:00:01Z"
+                }
+                """.trimIndent()
+            )
             val repairPosted = post(
                 server.address.port,
                 "/internal/admin/settlement/repairs/security",
@@ -2506,8 +2537,11 @@ class PlatformHttpServerBoundaryTest {
             val repairedObligations = get(server.address.port, "/api/v1/settlement/obligations/run-materialize-security-fail")
             val repairedLedger = get(server.address.port, "/api/v1/settlement/ledger/run-materialize-security-fail")
 
+            assertEquals(400, wrongRepairRoute.status)
+            assertContains(wrongRepairRoute.body, "\"error\":\"settlementBreakId is not a cash break\"")
             assertEquals(200, repairPosted.status)
             assertContains(repairPosted.body, "\"resourcePositionId\":\"resource-run-materialize-security-fail-seller-security-repair\"")
+            assertContains(repairPosted.body, "\"repairAction\":\"POST_SECURITY_LEG_REPAIR\"")
             assertContains(repairPosted.body, "\"assetType\":\"SECURITY\"")
             assertContains(repairPosted.body, "\"assetId\":\"AAPL\"")
             assertContains(repairPosted.body, "\"quantity\":\"100\"")

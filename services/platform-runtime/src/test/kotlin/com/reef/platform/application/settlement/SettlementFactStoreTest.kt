@@ -370,11 +370,40 @@ class SettlementFactStoreTest {
             store.appendFacts(SettlementFactBundle(scenarioRunId = "run-p2", repairs = listOf(repair("run-p2").copy(repairAction = "OTHER"))))
         }
         assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(
+                    scenarioRunId = "run-p2",
+                    repairs = listOf(repair("run-p2").copy(repairAction = SettlementRepairPostedActionSecurity))
+                )
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
             store.appendFacts(SettlementFactBundle(scenarioRunId = "run-p2", repairs = listOf(repair("run-p2").copy(actorType = "OTHER"))))
         }
         assertFailsWith<IllegalArgumentException> {
             store.appendFacts(SettlementFactBundle(scenarioRunId = "run-p2", repairs = listOf(repair("run-p2").copy(actorId = ""))))
         }
+    }
+
+    @Test
+    fun acceptsSecurityRepairForSecurityBreak() {
+        val store = InMemorySettlementFactStore()
+        store.appendFacts(
+            SettlementFactBundle(
+                scenarioRunId = "run-p2",
+                obligations = listOf(obligation("run-p2")),
+                breaks = listOf(breakOpened("run-p2", reason = SettlementBreakOpenedReasonSecurity))
+            )
+        )
+
+        store.appendFacts(
+            SettlementFactBundle(
+                scenarioRunId = "run-p2",
+                repairs = listOf(repair("run-p2").copy(repairAction = SettlementRepairPostedActionSecurity))
+            )
+        )
+
+        assertEquals(SettlementRepairPostedActionSecurity, store.factsByScenarioRunId("run-p2").repairs.single().repairAction)
     }
 
     @Test
@@ -656,13 +685,17 @@ private fun attemptStarted(scenarioRunId: String): SettlementAttemptStartedFact 
     )
 }
 
-private fun breakOpened(scenarioRunId: String): SettlementBreakOpenedFact {
+private fun breakOpened(
+    scenarioRunId: String,
+    reason: String = SettlementBreakOpenedReason
+): SettlementBreakOpenedFact {
     return SettlementBreakOpenedFact(
         settlementBreakId = "break-1",
         settlementObligationId = "obl-1",
         scenarioRunId = scenarioRunId,
         correlationId = "corr-1",
         causationId = "trade-1",
+        reason = reason,
         occurredAt = Instant.parse("2026-01-01T00:00:01Z")
     )
 }

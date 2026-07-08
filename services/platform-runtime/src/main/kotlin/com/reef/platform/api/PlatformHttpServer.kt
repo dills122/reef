@@ -54,6 +54,8 @@ import com.reef.platform.application.settlement.SettlementLegOutcomeFact
 import com.reef.platform.application.settlement.SettlementObligationCreatedFact
 import com.reef.platform.application.settlement.SettlementObligationProjection
 import com.reef.platform.application.settlement.SettlementObligationView
+import com.reef.platform.application.settlement.SettlementRepairPostedActionCash
+import com.reef.platform.application.settlement.SettlementRepairPostedActionSecurity
 import com.reef.platform.application.settlement.SettlementRepairPostedFact
 import com.reef.platform.application.settlement.SettlementResolvedFact
 import com.reef.platform.application.settlement.SettlementResourcePositionFact
@@ -3427,6 +3429,7 @@ class PlatformHttpServer(
             body = body,
             repairKind = "cash",
             expectedBreakReason = SettlementBreakOpenedReason,
+            repairAction = SettlementRepairPostedActionCash,
             assetType = SettlementLedgerEntryTypeCash,
             defaultParticipantId = { it.buyerParticipantId },
             defaultAssetId = { it.currency },
@@ -3439,6 +3442,7 @@ class PlatformHttpServer(
             body = body,
             repairKind = "security",
             expectedBreakReason = SettlementBreakOpenedReasonSecurity,
+            repairAction = SettlementRepairPostedActionSecurity,
             assetType = SettlementLedgerEntryTypeSecurity,
             defaultParticipantId = { it.sellerParticipantId },
             defaultAssetId = { it.instrumentId },
@@ -3450,6 +3454,7 @@ class PlatformHttpServer(
         body: String,
         repairKind: String,
         expectedBreakReason: String,
+        repairAction: String,
         assetType: String,
         defaultParticipantId: (SettlementObligationCreatedFact) -> String,
         defaultAssetId: (SettlementObligationCreatedFact) -> String,
@@ -3516,6 +3521,7 @@ class PlatformHttpServer(
                         postTradePolicyVersion = breakFact.postTradePolicyVersion,
                         correlationId = correlationId,
                         causationId = causationId,
+                        repairAction = repairAction,
                         actorId = actorId,
                         occurredAt = occurredAt
                     )
@@ -3868,7 +3874,7 @@ class PlatformHttpServer(
             postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
-            repairAction = json.string("repairAction").ifBlank { "POST_CASH_LEG_REPAIR" },
+            repairAction = json.string("repairAction").ifBlank { SettlementRepairPostedActionCash },
             actorType = json.string("actorType").ifBlank { "USER" },
             actorId = json.string("actorId"),
             occurredAt = requiredInstant(json, "occurredAt")
