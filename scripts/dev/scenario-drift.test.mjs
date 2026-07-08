@@ -5,7 +5,7 @@ const report = {
   throughput: { attemptedPerSecond: 120, acceptedPerSecond: 100 },
   latencyMs: { p95: 20 },
   traceChecks: { checked: 10, pass: 10, fail: 0 },
-  rejectTaxonomy: [{ code: "INVALID_STATE", count: 1 }],
+  rejectTaxonomy: [{ code: "SELF_TRADE_PREVENTION", count: 1 }],
   byActor: { "bot-1": { requests: 1 } },
   byStrategy: { "strategy-1": { requests: 1 } },
   config: { Seed: 7, Mode: "strict-lifecycle" },
@@ -24,7 +24,7 @@ const thresholdCheck = evaluateReportDrift(report, {
     maxP95LatencyMs: 30,
     minTracePassRatePct: 100,
   },
-  requiredRejectCodes: ["INVALID_STATE"],
+  requiredRejectCodes: ["SELF_TRADE_PREVENTION"],
   requiredAttribution: ["byActor", "byStrategy"],
 });
 assert.equal(thresholdCheck.pass, true);
