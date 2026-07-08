@@ -36,7 +36,8 @@ class AcceptedAsyncCommandIntakeTest {
                 )
             ),
             laneCount = 1,
-            queueCapacityPerLane = 10
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 1
         )
 
         intake.start()
@@ -75,6 +76,54 @@ class AcceptedAsyncCommandIntakeTest {
                 listOf("ord-1", "ord-2"),
                 persistence.acceptedOrders().map { it.orderId }
             )
+        } finally {
+            intake.stop()
+        }
+    }
+
+    @Test
+    fun sameLaneCommandsHonorConfiguredInFlightWindow() {
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 2
+        )
+
+        intake.start()
+        try {
+            val first = intake.enqueueSubmit(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-1",
+                correlationId = "corr-1",
+                body = validSubmitBody("cmd-accepted-async-window-1", "trace-1", "ord-window-1")
+            )
+            val second = intake.enqueueSubmit(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-2",
+                correlationId = "corr-2",
+                body = validSubmitBody("cmd-accepted-async-window-2", "trace-2", "ord-window-2")
+            )
+
+            assertTrue(first.accepted)
+            assertTrue(second.accepted)
+            assertTrue(waitFor { gateway.pendingCount() == 2 })
+            assertEquals(2, intake.stats().inFlightPerLane)
+            assertEquals(2, intake.stats().processing)
+
+            gateway.completeNextAccepted()
+            gateway.completeNextAccepted()
+            assertTrue(waitFor { persistence.submitResult("cmd-accepted-async-window-1") != null })
+            assertTrue(waitFor { persistence.submitResult("cmd-accepted-async-window-2") != null })
         } finally {
             intake.stop()
         }

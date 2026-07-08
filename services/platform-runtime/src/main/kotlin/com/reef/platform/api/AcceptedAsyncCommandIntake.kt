@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -67,7 +68,7 @@ class AcceptedAsyncCommandIntake(
     private val api: PlatformApi,
     laneCount: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_LANES", 16, min = 1),
     private val queueCapacityPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY", 100_000, min = 1),
-    private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 1, min = 1).coerceAtMost(1),
+    private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 32, min = 1),
     private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L)
 ) : CommandStatusLookup {
     private val lanes: Array<Channel<AcceptedAsyncCommand>> =
@@ -215,16 +216,22 @@ class AcceptedAsyncCommandIntake(
     }
 
     private suspend fun processLane(lane: Int, queue: Channel<AcceptedAsyncCommand>) {
-        for (command in queue) {
-            if (!started.get() || !scope.isActive) break
-            laneQueued.decrementAndGet(lane)
-            val pending = try {
-                submit(lane, command)
-            } catch (ex: Exception) {
-                fail(lane, command, ex)
-                continue
+        coroutineScope {
+            repeat(inFlightPerLane) { slot ->
+                launch(CoroutineName("reef-accepted-async-lane-$lane-slot-$slot")) {
+                    for (command in queue) {
+                        if (!started.get() || !scope.isActive) break
+                        laneQueued.decrementAndGet(lane)
+                        val pending = try {
+                            submit(lane, command)
+                        } catch (ex: Exception) {
+                            fail(lane, command, ex)
+                            continue
+                        }
+                        complete(lane, pending)
+                    }
+                }
             }
-            complete(lane, pending)
         }
     }
 
