@@ -45,6 +45,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0028_typed_top_of_book_facts.sql",
       "runtime/0029_typed_runtime_event_facts.sql",
       "runtime/0030_typed_submit_result_facts.sql",
+      "runtime/0031_typed_execution_trade_facts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -136,6 +137,21 @@ test("typed submit result migration adds native audit facts", async () => {
   assert.match(migration.sql, /CREATE TRIGGER submit_results_set_typed_facts/);
   assert.match(migration.sql, /idx_submit_results_occurred_typed/);
   assert.match(migration.sql, /idx_submit_results_event_uuid/);
+});
+
+test("typed execution and trade migration adds native market facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0031_typed_execution_trade_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.executions/);
+  assert.match(migration.sql, /ALTER TABLE runtime\.trades/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS execution_price_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS price_num NUMERIC/);
+  assert.match(migration.sql, /CREATE TRIGGER executions_set_typed_facts/);
+  assert.match(migration.sql, /CREATE TRIGGER trades_set_typed_facts/);
+  assert.match(migration.sql, /idx_trades_instrument_occurred_typed/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

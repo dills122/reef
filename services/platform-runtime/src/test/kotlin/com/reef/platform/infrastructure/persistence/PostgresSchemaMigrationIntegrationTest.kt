@@ -139,7 +139,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0027_audit_persistence_hardening.sql",
                     "runtime/0028_typed_top_of_book_facts.sql",
                     "runtime/0029_typed_runtime_event_facts.sql",
-                    "runtime/0030_typed_submit_result_facts.sql"
+                    "runtime/0030_typed_submit_result_facts.sql",
+                    "runtime/0031_typed_execution_trade_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -416,6 +417,57 @@ class PostgresSchemaMigrationIntegrationTest {
                     "result_type:text"
                 ),
                 submitResultColumns
+            )
+
+            val executionTradeColumns = conn.prepareStatement(
+                """
+                SELECT table_name || '.' || column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND (
+                    (table_name = 'executions' AND column_name IN (
+                      'event_id',
+                      'event_id_uuid',
+                      'quantity_units_num',
+                      'execution_price_num',
+                      'occurred_at',
+                      'occurred_at_ts'
+                    ))
+                    OR (table_name = 'trades' AND column_name IN (
+                      'event_id',
+                      'event_id_uuid',
+                      'quantity_units_num',
+                      'price_num',
+                      'occurred_at',
+                      'occurred_at_ts'
+                    ))
+                  )
+                ORDER BY table_name, column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "executions.event_id:text",
+                    "executions.event_id_uuid:uuid",
+                    "executions.execution_price_num:numeric",
+                    "executions.occurred_at:text",
+                    "executions.occurred_at_ts:timestamp with time zone",
+                    "executions.quantity_units_num:numeric",
+                    "trades.event_id:text",
+                    "trades.event_id_uuid:uuid",
+                    "trades.occurred_at:text",
+                    "trades.occurred_at_ts:timestamp with time zone",
+                    "trades.price_num:numeric",
+                    "trades.quantity_units_num:numeric"
+                ),
+                executionTradeColumns
             )
 
             val topOfBookColumns = conn.prepareStatement(

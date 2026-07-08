@@ -62,6 +62,8 @@ object PostgresSchemaRequirements {
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         val orders = PostgresSchemaObject.parse(names.orders)
+        val executions = PostgresSchemaObject.parse(names.executions)
+        val trades = PostgresSchemaObject.parse(names.trades)
         val submitResults = PostgresSchemaObject.parse(names.submitResults)
         return PostgresSchemaRequirement(
             tables = listOf(
@@ -101,6 +103,18 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(orders, "client_order_id", "text"),
                 PostgresSchemaColumn(orders, "run_id", "text"),
                 PostgresSchemaColumn(orders, "venue_session_id", "text"),
+                PostgresSchemaColumn(executions, "event_id", "text"),
+                PostgresSchemaColumn(executions, "event_id_uuid", "uuid"),
+                PostgresSchemaColumn(executions, "quantity_units_num", "numeric"),
+                PostgresSchemaColumn(executions, "execution_price_num", "numeric"),
+                PostgresSchemaColumn(executions, "occurred_at", "text"),
+                PostgresSchemaColumn(executions, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(trades, "event_id", "text"),
+                PostgresSchemaColumn(trades, "event_id_uuid", "uuid"),
+                PostgresSchemaColumn(trades, "quantity_units_num", "numeric"),
+                PostgresSchemaColumn(trades, "price_num", "numeric"),
+                PostgresSchemaColumn(trades, "occurred_at", "text"),
+                PostgresSchemaColumn(trades, "occurred_at_ts", "timestamp with time zone"),
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "event_id_uuid", "uuid"),
                 PostgresSchemaColumn(runtimeEvents, "occurred_at", "text"),

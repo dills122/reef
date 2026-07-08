@@ -55,6 +55,7 @@ Implemented here:
 - A `runtime.runtime_events_set_typed_facts()` trigger backfills those typed facts for new event inserts from both Kotlin and database persistence routines.
 - Recent-event reads now prefer native timestamp ordering with deterministic text/id fallback.
 - `runtime/0030_typed_submit_result_facts.sql` applies the same typed companion pattern to `runtime.submit_results` for command-result audit facts.
+- `runtime/0031_typed_execution_trade_facts.sql` adds typed execution/trade event, time, quantity, and price companion facts for fills, trade tape, and intraday bars.
 
 ### 3. High-volume append tables are not physically partitioned
 
@@ -170,11 +171,12 @@ Target:
 - Added typed top-of-book projection facts and native lifecycle book indexes in `runtime/0028_typed_top_of_book_facts.sql`.
 - Added typed runtime event identity/time companion facts and native recent-event indexes in `runtime/0029_typed_runtime_event_facts.sql`.
 - Added typed submit-result event/time companion facts and native audit indexes in `runtime/0030_typed_submit_result_facts.sql`.
+- Added typed execution/trade market facts and native history/bar indexes in `runtime/0031_typed_execution_trade_facts.sql`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
 ### Next service-spanning work
 
-- Typed runtime facts beyond top-of-book, runtime event, and submit-result companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
+- Typed runtime facts beyond top-of-book, runtime event, submit-result, execution, and trade companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
 - Final runtime event schema reconciliation once the compatibility text surface can be retired.
 - Physical partition plan and measured migration path.
 - Canonical command model cleanup.

@@ -52,6 +52,34 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.executions.event_id:text",
+                "runtime.executions.event_id_uuid:uuid",
+                "runtime.executions.quantity_units_num:numeric",
+                "runtime.executions.execution_price_num:numeric",
+                "runtime.executions.occurred_at:text",
+                "runtime.executions.occurred_at_ts:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.executions" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.trades.event_id:text",
+                "runtime.trades.event_id_uuid:uuid",
+                "runtime.trades.quantity_units_num:numeric",
+                "runtime.trades.price_num:numeric",
+                "runtime.trades.occurred_at:text",
+                "runtime.trades.occurred_at_ts:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.trades" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.runtime_events.event_id:text",
                 "runtime.runtime_events.event_id_uuid:uuid",
                 "runtime.runtime_events.occurred_at:text",

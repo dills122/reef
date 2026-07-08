@@ -171,8 +171,21 @@ class PostgresRuntimePersistence(
                       quantity_units TEXT NOT NULL,
                       execution_price TEXT NOT NULL,
                       currency TEXT NOT NULL,
-                      occurred_at TEXT NOT NULL
+                      occurred_at TEXT NOT NULL,
+                      event_id_uuid UUID,
+                      quantity_units_num NUMERIC,
+                      execution_price_num NUMERIC,
+                      occurred_at_ts TIMESTAMPTZ
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.executions}
+                    ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
+                    ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC,
+                    ADD COLUMN IF NOT EXISTS execution_price_num NUMERIC,
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -187,8 +200,21 @@ class PostgresRuntimePersistence(
                       quantity_units TEXT NOT NULL,
                       price TEXT NOT NULL,
                       currency TEXT NOT NULL,
-                      occurred_at TEXT NOT NULL
+                      occurred_at TEXT NOT NULL,
+                      event_id_uuid UUID,
+                      quantity_units_num NUMERIC,
+                      price_num NUMERIC,
+                      occurred_at_ts TIMESTAMPTZ
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.trades}
+                    ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
+                    ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC,
+                    ADD COLUMN IF NOT EXISTS price_num NUMERIC,
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -298,6 +324,37 @@ class PostgresRuntimePersistence(
                     """
                     CREATE INDEX IF NOT EXISTS idx_trades_sell_order_occurred
                     ON ${names.trades}(sell_order_id, occurred_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_executions_order_occurred_typed
+                    ON ${names.executions}(order_id, occurred_at_ts, event_id_uuid)
+                    WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_buy_order_occurred_typed
+                    ON ${names.trades}(buy_order_id, occurred_at_ts, event_id_uuid)
+                    WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_sell_order_occurred_typed
+                    ON ${names.trades}(sell_order_id, occurred_at_ts, event_id_uuid)
+                    WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_instrument_occurred_typed
+                    ON ${names.trades}(instrument_id, occurred_at_ts, sequence)
+                    INCLUDE (price_num, quantity_units_num)
+                    WHERE occurred_at_ts IS NOT NULL
+                      AND price_num IS NOT NULL
+                      AND quantity_units_num IS NOT NULL
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -3632,7 +3689,7 @@ class PostgresRuntimePersistence(
             JOIN ${names.orders} o ON o.order_id = e.order_id
             WHERE o.participant_id = ?
             $instrumentFilter
-            ORDER BY e.occurred_at, e.execution_id
+            ORDER BY e.occurred_at_ts NULLS LAST, e.occurred_at, e.execution_id
             $limitClause
             """.trimIndent(),
             *params.toTypedArray()
@@ -3651,7 +3708,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun executionsForOrder(orderId: String): List<ExecutionCreated> = projectionQueryList(
-        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at",
+        "SELECT event_id, execution_id, order_id, instrument_id, quantity_units, execution_price, currency, occurred_at FROM ${names.executions} WHERE order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id",
         orderId
     ) {
         ExecutionCreated(
@@ -3667,7 +3724,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun trades(): List<TradeCreated> = projectionQueryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at"
+        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id"
     ) {
         TradeCreated(
             eventId = getString("event_id"),
@@ -3684,7 +3741,7 @@ class PostgresRuntimePersistence(
     }
 
     override fun recentTrades(limit: Int): List<TradeCreated> = projectionQueryList(
-        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at DESC LIMIT ?::integer",
+        "SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at FROM ${names.trades} ORDER BY occurred_at_ts DESC NULLS LAST, occurred_at DESC, event_id DESC LIMIT ?::integer",
         limit.coerceIn(0, 500).toString()
     ) {
         TradeCreated(
@@ -3704,7 +3761,7 @@ class PostgresRuntimePersistence(
     override fun tradesForOrder(orderId: String): List<TradeCreated> = projectionQueryList(
         """
         SELECT event_id, trade_id, execution_id, buy_order_id, sell_order_id, instrument_id, quantity_units, price, currency, occurred_at
-        FROM ${names.trades} WHERE buy_order_id = ? OR sell_order_id = ? ORDER BY occurred_at
+        FROM ${names.trades} WHERE buy_order_id = ? OR sell_order_id = ? ORDER BY occurred_at_ts NULLS LAST, occurred_at, event_id
         """.trimIndent(),
         orderId,
         orderId
@@ -3759,14 +3816,16 @@ class PostgresRuntimePersistence(
             """
             WITH bucketed AS (
               SELECT
-                date_bin(?::interval, occurred_at::timestamptz, TIMESTAMPTZ '2000-01-01') AS bucket_start,
-                price::numeric AS price_num,
-                quantity_units::numeric AS qty_num,
+                date_bin(?::interval, occurred_at_ts, TIMESTAMPTZ '2000-01-01') AS bucket_start,
+                price_num,
+                quantity_units_num AS qty_num,
                 sequence
               FROM ${names.trades}
               WHERE instrument_id = ?
-                AND occurred_at::timestamptz >= ?::timestamptz
-                AND occurred_at::timestamptz < ?::timestamptz
+                AND occurred_at_ts >= ?::timestamptz
+                AND occurred_at_ts < ?::timestamptz
+                AND price_num IS NOT NULL
+                AND quantity_units_num IS NOT NULL
             )
             SELECT
               bucket_start::text AS bucket_start,
