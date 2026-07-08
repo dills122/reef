@@ -964,6 +964,191 @@ func TestModifyOrderRejectsTerminalOrderWithoutChangingState(t *testing.T) {
 	}
 }
 
+func TestLifecycleRejectMatrixDoesNotMutateState(t *testing.T) {
+	tests := []struct {
+		name          string
+		setup         func(t *testing.T, service *Service) string
+		act           func(service *Service, orderID string) domain.SubmitOrderResult
+		wantCode      string
+		wantStatus    domain.OrderStatus
+		wantRemaining string
+		wantBuyRest   int
+		wantSellRest  int
+	}{
+		{
+			name: "cancel unknown order",
+			setup: func(t *testing.T, service *Service) string {
+				return "ord-missing"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.CancelOrder(domain.CancelOrder{OrderID: orderID})
+			},
+			wantCode: "NOT_FOUND",
+		},
+		{
+			name: "modify unknown order",
+			setup: func(t *testing.T, service *Service) string {
+				return "ord-missing"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.ModifyOrder(domain.ModifyOrder{OrderID: orderID, QuantityUnits: "100", LimitPrice: "150250000000"})
+			},
+			wantCode: "NOT_FOUND",
+		},
+		{
+			name: "cancel filled order",
+			setup: func(t *testing.T, service *Service) string {
+				t.Helper()
+				submitRestingBuy(t, service, "ord-buy-filled", "100", "150250000000")
+				match := service.SubmitOrder(domain.SubmitOrder{
+					OrderID:       "ord-sell-fill",
+					InstrumentID:  "AAPL",
+					Side:          domain.SideSell,
+					QuantityUnits: "100",
+					LimitPrice:    "150000000000",
+					Currency:      "USD",
+				})
+				if len(match.Trades) != 1 {
+					t.Fatalf("expected fill trade, got %#v", match.Trades)
+				}
+				return "ord-buy-filled"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.CancelOrder(domain.CancelOrder{OrderID: orderID})
+			},
+			wantCode:      "INVALID_STATE",
+			wantStatus:    domain.OrderStatusFilled,
+			wantRemaining: "0",
+		},
+		{
+			name: "modify filled order",
+			setup: func(t *testing.T, service *Service) string {
+				t.Helper()
+				submitRestingBuy(t, service, "ord-buy-filled", "100", "150250000000")
+				match := service.SubmitOrder(domain.SubmitOrder{
+					OrderID:       "ord-sell-fill",
+					InstrumentID:  "AAPL",
+					Side:          domain.SideSell,
+					QuantityUnits: "100",
+					LimitPrice:    "150000000000",
+					Currency:      "USD",
+				})
+				if len(match.Trades) != 1 {
+					t.Fatalf("expected fill trade, got %#v", match.Trades)
+				}
+				return "ord-buy-filled"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.ModifyOrder(domain.ModifyOrder{OrderID: orderID, QuantityUnits: "120", LimitPrice: "150250000000"})
+			},
+			wantCode:      "INVALID_STATE",
+			wantStatus:    domain.OrderStatusFilled,
+			wantRemaining: "0",
+		},
+		{
+			name: "cancel already cancelled order",
+			setup: func(t *testing.T, service *Service) string {
+				t.Helper()
+				submitRestingBuy(t, service, "ord-buy-cancelled", "100", "150250000000")
+				cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-cancelled"})
+				if cancel.Accepted == nil {
+					t.Fatalf("expected cancel to accept, got %#v", cancel)
+				}
+				return "ord-buy-cancelled"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.CancelOrder(domain.CancelOrder{OrderID: orderID})
+			},
+			wantCode:      "INVALID_STATE",
+			wantStatus:    domain.OrderStatusCancelled,
+			wantRemaining: "0",
+		},
+		{
+			name: "modify cancelled order",
+			setup: func(t *testing.T, service *Service) string {
+				t.Helper()
+				submitRestingBuy(t, service, "ord-buy-cancelled", "100", "150250000000")
+				cancel := service.CancelOrder(domain.CancelOrder{OrderID: "ord-buy-cancelled"})
+				if cancel.Accepted == nil {
+					t.Fatalf("expected cancel to accept, got %#v", cancel)
+				}
+				return "ord-buy-cancelled"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.ModifyOrder(domain.ModifyOrder{OrderID: orderID, QuantityUnits: "120", LimitPrice: "150250000000"})
+			},
+			wantCode:      "INVALID_STATE",
+			wantStatus:    domain.OrderStatusCancelled,
+			wantRemaining: "0",
+		},
+		{
+			name: "modify quantity at already filled units",
+			setup: func(t *testing.T, service *Service) string {
+				t.Helper()
+				submitRestingBuy(t, service, "ord-buy-partial", "150", "150250000000")
+				match := service.SubmitOrder(domain.SubmitOrder{
+					OrderID:       "ord-sell-partial",
+					InstrumentID:  "AAPL",
+					Side:          domain.SideSell,
+					QuantityUnits: "100",
+					LimitPrice:    "150000000000",
+					Currency:      "USD",
+				})
+				if len(match.Trades) != 1 {
+					t.Fatalf("expected partial fill trade, got %#v", match.Trades)
+				}
+				return "ord-buy-partial"
+			},
+			act: func(service *Service, orderID string) domain.SubmitOrderResult {
+				return service.ModifyOrder(domain.ModifyOrder{OrderID: orderID, QuantityUnits: "100", LimitPrice: "150250000000"})
+			},
+			wantCode:      "VALIDATION_ERROR",
+			wantStatus:    domain.OrderStatusPartiallyFilled,
+			wantRemaining: "50",
+			wantBuyRest:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := NewService()
+			orderID := tt.setup(t, service)
+			beforeBuyRest := service.RestingOrders("AAPL", domain.SideBuy)
+			beforeSellRest := service.RestingOrders("AAPL", domain.SideSell)
+
+			result := tt.act(service, orderID)
+			if result.Rejected == nil {
+				t.Fatalf("expected rejected lifecycle action, got %#v", result)
+			}
+			if result.Rejected.Code != tt.wantCode {
+				t.Fatalf("expected reject code %s, got %#v", tt.wantCode, result.Rejected)
+			}
+			if service.RestingOrders("AAPL", domain.SideBuy) != beforeBuyRest || service.RestingOrders("AAPL", domain.SideSell) != beforeSellRest {
+				t.Fatalf("rejected lifecycle action mutated book state")
+			}
+			if tt.wantStatus == "" {
+				if _, ok := service.OrderState(orderID); ok {
+					t.Fatalf("expected unknown order %s to remain absent", orderID)
+				}
+				return
+			}
+			state, ok := service.OrderState(orderID)
+			if !ok {
+				t.Fatalf("expected order state for %s", orderID)
+			}
+			if state.Status != tt.wantStatus || state.RemainingQuantity != tt.wantRemaining {
+				t.Fatalf("rejected lifecycle action mutated order state: %#v", state)
+			}
+			if tt.wantBuyRest != 0 && service.RestingOrders("AAPL", domain.SideBuy) != tt.wantBuyRest {
+				t.Fatalf("expected %d resting buys after reject", tt.wantBuyRest)
+			}
+			if tt.wantSellRest != 0 && service.RestingOrders("AAPL", domain.SideSell) != tt.wantSellRest {
+				t.Fatalf("expected %d resting sells after reject", tt.wantSellRest)
+			}
+		})
+	}
+}
+
 func TestParsePositiveInt(t *testing.T) {
 	if _, ok := parsePositiveInt(""); ok {
 		t.Fatal("expected empty input to fail")
