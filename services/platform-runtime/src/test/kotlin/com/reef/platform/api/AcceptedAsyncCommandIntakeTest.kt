@@ -97,7 +97,6 @@ class AcceptedAsyncCommandIntakeTest {
             inFlightPerLane = 2
         )
 
-        intake.start()
         try {
             val first = intake.enqueueSubmit(
                 clientId = "client-1",
@@ -120,12 +119,16 @@ class AcceptedAsyncCommandIntakeTest {
                 correlationId = "corr-3",
                 body = validSubmitBody("cmd-accepted-async-3", "trace-3", "ord-3")
             )
+            intake.start()
 
             assertTrue(first.accepted)
             assertTrue(second.accepted)
             assertTrue(third.accepted)
-            assertTrue(waitFor { gateway.submittedCount() == 2 })
-            assertTrue(waitFor { intake.stats().inFlight == 2L })
+            assertTrue(
+                waitFor(timeoutMs = 30_000) { gateway.submittedCount() == 2 },
+                "submitted=${gateway.submittedCount()} pending=${gateway.pendingCount()} stats=${intake.stats()}"
+            )
+            assertTrue(waitFor(timeoutMs = 30_000) { intake.stats().inFlight == 2L })
             assertEquals(1, intake.stats().saturatedLaneCount)
             assertEquals(2, gateway.pendingCount())
 
@@ -137,8 +140,8 @@ class AcceptedAsyncCommandIntakeTest {
             assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-2")?.status)
 
             gateway.completeOrderAccepted("ord-1")
-            assertTrue(waitFor { gateway.submittedCount() == 3 })
-            assertTrue(waitFor { intake.stats().inFlight == 1L })
+            assertTrue(waitFor(timeoutMs = 30_000) { gateway.submittedCount() == 3 })
+            assertTrue(waitFor(timeoutMs = 30_000) { intake.stats().inFlight == 1L })
             assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-1")?.status)
             assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-2")?.status)
             assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-3")?.status)

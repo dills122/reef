@@ -638,6 +638,7 @@ Accepted-async no-DB isolation knobs:
 
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=accepted-async` makes submit-order intake return a `202` command receipt after validation, idempotency reservation, and in-memory lane enqueue. It does not provide durable acceptance and is benchmark-only unless paired with a durable ingress design.
 - `EXTERNAL_API_ACCEPTED_ASYNC_LANES=16` sets in-memory worker lanes. Submit commands route by deterministic `instrumentId` lane scoring to preserve per-instrument order while avoiding obvious small-symbol-set modulo skew.
+- Accepted-async parses submit bodies once at intake and queues the parsed command object, not the raw request body, to reduce hot-path JSON parse and retained string overhead.
 - `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000` sets per-lane queued command capacity.
 - `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32` bounds concurrent engine submissions per accepted-async lane. Terminal persistence and status completion still follow lane intake order; raising it can inflate engine wait time by flooding the gRPC stream.
 - `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW=false` keeps startup validation from accepting in-flight windows above `128` unless the run is an explicit stress test.

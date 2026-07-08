@@ -4,6 +4,7 @@ import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.partition.PartitionLaneHash
 import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
+import com.reef.platform.domain.SubmitOrderCommand
 import java.time.Instant
 import java.util.ArrayDeque
 import java.util.concurrent.ConcurrentHashMap
@@ -171,7 +172,7 @@ class AcceptedAsyncCommandIntake(
         )
         recordsByCommandId[command.commandId] = record
         val accepted = HotPathMetrics.time("api.acceptedAsync.enqueue") {
-            offer(lane, lanes[lane], AcceptedAsyncCommand(record, body))
+            offer(lane, lanes[lane], AcceptedAsyncCommand(record, command))
         }
         if (!accepted) {
             backpressured.incrementAndGet()
@@ -285,7 +286,7 @@ class AcceptedAsyncCommandIntake(
             record.copy(status = CommandLogStatus.PROCESSING, updatedAtEpochMs = System.currentTimeMillis())
         }
         val future = HotPathMetrics.time("acceptedAsync.prepareSubmitOrder") {
-            api.prepareSubmitOrderAsync(command.body)
+            api.prepareSubmitOrderAsync(command.command)
         }
         val pending = PendingAcceptedAsyncCommand(
             command = command,
@@ -440,7 +441,7 @@ private suspend fun <T> CompletableFuture<T>.awaitResult(): T =
 
 private data class AcceptedAsyncCommand(
     val record: AcceptedAsyncCommandRecord,
-    val body: String
+    val command: SubmitOrderCommand
 )
 
 private data class PendingAcceptedAsyncCommand(
