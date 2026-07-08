@@ -153,7 +153,7 @@ Rules:
 - `ops-realistic-v1` should be the default for standalone platform operation.
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
-- Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, non-local `POST_TRADE_PROFILE` boot validation, and the P2 settlement fact slice with profile evidence fields. Venue/session and scenario/run profile selection are still planned.
+- Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, and the P2 settlement fact slice with profile evidence fields. Venue/session and scenario/run storage are still planned.
 
 Policy storage:
 

@@ -37,6 +37,7 @@ import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
+import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
@@ -173,6 +174,8 @@ class PlatformHttpServer(
         RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
     private val defaultPostTradePolicyVersion: Int =
         RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1),
+    private val postTradeProfileResolver: PostTradeProfileResolver =
+        PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
@@ -375,6 +378,7 @@ class PlatformHttpServer(
         arenaAdminService = deps.arenaAdminService,
         analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
+        postTradeProfileResolver = deps.postTradeProfileResolver,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
@@ -3323,11 +3327,14 @@ class PlatformHttpServer(
 
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
-        val postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId }
+        val selection = postTradeProfileResolver.resolve(
+            scenarioRunProfileId = json.string("postTradeProfileId")
+        )
+        val postTradeProfileId = selection.profileId
         val postTradePolicyVersion = positiveIntOrDefault(
             json = json,
             key = "postTradePolicyVersion",
-            defaultValue = defaultPostTradePolicyVersion
+            defaultValue = selection.policyVersion
         )
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
@@ -4548,6 +4555,11 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         arenaAdminService = defaultArenaAdminService(hooks),
         analyticsRunExportService = defaultAnalyticsRunExportService(),
         settlementFactStore = defaultSettlementFactStore(),
+        postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
+            runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver"),
+            environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
+            environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
+        ),
         boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
@@ -4644,6 +4656,11 @@ data class ServerBoundaryDeps(
     val arenaAdminService: AdminApplicationService? = null,
     val analyticsRunExportService: SimulationRunExportService? = null,
     val settlementFactStore: SettlementFactStore? = null,
+    val postTradeProfileResolver: PostTradeProfileResolver =
+        PostTradeProfileResolver.envOnly(
+            RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
+            RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1)
+        ),
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,

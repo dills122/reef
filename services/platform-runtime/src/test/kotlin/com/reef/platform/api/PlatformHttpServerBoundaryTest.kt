@@ -20,7 +20,9 @@ import com.reef.platform.application.arena.RegisterArenaRunCommand
 import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
 import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
+import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementFactStore
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.CancelOrderCommand
@@ -1928,6 +1930,45 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun settlementFactsEndpointUsesPersistedActivePostTradeProfile() {
+        val settlementStore = InMemorySettlementFactStore()
+        val persistence = InMemoryRuntimePersistence()
+        persistence.savePostTradeProfile(
+            PostTradeProfile(
+                profileId = "instant-post-trade-v1",
+                mode = "instant-post-trade",
+                settlementCycle = "T+0",
+                nettingMode = "gross-or-microbatch",
+                ledgerPostingMode = "near-instant-finality",
+                policyVersion = 5,
+                active = true
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            settlementFactStore = settlementStore,
+            runtimePersistence = persistence,
+            postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(persistence)
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/internal/admin/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody("p2-run-persisted-default", includePostTradeProfile = false)
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-persisted-default")
+
+            assertEquals(200, posted.status)
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"postTradeProfileId\":\"instant-post-trade-v1\"")
+            assertContains(fetched.body, "\"postTradePolicyVersion\":5")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun internalAdminCircuitBreakerEndpointSetsBreakerAndAuditsChange() {
         val breakerStore = RecordingCommandCircuitBreakerStore()
         val persistence = InMemoryRuntimePersistence()
@@ -3373,6 +3414,8 @@ class PlatformHttpServerBoundaryTest {
         settlementFactStore: SettlementFactStore? = null,
         defaultPostTradeProfileId: String = DefaultPostTradeProfileId,
         defaultPostTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+        postTradeProfileResolver: PostTradeProfileResolver =
+            PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
@@ -3425,6 +3468,7 @@ class PlatformHttpServerBoundaryTest {
             settlementFactStore = settlementFactStore,
             defaultPostTradeProfileId = defaultPostTradeProfileId,
             defaultPostTradePolicyVersion = defaultPostTradePolicyVersion,
+            postTradeProfileResolver = postTradeProfileResolver,
             boundaryRejectionLog = boundaryRejectionLog,
             idempotencyStore = idempotencyStore,
             idempotencyRetentionPolicy = DefaultIdempotencyRetentionPolicy(),
