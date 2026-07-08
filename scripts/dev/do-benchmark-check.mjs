@@ -19,6 +19,8 @@ const maxP95Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P95_MS);
 const maxP99Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P99_MS);
 const minStreamDirectActivePartitions = parseOptionalNumber(process.env.REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS);
 const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW);
+const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
+const requirePgStatIo = process.env.REEF_DO_REQUIRE_PG_STAT_IO === "1";
 const failures = [];
 const evidenceRows = [];
 
@@ -49,6 +51,9 @@ for (const rate of requiredRates) {
 }
 
 validateTelemetry(target);
+if (reportProfile === "materializer" && requireDbDiagnostics) {
+  validateMaterializerDbDiagnostics(target);
+}
 
 finish();
 
@@ -258,6 +263,61 @@ function validateTelemetry(dir) {
   }
   if (!sawStreamHealth) {
     failures.push("telemetry did not capture a successful runtime.streamAckHealth probe");
+  }
+}
+
+function validateMaterializerDbDiagnostics(dir) {
+  const summaryPath = join(dir, "venue-event-materializer-stress-diagnostics-summary.json");
+  if (!existsSync(summaryPath)) {
+    failures.push(`missing materializer DB diagnostics summary: ${summaryPath}`);
+    return;
+  }
+
+  const summary = readJson(summaryPath);
+  if (!summary.ok) {
+    failures.push(`invalid materializer DB diagnostics summary: ${summaryPath}: ${summary.error}`);
+    return;
+  }
+
+  const postgres = summary.json?.services?.postgres;
+  if (!postgres?.ok) {
+    failures.push("materializer DB diagnostics summary did not report services.postgres.ok=true");
+  }
+  const walBytes = Number(postgres?.wal?.walBytes ?? postgres?.unitMetrics?.walBytes);
+  if (!Number.isFinite(walBytes) || walBytes <= 0) {
+    failures.push("materializer DB diagnostics summary missing positive WAL bytes");
+  }
+  const walBytesPerAccepted = Number(postgres?.unitMetrics?.walBytesPerAcceptedCommand);
+  if (!Number.isFinite(walBytesPerAccepted) || walBytesPerAccepted <= 0) {
+    failures.push("materializer DB diagnostics summary missing positive WAL bytes per accepted command");
+  }
+  if (!Array.isArray(postgres?.topTablesByBytes) || postgres.topTablesByBytes.length === 0) {
+    failures.push("materializer DB diagnostics summary missing topTablesByBytes");
+  }
+
+  const diagnosticsDir = join(dir, "venue-event-materializer-stress-diagnostics");
+  const requiredFiles = [
+    "pre-db-diagnostics.json",
+    "post-db-diagnostics.json",
+    "pre-pg_stat_wal.csv",
+    "post-pg_stat_wal.csv",
+    "pre-pg_stat_database.csv",
+    "post-pg_stat_database.csv",
+    "pre-pg_stat_activity_waits.csv",
+    "post-pg_stat_activity_waits.csv",
+    "pre-pg_settings_wal.csv",
+    "post-pg_settings_wal.csv",
+    "pre-table-stats.csv",
+    "post-table-stats.csv",
+  ];
+  if (requirePgStatIo) {
+    requiredFiles.push("pre-pg_stat_io.csv", "post-pg_stat_io.csv");
+  }
+  for (const file of requiredFiles) {
+    const path = join(diagnosticsDir, file);
+    if (!existsSync(path)) {
+      failures.push(`missing materializer DB diagnostics artifact: ${path}`);
+    }
   }
 }
 

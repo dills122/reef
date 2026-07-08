@@ -3726,10 +3726,11 @@ class PlatformHttpServerBoundaryTest {
     @Test
     fun streamAckReturnsUnavailableWhenPublishAckFails() {
         val publisher = RecordingStreamCommandPublisher(fail = true)
+        val intakeStore = InMemoryStreamCommandIntakeStore()
         val server = testServerWithGateway(
             gateway = CountingEngineGateway(EchoOrderEngineGateway()),
             commandProcessingMode = CommandProcessingMode.StreamAck,
-            streamCommandIntakeStore = InMemoryStreamCommandIntakeStore(),
+            streamCommandIntakeStore = intakeStore,
             streamCommandPublisher = publisher
         )
         try {
@@ -3746,6 +3747,14 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, response.status)
             assertContains(response.body, "\"error\":\"stream command publish unavailable\"")
             assertEquals(1, publisher.published.size)
+            assertEquals(0L, intakeStore.findByCommandId("cmd-stream-publish-fail")?.streamSequence)
+
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-stream-publish-fail",
+                headers = apiReadHeaders()
+            )
+            assertEquals(404, status.status)
         } finally {
             server.stop(0)
         }
@@ -3772,6 +3781,13 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, first.status)
             assertContains(first.body, "timed out waiting 25ms")
             assertEquals(1, publisher.published.size)
+
+            val beforeAckStatus = get(
+                server.address.port,
+                "/api/v1/commands/cmd-stream-late-ack",
+                headers = apiReadHeaders()
+            )
+            assertEquals(404, beforeAckStatus.status)
 
             publisher.complete(StreamPublishAck("REEF_COMMANDS", 123L))
 

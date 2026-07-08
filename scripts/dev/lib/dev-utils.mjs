@@ -49,13 +49,24 @@ export async function run(cmd, args = [], options = {}) {
       stdio: passthrough ? "inherit" : "pipe",
       env: process.env,
     });
+    let stdout = "";
+    let stderr = "";
+    if (!passthrough) {
+      child.stdout?.on("data", (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr?.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+    }
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
-        resolve();
+        resolve({ stdout, stderr });
         return;
       }
-      reject(new Error(`${cmd} ${args.join(" ")} failed with code ${code}`));
+      const output = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n");
+      reject(new Error(`${cmd} ${args.join(" ")} failed with code ${code}${output ? `\n${output}` : ""}`));
     });
   });
 }

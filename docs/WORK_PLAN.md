@@ -99,8 +99,9 @@ This checkpoint is done only when Reef can prove, with named local gates and the
 
 5. Promote only clean local gates to the DigitalOcean/OpenTofu harness.
    - the bridge harness exists under `infra/do-benchmark/` with `scripts/dev/do-benchmark-host.sh`, `make do-benchmark`, and local report checks; the remaining requirement is clean promotion evidence, not initial scaffold creation.
-   - first remote tier is `2000` completed/sec for at least `5m`.
-   - next tiers are `5000`, then `7500`, only after the lower tier is stable.
+   - for the generic stream-worker path, first remote tier remains `2000` completed/sec for at least `5m`, followed by `5000`, then `7500`.
+   - for the active Redpanda direct-stream plus venue-event-materializer path, use `make do-materializer-10k-gate`: short tier is `10k / 60s / 3 samples`, then `10k / 5m / 2 samples`, then `10k / 15m / 1 sample`.
+   - the materializer 10k gate requires p95 <= `100ms`, p99 <= `200ms`, attempted and accepted rps >= `9900`, all `16` direct-stream partitions active, partition skew <= `4`, DB WAL/activity/settings/`pg_stat_io` diagnostics, and accepted/direct-acked/materialized gaps equal to `0`.
    - reports must include attempted, accepted, direct-acked, materialized, projected, lag, p95/p99, restart counts, and artifact paths.
 
 ### Implementation Slices

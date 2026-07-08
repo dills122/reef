@@ -10,7 +10,26 @@ SCENARIO ?= ../../packages/scenario-definitions/scenarios/v1/P1_GOLDEN_HIDDEN_CR
 SCENARIO_RUN_ID ?= p1-golden-hidden-cross-local
 SCENARIO_START ?= 2026-03-14T18:00:00Z
 
-.PHONY: test lint check-scripts test-go test-platform-runtime test-simulator test-bot-sdk fmt-go check-proto-additive bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-reset dev-db-migrate dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-render-bot-arena-report dev-render-bot-arena-report-index dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check dev-read-surface-availability-check dev-gate-local-durable dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb dev-stress-diagnostics dev-export-simulation-run dev-intake-bench dev-command-log-integrity-check dev-command-log-prune dev-command-log-pin dev-admin dev-seed-p2-settlement-facts dev-sim dev-sim-batch dev-scenario-plan dev-scenario-smoke dev-scenario-drift-check dev-replay dev-throughput-campaign dev-throughput-compare kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-materializer-up kube-smoke-venue-event-materializer kube-port-forward do-benchmark simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
+.PHONY: test lint check-scripts check-js-runtime
+.PHONY: test-go test-platform-runtime test-simulator test-simulator-go test-bot-sdk fmt-go check-proto-additive
+.PHONY: bench-matching-engine bench-matching-engine-load bench-matching-engine-check bench-platform-runtime-check
+.PHONY: dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
+.PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-reset dev-db-migrate
+.PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results
+.PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative
+.PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
+.PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
+.PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check
+.PHONY: dev-read-surface-availability-check dev-gate-local-durable
+.PHONY: dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
+.PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
+.PHONY: dev-command-log-integrity-check dev-command-log-prune dev-command-log-pin dev-admin
+.PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
+.PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-replay
+.PHONY: dev-throughput-campaign dev-throughput-compare
+.PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-materializer-up
+.PHONY: kube-smoke-venue-event-materializer kube-port-forward
+.PHONY: do-benchmark do-materializer-10k-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
 
@@ -30,7 +49,9 @@ check-proto-additive:
 test-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && GOCACHE=/tmp/reef-go-build-cache go test ./...
 
-test-simulator:
+test-simulator: test-simulator-go dev-scenario-golden-check
+
+test-simulator-go:
 	cd $(SIMULATOR_DIR) && GOCACHE=/tmp/reef-go-build-cache go test ./...
 
 bench-matching-engine:
@@ -87,7 +108,9 @@ test-bot-sdk:
 	node scripts/dev/report-taxonomy.test.mjs
 	node scripts/dev/stream-partition-spread.test.mjs
 	node scripts/dev/do-benchmark-check.test.mjs
+	node scripts/dev/do-materializer-10k-gate.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
+	node scripts/dev/scenario-golden.test.mjs
 
 fmt-go:
 	cd $(GO_MATCHING_ENGINE_DIR) && gofmt -w ./cmd ./internal
@@ -324,6 +347,10 @@ dev-scenario-plan:
 dev-scenario-smoke:
 	cd $(SIMULATOR_DIR) && GOCACHE=/tmp/reef-go-build-cache go run ./cmd/scenario-smoke --scenario $(SCENARIO) --scenario-run-id $(SCENARIO_RUN_ID) --start $(SCENARIO_START) $(ARGS)
 
+dev-scenario-golden-check:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/scenario-golden-check.mjs $(ARGS)
+
 docs-site-dev:
 	cd apps/docs-site && bun install && bun run dev
 
@@ -348,6 +375,9 @@ dev-throughput-compare:
 
 do-benchmark:
 	./scripts/dev/do-benchmark-host.sh $(ARGS)
+
+do-materializer-10k-gate:
+	./scripts/dev/do-materializer-10k-gate.sh $(or $(ARGS),plan)
 
 simulation-run:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
