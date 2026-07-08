@@ -125,10 +125,12 @@ class AcceptedAsyncCommandIntakeTest {
             assertTrue(second.accepted)
             assertTrue(third.accepted)
             assertTrue(waitFor { gateway.submittedCount() == 2 })
+            assertTrue(waitFor { intake.stats().inFlight == 2L })
+            assertEquals(1, intake.stats().saturatedLaneCount)
             assertEquals(2, gateway.pendingCount())
 
             gateway.completeOrderAccepted("ord-2")
-            Thread.sleep(100)
+            assertTrue(waitFor { intake.stats().completedWaiting == 1L })
             assertEquals(null, persistence.submitResult("cmd-accepted-async-1"))
             assertEquals(null, persistence.submitResult("cmd-accepted-async-2"))
             assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-1")?.status)
@@ -136,6 +138,7 @@ class AcceptedAsyncCommandIntakeTest {
 
             gateway.completeOrderAccepted("ord-1")
             assertTrue(waitFor { gateway.submittedCount() == 3 })
+            assertTrue(waitFor { intake.stats().inFlight == 1L })
             assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-1")?.status)
             assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-2")?.status)
             assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-3")?.status)

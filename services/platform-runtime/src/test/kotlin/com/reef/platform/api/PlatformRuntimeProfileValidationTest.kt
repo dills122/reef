@@ -64,6 +64,60 @@ class PlatformRuntimeProfileValidationTest {
         PlatformRuntimeProfileValidator.requireValidProfile(config)
     }
 
+    // --- accepted-async no-DB isolation profile: bounded status/window required ---
+
+    @Test
+    fun acceptedAsyncDefaultsPassValidation() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "accepted-async"
+            )
+        )
+
+        assertEquals(emptyList(), PlatformRuntimeProfileValidator.violations(config))
+    }
+
+    @Test
+    fun rejectsAcceptedAsyncUnboundedTerminalStatusRetention() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "accepted-async",
+                "EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS" to "0"
+            )
+        )
+
+        val issues = PlatformRuntimeProfileValidator.violations(config)
+        assertEquals(1, issues.size)
+        assertTrue(issues.single().contains("EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS"))
+    }
+
+    @Test
+    fun rejectsAcceptedAsyncOversizedWindowWithoutOverride() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "accepted-async",
+                "EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE" to "256"
+            )
+        )
+
+        val issues = PlatformRuntimeProfileValidator.violations(config)
+        assertEquals(1, issues.size)
+        assertTrue(issues.single().contains("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE"))
+    }
+
+    @Test
+    fun acceptsAcceptedAsyncOversizedWindowWithOverride() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "accepted-async",
+                "EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE" to "256",
+                "EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW" to "true"
+            )
+        )
+
+        assertEquals(emptyList(), PlatformRuntimeProfileValidator.violations(config))
+    }
+
     // --- no-DB ceiling profile: bounded in-memory intake retention required ---
 
     @Test

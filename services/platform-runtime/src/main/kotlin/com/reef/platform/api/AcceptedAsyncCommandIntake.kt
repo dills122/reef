@@ -38,6 +38,10 @@ data class AcceptedAsyncCommandReceipt(
 data class AcceptedAsyncLaneStats(
     val lane: Int,
     val queued: Long,
+    val inFlight: Long,
+    val completedWaiting: Long,
+    val oldestInFlightAgeMs: Long,
+    val windowSaturated: Boolean,
     val received: Long,
     val backpressured: Long,
     val processing: Long,
@@ -53,6 +57,10 @@ data class AcceptedAsyncCommandStats(
     val inFlightPerLane: Int,
     val queued: Long,
     val maxLaneDepth: Long,
+    val inFlight: Long,
+    val completedWaiting: Long,
+    val maxOldestInFlightAgeMs: Long,
+    val saturatedLaneCount: Int,
     val received: Long,
     val duplicates: Long,
     val backpressured: Long,
@@ -82,6 +90,10 @@ class AcceptedAsyncCommandIntake(
         Array(laneCount) { Channel(queueCapacityPerLane) }
     private val laneQueued = AtomicLongArray(laneCount)
     private val laneReceived = AtomicLongArray(laneCount)
+    private val laneInFlight = AtomicLongArray(laneCount)
+    private val laneCompletedWaiting = AtomicLongArray(laneCount)
+    private val laneOldestInFlightAtEpochMs = AtomicLongArray(laneCount)
+    private val laneWindowSaturated = AtomicLongArray(laneCount)
     private val laneBackpressured = AtomicLongArray(laneCount)
     private val laneProcessing = AtomicLongArray(laneCount)
     private val laneCompleted = AtomicLongArray(laneCount)
@@ -193,9 +205,14 @@ class AcceptedAsyncCommandIntake(
 
     fun stats(): AcceptedAsyncCommandStats {
         val laneStats = lanes.indices.map { lane ->
+            val oldestInFlightAt = laneOldestInFlightAtEpochMs.get(lane)
             AcceptedAsyncLaneStats(
                 lane = lane,
                 queued = laneQueued.get(lane),
+                inFlight = laneInFlight.get(lane),
+                completedWaiting = laneCompletedWaiting.get(lane),
+                oldestInFlightAgeMs = ageMs(oldestInFlightAt),
+                windowSaturated = laneWindowSaturated.get(lane) > 0,
                 received = laneReceived.get(lane),
                 backpressured = laneBackpressured.get(lane),
                 processing = laneProcessing.get(lane),
@@ -204,6 +221,7 @@ class AcceptedAsyncCommandIntake(
             )
         }
         val depths = laneStats.map { it.queued }
+        val oldestInFlightAges = laneStats.map { it.oldestInFlightAgeMs }
         return AcceptedAsyncCommandStats(
             enabled = started.get(),
             laneCount = lanes.size,
@@ -214,6 +232,10 @@ class AcceptedAsyncCommandIntake(
             inFlightPerLane = inFlightPerLane,
             queued = depths.sum(),
             maxLaneDepth = depths.maxOrNull() ?: 0,
+            inFlight = laneStats.sumOf { it.inFlight },
+            completedWaiting = laneStats.sumOf { it.completedWaiting },
+            maxOldestInFlightAgeMs = oldestInFlightAges.maxOrNull() ?: 0,
+            saturatedLaneCount = laneStats.count { it.windowSaturated },
             received = received.get(),
             duplicates = duplicates.get(),
             backpressured = backpressured.get(),
@@ -240,12 +262,14 @@ class AcceptedAsyncCommandIntake(
                 laneQueued.decrementAndGet(lane)
                 try {
                     pending.addLast(submit(lane, command))
+                    recordLanePipeline(lane, pending)
                 } catch (ex: Exception) {
                     fail(lane, command, ex)
                 }
             }
             val next = pending.pollFirst() ?: continue
             complete(lane, next)
+            recordLanePipeline(lane, pending)
         }
     }
 
@@ -263,7 +287,17 @@ class AcceptedAsyncCommandIntake(
         val future = HotPathMetrics.time("acceptedAsync.prepareSubmitOrder") {
             api.prepareSubmitOrderAsync(command.body)
         }
-        return PendingAcceptedAsyncCommand(command, future)
+        val pending = PendingAcceptedAsyncCommand(
+            command = command,
+            future = future,
+            submittedAtEpochMs = System.currentTimeMillis()
+        )
+        future.whenComplete { _, _ ->
+            if (pending.completionRecorded.compareAndSet(false, true)) {
+                laneCompletedWaiting.incrementAndGet(lane)
+            }
+        }
+        return pending
     }
 
     private suspend fun complete(lane: Int, pending: PendingAcceptedAsyncCommand) {
@@ -293,6 +327,10 @@ class AcceptedAsyncCommandIntake(
             fail(lane, command, ex.cause ?: ex)
         } catch (ex: Exception) {
             fail(lane, command, ex)
+        } finally {
+            if (pending.completionRecorded.compareAndSet(true, false)) {
+                laneCompletedWaiting.decrementAndGet(lane)
+            }
         }
     }
 
@@ -342,6 +380,12 @@ class AcceptedAsyncCommandIntake(
         return "$clientId|$route|$idempotencyKey"
     }
 
+    private fun recordLanePipeline(lane: Int, pending: ArrayDeque<PendingAcceptedAsyncCommand>) {
+        laneInFlight.set(lane, pending.size.toLong())
+        laneWindowSaturated.set(lane, if (pending.size >= inFlightPerLane) 1 else 0)
+        laneOldestInFlightAtEpochMs.set(lane, pending.peekFirst()?.submittedAtEpochMs ?: 0L)
+    }
+
     private fun markTerminalStatus(commandId: String) {
         if (terminalStatusMaxRecords <= 0) return
         if (terminalCommandIds.add(commandId)) {
@@ -371,6 +415,11 @@ class AcceptedAsyncCommandIntake(
         if (epochMs <= 0) return ""
         return Instant.ofEpochMilli(epochMs).toString()
     }
+
+    private fun ageMs(epochMs: Long): Long {
+        if (epochMs <= 0) return 0L
+        return (System.currentTimeMillis() - epochMs).coerceAtLeast(0L)
+    }
 }
 
 private fun CommandLogStatus.isTerminal(): Boolean {
@@ -396,7 +445,9 @@ private data class AcceptedAsyncCommand(
 
 private data class PendingAcceptedAsyncCommand(
     val command: AcceptedAsyncCommand,
-    val future: CompletableFuture<PersistableSubmitOutcome>
+    val future: CompletableFuture<PersistableSubmitOutcome>,
+    val submittedAtEpochMs: Long,
+    val completionRecorded: AtomicBoolean = AtomicBoolean(false)
 )
 
 private data class AcceptedAsyncCommandRecord(

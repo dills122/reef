@@ -42,6 +42,7 @@ Default shape:
 - `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` bounds the no-DB idempotency window for long ceiling tests; set it to `0` for unlimited in-memory replay retention.
 - `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256` shards no-DB stream-intake reservation state so the ceiling profile does not serialize all accepted commands on one in-memory monitor.
 - `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS=100000` bounds completed/failed status retention for the accepted-async no-DB isolation path; set it to `0` only when measuring unlimited status/idempotency heap growth.
+- `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW=false` keeps accepted-async startup validation from allowing in-flight windows above `128` unless an explicit stress run opts in.
 
 Isolation tools:
 
@@ -137,6 +138,7 @@ Current hot-path materializer profile uses 16 command partitions and matching-en
 - `STREAM_ACK_PUBLISH_PIPELINE_BATCH_SIZE`
 - `STREAM_ACK_PUBLISH_PIPELINE_BATCH_LINGER_MS`
 - `PLATFORM_NETTY_APPLICATION_MAX_PENDING_TASKS`
+- `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW`
 - `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS`
 - `STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT`
 - `STREAM_ACK_KAFKA_BATCH_SIZE`
