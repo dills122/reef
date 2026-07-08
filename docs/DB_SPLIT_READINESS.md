@@ -99,11 +99,39 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 - Docker/local runtime defaults to schema validation mode.
 - Service-side compatibility bootstrap remains available through `RUNTIME_DB_BOOTSTRAP_MODE=compat`, not as the local default.
 
+## HFT SQL audit checkpoint
+
+The current HFT/finance SQL audit is tracked in [`HFT_SQL_AUDIT.md`](./HFT_SQL_AUDIT.md).
+
+Immediate low-risk hardening from that audit is included in the command-log migration stream:
+
+- `command_log/0014_integrity_audit_views.sql` adds `command_log.command_integrity_violations`.
+- `command_log.command_integrity_summary()` groups integrity violations for CI, smoke, and operator checks.
+- These diagnostics replace the visibility lost when hot-path same-schema foreign keys were removed, without adding write-time FK checks back onto command intake, queue, or result writes.
+- `make dev-command-log-integrity-check` fails when any grouped integrity violation count is nonzero.
+- `scripts/dev/command-log-prune.mjs` removes orphan command-log child rows in apply mode before terminal-history pruning.
+
 ## Next persistence-alignment work
 
 1. Remove or narrow service-side `CREATE TABLE IF NOT EXISTS` compatibility code after the CI migration lane soaks.
 2. Move long-term UI/query projections from overloaded `runtime.*` tables into a dedicated `read_model` schema contract.
-3. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
+3. Convert runtime fact columns that are still stored as text into typed Postgres facts.
+   - Scope: `runtime.runtime_events`, `runtime.orders`, `runtime.executions`, `runtime.trades`, `runtime.submit_results`, `runtime.order_lifecycle_state`, `runtime.market_data_snapshots`, and canonical batch/outcome timestamp fields.
+   - Use `UUID`/`TIMESTAMPTZ`/`NUMERIC` for canonical and query-critical facts where the domain contract is stable; keep raw payload JSON/text only at compatibility edges.
+   - Update Kotlin compatibility bootstrap, schema validation expectations, row mappers, projector SQL, smoke scripts, and migration/integration tests in the same slice.
+   - Preserve existing public API wire shapes while changing DB storage types.
+   - Add compatibility cleanup for existing rows that cannot cast safely, with explicit failure or quarantine behavior instead of silent coercion.
+   - Verification: clean-stack migration apply, migrated-stack apply, Postgres schema integration test for column types, projector replay/idempotency checks, market-data/order read smoke, and an `EXPLAIN` check for top-of-book/index-sensitive queries.
+   - Checkpoint: `runtime/0028_typed_top_of_book_facts.sql` adds typed numeric companion columns for top-of-book lifecycle and market-data projection facts.
+   - Checkpoint: `runtime/0029_typed_runtime_event_facts.sql` adds typed runtime event identity/time companion columns, typed ordering indexes, and a trigger to keep new writes populated.
+   - Checkpoint: `runtime/0030_typed_submit_result_facts.sql` adds typed command-result event/time companion columns, typed audit indexes, and a trigger for persisted submit outcomes.
+   - Checkpoint: `runtime/0031_typed_execution_trade_facts.sql` adds typed execution/trade event, time, quantity, and price companion columns plus typed history and intraday-bar indexes.
+   - Checkpoint: `runtime/0032_typed_order_facts.sql` adds typed order accepted-time, quantity, and limit-price companion columns plus typed order-history indexes.
+   - Checkpoint: `runtime/0033_typed_canonical_time_facts.sql` adds typed canonical command, venue-event, batch, and outcome timestamp companions for audit/range queries.
+4. Reconcile the runtime event schema so `runtime.runtime_events` has one intentional typed contract instead of the current `0002` typed backbone followed by `0003` text compatibility.
+5. Add a physical partition plan for high-volume append/canonical history tables before production-scale retention and replay data accumulates.
+6. Mark `runtime.canonical_command_results` as legacy/compat or consolidate canonical command consumers onto `runtime.canonical_command_outcomes`.
+7. Revisit the outbox/event-backbone routine once runtime event payloads and publisher behavior are implemented.
 
 ## Split readiness checks to enforce in CI
 
@@ -114,3 +142,4 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 5. critical write-path changes include routine contract tests
 6. command-log writes remain append-only except explicit status/attempt transitions
 7. read-model migrations do not add dependencies to hot runtime write paths
+8. command-log integrity audit checks stay empty after queue reconstruction and prune jobs

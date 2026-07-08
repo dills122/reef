@@ -90,6 +90,50 @@ FROM deleted_commands;
 `.trim();
 }
 
+export function buildOrphanCountSql() {
+  return `
+SELECT COUNT(*) AS orphan_count
+FROM command_log.command_integrity_violations
+WHERE violation_type IN ('orphan_payload', 'orphan_work_queue', 'orphan_result');
+`.trim();
+}
+
+export function buildDeleteOrphanRowsSql() {
+  return `
+WITH deleted_payloads AS (
+  DELETE FROM command_log.command_payloads payloads
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM command_log.commands commands
+    WHERE commands.command_id = payloads.command_id
+  )
+  RETURNING payloads.command_id
+),
+deleted_queue AS (
+  DELETE FROM command_log.command_work_queue queue
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM command_log.commands commands
+    WHERE commands.command_id = queue.command_id
+  )
+  RETURNING queue.command_id
+),
+deleted_results AS (
+  DELETE FROM command_log.command_results results
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM command_log.commands commands
+    WHERE commands.command_id = results.command_id
+  )
+  RETURNING results.command_id
+)
+SELECT
+  (SELECT COUNT(*) FROM deleted_payloads)
+  + (SELECT COUNT(*) FROM deleted_queue)
+  + (SELECT COUNT(*) FROM deleted_results) AS deleted_count;
+`.trim();
+}
+
 export function buildRetentionPinExclusionPredicate(commandAlias) {
   return `NOT EXISTS (
     SELECT 1
@@ -169,12 +213,26 @@ async function main() {
     dbName,
     sql: buildEligibleCountSql({ olderThanSeconds }),
   });
+  const orphanRowsBefore = await querySingleNumber({
+    service,
+    dbUser,
+    dbName,
+    sql: buildOrphanCountSql(),
+  });
   const queueCountsBefore = await queryQueueCounts({ service, dbUser, dbName });
 
   let deleted = 0;
+  let deletedOrphans = 0;
   let batches = 0;
   const vacuum = [];
   if (apply) {
+    deletedOrphans = await querySingleNumber({
+      service,
+      dbUser,
+      dbName,
+      sql: buildDeleteOrphanRowsSql(),
+    });
+
     while (batches < maxBatches) {
       const deletedThisBatch = await querySingleNumber({
         service,
@@ -188,7 +246,7 @@ async function main() {
       if (deletedThisBatch < batchSize) break;
     }
 
-    if (runVacuum && deleted > 0) {
+    if (runVacuum && deleted + deletedOrphans > 0) {
       for (const vacuumCommand of buildVacuumSql()) {
         try {
           await execPsql({ service, dbUser, dbName, sql: vacuumCommand.sql, capture: false });
@@ -209,6 +267,12 @@ async function main() {
     dbUser,
     dbName,
     sql: buildEligibleCountSql({ olderThanSeconds }),
+  });
+  const orphanRowsAfter = await querySingleNumber({
+    service,
+    dbUser,
+    dbName,
+    sql: buildOrphanCountSql(),
   });
   const queueCountsAfter = await queryQueueCounts({ service, dbUser, dbName });
 
@@ -234,7 +298,10 @@ async function main() {
     runVacuum,
     eligibleBefore,
     eligibleAfter,
+    orphanRowsBefore,
+    orphanRowsAfter,
     deleted,
+    deletedOrphans,
     batches,
     vacuum,
     queueCountsBefore,
@@ -261,6 +328,7 @@ function printSummary(report, reportOut) {
   console.log(`Eligible   : ${report.eligibleBefore}`);
   console.log(`Deleted    : ${report.deleted}`);
   console.log(`Remaining  : ${report.eligibleAfter}`);
+  console.log(`Orphans    : ${report.orphanRowsBefore} -> ${report.orphanRowsAfter} (${report.deletedOrphans} deleted)`);
   console.log(`Active queue before: ${JSON.stringify(report.queueCountsBefore)}`);
   console.log(`Active queue after : ${JSON.stringify(report.queueCountsAfter)}`);
   console.log(`Report     : ${reportOut}`);

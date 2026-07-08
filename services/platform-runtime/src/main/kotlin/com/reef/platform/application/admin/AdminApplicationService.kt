@@ -21,13 +21,16 @@ import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.RegisterArenaBotCommand
 import com.reef.platform.application.arena.RegisterArenaBotVersionCommand
 import com.reef.platform.application.arena.RegisterArenaRunCommand
+import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.domain.Account
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.Permission
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RuntimeEvent
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.PostgresRuntimePersistence
 import com.reef.platform.infrastructure.persistence.RuntimeDataSources
@@ -156,6 +159,7 @@ class AdminApplicationService(
     private var simulationState = SimulationControlState(status = "stopped", scenario = "")
 
     init {
+        seedPostTradeProfiles()
         runtimePersistence.saveRole(
             RoleDefinition(
                 roleId = "system_admin",
@@ -213,6 +217,54 @@ class AdminApplicationService(
     }
 
     fun listCalendarProfiles(): List<CalendarProfile> = calendarProfiles.values.toList()
+
+    fun upsertPostTradeProfile(actor: AdminActor, profile: PostTradeProfile) {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        validatePostTradeProfile(profile)
+        val existing = runtimePersistence.postTradeProfiles().firstOrNull { it.profileId == profile.profileId }
+        runtimePersistence.savePostTradeProfile(profile.copy(active = existing?.active ?: false))
+        emitAudit(
+            actor,
+            "AdminPostTradeProfileUpserted",
+            profile.profileId,
+            "mode=${profile.mode},settlementCycle=${profile.settlementCycle},nettingMode=${profile.nettingMode}," +
+                "ledgerPostingMode=${profile.ledgerPostingMode},policyVersion=${profile.policyVersion}"
+        )
+    }
+
+    fun listPostTradeProfiles(): List<PostTradeProfile> = runtimePersistence.postTradeProfiles()
+
+    fun activePostTradeProfile(): PostTradeProfile = runtimePersistence.activePostTradeProfile()
+
+    fun activatePostTradeProfile(actor: AdminActor, profileId: String): PostTradeProfile {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        val profile = runtimePersistence.activatePostTradeProfile(profileId)
+        emitAudit(actor, "AdminPostTradeProfileActivated", profileId, "policyVersion=${profile.policyVersion}")
+        return profile
+    }
+
+    fun setVenueSessionPostTradeProfile(
+        actor: AdminActor,
+        venueSessionId: String,
+        postTradeProfileId: String
+    ): VenueSessionPostTradeProfile {
+        requirePermission(actor, Permission.POST_TRADE_PROFILE_ADMIN)
+        require(venueSessionId.isNotBlank()) { "venueSessionId is required" }
+        PostTradeProfileResolver.fromPersistence(runtimePersistence).resolve(venueSessionProfileId = postTradeProfileId)
+        val config = VenueSessionPostTradeProfile(venueSessionId = venueSessionId, postTradeProfileId = postTradeProfileId)
+        runtimePersistence.saveVenueSessionPostTradeProfile(config)
+        emitAudit(
+            actor,
+            "AdminVenueSessionPostTradeProfileSet",
+            venueSessionId,
+            "postTradeProfileId=$postTradeProfileId"
+        )
+        return config
+    }
+
+    fun listVenueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return runtimePersistence.venueSessionPostTradeProfiles()
+    }
 
     fun upsertOverrideReason(actor: AdminActor, reason: OverrideReasonCode) {
         requirePermission(actor, Permission.OVERRIDE_ADMIN)
@@ -459,6 +511,47 @@ class AdminApplicationService(
 
     private fun arenaStore(): ArenaBotRegistryStore {
         return arenaRegistryStore ?: error("arena registry store is not configured")
+    }
+
+    private fun seedPostTradeProfiles() {
+        val existingIds = runtimePersistence.postTradeProfiles().map { it.profileId }.toSet()
+        if ("ops-realistic-v1" !in existingIds) {
+            runtimePersistence.savePostTradeProfile(
+                PostTradeProfile(
+                    profileId = "ops-realistic-v1",
+                    mode = "ops-realistic",
+                    settlementCycle = "T+1",
+                    nettingMode = "batch-netting",
+                    ledgerPostingMode = "scheduled-finality",
+                    policyVersion = 1,
+                    active = true
+                )
+            )
+        }
+        if ("instant-post-trade-v1" !in existingIds) {
+            runtimePersistence.savePostTradeProfile(
+                PostTradeProfile(
+                    profileId = "instant-post-trade-v1",
+                    mode = "instant-post-trade",
+                    settlementCycle = "T+0",
+                    nettingMode = "gross-or-microbatch",
+                    ledgerPostingMode = "near-instant-finality",
+                    policyVersion = 1,
+                    active = false
+                )
+            )
+        }
+    }
+
+    private fun validatePostTradeProfile(profile: PostTradeProfile) {
+        require(profile.profileId.isNotBlank()) { "post-trade profileId is required" }
+        require(profile.mode in setOf("ops-realistic", "instant-post-trade")) {
+            "post-trade profile mode must be ops-realistic or instant-post-trade"
+        }
+        require(profile.settlementCycle.isNotBlank()) { "post-trade settlementCycle is required" }
+        require(profile.nettingMode.isNotBlank()) { "post-trade nettingMode is required" }
+        require(profile.ledgerPostingMode.isNotBlank()) { "post-trade ledgerPostingMode is required" }
+        require(profile.policyVersion > 0) { "post-trade policyVersion must be positive" }
     }
 
     private fun syncArenaBotRiskControl(command: ArenaBotVersionDecisionCommand, updated: ArenaBotVersion) {

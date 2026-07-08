@@ -5,10 +5,12 @@ import com.reef.platform.domain.Account
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.Instrument
 import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.Participant
 import com.reef.platform.domain.PublicTradeTapeEntry
+import com.reef.platform.domain.PostTradeProfile
 import com.reef.platform.domain.RoleDefinition
 import com.reef.platform.domain.ActorRoleBinding
 import com.reef.platform.domain.RuntimeEvent
@@ -16,6 +18,7 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.domain.EngineOrderAccepted
 import com.reef.platform.domain.EngineOrderRejected
+import com.reef.platform.domain.VenueSessionPostTradeProfile
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
@@ -31,6 +34,9 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     private val accounts = linkedMapOf<String, Account>()
     private val roles = linkedMapOf<String, RoleDefinition>()
     private val actorRoleBindings = mutableListOf<ActorRoleBinding>()
+    private val postTradeProfiles = linkedMapOf<String, PostTradeProfile>()
+    private var activePostTradeProfileId = ""
+    private val venueSessionPostTradeProfiles = linkedMapOf<String, VenueSessionPostTradeProfile>()
     private val orders = linkedMapOf<String, PersistedOrder>()
     private val executions = mutableListOf<ExecutionCreated>()
     private val trades = mutableListOf<TradeCreated>()
@@ -75,6 +81,44 @@ class InMemoryRuntimePersistence : RuntimePersistence {
     override fun saveActorRoleBinding(binding: ActorRoleBinding) {
         actorRoleBindings.removeIf { it.actorId == binding.actorId && it.roleId == binding.roleId }
         actorRoleBindings.add(binding)
+    }
+
+    override fun savePostTradeProfile(profile: PostTradeProfile) {
+        postTradeProfiles[profile.profileId] = profile
+        if (profile.active) {
+            activePostTradeProfileId = profile.profileId
+        } else if (activePostTradeProfileId.isBlank()) {
+            activePostTradeProfileId = profile.profileId
+        }
+    }
+
+    override fun postTradeProfiles(): List<PostTradeProfile> {
+        return postTradeProfiles.values.map { it.copy(active = it.profileId == activePostTradeProfileId) }
+    }
+
+    override fun activePostTradeProfile(): PostTradeProfile {
+        val profile = postTradeProfiles[activePostTradeProfileId]
+            ?: throw IllegalArgumentException("no active post-trade profile")
+        return profile.copy(active = true)
+    }
+
+    override fun activatePostTradeProfile(profileId: String): PostTradeProfile {
+        val profile = postTradeProfiles[profileId]
+            ?: throw IllegalArgumentException("unknown post-trade profile '$profileId'")
+        activePostTradeProfileId = profileId
+        return profile.copy(active = true)
+    }
+
+    override fun saveVenueSessionPostTradeProfile(config: VenueSessionPostTradeProfile) {
+        venueSessionPostTradeProfiles[config.venueSessionId] = config
+    }
+
+    override fun venueSessionPostTradeProfileId(venueSessionId: String): String? {
+        return venueSessionPostTradeProfiles[venueSessionId]?.postTradeProfileId
+    }
+
+    override fun venueSessionPostTradeProfiles(): List<VenueSessionPostTradeProfile> {
+        return venueSessionPostTradeProfiles.values.toList()
     }
 
     override fun instruments(): List<Instrument> {
@@ -171,6 +215,35 @@ class InMemoryRuntimePersistence : RuntimePersistence {
                     remainingQuantityUnits = state.remainingQuantityUnits,
                     limitPrice = state.limitPrice,
                     status = state.status
+                )
+            }
+        return if (boundedLimit > 0) views.take(boundedLimit) else views
+    }
+
+    override fun executionsForParticipant(
+        participantId: String,
+        instrumentId: String,
+        limit: Int
+    ): List<OwnExecutionView> {
+        val boundedLimit = limit.coerceIn(0, 500)
+        val participantOrders = orders.values
+            .filter { it.participantId == participantId }
+            .filter { instrumentId.isBlank() || it.instrumentId == instrumentId }
+            .associateBy { it.orderId }
+        val views = executions
+            .filter { participantOrders.containsKey(it.orderId) }
+            .sortedWith(compareBy<ExecutionCreated> { it.occurredAt }.thenBy { it.executionId })
+            .mapNotNull { execution ->
+                val order = participantOrders[execution.orderId] ?: return@mapNotNull null
+                OwnExecutionView(
+                    executionId = execution.executionId,
+                    orderId = execution.orderId,
+                    instrumentId = execution.instrumentId,
+                    side = order.side,
+                    quantityUnits = execution.quantityUnits,
+                    executionPrice = execution.executionPrice,
+                    currency = execution.currency,
+                    occurredAt = execution.occurredAt
                 )
             }
         return if (boundedLimit > 0) views.take(boundedLimit) else views

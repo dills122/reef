@@ -28,6 +28,7 @@ type config struct {
 	assertions                bool
 	settlementFactsReportPath string
 	replayCheckReportPath     string
+	requireReplayCheck        bool
 	seedReference             bool
 	timeout                   time.Duration
 	statusTimeout             time.Duration
@@ -138,6 +139,25 @@ type ownOrderBody struct {
 	OrderID             string `json:"orderId"`
 	Status              string `json:"status"`
 	FilledQuantityUnits string `json:"filledQuantityUnits"`
+}
+
+type ownExecutionsBody struct {
+	Meta struct {
+		Source    string `json:"source"`
+		Freshness string `json:"freshness"`
+	} `json:"meta"`
+	Fills []ownExecutionBody `json:"fills"`
+}
+
+type ownExecutionBody struct {
+	ExecutionID    string `json:"executionId"`
+	OrderID        string `json:"orderId"`
+	InstrumentID   string `json:"instrumentId"`
+	Side           string `json:"side"`
+	QuantityUnits  string `json:"quantityUnits"`
+	ExecutionPrice string `json:"executionPrice"`
+	Currency       string `json:"currency"`
+	OccurredAt     string `json:"occurredAt"`
 }
 
 type settlementFactsReport struct {
@@ -281,6 +301,15 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 		}
 		if cfg.replayCheckReportPath != "" {
 			attachReplayChecksumEvidence(cfg, &report)
+		} else if cfg.requireReplayCheck {
+			failAssertion(
+				&report,
+				"p1-replay-checksum-clean",
+				"replay_checksum",
+				"clean replay check report attached",
+				"missing --replay-check-report",
+				"--replay-check-report",
+			)
 		}
 		report.Pass = len(report.Errors) == 0
 	}
@@ -320,6 +349,7 @@ func parseConfig(args []string) (config, error) {
 	fs.BoolVar(&cfg.assertions, "assertions", false, "run first-wave live scenario assertions after command submission")
 	fs.StringVar(&cfg.settlementFactsReportPath, "settlement-facts-report", "", "optional P2 settlement assertion JSON artifact")
 	fs.StringVar(&cfg.replayCheckReportPath, "replay-check-report", "", "optional JSON output from dev-venue-event-replay-check to attach to assertion report")
+	fs.BoolVar(&cfg.requireReplayCheck, "require-replay-check", false, "fail assertion report unless --replay-check-report is attached and clean")
 	fs.BoolVar(&cfg.seedReference, "seed-reference", cfg.seedReference, "seed scenario reference/auth data in live mode")
 	fs.DurationVar(&cfg.timeout, "timeout", cfg.timeout, "HTTP request timeout")
 	fs.DurationVar(&cfg.statusTimeout, "status-timeout", cfg.statusTimeout, "command status polling timeout")
@@ -339,6 +369,9 @@ func parseConfig(args []string) (config, error) {
 	}
 	if cfg.replayCheckReportPath != "" && !cfg.assertions {
 		return cfg, errors.New("--replay-check-report requires --assertions")
+	}
+	if cfg.requireReplayCheck && !cfg.assertions {
+		return cfg, errors.New("--require-replay-check requires --assertions")
 	}
 	if cfg.timeout <= 0 {
 		return cfg, errors.New("timeout must be > 0")
@@ -720,15 +753,19 @@ func attachReplayChecksumEvidence(cfg config, report *smokeReport) {
 	report.ArtifactPaths = append(report.ArtifactPaths, cfg.replayCheckReportPath)
 	pass, _ := parsed["pass"].(bool)
 	failures := replayFailures(parsed)
-	if pass && len(failures) == 0 {
-		passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	if !pass || len(failures) > 0 {
+		observed := "pass false"
+		if len(failures) > 0 {
+			observed = strings.Join(failures, "; ")
+		}
+		failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
 		return
 	}
-	observed := "pass false"
-	if len(failures) > 0 {
-		observed = strings.Join(failures, "; ")
+	passAssertion(report, "p1-replay-checksum-clean", "pass true and no replay failures", "pass true and no replay failures", cfg.replayCheckReportPath)
+	if cfg.requireReplayCheck && report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
+		assertP1ReplayChecksumCounters(report, parsed, cfg.replayCheckReportPath)
+		assertP1HistoricalVisibilityProof(report, parsed, cfg.replayCheckReportPath)
 	}
-	failAssertion(report, "p1-replay-checksum-clean", "replay_checksum", "pass true and no replay failures", observed, cfg.replayCheckReportPath)
 }
 
 func replayFailures(parsed map[string]any) []string {
@@ -745,9 +782,116 @@ func replayFailures(parsed map[string]any) []string {
 	return failures
 }
 
+func assertP1HistoricalVisibilityProof(report *smokeReport, parsed map[string]any, proofSource string) {
+	visibility, ok := parsed["visibilityTimeline"].(map[string]any)
+	if !ok {
+		failAssertion(report, "p1-replay-hidden-depth-timeline-proof", "replay_visibility_timeline", "visibilityTimeline.publicDepthHiddenRestingExposed=false", "missing visibilityTimeline object", proofSource)
+		return
+	}
+	exposed, found := visibility["publicDepthHiddenRestingExposed"].(bool)
+	if !found {
+		failAssertion(report, "p1-replay-hidden-depth-timeline-proof", "replay_visibility_timeline", "visibilityTimeline.publicDepthHiddenRestingExposed=false", "missing publicDepthHiddenRestingExposed boolean", proofSource)
+		return
+	}
+	checkCount := replayVisibilityCheckCount(visibility)
+	if !exposed && checkCount > 0 {
+		passAssertion(report, "p1-replay-hidden-depth-timeline-proof", "hidden resting size never exposed in replayed public depth checks", fmt.Sprintf("%d public depth checks, exposed=false", checkCount), proofSource)
+		return
+	}
+	observed := fmt.Sprintf("%d public depth checks, exposed=%t", checkCount, exposed)
+	failAssertion(report, "p1-replay-hidden-depth-timeline-proof", "replay_visibility_timeline", "hidden resting size never exposed in replayed public depth checks", observed, proofSource)
+}
+
+func replayVisibilityCheckCount(visibility map[string]any) int {
+	raw, ok := visibility["publicDepthChecks"].([]any)
+	if !ok {
+		return 0
+	}
+	return len(raw)
+}
+
+func assertP1ReplayChecksumCounters(report *smokeReport, parsed map[string]any, proofSource string) {
+	replayReport, ok := parsed["report"].(map[string]any)
+	if !ok {
+		failAssertion(report, "p1-replay-counter-report-present", "replay_checksum", "replay report counters", "missing report object", proofSource)
+		return
+	}
+	minimums := map[string]float64{
+		"batchCount":            1,
+		"storedCommandCount":    3,
+		"payloadOutcomeCount":   3,
+		"canonicalOutcomeCount": 3,
+	}
+	for key, minimum := range minimums {
+		value, found := replayCounter(replayReport, key)
+		if found && value >= minimum {
+			passAssertion(report, "p1-replay-"+kebabCase(key), fmt.Sprintf(">= %.0f", minimum), fmt.Sprintf("%.0f", value), proofSource)
+		} else {
+			observed := "missing"
+			if found {
+				observed = fmt.Sprintf("%.0f", value)
+			}
+			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", fmt.Sprintf(">= %.0f", minimum), observed, proofSource)
+		}
+	}
+	zeroCounters := []string{
+		"duplicateReplayInserted",
+		"checksumMismatchCount",
+		"batchCommandCountMismatchCount",
+		"payloadHashMismatchCount",
+		"missingOutcomeCount",
+		"extraOutcomeCount",
+		"streamGapCount",
+		"streamOverlapCount",
+		"watermarkLagCount",
+	}
+	for _, key := range zeroCounters {
+		value, found := replayCounter(replayReport, key)
+		if found && value == 0 {
+			passAssertion(report, "p1-replay-"+kebabCase(key), "0", "0", proofSource)
+		} else {
+			observed := "missing"
+			if found {
+				observed = fmt.Sprintf("%.0f", value)
+			}
+			failAssertion(report, "p1-replay-"+kebabCase(key), "replay_checksum", "0", observed, proofSource)
+		}
+	}
+}
+
+func replayCounter(report map[string]any, key string) (float64, bool) {
+	value, ok := report[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case int:
+		return float64(typed), true
+	case json.Number:
+		number, err := typed.Float64()
+		return number, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func kebabCase(value string) string {
+	var out strings.Builder
+	for index, char := range value {
+		if index > 0 && char >= 'A' && char <= 'Z' {
+			out.WriteByte('-')
+		}
+		out.WriteRune(char)
+	}
+	return strings.ToLower(out.String())
+}
+
 func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeReport) {
 	expected := []struct {
 		assertionID   string
+		fillID        string
 		participantID string
 		orderID       string
 		status        string
@@ -755,6 +899,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 	}{
 		{
 			assertionID:   "p1-hidden-sell-filled",
+			fillID:        "p1-hidden-sell-fills",
 			participantID: "HIDDEN_SELLER_A",
 			orderID:       "p1_golden_hidden_cross_t1-ord-001",
 			status:        "FILLED",
@@ -762,6 +907,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		},
 		{
 			assertionID:   "p1-first-visible-buy-filled",
+			fillID:        "p1-first-visible-buy-fills",
 			participantID: "VISIBLE_BUYER_B",
 			orderID:       "p1_golden_hidden_cross_t1-ord-002",
 			status:        "FILLED",
@@ -769,12 +915,16 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		},
 		{
 			assertionID:   "p1-second-visible-buy-filled",
+			fillID:        "p1-second-visible-buy-fills",
 			participantID: "VISIBLE_BUYER_C",
 			orderID:       "p1_golden_hidden_cross_t1-ord-003",
 			status:        "FILLED",
 			filled:        "60",
 		},
 	}
+	uniqueExecutionIDs := map[string]struct{}{}
+	ownFillIdentityLeaks := map[string]struct{}{}
+	allFillPricesExpected := true
 	for _, want := range expected {
 		read, orders, err := readOwnOrderHistory(cfg, client, want.participantID, "XYZ")
 		report.Reads = append(report.Reads, read)
@@ -806,6 +956,57 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		} else {
 			failAssertion(report, filledAssertionID, "own_order_filled_quantity", want.filled, observedFilled, read.Endpoint)
 		}
+
+		fillRead, fills, err := readOwnFills(cfg, client, want.participantID, "XYZ")
+		report.Reads = append(report.Reads, fillRead)
+		if err != nil {
+			report.Errors = append(report.Errors, fmt.Sprintf("%s failed", want.fillID))
+			report.Failures = append(report.Failures, scenarioFailure{
+				AssertionID: want.fillID,
+				Category:    "own_fill_read",
+				Message:     err.Error(),
+				ProofSource: fillRead.Endpoint,
+			})
+			continue
+		}
+		totalFilled := 0
+		for _, fill := range fills {
+			totalFilled += parsePositiveInt(fill.QuantityUnits)
+			if fill.ExecutionID != "" {
+				uniqueExecutionIDs[fill.ExecutionID] = struct{}{}
+			}
+			if fill.ExecutionPrice != "100000000000" {
+				allFillPricesExpected = false
+			}
+		}
+		if totalFilled == parsePositiveInt(want.filled) {
+			passAssertion(report, want.fillID+"-quantity", want.filled, fmt.Sprint(totalFilled), fillRead.Endpoint)
+		} else {
+			failAssertion(report, want.fillID+"-quantity", "own_fill_quantity", want.filled, fmt.Sprint(totalFilled), fillRead.Endpoint)
+		}
+		for _, leak := range leakedOwnFillCounterpartyFields(fillRead.Body) {
+			ownFillIdentityLeaks[leak] = struct{}{}
+		}
+	}
+	if len(uniqueExecutionIDs) == 2 {
+		passAssertion(report, "p1-own-fills-unique-execution-count", "2", "2", "/api/v1/orders/fills")
+	} else {
+		failAssertion(report, "p1-own-fills-unique-execution-count", "own_fill_execution_count", "2", fmt.Sprint(len(uniqueExecutionIDs)), "/api/v1/orders/fills")
+	}
+	if allFillPricesExpected {
+		passAssertion(report, "p1-own-fills-prices", "all 100000000000", "all 100000000000", "/api/v1/orders/fills")
+	} else {
+		failAssertion(report, "p1-own-fills-prices", "own_fill_price", "all 100000000000", "unexpected fill price", "/api/v1/orders/fills")
+	}
+	if len(ownFillIdentityLeaks) == 0 {
+		passAssertion(report, "p1-own-fills-counterparty-safe", "no counterparty identity", "no counterparty fields", "/api/v1/orders/fills")
+	} else {
+		leaks := make([]string, 0, len(ownFillIdentityLeaks))
+		for leak := range ownFillIdentityLeaks {
+			leaks = append(leaks, leak)
+		}
+		sort.Strings(leaks)
+		failAssertion(report, "p1-own-fills-counterparty-safe", "own_fill_visibility", "no counterparty identity", strings.Join(leaks, ","), "/api/v1/orders/fills")
 	}
 }
 
@@ -872,6 +1073,11 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 			source:      "runtime.orders + runtime.order_lifecycle_state",
 			freshness:   "dirty-tracked lifecycle projection",
 		},
+		"orderFills": {
+			assertionID: "p1-order-fills-source-declared",
+			source:      "runtime.orders + runtime.executions",
+			freshness:   "durable execution rows scoped by participant order ownership",
+		},
 		"marketDataDepth": {
 			assertionID: "p1-market-depth-source-declared",
 			source:      "runtime.order_lifecycle_state",
@@ -907,9 +1113,9 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 	}
 	sort.Strings(missing)
 	if len(missing) == 0 {
-		passAssertion(report, "p1-read-surface-inventory", "orderHistory/marketDataDepth/tradeTape", "read surfaces available", endpoint)
+		passAssertion(report, "p1-read-surface-inventory", "orderHistory/orderFills/marketDataDepth/tradeTape", "read surfaces available", endpoint)
 	} else {
-		failAssertion(report, "p1-read-surface-inventory", "read_surface_inventory", "orderHistory/marketDataDepth/tradeTape", "missing "+strings.Join(missing, ","), endpoint)
+		failAssertion(report, "p1-read-surface-inventory", "read_surface_inventory", "orderHistory/orderFills/marketDataDepth/tradeTape", "missing "+strings.Join(missing, ","), endpoint)
 	}
 	for name, want := range required {
 		surface, ok := surfaces[name]
@@ -1081,6 +1287,17 @@ func leakedPublicIdentityFields(body string) []string {
 	return leaks
 }
 
+func leakedOwnFillCounterpartyFields(body string) []string {
+	fields := []string{"buyOrderId", "sellOrderId", "buyerParticipantId", "sellerParticipantId", "counterparty", "counterpartyParticipantId", "accountId"}
+	leaks := make([]string, 0)
+	for _, field := range fields {
+		if strings.Contains(body, `"`+field+`"`) {
+			leaks = append(leaks, field)
+		}
+	}
+	return leaks
+}
+
 func readOwnOrderHistory(cfg config, client *http.Client, participantID string, instrumentID string) (assertionRead, []ownOrderBody, error) {
 	endpoint := "/api/v1/orders/history"
 	query := url.Values{}
@@ -1110,6 +1327,37 @@ func readOwnOrderHistory(cfg config, client *http.Client, participantID string, 
 		return read, parsed.Orders, fmt.Errorf("own-order history returned %d", read.StatusCode)
 	}
 	return read, parsed.Orders, nil
+}
+
+func readOwnFills(cfg config, client *http.Client, participantID string, instrumentID string) (assertionRead, []ownExecutionBody, error) {
+	endpoint := "/api/v1/orders/fills"
+	query := url.Values{}
+	query.Set("participantId", participantID)
+	query.Set("instrumentId", instrumentID)
+	query.Set("limit", "50")
+	requestURL := absoluteURL(cfg.baseURL, endpoint) + "?" + query.Encode()
+	read := assertionRead{
+		Endpoint: endpoint,
+		Filters: map[string]string{
+			"participantId": participantID,
+			"instrumentId":  instrumentID,
+			"limit":         "50",
+		},
+	}
+	read, body, err := executeRead(client, requestURL, endpoint, read.Filters)
+	if err != nil {
+		return read, nil, err
+	}
+	var parsed ownExecutionsBody
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return read, nil, err
+	}
+	read.SourceType = parsed.Meta.Source
+	read.FreshnessModel = parsed.Meta.Freshness
+	if read.StatusCode != 200 {
+		return read, parsed.Fills, fmt.Errorf("own fills returned %d", read.StatusCode)
+	}
+	return read, parsed.Fills, nil
 }
 
 func parseCommandStatus(body string) commandStatusBody {

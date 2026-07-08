@@ -32,9 +32,12 @@ import com.reef.platform.application.arena.OpenBaoClientException
 import com.reef.platform.application.arena.OpenBaoProvisioningConfig
 import com.reef.platform.application.arena.OpenBaoProvisioningService
 import com.reef.platform.application.arena.PostgresArenaBotRegistryStore
+import com.reef.platform.application.settlement.DefaultPostTradePolicyVersion
+import com.reef.platform.application.settlement.DefaultPostTradeProfileId
 import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
+import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
@@ -167,6 +170,13 @@ class PlatformHttpServer(
     private val arenaAdminService: AdminApplicationService? = null,
     private val analyticsRunExportService: SimulationRunExportService? = null,
     private val settlementFactStore: SettlementFactStore? = null,
+    private val defaultPostTradeProfileId: String =
+        RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
+    private val defaultPostTradePolicyVersion: Int =
+        RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1),
+    private val postTradeProfileResolver: PostTradeProfileResolver =
+        PostTradeProfileResolver.envOnly(defaultPostTradeProfileId, defaultPostTradePolicyVersion),
+    private val venueSessionPostTradeProfileLookup: (String) -> String? = { null },
     private val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     private val idempotencyStore: IdempotencyStore,
     private val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,
@@ -369,6 +379,8 @@ class PlatformHttpServer(
         arenaAdminService = deps.arenaAdminService,
         analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
+        postTradeProfileResolver = deps.postTradeProfileResolver,
+        venueSessionPostTradeProfileLookup = deps.venueSessionPostTradeProfileLookup,
         boundaryRejectionLog = deps.boundaryRejectionLog,
         idempotencyStore = deps.idempotencyStore,
         idempotencyRetentionPolicy = deps.idempotencyRetentionPolicy,
@@ -720,6 +732,22 @@ class PlatformHttpServer(
             val instrumentId = queryValue(exchange, "instrumentId")
             val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
             writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
+        }
+
+        server.createContext("/api/v1/orders/fills") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val participantId = queryValue(exchange, "participantId")
+            val boundaryError = boundary.checkParticipantRead(exchange.requestHeaders, "/api/v1/orders/fills", participantId)
+            if (boundaryError != null) {
+                writeJson(exchange, boundaryError.status, boundary.toErrorJson(boundaryError, correlationId(exchange.requestHeaders)))
+                return@createContext
+            }
+            val instrumentId = queryValue(exchange, "instrumentId")
+            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, limit = limit))
         }
 
         server.createContext("/trades") { exchange ->
@@ -1202,6 +1230,8 @@ class PlatformHttpServer(
                 readOrdersResponse(request, "/api/v1/orders/current", openOnly = true)
             request.path == "/api/v1/orders/history" && request.method == "GET" ->
                 readOrdersResponse(request, "/api/v1/orders/history", openOnly = false)
+            request.path == "/api/v1/orders/fills" && request.method == "GET" ->
+                readOrderFillsResponse(request, "/api/v1/orders/fills")
             else -> legacySetupRoutes.handle(request)
         }
     }
@@ -1220,6 +1250,25 @@ class PlatformHttpServer(
             body = api.ownOrders(
                 participantId = participantId,
                 openOnly = openOnly,
+                instrumentId = queryValue(request.query, "instrumentId"),
+                limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+            )
+        )
+    }
+
+    private fun readOrderFillsResponse(request: PlatformHotPathRequest, route: String): PlatformHotPathResponse {
+        val participantId = queryValue(request.query, "participantId")
+        val boundaryError = boundary.checkParticipantRead(request.headers, route, participantId)
+        if (boundaryError != null) {
+            return PlatformHotPathResponse(
+                boundaryError.status,
+                boundary.toErrorJson(boundaryError, correlationId(request.headers))
+            )
+        }
+        return PlatformHotPathResponse(
+            status = 200,
+            body = api.ownExecutions(
+                participantId = participantId,
                 instrumentId = queryValue(request.query, "instrumentId"),
                 limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
             )
@@ -3317,19 +3366,47 @@ class PlatformHttpServer(
 
     private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
         val scenarioRunId = json.string("scenarioRunId")
+        val venueSessionId = json.string("venueSessionId")
+        val selection = postTradeProfileResolver.resolve(
+            scenarioRunProfileId = json.string("postTradeProfileId"),
+            venueSessionProfileId = venueSessionId.takeIf { it.isNotBlank() }
+                ?.let { venueSessionPostTradeProfileLookup(it) }
+                .orEmpty()
+        )
+        val postTradeProfileId = selection.profileId
+        val postTradePolicyVersion = positiveIntOrDefault(
+            json = json,
+            key = "postTradePolicyVersion",
+            defaultValue = selection.policyVersion
+        )
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
-            obligations = json.objectDocuments("obligations").map { obligationFact(it, scenarioRunId) },
-            breaks = json.objectDocuments("breaks").map { breakFact(it, scenarioRunId) },
-            repairs = json.objectDocuments("repairs").map { repairFact(it, scenarioRunId) },
-            resolutions = json.objectDocuments("resolutions").map { resolutionFact(it, scenarioRunId) }
+            obligations = json.objectDocuments("obligations").map {
+                obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            breaks = json.objectDocuments("breaks").map {
+                breakFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            repairs = json.objectDocuments("repairs").map {
+                repairFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            resolutions = json.objectDocuments("resolutions").map {
+                resolutionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            }
         )
     }
 
-    private fun obligationFact(json: JsonDocument, scenarioRunId: String): SettlementObligationCreatedFact {
+    private fun obligationFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementObligationCreatedFact {
         return SettlementObligationCreatedFact(
             settlementObligationId = json.string("settlementObligationId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             tradeId = json.string("tradeId"),
@@ -3344,11 +3421,18 @@ class PlatformHttpServer(
         )
     }
 
-    private fun breakFact(json: JsonDocument, scenarioRunId: String): SettlementBreakOpenedFact {
+    private fun breakFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementBreakOpenedFact {
         return SettlementBreakOpenedFact(
             settlementBreakId = json.string("settlementBreakId"),
             settlementObligationId = json.string("settlementObligationId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             reason = json.string("reason").ifBlank { "CASH_LEG_FAILED" },
@@ -3357,12 +3441,19 @@ class PlatformHttpServer(
         )
     }
 
-    private fun repairFact(json: JsonDocument, scenarioRunId: String): SettlementRepairPostedFact {
+    private fun repairFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementRepairPostedFact {
         return SettlementRepairPostedFact(
             settlementRepairId = json.string("settlementRepairId"),
             settlementBreakId = json.string("settlementBreakId"),
             settlementObligationId = json.string("settlementObligationId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             repairAction = json.string("repairAction").ifBlank { "POST_CASH_LEG_REPAIR" },
@@ -3372,19 +3463,34 @@ class PlatformHttpServer(
         )
     }
 
-    private fun resolutionFact(json: JsonDocument, scenarioRunId: String): SettlementResolvedFact {
+    private fun resolutionFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementResolvedFact {
         return SettlementResolvedFact(
             settlementResolutionId = json.string("settlementResolutionId"),
             settlementObligationId = json.string("settlementObligationId"),
             settlementBreakId = json.string("settlementBreakId"),
             settlementRepairId = json.string("settlementRepairId"),
             scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
             correlationId = json.string("correlationId"),
             causationId = json.string("causationId"),
             settlementState = json.string("settlementState").ifBlank { "RESOLVED" },
             exceptionState = json.string("exceptionState").ifBlank { "RESOLVED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
+    }
+
+    private fun positiveIntOrDefault(json: JsonDocument, key: String, defaultValue: Int): Int {
+        val raw = json.string(key)
+        if (raw.isBlank()) return defaultValue
+        val parsed = raw.toIntOrNull()
+        require(parsed != null && parsed > 0) { "$key must be a positive integer" }
+        return parsed
     }
 
     private fun requiredInstant(json: JsonDocument, key: String): Instant {
@@ -3402,6 +3508,8 @@ class PlatformHttpServer(
                 mapOf(
                     "settlementObligationId" to it.settlementObligationId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "tradeId" to it.tradeId,
@@ -3420,6 +3528,8 @@ class PlatformHttpServer(
                     "settlementBreakId" to it.settlementBreakId,
                     "settlementObligationId" to it.settlementObligationId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "reason" to it.reason,
@@ -3433,6 +3543,8 @@ class PlatformHttpServer(
                     "settlementBreakId" to it.settlementBreakId,
                     "settlementObligationId" to it.settlementObligationId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "repairAction" to it.repairAction,
@@ -3448,6 +3560,8 @@ class PlatformHttpServer(
                     "settlementBreakId" to it.settlementBreakId,
                     "settlementRepairId" to it.settlementRepairId,
                     "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
                     "correlationId" to it.correlationId,
                     "causationId" to it.causationId,
                     "settlementState" to it.settlementState,
@@ -4463,6 +4577,7 @@ internal fun rootMessage(failure: Throwable): String {
 private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
     PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
+    val runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver")
     val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
         StreamCommandIntakeFactory.defaultPublisher()
     } else {
@@ -4484,6 +4599,14 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         arenaAdminService = defaultArenaAdminService(hooks),
         analyticsRunExportService = defaultAnalyticsRunExportService(),
         settlementFactStore = defaultSettlementFactStore(),
+        postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
+            runtimePersistence = runtimePersistence,
+            environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
+            environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
+        ),
+        venueSessionPostTradeProfileLookup = { venueSessionId ->
+            runtimePersistence.venueSessionPostTradeProfileId(venueSessionId)
+        },
         boundaryRejectionLog = hooks.boundaryRejectionLog,
         idempotencyStore = hooks.idempotencyStore,
         idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
@@ -4580,6 +4703,12 @@ data class ServerBoundaryDeps(
     val arenaAdminService: AdminApplicationService? = null,
     val analyticsRunExportService: SimulationRunExportService? = null,
     val settlementFactStore: SettlementFactStore? = null,
+    val postTradeProfileResolver: PostTradeProfileResolver =
+        PostTradeProfileResolver.envOnly(
+            RuntimeEnv.string("POST_TRADE_PROFILE", DefaultPostTradeProfileId).trim().ifBlank { DefaultPostTradeProfileId },
+            RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1)
+        ),
+    val venueSessionPostTradeProfileLookup: (String) -> String? = { null },
     val boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
     val idempotencyStore: IdempotencyStore,
     val idempotencyRetentionPolicy: IdempotencyRetentionPolicy,

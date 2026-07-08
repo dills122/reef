@@ -41,6 +41,13 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0024_scope_command_outcome_projection_stream.sql",
       "runtime/0025_orders_client_order_lookup.sql",
       "runtime/0026_contiguous_command_outcome_projection_watermarks.sql",
+      "runtime/0027_audit_persistence_hardening.sql",
+      "runtime/0028_typed_top_of_book_facts.sql",
+      "runtime/0029_typed_runtime_event_facts.sql",
+      "runtime/0030_typed_submit_result_facts.sql",
+      "runtime/0031_typed_execution_trade_facts.sql",
+      "runtime/0032_typed_order_facts.sql",
+      "runtime/0033_typed_canonical_time_facts.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
@@ -65,9 +72,117 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0011_unlogged_active_queue.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0012_command_payloads.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0013_drop_hot_path_foreign_keys.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0014_integrity_audit_views.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
+});
+
+test("audit hardening migration preserves first command outcome and counts actual canonical inserts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0027_audit_persistence_hardening.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ON CONFLICT \(command_id\) DO UPDATE SET\s+command_id = runtime\.submit_results\.command_id/);
+  assert.match(migration.sql, /runtime\.submit_results\.occurred_at = EXCLUDED\.occurred_at/);
+  assert.match(migration.sql, /SELECT COUNT\(\*\) INTO appended_count FROM insert_results/);
+  assert.match(migration.sql, /idx_order_lifecycle_state_book_numeric_price/);
+});
+
+test("command-log integrity audit migration replaces dropped hot-path foreign key checks", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "command_log/0014_integrity_audit_views.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE OR REPLACE VIEW command_log\.command_integrity_violations/);
+  assert.match(migration.sql, /orphan_payload/);
+  assert.match(migration.sql, /active_command_missing_queue/);
+  assert.match(migration.sql, /terminal_result_still_queued/);
+  assert.match(migration.sql, /CREATE OR REPLACE FUNCTION command_log\.command_integrity_summary/);
+});
+
+test("typed top-of-book migration adds native numeric facts and indexes", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0028_typed_top_of_book_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS limit_price_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS best_bid_price_num NUMERIC/);
+  assert.match(migration.sql, /idx_order_lifecycle_state_book_bid_native/);
+  assert.match(migration.sql, /idx_order_lifecycle_state_book_ask_native/);
+  assert.match(migration.sql, /limit_price_num AS price_num/);
+  assert.match(migration.sql, /best_bid_price_num = EXCLUDED\.best_bid_price_num/);
+});
+
+test("typed runtime event migration adds native UUID and timestamp facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0029_typed_runtime_event_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS event_id_uuid UUID/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /CREATE OR REPLACE FUNCTION runtime\.runtime_events_set_typed_facts/);
+  assert.match(migration.sql, /CREATE TRIGGER runtime_events_set_typed_facts/);
+  assert.match(migration.sql, /idx_runtime_events_occurred_typed/);
+  assert.match(migration.sql, /idx_runtime_events_order_occurred_typed/);
+});
+
+test("typed submit result migration adds native audit facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0030_typed_submit_result_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.submit_results/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS event_id_uuid UUID/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /CREATE OR REPLACE FUNCTION runtime\.submit_results_set_typed_facts/);
+  assert.match(migration.sql, /CREATE TRIGGER submit_results_set_typed_facts/);
+  assert.match(migration.sql, /idx_submit_results_occurred_typed/);
+  assert.match(migration.sql, /idx_submit_results_event_uuid/);
+});
+
+test("typed execution and trade migration adds native market facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0031_typed_execution_trade_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.executions/);
+  assert.match(migration.sql, /ALTER TABLE runtime\.trades/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS execution_price_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS price_num NUMERIC/);
+  assert.match(migration.sql, /CREATE TRIGGER executions_set_typed_facts/);
+  assert.match(migration.sql, /CREATE TRIGGER trades_set_typed_facts/);
+  assert.match(migration.sql, /idx_trades_instrument_occurred_typed/);
+});
+
+test("typed order migration adds native order facts", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0032_typed_order_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.orders/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS quantity_units_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS limit_price_num NUMERIC/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS accepted_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /CREATE TRIGGER orders_set_typed_facts/);
+  assert.match(migration.sql, /idx_orders_participant_client_order_accepted_typed/);
+  assert.match(migration.sql, /idx_orders_accepted_typed/);
+});
+
+test("typed canonical time migration adds native audit timestamps", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "runtime/0033_typed_canonical_time_facts.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /ALTER TABLE runtime\.canonical_command_results/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS accepted_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS completed_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS emitted_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS created_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ/);
+  assert.match(migration.sql, /CREATE TRIGGER canonical_command_outcomes_set_typed_facts/);
+  assert.match(migration.sql, /idx_canonical_command_outcomes_occurred_typed/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

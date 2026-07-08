@@ -50,7 +50,7 @@ Dry-run smoke remains useful for request/golden stability. It is not a locking g
 - public top-of-book/depth never exposes the hidden resting sell size before execution
 - hidden seller own-order read can see its own hidden order and lifecycle state
 - trade tape shows both trades without counterparty identity
-- replay/checksum evidence proves identical command outcome order, execution/trade facts, lifecycle states, and checksums
+- replay/checksum evidence proves identical command outcome order, execution/trade facts, lifecycle states, checksums, and historical public-depth hidden-size non-exposure
 
 P1 is a hard venue-core correctness gate. It must not rely on settlement or post-trade stubs.
 
@@ -83,7 +83,7 @@ Use these surfaces as the first proof sources:
 | Assertion area | Preferred proof source | Notes |
 | --- | --- | --- |
 | command completion | `GET /api/v1/commands/{commandId}` | Must distinguish accepted, in-flight, completed, rejected, and failed states. |
-| own-order lifecycle | `/api/v1/orders/current`, `/api/v1/orders/history` | Participant-scoped; must include freshness/projection metadata where available. |
+| own-order lifecycle and fills | `/api/v1/orders/current`, `/api/v1/orders/history`, `/api/v1/orders/fills` | Participant-scoped; must include freshness/projection metadata where available and must not expose counterparty identity in own fill reads. |
 | public depth visibility | `/api/v1/market-data/depth/{instrumentId}` | Proves public hidden-liquidity visibility rules. |
 | public trade tape | `/api/v1/market-data/trades/{instrumentId}` | Must exclude counterparty/order/participant identity. |
 | read-surface inventory | `/api/v1/data/availability` | Report must record source type, freshness model, lag/watermark where available. |
@@ -136,9 +136,9 @@ Required field meaning:
 ## First Implementation Slices
 
 1. Add assertion report types and dry-run JSON shape. Initial implementation extends `scenario-smoke` with `--live --assertions`, preserving dry-run smoke output unless assertions are requested.
-2. Add P1 command completion and own-order lifecycle assertions. Current implementation records command status proof from `GET /api/v1/commands/{commandId}` and participant-scoped order history proof from `/api/v1/orders/history`, including final lifecycle state and filled quantity for all three P1 orders.
-3. Add P1 trade tape, public depth, and read-surface inventory assertions. Current implementation records public trade tape proof from `/api/v1/market-data/trades/{instrumentId}`, current public depth non-leak proof from `/api/v1/market-data/depth/{instrumentId}`, and source/freshness/projection-lag proof from `/api/v1/data/availability`; historical pre-execution hidden-depth proof still needs timeline/replay evidence because the current depth endpoint is not time-travel capable.
-4. Attach replay/checksum evidence to the P1 report. Initial implementation accepts a `--replay-check-report` JSON artifact from `make dev-venue-event-replay-check`, stores it in `replayChecksum`, records its path, and fails the live assertion report when the replay check reports failures.
+2. Add P1 command completion, own-order lifecycle, and own-fill assertions. Current implementation records command status proof from `GET /api/v1/commands/{commandId}`, participant-scoped order history proof from `/api/v1/orders/history`, and participant-scoped fill proof from `/api/v1/orders/fills`, including final lifecycle state, filled quantity for all three P1 orders, exactly two unique execution IDs across participant fill reads, expected fill prices, and no counterparty fields in own-fill payloads.
+3. Add P1 trade tape, public depth, and read-surface inventory assertions. Current implementation records public trade tape proof from `/api/v1/market-data/trades/{instrumentId}`, current public depth non-leak proof from `/api/v1/market-data/depth/{instrumentId}`, and source/freshness/projection-lag proof from `/api/v1/data/availability` for order history, order fills, market depth, and trade tape.
+4. Attach replay/checksum and historical visibility evidence to the P1 report. Current implementation accepts a `--replay-check-report` JSON artifact from `make dev-venue-event-replay-check`, stores it in `replayChecksum`, records its path, and fails the live assertion report when the replay check reports failures. In strict P1 mode, the artifact must also include `visibilityTimeline.publicDepthHiddenRestingExposed=false` and at least one `visibilityTimeline.publicDepthChecks` row, so the pre-execution hidden-depth proof is explicit instead of inferred from the current depth endpoint. The replay-check script can bundle that timeline from `DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_JSON` or `DEV_VENUE_EVENT_REPLAY_CHECK_VISIBILITY_TIMELINE_PATH`.
 5. Add narrow P2 settlement fact assertion source. Current implementation reads `/api/v1/settlement/facts/{scenarioRunId}` by default and keeps `--settlement-facts-report` as an offline artifact fallback, with obligation, break, repair, and resolution facts shaped by [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md).
 6. Add P2 obligation, `CASH_LEG_FAILED`, repair, and resolved-state assertions. Current implementation checks one obligation with `tradeId`, one `CASH_LEG_FAILED` break, one `POST_CASH_LEG_REPAIR`, final settlement/exception `RESOLVED`, no resolution without repair linkage, and causation fields on every settlement fact.
 7. Promote passing reports into the active evidence docs.

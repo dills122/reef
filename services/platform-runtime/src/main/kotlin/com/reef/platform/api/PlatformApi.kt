@@ -3,6 +3,7 @@ package com.reef.platform.api
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.PublicTradeTapeEntry
@@ -166,6 +167,16 @@ class PlatformApi(
                     endpoint = "/api/v1/orders/history",
                     source = "runtime.orders + runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
+                    status = venueStatus,
+                    scope = "participant-own-orders",
+                    requiredQuery = listOf("participantId"),
+                    optionalQuery = listOf("instrumentId", "limit")
+                ),
+                surfaceAvailability(
+                    name = "orderFills",
+                    endpoint = "/api/v1/orders/fills",
+                    source = "runtime.orders + runtime.executions",
+                    freshness = "durable execution rows scoped by participant order ownership",
                     status = venueStatus,
                     scope = "participant-own-orders",
                     requiredQuery = listOf("participantId"),
@@ -485,6 +496,21 @@ class PlatformApi(
         )
     }
 
+    fun ownExecutions(participantId: String, instrumentId: String = "", limit: Int = 0): String {
+        val boundedLimit = limit.coerceIn(0, 500)
+        return JsonCodec.writeObject(
+            "participantId" to participantId,
+            "meta" to mapOf(
+                "source" to "runtime.orders + runtime.executions",
+                "freshness" to "durable execution rows scoped by participant order ownership",
+                "scope" to "participant",
+                "instrumentId" to instrumentId,
+                "limit" to boundedLimit
+            ),
+            "fills" to orderService.executionsForParticipant(participantId, instrumentId, boundedLimit).map { it.toMap() }
+        )
+    }
+
     private fun toJson(result: SubmitOrderResult): String {
         val accepted = result.accepted
         if (accepted != null) {
@@ -567,6 +593,17 @@ class PlatformApi(
         "remainingQuantityUnits" to remainingQuantityUnits,
         "limitPrice" to limitPrice,
         "status" to status
+    )
+
+    private fun OwnExecutionView.toMap(): Map<String, Any> = mapOf(
+        "executionId" to executionId,
+        "orderId" to orderId,
+        "instrumentId" to instrumentId,
+        "side" to side,
+        "quantityUnits" to quantityUnits,
+        "executionPrice" to executionPrice,
+        "currency" to currency,
+        "occurredAt" to occurredAt
     )
 
     private fun MarketDataSnapshot.toMap(): Map<String, Any> = mapOf(

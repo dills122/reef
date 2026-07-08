@@ -12,10 +12,44 @@ private fun envLookup(vararg pairs: Pair<String, String>): (String) -> String? {
 
 class PlatformRuntimeProfileValidationTest {
 
-    // --- non-stream-ack modes are always valid, regardless of publisher/store env noise ---
+    // --- settlement profile selection applies before stream-ack-specific validation ---
 
     @Test
-    fun nonStreamAckModesSkipValidationEntirely() {
+    fun localRuntimeDefaultsPostTradeProfile() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(envLookup())
+
+        assertEquals("ops-realistic-v1", config.effectivePostTradeProfileId)
+        assertEquals(emptyList(), PlatformRuntimeProfileValidator.violations(config))
+    }
+
+    @Test
+    fun nonLocalRuntimeRequiresExplicitPostTradeProfile() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup("REEF_ENV" to "prod")
+        )
+
+        val issues = PlatformRuntimeProfileValidator.violations(config)
+        assertEquals(1, issues.size)
+        assertTrue(issues.single().contains("POST_TRADE_PROFILE"))
+    }
+
+    @Test
+    fun nonLocalRuntimeAcceptsExplicitPostTradeProfile() {
+        val config = PlatformRuntimeProfileConfig.fromEnv(
+            envLookup(
+                "REEF_ENV" to "prod",
+                "POST_TRADE_PROFILE" to "ops-realistic-v1"
+            )
+        )
+
+        assertEquals("ops-realistic-v1", config.effectivePostTradeProfileId)
+        assertEquals(emptyList(), PlatformRuntimeProfileValidator.violations(config))
+    }
+
+    // --- non-stream-ack modes skip stream-ack-specific validation ---
+
+    @Test
+    fun nonStreamAckModesSkipStreamAckValidation() {
         val config = PlatformRuntimeProfileConfig.fromEnv(
             envLookup(
                 "EXTERNAL_API_COMMAND_PROCESSING_MODE" to "sync-result",

@@ -618,6 +618,107 @@ class PlatformApiTest {
     }
 
     @Test
+    fun ownExecutionsApiScopesToParticipantOwnedOrders() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "mine-buy",
+                engineOrderId = "eng-mine-buy",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:00Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "mine-msft",
+                engineOrderId = "eng-mine-msft",
+                instrumentId = "MSFT",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "10",
+                limitPrice = "300",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:01Z"
+            )
+        )
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "someone-elses",
+                engineOrderId = "eng-someone-elses",
+                instrumentId = "AAPL",
+                participantId = "participant-2",
+                accountId = "account-2",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-03-14T18:00:02Z"
+            )
+        )
+        persistence.saveExecutions(
+            listOf(
+                ExecutionCreated(
+                    eventId = "evt-exec-mine",
+                    executionId = "exec-mine",
+                    orderId = "mine-buy",
+                    instrumentId = "AAPL",
+                    quantityUnits = "40",
+                    executionPrice = "150",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:03Z"
+                ),
+                ExecutionCreated(
+                    eventId = "evt-exec-msft",
+                    executionId = "exec-msft",
+                    orderId = "mine-msft",
+                    instrumentId = "MSFT",
+                    quantityUnits = "10",
+                    executionPrice = "300",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:04Z"
+                ),
+                ExecutionCreated(
+                    eventId = "evt-exec-other",
+                    executionId = "exec-other",
+                    orderId = "someone-elses",
+                    instrumentId = "AAPL",
+                    quantityUnits = "100",
+                    executionPrice = "150",
+                    currency = "USD",
+                    occurredAt = "2026-03-14T18:00:05Z"
+                )
+            )
+        )
+
+        val response = api.ownExecutions("participant-1", instrumentId = "AAPL", limit = 1)
+
+        assertContains(response, "\"participantId\":\"participant-1\"")
+        assertContains(response, "\"source\":\"runtime.orders + runtime.executions\"")
+        assertContains(response, "\"freshness\":\"durable execution rows scoped by participant order ownership\"")
+        assertContains(response, "\"fills\":[{\"executionId\":\"exec-mine\"")
+        assertContains(response, "\"side\":\"BUY\"")
+        assertContains(response, "\"quantityUnits\":\"40\"")
+        assertContains(response, "\"limit\":1")
+        assert(!response.contains("exec-msft")) { "instrument filter not applied" }
+        assert(!response.contains("exec-other")) { "other participant's fill leaked" }
+        assert(!response.contains("eventId")) { "internal event id leaked into own fills" }
+    }
+
+    @Test
     fun operationalProjectionSmokeReachesOrderAndMarketDataReads() {
         val persistence = InMemoryRuntimePersistence()
         val api = PlatformApi(
@@ -692,6 +793,9 @@ class PlatformApiTest {
         assertContains(availability, "\"name\":\"settlementFacts\"")
         assertContains(availability, "\"endpoint\":\"/api/v1/settlement/facts/{scenarioRunId}\"")
         assertContains(availability, "\"name\":\"currentOrders\"")
+        assertContains(availability, "\"name\":\"orderFills\"")
+        assertContains(availability, "\"endpoint\":\"/api/v1/orders/fills\"")
+        assertContains(availability, "\"source\":\"runtime.orders + runtime.executions\"")
         assertContains(availability, "\"scope\":\"participant-own-orders\"")
         assertContains(availability, "\"requiredQuery\":[\"participantId\"]")
         assertContains(availability, "\"optionalQuery\":[\"levels\",\"projectionName\",\"sourceProjectionName\"]")
