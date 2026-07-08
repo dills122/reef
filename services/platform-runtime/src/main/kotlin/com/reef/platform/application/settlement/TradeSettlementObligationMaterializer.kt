@@ -13,6 +13,9 @@ data class SettlementObligationMaterializationResult(
     val materializedObligations: Int,
     val materializedInstructions: Int,
     val materializedAttempts: Int,
+    val materializedLegOutcomes: Int,
+    val materializedLedgerEntries: Int,
+    val materializedSettlements: Int,
     val skippedTrades: Int
 )
 
@@ -28,6 +31,9 @@ class TradeSettlementObligationMaterializer(
         val obligations = mutableListOf<SettlementObligationCreatedFact>()
         val instructions = mutableListOf<SettlementInstructionCreatedFact>()
         val attempts = mutableListOf<SettlementAttemptStartedFact>()
+        val legOutcomes = mutableListOf<SettlementLegOutcomeFact>()
+        val ledgerEntries = mutableListOf<SettlementLedgerEntryFact>()
+        val settlements = mutableListOf<SettlementSettledFact>()
         var skipped = 0
 
         trades.forEach { trade ->
@@ -76,18 +82,28 @@ class TradeSettlementObligationMaterializer(
             obligations += obligation
             if (selection.mode == InstantPostTradeMode) {
                 val instruction = instructionFact(obligation)
+                val attempt = attemptFact(obligation, instruction)
                 instructions += instruction
-                attempts += attemptFact(obligation, instruction)
+                attempts += attempt
+                legOutcomes += legOutcomeFacts(obligation, instruction, attempt)
+                ledgerEntries += ledgerEntryFacts(obligation, instruction, attempt, buyOrder, sellOrder)
+                settlements += settlementFact(obligation, instruction, attempt)
             }
         }
 
-        if (obligations.isNotEmpty() || instructions.isNotEmpty() || attempts.isNotEmpty()) {
+        if (
+            obligations.isNotEmpty() || instructions.isNotEmpty() || attempts.isNotEmpty() ||
+            legOutcomes.isNotEmpty() || ledgerEntries.isNotEmpty() || settlements.isNotEmpty()
+        ) {
             settlementFactStore.appendFacts(
                 SettlementFactBundle(
                     scenarioRunId = scenarioRunId,
                     obligations = obligations,
                     instructions = instructions,
-                    attempts = attempts
+                    attempts = attempts,
+                    legOutcomes = legOutcomes,
+                    ledgerEntries = ledgerEntries,
+                    settlements = settlements
                 )
             )
         }
@@ -97,6 +113,9 @@ class TradeSettlementObligationMaterializer(
             materializedObligations = obligations.size,
             materializedInstructions = instructions.size,
             materializedAttempts = attempts.size,
+            materializedLegOutcomes = legOutcomes.size,
+            materializedLedgerEntries = ledgerEntries.size,
+            materializedSettlements = settlements.size,
             skippedTrades = skipped
         )
     }
@@ -155,6 +174,151 @@ class TradeSettlementObligationMaterializer(
             correlationId = obligation.correlationId,
             causationId = instruction.settlementInstructionId,
             attemptNumber = 1,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun legOutcomeFacts(
+        obligation: SettlementObligationCreatedFact,
+        instruction: SettlementInstructionCreatedFact,
+        attempt: SettlementAttemptStartedFact
+    ): List<SettlementLegOutcomeFact> {
+        return listOf(
+            SettlementLegOutcomeFact(
+                settlementLegOutcomeId = "settlement-leg-${attempt.settlementAttemptId}-cash",
+                settlementObligationId = obligation.settlementObligationId,
+                settlementInstructionId = instruction.settlementInstructionId,
+                settlementAttemptId = attempt.settlementAttemptId,
+                scenarioRunId = obligation.scenarioRunId,
+                postTradeProfileId = obligation.postTradeProfileId,
+                postTradePolicyVersion = obligation.postTradePolicyVersion,
+                correlationId = obligation.correlationId,
+                causationId = attempt.settlementAttemptId,
+                legType = SettlementLegTypeCash,
+                occurredAt = obligation.occurredAt
+            ),
+            SettlementLegOutcomeFact(
+                settlementLegOutcomeId = "settlement-leg-${attempt.settlementAttemptId}-security",
+                settlementObligationId = obligation.settlementObligationId,
+                settlementInstructionId = instruction.settlementInstructionId,
+                settlementAttemptId = attempt.settlementAttemptId,
+                scenarioRunId = obligation.scenarioRunId,
+                postTradeProfileId = obligation.postTradeProfileId,
+                postTradePolicyVersion = obligation.postTradePolicyVersion,
+                correlationId = obligation.correlationId,
+                causationId = attempt.settlementAttemptId,
+                legType = SettlementLegTypeSecurity,
+                occurredAt = obligation.occurredAt
+            )
+        )
+    }
+
+    private fun ledgerEntryFacts(
+        obligation: SettlementObligationCreatedFact,
+        instruction: SettlementInstructionCreatedFact,
+        attempt: SettlementAttemptStartedFact,
+        buyOrder: PersistedOrder,
+        sellOrder: PersistedOrder
+    ): List<SettlementLedgerEntryFact> {
+        return listOf(
+            ledgerEntry(
+                suffix = "buyer-cash-debit",
+                obligation = obligation,
+                instruction = instruction,
+                attempt = attempt,
+                participantId = buyOrder.participantId,
+                accountId = buyOrder.accountId,
+                assetType = SettlementLedgerEntryTypeCash,
+                assetId = obligation.currency,
+                direction = SettlementLedgerDirectionDebit,
+                quantity = obligation.cashAmount
+            ),
+            ledgerEntry(
+                suffix = "seller-cash-credit",
+                obligation = obligation,
+                instruction = instruction,
+                attempt = attempt,
+                participantId = sellOrder.participantId,
+                accountId = sellOrder.accountId,
+                assetType = SettlementLedgerEntryTypeCash,
+                assetId = obligation.currency,
+                direction = SettlementLedgerDirectionCredit,
+                quantity = obligation.cashAmount
+            ),
+            ledgerEntry(
+                suffix = "seller-security-debit",
+                obligation = obligation,
+                instruction = instruction,
+                attempt = attempt,
+                participantId = sellOrder.participantId,
+                accountId = sellOrder.accountId,
+                assetType = SettlementLedgerEntryTypeSecurity,
+                assetId = obligation.instrumentId,
+                direction = SettlementLedgerDirectionDebit,
+                quantity = obligation.quantity
+            ),
+            ledgerEntry(
+                suffix = "buyer-security-credit",
+                obligation = obligation,
+                instruction = instruction,
+                attempt = attempt,
+                participantId = buyOrder.participantId,
+                accountId = buyOrder.accountId,
+                assetType = SettlementLedgerEntryTypeSecurity,
+                assetId = obligation.instrumentId,
+                direction = SettlementLedgerDirectionCredit,
+                quantity = obligation.quantity
+            )
+        )
+    }
+
+    private fun ledgerEntry(
+        suffix: String,
+        obligation: SettlementObligationCreatedFact,
+        instruction: SettlementInstructionCreatedFact,
+        attempt: SettlementAttemptStartedFact,
+        participantId: String,
+        accountId: String,
+        assetType: String,
+        assetId: String,
+        direction: String,
+        quantity: String
+    ): SettlementLedgerEntryFact {
+        return SettlementLedgerEntryFact(
+            ledgerEntryId = "settlement-ledger-${attempt.settlementAttemptId}-$suffix",
+            settlementObligationId = obligation.settlementObligationId,
+            settlementInstructionId = instruction.settlementInstructionId,
+            settlementAttemptId = attempt.settlementAttemptId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = attempt.settlementAttemptId,
+            participantId = participantId,
+            accountId = accountId,
+            assetType = assetType,
+            assetId = assetId,
+            direction = direction,
+            quantity = quantity,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
+    private fun settlementFact(
+        obligation: SettlementObligationCreatedFact,
+        instruction: SettlementInstructionCreatedFact,
+        attempt: SettlementAttemptStartedFact
+    ): SettlementSettledFact {
+        return SettlementSettledFact(
+            settlementId = "settlement-final-${obligation.settlementObligationId}",
+            settlementObligationId = obligation.settlementObligationId,
+            settlementInstructionId = instruction.settlementInstructionId,
+            settlementAttemptId = attempt.settlementAttemptId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = attempt.settlementAttemptId,
             occurredAt = obligation.occurredAt
         )
     }

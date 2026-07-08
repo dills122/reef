@@ -28,13 +28,59 @@ class SettlementFactStoreTest {
     @Test
     fun storesPostTradeProfileEvidenceAcrossSettlementChain() {
         val store = InMemorySettlementFactStore()
-        val facts = p2Facts("run-p2").withProfile("instant-post-trade-v1", 3)
+        val finality = finalityFacts("run-p2")
+        val facts = p2Facts("run-p2")
+            .copy(
+                legOutcomes = finality.legOutcomes,
+                ledgerEntries = finality.ledgerEntries,
+                settlements = finality.settlements
+            )
+            .withProfile("instant-post-trade-v1", 3)
 
         store.appendFacts(facts)
         val stored = store.factsByScenarioRunId("run-p2")
 
         assertEquals(setOf("instant-post-trade-v1"), stored.profileIds())
         assertEquals(setOf(3), stored.policyVersions())
+    }
+
+    @Test
+    fun appendsAndReadsInstantSettlementFinalityProof() {
+        val store = InMemorySettlementFactStore()
+        val facts = finalityFacts("run-finality")
+
+        store.appendFacts(facts)
+        store.appendFacts(facts)
+        val stored = store.factsByScenarioRunId("run-finality")
+
+        assertEquals(listOf("cash-leg-1", "security-leg-1"), stored.legOutcomes.map { it.settlementLegOutcomeId }.sorted())
+        assertEquals(
+            listOf(
+                "ledger-buyer-cash-debit",
+                "ledger-buyer-security-credit",
+                "ledger-seller-cash-credit",
+                "ledger-seller-security-debit"
+            ),
+            stored.ledgerEntries.map { it.ledgerEntryId }.sorted()
+        )
+        assertEquals(listOf("settlement-1"), stored.settlements.map { it.settlementId })
+    }
+
+    @Test
+    fun rejectsSettlementWithoutLegAndLedgerProof() {
+        val store = InMemorySettlementFactStore()
+
+        assertFailsWith<IllegalArgumentException> {
+            store.appendFacts(
+                SettlementFactBundle(
+                    scenarioRunId = "run-finality",
+                    obligations = listOf(obligation("run-finality")),
+                    instructions = listOf(instructionCreated("run-finality")),
+                    attempts = listOf(attemptStarted("run-finality")),
+                    settlements = listOf(settled("run-finality"))
+                )
+            )
+        }
     }
 
     @Test
@@ -382,6 +428,9 @@ class SettlementFactStoreTest {
         assertEquals("settlement.obligations", names.obligations)
         assertEquals("settlement.instructions", names.instructions)
         assertEquals("settlement.attempts", names.attempts)
+        assertEquals("settlement.leg_outcomes", names.legOutcomes)
+        assertEquals("settlement.ledger_entries", names.ledgerEntries)
+        assertEquals("settlement.settlements", names.settlements)
         assertEquals("settlement.breaks", names.breaks)
         assertEquals("settlement.repairs", names.repairs)
         assertEquals("settlement.resolutions", names.resolutions)
@@ -419,6 +468,74 @@ private fun p2Facts(scenarioRunId: String): SettlementFactBundle {
     )
 }
 
+private fun finalityFacts(scenarioRunId: String): SettlementFactBundle {
+    return SettlementFactBundle(
+        scenarioRunId = scenarioRunId,
+        obligations = listOf(obligation(scenarioRunId)),
+        instructions = listOf(instructionCreated(scenarioRunId)),
+        attempts = listOf(attemptStarted(scenarioRunId)),
+        legOutcomes = listOf(
+            SettlementLegOutcomeFact(
+                settlementLegOutcomeId = "cash-leg-1",
+                settlementObligationId = "obl-1",
+                settlementInstructionId = "instruction-1",
+                settlementAttemptId = "attempt-1",
+                scenarioRunId = scenarioRunId,
+                correlationId = "corr-1",
+                causationId = "attempt-1",
+                legType = SettlementLegTypeCash,
+                occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+            ),
+            SettlementLegOutcomeFact(
+                settlementLegOutcomeId = "security-leg-1",
+                settlementObligationId = "obl-1",
+                settlementInstructionId = "instruction-1",
+                settlementAttemptId = "attempt-1",
+                scenarioRunId = scenarioRunId,
+                correlationId = "corr-1",
+                causationId = "attempt-1",
+                legType = SettlementLegTypeSecurity,
+                occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+            )
+        ),
+        ledgerEntries = listOf(
+            ledgerEntry(scenarioRunId, "ledger-buyer-cash-debit", "buyer-1", "account-buyer-1", SettlementLedgerEntryTypeCash, "USD", SettlementLedgerDirectionDebit, "15000.00"),
+            ledgerEntry(scenarioRunId, "ledger-seller-cash-credit", "seller-1", "account-seller-1", SettlementLedgerEntryTypeCash, "USD", SettlementLedgerDirectionCredit, "15000.00"),
+            ledgerEntry(scenarioRunId, "ledger-seller-security-debit", "seller-1", "account-seller-1", SettlementLedgerEntryTypeSecurity, "AAPL", SettlementLedgerDirectionDebit, "100"),
+            ledgerEntry(scenarioRunId, "ledger-buyer-security-credit", "buyer-1", "account-buyer-1", SettlementLedgerEntryTypeSecurity, "AAPL", SettlementLedgerDirectionCredit, "100")
+        ),
+        settlements = listOf(settled(scenarioRunId))
+    )
+}
+
+private fun ledgerEntry(
+    scenarioRunId: String,
+    ledgerEntryId: String,
+    participantId: String,
+    accountId: String,
+    assetType: String,
+    assetId: String,
+    direction: String,
+    quantity: String
+): SettlementLedgerEntryFact {
+    return SettlementLedgerEntryFact(
+        ledgerEntryId = ledgerEntryId,
+        settlementObligationId = "obl-1",
+        settlementInstructionId = "instruction-1",
+        settlementAttemptId = "attempt-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "attempt-1",
+        participantId = participantId,
+        accountId = accountId,
+        assetType = assetType,
+        assetId = assetId,
+        direction = direction,
+        quantity = quantity,
+        occurredAt = Instant.parse("2026-01-01T00:00:01Z")
+    )
+}
+
 private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: Int): SettlementFactBundle {
     return copy(
         obligations = obligations.map {
@@ -428,6 +545,15 @@ private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: I
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
         attempts = attempts.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        legOutcomes = legOutcomes.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        ledgerEntries = ledgerEntries.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        settlements = settlements.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
         breaks = breaks.map {
@@ -447,6 +573,9 @@ private fun SettlementFactBundle.profileIds(): Set<String> {
         obligations.map { it.postTradeProfileId } +
             instructions.map { it.postTradeProfileId } +
             attempts.map { it.postTradeProfileId } +
+            legOutcomes.map { it.postTradeProfileId } +
+            ledgerEntries.map { it.postTradeProfileId } +
+            settlements.map { it.postTradeProfileId } +
             breaks.map { it.postTradeProfileId } +
             repairs.map { it.postTradeProfileId } +
             resolutions.map { it.postTradeProfileId }
@@ -458,6 +587,9 @@ private fun SettlementFactBundle.policyVersions(): Set<Int> {
         obligations.map { it.postTradePolicyVersion } +
             instructions.map { it.postTradePolicyVersion } +
             attempts.map { it.postTradePolicyVersion } +
+            legOutcomes.map { it.postTradePolicyVersion } +
+            ledgerEntries.map { it.postTradePolicyVersion } +
+            settlements.map { it.postTradePolicyVersion } +
             breaks.map { it.postTradePolicyVersion } +
             repairs.map { it.postTradePolicyVersion } +
             resolutions.map { it.postTradePolicyVersion }
@@ -524,6 +656,19 @@ private fun repair(scenarioRunId: String): SettlementRepairPostedFact {
         correlationId = "corr-1",
         causationId = "repair-command-1",
         actorId = "ops-user-1",
+        occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+    )
+}
+
+private fun settled(scenarioRunId: String): SettlementSettledFact {
+    return SettlementSettledFact(
+        settlementId = "settlement-1",
+        settlementObligationId = "obl-1",
+        settlementInstructionId = "instruction-1",
+        settlementAttemptId = "attempt-1",
+        scenarioRunId = scenarioRunId,
+        correlationId = "corr-1",
+        causationId = "attempt-1",
         occurredAt = Instant.parse("2026-01-01T00:00:02Z")
     )
 }

@@ -465,11 +465,14 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
-    fun settlementFactsRequirementsCoverAllSixTables() {
+    fun settlementFactsRequirementsCoverAllNineTables() {
         val requirements = PostgresSchemaRequirements.settlementFacts(
             obligations = "settlement.obligations",
             instructions = "settlement.instructions",
             attempts = "settlement.attempts",
+            legOutcomes = "settlement.leg_outcomes",
+            ledgerEntries = "settlement.ledger_entries",
+            settlements = "settlement.settlements",
             breaks = "settlement.breaks",
             repairs = "settlement.repairs",
             resolutions = "settlement.resolutions"
@@ -480,6 +483,9 @@ class PostgresSchemaRequirementsTest {
                 "settlement.obligations",
                 "settlement.instructions",
                 "settlement.attempts",
+                "settlement.leg_outcomes",
+                "settlement.ledger_entries",
+                "settlement.settlements",
                 "settlement.breaks",
                 "settlement.repairs",
                 "settlement.resolutions"
@@ -493,6 +499,9 @@ class PostgresSchemaRequirementsTest {
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_attempt_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_instruction_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.attempt_number" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.leg_outcomes.leg_type" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.ledger_entries.direction" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.settlements.settlement_state" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.reason" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.breaks.post_trade_policy_version" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.repairs.actor_id" })

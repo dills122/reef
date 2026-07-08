@@ -200,6 +200,9 @@ object PostgresSchemaRequirements {
         obligations: String,
         instructions: String,
         attempts: String,
+        legOutcomes: String,
+        ledgerEntries: String,
+        settlements: String,
         breaks: String,
         repairs: String,
         resolutions: String
@@ -207,11 +210,24 @@ object PostgresSchemaRequirements {
         val obligationTable = PostgresSchemaObject.parse(obligations)
         val instructionTable = PostgresSchemaObject.parse(instructions)
         val attemptTable = PostgresSchemaObject.parse(attempts)
+        val legOutcomeTable = PostgresSchemaObject.parse(legOutcomes)
+        val ledgerEntryTable = PostgresSchemaObject.parse(ledgerEntries)
+        val settlementTable = PostgresSchemaObject.parse(settlements)
         val breakTable = PostgresSchemaObject.parse(breaks)
         val repairTable = PostgresSchemaObject.parse(repairs)
         val resolutionTable = PostgresSchemaObject.parse(resolutions)
         return PostgresSchemaRequirement(
-            tables = listOf(obligationTable, instructionTable, attemptTable, breakTable, repairTable, resolutionTable),
+            tables = listOf(
+                obligationTable,
+                instructionTable,
+                attemptTable,
+                legOutcomeTable,
+                ledgerEntryTable,
+                settlementTable,
+                breakTable,
+                repairTable,
+                resolutionTable
+            ),
             columns = listOf(
                 PostgresSchemaColumn(obligationTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(obligationTable, "scenario_run_id", "text"),
@@ -232,6 +248,19 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(attemptTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(attemptTable, "attempt_number", "integer"),
                 PostgresSchemaColumn(attemptTable, "state", "text"),
+                PostgresSchemaColumn(legOutcomeTable, "settlement_leg_outcome_id", "text"),
+                PostgresSchemaColumn(legOutcomeTable, "settlement_attempt_id", "text"),
+                PostgresSchemaColumn(legOutcomeTable, "leg_type", "text"),
+                PostgresSchemaColumn(legOutcomeTable, "state", "text"),
+                PostgresSchemaColumn(ledgerEntryTable, "ledger_entry_id", "text"),
+                PostgresSchemaColumn(ledgerEntryTable, "settlement_attempt_id", "text"),
+                PostgresSchemaColumn(ledgerEntryTable, "asset_type", "text"),
+                PostgresSchemaColumn(ledgerEntryTable, "asset_id", "text"),
+                PostgresSchemaColumn(ledgerEntryTable, "direction", "text"),
+                PostgresSchemaColumn(ledgerEntryTable, "quantity", "text"),
+                PostgresSchemaColumn(settlementTable, "settlement_id", "text"),
+                PostgresSchemaColumn(settlementTable, "settlement_attempt_id", "text"),
+                PostgresSchemaColumn(settlementTable, "settlement_state", "text"),
                 PostgresSchemaColumn(breakTable, "settlement_break_id", "text"),
                 PostgresSchemaColumn(breakTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(breakTable, "post_trade_profile_id", "text"),

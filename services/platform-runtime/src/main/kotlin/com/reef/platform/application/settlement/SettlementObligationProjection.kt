@@ -23,6 +23,10 @@ data class SettlementObligationView(
     val settlementInstructionId: String,
     val settlementAttemptId: String,
     val settlementAttemptNumber: Int,
+    val settlementId: String,
+    val cashLegState: String,
+    val securityLegState: String,
+    val ledgerEntryCount: Int,
     val settlementBreakId: String,
     val settlementRepairId: String,
     val settlementResolutionId: String,
@@ -35,6 +39,9 @@ object SettlementObligationProjection {
         val breaksByObligation = facts.breaks.groupBy { it.settlementObligationId }
         val instructionsByObligation = facts.instructions.groupBy { it.settlementObligationId }
         val attemptsByObligation = facts.attempts.groupBy { it.settlementObligationId }
+        val legOutcomesByObligation = facts.legOutcomes.groupBy { it.settlementObligationId }
+        val ledgerEntriesByObligation = facts.ledgerEntries.groupBy { it.settlementObligationId }
+        val settlementsByObligation = facts.settlements.groupBy { it.settlementObligationId }
         val repairsByObligation = facts.repairs.groupBy { it.settlementObligationId }
         val resolutionsByObligation = facts.resolutions.groupBy { it.settlementObligationId }
         return facts.obligations
@@ -49,6 +56,16 @@ object SettlementObligationProjection {
                 val attempt = attemptsByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementAttemptStartedFact> { it.occurredAt }.thenBy { it.settlementAttemptId })
+                val legOutcomes = legOutcomesByObligation[obligation.settlementObligationId].orEmpty()
+                val cashLeg = legOutcomes
+                    .filter { it.legType == SettlementLegTypeCash }
+                    .maxWithOrNull(compareBy<SettlementLegOutcomeFact> { it.occurredAt }.thenBy { it.settlementLegOutcomeId })
+                val securityLeg = legOutcomes
+                    .filter { it.legType == SettlementLegTypeSecurity }
+                    .maxWithOrNull(compareBy<SettlementLegOutcomeFact> { it.occurredAt }.thenBy { it.settlementLegOutcomeId })
+                val settlement = settlementsByObligation[obligation.settlementObligationId]
+                    .orEmpty()
+                    .maxWithOrNull(compareBy<SettlementSettledFact> { it.occurredAt }.thenBy { it.settlementId })
                 val repair = repairsByObligation[obligation.settlementObligationId]
                     .orEmpty()
                     .maxWithOrNull(compareBy<SettlementRepairPostedFact> { it.occurredAt }.thenBy { it.settlementRepairId })
@@ -59,6 +76,9 @@ object SettlementObligationProjection {
                     obligation.occurredAt,
                     instruction?.occurredAt,
                     attempt?.occurredAt,
+                    cashLeg?.occurredAt,
+                    securityLeg?.occurredAt,
+                    settlement?.occurredAt,
                     breakFact?.occurredAt,
                     repair?.occurredAt,
                     resolution?.occurredAt
@@ -76,7 +96,12 @@ object SettlementObligationProjection {
                     cashAmount = obligation.cashAmount,
                     currency = obligation.currency,
                     obligationState = obligation.state,
-                    settlementState = resolution?.settlementState ?: breakFact?.state ?: attempt?.state ?: instruction?.state ?: obligation.state,
+                    settlementState = resolution?.settlementState
+                        ?: breakFact?.state
+                        ?: settlement?.settlementState
+                        ?: attempt?.state
+                        ?: instruction?.state
+                        ?: obligation.state,
                     exceptionState = resolution?.exceptionState
                         ?: repair?.let { SettlementRepairPostedState }
                         ?: breakFact?.state
@@ -84,6 +109,10 @@ object SettlementObligationProjection {
                     settlementInstructionId = instruction?.settlementInstructionId.orEmpty(),
                     settlementAttemptId = attempt?.settlementAttemptId.orEmpty(),
                     settlementAttemptNumber = attempt?.attemptNumber ?: 0,
+                    settlementId = settlement?.settlementId.orEmpty(),
+                    cashLegState = cashLeg?.state.orEmpty(),
+                    securityLegState = securityLeg?.state.orEmpty(),
+                    ledgerEntryCount = ledgerEntriesByObligation[obligation.settlementObligationId].orEmpty().size,
                     settlementBreakId = breakFact?.settlementBreakId.orEmpty(),
                     settlementRepairId = repair?.settlementRepairId.orEmpty(),
                     settlementResolutionId = resolution?.settlementResolutionId.orEmpty(),

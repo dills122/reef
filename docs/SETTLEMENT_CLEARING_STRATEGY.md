@@ -154,7 +154,8 @@ Rules:
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
-- The current materializer creates deterministic settlement instructions and attempts for `instant-post-trade` obligations and leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
+- The current materializer creates deterministic settlement instructions, attempts, cash/security leg outcome facts, append-only ledger proof entries, and `SETTLED` facts for `instant-post-trade` obligations. It leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
+- The first instant-post-trade finality implementation is gross-per-trade only. It proves both legs and four ledger entries per settled trade, but it does not yet derive account balances, apply micro-batch netting, model allocation/confirmation/affirmation, or create clearing/novation records.
 - Near-term adjustment from standards review: keep `SettlementInstructionCreated` before `SettlementAttemptStarted`, use `SETTLED` only for financial finality after leg/ledger proof, and leave `RESOLVED` for exception/case closure.
 
 Policy storage:
@@ -174,6 +175,8 @@ Obligation materialization:
 - deterministic obligation id: `settlement-obligation-{tradeId}`
 - deterministic instant instruction id: `settlement-instruction-settlement-obligation-{tradeId}-1`
 - deterministic instant attempt id: `settlement-attempt-settlement-obligation-{tradeId}-1`
+- deterministic instant settlement id: `settlement-final-settlement-obligation-{tradeId}`
+- ledger proof: buyer cash debit, seller cash credit, seller security debit, buyer security credit
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
