@@ -60,9 +60,18 @@ type PriceCollar struct {
 }
 
 type Snapshot struct {
+	Metadata SnapshotMetadata            `json:"metadata"`
 	Books    map[string]hotbook.Snapshot `json:"books"`
 	Orders   []SnapshotOrderRecord       `json:"orders"`
 	Checksum string                      `json:"checksum"`
+}
+
+type SnapshotMetadata struct {
+	SnapshotVersion string   `json:"snapshotVersion"`
+	EngineVersion   string   `json:"engineVersion"`
+	BookCount       int      `json:"bookCount"`
+	OrderCount      int      `json:"orderCount"`
+	BookKeys        []string `json:"bookKeys"`
 }
 
 type SnapshotOrderRecord struct {
@@ -452,6 +461,13 @@ func (s *Service) Snapshot() Snapshot {
 	sort.Slice(snapshot.Orders, func(i, j int) bool {
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
 	})
+	snapshot.Metadata = SnapshotMetadata{
+		SnapshotVersion: "matching-service-snapshot-v1",
+		EngineVersion:   "matching-engine-app-v1",
+		BookCount:       len(snapshot.Books),
+		OrderCount:      len(snapshot.Orders),
+		BookKeys:        bookIDs,
+	}
 	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
 	return snapshot
 }
@@ -472,6 +488,9 @@ func (s *Service) BookStats(instrumentID string) BookStats {
 }
 
 func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
+	if !validSnapshotMetadata(snapshot) {
+		return nil, false
+	}
 	if snapshot.Checksum != "" && snapshot.Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
 		return nil, false
 	}
@@ -621,8 +640,45 @@ func (s Snapshot) withoutChecksum() Snapshot {
 	return s
 }
 
+func validSnapshotMetadata(snapshot Snapshot) bool {
+	if snapshot.Metadata.SnapshotVersion == "" && snapshot.Metadata.EngineVersion == "" {
+		return true
+	}
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v1" || snapshot.Metadata.EngineVersion == "" {
+		return false
+	}
+	if snapshot.Metadata.BookCount != len(snapshot.Books) || snapshot.Metadata.OrderCount != len(snapshot.Orders) {
+		return false
+	}
+	if len(snapshot.Metadata.BookKeys) != len(snapshot.Books) {
+		return false
+	}
+	keys := make([]string, 0, len(snapshot.Books))
+	for key := range snapshot.Books {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for i, key := range keys {
+		if snapshot.Metadata.BookKeys[i] != key {
+			return false
+		}
+	}
+	return true
+}
+
 func serviceSnapshotChecksum(snapshot Snapshot) string {
 	var builder strings.Builder
+	builder.WriteString("metadata:")
+	builder.WriteString(snapshot.Metadata.SnapshotVersion)
+	builder.WriteByte(':')
+	builder.WriteString(snapshot.Metadata.EngineVersion)
+	builder.WriteByte(':')
+	builder.WriteString(strconv.Itoa(snapshot.Metadata.BookCount))
+	builder.WriteByte(':')
+	builder.WriteString(strconv.Itoa(snapshot.Metadata.OrderCount))
+	builder.WriteByte(':')
+	builder.WriteString(strings.Join(snapshot.Metadata.BookKeys, ","))
+	builder.WriteByte(';')
 	bookIDs := make([]string, 0, len(snapshot.Books))
 	for instrumentID := range snapshot.Books {
 		bookIDs = append(bookIDs, instrumentID)

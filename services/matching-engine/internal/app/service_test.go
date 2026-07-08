@@ -897,6 +897,15 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if snapshot.Checksum == "" {
 		t.Fatal("expected service snapshot checksum")
 	}
+	if snapshot.Metadata.SnapshotVersion != "matching-service-snapshot-v1" || snapshot.Metadata.EngineVersion == "" {
+		t.Fatalf("expected populated snapshot metadata, got %#v", snapshot.Metadata)
+	}
+	if snapshot.Metadata.BookCount != 1 || snapshot.Metadata.OrderCount != 4 {
+		t.Fatalf("unexpected snapshot metadata counts: %#v", snapshot.Metadata)
+	}
+	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"AAPL"}) {
+		t.Fatalf("unexpected snapshot book keys: %#v", snapshot.Metadata.BookKeys)
+	}
 	restored, ok := Restore(snapshot)
 	if !ok {
 		t.Fatal("expected service restore to succeed")
@@ -934,6 +943,19 @@ func TestServiceRestoreRejectsSnapshotChecksumMismatch(t *testing.T) {
 
 	if _, ok := Restore(snapshot); ok {
 		t.Fatal("expected tampered service snapshot restore to fail")
+	}
+}
+
+func TestServiceRestoreRejectsSnapshotMetadataMismatch(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+
+	snapshot := service.Snapshot()
+	snapshot.Metadata.BookCount = 2
+	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
+
+	if _, ok := Restore(snapshot); ok {
+		t.Fatal("expected metadata mismatch restore to fail")
 	}
 }
 

@@ -101,7 +101,7 @@ Gaps before calling it production-ready:
 - default self-trade prevention exists; alternate STP modes remain pending
 - explicit session state gates exist behind service options
 - engine-level max quantity, max notional, and price collar controls exist behind service options
-- in-memory snapshot/restore/replay checksum proof exists; durable artifact metadata remains pending
+- in-memory snapshot/restore/replay checksum proof exists with versioned metadata; stream offset metadata remains pending
 - no formal lifecycle conformance matrix
 - no per-instrument matching algorithm profile
 - no engine ownership-transfer or failover proof
@@ -139,7 +139,8 @@ Acceptance:
 - unit tests cover snapshot restore and replay equivalence
 - checksum mismatch fails closed
 - in-memory snapshot includes book identity, order records, and checksum
-- durable artifact metadata still needs sequence/offset fields and engine version
+- snapshot metadata includes version, engine version, book count, order count, and book keys
+- durable artifact metadata still needs command/event sequence or offset fields
 - no external state-store dependency is introduced
 
 ### 2. Lifecycle Conformance Matrix
