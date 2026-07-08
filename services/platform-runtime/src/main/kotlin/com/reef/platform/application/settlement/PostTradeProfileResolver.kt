@@ -14,6 +14,7 @@ enum class PostTradeProfileSelectionSource {
 data class PostTradeProfileSelection(
     val profileId: String,
     val policyVersion: Int,
+    val mode: String,
     val source: PostTradeProfileSelectionSource
 )
 
@@ -36,15 +37,18 @@ class PostTradeProfileResolver(
             return PostTradeProfileSelection(
                 profileId = platformProfile.profileId,
                 policyVersion = platformProfile.policyVersion,
+                mode = platformProfile.mode,
                 source = PostTradeProfileSelectionSource.PlatformDefault
             )
         }
 
         val envProfileId = environmentProfileId().trim()
         if (envProfileId.isNotBlank()) {
+            val envProfile = byId[envProfileId]
             return PostTradeProfileSelection(
-                profileId = envProfileId,
+                profileId = envProfile?.profileId ?: envProfileId,
                 policyVersion = environmentPolicyVersion().coerceAtLeast(1),
+                mode = envProfile?.mode.orEmpty(),
                 source = PostTradeProfileSelectionSource.EnvironmentDefault
             )
         }
@@ -52,6 +56,7 @@ class PostTradeProfileResolver(
         return PostTradeProfileSelection(
             profileId = DefaultPostTradeProfileId,
             policyVersion = DefaultPostTradePolicyVersion,
+            mode = "ops-realistic",
             source = PostTradeProfileSelectionSource.HardDefault
         )
     }
@@ -68,6 +73,7 @@ class PostTradeProfileResolver(
         return PostTradeProfileSelection(
             profileId = profile.profileId,
             policyVersion = profile.policyVersion,
+            mode = profile.mode,
             source = source
         )
     }

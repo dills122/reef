@@ -38,6 +38,7 @@ import com.reef.platform.application.settlement.InMemorySettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementFactStore
 import com.reef.platform.application.settlement.PostgresSettlementSqlNames
 import com.reef.platform.application.settlement.PostTradeProfileResolver
+import com.reef.platform.application.settlement.SettlementAttemptStartedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
@@ -3393,6 +3394,7 @@ class PlatformHttpServer(
                     "scenarioRunId" to result.scenarioRunId,
                     "scannedTrades" to result.scannedTrades,
                     "materializedObligations" to result.materializedObligations,
+                    "materializedAttempts" to result.materializedAttempts,
                     "skippedTrades" to result.skippedTrades
                 )
             )
@@ -3467,6 +3469,9 @@ class PlatformHttpServer(
             obligations = json.objectDocuments("obligations").map {
                 obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
+            attempts = json.objectDocuments("attempts").map {
+                attemptFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
             breaks = json.objectDocuments("breaks").map {
                 breakFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
@@ -3500,6 +3505,26 @@ class PlatformHttpServer(
             cashAmount = json.string("cashAmount"),
             currency = json.string("currency"),
             state = json.string("state").ifBlank { "OBLIGATION_CREATED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun attemptFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementAttemptStartedFact {
+        return SettlementAttemptStartedFact(
+            settlementAttemptId = json.string("settlementAttemptId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            attemptNumber = positiveIntOrDefault(json, "attemptNumber", 1),
+            state = json.string("state").ifBlank { "ATTEMPT_STARTED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
     }
@@ -3606,6 +3631,20 @@ class PlatformHttpServer(
                     "occurredAt" to it.occurredAt.toString()
                 )
             },
+            "attempts" to facts.attempts.map {
+                mapOf(
+                    "settlementAttemptId" to it.settlementAttemptId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "attemptNumber" to it.attemptNumber,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "breaks" to facts.breaks.map {
                 mapOf(
                     "settlementBreakId" to it.settlementBreakId,
@@ -3675,6 +3714,8 @@ class PlatformHttpServer(
             "obligationState" to view.obligationState,
             "settlementState" to view.settlementState,
             "exceptionState" to view.exceptionState,
+            "settlementAttemptId" to view.settlementAttemptId,
+            "settlementAttemptNumber" to view.settlementAttemptNumber,
             "settlementBreakId" to view.settlementBreakId,
             "settlementRepairId" to view.settlementRepairId,
             "settlementResolutionId" to view.settlementResolutionId,

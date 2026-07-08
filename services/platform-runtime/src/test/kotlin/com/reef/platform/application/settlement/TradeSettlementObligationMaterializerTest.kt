@@ -38,6 +38,7 @@ class TradeSettlementObligationMaterializerTest {
 
         assertEquals(1, result.scannedTrades)
         assertEquals(1, result.materializedObligations)
+        assertEquals(1, result.materializedAttempts)
         assertEquals(0, result.skippedTrades)
         assertEquals("settlement-obligation-trade-1", obligation.settlementObligationId)
         assertEquals("scenario-instant-v1", obligation.postTradeProfileId)
@@ -46,6 +47,8 @@ class TradeSettlementObligationMaterializerTest {
         assertEquals("seller-1", obligation.sellerParticipantId)
         assertEquals("15025000000000", obligation.cashAmount)
         assertEquals(1, facts.obligations.size)
+        assertEquals("settlement-attempt-settlement-obligation-trade-1-1", facts.attempts.single().settlementAttemptId)
+        assertEquals("settlement-obligation-trade-1", facts.attempts.single().settlementObligationId)
     }
 
     @Test
@@ -69,10 +72,51 @@ class TradeSettlementObligationMaterializerTest {
         val materializer = TradeSettlementObligationMaterializer(persistence, store)
 
         materializer.materialize("run-venue")
-        val obligation = store.factsByScenarioRunId("run-venue").obligations.single()
+        val facts = store.factsByScenarioRunId("run-venue")
+        val obligation = facts.obligations.single()
 
         assertEquals("venue-instant-v1", obligation.postTradeProfileId)
         assertEquals(6, obligation.postTradePolicyVersion)
+        assertEquals(1, facts.attempts.size)
+    }
+
+    @Test
+    fun realisticDefaultMaterializesObligationsWithoutStartingAttempts() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-realistic", venueSessionId = "session-realistic")
+        val materializer = TradeSettlementObligationMaterializer(persistence, store)
+
+        val result = materializer.materialize("run-realistic")
+        val facts = store.factsByScenarioRunId("run-realistic")
+
+        assertEquals(1, result.scannedTrades)
+        assertEquals(1, result.materializedObligations)
+        assertEquals(0, result.materializedAttempts)
+        assertEquals(DefaultPostTradeProfileId, facts.obligations.single().postTradeProfileId)
+        assertEquals(emptyList(), facts.attempts)
+    }
+
+    @Test
+    fun environmentInstantProfileStartsAttempts() {
+        val persistence = InMemoryRuntimePersistence()
+        val store = InMemorySettlementFactStore()
+        seedTrade(persistence, runId = "run-env-instant", venueSessionId = "session-env")
+        val materializer = TradeSettlementObligationMaterializer(
+            runtimePersistence = persistence,
+            settlementFactStore = store,
+            postTradeProfileResolver = PostTradeProfileResolver.envOnly(
+                profileId = "instant-post-trade-v1",
+                policyVersion = 4
+            )
+        )
+
+        val result = materializer.materialize("run-env-instant")
+        val facts = store.factsByScenarioRunId("run-env-instant")
+
+        assertEquals(1, result.materializedAttempts)
+        assertEquals("instant-post-trade-v1", facts.attempts.single().postTradeProfileId)
+        assertEquals(4, facts.attempts.single().postTradePolicyVersion)
     }
 
     private fun seedTrade(

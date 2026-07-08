@@ -154,6 +154,7 @@ Rules:
 - Every trade, obligation, ledger posting, and scenario/run report must record the effective post-trade profile and policy version.
 - Runtime profile validation should fail closed when a non-local deployment leaves post-trade profile selection implicit.
 - Current implementation has partial calendar/settlement-cycle admin configuration, seeded durable post-trade profile controls, durable scenario/run and venue/session profile overrides, non-local `POST_TRADE_PROFILE` boot validation, a profile resolver with scenario/run, venue/session, platform, environment, and hard-default precedence, the P2 settlement fact slice with profile evidence fields, and a replayable trade-to-settlement obligation materializer.
+- The current materializer starts deterministic settlement attempts for `instant-post-trade` obligations and leaves `ops-realistic` obligations waiting for explicit future lifecycle steps.
 
 Policy storage:
 
@@ -170,6 +171,7 @@ Obligation materialization:
 - input: `scenarioRunId`/`runId`, optional `venueSessionId`
 - source: persisted runtime trades plus accepted buy/sell orders
 - deterministic obligation id: `settlement-obligation-{tradeId}`
+- deterministic instant attempt id: `settlement-attempt-settlement-obligation-{tradeId}-1`
 - cash amount: venue fixed-point price nanos multiplied by quantity units
 - idempotency: settlement fact store primary keys and merge validation make repeat materialization safe
 - query surface: `GET /api/v1/settlement/obligations/{scenarioRunId}` returns current obligation state projected from facts
@@ -228,6 +230,7 @@ Current P2 facts can map into this direction:
 
 ```text
 SettlementObligationCreated
+  -> SettlementAttemptStarted
   -> SettlementFailed(reason=CASH_LEG_FAILED)
   -> SettlementRepairPosted(action=POST_CASH_LEG_REPAIR)
   -> SettlementResolved

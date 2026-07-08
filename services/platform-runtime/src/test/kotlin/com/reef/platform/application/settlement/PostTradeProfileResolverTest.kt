@@ -19,6 +19,7 @@ class PostTradeProfileResolverTest {
 
         assertEquals("scenario-fast-v1", selection.profileId)
         assertEquals(3, selection.policyVersion)
+        assertEquals("instant-post-trade", selection.mode)
         assertEquals(PostTradeProfileSelectionSource.ScenarioRun, selection.source)
     }
 
@@ -31,6 +32,7 @@ class PostTradeProfileResolverTest {
 
         assertEquals("venue-t1-v1", selection.profileId)
         assertEquals(2, selection.policyVersion)
+        assertEquals("ops-realistic", selection.mode)
         assertEquals(PostTradeProfileSelectionSource.VenueSession, selection.source)
     }
 
@@ -46,6 +48,7 @@ class PostTradeProfileResolverTest {
 
         assertEquals("instant-post-trade-v1", selection.profileId)
         assertEquals(1, selection.policyVersion)
+        assertEquals("instant-post-trade", selection.mode)
         assertEquals(PostTradeProfileSelectionSource.PlatformDefault, selection.source)
     }
 
@@ -60,6 +63,22 @@ class PostTradeProfileResolverTest {
 
         assertEquals("env-profile-v1", selection.profileId)
         assertEquals(7, selection.policyVersion)
+        assertEquals("", selection.mode)
+        assertEquals(PostTradeProfileSelectionSource.EnvironmentDefault, selection.source)
+    }
+
+    @Test
+    fun environmentDefaultKeepsKnownProfileMode() {
+        val resolver = PostTradeProfileResolver(
+            environmentProfileId = { "instant-post-trade-v1" },
+            environmentPolicyVersion = { 5 }
+        )
+
+        val selection = resolver.resolve()
+
+        assertEquals("instant-post-trade-v1", selection.profileId)
+        assertEquals(5, selection.policyVersion)
+        assertEquals("instant-post-trade", selection.mode)
         assertEquals(PostTradeProfileSelectionSource.EnvironmentDefault, selection.source)
     }
 
@@ -69,6 +88,7 @@ class PostTradeProfileResolverTest {
 
         assertEquals(DefaultPostTradeProfileId, selection.profileId)
         assertEquals(DefaultPostTradePolicyVersion, selection.policyVersion)
+        assertEquals("ops-realistic", selection.mode)
         assertEquals(PostTradeProfileSelectionSource.HardDefault, selection.source)
     }
 

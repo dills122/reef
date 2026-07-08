@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.sql.DataSource
 
 const val SettlementObligationCreatedState = "OBLIGATION_CREATED"
+const val SettlementAttemptStartedState = "ATTEMPT_STARTED"
 const val SettlementBreakOpenedReason = "CASH_LEG_FAILED"
 const val SettlementBreakOpenedState = "BROKEN"
 const val SettlementRepairPostedAction = "POST_CASH_LEG_REPAIR"
@@ -34,6 +35,19 @@ data class SettlementObligationCreatedFact(
     val cashAmount: String,
     val currency: String,
     val state: String = SettlementObligationCreatedState,
+    val occurredAt: Instant
+)
+
+data class SettlementAttemptStartedFact(
+    val settlementAttemptId: String,
+    val settlementObligationId: String,
+    val scenarioRunId: String,
+    val postTradeProfileId: String = DefaultPostTradeProfileId,
+    val postTradePolicyVersion: Int = DefaultPostTradePolicyVersion,
+    val correlationId: String,
+    val causationId: String,
+    val attemptNumber: Int = 1,
+    val state: String = SettlementAttemptStartedState,
     val occurredAt: Instant
 )
 
@@ -83,11 +97,13 @@ data class SettlementResolvedFact(
 data class SettlementFactBundle(
     val scenarioRunId: String,
     val obligations: List<SettlementObligationCreatedFact> = emptyList(),
+    val attempts: List<SettlementAttemptStartedFact> = emptyList(),
     val breaks: List<SettlementBreakOpenedFact> = emptyList(),
     val repairs: List<SettlementRepairPostedFact> = emptyList(),
     val resolutions: List<SettlementResolvedFact> = emptyList()
 ) {
-    fun isEmpty(): Boolean = obligations.isEmpty() && breaks.isEmpty() && repairs.isEmpty() && resolutions.isEmpty()
+    fun isEmpty(): Boolean =
+        obligations.isEmpty() && attempts.isEmpty() && breaks.isEmpty() && repairs.isEmpty() && resolutions.isEmpty()
 }
 
 interface SettlementFactStore {
@@ -97,6 +113,7 @@ interface SettlementFactStore {
 
 class InMemorySettlementFactStore : SettlementFactStore {
     private val obligations = ConcurrentHashMap<String, SettlementObligationCreatedFact>()
+    private val attempts = ConcurrentHashMap<String, SettlementAttemptStartedFact>()
     private val breaks = ConcurrentHashMap<String, SettlementBreakOpenedFact>()
     private val repairs = ConcurrentHashMap<String, SettlementRepairPostedFact>()
     private val resolutions = ConcurrentHashMap<String, SettlementResolvedFact>()
@@ -106,6 +123,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
         val existing = factsByScenarioRunId(facts.scenarioRunId)
         validateSettlementFacts(existing.merge(facts))
         facts.obligations.forEach { obligations.putIfAbsent(it.settlementObligationId, it) }
+        facts.attempts.forEach { attempts.putIfAbsent(it.settlementAttemptId, it) }
         facts.breaks.forEach { breaks.putIfAbsent(it.settlementBreakId, it) }
         facts.repairs.forEach { repairs.putIfAbsent(it.settlementRepairId, it) }
         facts.resolutions.forEach { resolutions.putIfAbsent(it.settlementResolutionId, it) }
@@ -117,6 +135,7 @@ class InMemorySettlementFactStore : SettlementFactStore {
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
             obligations = obligations.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
+            attempts = attempts.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             breaks = breaks.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             repairs = repairs.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt },
             resolutions = resolutions.values.filter { it.scenarioRunId == scenarioRunId }.sortedBy { it.occurredAt }
@@ -129,6 +148,7 @@ data class PostgresSettlementSqlNames(
 ) {
     val schemaName = schemaOrDefault(schema)
     val obligations = qualify("obligations")
+    val attempts = qualify("attempts")
     val breaks = qualify("breaks")
     val repairs = qualify("repairs")
     val resolutions = qualify("resolutions")
@@ -158,6 +178,7 @@ class PostgresSettlementFactStore(
                     conn,
                     PostgresSchemaRequirements.settlementFacts(
                         obligations = names.obligations,
+                        attempts = names.attempts,
                         breaks = names.breaks,
                         repairs = names.repairs,
                         resolutions = names.resolutions
@@ -184,6 +205,23 @@ class PostgresSettlementFactStore(
                       cash_amount TEXT NOT NULL,
                       currency TEXT NOT NULL,
                       state TEXT NOT NULL CHECK (state = 'OBLIGATION_CREATED'),
+                      occurred_at TIMESTAMPTZ NOT NULL,
+                      inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.attempts} (
+                      settlement_attempt_id TEXT PRIMARY KEY,
+                      settlement_obligation_id TEXT NOT NULL,
+                      scenario_run_id TEXT NOT NULL,
+                      post_trade_profile_id TEXT NOT NULL DEFAULT 'ops-realistic-v1',
+                      post_trade_policy_version INTEGER NOT NULL DEFAULT 1,
+                      correlation_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      attempt_number INTEGER NOT NULL CHECK (attempt_number > 0),
+                      state TEXT NOT NULL CHECK (state = 'ATTEMPT_STARTED'),
                       occurred_at TIMESTAMPTZ NOT NULL,
                       inserted_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
@@ -258,6 +296,7 @@ class PostgresSettlementFactStore(
                 val existing = factsByScenarioRunId(conn, facts.scenarioRunId)
                 validateSettlementFacts(existing.merge(facts))
                 insertObligations(conn, facts.obligations)
+                insertAttempts(conn, facts.attempts)
                 insertBreaks(conn, facts.breaks)
                 insertRepairs(conn, facts.repairs)
                 insertResolutions(conn, facts.resolutions)
@@ -281,6 +320,7 @@ class PostgresSettlementFactStore(
         return SettlementFactBundle(
             scenarioRunId = scenarioRunId,
             obligations = queryObligations(conn, scenarioRunId),
+            attempts = queryAttempts(conn, scenarioRunId),
             breaks = queryBreaks(conn, scenarioRunId),
             repairs = queryRepairs(conn, scenarioRunId),
             resolutions = queryResolutions(conn, scenarioRunId)
@@ -316,6 +356,35 @@ class PostgresSettlementFactStore(
                 ps.setString(13, it.currency)
                 ps.setString(14, it.state)
                 ps.setTimestamp(15, Timestamp.from(it.occurredAt))
+                ps.addBatch()
+            }
+            ps.executeBatch()
+        }
+    }
+
+    private fun insertAttempts(conn: Connection, facts: List<SettlementAttemptStartedFact>) {
+        conn.prepareStatement(
+            """
+            INSERT INTO ${names.attempts}(
+              settlement_attempt_id, settlement_obligation_id, scenario_run_id,
+              post_trade_profile_id, post_trade_policy_version,
+              correlation_id, causation_id, attempt_number, state, occurred_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (settlement_attempt_id) DO NOTHING
+            """.trimIndent()
+        ).use { ps ->
+            facts.forEach {
+                ps.setString(1, it.settlementAttemptId)
+                ps.setString(2, it.settlementObligationId)
+                ps.setString(3, it.scenarioRunId)
+                ps.setString(4, it.postTradeProfileId)
+                ps.setInt(5, it.postTradePolicyVersion)
+                ps.setString(6, it.correlationId)
+                ps.setString(7, it.causationId)
+                ps.setInt(8, it.attemptNumber)
+                ps.setString(9, it.state)
+                ps.setTimestamp(10, Timestamp.from(it.occurredAt))
                 ps.addBatch()
             }
             ps.executeBatch()
@@ -432,6 +501,26 @@ class PostgresSettlementFactStore(
         }
     }
 
+    private fun queryAttempts(conn: Connection, scenarioRunId: String): List<SettlementAttemptStartedFact> {
+        conn.prepareStatement(
+            """
+            SELECT settlement_attempt_id, settlement_obligation_id, scenario_run_id,
+                   post_trade_profile_id, post_trade_policy_version, correlation_id, causation_id,
+                   attempt_number, state, occurred_at
+            FROM ${names.attempts}
+            WHERE scenario_run_id = ?
+            ORDER BY occurred_at, settlement_attempt_id
+            """.trimIndent()
+        ).use { ps ->
+            ps.setString(1, scenarioRunId)
+            ps.executeQuery().use { rs ->
+                val records = mutableListOf<SettlementAttemptStartedFact>()
+                while (rs.next()) records.add(rs.toAttempt())
+                return records
+            }
+        }
+    }
+
     private fun queryBreaks(conn: Connection, scenarioRunId: String): List<SettlementBreakOpenedFact> {
         conn.prepareStatement(
             """
@@ -493,13 +582,14 @@ class PostgresSettlementFactStore(
 
     private fun createIndexes(stmt: java.sql.Statement) {
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_obligations_run ON ${names.obligations}(scenario_run_id, occurred_at)")
+        stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_attempts_run ON ${names.attempts}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_breaks_run ON ${names.breaks}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_repairs_run ON ${names.repairs}(scenario_run_id, occurred_at)")
         stmt.execute("CREATE INDEX IF NOT EXISTS idx_settlement_resolutions_run ON ${names.resolutions}(scenario_run_id, occurred_at)")
     }
 
     private fun ensureSettlementEvidenceColumns(stmt: java.sql.Statement) {
-        listOf(names.obligations, names.breaks, names.repairs, names.resolutions).forEach { table ->
+        listOf(names.obligations, names.attempts, names.breaks, names.repairs, names.resolutions).forEach { table ->
             stmt.execute(
                 "ALTER TABLE $table ADD COLUMN IF NOT EXISTS post_trade_profile_id " +
                     "TEXT NOT NULL DEFAULT 'ops-realistic-v1'"
@@ -518,6 +608,7 @@ private fun SettlementFactBundle.merge(next: SettlementFactBundle): SettlementFa
     require(scenarioRunId == next.scenarioRunId) { "settlement fact scenarioRunId mismatch" }
     return copy(
         obligations = obligations.byId(next.obligations) { it.settlementObligationId },
+        attempts = attempts.byId(next.attempts) { it.settlementAttemptId },
         breaks = breaks.byId(next.breaks) { it.settlementBreakId },
         repairs = repairs.byId(next.repairs) { it.settlementRepairId },
         resolutions = resolutions.byId(next.resolutions) { it.settlementResolutionId }
@@ -540,6 +631,7 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
     val repairs = facts.repairs.associateBy { it.settlementRepairId }
     val profileEvidence = (
         facts.obligations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+            facts.attempts.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.breaks.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.repairs.map { it.postTradeProfileId to it.postTradePolicyVersion } +
             facts.resolutions.map { it.postTradeProfileId to it.postTradePolicyVersion }
@@ -557,6 +649,19 @@ private fun validateSettlementFacts(facts: SettlementFactBundle) {
         require(it.cashAmount.isNotBlank()) { "cashAmount is required" }
         require(it.currency.isNotBlank()) { "currency is required" }
         require(it.state == SettlementObligationCreatedState) { "obligation state must be $SettlementObligationCreatedState" }
+    }
+
+    facts.attempts.forEach {
+        requireCommon(it.scenarioRunId, facts.scenarioRunId, it.correlationId, it.causationId)
+        requirePostTradeProfileEvidence(it.postTradeProfileId, it.postTradePolicyVersion)
+        require(it.settlementAttemptId.isNotBlank()) { "settlementAttemptId is required" }
+        val obligation = obligations[it.settlementObligationId]
+        require(obligation != null) { "attempt must reference existing obligation" }
+        require(profileMatchesParent(it.postTradeProfileId, it.postTradePolicyVersion, obligation)) {
+            "attempt post-trade profile must match obligation"
+        }
+        require(it.attemptNumber > 0) { "attemptNumber must be positive" }
+        require(it.state == SettlementAttemptStartedState) { "attempt state must be $SettlementAttemptStartedState" }
     }
 
     facts.breaks.forEach {
@@ -657,6 +762,21 @@ private fun ResultSet.toObligation(): SettlementObligationCreatedFact {
         currency = getString(11),
         state = getString(12),
         occurredAt = getTimestamp(13).toInstant()
+    )
+}
+
+private fun ResultSet.toAttempt(): SettlementAttemptStartedFact {
+    return SettlementAttemptStartedFact(
+        settlementAttemptId = getString(1),
+        settlementObligationId = getString(2),
+        scenarioRunId = getString(3),
+        postTradeProfileId = getString(4),
+        postTradePolicyVersion = getInt(5),
+        correlationId = getString(6),
+        causationId = getString(7),
+        attemptNumber = getInt(8),
+        state = getString(9),
+        occurredAt = getTimestamp(10).toInstant()
     )
 }
 

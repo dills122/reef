@@ -11,6 +11,7 @@ data class SettlementObligationMaterializationResult(
     val scenarioRunId: String,
     val scannedTrades: Int,
     val materializedObligations: Int,
+    val materializedAttempts: Int,
     val skippedTrades: Int
 )
 
@@ -24,6 +25,7 @@ class TradeSettlementObligationMaterializer(
         val trades = runtimePersistence.trades().sortedWith(compareBy<TradeCreated> { it.occurredAt }.thenBy { it.tradeId })
         val eventsById = runtimePersistence.events().associateBy { it.eventId }
         val obligations = mutableListOf<SettlementObligationCreatedFact>()
+        val attempts = mutableListOf<SettlementAttemptStartedFact>()
         var skipped = 0
 
         trades.forEach { trade ->
@@ -60,7 +62,7 @@ class TradeSettlementObligationMaterializer(
                     .orEmpty()
             )
             val event = eventsById[trade.eventId]
-            obligations += obligationFact(
+            val obligation = obligationFact(
                 trade = trade,
                 buyOrder = buyOrder,
                 sellOrder = sellOrder,
@@ -69,13 +71,18 @@ class TradeSettlementObligationMaterializer(
                 profileId = selection.profileId,
                 policyVersion = selection.policyVersion
             )
+            obligations += obligation
+            if (selection.mode == InstantPostTradeMode) {
+                attempts += attemptFact(obligation)
+            }
         }
 
-        if (obligations.isNotEmpty()) {
+        if (obligations.isNotEmpty() || attempts.isNotEmpty()) {
             settlementFactStore.appendFacts(
                 SettlementFactBundle(
                     scenarioRunId = scenarioRunId,
-                    obligations = obligations
+                    obligations = obligations,
+                    attempts = attempts
                 )
             )
         }
@@ -83,6 +90,7 @@ class TradeSettlementObligationMaterializer(
             scenarioRunId = scenarioRunId,
             scannedTrades = trades.size,
             materializedObligations = obligations.size,
+            materializedAttempts = attempts.size,
             skippedTrades = skipped
         )
     }
@@ -114,6 +122,20 @@ class TradeSettlementObligationMaterializer(
         )
     }
 
+    private fun attemptFact(obligation: SettlementObligationCreatedFact): SettlementAttemptStartedFact {
+        return SettlementAttemptStartedFact(
+            settlementAttemptId = "settlement-attempt-${obligation.settlementObligationId}-1",
+            settlementObligationId = obligation.settlementObligationId,
+            scenarioRunId = obligation.scenarioRunId,
+            postTradeProfileId = obligation.postTradeProfileId,
+            postTradePolicyVersion = obligation.postTradePolicyVersion,
+            correlationId = obligation.correlationId,
+            causationId = obligation.settlementObligationId,
+            attemptNumber = 1,
+            occurredAt = obligation.occurredAt
+        )
+    }
+
     private fun cashAmount(trade: TradeCreated): String {
         val quantity = trade.quantityUnits.toBigIntegerOrNull()
             ?: throw IllegalArgumentException("trade quantityUnits must be an integer")
@@ -137,5 +159,9 @@ class TradeSettlementObligationMaterializer(
             1 -> values.single()
             else -> null
         }
+    }
+
+    private companion object {
+        const val InstantPostTradeMode = "instant-post-trade"
     }
 }
