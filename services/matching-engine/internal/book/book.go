@@ -144,8 +144,10 @@ func Restore(snapshot Snapshot) (*Book, bool) {
 	}
 	restored := New()
 	restored.nextSequence = snapshot.NextSequence
+	seenOrderIDs := make(map[string]bool, len(snapshot.Buys)+len(snapshot.Sells))
+	maxSequence := int64(-1)
 	for _, order := range snapshot.Buys {
-		if order.Side != domain.SideBuy {
+		if !validSnapshotOrder(order, domain.SideBuy, seenOrderIDs, &maxSequence) {
 			return nil, false
 		}
 		restored.Add(order.Side, RestingOrder{
@@ -155,7 +157,7 @@ func Restore(snapshot Snapshot) (*Book, bool) {
 		})
 	}
 	for _, order := range snapshot.Sells {
-		if order.Side != domain.SideSell {
+		if !validSnapshotOrder(order, domain.SideSell, seenOrderIDs, &maxSequence) {
 			return nil, false
 		}
 		restored.Add(order.Side, RestingOrder{
@@ -163,6 +165,9 @@ func Restore(snapshot Snapshot) (*Book, bool) {
 			LimitPrice: order.LimitPrice,
 			Sequence:   order.Sequence,
 		})
+	}
+	if snapshot.NextSequence < 0 || snapshot.NextSequence <= maxSequence {
+		return nil, false
 	}
 	if restored.Snapshot().Checksum != checksum(snapshot.withoutChecksum()) {
 		return nil, false
@@ -251,6 +256,20 @@ func (s *sideBook) snapshotOrders() []SnapshotOrder {
 func (s Snapshot) withoutChecksum() Snapshot {
 	s.Checksum = ""
 	return s
+}
+
+func validSnapshotOrder(order SnapshotOrder, side domain.Side, seenOrderIDs map[string]bool, maxSequence *int64) bool {
+	if order.Side != side || order.OrderID == "" || order.Sequence < 0 {
+		return false
+	}
+	if seenOrderIDs[order.OrderID] {
+		return false
+	}
+	seenOrderIDs[order.OrderID] = true
+	if order.Sequence > *maxSequence {
+		*maxSequence = order.Sequence
+	}
+	return true
 }
 
 func checksum(snapshot Snapshot) string {

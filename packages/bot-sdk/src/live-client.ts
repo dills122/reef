@@ -76,7 +76,8 @@ function stringValue(value: unknown): string {
 }
 
 function numberValue(value: unknown): number {
-  return typeof value === "number" ? value : Number(value ?? 0);
+  const parsed = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function stringArrayValue(value: unknown): readonly string[] {
@@ -276,8 +277,8 @@ export function createLiveOwnOrdersReadClientV1(
       orderId: order.orderId ?? "",
       instrumentId: order.instrumentId ?? "",
       side: (order.side as OwnOrderV1["side"]) ?? "BUY",
-      quantity: Number(order.quantityUnits),
-      remainingQuantity: Number(order.remainingQuantityUnits),
+      quantity: numberValue(order.quantityUnits),
+      remainingQuantity: numberValue(order.remainingQuantityUnits),
       ...(limitPrice === undefined ? {} : { limitPrice }),
       status,
     };

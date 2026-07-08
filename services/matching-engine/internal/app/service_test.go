@@ -440,6 +440,51 @@ func TestTerminalOrderRetentionLimitPrunesOldestTerminalState(t *testing.T) {
 	}
 }
 
+func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
+	service := NewService(WithTerminalOrderRetentionLimit(1))
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-resting",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+
+	rollback := service.BeginBatch([]string{"AAPL"})
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-failed-publish",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	if result.Accepted == nil || len(result.Trades) != 1 {
+		t.Fatalf("expected crossing command to mutate terminal state before rollback, got %#v", result)
+	}
+	if tracked := service.terminalRetention.snapshot(); len(tracked.order)-tracked.head == 0 {
+		t.Fatal("expected failed batch mutation to touch terminal retention before rollback")
+	}
+
+	rollback.Rollback(map[string][]string{"AAPL": {"ord-buy-failed-publish"}})
+
+	tracked := service.terminalRetention.snapshot()
+	if len(tracked.order)-tracked.head != 0 {
+		t.Fatalf("expected rollback to restore empty terminal retention state, got %+v", tracked)
+	}
+	if _, ok := service.OrderState("ord-buy-failed-publish"); ok {
+		t.Fatal("expected newly reserved order to be removed by rollback")
+	}
+	state, ok := service.OrderState("ord-sell-resting")
+	if !ok || state.Status != domain.OrderStatusAccepted || state.RemainingQuantity != "100" {
+		t.Fatalf("expected resting order state to be restored after rollback, got %#v", state)
+	}
+	if resting := service.RestingOrders("AAPL", domain.SideSell); resting != 1 {
+		t.Fatalf("expected restored sell liquidity after rollback, got %d", resting)
+	}
+}
+
 func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")

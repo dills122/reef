@@ -321,8 +321,9 @@ func (s *Service) bookFor(instrumentID string) *orderBook {
 // true today since a given instrument's commands are only ever processed by
 // one direct-consume shard/partition at a time.
 type BatchRollback struct {
-	service     *Service
-	instruments map[string]*instrumentRollback
+	service           *Service
+	instruments       map[string]*instrumentRollback
+	terminalRetention terminalOrderRetentionSnapshot
 }
 
 type instrumentRollback struct {
@@ -334,7 +335,11 @@ type instrumentRollback struct {
 // BeginBatch snapshots the order book and the order records resting in it
 // for each distinct instrument ID.
 func (s *Service) BeginBatch(instrumentIDs []string) *BatchRollback {
-	rollback := &BatchRollback{service: s, instruments: make(map[string]*instrumentRollback)}
+	rollback := &BatchRollback{
+		service:           s,
+		instruments:       make(map[string]*instrumentRollback),
+		terminalRetention: s.terminalRetention.snapshot(),
+	}
 	for _, instrumentID := range instrumentIDs {
 		if instrumentID == "" {
 			continue
@@ -377,6 +382,7 @@ func (s *Service) BeginBatch(instrumentIDs []string) *BatchRollback {
 // reserved orders that never existed before the batch are removed rather
 // than left behind. It is only valid to call once per BeginBatch snapshot.
 func (rb *BatchRollback) Rollback(touchedOrderIDs map[string][]string) {
+	rb.service.terminalRetention.restore(rb.terminalRetention)
 	for instrumentID, snap := range rb.instruments {
 		snap.book.mu.Lock()
 		if restored, ok := hotbook.Restore(snap.snapshot); ok {

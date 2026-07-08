@@ -99,6 +99,21 @@ function fakeFetch(routes) {
   assert.match(requestedUrls.at(-1), /orders\/history\?participantId=p1&instrumentId=AAPL&limit=1/);
 }
 
+// own orders: malformed numeric fields do not leak NaN into bot decisions
+{
+  const fetchImpl = fakeFetch([
+    [/orders\/current/, { orders: [{ orderId: "bad-qty", instrumentId: "AAPL", side: "BUY", quantityUnits: "not-a-number", remainingQuantityUnits: undefined, limitPrice: "", status: "UNKNOWN" }] }],
+  ]);
+  const client = createLiveOwnOrdersReadClientV1({ baseUrl: "http://venue", participantId: "p1", fetch: fetchImpl });
+  const current = await client.current();
+  assert.equal(current.ok, true);
+  assert.equal(current.value.length, 1);
+  assert.equal(current.value[0].quantity, 0);
+  assert.equal(current.value[0].remainingQuantity, 0);
+  assert.equal(current.value[0].limitPrice, undefined);
+  assert.equal(current.value[0].status, "REJECTED");
+}
+
 // data availability: exposes read source/freshness and projection lag
 {
   const fetchImpl = fakeFetch([
@@ -146,6 +161,50 @@ function fakeFetch(routes) {
   assert.equal(result.value.surfaces[0].freshness, "durable fact rows");
   assert.equal(result.value.surfaces[0].scope, "public-market-data");
   assert.deepEqual(result.value.surfaces[0].optionalQuery, ["limit", "before"]);
+}
+
+// data availability: malformed numeric fields normalize to zero instead of NaN
+{
+  const fetchImpl = fakeFetch([
+    [/data\/availability/, {
+      generatedAt: "2026-07-06T00:00:00Z",
+      source: "venue-event-batch",
+      projections: [{
+        projectionName: "runtime-normalized-venue-outcomes",
+        role: "canonical venue outcome projection",
+        projectedCount: "not-a-number",
+        lag: "also-bad",
+        watermarks: [{
+          projectionName: "runtime-normalized-venue-outcomes",
+          partition: "bad",
+          lastPartitionSequence: "bad",
+          canonicalMaxPartitionSequence: "bad",
+          lag: "bad",
+          updatedAt: "2026-07-06T00:00:01Z",
+          lastError: "",
+        }],
+      }],
+      surfaces: [{
+        name: "tradeTape",
+        endpoint: "/api/v1/market-data/trades/{instrumentId}",
+        source: "runtime.trades",
+        freshness: "durable fact rows",
+        scope: "public-market-data",
+        requiredQuery: [],
+        optionalQuery: [],
+        lag: "bad",
+        lastPartitionSequence: "bad",
+      }],
+    }],
+  ]);
+  const client = createLiveDataAvailabilityClientV1({ baseUrl: "http://venue", participantId: "p1", fetch: fetchImpl });
+  const result = await client.availability();
+  assert.equal(result.ok, true);
+  assert.equal(result.value.projections[0].projectedCount, 0);
+  assert.equal(result.value.projections[0].lag, 0);
+  assert.equal(result.value.projections[0].watermarks[0].partition, 0);
+  assert.equal(result.value.surfaces[0].lag, 0);
+  assert.equal(result.value.surfaces[0].lastPartitionSequence, 0);
 }
 
 // createLiveBotContextV1 wires safe.cancel against live current-orders read
