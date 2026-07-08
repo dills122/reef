@@ -62,6 +62,7 @@ object PostgresSchemaRequirements {
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         val orders = PostgresSchemaObject.parse(names.orders)
+        val submitResults = PostgresSchemaObject.parse(names.submitResults)
         return PostgresSchemaRequirement(
             tables = listOf(
                 names.referenceInstruments,
@@ -107,6 +108,12 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "payload_json", "jsonb"),
                 PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint"),
+                PostgresSchemaColumn(submitResults, "command_id", "text"),
+                PostgresSchemaColumn(submitResults, "event_id", "text"),
+                PostgresSchemaColumn(submitResults, "event_id_uuid", "uuid"),
+                PostgresSchemaColumn(submitResults, "occurred_at", "text"),
+                PostgresSchemaColumn(submitResults, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(submitResults, "result_type", "text"),
                 PostgresSchemaColumn(canonicalCommandResults, "command_id", "text"),
                 PostgresSchemaColumn(canonicalCommandResults, "partition_seq", "bigint"),
                 PostgresSchemaColumn(canonicalCommandResults, "stream_seq", "bigint"),

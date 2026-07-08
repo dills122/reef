@@ -310,8 +310,31 @@ class PostgresRuntimePersistence(
                       engine_order_id TEXT NOT NULL,
                       code TEXT NOT NULL,
                       reason TEXT NOT NULL,
-                      occurred_at TEXT NOT NULL
+                      occurred_at TEXT NOT NULL,
+                      event_id_uuid UUID,
+                      occurred_at_ts TIMESTAMPTZ
                     )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    ALTER TABLE ${names.submitResults}
+                    ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
+                    ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_submit_results_occurred_typed
+                    ON ${names.submitResults}(occurred_at_ts DESC, command_id)
+                    WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_submit_results_event_uuid
+                    ON ${names.submitResults}(event_id_uuid)
+                    WHERE event_id_uuid IS NOT NULL
                     """.trimIndent()
                 )
                 stmt.execute(

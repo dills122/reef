@@ -138,7 +138,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0016_order_lifecycle_state.sql",
                     "runtime/0027_audit_persistence_hardening.sql",
                     "runtime/0028_typed_top_of_book_facts.sql",
-                    "runtime/0029_typed_runtime_event_facts.sql"
+                    "runtime/0029_typed_runtime_event_facts.sql",
+                    "runtime/0030_typed_submit_result_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -379,6 +380,42 @@ class PostgresSchemaMigrationIntegrationTest {
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val submitResultColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'submit_results'
+                  AND column_name IN (
+                    'command_id',
+                    'event_id',
+                    'event_id_uuid',
+                    'occurred_at',
+                    'occurred_at_ts',
+                    'result_type'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "command_id:text",
+                    "event_id:text",
+                    "event_id_uuid:uuid",
+                    "occurred_at:text",
+                    "occurred_at_ts:timestamp with time zone",
+                    "result_type:text"
+                ),
+                submitResultColumns
             )
 
             val topOfBookColumns = conn.prepareStatement(

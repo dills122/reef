@@ -54,6 +54,7 @@ Implemented here:
 - `runtime/0029_typed_runtime_event_facts.sql` adds typed `event_id_uuid` and `occurred_at_ts` companion columns while preserving the existing text columns.
 - A `runtime.runtime_events_set_typed_facts()` trigger backfills those typed facts for new event inserts from both Kotlin and database persistence routines.
 - Recent-event reads now prefer native timestamp ordering with deterministic text/id fallback.
+- `runtime/0030_typed_submit_result_facts.sql` applies the same typed companion pattern to `runtime.submit_results` for command-result audit facts.
 
 ### 3. High-volume append tables are not physically partitioned
 
@@ -168,11 +169,12 @@ Target:
 - Added orphan-child cleanup to `scripts/dev/command-log-prune.mjs`.
 - Added typed top-of-book projection facts and native lifecycle book indexes in `runtime/0028_typed_top_of_book_facts.sql`.
 - Added typed runtime event identity/time companion facts and native recent-event indexes in `runtime/0029_typed_runtime_event_facts.sql`.
+- Added typed submit-result event/time companion facts and native audit indexes in `runtime/0030_typed_submit_result_facts.sql`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
 ### Next service-spanning work
 
-- Typed runtime facts beyond top-of-book and runtime event companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
+- Typed runtime facts beyond top-of-book, runtime event, and submit-result companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
 - Final runtime event schema reconciliation once the compatibility text surface can be retired.
 - Physical partition plan and measured migration path.
 - Canonical command model cleanup.

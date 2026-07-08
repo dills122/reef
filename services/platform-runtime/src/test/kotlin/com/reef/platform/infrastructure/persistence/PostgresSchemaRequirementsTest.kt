@@ -67,6 +67,20 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.submit_results.command_id:text",
+                "runtime.submit_results.event_id:text",
+                "runtime.submit_results.event_id_uuid:uuid",
+                "runtime.submit_results.occurred_at:text",
+                "runtime.submit_results.occurred_at_ts:timestamp with time zone",
+                "runtime.submit_results.result_type:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.submit_results" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.canonical_command_results.command_id:text",
                 "runtime.canonical_command_results.partition_seq:bigint",
                 "runtime.canonical_command_results.stream_seq:bigint",
