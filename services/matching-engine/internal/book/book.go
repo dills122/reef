@@ -97,6 +97,44 @@ func (b *Book) Add(side domain.Side, order RestingOrder) {
 	b.orders[order.OrderID] = node
 }
 
+func (b *Book) RestoreRestingOrder(side domain.Side, order RestingOrder) {
+	if existing, ok := b.orders[order.OrderID]; ok {
+		b.removeNode(existing)
+	}
+	sideBook := b.side(side)
+	level := sideBook.level(order.LimitPrice)
+	node := &orderNode{
+		order: order,
+		side:  side,
+		level: level,
+	}
+	insertBefore := level.head
+	for insertBefore != nil && insertBefore.order.Sequence < order.Sequence {
+		insertBefore = insertBefore.next
+	}
+	switch {
+	case insertBefore == nil && level.tail == nil:
+		level.head = node
+		level.tail = node
+	case insertBefore == nil:
+		node.prev = level.tail
+		level.tail.next = node
+		level.tail = node
+	case insertBefore.prev == nil:
+		node.next = insertBefore
+		insertBefore.prev = node
+		level.head = node
+	default:
+		node.prev = insertBefore.prev
+		node.next = insertBefore
+		insertBefore.prev.next = node
+		insertBefore.prev = node
+	}
+	level.count++
+	sideBook.total++
+	b.orders[order.OrderID] = node
+}
+
 func (b *Book) Best(side domain.Side) (RestingOrder, bool) {
 	level, ok := b.side(side).bestLevel()
 	if !ok || level.head == nil {
@@ -135,6 +173,22 @@ func (b *Book) LevelCount(side domain.Side) int {
 		return true
 	})
 	return count
+}
+
+func (b *Book) RestingOrder(orderID string) (domain.Side, RestingOrder, bool) {
+	node, ok := b.orders[orderID]
+	if !ok {
+		return "", RestingOrder{}, false
+	}
+	return node.side, node.order, true
+}
+
+func (b *Book) NextSequence() int64 {
+	return b.nextSequence
+}
+
+func (b *Book) SetNextSequence(nextSequence int64) {
+	b.nextSequence = nextSequence
 }
 
 func (b *Book) ForEachCrossingResting(incomingSide domain.Side, limitPrice int64, visit func(RestingOrder) bool) {

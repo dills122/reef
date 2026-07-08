@@ -51,6 +51,23 @@ func TestBookRemoveUnlinksOrderWithoutScanningPricePriority(t *testing.T) {
 	assertIDs(t, ids, expected)
 }
 
+func TestBookRestoreRestingOrderPreservesSequencePriority(t *testing.T) {
+	book := New()
+	first := book.NewRestingOrder("s1", 100)
+	second := book.NewRestingOrder("s2", 100)
+	third := book.NewRestingOrder("s3", 100)
+	book.Add(domain.SideSell, first)
+	book.Add(domain.SideSell, second)
+	book.Add(domain.SideSell, third)
+
+	if !book.Remove("s1") {
+		t.Fatal("expected remove to find s1")
+	}
+	book.RestoreRestingOrder(domain.SideSell, first)
+
+	assertIDs(t, popIDs(t, book, domain.SideSell, 3), []string{"s1", "s2", "s3"})
+}
+
 func TestBookDeletesEmptyPriceLevelAndExposesNextBest(t *testing.T) {
 	book := New()
 	book.Add(domain.SideBuy, book.NewRestingOrder("b1", 101))

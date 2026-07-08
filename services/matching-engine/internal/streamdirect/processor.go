@@ -284,7 +284,7 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		venueSessionID := deliveryVenueSessionIDs[i]
 		instrumentID := deliveryInstrumentIDs[i]
 		commandType := deliveryCommandTypes[i]
-		outcome, supported := p.processDelivery(delivery, commandType, venueSessionID, instrumentID)
+		outcome, supported := p.processDelivery(rollback, delivery, commandType, venueSessionID, instrumentID)
 
 		var fact CommandOutcomeFact
 		switch {
@@ -395,7 +395,7 @@ type processedOutcome struct {
 	DecodeError    string
 }
 
-func (p *Processor) processDelivery(delivery CommandDelivery, commandType string, venueSessionID string, instrumentID string) (processedOutcome, bool) {
+func (p *Processor) processDelivery(rollback *app.BatchRollback, delivery CommandDelivery, commandType string, venueSessionID string, instrumentID string) (processedOutcome, bool) {
 	switch commandType {
 	case "SubmitOrder":
 		var command domain.SubmitOrder
@@ -408,7 +408,7 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 		if command.VenueSessionID == "" {
 			command.VenueSessionID = venueSessionID
 		}
-		result := p.service.SubmitOrder(command)
+		result := p.service.SubmitOrderInBatch(rollback, command)
 		result.AcceptedOrder = acceptedOrderFact(command, result)
 		return processedOutcome{
 			CommandID:      command.CommandID,
@@ -430,7 +430,7 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 			VenueSessionID: venueSessionID,
 			InstrumentID:   instrumentID,
 			OrderID:        command.OrderID,
-			Result:         p.service.ModifyOrder(command),
+			Result:         p.service.ModifyOrderInBatch(rollback, command),
 		}, true
 	case "CancelOrder":
 		var command domain.CancelOrder
@@ -445,7 +445,7 @@ func (p *Processor) processDelivery(delivery CommandDelivery, commandType string
 			VenueSessionID: venueSessionID,
 			InstrumentID:   instrumentID,
 			OrderID:        command.OrderID,
-			Result:         p.service.CancelOrder(command),
+			Result:         p.service.CancelOrderInBatch(rollback, command),
 		}, true
 	default:
 		return processedOutcome{CommandID: bestEffortCommandID(delivery.Data())}, false

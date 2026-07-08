@@ -1010,9 +1010,10 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 		LimitPrice:    "150250000000",
 		Currency:      "USD",
 	})
+	beforeChecksum := service.Snapshot().Checksum
 
 	rollback := service.BeginBatch([]BookScope{{InstrumentID: "AAPL"}})
-	result := service.SubmitOrder(domain.SubmitOrder{
+	result := service.SubmitOrderInBatch(rollback, domain.SubmitOrder{
 		OrderID:       "ord-buy-failed-publish",
 		InstrumentID:  "AAPL",
 		Side:          domain.SideBuy,
@@ -1042,6 +1043,9 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 	}
 	if resting := service.RestingOrders("AAPL", domain.SideSell); resting != 1 {
 		t.Fatalf("expected restored sell liquidity after rollback, got %d", resting)
+	}
+	if afterChecksum := service.Snapshot().Checksum; afterChecksum != beforeChecksum {
+		t.Fatalf("expected rollback checksum %s, got %s", beforeChecksum, afterChecksum)
 	}
 }
 

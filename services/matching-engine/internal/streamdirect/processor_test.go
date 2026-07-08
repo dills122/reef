@@ -673,6 +673,80 @@ func TestScenario3_MatchingEngineFailsBeforeEventBatchPublishLeavesCommandOffset
 	}
 }
 
+func TestPublishFailureRollbackRestoresPassiveMatchedLiquidity(t *testing.T) {
+	service := app.NewService()
+	seed := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-resting-sell",
+		VenueSessionID: "session",
+		InstrumentID:   "STK001",
+		ParticipantID:  "participant-2",
+		AccountID:      "account-2",
+		Side:           domain.SideSell,
+		QuantityUnits:  "100",
+		LimitPrice:     "100000000000",
+		Currency:       "USD",
+	})
+	if seed.Accepted == nil {
+		t.Fatalf("expected resting seed accepted, got %#v", seed)
+	}
+
+	payload := map[string]string{
+		"commandId":      "cmd-rollback-match",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-taking-buy",
+		"venueSessionId": "session",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "101000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	}
+	failingPublisher := &fakePublisher{err: errors.New("publish failed")}
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 51, payload)
+	firstProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{first}}, failingPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := firstProcessor.ProcessOnce(context.Background()); err == nil {
+		t.Fatal("expected publish failure")
+	}
+
+	if _, ok := service.OrderState("ord-taking-buy"); ok {
+		t.Fatal("expected failed-publish taker to be removed from order state")
+	}
+	restored, ok := service.OrderState("ord-resting-sell")
+	if !ok || restored.Status != domain.OrderStatusAccepted || restored.RemainingQuantity != "100" {
+		t.Fatalf("expected passive resting sell restored after rollback, got %#v", restored)
+	}
+	if got := service.RestingOrdersInSession("session", "STK001", domain.SideSell); got != 1 {
+		t.Fatalf("expected restored sell to rest after rollback, got %d", got)
+	}
+
+	successPublisher := &fakePublisher{}
+	redelivered := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 51, payload)
+	redeliveredProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redelivered}}, successPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := redeliveredProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("redelivered ProcessOnce returned error: %v", err)
+	}
+	if len(successPublisher.batches) != 1 || len(successPublisher.batches[0].Outcomes) != 1 {
+		t.Fatalf("expected one redelivered outcome batch, got %#v", successPublisher.batches)
+	}
+	outcome := successPublisher.batches[0].Outcomes[0]
+	if outcome.Status != "accepted" || len(outcome.Result.Trades) != 1 {
+		t.Fatalf("expected redelivery to match restored liquidity, got %#v", outcome)
+	}
+}
+
 type fakeSource struct {
 	deliveries []CommandDelivery
 	fetchErr   error
