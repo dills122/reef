@@ -62,6 +62,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0015_market_data_snapshots.sql',
                   'runtime/0016_order_lifecycle_state.sql',
                   'runtime/0027_audit_persistence_hardening.sql',
+                  'runtime/0028_typed_top_of_book_facts.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -135,7 +136,13 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0014_lifecycle_command_outcome_projection.sql",
                     "runtime/0015_market_data_snapshots.sql",
                     "runtime/0016_order_lifecycle_state.sql",
-                    "runtime/0027_audit_persistence_hardening.sql"
+                    "runtime/0027_audit_persistence_hardening.sql",
+                    "runtime/0028_typed_top_of_book_facts.sql",
+                    "runtime/0029_typed_runtime_event_facts.sql",
+                    "runtime/0030_typed_submit_result_facts.sql",
+                    "runtime/0031_typed_execution_trade_facts.sql",
+                    "runtime/0032_typed_order_facts.sql",
+                    "runtime/0033_typed_canonical_time_facts.sql"
                 ),
                 appliedMigrations
             )
@@ -348,7 +355,9 @@ class PostgresSchemaMigrationIntegrationTest {
                   AND table_name = 'runtime_events'
                   AND column_name IN (
                     'event_id',
+                    'event_id_uuid',
                     'occurred_at',
+                    'occurred_at_ts',
                     'actor_id',
                     'payload_json',
                     'sequence_number'
@@ -367,11 +376,217 @@ class PostgresSchemaMigrationIntegrationTest {
                 listOf(
                     "actor_id:text",
                     "event_id:text",
+                    "event_id_uuid:uuid",
                     "occurred_at:text",
+                    "occurred_at_ts:timestamp with time zone",
                     "payload_json:jsonb",
                     "sequence_number:bigint"
                 ),
                 runtimeEventColumns
+            )
+
+            val submitResultColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'submit_results'
+                  AND column_name IN (
+                    'command_id',
+                    'event_id',
+                    'event_id_uuid',
+                    'occurred_at',
+                    'occurred_at_ts',
+                    'result_type'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "command_id:text",
+                    "event_id:text",
+                    "event_id_uuid:uuid",
+                    "occurred_at:text",
+                    "occurred_at_ts:timestamp with time zone",
+                    "result_type:text"
+                ),
+                submitResultColumns
+            )
+
+            val executionTradeColumns = conn.prepareStatement(
+                """
+                SELECT table_name || '.' || column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND (
+                    (table_name = 'executions' AND column_name IN (
+                      'event_id',
+                      'event_id_uuid',
+                      'quantity_units_num',
+                      'execution_price_num',
+                      'occurred_at',
+                      'occurred_at_ts'
+                    ))
+                    OR (table_name = 'trades' AND column_name IN (
+                      'event_id',
+                      'event_id_uuid',
+                      'quantity_units_num',
+                      'price_num',
+                      'occurred_at',
+                      'occurred_at_ts'
+                    ))
+                  )
+                ORDER BY table_name, column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "executions.event_id:text",
+                    "executions.event_id_uuid:uuid",
+                    "executions.execution_price_num:numeric",
+                    "executions.occurred_at:text",
+                    "executions.occurred_at_ts:timestamp with time zone",
+                    "executions.quantity_units_num:numeric",
+                    "trades.event_id:text",
+                    "trades.event_id_uuid:uuid",
+                    "trades.occurred_at:text",
+                    "trades.occurred_at_ts:timestamp with time zone",
+                    "trades.price_num:numeric",
+                    "trades.quantity_units_num:numeric"
+                ),
+                executionTradeColumns
+            )
+
+            val orderColumns = conn.prepareStatement(
+                """
+                SELECT column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND table_name = 'orders'
+                  AND column_name IN (
+                    'accepted_at',
+                    'accepted_at_ts',
+                    'quantity_units_num',
+                    'limit_price_num',
+                    'client_order_id',
+                    'run_id',
+                    'venue_session_id'
+                  )
+                ORDER BY column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "accepted_at:text",
+                    "accepted_at_ts:timestamp with time zone",
+                    "client_order_id:text",
+                    "limit_price_num:numeric",
+                    "quantity_units_num:numeric",
+                    "run_id:text",
+                    "venue_session_id:text"
+                ),
+                orderColumns
+            )
+
+            val canonicalTypedTimeColumns = conn.prepareStatement(
+                """
+                SELECT table_name || '.' || column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND (
+                    (table_name = 'canonical_command_results' AND column_name IN (
+                      'accepted_at_ts',
+                      'completed_at_ts'
+                    ))
+                    OR (table_name = 'canonical_venue_events' AND column_name = 'emitted_at_ts')
+                    OR (table_name = 'canonical_venue_event_batches' AND column_name = 'created_at_ts')
+                    OR (table_name = 'canonical_command_outcomes' AND column_name = 'occurred_at_ts')
+                  )
+                ORDER BY table_name, column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "canonical_command_outcomes.occurred_at_ts:timestamp with time zone",
+                    "canonical_command_results.accepted_at_ts:timestamp with time zone",
+                    "canonical_command_results.completed_at_ts:timestamp with time zone",
+                    "canonical_venue_event_batches.created_at_ts:timestamp with time zone",
+                    "canonical_venue_events.emitted_at_ts:timestamp with time zone"
+                ),
+                canonicalTypedTimeColumns
+            )
+
+            val topOfBookColumns = conn.prepareStatement(
+                """
+                SELECT table_name || '.' || column_name || ':' || data_type AS column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'runtime'
+                  AND (
+                    (table_name = 'order_lifecycle_state' AND column_name IN (
+                      'original_quantity_units_num',
+                      'remaining_quantity_units_num',
+                      'filled_quantity_units_num',
+                      'limit_price_num'
+                    ))
+                    OR
+                    (table_name = 'market_data_snapshots' AND column_name IN (
+                      'best_bid_price_num',
+                      'best_bid_quantity_num',
+                      'best_ask_price_num',
+                      'best_ask_quantity_num'
+                    ))
+                  )
+                ORDER BY table_name, column_name
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableListOf<String>()
+                    while (rs.next()) rows.add(rs.getString("column_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                listOf(
+                    "market_data_snapshots.best_ask_price_num:numeric",
+                    "market_data_snapshots.best_ask_quantity_num:numeric",
+                    "market_data_snapshots.best_bid_price_num:numeric",
+                    "market_data_snapshots.best_bid_quantity_num:numeric",
+                    "order_lifecycle_state.filled_quantity_units_num:numeric",
+                    "order_lifecycle_state.limit_price_num:numeric",
+                    "order_lifecycle_state.original_quantity_units_num:numeric",
+                    "order_lifecycle_state.remaining_quantity_units_num:numeric"
+                ),
+                topOfBookColumns
             )
 
             val runtimeFunctions = conn.prepareStatement(

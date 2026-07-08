@@ -122,6 +122,12 @@ Immediate low-risk hardening from that audit is included in the command-log migr
    - Preserve existing public API wire shapes while changing DB storage types.
    - Add compatibility cleanup for existing rows that cannot cast safely, with explicit failure or quarantine behavior instead of silent coercion.
    - Verification: clean-stack migration apply, migrated-stack apply, Postgres schema integration test for column types, projector replay/idempotency checks, market-data/order read smoke, and an `EXPLAIN` check for top-of-book/index-sensitive queries.
+   - Checkpoint: `runtime/0028_typed_top_of_book_facts.sql` adds typed numeric companion columns for top-of-book lifecycle and market-data projection facts.
+   - Checkpoint: `runtime/0029_typed_runtime_event_facts.sql` adds typed runtime event identity/time companion columns, typed ordering indexes, and a trigger to keep new writes populated.
+   - Checkpoint: `runtime/0030_typed_submit_result_facts.sql` adds typed command-result event/time companion columns, typed audit indexes, and a trigger for persisted submit outcomes.
+   - Checkpoint: `runtime/0031_typed_execution_trade_facts.sql` adds typed execution/trade event, time, quantity, and price companion columns plus typed history and intraday-bar indexes.
+   - Checkpoint: `runtime/0032_typed_order_facts.sql` adds typed order accepted-time, quantity, and limit-price companion columns plus typed order-history indexes.
+   - Checkpoint: `runtime/0033_typed_canonical_time_facts.sql` adds typed canonical command, venue-event, batch, and outcome timestamp companions for audit/range queries.
 4. Reconcile the runtime event schema so `runtime.runtime_events` has one intentional typed contract instead of the current `0002` typed backbone followed by `0003` text compatibility.
 5. Add a physical partition plan for high-volume append/canonical history tables before production-scale retention and replay data accumulates.
 6. Mark `runtime.canonical_command_results` as legacy/compat or consolidate canonical command consumers onto `runtime.canonical_command_outcomes`.

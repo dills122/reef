@@ -54,8 +54,53 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.orders.client_order_id:text",
+                "runtime.orders.run_id:text",
+                "runtime.orders.venue_session_id:text",
+                "runtime.orders.quantity_units_num:numeric",
+                "runtime.orders.limit_price_num:numeric",
+                "runtime.orders.accepted_at:text",
+                "runtime.orders.accepted_at_ts:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.orders" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.executions.event_id:text",
+                "runtime.executions.event_id_uuid:uuid",
+                "runtime.executions.quantity_units_num:numeric",
+                "runtime.executions.execution_price_num:numeric",
+                "runtime.executions.occurred_at:text",
+                "runtime.executions.occurred_at_ts:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.executions" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.trades.event_id:text",
+                "runtime.trades.event_id_uuid:uuid",
+                "runtime.trades.quantity_units_num:numeric",
+                "runtime.trades.price_num:numeric",
+                "runtime.trades.occurred_at:text",
+                "runtime.trades.occurred_at_ts:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.trades" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.runtime_events.event_id:text",
+                "runtime.runtime_events.event_id_uuid:uuid",
                 "runtime.runtime_events.occurred_at:text",
+                "runtime.runtime_events.occurred_at_ts:timestamp with time zone",
                 "runtime.runtime_events.actor_id:text",
                 "runtime.runtime_events.payload_json:jsonb",
                 "runtime.runtime_events.sequence_number:bigint"
@@ -67,10 +112,26 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.submit_results.command_id:text",
+                "runtime.submit_results.event_id:text",
+                "runtime.submit_results.event_id_uuid:uuid",
+                "runtime.submit_results.occurred_at:text",
+                "runtime.submit_results.occurred_at_ts:timestamp with time zone",
+                "runtime.submit_results.result_type:text"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.submit_results" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.canonical_command_results.command_id:text",
                 "runtime.canonical_command_results.partition_seq:bigint",
                 "runtime.canonical_command_results.stream_seq:bigint",
-                "runtime.canonical_command_results.result_payload:jsonb"
+                "runtime.canonical_command_results.result_payload:jsonb",
+                "runtime.canonical_command_results.accepted_at_ts:timestamp with time zone",
+                "runtime.canonical_command_results.completed_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_command_results" }
@@ -81,7 +142,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.canonical_venue_events.event_id:text",
                 "runtime.canonical_venue_events.event_seq:bigint",
-                "runtime.canonical_venue_events.payload:jsonb"
+                "runtime.canonical_venue_events.payload:jsonb",
+                "runtime.canonical_venue_events.emitted_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_venue_events" }
@@ -92,7 +154,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.canonical_venue_event_batches.batch_id:text",
                 "runtime.canonical_venue_event_batches.payload_checksum:text",
-                "runtime.canonical_venue_event_batches.payload_json:jsonb"
+                "runtime.canonical_venue_event_batches.payload_json:jsonb",
+                "runtime.canonical_venue_event_batches.created_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_venue_event_batches" }
@@ -103,7 +166,8 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "runtime.canonical_command_outcomes.command_id:text",
                 "runtime.canonical_command_outcomes.stream_sequence:bigint",
-                "runtime.canonical_command_outcomes.result_payload:jsonb"
+                "runtime.canonical_command_outcomes.result_payload:jsonb",
+                "runtime.canonical_command_outcomes.occurred_at_ts:timestamp with time zone"
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_command_outcomes" }
@@ -125,8 +189,12 @@ class PostgresSchemaRequirementsTest {
         assertEquals(
             setOf(
                 "runtime.order_lifecycle_state.order_id:text",
+                "runtime.order_lifecycle_state.original_quantity_units_num:numeric",
                 "runtime.order_lifecycle_state.remaining_quantity_units:text",
+                "runtime.order_lifecycle_state.remaining_quantity_units_num:numeric",
                 "runtime.order_lifecycle_state.filled_quantity_units:text",
+                "runtime.order_lifecycle_state.filled_quantity_units_num:numeric",
+                "runtime.order_lifecycle_state.limit_price_num:numeric",
                 "runtime.order_lifecycle_state.status:text"
             ),
             requirements.columns
@@ -139,6 +207,10 @@ class PostgresSchemaRequirementsTest {
                 "runtime.market_data_snapshots.projection_name:text",
                 "runtime.market_data_snapshots.source_projection_name:text",
                 "runtime.market_data_snapshots.instrument_id:text",
+                "runtime.market_data_snapshots.best_bid_price_num:numeric",
+                "runtime.market_data_snapshots.best_bid_quantity_num:numeric",
+                "runtime.market_data_snapshots.best_ask_price_num:numeric",
+                "runtime.market_data_snapshots.best_ask_quantity_num:numeric",
                 "runtime.market_data_snapshots.last_partition_seq:bigint",
                 "runtime.market_data_snapshots.lag:bigint"
             ),

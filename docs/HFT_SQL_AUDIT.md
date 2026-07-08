@@ -50,6 +50,15 @@ Target:
 - Restore typed event identity/time in a forward migration.
 - Update Kotlin bootstrap validation, mappers, replay queries, and event save/read tests in the same slice.
 
+Implemented here:
+- `runtime/0029_typed_runtime_event_facts.sql` adds typed `event_id_uuid` and `occurred_at_ts` companion columns while preserving the existing text columns.
+- A `runtime.runtime_events_set_typed_facts()` trigger backfills those typed facts for new event inserts from both Kotlin and database persistence routines.
+- Recent-event reads now prefer native timestamp ordering with deterministic text/id fallback.
+- `runtime/0030_typed_submit_result_facts.sql` applies the same typed companion pattern to `runtime.submit_results` for command-result audit facts.
+- `runtime/0031_typed_execution_trade_facts.sql` adds typed execution/trade event, time, quantity, and price companion facts for fills, trade tape, and intraday bars.
+- `runtime/0032_typed_order_facts.sql` adds typed accepted-time, quantity, and limit-price companion facts for accepted orders.
+- `runtime/0033_typed_canonical_time_facts.sql` adds typed canonical command, venue-event, batch, and outcome timestamp companions for audit and range queries.
+
 ### 3. High-volume append tables are not physically partitioned
 
 Priority: P1
@@ -126,6 +135,11 @@ Target:
 - Move price and remaining quantity to typed columns.
 - Add side-aware indexes that satisfy best bid/ask `ORDER BY ... LIMIT 1` patterns without regex filters or casts.
 
+Implemented here:
+- `runtime/0028_typed_top_of_book_facts.sql` adds typed numeric companion columns for lifecycle book facts and top-of-book snapshots.
+- The lifecycle and market-data projection routines now maintain those numeric facts while preserving existing text columns for API compatibility.
+- Native bid/ask indexes on `runtime.order_lifecycle_state` replace the transitional text-cast expression index for top-of-book access.
+
 ### 9. Boundary risk/collar facts need typed constraints
 
 Priority: P3
@@ -156,12 +170,18 @@ Target:
 - Added command-log integrity diagnostics in `command_log/0014_integrity_audit_views.sql`.
 - Added `make dev-command-log-integrity-check`.
 - Added orphan-child cleanup to `scripts/dev/command-log-prune.mjs`.
+- Added typed top-of-book projection facts and native lifecycle book indexes in `runtime/0028_typed_top_of_book_facts.sql`.
+- Added typed runtime event identity/time companion facts and native recent-event indexes in `runtime/0029_typed_runtime_event_facts.sql`.
+- Added typed submit-result event/time companion facts and native audit indexes in `runtime/0030_typed_submit_result_facts.sql`.
+- Added typed execution/trade market facts and native history/bar indexes in `runtime/0031_typed_execution_trade_facts.sql`.
+- Added typed accepted-order facts and native order-history indexes in `runtime/0032_typed_order_facts.sql`.
+- Added typed canonical timestamp facts and native audit/range indexes in `runtime/0033_typed_canonical_time_facts.sql`.
 - Documented typed facts, event schema, partitioning, JSONB, FK, unlogged queue, canonical model, and boundary-risk follow-ups.
 
 ### Next service-spanning work
 
-- Typed runtime facts across persistence, bootstrap validation, mappers, projectors, and smoke tests.
-- Runtime event typed schema reconciliation.
+- Typed runtime facts beyond top-of-book, runtime event, submit-result, execution, trade, order, and canonical timestamp companion columns, across persistence, bootstrap validation, mappers, projectors, and smoke tests.
+- Final runtime event schema reconciliation once the compatibility text surface can be retired.
 - Physical partition plan and measured migration path.
 - Canonical command model cleanup.
 - Risk/collar typed constraints.
