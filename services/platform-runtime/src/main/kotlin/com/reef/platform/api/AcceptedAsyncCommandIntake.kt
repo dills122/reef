@@ -177,16 +177,15 @@ class AcceptedAsyncCommandIntake(
         if (!accepted) {
             backpressured.incrementAndGet()
             laneBackpressured.incrementAndGet(lane)
-            val failed = record.copy(
-                status = CommandLogStatus.FAILED,
+            record.markFailed(
                 responseStatus = 429,
+                responsePayloadJson = "{}",
                 lastError = "accepted-async lane queue is full",
                 updatedAtEpochMs = System.currentTimeMillis()
             )
-            recordsByCommandId[command.commandId] = failed
             markTerminalStatus(command.commandId)
             commandIdByIdempotency.remove(idempotencyKeyValue, command.commandId)
-            return AcceptedAsyncCommandReceipt(accepted = false, backpressure = true, status = failed.toStatusView())
+            return AcceptedAsyncCommandReceipt(accepted = false, backpressure = true, status = record.toStatusView())
         }
 
         received.incrementAndGet()
@@ -280,10 +279,10 @@ class AcceptedAsyncCommandIntake(
     }
 
     private fun submit(lane: Int, command: AcceptedAsyncCommand): PendingAcceptedAsyncCommand {
-        recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
+        recordsByCommandId[command.record.commandId]?.let { record ->
             processing.incrementAndGet()
             laneProcessing.incrementAndGet(lane)
-            record.copy(status = CommandLogStatus.PROCESSING, updatedAtEpochMs = System.currentTimeMillis())
+            record.markProcessing(System.currentTimeMillis())
         }
         val future = HotPathMetrics.time("acceptedAsync.prepareSubmitOrder") {
             api.prepareSubmitOrderAsync(command.command)
@@ -309,18 +308,17 @@ class AcceptedAsyncCommandIntake(
                 api.persistSubmitOutcomes(listOf(outcome))
             }
             val payload = api.submitOrderResponse(outcome)
-            recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
+            recordsByCommandId[command.record.commandId]?.let { record ->
                 processing.decrementAndGet()
                 laneProcessing.decrementAndGet(lane)
                 completed.incrementAndGet()
                 laneCompleted.incrementAndGet(lane)
-                lastCompletedAtEpochMs.set(System.currentTimeMillis())
-                record.copy(
-                    status = CommandLogStatus.COMPLETED,
+                val now = System.currentTimeMillis()
+                lastCompletedAtEpochMs.set(now)
+                record.markCompleted(
                     responseStatus = 200,
                     responsePayloadJson = payload,
-                    lastError = "",
-                    updatedAtEpochMs = System.currentTimeMillis()
+                    updatedAtEpochMs = now
                 )
             }
             markTerminalStatus(command.record.commandId)
@@ -337,7 +335,7 @@ class AcceptedAsyncCommandIntake(
 
     private fun fail(lane: Int, command: AcceptedAsyncCommand, error: Throwable) {
         val message = error.message ?: error::class.simpleName ?: "unknown"
-        recordsByCommandId.computeIfPresent(command.record.commandId) { _, record ->
+        recordsByCommandId[command.record.commandId]?.let { record ->
             if (record.status == CommandLogStatus.PROCESSING) {
                 processing.decrementAndGet()
                 laneProcessing.decrementAndGet(lane)
@@ -345,8 +343,7 @@ class AcceptedAsyncCommandIntake(
             failed.incrementAndGet()
             laneFailed.incrementAndGet(lane)
             lastFailedAtEpochMs.set(System.currentTimeMillis())
-            record.copy(
-                status = CommandLogStatus.FAILED,
+            record.markFailed(
                 responseStatus = 503,
                 responsePayloadJson = "{}",
                 lastError = message,
@@ -451,18 +448,64 @@ private data class PendingAcceptedAsyncCommand(
     val completionRecorded: AtomicBoolean = AtomicBoolean(false)
 )
 
-private data class AcceptedAsyncCommandRecord(
+private class AcceptedAsyncCommandRecord(
     val commandId: String,
     val clientId: String,
     val route: String,
     val idempotencyKey: String,
     val lane: Int,
-    val status: CommandLogStatus,
-    val responseStatus: Int,
-    val responsePayloadJson: String,
-    val lastError: String,
-    val updatedAtEpochMs: Long
+    status: CommandLogStatus,
+    responseStatus: Int,
+    responsePayloadJson: String,
+    lastError: String,
+    updatedAtEpochMs: Long
 ) {
+    @Volatile
+    var status: CommandLogStatus = status
+        private set
+
+    @Volatile
+    var responseStatus: Int = responseStatus
+        private set
+
+    @Volatile
+    var responsePayloadJson: String = responsePayloadJson
+        private set
+
+    @Volatile
+    var lastError: String = lastError
+        private set
+
+    @Volatile
+    var updatedAtEpochMs: Long = updatedAtEpochMs
+        private set
+
+    fun markProcessing(updatedAtEpochMs: Long) {
+        status = CommandLogStatus.PROCESSING
+        this.updatedAtEpochMs = updatedAtEpochMs
+    }
+
+    fun markCompleted(responseStatus: Int, responsePayloadJson: String, updatedAtEpochMs: Long) {
+        this.responseStatus = responseStatus
+        this.responsePayloadJson = responsePayloadJson
+        lastError = ""
+        this.updatedAtEpochMs = updatedAtEpochMs
+        status = CommandLogStatus.COMPLETED
+    }
+
+    fun markFailed(
+        responseStatus: Int,
+        responsePayloadJson: String,
+        lastError: String,
+        updatedAtEpochMs: Long
+    ) {
+        this.responseStatus = responseStatus
+        this.responsePayloadJson = responsePayloadJson
+        this.lastError = lastError
+        this.updatedAtEpochMs = updatedAtEpochMs
+        status = CommandLogStatus.FAILED
+    }
+
     fun toStatusView(): CommandStatusView {
         return CommandStatusView(
             commandId = commandId,
