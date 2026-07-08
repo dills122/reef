@@ -42,7 +42,7 @@ func ActionMixForProfile(profile sessionconfig.StrategyProfile) (ActionMix, bool
 	submit, okS := intParam(profile.Params, "submitPct")
 	modify, okM := intParam(profile.Params, "modifyPct")
 	cancel, okC := intParam(profile.Params, "cancelPct")
-	if !okS || !okM || !okC || submit+modify+cancel != 100 {
+	if !okS || !okM || !okC || !validPct(submit) || !validPct(modify) || !validPct(cancel) || submit+modify+cancel != 100 {
 		return base, true
 	}
 	return ActionMix{SubmitPct: submit, ModifyPct: modify, CancelPct: cancel}, true
@@ -74,8 +74,15 @@ func intParam(params map[string]interface{}, key string) (int, bool) {
 	case int64:
 		return int(value), true
 	case float64:
+		if value != float64(int(value)) {
+			return 0, false
+		}
 		return int(value), true
 	default:
 		return 0, false
 	}
+}
+
+func validPct(value int) bool {
+	return value >= 0 && value <= 100
 }

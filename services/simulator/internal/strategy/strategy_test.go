@@ -75,6 +75,20 @@ func TestActionMixForProfileInvalidParamsFallsBackToDefault(t *testing.T) {
 	}
 }
 
+func TestActionMixForProfileRejectsNegativePctEvenWhenSumIsOneHundred(t *testing.T) {
+	profile := sessionconfig.StrategyProfile{
+		Strategy: "two_sided_quote",
+		Params:   map[string]interface{}{"submitPct": 120, "modifyPct": -20, "cancelPct": 0},
+	}
+	mix, ok := ActionMixForProfile(profile)
+	if !ok {
+		t.Fatal("expected fallback mix to succeed")
+	}
+	if mix != namedDefaults["two_sided_quote"] {
+		t.Fatalf("expected default mix on negative params, got %+v", mix)
+	}
+}
+
 func TestIntParam(t *testing.T) {
 	if _, ok := intParam(nil, "submitPct"); ok {
 		t.Fatal("expected nil params to fail")
@@ -90,6 +104,9 @@ func TestIntParam(t *testing.T) {
 	}
 	if v, ok := intParam(map[string]interface{}{"x": float64(7)}, "x"); !ok || v != 7 {
 		t.Fatalf("expected float64 7, got %d ok=%v", v, ok)
+	}
+	if _, ok := intParam(map[string]interface{}{"x": float64(7.5)}, "x"); ok {
+		t.Fatal("expected fractional float64 to fail")
 	}
 	if _, ok := intParam(map[string]interface{}{"x": "not-a-number"}, "x"); ok {
 		t.Fatal("expected unsupported type to fail")

@@ -220,6 +220,9 @@ func removeOrder(orders []trackedOrder, orderID string) []trackedOrder {
 }
 
 func profileForWorker(workerID, workers int, cfg Config) string {
+	if workers <= 0 {
+		return profileNoise
+	}
 	pct := workerID * 100 / workers
 	if pct < cfg.ProfileMixMM {
 		return profileMarketMaker
@@ -291,7 +294,7 @@ func chooseSessionActor(rng *rand.Rand, cfg Config) *sessionconfig.Actor {
 }
 
 func randomInt(rng *rand.Rand, min, max int) int {
-	if min == max {
+	if max <= min {
 		return min
 	}
 	return min + rng.Intn(max-min+1)
@@ -300,18 +303,28 @@ func randomInt(rng *rand.Rand, min, max int) int {
 func profileQuantity(rng *rand.Rand, cfg Config, profile string) int {
 	switch profile {
 	case profileMarketMaker:
-		return randomInt(rng, maxInt(cfg.QuantityMin, 25), minInt(cfg.QuantityMax, 250))
+		return profileQuantityBand(rng, cfg, 25, 250)
 	case profileInstitutional:
-		return randomInt(rng, maxInt(cfg.QuantityMin, 200), cfg.QuantityMax)
+		return profileQuantityBand(rng, cfg, 200, cfg.QuantityMax)
 	case profileRetail:
-		return randomInt(rng, cfg.QuantityMin, minInt(cfg.QuantityMax, 100))
+		return profileQuantityBand(rng, cfg, cfg.QuantityMin, 100)
 	default:
 		return randomInt(rng, cfg.QuantityMin, cfg.QuantityMax)
 	}
 }
 
+func profileQuantityBand(rng *rand.Rand, cfg Config, preferredMin, preferredMax int) int {
+	minValue := maxInt(cfg.QuantityMin, preferredMin)
+	maxValue := minInt(cfg.QuantityMax, preferredMax)
+	if maxValue < minValue {
+		minValue = cfg.QuantityMin
+		maxValue = cfg.QuantityMax
+	}
+	return randomInt(rng, minValue, maxValue)
+}
+
 func randomInt64(rng *rand.Rand, min, max int64) int64 {
-	if min == max {
+	if max <= min {
 		return min
 	}
 	return min + rng.Int63n(max-min+1)

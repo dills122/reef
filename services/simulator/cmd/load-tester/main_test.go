@@ -144,6 +144,47 @@ func TestRunTraceChecksSkipsWhenLimitDisabled(t *testing.T) {
 	}
 }
 
+func TestTraceSamplerIDsHandlesNonPositiveLimit(t *testing.T) {
+	seen := newTraceSampler(10)
+	seen.offer("trace-1")
+
+	if ids := seen.ids(0); len(ids) != 0 {
+		t.Fatalf("expected no trace IDs for zero limit, got %+v", ids)
+	}
+	if ids := seen.ids(-1); len(ids) != 0 {
+		t.Fatalf("expected no trace IDs for negative limit, got %+v", ids)
+	}
+}
+
+func TestTraceSamplerIgnoresBlankTraceID(t *testing.T) {
+	seen := newTraceSampler(10)
+	seen.offer("")
+	seen.offer("   ")
+	seen.offer("trace-1")
+
+	ids := seen.ids(10)
+	if len(ids) != 1 || ids[0] != "trace-1" {
+		t.Fatalf("expected only non-blank trace ID, got %+v", ids)
+	}
+}
+
+func TestBuildSummaryHandlesZeroDuration(t *testing.T) {
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+	report := buildSummary("s-zero", now, now, Config{}, []requestResult{
+		{Profile: "retail", Action: ActionSubmit, Success: true, Latency: time.Millisecond, StatusCode: 200},
+	}, loadScheduleSummary{})
+
+	if report.DurationSeconds != 0 {
+		t.Fatalf("expected zero duration, got %f", report.DurationSeconds)
+	}
+	if report.ThroughputRPS != 0 || report.AcceptedBusinessOpsRPS != 0 {
+		t.Fatalf("expected zero throughput rates for zero duration, got throughput=%f accepted=%f", report.ThroughputRPS, report.AcceptedBusinessOpsRPS)
+	}
+	if math.IsInf(report.Throughput.AttemptedPerSecond, 0) || math.IsInf(report.Throughput.AcceptedPerSecond, 0) {
+		t.Fatalf("expected finite throughput summary, got %+v", report.Throughput)
+	}
+}
+
 func TestFillResultParsesBoundaryErrorEnvelope(t *testing.T) {
 	result := requestResult{}
 	fillResult(
@@ -358,6 +399,16 @@ func TestTopProfileKeysSortsByRequests(t *testing.T) {
 	}
 	if keys[0] != "a" || keys[1] != "b" || keys[2] != "c" {
 		t.Fatalf("unexpected order: %+v", keys)
+	}
+}
+
+func TestTopProfileKeysHandlesNonPositiveLimit(t *testing.T) {
+	values := map[string]profileSummary{"a": {Requests: 1}}
+	if keys := topProfileKeys(values, 0); keys != nil {
+		t.Fatalf("expected nil keys for zero limit, got %+v", keys)
+	}
+	if keys := topProfileKeys(values, -1); keys != nil {
+		t.Fatalf("expected nil keys for negative limit, got %+v", keys)
 	}
 }
 
