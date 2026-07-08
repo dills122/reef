@@ -76,6 +76,15 @@ type SnapshotOrderRecord struct {
 	LastUpdatedAt     string             `json:"lastUpdatedAt"`
 }
 
+type BookStats struct {
+	InstrumentID    string `json:"instrumentId"`
+	BuyOrders       int    `json:"buyOrders"`
+	SellOrders      int    `json:"sellOrders"`
+	BuyPriceLevels  int    `json:"buyPriceLevels"`
+	SellPriceLevels int    `json:"sellPriceLevels"`
+	Checksum        string `json:"checksum"`
+}
+
 type SessionState string
 
 const (
@@ -424,6 +433,21 @@ func (s *Service) Snapshot() Snapshot {
 	})
 	snapshot.Checksum = serviceSnapshotChecksum(snapshot.withoutChecksum())
 	return snapshot
+}
+
+func (s *Service) BookStats(instrumentID string) BookStats {
+	book := s.bookFor(instrumentID)
+	book.mu.Lock()
+	defer book.mu.Unlock()
+	snapshot := book.book.Snapshot()
+	return BookStats{
+		InstrumentID:    instrumentID,
+		BuyOrders:       book.book.Len(domain.SideBuy),
+		SellOrders:      book.book.Len(domain.SideSell),
+		BuyPriceLevels:  book.book.LevelCount(domain.SideBuy),
+		SellPriceLevels: book.book.LevelCount(domain.SideSell),
+		Checksum:        snapshot.Checksum,
+	}
 }
 
 func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {

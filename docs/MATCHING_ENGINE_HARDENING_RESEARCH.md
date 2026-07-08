@@ -104,7 +104,7 @@ Gaps before calling it production-ready:
 - no formal lifecycle conformance matrix
 - no per-instrument matching algorithm profile
 - no engine ownership-transfer or failover proof
-- limited operator/debug telemetry from engine-local book state
+- engine-local book stats expose order counts, price-level counts, and checksum; transport exposure remains pending
 
 ## Recommended Pivot
 
@@ -226,7 +226,8 @@ Goal:
 
 Acceptance:
 
-- per shard/partition processed sequence
-- current batch id and ack lag
-- open order count and price-level count per side
-- checksum/debug endpoint or admin-only inspection path
+- per shard/partition processed sequence exists in stream-direct stats
+- current batch id and ack lag exist in stream-direct stats
+- open order count and price-level count per side exist through `BookStats`
+- checksum exists through `BookStats`
+- transport/admin exposure remains pending

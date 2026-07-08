@@ -128,6 +128,15 @@ func (b *Book) Len(side domain.Side) int {
 	return b.side(side).total
 }
 
+func (b *Book) LevelCount(side domain.Side) int {
+	count := 0
+	b.side(side).levels.Scan(func(_ int64, _ *priceLevel) bool {
+		count++
+		return true
+	})
+	return count
+}
+
 func (b *Book) Snapshot() Snapshot {
 	snapshot := Snapshot{
 		NextSequence: b.nextSequence,

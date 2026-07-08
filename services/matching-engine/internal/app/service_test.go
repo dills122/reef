@@ -816,6 +816,28 @@ func TestServiceRestoreRejectsSnapshotChecksumMismatch(t *testing.T) {
 	}
 }
 
+func TestBookStatsExposeOrderLevelCountsAndChecksum(t *testing.T) {
+	service := NewService()
+	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-2", "100", "150250000000")
+	submitRestingBuy(t, service, "ord-buy-3", "100", "150100000000")
+	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150500000000")
+
+	stats := service.BookStats("AAPL")
+	if stats.InstrumentID != "AAPL" {
+		t.Fatalf("expected AAPL stats, got %#v", stats)
+	}
+	if stats.BuyOrders != 3 || stats.SellOrders != 1 {
+		t.Fatalf("unexpected order counts: %#v", stats)
+	}
+	if stats.BuyPriceLevels != 2 || stats.SellPriceLevels != 1 {
+		t.Fatalf("unexpected price-level counts: %#v", stats)
+	}
+	if stats.Checksum == "" {
+		t.Fatal("expected book stats checksum")
+	}
+}
+
 func TestCancelOrderRemovesMiddleSamePriceOrder(t *testing.T) {
 	service := NewService()
 	submitRestingBuy(t, service, "ord-buy-1", "100", "150250000000")
