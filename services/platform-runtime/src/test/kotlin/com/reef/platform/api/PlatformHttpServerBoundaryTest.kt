@@ -60,6 +60,22 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayRouteMapIncludesRiskControlAliases() {
+        assertEquals(
+            AdminGatewayRoute("/internal/admin/account-risk/controls", "admin"),
+            adminGatewayRouteFor("/admin/v1/risk/account-controls")
+        )
+        assertEquals(
+            AdminGatewayRoute("/internal/admin/circuit-breakers", "admin"),
+            adminGatewayRouteFor("/admin/v1/risk/circuit-breakers")
+        )
+        assertEquals(
+            AdminGatewayRoute("/internal/admin/price-collars", "admin"),
+            adminGatewayRouteFor("/admin/v1/risk/price-collars")
+        )
+    }
+
+    @Test
     fun apiV1SubmitReturnsBoundaryErrorEnvelopeWhenClientIdMissing() {
         val server = testServer()
         try {

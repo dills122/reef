@@ -78,6 +78,22 @@ private data class CachedStreamCommandDrainBackpressureSnapshot(
     val snapshot: StreamCommandDrainBackpressureSnapshot
 )
 
+internal data class AdminGatewayRoute(
+    val internalPath: String,
+    val tokenFamily: String
+)
+
+internal fun adminGatewayRouteFor(path: String): AdminGatewayRoute? = when (path) {
+    "/admin/v1/arena/bots" -> AdminGatewayRoute("/internal/admin/arena/bots", "arena")
+    "/admin/v1/arena/bots/openbao-provision" ->
+        AdminGatewayRoute("/internal/admin/arena/bots/openbao-provision", "arena")
+    "/admin/v1/analytics/run-exports" -> AdminGatewayRoute("/internal/admin/analytics/run-exports", "analytics")
+    "/admin/v1/risk/account-controls" -> AdminGatewayRoute("/internal/admin/account-risk/controls", "admin")
+    "/admin/v1/risk/circuit-breakers" -> AdminGatewayRoute("/internal/admin/circuit-breakers", "admin")
+    "/admin/v1/risk/price-collars" -> AdminGatewayRoute("/internal/admin/price-collars", "admin")
+    else -> null
+}
+
 private data class PreparedApiV1Mutation(
     val route: String,
     val clientId: String,
@@ -394,16 +410,17 @@ class PlatformHttpServer(
             }
         }
 
-        server.createContext("/admin/v1/arena/bots") { exchange ->
-            handleAdminGatewayRoute(exchange, "arena")
-        }
-
-        server.createContext("/admin/v1/arena/bots/openbao-provision") { exchange ->
-            handleAdminGatewayRoute(exchange, "arena")
-        }
-
-        server.createContext("/admin/v1/analytics/run-exports") { exchange ->
-            handleAdminGatewayRoute(exchange, "analytics")
+        for (path in listOf(
+            "/admin/v1/arena/bots",
+            "/admin/v1/arena/bots/openbao-provision",
+            "/admin/v1/analytics/run-exports",
+            "/admin/v1/risk/account-controls",
+            "/admin/v1/risk/circuit-breakers",
+            "/admin/v1/risk/price-collars"
+        )) {
+            server.createContext(path) { exchange ->
+                handleAdminGatewayRoute(exchange)
+            }
         }
 
         if (runtimeRole.publicHttpEnabled) {
@@ -991,19 +1008,14 @@ class PlatformHttpServer(
         )
     }
 
-    private fun handleAdminGatewayRoute(exchange: HttpExchange, tokenFamily: String) {
-        if (!authorizeAdminGateway(exchange, tokenFamily)) return
-        val internalPath = when (exchange.requestURI.path) {
-            "/admin/v1/arena/bots" -> "/internal/admin/arena/bots"
-            "/admin/v1/arena/bots/openbao-provision" -> "/internal/admin/arena/bots/openbao-provision"
-            "/admin/v1/analytics/run-exports" -> "/internal/admin/analytics/run-exports"
-            else -> ""
-        }
-        if (internalPath.isBlank()) {
+    private fun handleAdminGatewayRoute(exchange: HttpExchange) {
+        val route = adminGatewayRouteFor(exchange.requestURI.path)
+        if (route == null) {
             exchange.sendResponseHeaders(404, -1)
             exchange.close()
             return
         }
+        if (!authorizeAdminGateway(exchange, route.tokenFamily)) return
         val body = if (exchange.requestMethod == "POST") {
             readRequestBody(exchange) ?: return
         } else {
@@ -1012,7 +1024,7 @@ class PlatformHttpServer(
         withAdminRequestPrincipal(exchange) {
             val response = diagnosticRoutes.handle(
                 method = exchange.requestMethod,
-                path = internalPath,
+                path = route.internalPath,
                 query = exchange.requestURI.query,
                 body = body
             ) ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
@@ -1023,6 +1035,7 @@ class PlatformHttpServer(
     private fun authorizeAdminGateway(exchange: HttpExchange, tokenFamily: String): Boolean {
         val envName = when (tokenFamily) {
             "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
+            "admin" -> "ADMIN_API_TOKEN"
             else -> "ARENA_ADMIN_API_TOKEN"
         }
         val token = RuntimeEnv.string(envName, "")
