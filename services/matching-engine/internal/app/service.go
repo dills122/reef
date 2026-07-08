@@ -22,6 +22,7 @@ type Service struct {
 	now               func() time.Time
 	orderControls     OrderControls
 	sessionControls   SessionControls
+	matchingProfiles  MatchingProfiles
 	terminalRetention terminalOrderRetention
 }
 
@@ -98,6 +99,17 @@ type BookStats struct {
 	Checksum        string `json:"checksum"`
 }
 
+type MatchAlgorithm string
+
+const (
+	MatchAlgorithmFIFO MatchAlgorithm = "FIFO"
+)
+
+type MatchingProfiles struct {
+	DefaultAlgorithm MatchAlgorithm
+	Instruments      map[string]MatchAlgorithm
+}
+
 type SessionState string
 
 const (
@@ -141,6 +153,12 @@ func WithSessionControls(controls SessionControls) Option {
 	}
 }
 
+func WithMatchingProfiles(profiles MatchingProfiles) Option {
+	return func(s *Service) {
+		s.matchingProfiles = profiles
+	}
+}
+
 func NewService(options ...Option) *Service {
 	service := &Service{
 		books:  make(map[string]*orderBook),
@@ -170,6 +188,9 @@ func (s *Service) SubmitOrder(cmd domain.SubmitOrder) domain.SubmitOrderResult {
 
 	if cmd.InstrumentID == "" {
 		return rejectedResult("evt-reject-missing-instrument", cmd.OrderID, "VALIDATION_ERROR", "instrumentId is required", now)
+	}
+	if rejection := s.validateMatchingProfile(cmd.OrderID, cmd.InstrumentID, now); rejection != nil {
+		return *rejection
 	}
 	if rejection := s.validateSessionForSubmit(cmd.OrderID, cmd.VenueSessionID, now); rejection != nil {
 		return *rejection
@@ -279,6 +300,9 @@ func (s *Service) ModifyOrder(cmd domain.ModifyOrder) domain.SubmitOrderResult {
 	record, ok := s.loadOrder(cmd.OrderID)
 	if !ok {
 		return rejectedResult("evt-reject-order-not-found", cmd.OrderID, "NOT_FOUND", "order not found", now)
+	}
+	if rejection := s.validateMatchingProfile(cmd.OrderID, record.InstrumentID, now); rejection != nil {
+		return *rejection
 	}
 	if rejection := s.validateSessionForModify(cmd.OrderID, record.VenueSessionID, now); rejection != nil {
 		return *rejection
@@ -487,6 +511,16 @@ func (s *Service) BookStats(instrumentID string) BookStats {
 	}
 }
 
+func (s *Service) MatchAlgorithm(instrumentID string) MatchAlgorithm {
+	if algorithm, ok := s.matchingProfiles.Instruments[instrumentID]; ok && algorithm != "" {
+		return algorithm
+	}
+	if s.matchingProfiles.DefaultAlgorithm != "" {
+		return s.matchingProfiles.DefaultAlgorithm
+	}
+	return MatchAlgorithmFIFO
+}
+
 func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 	if !validSnapshotMetadata(snapshot) {
 		return nil, false
@@ -583,6 +617,15 @@ func (s *Service) sessionState(venueSessionID string) SessionState {
 		return s.sessionControls.DefaultState
 	}
 	return SessionStateOpen
+}
+
+func (s *Service) validateMatchingProfile(orderID string, instrumentID string, occurredAt string) *domain.SubmitOrderResult {
+	algorithm := s.MatchAlgorithm(instrumentID)
+	if algorithm == MatchAlgorithmFIFO {
+		return nil
+	}
+	result := rejectedResult("evt-reject-match-algorithm-"+orderID, orderID, "UNSUPPORTED_MATCH_ALGORITHM", "matching algorithm is not supported", occurredAt)
+	return &result
 }
 
 func (s *Service) selfTradeWouldOccur(book *orderBook, incoming *orderRecord) bool {

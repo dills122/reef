@@ -103,7 +103,7 @@ Gaps before calling it production-ready:
 - engine-level max quantity, max notional, and price collar controls exist behind service options
 - in-memory snapshot/restore/replay checksum proof exists with versioned metadata; stream offset metadata remains pending
 - no formal lifecycle conformance matrix
-- no per-instrument matching algorithm profile
+- per-instrument matching algorithm profile exists for `FIFO`; non-FIFO algorithms remain unsupported
 - no engine ownership-transfer or failover proof
 - engine-local book stats expose order counts, price-level counts, and checksum through an internal HTTP endpoint
 
@@ -124,6 +124,8 @@ FIFO
 ```
 
 Only after that should Reef add `matchAlgorithm` profiles such as pro-rata or LMM-style allocation.
+
+The first matching profile exists now as `FIFO`; this is a compatibility hook, not a second algorithm implementation.
 
 ## Branch Follow-Up Items
 

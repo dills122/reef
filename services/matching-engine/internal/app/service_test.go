@@ -643,6 +643,58 @@ func TestSubmitOrderRejectsWhenSessionNotOpen(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderRejectsUnsupportedMatchAlgorithm(t *testing.T) {
+	service := NewService(WithMatchingProfiles(MatchingProfiles{
+		Instruments: map[string]MatchAlgorithm{"AAPL": "PRO_RATA"},
+	}))
+
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-unsupported-algo",
+		InstrumentID:  "AAPL",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	if result.Rejected == nil {
+		t.Fatalf("expected unsupported matching algorithm rejection, got %#v", result)
+	}
+	if result.Rejected.Code != "UNSUPPORTED_MATCH_ALGORITHM" {
+		t.Fatalf("expected unsupported matching algorithm code, got %#v", result.Rejected)
+	}
+	if _, ok := service.OrderState("ord-unsupported-algo"); ok {
+		t.Fatal("expected unsupported algorithm reject to avoid order state")
+	}
+	if service.RestingOrders("AAPL", domain.SideBuy) != 0 {
+		t.Fatal("expected unsupported algorithm reject to avoid book mutation")
+	}
+}
+
+func TestMatchingProfileDefaultsToFIFO(t *testing.T) {
+	service := NewService(WithMatchingProfiles(MatchingProfiles{
+		DefaultAlgorithm: MatchAlgorithmFIFO,
+		Instruments:      map[string]MatchAlgorithm{"MSFT": MatchAlgorithmFIFO},
+	}))
+
+	if service.MatchAlgorithm("AAPL") != MatchAlgorithmFIFO {
+		t.Fatalf("expected default FIFO match algorithm")
+	}
+	if service.MatchAlgorithm("MSFT") != MatchAlgorithmFIFO {
+		t.Fatalf("expected instrument FIFO match algorithm")
+	}
+	result := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-fifo",
+		InstrumentID:  "MSFT",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150250000000",
+		Currency:      "USD",
+	})
+	if result.Accepted == nil {
+		t.Fatalf("expected FIFO profile order to accept, got %#v", result)
+	}
+}
+
 func TestSubmitOrderRejectsSelfTradePreventionWithoutMutation(t *testing.T) {
 	service := NewService()
 	resting := service.SubmitOrder(domain.SubmitOrder{
