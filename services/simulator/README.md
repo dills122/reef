@@ -167,11 +167,23 @@ make dev-seed-p2-settlement-facts SCENARIO_RUN_ID=p2-settlement-live
 make dev-scenario-smoke SCENARIO=../../packages/scenario-definitions/scenarios/v1/P2_SETTLEMENT_BREAK_REPAIR.yaml SCENARIO_RUN_ID=p2-settlement-live ARGS="--live --base-url http://127.0.0.1:8080 --assertions --seed-reference=false --pretty"
 ```
 
-The P1 dry-run golden report is checked in at [`replay/golden/p1-golden-hidden-cross.smoke.json`](replay/golden/p1-golden-hidden-cross.smoke.json). Refresh it only when the scenario contract intentionally changes:
+Dry-run golden reports are checked in under [`replay/golden/`](replay/golden/) for the P1 hidden-cross path and P2 settlement-break path. Refresh them only when the scenario contract intentionally changes:
 
 ```bash
-make dev-scenario-smoke ARGS="--scenario-run-id p1-golden-hidden-cross-golden --pretty --report-out replay/golden/p1-golden-hidden-cross.smoke.json"
+make dev-scenario-golden-check DEV_SCENARIO_GOLDEN_UPDATE=1
 ```
+
+Use the golden checker to regenerate deterministic dry-run reports into `/tmp`, compare them with checked-in goldens, and write path-level drift evidence. `make test-simulator` also runs this check.
+
+```bash
+make dev-scenario-golden-check
+```
+
+Useful overrides:
+
+- `DEV_SCENARIO_GOLDEN_ARTIFACT_DIR=/tmp/reef-scenario-golden`
+- `DEV_SCENARIO_GOLDEN_MAX_FAILURES=50`
+- `DEV_SCENARIO_GOLDEN_UPDATE=1` to intentionally replace checked-in golden reports after a scenario contract change
 
 Direct use from `services/simulator`:
 
