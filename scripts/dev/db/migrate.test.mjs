@@ -42,8 +42,10 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0025_orders_client_order_lookup.sql",
       "runtime/0026_contiguous_command_outcome_projection_watermarks.sql",
       "runtime/0027_audit_persistence_hardening.sql",
+      "runtime/0028_post_trade_profile_references.sql",
     ],
   );
+  assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
   assert.ok(migrations.some((migration) => migration.id === "auth/0002_live_auth_tables.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0002_live_boundary_tables.sql"));
   assert.ok(migrations.some((migration) => migration.id === "boundary/0003_command_capture_live_shape.sql"));
