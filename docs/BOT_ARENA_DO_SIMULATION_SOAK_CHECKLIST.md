@@ -103,6 +103,10 @@ include controlled fill pressure through `healthTargets.minTotalFills` and
 `healthTargets.minFillsPerInstrument`, using venue order-fill readback as the
 source of execution evidence.
 
+The next-run operator checklist, report-shape contract, score-v1 direction, and
+tuning matrix live in
+[`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](./BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
+
 The first multi-instrument mode should declare:
 
 - active ticker set

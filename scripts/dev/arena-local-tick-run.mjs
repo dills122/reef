@@ -8,6 +8,11 @@ import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
+import {
+  enrichBotResultsWithExecutionDiagnostics,
+  marketPriceValue,
+  priceFromExecutionPrice,
+} from "./lib/arena-execution-diagnostics.mjs";
 
 loadDotEnv();
 
@@ -126,7 +131,9 @@ async function main() {
 
     const baseBotResults = scoreBots(sessionReports, enforcementEvents);
     const venueReadback = await collectVenueReadback(baseBotResults);
-    const botResults = enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples);
+    const botResults = enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
+      fallbackInstruments: mode.instruments ?? [],
+    });
     const completedAtIso = new Date().toISOString();
     const report = buildReport({
       botResults,
@@ -453,21 +460,6 @@ function priceFromNanos(value) {
   return Number.isFinite(parsed) ? parsed / 1_000_000_000 : undefined;
 }
 
-function priceFromExecutionPrice(value) {
-  if (value === undefined || value === null || value === "") {
-    return undefined;
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return undefined;
-  return Math.abs(parsed) >= 1_000_000 ? parsed / 1_000_000_000 : parsed;
-}
-
-function marketPriceValue(value) {
-  const parsed = nullableNumber(value);
-  if (parsed === null) return null;
-  return Math.abs(parsed) >= 1_000_000 ? parsed / 1_000_000_000 : parsed;
-}
-
 function ownOrderStatus(status) {
   if (status === "OPEN" || status === "PARTIALLY_FILLED" || status === "FILLED" || status === "CANCELED" || status === "REJECTED") {
     return status;
@@ -703,188 +695,6 @@ function summarizeTradingMetrics(session, counters) {
       reason: "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices",
     },
   };
-}
-
-function enrichBotResultsWithExecutionDiagnostics(botResults, venueReadback, healthSamples) {
-  if (venueReadback?.skipped === true || !Array.isArray(venueReadback?.ownOrders)) {
-    return botResults;
-  }
-  const fillsByBotId = new Map();
-  for (const entry of venueReadback?.ownOrders ?? []) {
-    fillsByBotId.set(entry.botId, Array.isArray(entry.fills?.body?.fills) ? entry.fills.body.fills : []);
-  }
-  const markPrices = markPricesByInstrument(venueReadback, healthSamples);
-  return botResults.map((result) => {
-    const diagnostics = summarizeExecutionDiagnostics(fillsByBotId.get(result.botId) ?? [], markPrices);
-    return {
-      ...result,
-      tradingMetrics: {
-        ...result.tradingMetrics,
-        basis: "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
-        executions: diagnostics.executions,
-        pnl: diagnostics.pnl,
-        fees: diagnostics.fees,
-        inventory: diagnostics.inventory,
-      },
-    };
-  });
-}
-
-function summarizeExecutionDiagnostics(fills, markPrices) {
-  const byInstrument = {};
-  let fillCount = 0;
-  let buyFillCount = 0;
-  let sellFillCount = 0;
-  let buyQuantity = 0;
-  let sellQuantity = 0;
-  let filledQuantity = 0;
-  let grossNotional = 0;
-  let cash = 0;
-
-  for (const fill of fills) {
-    const instrumentId = typeof fill.instrumentId === "string" && fill.instrumentId.length > 0 ? fill.instrumentId : "unknown";
-    const side = fill.side === "SELL" ? "SELL" : "BUY";
-    const quantity = numberValue(fill.quantityUnits);
-    const price = priceFromExecutionPrice(fill.executionPrice);
-    const notional = price === undefined ? 0 : quantity * price;
-    const bucket = byInstrument[instrumentId] ?? createExecutionInstrumentBucket(instrumentId);
-
-    fillCount += 1;
-    filledQuantity += quantity;
-    grossNotional += notional;
-    bucket.fillCount += 1;
-    bucket.filledQuantity += quantity;
-    bucket.grossNotional += notional;
-
-    if (side === "BUY") {
-      buyFillCount += 1;
-      buyQuantity += quantity;
-      cash -= notional;
-      bucket.buyQuantity += quantity;
-      bucket.netQuantity += quantity;
-      bucket.cash -= notional;
-    } else {
-      sellFillCount += 1;
-      sellQuantity += quantity;
-      cash += notional;
-      bucket.sellQuantity += quantity;
-      bucket.netQuantity -= quantity;
-      bucket.cash += notional;
-    }
-    byInstrument[instrumentId] = bucket;
-  }
-
-  let inventoryValue = 0;
-  let grossMarkedNotional = 0;
-  const netQuantityByInstrument = {};
-  const markPriceByInstrument = {};
-  const instrumentRows = {};
-
-  for (const [instrumentId, bucket] of Object.entries(byInstrument).sort(([left], [right]) => left.localeCompare(right))) {
-    const markPrice = markPrices[instrumentId] ?? syntheticSnapshot(instrumentId).midPrice;
-    const markedValue = bucket.netQuantity * markPrice;
-    inventoryValue += markedValue;
-    grossMarkedNotional += Math.abs(markedValue);
-    netQuantityByInstrument[instrumentId] = bucket.netQuantity;
-    markPriceByInstrument[instrumentId] = markPrice;
-    instrumentRows[instrumentId] = {
-      fillCount: bucket.fillCount,
-      filledQuantity: bucket.filledQuantity,
-      buyQuantity: bucket.buyQuantity,
-      sellQuantity: bucket.sellQuantity,
-      netQuantity: bucket.netQuantity,
-      grossNotional: Number(bucket.grossNotional.toFixed(6)),
-      avgFillPrice: bucket.filledQuantity === 0 ? null : Number((bucket.grossNotional / bucket.filledQuantity).toFixed(6)),
-      cash: Number(bucket.cash.toFixed(6)),
-      markPrice,
-      markedValue: Number(markedValue.toFixed(6)),
-    };
-  }
-
-  const total = cash + inventoryValue;
-  return {
-    executions: {
-      fillCount,
-      buyFillCount,
-      sellFillCount,
-      filledQuantity,
-      buyQuantity,
-      sellQuantity,
-      grossNotional: Number(grossNotional.toFixed(6)),
-      avgFillPrice: filledQuantity === 0 ? null : Number((grossNotional / filledQuantity).toFixed(6)),
-      byInstrument: instrumentRows,
-    },
-    pnl: {
-      available: true,
-      realized: null,
-      unrealized: null,
-      cash: Number(cash.toFixed(6)),
-      inventoryValue: Number(inventoryValue.toFixed(6)),
-      total: Number(total.toFixed(6)),
-      finalEquityDiagnostic: Number((1_000_000 + total).toFixed(6)),
-      currency: "USD",
-      basis: "zero-fee cash plus marked inventory from participant-scoped fills",
-      markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
-    },
-    fees: {
-      total: 0,
-      maker: 0,
-      taker: 0,
-      currency: "USD",
-      policy: "fees-v0-zero-placeholder",
-    },
-    inventory: {
-      netQuantityByInstrument,
-      markPriceByInstrument,
-      grossNotional: Number(grossMarkedNotional.toFixed(6)),
-      markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
-    },
-  };
-}
-
-function createExecutionInstrumentBucket(instrumentId) {
-  return {
-    instrumentId,
-    fillCount: 0,
-    filledQuantity: 0,
-    buyQuantity: 0,
-    sellQuantity: 0,
-    netQuantity: 0,
-    grossNotional: 0,
-    cash: 0,
-  };
-}
-
-function markPricesByInstrument(venueReadback, healthSamples) {
-  const prices = {};
-  for (const snapshot of latestHealthSnapshotsByInstrument(healthSamples)) {
-    const mid = marketPriceValue(snapshot.midPrice);
-    if (mid !== null) prices[snapshot.instrumentId] = mid;
-  }
-  for (const entry of venueReadback?.snapshots ?? []) {
-    const snapshot = entry.body?.snapshot ?? entry.snapshot ?? entry;
-    const instrumentId = String(entry.instrumentId ?? snapshot.instrumentId ?? "");
-    const mid = marketPriceValue(snapshot.midPrice) ??
-      midpoint(
-        marketPriceValue(snapshot.bestBidPrice ?? snapshot.bidPrice),
-        marketPriceValue(snapshot.bestAskPrice ?? snapshot.askPrice),
-      );
-    if (instrumentId.length > 0 && mid !== null) prices[instrumentId] = mid;
-  }
-  for (const instrumentId of mode.instruments ?? []) {
-    prices[instrumentId] ??= syntheticSnapshot(instrumentId).midPrice;
-  }
-  return prices;
-}
-
-function latestHealthSnapshotsByInstrument(healthSamples) {
-  const snapshots = new Map();
-  for (const sample of healthSamples ?? []) {
-    for (const snapshot of sample.snapshots ?? []) {
-      if (snapshot.instrumentId !== undefined) snapshots.set(snapshot.instrumentId, snapshot);
-    }
-  }
-  return Array.from(snapshots.values());
 }
 
 function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {

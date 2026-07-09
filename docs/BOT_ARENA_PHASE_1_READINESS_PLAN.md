@@ -365,6 +365,8 @@ policy-compliance score, not a competitive trading-performance score.
 
 Current scoring/reporting assumptions:
 
+- The current score/report follow-up plan is tracked in
+  [`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](./BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
 - Public competitive scoring ranks only score-eligible competitor bots. House
   and NPC bots remain diagnostics-only unless a future mode explicitly changes
   that behavior.
