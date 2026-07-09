@@ -154,6 +154,106 @@
       "publicLeaderboard": false
     },
     {
+      "botId": "builtin-npc-taker-aapl",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-aapl",
+        "values": {
+          "instrumentId": "AAPL",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-msft",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-msft",
+        "values": {
+          "instrumentId": "MSFT",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-nvda",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-nvda",
+        "values": {
+          "instrumentId": "NVDA",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-tsla",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-tsla",
+        "values": {
+          "instrumentId": "TSLA",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-amzn",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-amzn",
+        "values": {
+          "instrumentId": "AMZN",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
       "botId": "custom-technical-indicator",
       "versionId": "local-1",
       "runnerKey": "technical",

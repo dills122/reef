@@ -597,7 +597,7 @@ class PlatformApiTest {
 
         val current = api.ownOrders("participant-1", openOnly = true)
         assertContains(current, "\"mine-open\"")
-        assertContains(current, "\"meta\":{\"source\":\"runtime.orders + runtime.order_lifecycle_state\"")
+        assertContains(current, "\"meta\":{\"source\":\"runtime.order_lifecycle_state\"")
         assertContains(current, "\"freshness\":\"dirty-tracked lifecycle projection\"")
         assertContains(current, "\"openOnly\":true")
         assert(!current.contains("mine-cancelled")) { "cancelled order leaked into current" }

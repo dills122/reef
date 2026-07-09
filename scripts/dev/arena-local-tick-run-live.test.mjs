@@ -5,6 +5,7 @@ import http from "node:http";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const commands = new Map();
+const openOrdersByParticipant = new Map();
 const receivedCommands = [];
 const commandStatusReads = [];
 const referenceWrites = [];
@@ -27,10 +28,28 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && ["/api/v1/orders/submit", "/api/v1/orders/modify", "/api/v1/orders/cancel"].includes(url.pathname)) {
     const body = await readJson(req);
+    const participantId = req.headers["x-participant-id"] ?? body.participantId;
     receivedCommands.push({ path: url.pathname, body });
+    if (url.pathname === "/api/v1/orders/submit") {
+      const orders = openOrdersByParticipant.get(participantId) ?? [];
+      orders.push({
+        orderId: body.clientOrderId ?? body.commandId,
+        instrumentId: body.instrumentId,
+        side: body.side,
+        quantityUnits: body.quantityUnits,
+        remainingQuantityUnits: body.quantityUnits,
+        limitPrice: body.limitPrice,
+        status: "OPEN",
+      });
+      openOrdersByParticipant.set(participantId, orders);
+    }
+    if (url.pathname === "/api/v1/orders/cancel") {
+      const orders = openOrdersByParticipant.get(participantId) ?? [];
+      openOrdersByParticipant.set(participantId, orders.filter((order) => order.orderId !== body.orderId));
+    }
     commands.set(body.commandId, {
       commandId: body.commandId,
-      participantId: req.headers["x-participant-id"] ?? body.participantId,
+      participantId,
       status: "COMPLETED",
       responseStatus: 200,
       responsePayloadJson: "{}",
@@ -62,7 +81,8 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { snapshot: { instrumentId, bestBidPrice: "100000000000", bestAskPrice: "101000000000", updatedAt: "2026-07-07T00:00:00.000Z" } });
   }
   if (req.method === "GET" && (url.pathname === "/api/v1/orders/current" || url.pathname === "/api/v1/orders/history")) {
-    return json(res, 200, { orders: [] });
+    const participantId = url.searchParams.get("participantId") ?? "";
+    return json(res, 200, { orders: openOrdersByParticipant.get(participantId) ?? [] });
   }
   if (url.pathname.startsWith("/internal/admin/arena/")) {
     return await handleArenaAdmin(req, res, url);
@@ -91,9 +111,9 @@ try {
 
   assert.equal(referenceWrites.filter((write) => write.path === "/reference/instruments").length, 4);
   assert.equal(referenceWrites.some((write) => JSON.stringify(write.body).includes("undefined")), false);
-  assert.ok(referenceWrites.some((write) => write.body.participantId === "participant-builtin-mm-simple"));
-  assert.ok(referenceWrites.some((write) => write.body.accountId === "account-custom-technical-indicator"));
-  assert.ok(referenceWrites.some((write) => write.body.actorId === "actor-builtin-mm-refreshing"));
+  assert.ok(referenceWrites.some((write) => String(write.body.participantId ?? "").endsWith("-builtin-mm-simple")));
+  assert.ok(referenceWrites.some((write) => String(write.body.accountId ?? "").endsWith("-custom-technical-indicator")));
+  assert.ok(referenceWrites.some((write) => String(write.body.actorId ?? "").endsWith("-builtin-mm-refreshing")));
   assert.equal(receivedCommands.length, 16);
   assert.ok(Array.from(commands.values()).every((command) => command.status === "COMPLETED"));
   assert.ok(commandStatusReads.length >= receivedCommands.length);

@@ -189,7 +189,7 @@ class PlatformApi(
                 surfaceAvailability(
                     name = "currentOrders",
                     endpoint = "/api/v1/orders/current",
-                    source = "runtime.orders + runtime.order_lifecycle_state",
+                    source = "runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
                     status = venueStatus,
                     scope = "participant-own-orders",
@@ -199,7 +199,7 @@ class PlatformApi(
                 surfaceAvailability(
                     name = "orderHistory",
                     endpoint = "/api/v1/orders/history",
-                    source = "runtime.orders + runtime.order_lifecycle_state",
+                    source = "runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
                     status = venueStatus,
                     scope = "participant-own-orders",
@@ -563,7 +563,7 @@ class PlatformApi(
         return JsonCodec.writeObject(
             "participantId" to participantId,
             "meta" to mapOf(
-                "source" to "runtime.orders + runtime.order_lifecycle_state",
+                "source" to "runtime.order_lifecycle_state",
                 "freshness" to "dirty-tracked lifecycle projection",
                 "scope" to "participant",
                 "openOnly" to openOnly,

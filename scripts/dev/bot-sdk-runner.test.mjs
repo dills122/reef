@@ -15,6 +15,7 @@ await assertLiveReadClientsRun();
 await assertLifecycleSafeMarketMakerRun();
 await assertRefreshingMarketMakerHealthyNoopRun();
 await assertRefreshingMarketMakerStaleRefreshRun();
+await assertAggressiveTakerRun();
 await assertPolicyBlockedRunDoesNotSendOrApply();
 
 console.log("bot SDK scenario runner checks passed");
@@ -198,6 +199,36 @@ async function assertRefreshingMarketMakerStaleRefreshRun() {
   assert.equal(report.ticks[3].venueCommands[0].route, "/api/v1/orders/submit");
   assert.equal(report.finalOrders.length, 2);
   assert.equal(transport.requests.length, 6);
+}
+
+async function assertAggressiveTakerRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      botId: "configurable-aggressive-taker-bot",
+      actorId: "actor-configurable-aggressive-taker-bot",
+      config: {
+        instrumentId: "AAPL",
+        side: "ALTERNATE",
+        orderSize: 1,
+        crossOffset: 0.05,
+      },
+      ticks: fixture.ticks.slice(0, 2),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.ticksRun, 2);
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.ticks[0].venueCommands[0].body.side, "BUY");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "100550000000");
+  assert.equal(report.ticks[1].venueCommands[0].body.side, "SELL");
+  assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "99950000000");
+  assert.equal(transport.requests.length, 2);
 }
 
 async function assertPolicyBlockedRunDoesNotSendOrApply() {

@@ -272,6 +272,18 @@ function ticksForSchedulingClass(schedulingClass, intervalMs = runPlan.tickInter
 }
 
 async function runSessionTick(session, tick, tickIndex, offsetMs) {
+  const orderRefresh = await refreshLiveSessionOrders(session);
+  if (orderRefresh !== undefined && !orderRefresh.ok) {
+    return {
+      tick,
+      schedulingClass: session.schedulingClass,
+      offsetMs,
+      ok: false,
+      issues: [orderRefresh.issue],
+      venueCommands: [],
+      submission: emptySubmission("live_order_refresh_failed"),
+    };
+  }
   const tickResult = await worker.request({ type: "runTick", sessionId: session.sessionId, tick });
   const policyViolation = tickPolicyViolation(session, tickResult, offsetMs);
   if (policyViolation !== undefined) {
@@ -324,8 +336,9 @@ function tickPolicyViolation(session, tickResult, offsetMs) {
     };
   }
   if (session.schedulingClass === "house_responsive") {
+    const houseConfig = houseLiquidityConfig(bot);
     const submittedCommands = tickResult.venueCommands?.length ?? 0;
-    const maxCommandsPerSecond = Number(houseLiquidityConfig(bot).maxCommandsPerSecond ?? 0);
+    const maxCommandsPerSecond = Number(houseConfig.maxCommandsPerSecond ?? 0);
     if (maxCommandsPerSecond > 0) {
       const second = Math.floor(offsetMs / 1000);
       session.houseCommandCountsBySecond ??= new Map();
@@ -341,8 +354,124 @@ function tickPolicyViolation(session, tickResult, offsetMs) {
         };
       }
     }
+    const cancelCommands = (tickResult.actions ?? []).filter((action) => action.type === "cancel_order").length;
+    const maxCancelsPerSecond = Number(houseConfig.maxCancelsPerSecond ?? 0);
+    if (maxCancelsPerSecond > 0) {
+      const second = Math.floor(offsetMs / 1000);
+      session.houseCancelCountsBySecond ??= new Map();
+      const nextCount = Number(session.houseCancelCountsBySecond.get(second) ?? 0) + cancelCommands;
+      session.houseCancelCountsBySecond.set(second, nextCount);
+      if (nextCount > maxCancelsPerSecond) {
+        return {
+          code: "house_max_cancels_per_second",
+          message: `house cancels ${nextCount} > ${maxCancelsPerSecond} in second ${second}`,
+          observed: nextCount,
+          limit: maxCancelsPerSecond,
+          operational: true,
+        };
+      }
+    }
+    const maxOpenOrdersPerSide = Number(houseConfig.maxOpenOrdersPerSide ?? 0);
+    if (maxOpenOrdersPerSide > 0) {
+      const counts = openOrderCountsByInstrumentSide(tickResult.ordersAfterTick ?? []);
+      for (const count of counts) {
+        if (count.openOrders > maxOpenOrdersPerSide) {
+          return {
+            code: "house_max_open_orders_per_side",
+            message: `house open orders ${count.openOrders} > ${maxOpenOrdersPerSide} for ${count.instrumentId} ${count.side}`,
+            observed: count.openOrders,
+            limit: maxOpenOrdersPerSide,
+            operational: true,
+          };
+        }
+      }
+    }
   }
   return undefined;
+}
+
+async function refreshLiveSessionOrders(session) {
+  if (config.submitMode !== "live" || session.schedulingClass !== "house_responsive") {
+    return undefined;
+  }
+  const participantId = participantIdForBot(session.bot);
+  const response = await getJson(
+    `${config.venueUrl.replace(/\/$/, "")}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=100`,
+    readbackHeaders(participantId),
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    return {
+      ok: false,
+      issue: {
+        code: "live_order_refresh_failed",
+        message: `live order refresh failed for ${session.bot.botId}: HTTP ${response.statusCode}`,
+      },
+    };
+  }
+  const orders = Array.isArray(response.body?.orders) ? response.body.orders.map(toOwnOrder) : [];
+  const replace = await worker.request({ type: "replaceOrders", sessionId: session.sessionId, orders });
+  if (!replace.ok) {
+    return {
+      ok: false,
+      issue: {
+        code: "live_order_refresh_failed",
+        message: `live order refresh failed for ${session.bot.botId}: ${JSON.stringify(replace.error ?? replace)}`,
+      },
+    };
+  }
+  return { ok: true };
+}
+
+function toOwnOrder(order) {
+  const limitPrice = priceFromNanos(order.limitPrice);
+  return {
+    orderId: String(order.orderId ?? ""),
+    instrumentId: String(order.instrumentId ?? ""),
+    side: order.side === "SELL" ? "SELL" : "BUY",
+    quantity: numberValue(order.quantityUnits),
+    remainingQuantity: numberValue(order.remainingQuantityUnits),
+    ...(limitPrice === undefined ? {} : { limitPrice }),
+    status: ownOrderStatus(order.status),
+  };
+}
+
+function numberValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function priceFromNanos(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed / 1_000_000_000 : undefined;
+}
+
+function ownOrderStatus(status) {
+  if (status === "OPEN" || status === "PARTIALLY_FILLED" || status === "FILLED" || status === "CANCELED" || status === "REJECTED") {
+    return status;
+  }
+  if (status === "CANCELLED") {
+    return "CANCELED";
+  }
+  return "REJECTED";
+}
+
+function openOrderCountsByInstrumentSide(orders) {
+  const counts = new Map();
+  for (const order of orders) {
+    if ((order.status !== "OPEN" && order.status !== "PARTIALLY_FILLED") || Number(order.remainingQuantity ?? 0) <= 0) {
+      continue;
+    }
+    const key = `${order.instrumentId}:${order.side}`;
+    counts.set(key, {
+      instrumentId: order.instrumentId,
+      side: order.side,
+      openOrders: Number(counts.get(key)?.openOrders ?? 0) + 1,
+    });
+  }
+  return Array.from(counts.values());
 }
 
 function enforceBot(bot, session) {
@@ -740,7 +869,7 @@ async function collectVenueReadback(botResults) {
   }
   const ownOrders = [];
   for (const result of botResults) {
-    const participantId = `participant-${botIdentityKey(result)}`;
+    const participantId = participantIdForBot(result);
     ownOrders.push({
       botId: result.botId,
       participantId,
@@ -1099,14 +1228,14 @@ async function seedReferenceData(bots) {
     }, internal);
   }
   for (const bot of bots) {
-    const identityKey = bot.identityKey ?? botIdentityKey(bot);
+    const identityKey = venueIdentityKey(bot);
     await postSetupOk("/reference/participants", {
-      participantId: `participant-${identityKey}`,
+      participantId: participantIdForIdentity(identityKey),
       name: `Arena ${bot.botId}`,
     }, internal);
     await postSetupOk("/reference/accounts", {
-      accountId: `account-${identityKey}`,
-      participantId: `participant-${identityKey}`,
+      accountId: accountIdForIdentity(identityKey),
+      participantId: participantIdForIdentity(identityKey),
       accountType: bot.riskProfile.assetLedgerMode === "bypass" ? "HOUSE" : "CUSTOMER",
     }, internal);
     await postSetupOk("/auth/roles", {
@@ -1114,7 +1243,7 @@ async function seedReferenceData(bots) {
       permissions: "order.submit,order.cancel,order.modify",
     }, internal);
     await postSetupOk("/auth/actor-roles", {
-      actorId: `actor-${identityKey}`,
+      actorId: actorIdForIdentity(identityKey),
       roleId: "order_trader",
     }, internal);
   }
@@ -1260,7 +1389,7 @@ function buildArtifact(entryPath, name) {
 }
 
 function fixtureForBot(bot, schedule = {}) {
-  const identityKey = bot.identityKey ?? botIdentityKey(bot);
+  const identityKey = venueIdentityKey(bot);
   const tickIntervalMs = positiveNumber(schedule.tickIntervalMs, runPlan.tickIntervalMs);
   const tickCount = Math.max(1, Number(schedule.tickCount ?? runPlan.tickCount));
   const fixture = {
@@ -1270,9 +1399,9 @@ function fixtureForBot(bot, schedule = {}) {
     venueSessionId: mode.venueSessionId,
     botId: bot.botId,
     botVersion: bot.versionId,
-    actorId: `actor-${identityKey}`,
-    participantId: `participant-${identityKey}`,
-    accountId: `account-${identityKey}`,
+    actorId: actorIdForIdentity(identityKey),
+    participantId: participantIdForIdentity(identityKey),
+    accountId: accountIdForIdentity(identityKey),
     correlationId: `${mode.modeId}-${identityKey}`,
     config: {
       ...(baseFixture.config ?? {}),
@@ -1362,6 +1491,26 @@ function scheduledTicks(sourceTicks, plan) {
 
 function botIdentityKey(bot) {
   return String(bot.botId ?? bot.runnerKey).replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
+function venueIdentityKey(bot) {
+  return `${config.runId}-${botIdentityKey(bot)}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
+function actorIdForIdentity(identityKey) {
+  return `actor-${identityKey}`;
+}
+
+function participantIdForIdentity(identityKey) {
+  return `participant-${identityKey}`;
+}
+
+function accountIdForIdentity(identityKey) {
+  return `account-${identityKey}`;
+}
+
+function participantIdForBot(bot) {
+  return participantIdForIdentity(venueIdentityKey(bot));
 }
 
 async function resolveRuntimeConfigForBot(bot) {

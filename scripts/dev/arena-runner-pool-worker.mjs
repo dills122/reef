@@ -86,6 +86,9 @@ async function handleMessage(message) {
     case "runTick":
       await handleRunTick(message);
       return;
+    case "replaceOrders":
+      handleReplaceOrders(message);
+      return;
     case "stopSession":
       await handleStopSession(message);
       return;
@@ -121,6 +124,36 @@ async function handleMessage(message) {
         resourceReport: resourceReport(),
       });
   }
+}
+
+function handleReplaceOrders(message) {
+  const session = sessions.get(message.sessionId);
+  if (session === undefined) {
+    writeResponse({
+      id: message.id,
+      ok: false,
+      type: "replaceOrdersResult",
+      workerId,
+      sessionId: message.sessionId,
+      error: { code: "session_not_started", message: `session ${message.sessionId} is not active in ${workerId}` },
+      resourceReport: resourceReport(),
+    });
+    return;
+  }
+  session.orderState.clear();
+  for (const order of message.orders ?? []) {
+    session.orderState.set(order.orderId, order);
+    session.orderHistory.set(order.orderId, order);
+  }
+  writeResponse({
+    id: message.id,
+    ok: true,
+    type: "replaceOrdersResult",
+    workerId,
+    sessionId: message.sessionId,
+    orderCount: session.orderState.size,
+    resourceReport: resourceReport(),
+  });
 }
 
 async function handleLoadBot(message) {

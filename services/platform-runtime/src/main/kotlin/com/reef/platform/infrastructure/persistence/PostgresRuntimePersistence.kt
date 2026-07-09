@@ -4180,7 +4180,7 @@ class PostgresRuntimePersistence(
         limit: Int
     ): List<OwnOrderView> {
         val statusFilter = if (openOnly) "AND ols.status IN ('OPEN', 'PARTIALLY_FILLED')" else ""
-        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND o.instrument_id = ?"
+        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND ols.instrument_id = ?"
         val boundedLimit = limit.coerceIn(0, 500)
         val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
         val params = buildList {
@@ -4190,13 +4190,12 @@ class PostgresRuntimePersistence(
         }
         return projectionQueryList(
             """
-            SELECT o.order_id, o.instrument_id, o.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
-            FROM ${names.orders} o
-            JOIN ${names.orderLifecycleState} ols ON ols.order_id = o.order_id
-            WHERE o.participant_id = ?
+            SELECT ols.order_id, ols.instrument_id, ols.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
+            FROM ${names.orderLifecycleState} ols
+            WHERE ols.participant_id = ?
             $instrumentFilter
             $statusFilter
-            ORDER BY o.accepted_at
+            ORDER BY ols.accepted_at
             $limitClause
             """.trimIndent(),
             *params.toTypedArray()
