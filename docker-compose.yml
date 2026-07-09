@@ -400,7 +400,7 @@ services:
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/health"]
+      test: ["CMD", "/usr/local/bin/http-healthcheck", "http://127.0.0.1:8081/health"]
       interval: 5s
       timeout: 3s
       retries: 20
