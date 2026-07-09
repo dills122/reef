@@ -341,6 +341,28 @@ Retained secondary metrics:
 The score format must include `modeId` and `scoringPolicyVersion` so old results
 stay explainable after scoring changes.
 
+Next scoring slices after the 15 minute reporting/infra gate:
+
+1. **Portfolio/P&L accounting**: reconstruct per-bot executions, maintain cash
+   and inventory by instrument, mark inventory to deterministic mid/last/reference
+   prices, and report realized P&L, unrealized P&L, final equity, and drawdown.
+2. **Market-quality contribution**: attribute quote uptime, two-sided presence,
+   spread tightness, depth, replenishment after fills, fill quality, and
+   order-to-trade/cancel behavior to the bot that supplied the liquidity.
+3. **Price movement and impact**: compare pre/post mid, last trade, and spread
+   around each bot's actions; reward useful price discovery and liquidity
+   improvement while penalizing destabilizing impact, crossed/empty books,
+   excessive volatility, and toxic quote behavior.
+4. **Risk-adjusted score**: combine P&L with inventory concentration, max
+   drawdown, rejected/failed/timed-out command penalties, freeze/disqualification
+   penalties, and mode-specific instrument risk categories.
+5. **House-bot separation**: keep house liquidity providers out of public
+   competitor scoring while still reporting their P&L, inventory, quote quality,
+   and market-health contribution for tuning and diagnostics.
+
+Until those slices land, `score-v0` should be treated as a participation and
+policy-compliance score, not a competitive trading-performance score.
+
 ### 6. Real Run-Result Ingestion
 
 Extend the current result ingestion smoke so it can ingest the actual hosted bot

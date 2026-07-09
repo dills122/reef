@@ -75,6 +75,13 @@ export function exportCounts(report) {
 
 export function exportLatency(report) {
   if (isArenaLocalTickReport(report)) {
+    if (report.latencySummary?.tickElapsedMs !== undefined) {
+      return {
+        p50: nullableNumber(report.latencySummary.tickElapsedMs.p50),
+        p95: nullableNumber(report.latencySummary.tickElapsedMs.p95),
+        p99: nullableNumber(report.latencySummary.tickElapsedMs.p99),
+      };
+    }
     const latencies = report.sessionReports
       ?.flatMap((session) => session.ticks ?? [])
       ?.map((tick) => Number(tick.elapsedMs ?? 0))

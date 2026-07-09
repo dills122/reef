@@ -1,11 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
 
 loadDotEnv();
@@ -39,6 +40,7 @@ const config = {
   requireProjectionDrain: args.includes("--require-projection-drain"),
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
+  reportShape: stringOption("--report-shape", "full"),
 };
 
 if (!["vm", "ses"].includes(config.compartment)) {
@@ -49,6 +51,9 @@ if (!["dry-run", "live"].includes(config.submitMode)) {
 }
 if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
   throw new Error(`unsupported --command-wait-mode=${config.commandWaitMode}; expected terminal, accepted, or none`);
+}
+if (!["full", "compact"].includes(config.reportShape)) {
+  throw new Error(`unsupported --report-shape=${config.reportShape}; expected full or compact`);
 }
 if (config.submitMode === "live" && config.venueUrl.length === 0) {
   throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
@@ -133,8 +138,7 @@ async function main() {
       elapsedMs: performance.now() - startedAt,
     });
     report.persistence = await persistArenaResults(report);
-    mkdirSync(dirname(config.out), { recursive: true });
-    writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
+    await writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 });
     assertExpectedFreezeBots(report);
     console.log(`arena local tick run complete: ${resolve(config.out)}`);
     console.log(
@@ -619,6 +623,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
         : 0,
     },
     commandStatusSummary,
+    latencySummary: summarizeReportLatency(tickResults),
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
     healthSamples,
@@ -630,6 +635,99 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     ),
     diagnosticLeaderboard: rankBotResults(botResults.filter((result) => result.scoreEligible)),
     sessionReports,
+  };
+}
+
+function reportForOutput(report) {
+  if (config.reportShape === "full") {
+    return report;
+  }
+  return compactArenaReport(report);
+}
+
+function compactArenaReport(report) {
+  return {
+    schemaVersion: report.schemaVersion,
+    reportShape: "compact",
+    generatedAt: report.generatedAt,
+    startedAt: report.startedAt,
+    completedAt: report.completedAt,
+    runId: report.runId,
+    mode: report.mode,
+    runPlan: report.runPlan,
+    expectations: report.expectations,
+    runnerProfile: report.runnerProfile,
+    commandWaitMode: report.commandWaitMode,
+    status: report.status,
+    elapsedMs: report.elapsedMs,
+    totals: report.totals,
+    commandAccounting: report.commandAccounting,
+    commandStatusSummary: report.commandStatusSummary,
+    latencySummary: report.latencySummary,
+    activityBySchedulingClass: report.activityBySchedulingClass,
+    healthSummary: report.healthSummary,
+    venueReadback: compactVenueReadback(report.venueReadback),
+    enforcementEvents: report.enforcementEvents,
+    botResults: report.botResults,
+    leaderboard: report.leaderboard,
+    diagnosticLeaderboard: report.diagnosticLeaderboard,
+    persistence: compactPersistence(report.persistence),
+    omitted: {
+      healthSamples: Array.isArray(report.healthSamples) ? report.healthSamples.length : 0,
+      sessionReports: Array.isArray(report.sessionReports) ? report.sessionReports.length : 0,
+      reason: "compact report shape omits high-volume per-tick detail",
+    },
+  };
+}
+
+function compactVenueReadback(venueReadback) {
+  if (venueReadback === undefined) return undefined;
+  return {
+    mode: venueReadback.mode,
+    skipped: venueReadback.skipped,
+    projectionDrained: venueReadback.projectionDrained,
+    projectionDrainRequired: venueReadback.projectionDrainRequired,
+    availability: venueReadback.availability,
+    snapshots: venueReadback.snapshots,
+    ownOrders: Array.isArray(venueReadback.ownOrders)
+      ? venueReadback.ownOrders.map((entry) => ({
+        botId: entry.botId,
+        participantId: entry.participantId,
+        currentStatusCode: entry.current?.statusCode,
+        currentOrderCount: entry.current?.body?.orders?.length ?? 0,
+        historyStatusCode: entry.history?.statusCode,
+        historyOrderCount: entry.history?.body?.orders?.length ?? 0,
+      }))
+      : [],
+  };
+}
+
+function compactPersistence(persistence) {
+  if (persistence === undefined) return undefined;
+  return {
+    enabled: persistence.enabled,
+    skipped: persistence.skipped,
+    operationCount: Array.isArray(persistence.operations) ? persistence.operations.length : 0,
+    rawResultsStatusCode: persistence.rawResults?.statusCode,
+    rawEnforcementEventsStatusCode: persistence.rawEnforcementEvents?.statusCode,
+    leaderboardStatusCode: persistence.leaderboard?.statusCode,
+    leaderboardEntry: persistence.leaderboardEntry,
+  };
+}
+
+function summarizeReportLatency(tickResults) {
+  const tickElapsedMs = tickResults
+    .map((tick) => Number(tick.elapsedMs ?? 0))
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right);
+  return {
+    tickElapsedMs: {
+      count: tickElapsedMs.length,
+      p50: percentile(tickElapsedMs, 0.5),
+      p95: percentile(tickElapsedMs, 0.95),
+      p99: percentile(tickElapsedMs, 0.99),
+      max: tickElapsedMs.length === 0 ? null : tickElapsedMs[tickElapsedMs.length - 1],
+    },
   };
 }
 

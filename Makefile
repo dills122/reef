@@ -93,6 +93,8 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-render-report-index.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-render-report.test.mjs
+	$(JS_RUNTIME) scripts/dev/large-json-writer.test.mjs
+	$(JS_RUNTIME) scripts/dev/arena-local-tick-report-writer.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs

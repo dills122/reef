@@ -64,9 +64,10 @@ export default class RefreshingMarketMaker extends ReefBotV1 {
         staleOrders.map((order) => ctx.orders.safe.cancel({ orderId: order.orderId, instrumentId: order.instrumentId })),
       );
       for (let index = 0; index < staleOrders.length; index += 1) {
-        if (cancels[index]?.ok) {
-          this.cancelPendingOrderIds.add(staleOrders[index].orderId);
-          this.recentlyCancelledUntilByOrderId.set(staleOrders[index].orderId, nowMs + cancelSuppressMs);
+        const staleOrder = staleOrders[index];
+        if (staleOrder !== undefined && cancels[index]?.ok) {
+          this.cancelPendingOrderIds.add(staleOrder.orderId);
+          this.recentlyCancelledUntilByOrderId.set(staleOrder.orderId, nowMs + cancelSuppressMs);
         }
       }
       return cancels.flatMap((cancel) => (cancel.ok ? [cancel.value] : [ctx.actions.noop(cancel.denial.message)]));

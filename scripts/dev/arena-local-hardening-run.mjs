@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 
 const args = process.argv.slice(2);
 
@@ -56,8 +57,7 @@ if (result.status !== 0) {
 
 const report = JSON.parse(readFileSync(config.out, "utf8"));
 const summary = hardeningSummary(report);
-mkdirSync(dirname(summaryOut), { recursive: true });
-writeFileSync(summaryOut, `${JSON.stringify(summary, null, 2)}\n`);
+await writeJsonFileStreaming(summaryOut, summary, { space: 2 });
 
 console.log(`arena local hardening summary: ${resolve(summaryOut)}`);
 console.log(

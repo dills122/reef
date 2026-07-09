@@ -14,9 +14,9 @@ export default class ConfigurablePassiveStrategyBot extends ReefBotV1 {
 
   override async onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]> {
     const instrumentId = ctx.config.string("instrumentId");
-    const side = ctx.config.string("side") === "SELL" ? "SELL" : "BUY";
+    const side = ctx.config.optionalString("side") === "SELL" ? "SELL" : "BUY";
     const orderSize = ctx.config.number("orderSize");
-    const priceOffset = ctx.config.number("priceOffset");
+    const priceOffset = ctx.config.optionalNumber("priceOffset") ?? 1;
     const snapshot = await ctx.marketData.snapshot(instrumentId);
 
     if (!snapshot.ok) {

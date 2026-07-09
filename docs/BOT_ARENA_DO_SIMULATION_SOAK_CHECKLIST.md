@@ -796,6 +796,13 @@ Research anchor:
 - submit mode: `dry-run`
 - purpose: prove run sizing, artifact shape, scoring, and report/export
   generation before starting the venue stack
+- report artifacts: arena tick and hardening reports use a backpressure-aware
+  streaming JSON writer so 3-15 minute runs do not materialize the full
+  pretty-printed report string before writing it
+- long-run parser/render/export path: use `--report-shape=compact` for
+  15-minute report consumers. Full reports preserve per-tick detail for small
+  debug runs, but 15-minute multi-instrument full JSON can exceed Node's
+  single-file buffer limits.
 
 Latest local dry plan:
 
