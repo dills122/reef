@@ -169,6 +169,7 @@ function summarizeMarketQuality(report) {
         commandCountByClass: {},
         filledCommandCountByClass: {},
         tradeCountByClass: {},
+        sides: {},
       });
     }
     return instruments.get(key);
@@ -198,15 +199,30 @@ function summarizeMarketQuality(report) {
         const commandInstrumentId = instrumentId ?? findCommandInstrument(tick, command.commandId);
         const instrument = ensureInstrument(commandInstrumentId);
         if (instrument === undefined) continue;
+        const side = command.body?.side ??
+          command.commandBody?.side ??
+          command.venueCommand?.body?.side ??
+          findCommandSide(tick, command.commandId) ??
+          "UNKNOWN";
+        const sideStats = ensureSideStats(instrument, side);
         increment(instrument.commandCountByClass, schedulingClass);
         instrument.submittedCommands += 1;
+        sideStats.submittedCommands += 1;
         if (command.finalStatus === "COMPLETED") instrument.completedCommands += 1;
-        if (command.finalStatus === "REJECTED" || command.rejected) instrument.rejectedCommands += 1;
-        if (command.timedOut) instrument.timedOutCommands += 1;
+        if (command.finalStatus === "COMPLETED") sideStats.completedCommands += 1;
+        if (command.finalStatus === "REJECTED" || command.rejected) {
+          instrument.rejectedCommands += 1;
+          sideStats.rejectedCommands += 1;
+        }
+        if (command.timedOut) {
+          instrument.timedOutCommands += 1;
+          sideStats.timedOutCommands += 1;
+        }
         const trades = Array.isArray(command.intakeBody?.trades) ? command.intakeBody.trades : [];
         const executions = Array.isArray(command.intakeBody?.executions) ? command.intakeBody.executions : [];
         if (trades.length > 0 || executions.length > 0) {
           instrument.filledCommands += 1;
+          sideStats.filledCommands += 1;
           increment(instrument.filledCommandCountByClass, schedulingClass);
         }
         for (const trade of trades) {
@@ -217,6 +233,10 @@ function summarizeMarketQuality(report) {
           tradeInstrument.tradeCount += 1;
           tradeInstrument.tradedQuantity += quantity;
           tradeInstrument.notionalNanos += quantity * price;
+          if (tradeInstrument === instrument) {
+            sideStats.tradeCount += 1;
+            sideStats.tradedQuantity += quantity;
+          }
           increment(tradeInstrument.tradeCountByClass, schedulingClass);
         }
       }
@@ -249,6 +269,17 @@ function summarizeMarketQuality(report) {
         commandCountByClass: instrument.commandCountByClass,
         filledCommandCountByClass: instrument.filledCommandCountByClass,
         tradeCountByClass: instrument.tradeCountByClass,
+        bySide: Object.fromEntries(
+          Object.entries(instrument.sides)
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([side, stats]) => [
+              side,
+              {
+                ...stats,
+                fillRatePct: pct(stats.filledCommands, stats.submittedCommands),
+              },
+            ]),
+        ),
       };
     });
 
@@ -261,6 +292,11 @@ function summarizeMarketQuality(report) {
       failures.push(`market ${instrument.instrumentId} p95SpreadBps ${instrument.p95QuotedSpreadBps.toFixed(2)} > ${maxP95QuotedSpreadBps}`);
     }
     if (instrument.tradeCount === 0) failures.push(`market ${instrument.instrumentId} has no trades`);
+    for (const [side, stats] of Object.entries(instrument.bySide)) {
+      if (stats.submittedCommands > 0 && stats.filledCommands === 0) {
+        failures.push(`market ${instrument.instrumentId} side ${side} has no filled commands`);
+      }
+    }
   }
 
   return {
@@ -290,6 +326,27 @@ function summarizeMarketQuality(report) {
 function findCommandInstrument(tick, commandId) {
   const venueCommand = (tick.venueCommands ?? []).find((candidate) => candidate.body?.commandId === commandId);
   return venueCommand?.body?.instrumentId;
+}
+
+function findCommandSide(tick, commandId) {
+  const venueCommand = (tick.venueCommands ?? []).find((candidate) => candidate.body?.commandId === commandId);
+  return venueCommand?.body?.side;
+}
+
+function ensureSideStats(instrument, side) {
+  const key = String(side ?? "UNKNOWN");
+  if (!instrument.sides[key]) {
+    instrument.sides[key] = {
+      submittedCommands: 0,
+      completedCommands: 0,
+      rejectedCommands: 0,
+      timedOutCommands: 0,
+      filledCommands: 0,
+      tradeCount: 0,
+      tradedQuantity: 0,
+    };
+  }
+  return instrument.sides[key];
 }
 
 function summarizeRejects(report) {

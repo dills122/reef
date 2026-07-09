@@ -167,7 +167,7 @@
           "instrumentId": "AAPL",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0.05
+          "crossOffset": 0.6
         }
       },
       "scoreEligible": false,
