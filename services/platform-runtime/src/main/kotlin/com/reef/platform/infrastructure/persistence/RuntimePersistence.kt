@@ -52,6 +52,20 @@ data class CanonicalSubmitOutcome(
     val outcome: PersistableSubmitOutcome
 )
 
+data class CanonicalCommandResult(
+    val commandId: String,
+    val partition: Int,
+    val commandStream: String,
+    val streamSequence: Long,
+    val commandType: String,
+    val payloadHash: String,
+    val instrumentId: String,
+    val resultStatus: String,
+    val rejectCode: String,
+    val engineShardId: String,
+    val resultPayloadJson: String
+)
+
 data class ProjectionWatermark(
     val projectionName: String,
     val partitionId: Int,
@@ -280,6 +294,9 @@ interface RuntimePersistence {
         return 0
     }
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
+        return null
+    }
+    fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
         return null
     }
     fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {

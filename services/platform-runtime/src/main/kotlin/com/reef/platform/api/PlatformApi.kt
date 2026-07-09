@@ -16,6 +16,7 @@ import com.reef.platform.domain.SupportedIntradayBarIntervals
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
+import com.reef.platform.infrastructure.persistence.CanonicalCommandResult
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.MarketDataDepthLevel
 import com.reef.platform.infrastructure.persistence.MarketDataDepthSnapshot
@@ -275,6 +276,10 @@ class PlatformApi(
 
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return orderService.canonicalCommandOutcome(commandId)
+    }
+
+    fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        return orderService.canonicalCommandResult(commandId)
     }
 
     fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {

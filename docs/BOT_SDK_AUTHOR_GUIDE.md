@@ -176,7 +176,7 @@ The venue adapter sends a bot-scoped API client identity as `X-Client-Id: bot:<b
 Compiled hosted artifact smoke runs use `scripts/dev/bot-sdk-hosted-run.mjs`; see [`BOT_SDK_HOSTED_RUNTIME.md`](./BOT_SDK_HOSTED_RUNTIME.md) for the current SES-compatible runner contract.
 For the runtime integration path and command flow, see the "Runtime Integration" section in [`BOT_SDK_DESIGN.md`](./BOT_SDK_DESIGN.md).
 
-See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, cancels active quotes through `ctx.orders.safe.cancel`, then submits replacement quotes after the local order state clears.
+See `packages/bot-sdk/examples/refreshing-market-maker.ts` for a lifecycle-aware cancel/replace example that reads own orders, no-ops while both sides are healthy, cancels quotes after configurable `quoteTtlMs`, then submits replacement quotes after the local order state clears.
 See `packages/bot-sdk/examples/multi-symbol-strategy-bot.ts` for a v1.5 strategy example that subscribes to several instruments, emits Bollinger/momentum signals, and converts approved signals into proposed order actions.
 See `packages/bot-sdk/examples/technical-indicator-strategy-bot.ts` for an approved-package example using `trading-signals`; approved packages are bundled into the hosted artifact and are not loaded dynamically at runtime.
 

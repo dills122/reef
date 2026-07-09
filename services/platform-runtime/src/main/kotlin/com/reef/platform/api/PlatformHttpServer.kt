@@ -3019,6 +3019,9 @@ class PlatformHttpServer(
             api.canonicalCommandOutcome(commandId)?.let { outcome ->
                 return outcome.toStatusView().withReadScopeFrom(capturedStatus)
             }
+            api.canonicalCommandResult(commandId)?.let { result ->
+                return result.toStatusView().withReadScopeFrom(capturedStatus)
+            }
             api.venueEventBatchCommandReference(commandId)?.let { reference ->
                 return reference.toStatusView().withReadScopeFrom(capturedStatus)
             }

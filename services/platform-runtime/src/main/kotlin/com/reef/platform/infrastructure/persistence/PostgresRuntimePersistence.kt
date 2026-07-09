@@ -3210,6 +3210,47 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  command_id,
+                  partition_id,
+                  stream_name,
+                  stream_seq,
+                  command_type,
+                  payload_hash,
+                  instrument_id,
+                  result_status,
+                  reject_code,
+                  engine_shard_id,
+                  result_payload::TEXT AS result_payload
+                FROM ${names.canonicalCommandResults}
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return CanonicalCommandResult(
+                        commandId = rs.getString("command_id"),
+                        partition = rs.getInt("partition_id"),
+                        commandStream = rs.getString("stream_name"),
+                        streamSequence = rs.getLong("stream_seq"),
+                        commandType = rs.getString("command_type"),
+                        payloadHash = rs.getString("payload_hash"),
+                        instrumentId = rs.getString("instrument_id"),
+                        resultStatus = rs.getString("result_status"),
+                        rejectCode = rs.getString("reject_code"),
+                        engineShardId = rs.getString("engine_shard_id"),
+                        resultPayloadJson = rs.getString("result_payload")
+                    )
+                }
+            }
+        }
+    }
+
     override fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
         canonicalConnection().use { conn ->
             conn.prepareStatement(

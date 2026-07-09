@@ -47,7 +47,9 @@ import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
+import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.PersistableSubmitOutcome
 import com.reef.platform.infrastructure.persistence.VenueCommandOutcomeFact
 import com.reef.platform.infrastructure.persistence.VenueEventBatchFact
 import java.net.HttpURLConnection
@@ -942,6 +944,89 @@ class PlatformHttpServerBoundaryTest {
             assertContains(status.body, "\"participantId\":\"participant-1\"")
             assertContains(status.body, "\"orderId\":\"ord-cmd-status-canonical\"")
             assertContains(status.body, "\"clientId\":\"client-1\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1CommandStatusEndpointReturnsCompactCanonicalCommandResult() {
+        val persistence = InMemoryRuntimePersistence()
+        persistence.appendCanonicalSubmitOutcomes(
+            listOf(
+                CanonicalSubmitOutcome(
+                    runId = "run-status-compact",
+                    venueSessionId = "session-status-compact",
+                    partitionId = 7,
+                    partitionSequence = 42L,
+                    streamName = "stream-status-compact",
+                    streamSequence = 12L,
+                    commandId = "cmd-status-compact",
+                    idempotencyKey = "idem-status-compact",
+                    payloadHash = "hash-status-compact",
+                    instrumentId = "MSFT",
+                    commandType = "SubmitOrder",
+                    resultStatus = "accepted",
+                    rejectCode = "",
+                    acceptedAt = "2026-07-04T14:30:00.000Z",
+                    completedAt = "2026-07-04T14:30:00.000Z",
+                    engineShardId = "shard-compact",
+                    outcome = PersistableSubmitOutcome(
+                        commandId = "cmd-status-compact",
+                        result = SubmitOrderResult(
+                            accepted = EngineOrderAccepted(
+                                eventId = "evt-status-compact",
+                                orderId = "ord-status-compact",
+                                engineOrderId = "eng-status-compact",
+                                occurredAt = "2026-07-04T14:30:00.000Z"
+                            )
+                        ),
+                        acceptedOrder = PersistedOrder(
+                            orderId = "ord-status-compact",
+                            engineOrderId = "eng-status-compact",
+                            instrumentId = "MSFT",
+                            participantId = "participant-compact",
+                            accountId = "account-compact",
+                            side = "BUY",
+                            orderType = "LIMIT",
+                            quantityUnits = "1",
+                            limitPrice = "100000000",
+                            currency = "USD",
+                            timeInForce = "DAY",
+                            acceptedAt = "2026-07-04T14:30:00.000Z"
+                        ),
+                        lifecycleEvents = emptyList()
+                    )
+                )
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = NoopCommandCaptureStore(),
+            runtimePersistence = persistence
+        )
+        try {
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-compact",
+                headers = apiReadHeaders(participantId = "participant-compact")
+            )
+
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-status-compact\"")
+            assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"internalStatus\":\"COMPLETED\"")
+            assertContains(status.body, "\"processingMode\":\"stream-ack\"")
+            assertContains(status.body, "\"canonicalMaterialized\":true")
+            assertContains(status.body, "\"resultStatus\":\"accepted\"")
+            assertContains(status.body, "\"source\":\"canonical_result\"")
+            assertContains(status.body, "\"partition\":7")
+            assertContains(status.body, "\"streamSequence\":12")
+            assertContains(status.body, "\"commandStream\":\"stream-status-compact\"")
+            assertContains(status.body, "\"shardId\":\"shard-compact\"")
+            assertContains(status.body, "\"instrumentId\":\"MSFT\"")
+            assertContains(status.body, "\"participantId\":\"participant-compact\"")
+            assertContains(status.body, "\"orderId\":\"ord-status-compact\"")
         } finally {
             server.stop(0)
         }

@@ -6,6 +6,7 @@ import http from "node:http";
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const commands = new Map();
 const receivedCommands = [];
+const commandStatusReads = [];
 const referenceWrites = [];
 const arena = {
   bots: new Map(),
@@ -29,6 +30,7 @@ const server = http.createServer(async (req, res) => {
     receivedCommands.push({ path: url.pathname, body });
     commands.set(body.commandId, {
       commandId: body.commandId,
+      participantId: req.headers["x-participant-id"] ?? body.participantId,
       status: "COMPLETED",
       responseStatus: 200,
       responsePayloadJson: "{}",
@@ -39,7 +41,13 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname.startsWith("/api/v1/commands/")) {
     const commandId = decodeURIComponent(url.pathname.slice("/api/v1/commands/".length));
-    return json(res, commands.has(commandId) ? 200 : 404, commands.get(commandId) ?? { error: "not found" });
+    const command = commands.get(commandId);
+    const participantId = req.headers["x-participant-id"] ?? "";
+    commandStatusReads.push({ commandId, participantId });
+    if (command !== undefined && participantId !== command.participantId) {
+      return json(res, 403, { error: "participant mismatch" });
+    }
+    return json(res, commands.has(commandId) ? 200 : 404, command ?? { error: "not found" });
   }
   if (req.method === "GET" && url.pathname === "/api/v1/data/availability") {
     return json(res, 200, {
@@ -62,8 +70,10 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: "not found", path: url.pathname });
 });
 
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const address = server.address();
+const configuredTestPort = process.env.REEF_ARENA_LOCAL_TICK_TEST_PORT === undefined
+  ? undefined
+  : Number(process.env.REEF_ARENA_LOCAL_TICK_TEST_PORT);
+const address = await listenOnAvailablePort(server, configuredTestPort);
 const baseUrl = `http://127.0.0.1:${address.port}`;
 
 try {
@@ -80,8 +90,14 @@ try {
   ]);
 
   assert.equal(referenceWrites.filter((write) => write.path === "/reference/instruments").length, 4);
-  assert.equal(receivedCommands.length, 14);
+  assert.equal(referenceWrites.some((write) => JSON.stringify(write.body).includes("undefined")), false);
+  assert.ok(referenceWrites.some((write) => write.body.participantId === "participant-builtin-mm-simple"));
+  assert.ok(referenceWrites.some((write) => write.body.accountId === "account-custom-technical-indicator"));
+  assert.ok(referenceWrites.some((write) => write.body.actorId === "actor-builtin-mm-refreshing"));
+  assert.equal(receivedCommands.length, 16);
   assert.ok(Array.from(commands.values()).every((command) => command.status === "COMPLETED"));
+  assert.ok(commandStatusReads.length >= receivedCommands.length);
+  assert.ok(commandStatusReads.every((read) => commands.get(read.commandId)?.participantId === read.participantId));
   assert.equal(arena.bots.size, 5);
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
@@ -89,8 +105,13 @@ try {
   const report = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-live-test.json", "utf8"));
   assert.equal(report.runPlan.tickCount, 3);
   assert.equal(report.runPlan.durationSeconds, 1.5);
+  assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
+  assert.equal(report.runPlan.totalTickCount, 24);
   assert.equal(report.commandWaitMode, "accepted");
-  assert.equal(report.healthSamples.length, 15);
+  assert.equal(report.healthSamples.length, 3);
+  assert.equal(report.activityBySchedulingClass.house_responsive.ticks, 18);
+  assert.equal(report.activityBySchedulingClass.house_responsive.submittedCommands, 16);
+  assert.equal(report.activityBySchedulingClass.contestant_tick.ticks, 3);
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
@@ -109,10 +130,11 @@ try {
   ]);
   const durationReport = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-duration-test.json", "utf8"));
   assert.equal(durationReport.runPlan.selectedBotCount, 5);
-  assert.equal(durationReport.runPlan.perBotTickCount, 1);
-  assert.equal(durationReport.runPlan.totalTickCount, 5);
-  assert.equal(durationReport.runPlan.durationSeconds, 2.5);
-  assert.equal(durationReport.totals.ticks, 5);
+  assert.equal(durationReport.runPlan.schedulingMode, "shared-arena-time");
+  assert.equal(durationReport.runPlan.perBotTickCount, 4);
+  assert.equal(durationReport.runPlan.totalTickCount, 32);
+  assert.equal(durationReport.runPlan.durationSeconds, 2);
+  assert.equal(durationReport.totals.ticks, 32);
   console.log("arena local tick live path checks passed");
 } finally {
   await new Promise((resolve) => server.close(resolve));
@@ -222,4 +244,35 @@ function json(res, status, body) {
   const raw = JSON.stringify(body);
   res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(raw) });
   res.end(raw);
+}
+
+async function listenOnAvailablePort(server, configuredPort) {
+  const ports = configuredPort === undefined
+    ? Array.from({ length: 50 }, (_, index) => 45000 + ((process.pid + Date.now() + index) % 10000))
+    : [configuredPort];
+  let lastError;
+  for (const port of ports) {
+    try {
+      await new Promise((resolve, reject) => {
+        const onError = (error) => {
+          server.off("listening", onListening);
+          reject(error);
+        };
+        const onListening = () => {
+          server.off("error", onError);
+          resolve();
+        };
+        server.once("error", onError);
+        server.once("listening", onListening);
+        server.listen(port, "127.0.0.1");
+      });
+      return server.address();
+    } catch (error) {
+      lastError = error;
+      if (configuredPort !== undefined || error?.code !== "EADDRINUSE") {
+        throw error;
+      }
+    }
+  }
+  throw lastError ?? new Error("failed to bind test server");
 }

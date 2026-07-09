@@ -189,6 +189,7 @@ function commandHeaders(
   return {
     "Content-Type": "application/json",
     "X-Client-Id": context.clientId ?? `bot:${context.botId}`,
+    "X-Participant-Id": context.participantId,
     "Idempotency-Key": `${context.idempotencyKeyPrefix}-${sequence}`,
   };
 }

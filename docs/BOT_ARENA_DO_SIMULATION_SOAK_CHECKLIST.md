@@ -1,16 +1,21 @@
-# Bot Arena DO Simulation Soak Checklist
+# Bot Arena Simulation Soak Checklist
 
 ## Goal
 
-Prove Reef can run a DigitalOcean-hosted bot arena simulation for 15 minutes
-with a healthy market throughout and a successful simulation data export.
+Prove Reef can run a bot arena simulation with a healthy market throughout and
+a successful simulation data export.
+
+The near-term hardening path is local-first: use local 3-5 minute live runs to
+shake out arena behavior, health metrics, projection/readback gaps, and artifact
+capture. Keep the 15 minute run as a later promotion gate because `15m` is the
+target length for the quickest real game simulation.
 
 The path should ramp in this order:
 
 1. Local dry-run smoke with current fixture ticks.
 2. Local live smoke against the platform stack.
-3. DigitalOcean 3-5 minute shakedown with test bots.
-4. DigitalOcean 3-5 minute house-bot tuning run.
+3. Local 3-5 minute shakedown with test bots and persisted artifacts.
+4. Local 3-5 minute multi-instrument liquidity/provider tuning run.
 5. DigitalOcean 15 minute success run with export.
 
 ## Current Baseline
@@ -26,6 +31,25 @@ The path should ramp in this order:
   - `15` bot ticks
   - `14` venue command drafts
   - `0` freezes
+- [x] Local `3m` dry-run plan completes and writes repo-local artifacts:
+  - artifact root: `artifacts/arena/local-dry-3m/`
+  - `180` bot ticks
+  - `146` venue command drafts
+  - `0` freezes
+- [x] Local `3m` live venue-path run writes repo-local artifacts:
+  - artifact root: `artifacts/arena/local-live-3m/`
+  - `180` bot ticks
+  - `146` submitted venue commands
+  - AAPL market-health summary passed
+  - `1` freeze remains, caused by refreshing-bot command timeouts
+- [x] Clean local `3m` live gate passes on rebuilt runtime:
+  - artifact root: `artifacts/arena/local-live-3m-clean/`
+  - `180` bot ticks
+  - `146` submitted venue commands
+  - `0` timed-out commands
+  - `0` freezes
+  - projection drain required and passed
+  - arena persistence/readback and leaderboard entry passed
 - [x] Local live-path JS test covers arena result persistence.
 - [x] Simulation export code can ingest arena local tick reports.
 - [x] Arena runner supports duration-based runs.
@@ -36,7 +60,367 @@ The path should ramp in this order:
 - [x] DigitalOcean stack setup and `make dev-smoke` pass for arena profile.
 - [x] DigitalOcean arena shakedown completes with an arena report.
 - [x] DigitalOcean shakedown export includes arena health evidence.
+- [x] Local 3-5 minute live run completes with full arena health evidence.
+- [ ] Local 3-5 minute shared-time multi-instrument run covers 5-10 tickers with at least
+      one liquidity provider per active ticker and 10+ non-house/non-NPC bots.
+  - mode and catalog coverage exist for `5` tickers and `11` non-house/non-NPC
+    score-eligible bots
+  - superseded sliced-time local live `3m` stream-ack run passed terminal
+    command waits, multi-instrument market-health gates, arena persistence, and
+    leaderboard readback
+  - shared-time local live smoke passed for `3s`
+  - shared-time local live `180s` simulated gate passed unpaced with full
+    terminal command waits, projection drain, persistence, rendered report, and
+    export
+  - real paced `3-5m` wall-clock gate remains open because the first paced
+    attempt showed same-offset bot/session execution and status polling still
+    stretch wall time beyond the target window
 - [ ] DigitalOcean 15 minute run completes with full arena health evidence.
+
+## Local-First Hardening Plan
+
+Use local runs to prove behavior before spending remote-cycle time:
+
+1. `3m` live local health run using normal `/api/v1` venue command paths,
+   accepted-mode command waits, projection drain, rendered report, and export.
+2. `3-5m` local tuning run with explicit health scope for actively quoted
+   instruments.
+3. `3-5m` local multi-instrument run with `5-10` active tickers. Each ticker
+   must have at least one liquidity provider; one provider may cover multiple
+   tickers if quote uptime and spread/depth gates pass per ticker.
+4. Add `10+` non-house/non-NPC bots after liquidity is stable. Keep intentionally
+   abusive/failing bots in a separate negative-test mode so main health runs are
+   not dominated by expected policy failures.
+5. Promote to the `15m` gate only after local artifact bundles include command
+   accounting, projection/readback health, market health, bot summaries,
+   enforcement events, rendered HTML, and export JSON.
+
+The first multi-instrument mode should declare:
+
+- active ticker set
+- primary health ticker set
+- liquidity-provider assignment per ticker
+- minimum quote uptime per ticker
+- spread/depth thresholds per ticker or liquidity tier
+- bot role: house LP, NPC flow, competitor/test bot
+- per-role action, cancel/replace, and open-order budgets
+
+House liquidity providers are venue-stabilization actors, not contestant bots.
+They may run on real-time or event-responsive loops instead of the contestant
+tick cadence, provided they remain deterministic under replay, bounded by
+explicit rate/cancel/open-order budgets, and fully visible in command,
+execution, and audit artifacts.
+
+## Latest Local Live Hardening
+
+Run: `local-live-3m-clean`
+
+- [x] Clean local Docker stack started from reset volumes.
+- [x] Rebuilt `reef-platform-runtime` image used.
+- [x] Order-lifecycle and market-data projectors enabled.
+- [x] Local internal admin access enabled for host-runner persistence.
+- [x] Arena report completed.
+- [x] Arena export completed.
+- [x] Rendered report HTML completed.
+- [x] Projection drain required and passed.
+- [x] Arena admin persistence, run-result readback, enforcement readback, and
+      leaderboard readback passed.
+- [x] Market-health summary passed for actively quoted AAPL.
+- [x] Full run completed without freezes.
+
+Evidence:
+
+- artifact root: `artifacts/arena/local-live-3m-clean/`
+- `180` ticks
+- `146` submitted commands
+- route mix: `110` submit, `36` cancel
+- `0` timed-out commands
+- `0` failed/rejected commands
+- `0` freezes
+- projection availability: `runtime-normalized-venue-outcomes` lag `0`,
+  `market-data-top-of-book` lag `0`
+- AAPL health: `30` post-warmup samples, `100%` top-of-book availability,
+  `100%` depth availability, median/p95 quoted spread
+  `24.906600249066003` bps, zero crossed/locked/empty-book samples
+- arena persistence: `18` operations, leaderboard entry present
+
+Current conclusion: the local single-instrument `3m` gate is now green. The next
+local arena milestone can broaden to the multi-instrument liquidity/provider run
+with `5-10` tickers and `10+` non-house/non-NPC bots.
+
+## Superseded Local Multi-Instrument Plumbing Gate
+
+Run: `arena-local-tick-1783612157169`
+
+- [x] Stream-ack stack restored with arena admin and internal local diagnostics
+      enabled.
+- [x] Dedicated mode covered `5` active symbols: `AAPL`, `MSFT`, `NVDA`,
+      `TSLA`, `AMZN`.
+- [x] Catalog covered at least one house liquidity provider per active ticker.
+- [x] Catalog covered `11` score-eligible non-house/non-NPC bots:
+      `custom-technical-indicator` plus `10` configurable passive bots.
+- [x] Terminal command status polling used participant read-scope headers.
+- [x] Compact stream-worker canonical command results are visible through
+      `/api/v1/commands/{commandId}` as terminal command status.
+- [x] Full local `3m` stream-ack live run completed and persisted arena results:
+      artifact root `artifacts/arena/local-live-3m-multi-terminal/`.
+- [x] Multi-instrument market-health passed.
+
+Evidence:
+
+- `18` bots
+- `180` bot ticks
+- `130` submitted venue commands
+- route mix: `120` submit, `10` cancel
+- `130` terminal `COMPLETED` statuses
+- `0` timed-out commands
+- `0` failed/rejected commands
+- `0` freezes
+- health summary: `pass`
+  - top-of-book availability: `100%`
+  - depth availability: `100%`
+  - median quoted spread: `20` bps
+  - p95 quoted spread: `24.91` bps
+  - crossed/locked/empty book samples: `0`
+- run-scoped canonical command results:
+  - `AAPL`: `42` accepted
+  - `MSFT`: `22` accepted
+  - `NVDA`: `22` accepted
+  - `TSLA`: `22` accepted
+  - `AMZN`: `22` accepted
+- arena persistence/readback passed; leaderboard entry present.
+- This run is superseded as a duration gate because the runner divided the
+  configured `180s` by `18` selected bots. It remains useful plumbing evidence
+  for multi-symbol command/readback/persistence behavior, but not as proof that
+  all bots traded concurrently for a full `3m` market window.
+
+Findings:
+
+- The earlier non-AAPL gap was not matching-engine materialization failure.
+  The runner seeded `participant-undefined`/`actor-undefined` before expanding
+  catalog identities, causing non-AAPL commands to reject authorization.
+- The terminal wait failure after that was status readback plumbing:
+  stream-worker compact canonical results were persisted in
+  `runtime.canonical_command_results`, but `/api/v1/commands/{commandId}` only
+  checked venue-batch canonical outcomes and event-batch references.
+- The final timeout was runner-side read-scope: status polls omitted
+  `X-Participant-Id`, so the API correctly denied command status for
+  participant-scoped commands.
+
+## Latest Responsive-House Shared-Time Smoke
+
+Run artifact: `/tmp/reef-arena-house-responsive-live-smoke.json`
+
+- [x] Runner uses `shared-arena-time` scheduling.
+- [x] Duration is no longer divided by selected bot count.
+- [x] All `18` bots started before tick execution.
+- [x] House liquidity providers used `house_responsive` scheduling with
+      `250ms` deterministic wake intervals.
+- [x] Contestants/NPCs used normal `1000ms` tick scheduling.
+- [x] Market-health snapshots were sampled once per global arena tick, not once
+      per bot tick.
+- [x] Short live stream-ack smoke completed against the local stack.
+
+Evidence:
+
+- configured duration: `3s`
+- contestant/NPC tick interval: `1000ms`
+- house LP wake interval: `250ms`
+- selected bots: `18`
+- house LPs: `6` bots, `72` wakes, `34` submitted commands
+- contestants: `11` bots, `33` ticks, `30` submitted commands
+- NPCs: `1` bot, `3` ticks, `0` submitted commands
+- total bot ticks/wakes: `108`
+- submitted venue commands: `64`
+- route mix: `52` submit, `12` cancel
+- terminal statuses: `64` `COMPLETED`
+- `0` timed-out commands
+- `0` failed/rejected commands
+- `0` house operational pauses
+- `0` freezes
+- health summary: `pass`
+  - top-of-book availability: `100%`
+  - depth availability: `100%`
+  - crossed/locked/empty book samples: `0`
+
+Next proof target:
+
+- Re-run `artifacts/arena/local-live-3m-multi-terminal/` under
+  responsive-house shared-time semantics. With `6` house LPs at `250ms`, `11`
+  contestants at `1000ms`, and `1` NPC at `1000ms`, expected total work over
+  `180s` is `4320` house wakes plus `2160` tick-bot ticks, or `6480` total
+  bot ticks/wakes.
+
+## Latest Responsive-House Shared-Time Gate
+
+Run: `arena-local-tick-1783616217536`
+
+- [x] Shared simulated market duration was `180s`.
+- [x] Mode covered `5` active symbols: `AAPL`, `MSFT`, `NVDA`, `TSLA`,
+      `AMZN`.
+- [x] Catalog covered `6` house LPs, at least one LP per active symbol.
+- [x] Catalog covered `11` score-eligible non-house/non-NPC bots.
+- [x] House LPs used `250ms` responsive wakes.
+- [x] Contestants/NPCs used `1000ms` ticks.
+- [x] Same-offset bot sessions execute concurrently in the runner.
+- [x] Terminal command status polling passed for every submitted command.
+- [x] Projection drain required and passed.
+- [x] Arena persistence/readback passed.
+- [x] Rendered report and export JSON written.
+
+Evidence:
+
+- artifact root: `artifacts/arena/local-live-3m-responsive-house-unpaced/`
+- wall elapsed: `106.046s`
+- total ticks/wakes: `6480`
+- house LPs: `6` bots, `4320` wakes, `12` submitted commands
+- contestants: `11` bots, `1980` ticks, `1800` submitted commands
+- NPCs: `1` bot, `180` ticks, `0` submitted commands
+- total submitted venue commands: `1812`
+- route mix: `1812` submit, `0` cancel
+- terminal statuses: `1812` `COMPLETED`
+- `0` timed-out commands
+- `0` failed/rejected commands
+- `0` house operational pauses
+- `0` freezes
+- projection drained: `true`
+- health summary: `pass`
+  - top-of-book availability: `100%`
+  - depth availability: `100%`
+  - median quoted spread: `20` bps
+  - p95 quoted spread: `24.906600249066003` bps
+  - crossed/locked/empty book samples: `0`
+- command status timing:
+  - average intake elapsed: `9.3139562075056ms`
+  - average status elapsed: `293.0566982897352ms`
+
+Findings:
+
+- Responsive-house no-op behavior is working: LPs wake frequently but submit
+  only initial quotes while healthy.
+- This is useful shared-time simulation proof, but not yet real paced wall-clock
+  proof. The first `--pace-ticks` attempt reached only about `40s` simulated
+  after about `150s` wall time.
+- Runner concurrency improved same-offset execution, but terminal status polling
+  and single worker/session execution still make real paced runs slower than
+  target.
+- Current flow has no cancel pressure because quotes stay healthy and no fills
+  deplete house orders. Next gate needs taker/fill pressure or event-responsive
+  stale/fill triggers to exercise cancel/replace plumbing under load.
+
+Next proof target:
+
+- Add controlled taker/fill pressure and open-order/cancel-budget enforcement,
+  then run a real paced `3-5m` wall-clock gate.
+
+## Previous Local Multi-Instrument Attempt
+
+Run: `arena-local-tick-1783610020341`
+
+- [x] Dedicated mode added: `packages/scenario-definitions/arena/equity-multi-local.v1.json`.
+- [x] Active ticker set covers `5` symbols: `AAPL`, `MSFT`, `NVDA`, `TSLA`, `AMZN`.
+- [x] Catalog includes at least one house liquidity provider per active ticker.
+- [x] Catalog includes `11` score-eligible non-house/non-NPC bots:
+      `custom-technical-indicator` plus `10` configurable passive bots.
+- [x] Runner supports multiple catalog entries sharing the same implementation
+      while retaining distinct bot, actor, participant, and account identities.
+- [x] Short live persistence smoke passed with duplicated implementation entries:
+      artifact root `artifacts/arena/local-live-multi-persist-smoke/`.
+- [x] Full local `3m` live attempt completed and persisted arena results:
+      artifact root `artifacts/arena/local-live-3m-multi/`.
+- [x] Rendered report HTML and export JSON were generated.
+- [ ] Multi-instrument market-health passed.
+
+Evidence:
+
+- `18` bots
+- `180` bot ticks
+- `130` submitted venue commands
+- route mix: `120` submit, `10` cancel
+- `0` timed-out commands
+- `0` failed/rejected commands at intake
+- `0` freezes
+- arena persistence: `57` operations, leaderboard entry present
+- health summary: `warn`
+  - top-of-book availability: `20%`
+  - depth availability: `20%`
+  - empty-book samples: `720` of `900`
+  - only `AAPL` had final market-data readback; `MSFT`, `NVDA`, `TSLA`, and
+    `AMZN` returned `404`
+
+Findings:
+
+- The multi-instrument runner/catalog shape is now present and useful for local
+  testing.
+- The first live multi-instrument run is not a pass. It proved intake,
+  duplicated bot identity, cancel command submission, arena persistence, report
+  rendering, and export generation, but not non-AAPL market materialization.
+- The report status logic now treats failed health checks as
+  `completed_with_warnings` instead of plain `completed`, so future attempts do
+  not look green when top-of-book/depth gates fail.
+- The next fix is to trace non-AAPL stream commands from worker completion into
+  canonical outcomes/read-model projection, then rerun this same mode with
+  terminal command waits or another run-scoped execution proof.
+
+Run: `arena-local-tick-1783566974753`
+
+- [x] Local stream-ack stack started with order-lifecycle and market-data
+      projectors enabled.
+- [x] API health passed from host with elevated local-network access.
+- [x] Arena report completed.
+- [x] Arena export completed.
+- [x] Rendered report HTML completed.
+- [x] Market-health summary passed for actively quoted AAPL.
+- [ ] Full run passed without freezes.
+- [ ] Projection drain passed on the existing local databases.
+- [ ] Arena admin persistence worked from the host runner.
+
+Evidence:
+
+- artifact root: `artifacts/arena/local-live-3m/`
+- `180` ticks
+- `146` submitted commands
+- `36` timed-out commands
+- `1` freeze: `builtin-mm-refreshing`, reason `timedOutCommands 36 > 0`
+- AAPL health: `30` post-warmup samples, `100%` top-of-book availability,
+  `100%` depth availability, median/p95 quoted spread
+  `24.906600249066003` bps, zero crossed/locked/empty-book samples
+- own-order readbacks returned `200` for all five bot participants
+
+Findings:
+
+- The local venue path is usable for artifact-producing 3 minute arena runs.
+- The first local live run used a stale platform-runtime Docker image because
+  the stack was started with `DEV_COMPOSE_BUILD=0` to avoid a Docker metadata
+  stall. That stale image exposed the old cancel/refresh command-status gap:
+  the refreshing bot submitted `72` commands and timed out `36` cancel commands.
+- The global projection-drain gate is not meaningful on the current reused local
+  projection database: availability reported about `1.2M` lag from prior data.
+  Use a clean local stack or run-scoped projection-drain accounting before
+  treating this as a pass/fail gate.
+- Host-to-container calls to `/internal/admin/arena/*` are rejected by the
+  internal route guard (`internal HTTP route requires loopback access`), so local
+  host-runner persistence needs a public/admin route, in-container execution, or
+  a loopback-safe local operator path.
+
+Follow-up verification after rebuilding `reef-platform-runtime` from the current
+source:
+
+- focused source tests passed:
+  `StreamCommandWorkerTest.cancelWorkerPersistsCanonicalOutcomeBeforeAck` and
+  `StreamCommandWorkerTest.modifyWorkerPersistsCanonicalOutcomeBeforeAck`
+- artifact root: `artifacts/arena/local-live-1m-after-rebuild/`
+- `60` ticks
+- `50` submitted commands
+- route mix: `38` submit, `12` cancel
+- `0` timed-out commands
+- `0` freezes
+- AAPL market-health summary passed
+
+Current conclusion from the stale-image run: cancel/modify stream-worker plumbing
+is present in source and works in the rebuilt local runtime image. Clean-stack
+verification above closes the projection-drain and host-runner arena persistence
+gaps for local testing.
 
 ## Latest DigitalOcean Shakedown
 
@@ -228,6 +612,14 @@ Use message-oriented, agent-based simulation shape:
 - [ ] run config controls agent mix, venue session, instruments, and duration
 - [ ] deterministic seeds govern bot/background behavior
 - [ ] reports preserve event and command evidence for replay/debug
+- [x] duration is shared simulated market time, not total bot work divided by
+      selected bot count
+- [x] contestant bots receive the full configured game window on the same
+      timestamp schedule
+- [x] house liquidity providers can be scheduled by deterministic responsive
+      loops under separate rate and command budgets
+- [ ] house liquidity providers can additionally wake from book/fill/spread
+      events once those event feeds are available
 
 Research anchor:
 
@@ -235,6 +627,10 @@ Research anchor:
   with an exchange agent, configurable pairwise latencies, and a message-based
   design modeled after equity trading protocols:
   https://arxiv.org/abs/1904.12066
+- Multi-asset agent-based market simulation research uses heterogeneous agents
+  interacting with continuous double-auction matching across simultaneous
+  assets, which is a closer fit than sequential per-bot time slices:
+  https://arxiv.org/abs/2312.14903
 
 ### House Market Maker Behavior
 
@@ -242,20 +638,26 @@ House bots should start simple, then add inventory control:
 
 - [ ] quote both sides around visible midpoint
 - [ ] keep fixed minimum depth near touch
-- [ ] refresh stale quotes
+- [x] refresh stale quotes
 - [ ] skew quotes when inventory grows
 - [ ] widen spread during volatility or projection lag
 - [ ] stop quoting only through explicit policy event
+- [ ] replenish depleted quotes within a configured latency target
+- [ ] satisfy quote uptime targets per assigned instrument
+- [ ] emit house activity separately from score-eligible contestant results
 
 Research anchor:
 
 - Market-making literature frames market makers as liquidity providers earning
   spread while managing inventory and dynamically skewing quotes:
   https://arxiv.org/abs/1605.01862
+- Designated market-maker behavior research argues quote obligations should
+  consider liquidity replenishment speed, not only quote presence:
+  https://arxiv.org/abs/1508.04348
 
 ## Implementation Checklist
 
-### A. Duration-Based Arena Runner
+### A. Shared-Time Arena Runner
 
 - [x] Add mode fields:
   - `durationSeconds`
@@ -271,6 +673,28 @@ Research anchor:
 - [x] Add accepted-mode command status wait for tick runner.
 - [x] Add per-command intake/status timing telemetry.
 - [x] Add report-level command status summary.
+- [x] Stop dividing configured duration by selected bot count.
+- [x] Interleave bot sessions by global arena tick.
+- [x] Collect market-health snapshots once per global arena tick.
+- [ ] Re-run local `3m` multi-instrument gate under shared-time semantics.
+
+### A2. House Liquidity Provider Runtime
+
+- [x] Add mode/catalog field for `schedulingClass`: `contestant_tick`,
+      `npc_tick`, or `house_responsive`.
+- [x] Keep house LPs out of public scoring while preserving command evidence.
+- [ ] Preserve house P&L and inventory diagnostics once those projections are
+      available.
+- [x] Add first per-house-LP budgets/config: wake interval, data latency,
+      max commands/sec, cancel/replace/sec, open orders per side, inventory cap,
+      quote TTL, and dark-space flags.
+- [ ] Enforce cancel/replace/sec, open orders per side, inventory cap, quote TTL,
+      and replenishment target.
+- [ ] Add deterministic event-responsive triggers: book empty, quote stale,
+      fill observed, spread breached, inventory threshold crossed.
+- [x] Add report metrics split by scheduling class.
+- [ ] Add report metrics for quote uptime, replenishment latency, cancel ratio,
+      order-rate budget use, inventory range, and per-symbol coverage.
 - [x] Add DigitalOcean arena process timeout guard for long runs.
 - [ ] Add per-bot/session timeout budget inside arena runner.
 - [ ] Add stream-ack worker support for cancel/modify command completion.
@@ -318,7 +742,7 @@ Research anchor:
 - [ ] Make quote size configurable per house bot.
 - [ ] Add inventory bounds.
 - [ ] Add inventory-skew behavior.
-- [ ] Add stale quote refresh interval.
+- [x] Add stale quote refresh interval.
 - [ ] Add minimum quote uptime target.
 - [ ] Add circuit-breaker allowances for house liquidity profiles.
 
@@ -365,24 +789,62 @@ Research anchor:
 - submit mode: `dry-run`
 - purpose: runner/build validation
 
-### Local Live Smoke
-
-- duration: `60s`
-- tick interval: `1000ms`
-- bots: house market makers plus one taker test bot
-- purpose: command path and readback validation
-
-### DO Shakedown
+### Local Dry Plan
 
 - duration: `3m`
 - tick interval: `1000ms`
+- submit mode: `dry-run`
+- purpose: prove run sizing, artifact shape, scoring, and report/export
+  generation before starting the venue stack
+
+Latest local dry plan:
+
+```bash
+bun scripts/dev/arena-local-tick-run.mjs \
+  --duration-seconds=180 \
+  --tick-interval-ms=1000 \
+  --warmup-seconds=30 \
+  --health-sample-interval-ms=1000 \
+  --command-wait-mode=none \
+  --submit-mode=dry-run \
+  --out=artifacts/arena/local-dry-3m/arena-local-tick-run.json
+```
+
+Observed locally:
+
+- `180` bot ticks
+- `146` venue command drafts
+- `0` submitted commands, as expected for dry-run mode
+- `0` freezes
+- report JSON, rendered HTML, and export JSON written under
+  `artifacts/arena/local-dry-3m/`
+
+### Local Live Hardening
+
+- duration: `3-5m`
+- tick interval: `1000ms`
+- bots: house market makers plus one taker test bot
+- purpose: command path, projection drain, readback validation, and artifact
+  preservation
+
+### Local Multi-Instrument Tuning
+
+- duration: `3-5m`
+- tick interval: `1000ms`
 - warmup: `30s`
-- bots: house market makers, passive NPC, taker test bot
-- purpose: health monitor and export validation
+- instruments: `5-10` tickers
+- liquidity: at least one provider per active ticker
+- bots: house liquidity providers, NPC flow, and `10+` non-house/non-NPC bots
+- purpose: prove arena realism before the 15 minute gate
+
+### DO Shakedown
+
+- duration: defer until local 3-5 minute gates are meaningful and stable
+- purpose: remote orchestration, host sizing, and artifact transfer validation
 
 ### DO Tuning
 
-- duration: `5m`
+- duration: optional after local multi-instrument tuning
 - tick interval: `1000ms`
 - warmup: `30s`
 - bots: full house set plus controlled test bots
