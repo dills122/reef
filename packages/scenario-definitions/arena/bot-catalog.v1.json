@@ -60,7 +60,8 @@
           "spread": 0.2,
           "quoteTtlMs": 1000,
           "replacementCooldownMs": 1000,
-          "cancelSuppressMs": 300000
+          "cancelSuppressMs": 300000,
+          "maxCancelsPerTick": 1
         }
       },
       "scoreEligible": false,

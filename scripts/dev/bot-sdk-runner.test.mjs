@@ -171,6 +171,7 @@ async function assertRefreshingMarketMakerStaleRefreshRun() {
       config: {
         ...fixture.config,
         quoteTtlMs: 400,
+        maxCancelsPerTick: 2,
       },
       ticks: [
         ...fixture.ticks,

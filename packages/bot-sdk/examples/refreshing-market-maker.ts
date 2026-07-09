@@ -22,6 +22,7 @@ export default class RefreshingMarketMaker extends ReefBotV1 {
     const quoteTtlMs = ctx.config.optionalNumber("quoteTtlMs") ?? 2000;
     const replacementCooldownMs = ctx.config.optionalNumber("replacementCooldownMs") ?? 1000;
     const cancelSuppressMs = ctx.config.optionalNumber("cancelSuppressMs") ?? 300000;
+    const maxCancelsPerTick = Math.max(1, Math.floor(ctx.config.optionalNumber("maxCancelsPerTick") ?? 1));
     const nowMs = ctx.clock.now().getTime();
     const ownOrders = await ctx.orders.current();
     if (!ownOrders.ok) {
@@ -60,11 +61,12 @@ export default class RefreshingMarketMaker extends ReefBotV1 {
       return nowMs - firstObservedMs >= quoteTtlMs;
     });
     if (staleOrders.length > 0) {
+      const staleOrdersToCancel = staleOrders.slice(0, maxCancelsPerTick);
       const cancels = await Promise.all(
-        staleOrders.map((order) => ctx.orders.safe.cancel({ orderId: order.orderId, instrumentId: order.instrumentId })),
+        staleOrdersToCancel.map((order) => ctx.orders.safe.cancel({ orderId: order.orderId, instrumentId: order.instrumentId })),
       );
-      for (let index = 0; index < staleOrders.length; index += 1) {
-        const staleOrder = staleOrders[index];
+      for (let index = 0; index < staleOrdersToCancel.length; index += 1) {
+        const staleOrder = staleOrdersToCancel[index];
         if (staleOrder !== undefined && cancels[index]?.ok) {
           this.cancelPendingOrderIds.add(staleOrder.orderId);
           this.recentlyCancelledUntilByOrderId.set(staleOrder.orderId, nowMs + cancelSuppressMs);
