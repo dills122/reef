@@ -8,8 +8,9 @@
 	let loading = $state(true);
 
 	$effect(() => {
+		const mode = GAME_MODES.find((m) => m.id === selectedMode) ?? GAME_MODES[0];
 		loading = true;
-		fetchLeaderboard(selectedMode).then((result) => {
+		fetchLeaderboard(mode.id, mode.scoringPolicyVersion).then((result) => {
 			entries = result;
 			loading = false;
 		});

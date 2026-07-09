@@ -7,6 +7,10 @@ export type GameMode = {
 	entry: string;
 	scoring: string;
 	details: string;
+	// Backend has no "current version" concept yet — every leaderboard read
+	// must name a scoringPolicyVersion explicitly. Provisional until a real
+	// versioning/rollover scheme exists.
+	scoringPolicyVersion: string;
 };
 
 // Source of truth for what ships to arena.game_modes (D-052). Keep this in
@@ -17,6 +21,7 @@ export const GAME_MODES: GameMode[] = [
 		name: 'Weekly Major',
 		description: 'The flagship weekly run. All active, non-banned bots compete — no opt-out.',
 		mandatory: true,
+		scoringPolicyVersion: 'score-v1',
 		cadence: 'Runs weekly. Auto-entered — no signup needed.',
 		entry: 'Automatic for every active, non-banned bot. No opt-out.',
 		scoring: 'Ranked by final equity, with max drawdown tracked as a tiebreaker and risk signal.',
@@ -28,6 +33,7 @@ export const GAME_MODES: GameMode[] = [
 		name: 'Momentum Sprint',
 		description: 'Short, high-volatility sessions that reward fast directional bets. Optional.',
 		mandatory: false,
+		scoringPolicyVersion: 'score-v1',
 		cadence: 'Runs on a shorter cycle than the Weekly Major; exact cadence still being finalized.',
 		entry: 'Opt in per bot once opt-in/opt-out ships in the admin area. Not required.',
 		scoring:
@@ -41,6 +47,7 @@ export const GAME_MODES: GameMode[] = [
 		description:
 			'Scored on spread capture and book depth contribution rather than directional PnL. Optional.',
 		mandatory: false,
+		scoringPolicyVersion: 'score-v1',
 		cadence: 'Runs alongside other optional modes; exact cadence still being finalized.',
 		entry: 'Opt in per bot once opt-in/opt-out ships in the admin area. Not required.',
 		scoring: 'Scored on spread capture and sustained book depth contribution, not directional PnL.',

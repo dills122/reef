@@ -14,16 +14,22 @@ export type SessionUser = {
 	roles: string[];
 };
 
-// Placeholder public route until /api/v1/arena/leaderboard ships per D-052 —
-// ArenaControlPlaneService.leaderboard exists server-side but is currently
-// internal-only. Returns [] on any failure so the page renders an empty state.
-export async function fetchLeaderboard(modeId: string): Promise<LeaderboardEntry[]> {
+// Requires an X-Client-Id header per the venue-intake read boundary
+// (ExternalApiBoundary.checkRead) — public/unauthenticated, but still
+// client-identified for rate limiting. Returns [] on any failure so the
+// page renders an empty state rather than an error.
+export async function fetchLeaderboard(
+	modeId: string,
+	scoringPolicyVersion: string
+): Promise<LeaderboardEntry[]> {
 	try {
-		const res = await fetch(
-			`${PUBLIC_ARENA_API_BASE_URL}/api/v1/arena/leaderboard?modeId=${encodeURIComponent(modeId)}`
-		);
+		const params = new URLSearchParams({ modeId, scoringPolicyVersion });
+		const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}/api/v1/arena/leaderboard?${params}`, {
+			headers: { 'X-Client-Id': 'arena-admin-web' }
+		});
 		if (!res.ok) return [];
-		return (await res.json()) as LeaderboardEntry[];
+		const body = (await res.json()) as { entries: LeaderboardEntry[] };
+		return body.entries;
 	} catch {
 		return [];
 	}
