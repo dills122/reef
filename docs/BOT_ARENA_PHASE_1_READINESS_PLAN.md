@@ -341,6 +341,28 @@ Retained secondary metrics:
 The score format must include `modeId` and `scoringPolicyVersion` so old results
 stay explainable after scoring changes.
 
+Next scoring slices after the 15 minute reporting/infra gate:
+
+1. **Portfolio/P&L accounting**: reconstruct per-bot executions, maintain cash
+   and inventory by instrument, mark inventory to deterministic mid/last/reference
+   prices, and report realized P&L, unrealized P&L, final equity, and drawdown.
+2. **Market-quality contribution**: attribute quote uptime, two-sided presence,
+   spread tightness, depth, replenishment after fills, fill quality, and
+   order-to-trade/cancel behavior to the bot that supplied the liquidity.
+3. **Price movement and impact**: compare pre/post mid, last trade, and spread
+   around each bot's actions; reward useful price discovery and liquidity
+   improvement while penalizing destabilizing impact, crossed/empty books,
+   excessive volatility, and toxic quote behavior.
+4. **Risk-adjusted score**: combine P&L with inventory concentration, max
+   drawdown, rejected/failed/timed-out command penalties, freeze/disqualification
+   penalties, and mode-specific instrument risk categories.
+5. **House-bot separation**: keep house liquidity providers out of public
+   competitor scoring while still reporting their P&L, inventory, quote quality,
+   and market-health contribution for tuning and diagnostics.
+
+Until those slices land, `score-v0` should be treated as a participation and
+policy-compliance score, not a competitive trading-performance score.
+
 ### 6. Real Run-Result Ingestion
 
 Extend the current result ingestion smoke so it can ingest the actual hosted bot
@@ -388,6 +410,36 @@ Expected proof:
   command accounting, persistence readback, and projection-drain evidence
 - run results are persisted
 - leaderboard returns deterministic ranking for the fixed seed
+
+After the short smoke is stable, use the local hardening gate for meaningful
+pre-soak evidence:
+
+```bash
+make dev-hardening-bot-arena-local
+```
+
+This defaults to the multi-instrument local arena mode for `180` seconds, uses
+terminal command accounting, requires projection drain, and writes both the full
+arena report and a compact hardening summary. The summary includes per-ticker
+market-quality evidence: sampled top-of-book/depth, spread distribution,
+submitted/completed/rejected/timed-out commands, filled commands, trade count,
+side-level fill coverage, traded quantity, notional, fill rate, and actor-class
+contribution. It also records tick runtime and command intake/status/total
+latency distributions overall, by scheduling class, and by bot role so tuning
+can distinguish house-responsive pressure from NPC and contestant tick traffic.
+The mode-level health targets can also require per-minute command pressure, such
+as cancel-route activity and house liquidity-provider command activity, so short
+smokes and 180 second hardening runs prove lifecycle plumbing is exercised at
+their own scale. The local profile records per-side fill coverage but does not
+require every submitted side to fill on every instrument; that stricter assertion
+belongs on longer market-quality gates where the traffic mix is tuned for side
+coverage instead of local infrastructure pressure. It must fail closed when
+commands time out, command finality is incomplete, market health fails,
+per-ticker market quality fails, required command pressure is missing, projection
+drain fails, freeze events appear, or house liquidity providers have empty
+own-order readback. This is the working gate before promoting a profile to the
+longer `15` minute
+quickest-real-game simulation check.
 
 First operator-facing UI artifact:
 

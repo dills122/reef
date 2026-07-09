@@ -133,6 +133,7 @@ export async function runBotScenarioV1(options: BotScenarioRunOptionsV1): Promis
     const context = createFixtureBotContextV1({
       policy,
       fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory, fixtureTick.marketSnapshots),
+      nowIso: fixtureTick.occurredAt,
       readClients: options.readClients,
       logs,
       denials,

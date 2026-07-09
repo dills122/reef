@@ -261,6 +261,7 @@ export async function qualifyBotV1(options: BotQualificationOptionsV1): Promise<
 export function createFixtureBotContextV1(options?: {
   readonly policy?: BotRuntimePolicyV1;
   readonly fixtureData?: BotFixtureDataV1;
+  readonly nowIso?: string;
   readonly readClients?: BotReadClientsV1 | undefined;
   readonly logs?: BotLogEntryV1[];
   readonly denials?: BotDenialV1[];
@@ -268,6 +269,7 @@ export function createFixtureBotContextV1(options?: {
 }): BotContextV1 {
   const policy = options?.policy ?? defaultBotRuntimePolicyV1;
   const fixtureData = options?.fixtureData ?? {};
+  const nowIso = options?.nowIso ?? "2026-07-04T14:30:00.000Z";
   const readClients = options?.readClients;
   const logs = options?.logs ?? [];
   const denials = options?.denials ?? [];
@@ -417,8 +419,8 @@ export function createFixtureBotContextV1(options?: {
     policy,
     config: createConfig(fixtureData.config ?? {}),
     clock: {
-      now: () => new Date("2026-07-04T14:30:00.000Z"),
-      nowIso: () => "2026-07-04T14:30:00.000Z",
+      now: () => new Date(nowIso),
+      nowIso: () => nowIso,
     },
     random: createSeededRandom(1),
     log: createLogger(logs),

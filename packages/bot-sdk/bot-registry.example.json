@@ -1,6 +1,22 @@
 {
   "bots": [
     {
+      "fileName": "configurable-aggressive-taker-bot.ts",
+      "botId": "configurable-aggressive-taker-bot",
+      "owner": "reef",
+      "publisher": "Reef Examples",
+      "approvedVersion": "1.0.0",
+      "status": "draft"
+    },
+    {
+      "fileName": "configurable-passive-strategy-bot.ts",
+      "botId": "configurable-passive-strategy-bot",
+      "owner": "reef",
+      "publisher": "Reef Examples",
+      "approvedVersion": "1.0.0",
+      "status": "draft"
+    },
+    {
       "fileName": "hello-bot.ts",
       "botId": "hello-bot",
       "owner": "reef",

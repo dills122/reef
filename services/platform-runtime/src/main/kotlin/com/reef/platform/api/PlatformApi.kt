@@ -16,6 +16,7 @@ import com.reef.platform.domain.SupportedIntradayBarIntervals
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
+import com.reef.platform.infrastructure.persistence.CanonicalCommandResult
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.MarketDataDepthLevel
 import com.reef.platform.infrastructure.persistence.MarketDataDepthSnapshot
@@ -188,7 +189,7 @@ class PlatformApi(
                 surfaceAvailability(
                     name = "currentOrders",
                     endpoint = "/api/v1/orders/current",
-                    source = "runtime.orders + runtime.order_lifecycle_state",
+                    source = "runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
                     status = venueStatus,
                     scope = "participant-own-orders",
@@ -198,7 +199,7 @@ class PlatformApi(
                 surfaceAvailability(
                     name = "orderHistory",
                     endpoint = "/api/v1/orders/history",
-                    source = "runtime.orders + runtime.order_lifecycle_state",
+                    source = "runtime.order_lifecycle_state",
                     freshness = "dirty-tracked lifecycle projection",
                     status = venueStatus,
                     scope = "participant-own-orders",
@@ -286,6 +287,10 @@ class PlatformApi(
 
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return orderService.canonicalCommandOutcome(commandId)
+    }
+
+    fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        return orderService.canonicalCommandResult(commandId)
     }
 
     fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
@@ -569,7 +574,7 @@ class PlatformApi(
         return JsonCodec.writeObject(
             "participantId" to participantId,
             "meta" to mapOf(
-                "source" to "runtime.orders + runtime.order_lifecycle_state",
+                "source" to "runtime.order_lifecycle_state",
                 "freshness" to "dirty-tracked lifecycle projection",
                 "scope" to "participant",
                 "openOnly" to openOnly,

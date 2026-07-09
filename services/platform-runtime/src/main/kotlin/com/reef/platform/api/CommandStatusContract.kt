@@ -1,6 +1,7 @@
 package com.reef.platform.api
 
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
+import com.reef.platform.infrastructure.persistence.CanonicalCommandResult
 import com.reef.platform.infrastructure.persistence.VenueEventBatchCommandReference
 
 data class CommandStatusView(
@@ -184,6 +185,43 @@ fun CanonicalCommandOutcome.toStatusView(): CommandStatusView {
     )
 }
 
+fun CanonicalCommandResult.toStatusView(): CommandStatusView {
+    val failed = resultStatus.equals("failed", ignoreCase = true)
+    val responseStatus = when {
+        failed -> 500
+        resultStatus.equals("rejected", ignoreCase = true) -> 422
+        else -> 200
+    }
+    return CommandStatusView(
+        commandId = commandId,
+        clientId = "",
+        route = "",
+        idempotencyKey = "",
+        status = if (failed) CommandLogStatus.FAILED else CommandLogStatus.COMPLETED,
+        processingMode = CommandProcessingMode.StreamAck,
+        responseStatus = responseStatus,
+        responsePayloadJson = resultPayloadJson,
+        lastError = "",
+        canonicalMaterialized = true,
+        engineResultStatus = resultStatus,
+        batchId = "",
+        shardId = engineShardId,
+        partition = partition,
+        commandStream = commandStream,
+        eventStream = "",
+        streamSequence = streamSequence,
+        deliveredCount = 0L,
+        commandType = commandType,
+        payloadHash = payloadHash,
+        instrumentId = instrumentId,
+        participantId = commandStatusParticipantId(resultPayloadJson),
+        orderId = commandStatusOrderId(resultPayloadJson),
+        rejectCode = rejectCode,
+        resultPayloadJson = resultPayloadJson,
+        source = "canonical_result"
+    )
+}
+
 fun VenueEventBatchCommandReference.toStatusView(): CommandStatusView {
     return CommandStatusView(
         commandId = commandId,
@@ -221,4 +259,12 @@ private fun commandStatusParticipantId(payloadJson: String): String {
         .ifBlank { root.obj("acceptedOrder").string("participantId") }
         .ifBlank { root.obj("accepted").string("participantId") }
         .ifBlank { root.obj("rejected").string("participantId") }
+}
+
+private fun commandStatusOrderId(payloadJson: String): String {
+    val root = JsonCodec.parseObjectOrEmpty(payloadJson)
+    return root.string("orderId")
+        .ifBlank { root.obj("acceptedOrder").string("orderId") }
+        .ifBlank { root.obj("accepted").string("orderId") }
+        .ifBlank { root.obj("rejected").string("orderId") }
 }

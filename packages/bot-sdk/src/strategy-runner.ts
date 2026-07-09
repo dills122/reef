@@ -119,6 +119,7 @@ export async function runBotStrategyScenarioV1(
     const context = createFixtureBotContextV1({
       policy,
       fixtureData: fixtureDataForState(options.fixture, orderState, orderHistory, fixtureTick.marketSnapshots),
+      nowIso: fixtureTick.occurredAt,
       readClients: options.readClients,
       logs,
       denials,

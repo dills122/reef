@@ -1281,6 +1281,20 @@ class PostgresRuntimePersistence(
                         ON CONFLICT (event_id) DO NOTHING;
                       END IF;
 
+                      INSERT INTO ${names.orderLifecycleDirty}(order_id)
+                      SELECT DISTINCT order_id FROM (
+                        SELECT p_result_order_id AS order_id
+                        WHERE COALESCE(p_result_order_id, '') <> ''
+                        UNION ALL
+                        SELECT event->>'orderId' FROM jsonb_array_elements(COALESCE(p_events, '[]'::jsonb)) AS event
+                        UNION ALL
+                        SELECT trade->>'buyOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
+                        UNION ALL
+                        SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
+                      ) dirty_ids
+                      WHERE COALESCE(order_id, '') <> ''
+                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now();
+
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
                       END IF;
@@ -3210,6 +3224,47 @@ class PostgresRuntimePersistence(
         }
     }
 
+    override fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        canonicalConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT
+                  command_id,
+                  partition_id,
+                  stream_name,
+                  stream_seq,
+                  command_type,
+                  payload_hash,
+                  instrument_id,
+                  result_status,
+                  reject_code,
+                  engine_shard_id,
+                  result_payload::TEXT AS result_payload
+                FROM ${names.canonicalCommandResults}
+                WHERE command_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return CanonicalCommandResult(
+                        commandId = rs.getString("command_id"),
+                        partition = rs.getInt("partition_id"),
+                        commandStream = rs.getString("stream_name"),
+                        streamSequence = rs.getLong("stream_seq"),
+                        commandType = rs.getString("command_type"),
+                        payloadHash = rs.getString("payload_hash"),
+                        instrumentId = rs.getString("instrument_id"),
+                        resultStatus = rs.getString("result_status"),
+                        rejectCode = rs.getString("reject_code"),
+                        engineShardId = rs.getString("engine_shard_id"),
+                        resultPayloadJson = rs.getString("result_payload")
+                    )
+                }
+            }
+        }
+    }
+
     override fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
         canonicalConnection().use { conn ->
             conn.prepareStatement(
@@ -4139,7 +4194,7 @@ class PostgresRuntimePersistence(
         limit: Int
     ): List<OwnOrderView> {
         val statusFilter = if (openOnly) "AND ols.status IN ('OPEN', 'PARTIALLY_FILLED')" else ""
-        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND o.instrument_id = ?"
+        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND ols.instrument_id = ?"
         val boundedLimit = limit.coerceIn(0, 500)
         val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
         val params = buildList {
@@ -4147,15 +4202,14 @@ class PostgresRuntimePersistence(
             if (instrumentId.isNotBlank()) add(instrumentId)
             if (boundedLimit > 0) add(boundedLimit.toString())
         }
-        return projectionQueryList(
+        val lifecycleOrders = projectionQueryList(
             """
-            SELECT o.order_id, o.instrument_id, o.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
-            FROM ${names.orders} o
-            JOIN ${names.orderLifecycleState} ols ON ols.order_id = o.order_id
-            WHERE o.participant_id = ?
+            SELECT ols.order_id, ols.instrument_id, ols.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
+            FROM ${names.orderLifecycleState} ols
+            WHERE ols.participant_id = ?
             $instrumentFilter
             $statusFilter
-            ORDER BY o.accepted_at
+            ORDER BY ols.accepted_at
             $limitClause
             """.trimIndent(),
             *params.toTypedArray()
@@ -4170,6 +4224,44 @@ class PostgresRuntimePersistence(
                 status = getString("status")
             )
         }
+        if (lifecycleOrders.isNotEmpty()) return lifecycleOrders
+        return acceptedOrdersForParticipantFallback(participantId, instrumentId, boundedLimit)
+    }
+
+    private fun acceptedOrdersForParticipantFallback(
+        participantId: String,
+        instrumentId: String,
+        boundedLimit: Int
+    ): List<OwnOrderView> {
+        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND instrument_id = ?"
+        val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
+        val params = buildList {
+            add(participantId)
+            if (instrumentId.isNotBlank()) add(instrumentId)
+            if (boundedLimit > 0) add(boundedLimit.toString())
+        }
+        val sql = """
+            SELECT order_id, instrument_id, side, quantity_units, limit_price
+            FROM ${names.orders}
+            WHERE participant_id = ?
+            $instrumentFilter
+            ORDER BY accepted_at_ts DESC NULLS LAST, accepted_at DESC, order_id DESC
+            $limitClause
+            """.trimIndent()
+        val mapOrder: java.sql.ResultSet.() -> OwnOrderView = {
+            OwnOrderView(
+                orderId = getString("order_id"),
+                instrumentId = getString("instrument_id"),
+                side = getString("side"),
+                quantityUnits = getString("quantity_units"),
+                remainingQuantityUnits = getString("quantity_units"),
+                limitPrice = getString("limit_price"),
+                status = "OPEN"
+            )
+        }
+        val projectionOrders = projectionQueryList(sql, *params.toTypedArray(), map = mapOrder)
+        if (projectionOrders.isNotEmpty() || !projectionStoreSeparated()) return projectionOrders
+        return queryList(sql, *params.toTypedArray(), map = mapOrder)
     }
 
     override fun executionsForParticipant(

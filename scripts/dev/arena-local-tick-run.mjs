@@ -1,11 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
 
 loadDotEnv();
@@ -39,6 +40,7 @@ const config = {
   requireProjectionDrain: args.includes("--require-projection-drain"),
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
+  reportShape: stringOption("--report-shape", "full"),
 };
 
 if (!["vm", "ses"].includes(config.compartment)) {
@@ -49,6 +51,9 @@ if (!["dry-run", "live"].includes(config.submitMode)) {
 }
 if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
   throw new Error(`unsupported --command-wait-mode=${config.commandWaitMode}; expected terminal, accepted, or none`);
+}
+if (!["full", "compact"].includes(config.reportShape)) {
+  throw new Error(`unsupported --report-shape=${config.reportShape}; expected full or compact`);
 }
 if (config.submitMode === "live" && config.venueUrl.length === 0) {
   throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
@@ -69,10 +74,10 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  return { ...entry, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
+  return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
 });
 const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
-const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots.length);
+const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots);
 
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
 let worker;
@@ -94,14 +99,15 @@ async function main() {
     for (const bot of selectedBots) {
       bots.push({
         ...bot,
-        artifact: buildArtifact(bot.entryPath, bot.runnerKey),
+        identityKey: botIdentityKey(bot),
+        artifact: buildArtifact(bot.entryPath, bot.botId),
         runtimeConfigPreflight: await resolveRuntimeConfigForBot(bot),
       });
     }
     for (const bot of bots) {
       const load = await worker.request({
         type: "loadBot",
-        botKey: bot.runnerKey,
+        botKey: bot.botId,
         source: bot.artifact.source,
         fileName: bot.artifact.fileName,
         executionLimits: {
@@ -114,16 +120,9 @@ async function main() {
       }
     }
 
-    const sessionReports = [];
-    const enforcementEvents = [];
     const healthSamples = [];
-    for (const [botIndex, bot] of bots.entries()) {
-      console.log(`arena bot start ${botIndex + 1}/${bots.length}: ${bot.botId} ticks=${runPlan.tickCount}`);
-      const result = await runBotSession(bot, healthSamples);
-      sessionReports.push(result);
-      enforcementEvents.push(...enforceBot(bot, result));
-      console.log(`arena bot complete ${botIndex + 1}/${bots.length}: ${bot.botId} ticks=${result.ticks.length}`);
-    }
+    const sessionReports = await runArenaSessions(bots, healthSamples);
+    const enforcementEvents = sessionReports.flatMap((result) => enforceBot(result.bot, result));
 
     const botResults = scoreBots(sessionReports, enforcementEvents);
     const venueReadback = await collectVenueReadback(botResults);
@@ -139,8 +138,7 @@ async function main() {
       elapsedMs: performance.now() - startedAt,
     });
     report.persistence = await persistArenaResults(report);
-    mkdirSync(dirname(config.out), { recursive: true });
-    writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
+    await writeJsonFileStreaming(config.out, reportForOutput(report), { space: 2 });
     assertExpectedFreezeBots(report);
     console.log(`arena local tick run complete: ${resolve(config.out)}`);
     console.log(
@@ -156,47 +154,182 @@ async function main() {
   }
 }
 
-async function runBotSession(bot, healthSamples) {
-  const fixture = fixtureForBot(bot);
-  const sessionId = `${mode.modeId}-${bot.runnerKey}-${Date.now()}`;
-  const start = await worker.request({ type: "startSession", botKey: bot.runnerKey, sessionId, fixture });
-  if (!start.ok) {
-    return { bot, sessionId, start, ticks: [], stop: undefined };
+async function runArenaSessions(bots, healthSamples) {
+  const sessions = [];
+  for (const [botIndex, bot] of bots.entries()) {
+    const schedulingClass = botSchedulingClass(bot);
+    const expectedTicks = ticksForSchedulingClass(schedulingClass, botScheduleIntervalMs(bot));
+    console.log(`arena bot start ${botIndex + 1}/${bots.length}: ${bot.botId} class=${schedulingClass} ticks=${expectedTicks}`);
+    sessions.push(await startBotSession(bot));
   }
-  const ticks = [];
-  const scheduled = fixture.ticks.slice(0, runPlan.tickCount);
-  for (const [tickIndex, tick] of scheduled.entries()) {
-    const tickResult = await worker.request({ type: "runTick", sessionId, tick });
-    const policyViolation = tickPolicyViolation(bot, tickResult);
-    if (policyViolation !== undefined) {
-      ticks.push({
-        ...tickResult,
-        ok: false,
-        policyViolation,
-        issues: [...(tickResult.issues ?? []), policyViolation],
-        venueCommands: [],
-        submission: emptySubmission("policy_violation"),
-      });
-      break;
+
+  for (const event of schedulerEvents(sessions)) {
+    const scheduledTicks = event.sessions.flatMap((session) => {
+      if (!session.start.ok || session.stoppedForPolicy) {
+        return [];
+      }
+      const tickIndex = event.tickIndexBySessionId.get(session.sessionId);
+      const tick = session.scheduled[tickIndex];
+      if (tick === undefined) {
+        return [];
+      }
+      return [{ session, tick, tickIndex }];
+    });
+    const tickReports = await Promise.all(scheduledTicks.map(({ session, tick, tickIndex }) =>
+      runSessionTick(session, tick, tickIndex, event.offsetMs).then((tickReport) => ({ session, tickReport })),
+    ));
+    for (const { session, tickReport } of tickReports) {
+      session.ticks.push(tickReport);
     }
-    const tickReport = {
-      ...tickResult,
-      submission: await submitVenueCommands(tickResult.venueCommands ?? []),
-    };
-    ticks.push(tickReport);
-    await maybeCollectHealthSample(healthSamples, bot, tick, tickIndex, tickReport);
-    if (tickIndex === 0 || (tickIndex + 1) % 10 === 0 || tickIndex + 1 === scheduled.length) {
-      console.log(`arena bot progress ${bot.botId}: tick=${tickIndex + 1}/${scheduled.length} commands=${tickReport.submission?.submitted ?? 0} timedOut=${tickReport.submission?.timedOut ?? 0}`);
+    if (event.sampleHealth) {
+      await maybeCollectHealthSample(healthSamples, event.healthSampleIndex, tickReports.map((result) => result.tickReport), event.offsetMs);
     }
-    if (config.paceTicks && tickIndex + 1 < scheduled.length) {
-      await sleep(runPlan.tickIntervalMs);
+    if (config.paceTicks && event.nextOffsetMs !== null) {
+      await sleep(event.nextOffsetMs - event.offsetMs);
     }
   }
-  const stop = await worker.request({ type: "stopSession", sessionId });
-  return { bot, sessionId, start, ticks, stop };
+
+  for (const session of sessions) {
+    if (session.start.ok) {
+      session.stop = await worker.request({ type: "stopSession", sessionId: session.sessionId });
+    }
+    console.log(`arena bot complete ${sessions.indexOf(session) + 1}/${sessions.length}: ${session.bot.botId} ticks=${session.ticks.length}`);
+  }
+
+  return sessions.map(({ scheduled, stoppedForPolicy, ...session }) => session);
 }
 
-function tickPolicyViolation(bot, tickResult) {
+async function startBotSession(bot) {
+  const schedulingClass = botSchedulingClass(bot);
+  const intervalMs = botScheduleIntervalMs(bot);
+  const tickCount = ticksForSchedulingClass(schedulingClass, intervalMs);
+  const fixture = fixtureForBot(bot, { tickCount, tickIntervalMs: intervalMs });
+  const sessionId = `${mode.modeId}-${bot.identityKey}-${Date.now()}`;
+  const start = await worker.request({ type: "startSession", botKey: bot.botId, sessionId, fixture });
+  if (!start.ok) {
+    return { bot, sessionId, schedulingClass, intervalMs, start, scheduled: [], ticks: [], stop: undefined, stoppedForPolicy: true };
+  }
+  const scheduled = fixture.ticks.slice(0, tickCount);
+  return { bot, sessionId, schedulingClass, intervalMs, start, scheduled, ticks: [], stop: undefined, stoppedForPolicy: false };
+}
+
+function schedulerEvents(sessions) {
+  const eventsByOffset = new Map();
+  for (const session of sessions) {
+    for (let tickIndex = 0; tickIndex < session.scheduled.length; tickIndex += 1) {
+      const offsetMs = tickIndex * session.intervalMs;
+      if (offsetMs >= runPlan.durationMs) {
+        continue;
+      }
+      const event = eventsByOffset.get(offsetMs) ?? {
+        offsetMs,
+        sessions: [],
+        tickIndexBySessionId: new Map(),
+        sampleHealth: offsetMs % runPlan.healthSampleIntervalMs === 0,
+        healthSampleIndex: Math.floor(offsetMs / runPlan.healthSampleIntervalMs),
+        nextOffsetMs: null,
+      };
+      event.sessions.push(session);
+      event.tickIndexBySessionId.set(session.sessionId, tickIndex);
+      eventsByOffset.set(offsetMs, event);
+    }
+  }
+  const events = Array.from(eventsByOffset.values()).sort((left, right) => left.offsetMs - right.offsetMs);
+  for (let index = 0; index < events.length; index += 1) {
+    events[index].nextOffsetMs = events[index + 1]?.offsetMs ?? null;
+  }
+  return events;
+}
+
+function botSchedulingClass(bot) {
+  if (typeof bot.schedulingClass === "string" && bot.schedulingClass.length > 0) {
+    return bot.schedulingClass;
+  }
+  if (bot.role === "market-maker" || bot.riskProfileName === "house_liquidity") {
+    return "house_responsive";
+  }
+  if (bot.role === "npc") {
+    return "npc_tick";
+  }
+  return "contestant_tick";
+}
+
+function botScheduleIntervalMs(bot) {
+  if (botSchedulingClass(bot) === "house_responsive") {
+    return positiveNumber(houseLiquidityConfig(bot).wakeIntervalMs, runPlan.houseWakeIntervalMs);
+  }
+  return runPlan.tickIntervalMs;
+}
+
+function houseLiquidityConfig(bot) {
+  return {
+    ...(mode.houseLiquidityDefaults ?? {}),
+    ...(bot.houseLiquidity ?? {}),
+  };
+}
+
+function ticksForSchedulingClass(schedulingClass, intervalMs = runPlan.tickIntervalMs) {
+  if (schedulingClass === "house_responsive") {
+    return Math.max(1, Math.ceil(runPlan.durationMs / intervalMs));
+  }
+  return runPlan.tickCount;
+}
+
+async function runSessionTick(session, tick, tickIndex, offsetMs) {
+  const orderRefresh = await refreshLiveSessionOrders(session);
+  if (orderRefresh !== undefined && !orderRefresh.ok) {
+    return {
+      tick,
+      schedulingClass: session.schedulingClass,
+      offsetMs,
+      ok: false,
+      issues: [orderRefresh.issue],
+      venueCommands: [],
+      submission: emptySubmission("live_order_refresh_failed"),
+    };
+  }
+  const tickResult = await worker.request({ type: "runTick", sessionId: session.sessionId, tick });
+  const policyViolation = tickPolicyViolation(session, tickResult, offsetMs);
+  if (policyViolation !== undefined) {
+    session.stoppedForPolicy = true;
+    if (policyViolation.operational) {
+      return {
+        ...tickResult,
+        tick,
+        schedulingClass: session.schedulingClass,
+        offsetMs,
+        ok: tickResult.ok ?? true,
+        operationalControl: policyViolation,
+        issues: [...(tickResult.issues ?? []), policyViolation],
+        venueCommands: [],
+        submission: emptySubmission("operational_control"),
+      };
+    }
+    return {
+      ...tickResult,
+      tick,
+      ok: false,
+      policyViolation,
+      issues: [...(tickResult.issues ?? []), policyViolation],
+      venueCommands: [],
+      submission: emptySubmission("policy_violation"),
+    };
+  }
+  const tickReport = {
+    ...tickResult,
+    tick,
+    schedulingClass: session.schedulingClass,
+    offsetMs,
+    submission: await submitVenueCommands(tickResult.venueCommands ?? []),
+  };
+  if (tickIndex === 0 || (tickIndex + 1) % 10 === 0 || tickIndex + 1 === session.scheduled.length) {
+    console.log(`arena bot progress ${session.bot.botId}: tick=${tickIndex + 1}/${session.scheduled.length} commands=${tickReport.submission?.submitted ?? 0} timedOut=${tickReport.submission?.timedOut ?? 0}`);
+  }
+  return tickReport;
+}
+
+function tickPolicyViolation(session, tickResult, offsetMs) {
+  const bot = session.bot;
   const actionCount = tickResult.actions?.length ?? 0;
   if (actionCount > bot.riskProfile.maxActionsPerTick) {
     return {
@@ -206,12 +339,168 @@ function tickPolicyViolation(bot, tickResult) {
       limit: bot.riskProfile.maxActionsPerTick,
     };
   }
+  if (session.schedulingClass === "house_responsive") {
+    const houseConfig = houseLiquidityConfig(bot);
+    const submittedCommands = tickResult.venueCommands?.length ?? 0;
+    const maxCommandsPerSecond = Number(houseConfig.maxCommandsPerSecond ?? 0);
+    if (maxCommandsPerSecond > 0) {
+      const second = Math.floor(offsetMs / 1000);
+      session.houseCommandCountsBySecond ??= new Map();
+      const nextCount = Number(session.houseCommandCountsBySecond.get(second) ?? 0) + submittedCommands;
+      session.houseCommandCountsBySecond.set(second, nextCount);
+      if (nextCount > maxCommandsPerSecond) {
+        return {
+          code: "house_max_commands_per_second",
+          message: `house commands ${nextCount} > ${maxCommandsPerSecond} in second ${second}`,
+          observed: nextCount,
+          limit: maxCommandsPerSecond,
+          operational: true,
+        };
+      }
+    }
+    const cancelCommands = (tickResult.actions ?? []).filter((action) => action.type === "cancel_order").length;
+    const maxCancelsPerSecond = Number(houseConfig.maxCancelsPerSecond ?? 0);
+    if (maxCancelsPerSecond > 0) {
+      const second = Math.floor(offsetMs / 1000);
+      session.houseCancelCountsBySecond ??= new Map();
+      const nextCount = Number(session.houseCancelCountsBySecond.get(second) ?? 0) + cancelCommands;
+      session.houseCancelCountsBySecond.set(second, nextCount);
+      if (nextCount > maxCancelsPerSecond) {
+        return {
+          code: "house_max_cancels_per_second",
+          message: `house cancels ${nextCount} > ${maxCancelsPerSecond} in second ${second}`,
+          observed: nextCount,
+          limit: maxCancelsPerSecond,
+          operational: true,
+        };
+      }
+    }
+    const maxOpenOrdersPerSide = Number(houseConfig.maxOpenOrdersPerSide ?? 0);
+    if (maxOpenOrdersPerSide > 0) {
+      const counts = openOrderCountsByInstrumentSide(tickResult.ordersAfterTick ?? []);
+      for (const count of counts) {
+        if (count.openOrders > maxOpenOrdersPerSide) {
+          return {
+            code: "house_max_open_orders_per_side",
+            message: `house open orders ${count.openOrders} > ${maxOpenOrdersPerSide} for ${count.instrumentId} ${count.side}`,
+            observed: count.openOrders,
+            limit: maxOpenOrdersPerSide,
+            operational: true,
+          };
+        }
+      }
+    }
+  }
   return undefined;
+}
+
+async function refreshLiveSessionOrders(session) {
+  if (config.submitMode !== "live" || session.schedulingClass !== "house_responsive") {
+    return undefined;
+  }
+  const participantId = participantIdForBot(session.bot);
+  const response = await getJson(
+    `${config.venueUrl.replace(/\/$/, "")}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=100`,
+    readbackHeaders(participantId),
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    return {
+      ok: false,
+      issue: {
+        code: "live_order_refresh_failed",
+        message: `live order refresh failed for ${session.bot.botId}: HTTP ${response.statusCode}`,
+      },
+    };
+  }
+  const orders = Array.isArray(response.body?.orders) ? response.body.orders.map(toOwnOrder) : [];
+  const replace = await worker.request({ type: "replaceOrders", sessionId: session.sessionId, orders });
+  if (!replace.ok) {
+    return {
+      ok: false,
+      issue: {
+        code: "live_order_refresh_failed",
+        message: `live order refresh failed for ${session.bot.botId}: ${JSON.stringify(replace.error ?? replace)}`,
+      },
+    };
+  }
+  return { ok: true };
+}
+
+function toOwnOrder(order) {
+  const limitPrice = priceFromNanos(order.limitPrice);
+  return {
+    orderId: String(order.orderId ?? ""),
+    instrumentId: String(order.instrumentId ?? ""),
+    side: order.side === "SELL" ? "SELL" : "BUY",
+    quantity: numberValue(order.quantityUnits),
+    remainingQuantity: numberValue(order.remainingQuantityUnits),
+    ...(limitPrice === undefined ? {} : { limitPrice }),
+    status: ownOrderStatus(order.status),
+  };
+}
+
+function numberValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function priceFromNanos(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed / 1_000_000_000 : undefined;
+}
+
+function ownOrderStatus(status) {
+  if (status === "OPEN" || status === "PARTIALLY_FILLED" || status === "FILLED" || status === "CANCELED" || status === "REJECTED") {
+    return status;
+  }
+  if (status === "CANCELLED") {
+    return "CANCELED";
+  }
+  return "REJECTED";
+}
+
+function openOrderCountsByInstrumentSide(orders) {
+  const counts = new Map();
+  for (const order of orders) {
+    if ((order.status !== "OPEN" && order.status !== "PARTIALLY_FILLED") || Number(order.remainingQuantity ?? 0) <= 0) {
+      continue;
+    }
+    const key = `${order.instrumentId}:${order.side}`;
+    counts.set(key, {
+      instrumentId: order.instrumentId,
+      side: order.side,
+      openOrders: Number(counts.get(key)?.openOrders ?? 0) + 1,
+    });
+  }
+  return Array.from(counts.values());
 }
 
 function enforceBot(bot, session) {
   const events = [];
   const counters = sessionCounters(session);
+  const operationalControls = session.ticks
+    .map((tick) => tick.operationalControl)
+    .filter((control) => control !== undefined);
+  if (operationalControls.length > 0) {
+    events.push({
+      type: "arena.houseOperationalControl.v0",
+      runId: config.runId,
+      botId: bot.botId,
+      versionId: bot.versionId,
+      decision: "operational_pause",
+      reasonCode: operationalControls[0].code,
+      reason: operationalControls.map((control) => control.message).join("; "),
+      policyVersion: mode.riskPolicyVersion,
+      counters,
+      occurredAt: new Date().toISOString(),
+    });
+    if (botSchedulingClass(bot) === "house_responsive") {
+      return events;
+    }
+  }
   const reasons = [];
   if (!session.start.ok) {
     reasons.push("session_start_failed");
@@ -252,7 +541,8 @@ function enforceBot(bot, session) {
 function scoreBots(sessionReports, enforcementEvents) {
   return sessionReports.map((session) => {
     const counters = sessionCounters(session);
-    const freezeCount = enforcementEvents.filter((event) => event.botId === session.bot.botId).length;
+    const freezeCount = enforcementEvents.filter((event) => event.botId === session.bot.botId && event.decision === "freeze").length;
+    const operationalPauseCount = enforcementEvents.filter((event) => event.botId === session.bot.botId && event.decision === "operational_pause").length;
     const score = Math.max(
       0,
       1_000_000 + counters.venueCommands * 250 + counters.actions * 25 - counters.failedTicks * 100_000 - freezeCount * 250_000,
@@ -262,6 +552,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       versionId: session.bot.versionId,
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
+      schedulingClass: botSchedulingClass(session.bot),
       riskProfile: session.bot.riskProfile === undefined ? undefined : session.bot.riskProfile,
       runtimeConfigPreflight: session.bot.runtimeConfigPreflight.report,
       scoreEligible: session.bot.scoreEligible,
@@ -273,6 +564,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       failedTicks: counters.failedTicks,
       latencyP95Ms: counters.latencyP95Ms,
       freezeCount,
+      operationalPauseCount,
       disqualified: freezeCount > 0,
       score,
     };
@@ -299,6 +591,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, completedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0 },
   );
   const healthSummary = summarizeHealth(healthSamples, totals);
+  const status = reportStatus(enforcementEvents, healthSummary);
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
     generatedAt: new Date().toISOString(),
@@ -318,7 +611,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     },
     runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
     commandWaitMode: config.commandWaitMode,
-    status: enforcementEvents.some((event) => event.decision === "freeze") ? "completed_with_freezes" : "completed",
+    status,
     elapsedMs,
     totals,
     commandAccounting: {
@@ -330,6 +623,8 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
         : 0,
     },
     commandStatusSummary,
+    latencySummary: summarizeReportLatency(tickResults),
+    activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
     healthSamples,
     venueReadback,
@@ -341,6 +636,109 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     diagnosticLeaderboard: rankBotResults(botResults.filter((result) => result.scoreEligible)),
     sessionReports,
   };
+}
+
+function reportForOutput(report) {
+  if (config.reportShape === "full") {
+    return report;
+  }
+  return compactArenaReport(report);
+}
+
+function compactArenaReport(report) {
+  return {
+    schemaVersion: report.schemaVersion,
+    reportShape: "compact",
+    generatedAt: report.generatedAt,
+    startedAt: report.startedAt,
+    completedAt: report.completedAt,
+    runId: report.runId,
+    mode: report.mode,
+    runPlan: report.runPlan,
+    expectations: report.expectations,
+    runnerProfile: report.runnerProfile,
+    commandWaitMode: report.commandWaitMode,
+    status: report.status,
+    elapsedMs: report.elapsedMs,
+    totals: report.totals,
+    commandAccounting: report.commandAccounting,
+    commandStatusSummary: report.commandStatusSummary,
+    latencySummary: report.latencySummary,
+    activityBySchedulingClass: report.activityBySchedulingClass,
+    healthSummary: report.healthSummary,
+    venueReadback: compactVenueReadback(report.venueReadback),
+    enforcementEvents: report.enforcementEvents,
+    botResults: report.botResults,
+    leaderboard: report.leaderboard,
+    diagnosticLeaderboard: report.diagnosticLeaderboard,
+    persistence: compactPersistence(report.persistence),
+    omitted: {
+      healthSamples: Array.isArray(report.healthSamples) ? report.healthSamples.length : 0,
+      sessionReports: Array.isArray(report.sessionReports) ? report.sessionReports.length : 0,
+      reason: "compact report shape omits high-volume per-tick detail",
+    },
+  };
+}
+
+function compactVenueReadback(venueReadback) {
+  if (venueReadback === undefined) return undefined;
+  return {
+    mode: venueReadback.mode,
+    skipped: venueReadback.skipped,
+    projectionDrained: venueReadback.projectionDrained,
+    projectionDrainRequired: venueReadback.projectionDrainRequired,
+    availability: venueReadback.availability,
+    snapshots: venueReadback.snapshots,
+    ownOrders: Array.isArray(venueReadback.ownOrders)
+      ? venueReadback.ownOrders.map((entry) => ({
+        botId: entry.botId,
+        participantId: entry.participantId,
+        currentStatusCode: entry.current?.statusCode,
+        currentOrderCount: entry.current?.body?.orders?.length ?? 0,
+        historyStatusCode: entry.history?.statusCode,
+        historyOrderCount: entry.history?.body?.orders?.length ?? 0,
+      }))
+      : [],
+  };
+}
+
+function compactPersistence(persistence) {
+  if (persistence === undefined) return undefined;
+  return {
+    enabled: persistence.enabled,
+    skipped: persistence.skipped,
+    operationCount: Array.isArray(persistence.operations) ? persistence.operations.length : 0,
+    rawResultsStatusCode: persistence.rawResults?.statusCode,
+    rawEnforcementEventsStatusCode: persistence.rawEnforcementEvents?.statusCode,
+    leaderboardStatusCode: persistence.leaderboard?.statusCode,
+    leaderboardEntry: persistence.leaderboardEntry,
+  };
+}
+
+function summarizeReportLatency(tickResults) {
+  const tickElapsedMs = tickResults
+    .map((tick) => Number(tick.elapsedMs ?? 0))
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right);
+  return {
+    tickElapsedMs: {
+      count: tickElapsedMs.length,
+      p50: percentile(tickElapsedMs, 0.5),
+      p95: percentile(tickElapsedMs, 0.95),
+      p99: percentile(tickElapsedMs, 0.99),
+      max: tickElapsedMs.length === 0 ? null : tickElapsedMs[tickElapsedMs.length - 1],
+    },
+  };
+}
+
+function reportStatus(enforcementEvents, healthSummary) {
+  if (enforcementEvents.some((event) => event.decision === "freeze")) {
+    return "completed_with_freezes";
+  }
+  if (healthSummary.status !== "pass") {
+    return "completed_with_warnings";
+  }
+  return "completed";
 }
 
 function summarizeCommandStatuses(tickResults) {
@@ -368,6 +766,40 @@ function summarizeCommandStatuses(tickResults) {
   };
 }
 
+function summarizeActivityBySchedulingClass(sessionReports) {
+  const summary = {};
+  for (const session of sessionReports) {
+    const key = session.schedulingClass ?? botSchedulingClass(session.bot);
+    const counters = sessionCounters(session);
+    const bucket = summary[key] ?? {
+      botCount: 0,
+      ticks: 0,
+      actions: 0,
+      venueCommands: 0,
+      submittedCommands: 0,
+      completedCommands: 0,
+      failedCommands: 0,
+      rejectedCommands: 0,
+      timedOutCommands: 0,
+      operationalPauses: 0,
+      dataCalls: 0,
+    };
+    bucket.botCount += 1;
+    bucket.ticks += counters.ticks;
+    bucket.actions += counters.actions;
+    bucket.venueCommands += counters.venueCommands;
+    bucket.submittedCommands += counters.submittedCommands;
+    bucket.completedCommands += counters.completedCommands;
+    bucket.failedCommands += counters.failedCommands;
+    bucket.rejectedCommands += counters.rejectedCommands;
+    bucket.timedOutCommands += counters.timedOutCommands;
+    bucket.operationalPauses += session.ticks.filter((tick) => tick.operationalControl !== undefined).length;
+    bucket.dataCalls += counters.dataCalls;
+    summary[key] = bucket;
+  }
+  return summary;
+}
+
 function increment(counter, key) {
   counter[key] = Number(counter[key] ?? 0) + 1;
 }
@@ -392,21 +824,26 @@ function assertExpectedFreezeBots(report) {
   }
 }
 
-async function maybeCollectHealthSample(healthSamples, bot, tick, tickIndex, tickReport) {
+async function maybeCollectHealthSample(healthSamples, tickIndex, tickReports) {
   if (tickIndex % runPlan.healthSampleEveryTicks !== 0) {
     return;
   }
+  const fallbackOccurredAt = new Date(Date.parse("2026-07-04T14:30:00.000Z") + tickIndex * runPlan.tickIntervalMs).toISOString();
+  const representativeTick = tickReports.find((tickReport) => tickReport.tick !== undefined)?.tick
+    ?? tickReports.find((tickReport) => typeof tickReport.occurredAt === "string")
+    ?? { occurredAt: fallbackOccurredAt };
   const snapshots = config.submitMode === "live"
     ? await liveHealthSnapshots()
-    : dryRunHealthSnapshots(tick);
+    : dryRunHealthSnapshots(representativeTick);
   healthSamples.push({
     sampleIndex: healthSamples.length,
     tickIndex,
-    botId: bot.botId,
-    occurredAt: tick.occurredAt,
+    botId: "",
+    sampleScope: "arena_tick",
+    occurredAt: representativeTick.occurredAt,
     postWarmup: tickIndex >= runPlan.warmupTicks,
-    submittedCommands: Number(tickReport.submission?.submitted ?? 0),
-    completedCommands: Number(tickReport.submission?.completed ?? 0),
+    submittedCommands: tickReports.reduce((total, tickReport) => total + Number(tickReport.submission?.submitted ?? 0), 0),
+    completedCommands: tickReports.reduce((total, tickReport) => total + Number(tickReport.submission?.completed ?? 0), 0),
     snapshots,
   });
 }
@@ -530,7 +967,7 @@ async function collectVenueReadback(botResults) {
   }
   const ownOrders = [];
   for (const result of botResults) {
-    const participantId = `participant-${result.runnerKey}`;
+    const participantId = participantIdForBot(result);
     ownOrders.push({
       botId: result.botId,
       participantId,
@@ -607,7 +1044,7 @@ async function persistArenaResults(report) {
   }, { allowInvalidTransition: true }));
   operations.push(await postArenaOk(baseUrl, "/internal/admin/arena/runs/status", {
     runId: config.runId,
-    status: report.status === "completed" || report.status === "completed_with_freezes" ? "completed" : "failed",
+    status: report.status === "completed" || report.status === "completed_with_freezes" || report.status === "completed_with_warnings" ? "completed" : "failed",
     actorId: config.actorId,
     correlationId,
   }, { allowInvalidTransition: true }));
@@ -692,7 +1129,7 @@ async function persistArenaResults(report) {
 async function ensureArenaBot(baseUrl, bot, correlationId) {
   return await postArenaOk(baseUrl, "/internal/admin/arena/bots", {
     botId: bot.botId,
-    fileName: bot.entryPath,
+    fileName: `${bot.entryPath}#${bot.botId}`,
     name: bot.botId,
     publisher: "Reef Built-In",
     email: "arena-local@reef.local",
@@ -824,10 +1261,41 @@ async function terminalStatusForAcceptedCommand(command, intakeBody) {
   if (config.commandWaitMode === "none") {
     return intakeStatus(command, intakeBody, "intake_response");
   }
-  if (typeof intakeBody.statusUrl === "string" && intakeBody.statusUrl.length > 0) {
-    return await waitForCommandStatus(command);
+  if (isTerminalIntakeBody(intakeBody)) {
+    return terminalIntakeStatus(command, intakeBody);
   }
-  return intakeStatus(command, intakeBody, "intake_response");
+  if (typeof intakeBody.statusUrl !== "string" || intakeBody.statusUrl.length === 0) {
+    return intakeStatus(command, intakeBody, "intake_response_without_status_url");
+  }
+  return await waitForCommandStatus(command);
+}
+
+function isTerminalIntakeBody(intakeBody) {
+  return intakeBody !== null
+    && typeof intakeBody === "object"
+    && (intakeBody.accepted !== undefined || intakeBody.rejected !== undefined);
+}
+
+function terminalIntakeStatus(command, intakeBody) {
+  const rejected = intakeBody.rejected !== undefined;
+  const status = rejected ? "REJECTED" : "COMPLETED";
+  const responseStatus = rejected ? 400 : 200;
+  return {
+    timedOut: false,
+    statusCode: responseStatus,
+    pollCount: 0,
+    elapsedMs: 0,
+    firstStatus: status,
+    firstStatusElapsedMs: 0,
+    body: {
+      commandId: command.body.commandId,
+      status,
+      responseStatus,
+      responsePayloadJson: JSON.stringify(intakeBody),
+      resultStatus: rejected ? "rejected" : "accepted",
+      source: "sync_result_intake_response",
+    },
+  };
 }
 
 function intakeStatus(command, intakeBody, source) {
@@ -867,10 +1335,10 @@ async function waitForCommandStatus(command) {
       firstStatus = status;
       firstStatusElapsedMs = performance.now() - startedAt;
     }
-    if (config.commandWaitMode === "accepted" && ["ACCEPTED", "EVENT_PUBLISHED", "COMPLETED", "FAILED"].includes(status)) {
+    if (config.commandWaitMode === "accepted" && ["ACCEPTED", "EVENT_PUBLISHED", "COMPLETED", "FAILED", "REJECTED"].includes(status)) {
       return { timedOut: false, statusCode: response.statusCode, body: response.body, pollCount, firstStatus, firstStatusElapsedMs, elapsedMs: performance.now() - startedAt };
     }
-    if (status === "COMPLETED" || status === "FAILED") {
+    if (status === "COMPLETED" || status === "FAILED" || status === "REJECTED") {
       return { timedOut: false, statusCode: response.statusCode, body: response.body, pollCount, firstStatus, firstStatusElapsedMs, elapsedMs: performance.now() - startedAt };
     }
     await sleep(config.commandPollMs);
@@ -881,7 +1349,7 @@ async function waitForCommandStatus(command) {
 async function seedReferenceData(bots) {
   const internal = { "X-Reef-Internal-Route": "true" };
   for (const instrumentId of mode.instruments ?? ["AAPL"]) {
-    await postJson(`${config.venueUrl.replace(/\/$/, "")}/reference/instruments`, {
+    await postSetupOk("/reference/instruments", {
       instrumentId,
       symbol: instrumentId,
       assetClass: "US_EQ",
@@ -889,30 +1357,43 @@ async function seedReferenceData(bots) {
     }, internal);
   }
   for (const bot of bots) {
-    await postJson(`${config.venueUrl.replace(/\/$/, "")}/reference/participants`, {
-      participantId: `participant-${bot.runnerKey}`,
+    const identityKey = venueIdentityKey(bot);
+    await postSetupOk("/reference/participants", {
+      participantId: participantIdForIdentity(identityKey),
       name: `Arena ${bot.botId}`,
     }, internal);
-    await postJson(`${config.venueUrl.replace(/\/$/, "")}/reference/accounts`, {
-      accountId: `account-${bot.runnerKey}`,
-      participantId: `participant-${bot.runnerKey}`,
+    await postSetupOk("/reference/accounts", {
+      accountId: accountIdForIdentity(identityKey),
+      participantId: participantIdForIdentity(identityKey),
       accountType: bot.riskProfile.assetLedgerMode === "bypass" ? "HOUSE" : "CUSTOMER",
     }, internal);
-    await postJson(`${config.venueUrl.replace(/\/$/, "")}/auth/roles`, {
+    await postSetupOk("/auth/roles", {
       roleId: "order_trader",
       permissions: "order.submit,order.cancel,order.modify",
     }, internal);
-    await postJson(`${config.venueUrl.replace(/\/$/, "")}/auth/actor-roles`, {
-      actorId: `actor-${bot.runnerKey}`,
+    await postSetupOk("/auth/actor-roles", {
+      actorId: actorIdForIdentity(identityKey),
       roleId: "order_trader",
     }, internal);
   }
 }
 
+async function postSetupOk(path, payload, headers) {
+  const response = await postJson(`${config.venueUrl.replace(/\/$/, "")}${path}`, payload, headers);
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`reference setup POST ${path} failed (${response.statusCode}): ${response.body}`);
+  }
+  return response;
+}
+
 function statusReadHeaders(command) {
+  const participantId = command.headers["X-Participant-Id"] ?? command.body.participantId ?? "";
   return {
     "X-Client-Id": command.headers["X-Client-Id"] ?? "",
     "Idempotency-Key": command.headers["Idempotency-Key"] ?? "",
+    ...(typeof participantId === "string" && participantId.length > 0
+      ? { "X-Participant-Id": participantId }
+      : {}),
   };
 }
 
@@ -925,6 +1406,7 @@ function sessionCounters(session) {
       acc.actions += tick.actions?.length ?? 0;
       acc.venueCommands += tick.venueCommands?.length ?? 0;
       acc.submittedCommands += tick.submission?.submitted ?? 0;
+      acc.completedCommands += tick.submission?.completed ?? 0;
       acc.failedCommands += tick.submission?.failed ?? 0;
       acc.rejectedCommands += tick.submission?.rejected ?? 0;
       acc.timedOutCommands += tick.submission?.timedOut ?? 0;
@@ -932,7 +1414,7 @@ function sessionCounters(session) {
       acc.maxActionsPerTick = Math.max(acc.maxActionsPerTick, tick.actions?.length ?? 0);
       return acc;
     },
-    { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0, maxActionsPerTick: 0, latencyP95Ms: percentile(latencies, 0.95) },
+    { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, completedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0, maxActionsPerTick: 0, latencyP95Ms: percentile(latencies, 0.95) },
   );
 }
 
@@ -1035,7 +1517,10 @@ function buildArtifact(entryPath, name) {
   };
 }
 
-function fixtureForBot(bot) {
+function fixtureForBot(bot, schedule = {}) {
+  const identityKey = venueIdentityKey(bot);
+  const tickIntervalMs = positiveNumber(schedule.tickIntervalMs, runPlan.tickIntervalMs);
+  const tickCount = Math.max(1, Number(schedule.tickCount ?? runPlan.tickCount));
   const fixture = {
     ...baseFixture,
     scenarioId: mode.scenarioId,
@@ -1043,53 +1528,68 @@ function fixtureForBot(bot) {
     venueSessionId: mode.venueSessionId,
     botId: bot.botId,
     botVersion: bot.versionId,
-    actorId: `actor-${bot.runnerKey}`,
-    participantId: `participant-${bot.runnerKey}`,
-    accountId: `account-${bot.runnerKey}`,
-    correlationId: `${mode.modeId}-${bot.runnerKey}`,
+    actorId: actorIdForIdentity(identityKey),
+    participantId: participantIdForIdentity(identityKey),
+    accountId: accountIdForIdentity(identityKey),
+    correlationId: `${mode.modeId}-${identityKey}`,
     config: {
       ...(baseFixture.config ?? {}),
       ...bot.runtimeConfigPreflight.values,
+      ...(botSchedulingClass(bot) === "house_responsive" ? { houseLiquidity: houseLiquidityConfig(bot) } : {}),
     },
   };
   const scheduledFixture = {
     ...fixture,
     policy: {
       ...(fixture.policy ?? {}),
-      tickIntervalMs: runPlan.tickIntervalMs,
+      tickIntervalMs,
     },
-    ticks: scheduledTicks(fixture.ticks, runPlan),
+    ticks: scheduledTicks(fixture.ticks, { tickCount, tickIntervalMs }),
   };
-  if (bot.runnerKey === "multi-symbol" || bot.runnerKey === "technical") {
-    return withMultiSymbolData(scheduledFixture);
-  }
-  return scheduledFixture;
+  return withModeMarketData(scheduledFixture);
 }
 
-function buildRunPlan(modeConfig, runtimeConfig, fixture, botCount) {
+function buildRunPlan(modeConfig, runtimeConfig, fixture, botsOrCount) {
   const tickIntervalMs = positiveNumber(
     runtimeConfig.tickIntervalMs,
     positiveNumber(modeConfig.tickIntervalMs, positiveNumber(fixture.policy?.tickIntervalMs, 500)),
   );
   const durationSeconds = positiveNumber(runtimeConfig.durationSeconds, positiveNumber(modeConfig.durationSeconds, 0));
-  const selectedBotCount = Math.max(1, Number(botCount ?? 1));
-  const totalTickCount = durationSeconds > 0
-    ? Math.max(1, Math.ceil((durationSeconds * 1000) / tickIntervalMs))
-    : Math.max(1, Number(modeConfig.ticks ?? fixture.ticks?.length ?? 1)) * selectedBotCount;
+  const selectedBotsForPlan = Array.isArray(botsOrCount) ? botsOrCount : [];
+  const selectedBotCount = selectedBotsForPlan.length > 0 ? selectedBotsForPlan.length : Math.max(1, Number(botsOrCount ?? 1));
   const tickCount = durationSeconds > 0
-    ? Math.max(1, Math.ceil(totalTickCount / selectedBotCount))
+    ? Math.max(1, Math.ceil((durationSeconds * 1000) / tickIntervalMs))
     : Math.max(1, Number(modeConfig.ticks ?? fixture.ticks?.length ?? 1));
-  const plannedTotalTickCount = tickCount * selectedBotCount;
   const warmupSeconds = Math.max(0, positiveNumber(runtimeConfig.warmupSeconds, positiveNumber(modeConfig.warmupSeconds, 0)));
   const healthSampleIntervalMs = positiveNumber(runtimeConfig.healthSampleIntervalMs, positiveNumber(modeConfig.healthSampleIntervalMs, tickIntervalMs));
+  const defaultHouseWakeIntervalMs = positiveNumber(modeConfig.houseLiquidityDefaults?.wakeIntervalMs, 250);
+  const durationMs = tickCount * tickIntervalMs;
+  const plannedTotalTickCount = selectedBotsForPlan.length === 0
+    ? tickCount * selectedBotCount
+    : selectedBotsForPlan.reduce((total, bot) => {
+      if (botSchedulingClass(bot) !== "house_responsive") {
+        return total + tickCount;
+      }
+      const intervalMs = positiveNumber(
+        {
+          ...(modeConfig.houseLiquidityDefaults ?? {}),
+          ...(bot.houseLiquidity ?? {}),
+        }.wakeIntervalMs,
+        defaultHouseWakeIntervalMs,
+      );
+      return total + Math.max(1, Math.ceil(durationMs / intervalMs));
+    }, 0);
   return {
-    durationSeconds: durationSeconds > 0 ? Number(((plannedTotalTickCount * tickIntervalMs) / 1000).toFixed(3)) : Number(((tickCount * tickIntervalMs) / 1000).toFixed(3)),
+    durationSeconds: Number(((tickCount * tickIntervalMs) / 1000).toFixed(3)),
+    durationMs,
     configuredDurationSeconds: durationSeconds,
     tickIntervalMs,
+    houseWakeIntervalMs: defaultHouseWakeIntervalMs,
     tickCount,
     perBotTickCount: tickCount,
     selectedBotCount,
     totalTickCount: plannedTotalTickCount,
+    schedulingMode: "shared-arena-time",
     perBotDurationSeconds: Number(((tickCount * tickIntervalMs) / 1000).toFixed(3)),
     warmupSeconds,
     warmupTicks: Math.min(tickCount, Math.floor((warmupSeconds * 1000) / tickIntervalMs)),
@@ -1116,6 +1616,30 @@ function scheduledTicks(sourceTicks, plan) {
       ),
     };
   });
+}
+
+function botIdentityKey(bot) {
+  return String(bot.botId ?? bot.runnerKey).replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
+function venueIdentityKey(bot) {
+  return `${config.runId}-${botIdentityKey(bot)}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
+function actorIdForIdentity(identityKey) {
+  return `actor-${identityKey}`;
+}
+
+function participantIdForIdentity(identityKey) {
+  return `participant-${identityKey}`;
+}
+
+function accountIdForIdentity(identityKey) {
+  return `account-${identityKey}`;
+}
+
+function participantIdForBot(bot) {
+  return participantIdForIdentity(venueIdentityKey(bot));
 }
 
 async function resolveRuntimeConfigForBot(bot) {
@@ -1239,23 +1763,48 @@ function assertRuntimeConfigValueType(descriptor, value) {
   return value;
 }
 
-function withMultiSymbolData(fixture) {
+function withModeMarketData(fixture) {
+  const instruments = nonEmptyArray(mode.instruments, ["AAPL"]);
+  const seedSnapshots = {
+    AAPL: { bidPrice: 99.9, askPrice: 100.1, midPrice: 100, lastPrice: 100 },
+    MSFT: { bidPrice: 199.8, askPrice: 200.2, midPrice: 200, lastPrice: 200 },
+    NVDA: { bidPrice: 499.5, askPrice: 500.5, midPrice: 500, lastPrice: 500 },
+    TSLA: { bidPrice: 249.75, askPrice: 250.25, midPrice: 250, lastPrice: 250 },
+    AMZN: { bidPrice: 149.85, askPrice: 150.15, midPrice: 150, lastPrice: 150 },
+  };
   return {
     ...fixture,
     historicalBars: {
-      AAPL: bars("AAPL", [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 85, 90, 92, 95]),
-      MSFT: bars("MSFT", [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 220, 215, 212, 210, 205]),
+      ...fixture.historicalBars,
+      ...Object.fromEntries(instruments.map((instrumentId) => [instrumentId, bars(instrumentId, historicalCloses(instrumentId))])),
     },
     ticks: fixture.ticks.map((tick) => ({
       ...tick,
       marketSnapshots: {
-        ...tick.marketSnapshots,
-        MSFT: { instrumentId: "MSFT", asOf: tick.occurredAt, bidPrice: 211, askPrice: 213, midPrice: 212, lastPrice: 212 },
-        NVDA: { instrumentId: "NVDA", asOf: tick.occurredAt, bidPrice: 499, askPrice: 501, midPrice: 500, lastPrice: 500 },
-        TSLA: { instrumentId: "TSLA", asOf: tick.occurredAt, bidPrice: 249, askPrice: 251, midPrice: 250, lastPrice: 250 },
+        ...Object.fromEntries(instruments.map((instrumentId) => {
+          const snapshot = seedSnapshots[instrumentId] ?? tick.marketSnapshots?.[instrumentId] ?? syntheticSnapshot(instrumentId);
+          return [instrumentId, { instrumentId, ...snapshot, asOf: tick.occurredAt }];
+        })),
       },
     })),
   };
+}
+
+function syntheticSnapshot(instrumentId) {
+  const midPrice = 100 + (instrumentId.charCodeAt(0) % 50);
+  return {
+    bidPrice: Number((midPrice - 0.1).toFixed(2)),
+    askPrice: Number((midPrice + 0.1).toFixed(2)),
+    midPrice,
+    lastPrice: midPrice,
+  };
+}
+
+function historicalCloses(instrumentId) {
+  const base = syntheticSnapshot(instrumentId).midPrice;
+  if (instrumentId === "AAPL") return [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 85, 90, 92, 95];
+  if (instrumentId === "MSFT") return [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 220, 215, 212, 210, 205];
+  return Array.from({ length: 20 }, (_, index) => Number((base + Math.sin(index / 2) * 2).toFixed(2)));
 }
 
 function bars(instrumentId, closes) {

@@ -16,7 +16,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-up dev-up-runtime-nodb dev-up-captured-ack dev-up-stream-ack dev-up-stream-direct-nodb
 .PHONY: dev-compose-config dev-compose-parity dev-validate-stream-profile dev-down dev-reset dev-db-migrate
 .PHONY: dev-smoke dev-smoke-protective-controls dev-smoke-arena-bot-risk dev-smoke-arena-run-results
-.PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative
+.PHONY: dev-smoke-bot-arena-local dev-smoke-bot-arena-local-persist dev-smoke-bot-arena-local-negative dev-hardening-bot-arena-local
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check
@@ -93,6 +93,8 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-render-report-index.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-render-report.test.mjs
+	$(JS_RUNTIME) scripts/dev/large-json-writer.test.mjs
+	$(JS_RUNTIME) scripts/dev/arena-local-tick-report-writer.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
@@ -276,6 +278,10 @@ dev-smoke-bot-arena-local-negative:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/arena-local-tick-run.mjs --submit-mode=live --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --seed-reference --compartment=ses --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),30000) --require-projection-drain --extra-bots=custom-too-many-orders --expect-freeze-bots=custom-too-many-orders --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json) $(ARGS)
 	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.mjs --report=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json) --out=$(or $(OUT),/tmp/reef-arena-local-tick-run-negative.json)
+
+dev-hardening-bot-arena-local:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/arena-local-hardening-run.mjs --venue-url=$(or $(VENUE_URL),http://127.0.0.1:8080) --arena-admin-url=$(or $(ARENA_ADMIN_URL),$(or $(VENUE_URL),http://127.0.0.1:8080)) --duration-seconds=$(or $(DURATION_SECONDS),180) --projection-drain-timeout-ms=$(or $(PROJECTION_DRAIN_TIMEOUT_MS),60000) --out=$(or $(OUT),/tmp/reef-arena-local-hardening.json) --summary-out=$(or $(SUMMARY_OUT),/tmp/reef-arena-local-hardening.summary.json) $(ARGS)
 
 dev-render-bot-arena-report:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

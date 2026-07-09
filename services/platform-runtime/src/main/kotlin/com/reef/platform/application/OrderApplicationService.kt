@@ -21,6 +21,7 @@ import com.reef.platform.infrastructure.engine.defaultEngineGateway
 import com.reef.platform.infrastructure.config.RuntimeEnv
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 import com.reef.platform.infrastructure.persistence.CanonicalCommandOutcome
+import com.reef.platform.infrastructure.persistence.CanonicalCommandResult
 import com.reef.platform.infrastructure.persistence.CanonicalSubmitOutcome
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import com.reef.platform.infrastructure.persistence.NoopRuntimePersistence
@@ -324,6 +325,12 @@ class OrderApplicationService(
     fun canonicalCommandOutcome(commandId: String): CanonicalCommandOutcome? {
         return HotPathMetrics.time("runtime.persistence.canonicalCommandOutcome") {
             runtimePersistence.canonicalCommandOutcome(commandId)
+        }
+    }
+
+    fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        return HotPathMetrics.time("runtime.persistence.canonicalCommandResult") {
+            runtimePersistence.canonicalCommandResult(commandId)
         }
     }
 

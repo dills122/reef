@@ -513,6 +513,23 @@ class InMemoryRuntimePersistence : RuntimePersistence {
         return commandOutcomes[commandId]
     }
 
+    override fun canonicalCommandResult(commandId: String): CanonicalCommandResult? {
+        val outcome = canonicalSubmitOutcomes[commandId] ?: return null
+        return CanonicalCommandResult(
+            commandId = outcome.commandId,
+            partition = outcome.partitionId,
+            commandStream = outcome.streamName,
+            streamSequence = outcome.streamSequence,
+            commandType = outcome.commandType,
+            payloadHash = outcome.payloadHash,
+            instrumentId = outcome.instrumentId,
+            resultStatus = outcome.resultStatus,
+            rejectCode = outcome.rejectCode,
+            engineShardId = outcome.engineShardId,
+            resultPayloadJson = outcome.outcome.toJsonObject()
+        )
+    }
+
     override fun venueEventBatchCommandReference(commandId: String): VenueEventBatchCommandReference? {
         return venueEventBatches.values.asSequence()
             .mapNotNull { batch ->

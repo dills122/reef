@@ -8,6 +8,7 @@
       "versionId": "local-1",
       "runnerKey": "simple",
       "role": "market-maker",
+      "schedulingClass": "house_responsive",
       "entryPath": "packages/bot-sdk/examples/simple-market-maker.ts",
       "riskProfile": "house_liquidity",
       "runtimeConfig": {
@@ -15,7 +16,7 @@
         "values": {
           "instrumentId": "AAPL",
           "orderSize": 10,
-          "spread": 1
+          "spread": 0.2
         }
       },
       "scoreEligible": false,
@@ -26,6 +27,7 @@
       "versionId": "local-1",
       "runnerKey": "lifecycle",
       "role": "market-maker",
+      "schedulingClass": "house_responsive",
       "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
       "riskProfile": "house_liquidity",
       "runtimeConfig": {
@@ -44,6 +46,7 @@
       "versionId": "local-1",
       "runnerKey": "refreshing",
       "role": "market-maker",
+      "schedulingClass": "house_responsive",
       "entryPath": "packages/bot-sdk/examples/refreshing-market-maker.ts",
       "riskProfile": "house_liquidity",
       "runtimeConfig": {
@@ -51,7 +54,86 @@
         "values": {
           "instrumentId": "AAPL",
           "orderSize": 10,
+          "spread": 1,
+          "quoteTtlMs": 1000,
+          "replacementCooldownMs": 1000,
+          "cancelSuppressMs": 300000
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-mm-msft-lifecycle",
+      "versionId": "local-1",
+      "runnerKey": "lifecycle",
+      "role": "market-maker",
+      "schedulingClass": "house_responsive",
+      "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-msft-lifecycle",
+        "values": {
+          "instrumentId": "MSFT",
+          "orderSize": 10,
+          "spread": 0.4
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-mm-nvda-lifecycle",
+      "versionId": "local-1",
+      "runnerKey": "lifecycle",
+      "role": "market-maker",
+      "schedulingClass": "house_responsive",
+      "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-nvda-lifecycle",
+        "values": {
+          "instrumentId": "NVDA",
+          "orderSize": 10,
           "spread": 1
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-mm-tsla-lifecycle",
+      "versionId": "local-1",
+      "runnerKey": "lifecycle",
+      "role": "market-maker",
+      "schedulingClass": "house_responsive",
+      "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-tsla-lifecycle",
+        "values": {
+          "instrumentId": "TSLA",
+          "orderSize": 10,
+          "spread": 0.5
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-mm-amzn-lifecycle",
+      "versionId": "local-1",
+      "runnerKey": "lifecycle",
+      "role": "market-maker",
+      "schedulingClass": "house_responsive",
+      "entryPath": "packages/bot-sdk/examples/lifecycle-safe-market-maker.ts",
+      "riskProfile": "house_liquidity",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-mm-amzn-lifecycle",
+        "values": {
+          "instrumentId": "AMZN",
+          "orderSize": 10,
+          "spread": 0.3
         }
       },
       "scoreEligible": false,
@@ -62,6 +144,7 @@
       "versionId": "local-1",
       "runnerKey": "multi-symbol",
       "role": "npc",
+      "schedulingClass": "npc_tick",
       "entryPath": "packages/bot-sdk/examples/multi-symbol-strategy-bot.ts",
       "riskProfile": "npc_standard",
       "runtimeConfig": {
@@ -74,12 +157,302 @@
       "publicLeaderboard": false
     },
     {
+      "botId": "builtin-npc-taker-aapl",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-aapl",
+        "values": {
+          "instrumentId": "AAPL",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.6
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-msft",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-msft",
+        "values": {
+          "instrumentId": "MSFT",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-nvda",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-nvda",
+        "values": {
+          "instrumentId": "NVDA",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-tsla",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-tsla",
+        "values": {
+          "instrumentId": "TSLA",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
+      "botId": "builtin-npc-taker-amzn",
+      "versionId": "local-1",
+      "runnerKey": "aggressive-taker",
+      "role": "npc",
+      "schedulingClass": "npc_tick",
+      "entryPath": "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts",
+      "riskProfile": "npc_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/builtin-npc-taker-amzn",
+        "values": {
+          "instrumentId": "AMZN",
+          "side": "ALTERNATE",
+          "orderSize": 1,
+          "crossOffset": 0.05
+        }
+      },
+      "scoreEligible": false,
+      "publicLeaderboard": false
+    },
+    {
       "botId": "custom-technical-indicator",
       "versionId": "local-1",
       "runnerKey": "technical",
       "role": "competitor",
       "entryPath": "packages/bot-sdk/examples/technical-indicator-strategy-bot.ts",
       "riskProfile": "competitor_standard",
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-aapl-buy",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-aapl-buy",
+        "values": {
+          "instrumentId": "AAPL",
+          "side": "BUY",
+          "orderSize": 1,
+          "priceOffset": 1.5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-aapl-sell",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-aapl-sell",
+        "values": {
+          "instrumentId": "AAPL",
+          "side": "SELL",
+          "orderSize": 1,
+          "priceOffset": 1.5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-msft-buy",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-msft-buy",
+        "values": {
+          "instrumentId": "MSFT",
+          "side": "BUY",
+          "orderSize": 1,
+          "priceOffset": 2
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-msft-sell",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-msft-sell",
+        "values": {
+          "instrumentId": "MSFT",
+          "side": "SELL",
+          "orderSize": 1,
+          "priceOffset": 2
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-nvda-buy",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-nvda-buy",
+        "values": {
+          "instrumentId": "NVDA",
+          "side": "BUY",
+          "orderSize": 1,
+          "priceOffset": 5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-nvda-sell",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-nvda-sell",
+        "values": {
+          "instrumentId": "NVDA",
+          "side": "SELL",
+          "orderSize": 1,
+          "priceOffset": 5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-tsla-buy",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-tsla-buy",
+        "values": {
+          "instrumentId": "TSLA",
+          "side": "BUY",
+          "orderSize": 1,
+          "priceOffset": 2.5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-tsla-sell",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-tsla-sell",
+        "values": {
+          "instrumentId": "TSLA",
+          "side": "SELL",
+          "orderSize": 1,
+          "priceOffset": 2.5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-amzn-buy",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-amzn-buy",
+        "values": {
+          "instrumentId": "AMZN",
+          "side": "BUY",
+          "orderSize": 1,
+          "priceOffset": 1.5
+        }
+      },
+      "scoreEligible": true,
+      "publicLeaderboard": true
+    },
+    {
+      "botId": "custom-passive-amzn-sell",
+      "versionId": "local-1",
+      "runnerKey": "passive",
+      "role": "competitor",
+      "entryPath": "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts",
+      "riskProfile": "competitor_standard",
+      "runtimeConfig": {
+        "secretPath": "secret/bots/local/custom-passive-amzn-sell",
+        "values": {
+          "instrumentId": "AMZN",
+          "side": "SELL",
+          "orderSize": 1,
+          "priceOffset": 1.5
+        }
+      },
       "scoreEligible": true,
       "publicLeaderboard": true
     },

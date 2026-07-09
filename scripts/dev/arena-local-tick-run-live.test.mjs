@@ -5,8 +5,11 @@ import http from "node:http";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
 const commands = new Map();
+const openOrdersByParticipant = new Map();
 const receivedCommands = [];
+const commandStatusReads = [];
 const referenceWrites = [];
+let syncResultMode = false;
 const arena = {
   bots: new Map(),
   versions: new Map(),
@@ -26,20 +29,57 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && ["/api/v1/orders/submit", "/api/v1/orders/modify", "/api/v1/orders/cancel"].includes(url.pathname)) {
     const body = await readJson(req);
+    const participantId = req.headers["x-participant-id"] ?? body.participantId;
     receivedCommands.push({ path: url.pathname, body });
+    if (url.pathname === "/api/v1/orders/submit") {
+      const orders = openOrdersByParticipant.get(participantId) ?? [];
+      orders.push({
+        orderId: body.clientOrderId ?? body.commandId,
+        instrumentId: body.instrumentId,
+        side: body.side,
+        quantityUnits: body.quantityUnits,
+        remainingQuantityUnits: body.quantityUnits,
+        limitPrice: body.limitPrice,
+        status: "OPEN",
+      });
+      openOrdersByParticipant.set(participantId, orders);
+    }
+    if (url.pathname === "/api/v1/orders/cancel") {
+      const orders = openOrdersByParticipant.get(participantId) ?? [];
+      openOrdersByParticipant.set(participantId, orders.filter((order) => order.orderId !== body.orderId));
+    }
     commands.set(body.commandId, {
       commandId: body.commandId,
+      participantId,
       status: "COMPLETED",
       responseStatus: 200,
       responsePayloadJson: "{}",
       resultStatus: "accepted",
       canonicalMaterialized: true,
     });
+    if (syncResultMode) {
+      return json(res, 200, {
+        accepted: {
+          eventId: `${body.commandId}-accepted`,
+          orderId: body.clientOrderId ?? body.commandId,
+          engineOrderId: `${body.commandId}-engine`,
+          occurredAt: body.occurredAt ?? "2026-07-07T00:00:00.000Z",
+        },
+        executions: [],
+        trades: [],
+      });
+    }
     return json(res, 202, { commandId: body.commandId, status: "RECEIVED", statusUrl: `/api/v1/commands/${body.commandId}` });
   }
   if (req.method === "GET" && url.pathname.startsWith("/api/v1/commands/")) {
     const commandId = decodeURIComponent(url.pathname.slice("/api/v1/commands/".length));
-    return json(res, commands.has(commandId) ? 200 : 404, commands.get(commandId) ?? { error: "not found" });
+    const command = commands.get(commandId);
+    const participantId = req.headers["x-participant-id"] ?? "";
+    commandStatusReads.push({ commandId, participantId });
+    if (command !== undefined && participantId !== command.participantId) {
+      return json(res, 403, { error: "participant mismatch" });
+    }
+    return json(res, commands.has(commandId) ? 200 : 404, command ?? { error: "not found" });
   }
   if (req.method === "GET" && url.pathname === "/api/v1/data/availability") {
     return json(res, 200, {
@@ -54,7 +94,8 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { snapshot: { instrumentId, bestBidPrice: "100000000000", bestAskPrice: "101000000000", updatedAt: "2026-07-07T00:00:00.000Z" } });
   }
   if (req.method === "GET" && (url.pathname === "/api/v1/orders/current" || url.pathname === "/api/v1/orders/history")) {
-    return json(res, 200, { orders: [] });
+    const participantId = url.searchParams.get("participantId") ?? "";
+    return json(res, 200, { orders: openOrdersByParticipant.get(participantId) ?? [] });
   }
   if (url.pathname.startsWith("/internal/admin/arena/")) {
     return await handleArenaAdmin(req, res, url);
@@ -62,8 +103,10 @@ const server = http.createServer(async (req, res) => {
   return json(res, 404, { error: "not found", path: url.pathname });
 });
 
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const address = server.address();
+const configuredTestPort = process.env.REEF_ARENA_LOCAL_TICK_TEST_PORT === undefined
+  ? undefined
+  : Number(process.env.REEF_ARENA_LOCAL_TICK_TEST_PORT);
+const address = await listenOnAvailablePort(server, configuredTestPort);
 const baseUrl = `http://127.0.0.1:${address.port}`;
 
 try {
@@ -80,8 +123,14 @@ try {
   ]);
 
   assert.equal(referenceWrites.filter((write) => write.path === "/reference/instruments").length, 4);
-  assert.equal(receivedCommands.length, 14);
+  assert.equal(referenceWrites.some((write) => JSON.stringify(write.body).includes("undefined")), false);
+  assert.ok(referenceWrites.some((write) => String(write.body.participantId ?? "").endsWith("-builtin-mm-simple")));
+  assert.ok(referenceWrites.some((write) => String(write.body.accountId ?? "").endsWith("-custom-technical-indicator")));
+  assert.ok(referenceWrites.some((write) => String(write.body.actorId ?? "").endsWith("-builtin-mm-refreshing")));
+  assert.equal(receivedCommands.length, 18);
   assert.ok(Array.from(commands.values()).every((command) => command.status === "COMPLETED"));
+  assert.ok(commandStatusReads.length >= receivedCommands.length);
+  assert.ok(commandStatusReads.every((read) => commands.get(read.commandId)?.participantId === read.participantId));
   assert.equal(arena.bots.size, 5);
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
@@ -89,15 +138,44 @@ try {
   const report = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-live-test.json", "utf8"));
   assert.equal(report.runPlan.tickCount, 3);
   assert.equal(report.runPlan.durationSeconds, 1.5);
+  assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
+  assert.equal(report.runPlan.totalTickCount, 24);
   assert.equal(report.commandWaitMode, "accepted");
-  assert.equal(report.healthSamples.length, 15);
+  assert.equal(report.healthSamples.length, 3);
+  assert.equal(report.activityBySchedulingClass.house_responsive.ticks, 18);
+  assert.equal(report.activityBySchedulingClass.house_responsive.submittedCommands, 18);
+  assert.equal(report.activityBySchedulingClass.contestant_tick.ticks, 3);
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
+  assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);
+  assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/cancel").length, 2);
   assert.ok(submittedCommands.every((command) => command.statusPollCount >= 1));
   assert.ok(submittedCommands.every((command) => command.firstStatus === "COMPLETED"));
   assert.ok(submittedCommands.every((command) => Number.isFinite(command.intakeElapsedMs)));
+
+  const statusReadsBeforeSyncResultRun = commandStatusReads.length;
+  syncResultMode = true;
+  await run("bun", [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=live",
+    `--venue-url=${baseUrl}`,
+    `--arena-admin-url=${baseUrl}`,
+    "--command-wait-mode=terminal",
+    "--out=/tmp/reef-arena-local-tick-run-sync-result-test.json",
+  ]);
+  syncResultMode = false;
+  const syncResultReport = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-sync-result-test.json", "utf8"));
+  assert.equal(commandStatusReads.length, statusReadsBeforeSyncResultRun);
+  assert.equal(syncResultReport.commandWaitMode, "terminal");
+  assert.equal(syncResultReport.commandStatusSummary.timedOut, 0);
+  assert.equal(syncResultReport.commandStatusSummary.byFinalStatus.COMPLETED, syncResultReport.commandStatusSummary.commandCount);
+  const syncResultCommands = syncResultReport.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
+  assert.ok(syncResultCommands.length > 0);
+  assert.ok(syncResultCommands.every((command) => command.statusPollCount === 0));
+  assert.ok(syncResultCommands.every((command) => command.statusBody.source === "sync_result_intake_response"));
 
   await run("bun", [
     "scripts/dev/arena-local-tick-run.mjs",
@@ -109,10 +187,11 @@ try {
   ]);
   const durationReport = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-duration-test.json", "utf8"));
   assert.equal(durationReport.runPlan.selectedBotCount, 5);
-  assert.equal(durationReport.runPlan.perBotTickCount, 1);
-  assert.equal(durationReport.runPlan.totalTickCount, 5);
-  assert.equal(durationReport.runPlan.durationSeconds, 2.5);
-  assert.equal(durationReport.totals.ticks, 5);
+  assert.equal(durationReport.runPlan.schedulingMode, "shared-arena-time");
+  assert.equal(durationReport.runPlan.perBotTickCount, 4);
+  assert.equal(durationReport.runPlan.totalTickCount, 32);
+  assert.equal(durationReport.runPlan.durationSeconds, 2);
+  assert.equal(durationReport.totals.ticks, 32);
   console.log("arena local tick live path checks passed");
 } finally {
   await new Promise((resolve) => server.close(resolve));
@@ -222,4 +301,35 @@ function json(res, status, body) {
   const raw = JSON.stringify(body);
   res.writeHead(status, { "content-type": "application/json", "content-length": Buffer.byteLength(raw) });
   res.end(raw);
+}
+
+async function listenOnAvailablePort(server, configuredPort) {
+  const ports = configuredPort === undefined
+    ? [0]
+    : [configuredPort];
+  let lastError;
+  for (const port of ports) {
+    try {
+      await new Promise((resolve, reject) => {
+        const onError = (error) => {
+          server.off("listening", onListening);
+          reject(error);
+        };
+        const onListening = () => {
+          server.off("error", onError);
+          resolve();
+        };
+        server.once("error", onError);
+        server.once("listening", onListening);
+        server.listen(port, "127.0.0.1");
+      });
+      return server.address();
+    } catch (error) {
+      lastError = error;
+      if (configuredPort !== undefined || error?.code !== "EADDRINUSE") {
+        throw error;
+      }
+    }
+  }
+  throw lastError ?? new Error("failed to bind test server");
 }
