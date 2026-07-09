@@ -437,7 +437,21 @@ and relevant object ids. Audit records must not contain secret values.
 ## Open Follow-Ups
 
 - Implement Admin DB user, role, trust-state, ownership, and audit tables.
-- Add GitHub OAuth login to the admin app.
+- ~~Add GitHub OAuth login to the admin app.~~ Done: `apps/arena-admin` has a
+  working GitHub login, and Caddy now reverse-proxies `/admin/auth/*`,
+  `/admin/v1/*`, and `/api/v1/*` same-origin with the static app (previously
+  the browser-facing surface wasn't Caddy-exposed at all, only the CI
+  bearer-token paths were).
+- Bridge the two disconnected admin identity/permission systems: GitHub OAuth
+  login (`AdminIdentityService`) grants a baseline `participant` role in its
+  own table, but `AdminApplicationService.requirePermission` checks a
+  completely separate `runtimePersistence` role-binding table that only the
+  hardcoded bootstrap actor (`admin-cli`/`ADMIN_ACTOR_ID`) has any role in.
+  A fresh GitHub login today has zero permission to call any `/admin/v1/...`
+  route, and there's no HTTP-reachable grant path — only CLI
+  `role-assign`/`role-upsert`. Needs a real design decision (see the arena
+  admin UI plan, D-052) before the admin app's data panels can be wired to
+  live routes.
 - Add Admin API authorization middleware that binds actor identity from the
   authenticated principal, not caller-controlled headers.
 - Move CI-to-Admin API auth from scoped bearer token to GitHub Actions OIDC.

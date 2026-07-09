@@ -1,40 +1,65 @@
 {$API_DOMAIN} {
-  encode zstd gzip
+	encode zstd gzip
 
-  header {
-    Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    X-Content-Type-Options "nosniff"
-    Referrer-Policy "no-referrer"
-    -Server
-  }
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
 
-  # CI/run-plane callers use versioned admin gateway paths. Raw /internal/*
-  # HTTP routes remain private to the runtime container.
-  @ci_admin {
-    path /admin/v1/arena/bots
-    path /admin/v1/arena/bots/openbao-provision
-  }
+	# POST run-exports is a write/ingestion path; keep an extra edge-layer
+	# bearer gate on it specifically, ahead of the general admin gateway match
+	# below. GET run-exports (a read) is covered by @admin_gateway instead.
+	@analytics_export_write {
+		method POST
+		path /admin/v1/analytics/run-exports
+	}
 
-  @analytics_export {
-    method POST
-    path /admin/v1/analytics/run-exports
-  }
+	handle @analytics_export_write {
+		@unauthorized not header Authorization "Bearer {$ANALYTICS_EXPORT_API_TOKEN}"
+		respond @unauthorized 401
 
-  handle @ci_admin {
-    @unauthorized not header Authorization "Bearer {$ARENA_ADMIN_API_TOKEN}"
-    respond @unauthorized 401
+		reverse_proxy platform-runtime:8080
+	}
 
-    reverse_proxy platform-runtime:8080
-  }
+	# Everything else under /admin/v1/... (arena bots, risk controls, circuit
+	# breakers, price collars, analytics reads). Machine callers authenticate
+	# with a service bearer token; browser callers authenticate with the
+	# first-party admin session cookie set by /admin/auth/github/callback.
+	# platform-runtime's authorizeAdminGateway enforces both — Caddy only
+	# routes here, it does not duplicate that check.
+	@admin_gateway {
+		path /admin/v1/*
+	}
 
-  handle @analytics_export {
-    @unauthorized not header Authorization "Bearer {$ANALYTICS_EXPORT_API_TOKEN}"
-    respond @unauthorized 401
+	handle @admin_gateway {
+		reverse_proxy platform-runtime:8080
+	}
 
-    reverse_proxy platform-runtime:8080
-  }
+	# GitHub OAuth login/session/logout for the admin app.
+	@admin_auth {
+		path /admin/auth/*
+	}
 
-  handle {
-    respond 404
-  }
+	handle @admin_auth {
+		reverse_proxy platform-runtime:8080
+	}
+
+	# Public venue-intake reads (trade tape, market data, arena leaderboard).
+	@venue_api {
+		path /api/v1/*
+	}
+
+	handle @venue_api {
+		reverse_proxy platform-runtime:8080
+	}
+
+	# Static admin app, served same-origin with everything above so the
+	# SameSite=Lax admin session cookie stays first-party.
+	handle {
+		root * /srv/arena-admin
+		try_files {path} /index.html
+		file_server
+	}
 }

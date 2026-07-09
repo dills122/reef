@@ -3403,9 +3403,13 @@ class PlatformHttpServer(
         if (botId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
         }
-        val bot = service.arenaBot(arenaAdminActor(query), botId)
-            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
-        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
+        return try {
+            val bot = service.arenaBot(arenaAdminActor(query), botId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot lookup failed")))
+        }
     }
 
     private fun arenaBotVersionResponse(query: String?): PlatformHotPathResponse {
@@ -3416,9 +3420,13 @@ class PlatformHttpServer(
         if (botId.isBlank() || versionId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
-        val version = service.arenaBotVersion(arenaAdminActor(query), botId, versionId)
-            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot version not found"))
-        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "version" to arenaBotVersionJson(version)))
+        return try {
+            val version = service.arenaBotVersion(arenaAdminActor(query), botId, versionId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot version not found"))
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "version" to arenaBotVersionJson(version)))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot version lookup failed")))
+        }
     }
 
     private fun arenaQualificationReportsResponse(query: String?): PlatformHotPathResponse {
@@ -3429,11 +3437,15 @@ class PlatformHttpServer(
         if (botId.isBlank() || versionId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
-        val reports = service.arenaQualificationReports(arenaAdminActor(query), botId, versionId)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject("status" to "ok", "reports" to reports.map { arenaQualificationReportJson(it) })
-        )
+        return try {
+            val reports = service.arenaQualificationReports(arenaAdminActor(query), botId, versionId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "reports" to reports.map { arenaQualificationReportJson(it) })
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena qualification reports query failed")))
+        }
     }
 
     private fun arenaOperatorDecisionsResponse(query: String?): PlatformHotPathResponse {
@@ -3444,11 +3456,15 @@ class PlatformHttpServer(
         if (botId.isBlank() || versionId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
-        val decisions = service.arenaOperatorDecisions(arenaAdminActor(query), botId, versionId)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map { arenaOperatorDecisionJson(it) })
-        )
+        return try {
+            val decisions = service.arenaOperatorDecisions(arenaAdminActor(query), botId, versionId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map { arenaOperatorDecisionJson(it) })
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena operator decisions query failed")))
+        }
     }
 
     private fun arenaRuntimeConfigDescriptorsResponse(query: String?): PlatformHotPathResponse {
@@ -3459,11 +3475,15 @@ class PlatformHttpServer(
         if (botId.isBlank() || versionId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
         }
-        val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(query), botId, versionId)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject("status" to "ok", "descriptors" to descriptors.map { arenaRuntimeConfigDescriptorJson(it) })
-        )
+        return try {
+            val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(query), botId, versionId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "descriptors" to descriptors.map { arenaRuntimeConfigDescriptorJson(it) })
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena runtime config descriptors query failed")))
+        }
     }
 
     private fun arenaRunResponse(query: String?): PlatformHotPathResponse {
@@ -3473,9 +3493,13 @@ class PlatformHttpServer(
         if (runId.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
         }
-        val run = service.arenaRun(arenaAdminActor(query), runId)
-            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena run not found"))
-        return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
+        return try {
+            val run = service.arenaRun(arenaAdminActor(query), runId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena run not found"))
+            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run lookup failed")))
+        }
     }
 
     private fun registerArenaRunResponse(body: String): PlatformHotPathResponse {
@@ -3633,11 +3657,15 @@ class PlatformHttpServer(
         if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
         }
-        val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
-        )
+        return try {
+            val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena leaderboard query failed")))
+        }
     }
 
     // Public, unauthenticated leaderboard read (D-052) — venue-intake visibility class,

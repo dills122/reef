@@ -9,6 +9,7 @@ const infraDir = resolve(repoRoot, "infra/hetzner-core");
 const serverDir = resolve(infraDir, "server");
 const migrationsDir = resolve(repoRoot, "scripts/dev/db/migrations");
 const tofuDir = resolve(infraDir, "tofu");
+const arenaAdminDir = resolve(repoRoot, "apps/arena-admin");
 const serviceContexts = [
   ["platform-runtime", resolve(repoRoot, "services/platform-runtime")],
   ["matching-engine", resolve(repoRoot, "services/matching-engine")],
@@ -23,7 +24,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || repoRoot,
     stdio: "inherit",
-    env: process.env,
+    env: options.env || process.env,
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
@@ -51,6 +52,9 @@ if (command === "help" || command === "--help" || command === "-h") {
 Commands:
   sync       rsync server files to the Hetzner host
   migrations rsync database migrations to the Hetzner host
+  arena-admin
+             build the arena-admin static site locally and rsync it to the
+             Hetzner host, served same-origin by Caddy at /srv/arena-admin
   build-local-images
              build service images on the Hetzner host and use local tags
   restart    docker compose pull and restart runtime services
@@ -90,6 +94,19 @@ function syncMigrations() {
   run("rsync", ["-av", `${migrationsDir}/`, `${target}:${deployDir}/postgres/migrations/`]);
 }
 
+function buildAndSyncArenaAdmin() {
+  // Empty base URL bakes relative fetch paths (e.g. "/api/v1/...") into the
+  // static build, matching the same-origin Caddy reverse-proxy setup — the
+  // deployed site must not point back at localhost.
+  run("bun", ["install", "--frozen-lockfile"], { cwd: arenaAdminDir });
+  run("bun", ["run", "build"], {
+    cwd: arenaAdminDir,
+    env: { ...process.env, PUBLIC_ARENA_API_BASE_URL: "" },
+  });
+  run("ssh", [target, `mkdir -p ${deployDir}/arena-admin`]);
+  run("rsync", ["-av", "--delete", `${arenaAdminDir}/build/`, `${target}:${deployDir}/arena-admin/`]);
+}
+
 function syncServiceContext(name, path) {
   run("ssh", [target, `mkdir -p /opt/reef-build/services/${name}`]);
   run("rsync", [
@@ -112,6 +129,9 @@ switch (command) {
     break;
   case "migrations":
     syncMigrations();
+    break;
+  case "arena-admin":
+    buildAndSyncArenaAdmin();
     break;
   case "build-local-images":
     for (const [name, path] of serviceContexts) {
@@ -153,6 +173,7 @@ switch (command) {
   case "deploy":
     syncServerBundle();
     syncMigrations();
+    buildAndSyncArenaAdmin();
     run("ssh", [
       target,
       [

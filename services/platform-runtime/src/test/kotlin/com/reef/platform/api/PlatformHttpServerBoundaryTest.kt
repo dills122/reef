@@ -198,6 +198,41 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayArenaBotsReadReturnsCleanErrorWhenSessionLacksPermission() {
+        // A real GitHub-authenticated session with no arena.admin role bound — the
+        // common case today, since GitHub OAuth login grants no runtimePersistence
+        // role by default. GET must fail with a clean 409, not an unhandled
+        // AuthorizationException reaching the HTTP layer (regression coverage for
+        // the missing try/catch previously present on every arena admin GET route).
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = arenaStore
+            )
+        )
+        try {
+            val response = get(
+                server.address.port,
+                "/admin/v1/arena/bots?botId=bot-1",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            )
+
+            assertEquals(409, response.status)
+            assertContains(response.body, "missing permission arena.admin")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun apiV1SubmitReturnsBoundaryErrorEnvelopeWhenClientIdMissing() {
         val server = testServer()
         try {
