@@ -102,10 +102,13 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
             )
             .take(limit)
             .mapIndexed { index, result ->
+                val bot = bots[result.botId]
                 ArenaLeaderboardEntry(
                     rank = index + 1,
                     runId = result.runId,
                     botId = result.botId,
+                    botName = bot?.metadata?.name ?: result.botId,
+                    ownerHandle = bot?.metadata?.publisher ?: "unknown",
                     versionId = result.versionId,
                     scoringPolicyVersion = result.scoringPolicyVersion,
                     finalEquity = result.finalEquity,

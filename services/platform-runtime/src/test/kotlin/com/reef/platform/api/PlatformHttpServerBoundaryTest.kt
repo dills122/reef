@@ -11,6 +11,7 @@ import com.reef.platform.application.admin.InMemoryAdminAuthStore
 import com.reef.platform.application.admin.InMemoryAdminIdentityStore
 import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
 import com.reef.platform.application.analytics.SimulationRunExportService
+import com.reef.platform.application.arena.ArenaBot
 import com.reef.platform.application.arena.ArenaBotMetadata
 import com.reef.platform.application.arena.ArenaBotVersionStatus
 import com.reef.platform.application.arena.ArenaControlPlaneService
@@ -18,6 +19,7 @@ import com.reef.platform.application.arena.InMemoryArenaBotRegistryStore
 import com.reef.platform.application.arena.ArenaQualificationStatus
 import com.reef.platform.application.arena.ArenaRunBotResult
 import com.reef.platform.application.arena.ArenaRunBotVersionRef
+import com.reef.platform.application.arena.ArenaRunRecord
 import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
 import com.reef.platform.application.arena.ArenaRuntimeConfigProvider
@@ -248,11 +250,91 @@ class PlatformHttpServerBoundaryTest {
         try {
             val availability = get(server.address.port, "/api/v1/data/availability")
             val marketData = get(server.address.port, "/api/v1/market-data/trades/AAPL")
+            val leaderboard = get(
+                server.address.port,
+                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2"
+            )
 
             assertEquals(401, availability.status)
             assertContains(availability.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
             assertEquals(401, marketData.status)
             assertContains(marketData.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+            assertEquals(401, leaderboard.status)
+            assertContains(leaderboard.body, "\"code\":\"CLIENT_ID_REQUIRED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun apiV1ArenaLeaderboardReturnsPublicSafeEntriesWithBotMetadata() {
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(
+                    name = "Bot 1",
+                    publisher = "Publisher",
+                    email = "publisher@example.com"
+                ),
+                createdAt = now
+            )
+        )
+        arenaStore.saveRunRecord(
+            ArenaRunRecord(
+                runId = "run-1",
+                modeId = "hosted-sim",
+                scenarioId = "scenario-1",
+                seed = 42,
+                policyVersion = "policy-v1",
+                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1")),
+                status = ArenaRunStatus.Completed,
+                createdAt = now
+            )
+        )
+        arenaStore.saveRunBotResult(
+            ArenaRunBotResult(
+                runId = "run-1",
+                botId = "bot-1",
+                versionId = "v1",
+                scoringPolicyVersion = "score-v2",
+                finalEquity = 1030000,
+                realizedPnl = 30000,
+                maxDrawdown = 900,
+                actionsProposed = 13,
+                orderActionsProposed = 9,
+                dataCalls = 21,
+                signalsGenerated = 5,
+                disqualified = false,
+                createdAt = now
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = arenaStore
+            )
+        )
+        try {
+            val missingParams = get(server.address.port, "/api/v1/arena/leaderboard", apiReadHeaders())
+            val leaderboard = get(
+                server.address.port,
+                "/api/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
+                apiReadHeaders()
+            )
+
+            assertEquals(400, missingParams.status)
+            assertEquals(200, leaderboard.status)
+            assertContains(leaderboard.body, "\"modeId\":\"hosted-sim\"")
+            assertContains(leaderboard.body, "\"scoringPolicyVersion\":\"score-v2\"")
+            assertContains(leaderboard.body, "\"rank\":1")
+            assertContains(leaderboard.body, "\"botId\":\"bot-1\"")
+            assertContains(leaderboard.body, "\"botName\":\"Bot 1\"")
+            assertContains(leaderboard.body, "\"ownerHandle\":\"Publisher\"")
+            assertContains(leaderboard.body, "\"finalEquity\":1030000")
         } finally {
             server.stop(0)
         }

@@ -517,6 +517,17 @@ class AdminApplicationService(
         return arenaStore().leaderboard(modeId, scoringPolicyVersion, limit)
     }
 
+    // Deliberately unauthenticated: the public /api/v1/arena/leaderboard route (D-052)
+    // reads the same public-safe, already-filtered rows (public_leaderboard = true,
+    // score_eligible = true, disqualified = false) as the admin-gated call above.
+    fun arenaLeaderboardPublic(
+        modeId: String,
+        scoringPolicyVersion: String,
+        limit: Int = 50
+    ): List<ArenaLeaderboardEntry> {
+        return arenaStore().leaderboard(modeId, scoringPolicyVersion, limit)
+    }
+
     fun listInstruments(): List<Instrument> = runtimePersistence.instruments()
 
     fun listParticipants(): List<Participant> = runtimePersistence.participants()
