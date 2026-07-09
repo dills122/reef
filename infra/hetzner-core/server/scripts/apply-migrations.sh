@@ -8,11 +8,14 @@ POSTGRES_USER="${REEF_POSTGRES_USER:-postgres}"
 POSTGRES_DB="${REEF_POSTGRES_DB:-reef}"
 APP_USER="${REEF_APP_USER:-reef_app}"
 
-# Admin and analytics live in their own dedicated Postgres containers
-# (postgres-admin, postgres-analytics), not schemas in this DB - see D-046.
+# Admin and analytics product state live in their own dedicated Postgres
+# containers (postgres-admin, postgres-analytics), not schemas in this DB - see
+# D-046. The primary runtime DB still carries the `admin` domain for current
+# runtime policy tables such as post-trade profiles until those dependencies are
+# separated.
 # Override REEF_MIGRATION_DOMAINS/REEF_POSTGRES_SERVICE/REEF_POSTGRES_DB/
 # REEF_APP_USER to apply those domains against their own container instead.
-domains=(${REEF_MIGRATION_DOMAINS:-runtime auth boundary command_log orchestration arena})
+domains=(${REEF_MIGRATION_DOMAINS:-runtime auth admin boundary command_log orchestration settlement arena})
 
 if [[ ! -d "$MIGRATIONS_ROOT" ]]; then
   echo "missing migrations directory: $MIGRATIONS_ROOT" >&2
@@ -78,6 +81,20 @@ sql_string() {
   printf "'%s'" "${1//\'/\'\'}"
 }
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+    return
+  fi
+  echo "missing sha256sum or shasum for migration checksums" >&2
+  exit 1
+}
+
 for domain in "${domains[@]}"; do
   domain_dir="$MIGRATIONS_ROOT/$domain"
   [[ -d "$domain_dir" ]] || continue
@@ -90,7 +107,7 @@ for domain in "${domains[@]}"; do
   for file in "${files[@]}"; do
     filename="$(basename "$file")"
     migration_id="$domain/$filename"
-    checksum="$(sha256sum "$file" | awk '{print $1}')"
+    checksum="$(sha256_file "$file")"
 
     existing="$(
       run_psql -q -t -A -c "SELECT COALESCE((SELECT checksum_sha256 FROM public.reef_schema_migrations WHERE migration_id = $(sql_string "$migration_id")), '');"

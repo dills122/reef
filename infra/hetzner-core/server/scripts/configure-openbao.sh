@@ -24,13 +24,29 @@ bao() {
     openbao bao "$@"
 }
 
+bao_write_json() {
+  local path="$1"
+  docker compose exec -T \
+    -e BAO_ADDR=http://127.0.0.1:8200 \
+    -e BAO_TOKEN="$BAO_TOKEN" \
+    openbao sh -c 'cat >/tmp/reef-openbao-payload.json && bao write "$1" @/tmp/reef-openbao-payload.json && rm -f /tmp/reef-openbao-payload.json' \
+    sh "$path"
+}
+
 has_json_key() {
   local key="$1"
   jq -e --arg key "$key" 'has($key)' >/dev/null
 }
 
 if ! bao audit list -format=json | has_json_key "file/"; then
-  bao audit enable file file_path=/bao/logs/audit.log
+  if audit_output="$(bao audit enable file file_path=/bao/logs/audit.log 2>&1)"; then
+    printf '%s\n' "$audit_output"
+  elif [[ "$audit_output" == *"declarative, config-based audit device management"* ]]; then
+    echo "skip audit file/ - this OpenBao build requires declarative audit device configuration"
+  else
+    printf '%s\n' "$audit_output" >&2
+    exit 1
+  fi
 else
   echo "skip audit file/"
 fi
@@ -73,15 +89,18 @@ path "secret/metadata/bots/*" {
 }
 POLICY
 
-bao write auth/jwt/role/reef-bot-submission-ci \
-  role_type="jwt" \
-  bound_audiences="reef-bot-submission-ci" \
-  bound_claims_type="glob" \
-  bound_claims="repository=${GITHUB_REPOSITORY}" \
-  user_claim="actor" \
-  token_policies="reef-bot-submission-ci" \
-  token_ttl="10m" \
-  token_max_ttl="15m"
+jq -n --arg repository "$GITHUB_REPOSITORY" '{
+  role_type: "jwt",
+  bound_audiences: "reef-bot-submission-ci",
+  bound_claims_type: "glob",
+  bound_claims: {
+    repository: $repository
+  },
+  user_claim: "actor",
+  token_policies: "reef-bot-submission-ci",
+  token_ttl: "10m",
+  token_max_ttl: "15m"
+}' | bao_write_json auth/jwt/role/reef-bot-submission-ci
 
 cat <<'POLICY' | bao policy write reef-platform-runtime -
 path "secret/data/bots/*" {
@@ -127,4 +146,3 @@ bao write auth/approle/role/reef-simulator \
 
 echo "OpenBao policy and AppRole bootstrap complete."
 echo "Use print-openbao-approle.sh to generate role credentials when needed."
-

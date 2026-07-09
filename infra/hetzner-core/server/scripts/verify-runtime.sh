@@ -14,16 +14,17 @@ done
 
 docker compose ps
 
+platform_host_port="${REEF_BACKBONE_PLATFORM_HOST_PORT:-8080}"
 health=""
 for _ in $(seq 1 45); do
-  if health="$(curl -fsS http://127.0.0.1:8080/health 2>/dev/null)"; then
+  if health="$(curl -fsS "http://127.0.0.1:${platform_host_port}/health" 2>/dev/null)"; then
     break
   fi
   sleep 2
 done
 
 if [[ -z "$health" ]]; then
-  echo "platform-runtime health endpoint did not become ready" >&2
+  echo "platform-runtime health endpoint did not become ready on port ${platform_host_port}" >&2
   docker compose logs --tail=160 platform-runtime >&2 || true
   exit 1
 fi
@@ -64,6 +65,29 @@ fi
 docker compose exec -T postgres-admin pg_isready -U postgres >/dev/null
 echo "postgres-admin: ready"
 
+admin_arena_tables="$(
+  docker compose exec -T postgres-admin psql -U postgres -d admin -X -q -t -A \
+    -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'arena' AND table_name = 'bots';"
+)"
+if [[ "$admin_arena_tables" -ne 1 ]]; then
+  echo "admin DB arena.bots table is missing" >&2
+  exit 1
+fi
+
+if [[ -f "$BASE/secrets/platform-runtime.env" ]]; then
+  arena_visible_tables="$(
+    docker compose exec -T \
+      -e PGPASSWORD="${ARENA_POSTGRES_PASSWORD:-}" \
+      postgres-admin psql -U "${ARENA_POSTGRES_USER:-admin_app}" -d admin -X -q -t -A \
+      -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'arena' AND table_name = 'bots';"
+  )"
+  if [[ "$arena_visible_tables" -ne 1 ]]; then
+    echo "admin_app cannot see arena.bots in admin DB" >&2
+    exit 1
+  fi
+  echo "admin_app visible arena tables: $arena_visible_tables"
+fi
+
 docker compose exec -T postgres-analytics pg_isready -U postgres >/dev/null
 echo "postgres-analytics: ready"
 
@@ -91,7 +115,16 @@ if [[ -f "$BASE/secrets/platform-runtime.env" ]]; then
 fi
 
 echo "resource snapshot:"
-docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" \
-  reef-platform-runtime-1 reef-matching-engine-1 reef-postgres-1 reef-postgres-admin-1 reef-postgres-analytics-1 || true
+snapshot_containers=()
+for service in platform-runtime matching-engine postgres postgres-admin postgres-analytics; do
+  container_id="$(docker compose ps -q "$service" 2>/dev/null || true)"
+  if [[ -n "$container_id" ]]; then
+    snapshot_containers+=("$container_id")
+  fi
+done
+if [[ "${#snapshot_containers[@]}" -gt 0 ]]; then
+  docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" \
+    "${snapshot_containers[@]}" || true
+fi
 
 echo "runtime verification complete"

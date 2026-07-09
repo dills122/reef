@@ -1,0 +1,18 @@
+services:
+  matching-engine:
+    image: ${REEF_MATCHING_ENGINE_IMAGE:-reef-matching-engine:backbone-local}
+    build:
+      context: ../../../services/matching-engine
+      dockerfile: Dockerfile
+
+  platform-runtime:
+    image: ${REEF_PLATFORM_RUNTIME_IMAGE:-reef-platform-runtime:backbone-local}
+    build:
+      context: ../../../services/platform-runtime
+      dockerfile: Dockerfile
+
+  simulator:
+    image: ${REEF_SIMULATOR_IMAGE:-reef-simulator:backbone-local}
+    build:
+      context: ../../../services/simulator
+      dockerfile: Dockerfile

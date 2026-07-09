@@ -774,7 +774,7 @@ Primary references:
 Status: accepted
 
 Summary:
-- this decision ratifies only the "Agreed Direction" section of `docs/BOT_ARENA_PLAN.md`; the plan's "Deferred Second Review" scope (bot safety limits, fairness rules, secret handling rules, failure handling, onboarding/KYC gates, approval-lifecycle detail) remains open and unresolved pending that review — it is not accepted by this entry.
+- this decision ratifies only the "Agreed Direction" section of `docs/BOT_ARENA_PLAN.md`; the plan's original "Deferred Second Review" scope is not accepted by this entry. D-051 later resolves the auth, provisioning, secret-slice, and PR failure-classification parts of that deferred scope; bot safety limits, fairness rules, onboarding/KYC gates, and broader approval-lifecycle detail still need explicit follow-up decisions before public launch.
 - TypeScript is the first public bot authoring SDK; the durable bot-runtime contract stays language-neutral through protobuf-defined snapshots, actions, outcomes, and resource reports.
 - a dedicated gRPC/protobuf protocol connects sandbox workers to the arena orchestrator; bot code must not create REST or gRPC clients to Reef services directly.
 - every bot-originated action preserves venue command semantics, validation, idempotency, abuse controls, and audit metadata through the same `/api/v1` boundary used by manual users.
@@ -901,3 +901,27 @@ Primary references:
 - [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
 - [`docs/SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
 - [`REEF_TECHNICAL_DESIGN.md`](../REEF_TECHNICAL_DESIGN.md)
+
+### D-051: Bot Arena Auth And Provisioning Model
+
+Status: accepted
+
+Summary:
+- GitHub is the first human identity provider for Bot Arena because a GitHub account is already required for pull-request based bot submission.
+- Reef keys users by GitHub's immutable numeric user id; usernames and email addresses are display/contact attributes only.
+- Reef Admin DB is the source of truth for local user records, roles, trust state, bot ownership, bot limits, and audit events.
+- Reef roles are enforced locally. GitHub repository role may seed reviewer/operator/platform-admin candidates, but `secret-admin` and continuing authorization must be explicit Reef assignments.
+- GitHub App support is deferred. MVP uses GitHub OAuth for the admin app, GitHub Actions for CI gates and comments/status, and the existing scoped Admin API token until GitHub Actions OIDC replaces it.
+- Participants normally configure bot secrets through the web admin app. Direct OpenBao login is an operator escape hatch, not the normal participant path.
+- OpenBao remains the secret authority. Services continue to read OpenBao through AppRole; CI provisioning continues through the narrow GitHub Actions JWT/OpenBao path where applicable; Admin API mediates participant-facing secret writes.
+- New bot submissions require human review, passing CI gates, ownership/limit checks, non-banned user state, and OpenBao slice provisioning before merge.
+- OpenBao slice existence is a pre-merge gate; config completeness is a pre-run gate because config blobs are user-managed opaque secret data.
+- Accepted users may get a lower-friction follow-up review path, but every merge keeps a human gate unless a later decision changes the policy.
+- Bot config is stored as the current opaque blob for a bot slice, not versioned by the platform. Run records should retain OpenBao path, config hash, and load timestamp, never secret values.
+- PR feedback must classify failures as user-fixable or maintainer/platform-fixable. Platform failures should comment on the PR and tag the configured maintainer group.
+
+Primary references:
+- [`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
+- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
