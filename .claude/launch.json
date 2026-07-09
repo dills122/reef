@@ -6,6 +6,12 @@
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--cwd", "apps/docs-site", "dev", "--", "--port", "4321"],
       "port": 4321
+    },
+    {
+      "name": "arena-admin",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "apps/arena-admin", "dev", "--", "--port", "5173"],
+      "port": 5173
     }
   ]
 }

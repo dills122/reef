@@ -47,7 +47,10 @@
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/sim-run.mjs",
     "docs-site:dev": "bun --cwd apps/docs-site run dev",
-    "docs-site:build": "bun --cwd apps/docs-site run build"
+    "docs-site:build": "bun --cwd apps/docs-site run build",
+    "arena-admin:dev": "bun --cwd apps/arena-admin run dev",
+    "arena-admin:build": "bun --cwd apps/arena-admin run build",
+    "arena-admin:check": "bun --cwd apps/arena-admin run check"
   },
   "devDependencies": {
     "decimal.js": "10.6.0",
