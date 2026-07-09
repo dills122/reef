@@ -1,6 +1,6 @@
 # Internal HTTP Caller Inventory
 
-Last aligned: 2026-07-07
+Last aligned: 2026-07-09
 
 Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or stable operator contracts. Hosted, CI, public, bot, SDK, and partner flows must use `/api/v1/...`, `/admin/v1/...`, gRPC, CLI, or durable-message contracts.
 
@@ -10,8 +10,8 @@ Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or 
 - `scripts/dev/bot-submission-provision-openbao.mjs`: uses `/admin/v1/arena/bots/openbao-provision`.
 - `scripts/dev/bot-submission-registry-diff.mjs`: uses `/admin/v1/arena/bots`.
 - `scripts/dev/export-simulation-run.mjs`: posts analytics exports to `/admin/v1/analytics/run-exports`.
-- `scripts/dev/admin.mjs`: account-risk, circuit-breaker, and price-collar writes use `/admin/v1/risk/...`.
-- `infra/hetzner-core/server/Caddyfile`: exposes only `/admin/v1/arena/...` and `/admin/v1/analytics/...`; raw `/internal/*` is not proxied.
+- `scripts/dev/admin.mjs`: account-risk, circuit-breaker, and price-collar writes use runtime gateway routes under `/admin/v1/risk/...`.
+- `infra/hetzner-core/server/Caddyfile`: exposes only `/admin/v1/arena/...` and `/admin/v1/analytics/...`; raw `/internal/*` and `/admin/v1/risk/...` are not proxied.
 
 ## Local-Only Callers
 
@@ -37,7 +37,7 @@ These callers still use raw `/internal/*` for local workflows. Do not reuse them
 
 ## Next Moves
 
-- Add `/admin/v1` gateway routes for protective controls when these become website/operator workflows.
+- Decide whether to expose `/admin/v1/risk/...` through hosted Caddy if protective controls become a remote website/operator workflow; the runtime gateway routes already exist for local/admin CLI use.
 - Add `/admin/v1` or CLI wrappers for settlement fact seeding before CI or hosted replay uses it.
 - Move arena run/result local helpers to `/admin/v1` when leaderboard ingestion becomes a hosted admin path.
 - Keep diagnostic reads (`/internal/commands/*`, `/internal/stream-ack/*`, `/internal/perf/*`, projector/materializer stats) loopback-only unless an explicit operator observability gateway is designed.

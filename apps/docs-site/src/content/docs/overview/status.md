@@ -28,6 +28,7 @@ Early product slices:
 - Arena control plane: bot registry, bot-version approval lifecycle, operator decisions, run records, and bot-originated order flow through real venue risk checks.
 - Settlement evidence: scenario facts API, obligation materializer, instant-post-trade instructions/attempts, cash/security leg outcomes, append-only ledger proof, `SETTLED` finality facts, break/repair paths, and replayable balance/proof reads.
 - `stock-data` seed service: seed-once Tiingo/fake provider boundary, normalized snapshots, batch seed hash, Postgres or in-memory persistence, and `/v1/seed-snapshots`.
+- Bot Arena local gates: persisted positive/negative smoke, static operator reports, and shared-time multi-instrument simulation proof with 5 active symbols and 18 bots.
 
 ## Still Planned
 
@@ -35,7 +36,7 @@ Early product slices:
 - Full post-trade lifecycle: allocation, confirmation, affirmation, clearing, novation, netting, and exception UI.
 - Dedicated broad `account` schema and possible future `market_data` extraction beyond the current runtime-backed read slice.
 - Broader analytics facts, dashboards, and reports beyond initial run export.
-- Public bot submission flow, hosted sandbox execution at scale, leaderboards, and full scoring policies.
+- Public bot submission flow, hosted sandbox execution at scale, production leaderboard service, and full scoring policies.
 - Kafka-compatible durable command log as default hot-ingress path. Local proof exists; default promotion still needs longer evidence.
 - Complete scenario locking for `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
 

@@ -1,6 +1,6 @@
 ---
 title: Settlement APIs
-description: Current scenario-scoped settlement fact, obligation, and ledger proof reads.
+description: Current scenario-scoped settlement fact, obligation, ledger, proof, and score reads.
 banner:
   content: Narrow P2 and instant-post-trade slice. This is evidence-oriented post-trade functionality, not the full allocation/confirmation/clearing workflow.
 ---
@@ -69,6 +69,20 @@ Instant-post-trade happy-path settlement writes four proof entries per settled t
 
 Settlement proof is valid only when cash debits equal cash credits, security debits equal security credits, both leg outcomes succeeded, and `SettlementSettled` is present. No balanced proof, no finality claim.
 
+## GET /api/v1/settlement/proof/{scenarioRunId}
+
+Returns one replay proof with trade, obligation, attempt, and ledger identifiers; final balances; settlement proof rows; profile/policy evidence; fact counts; causation-gap checks; proof status (`CLEAN` or `GAPPED`); and a deterministic checksum.
+
+Use it when a scenario assertion needs a compact answer to whether obligations have valid leg outcomes, balanced ledger proof, and final settlement facts.
+
+## GET /api/v1/settlement/score/{scenarioRunId}
+
+Returns participant scoring inputs from the same durable facts: settled balances, pending value, haircut-adjusted pending value, blocked unsettled value, fail counts, aged-fail counts, repair-pending counts, and penalty points.
+
+Query params: optional `asOf`, optional `agedFailAfterSeconds`.
+
+Use it for reports that need a single settlement-quality summary rather than raw facts.
+
 ## Internal Seed And Repair Commands
 
 These routes are local/operator tooling, not public client APIs:
@@ -79,6 +93,8 @@ These routes are local/operator tooling, not public client APIs:
 | `/internal/admin/settlement/obligations/materialize` | Materialize trade-to-settlement obligations for a scenario run |
 | `/internal/admin/settlement/repairs/cash` | Post buyer cash resource repair plus `SettlementRepairPosted` |
 | `/internal/admin/settlement/repairs/security` | Post seller security resource repair plus `SettlementRepairPosted` |
+| `/internal/admin/settlement/force-settle` | Force settlement finality for controlled repair/evidence paths |
+| `/internal/admin/settlement/reverse-ledger-entry` | Append compensating reversal evidence for a ledger entry |
 
 ## Profile Behavior
 

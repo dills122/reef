@@ -1,9 +1,9 @@
 ---
 title: Orders API
-description: /api/v1/orders/submit, modify, cancel, and lifecycle-state.
+description: /api/v1/orders/submit, modify, cancel, cancel-by-client-order, and lifecycle-state.
 ---
 
-All three mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [API Overview](../overview/)). Field validation happens before any durable command acceptance.
+Order mutation routes require `X-Client-Id` and `Idempotency-Key` headers (see [API Overview](../overview/)). Field validation happens before any durable command acceptance.
 
 ## POST /api/v1/orders/submit
 
@@ -61,9 +61,29 @@ All three mutation routes require `X-Client-Id` and `Idempotency-Key` headers (s
 }
 ```
 
+## POST /api/v1/orders/cancel-by-client-order
+
+Slower resolver path for clients that know their own `clientOrderId` but do not have the routed venue cancel metadata. The runtime resolves `(participantId, clientOrderId)` outside the matching hot path, synthesizes the normal cancel body with `orderId`, `runId`, `venueSessionId`, and `instrumentId`, then submits it through `/api/v1/orders/cancel`.
+
+This route is not part of the throughput target. Hot-path cancels should include routing metadata and use `/api/v1/orders/cancel` directly.
+
+```json
+{
+  "commandId": "uuid",
+  "traceId": "uuid",
+  "causationId": "uuid",
+  "correlationId": "uuid",
+  "actorId": "string",
+  "occurredAt": "2026-07-05T14:00:00.000Z",
+  "participantId": "uuid",
+  "clientOrderId": "client-order-123",
+  "reason": "string"
+}
+```
+
 ## Response Shape
 
-All three return the same result envelope (mirrors `SubmitOrderResult` in the wire contract — see [Wire Contracts](../../schema/contracts/)):
+Order command routes return the same result envelope (mirrors `SubmitOrderResult` in the wire contract — see [Wire Contracts](../../schema/contracts/)):
 
 ```json
 {
