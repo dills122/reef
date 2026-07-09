@@ -170,6 +170,8 @@ jobs:
     defaults:
       run:
         working-directory: apps/arena-admin
+    env:
+      PUBLIC_ARENA_API_BASE_URL: http://localhost:8080
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
