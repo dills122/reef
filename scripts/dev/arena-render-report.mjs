@@ -28,6 +28,7 @@ function renderReport(report, context) {
   const persistence = report.persistence ?? {};
   const venueReadback = report.venueReadback ?? {};
   const scoringAssumptions = report.scoringAssumptions ?? {};
+  const marketQualitySummary = report.marketQualitySummary ?? {};
   const statusClass = String(report.status ?? "unknown").includes("freeze") ? "warn" : "ok";
   const persisted = persistence.enabled && !persistence.skipped;
   const projectionDrained = venueReadback.projectionDrained === true;
@@ -268,6 +269,11 @@ function renderReport(report, context) {
     </section>
 
     <section class="section">
+      <h2>Market Quality</h2>
+      ${marketQualityTable(marketQualitySummary)}
+    </section>
+
+    <section class="section">
       <h2>Scoring Assumptions</h2>
       <table>
         <tbody>
@@ -387,6 +393,39 @@ function tradingMetricsTable(results) {
           <td>${pnl.available === false ? `<span class="pill warn">pending attribution</span>` : formatNumber(pnl.total ?? 0)}</td>
         </tr>`;
       }).join("")}
+    </tbody>
+  </table>`;
+}
+
+function marketQualityTable(summary) {
+  const instruments = summary.instruments ?? [];
+  if (instruments.length === 0) {
+    return `<div class="empty">No per-instrument market quality rows.</div>`;
+  }
+  return `<table>
+    <thead>
+      <tr>
+        <th>Instrument</th>
+        <th>Status</th>
+        <th class="num">TOB %</th>
+        <th class="num">Depth %</th>
+        <th class="num">Median Spread</th>
+        <th class="num">P95 Spread</th>
+        <th class="num">Crossed</th>
+        <th>Failures</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${instruments.map((instrument) => `<tr>
+        <td class="mono">${escapeHtml(instrument.instrumentId)}</td>
+        <td>${instrument.status === "pass" ? `<span class="pill ok">pass</span>` : `<span class="pill warn">warn</span>`}</td>
+        <td class="num">${formatNumber(instrument.topOfBookPct ?? 0)}</td>
+        <td class="num">${formatNumber(instrument.depthPct ?? 0)}</td>
+        <td class="num">${formatNumber(instrument.medianQuotedSpreadBps ?? 0)}</td>
+        <td class="num">${formatNumber(instrument.p95QuotedSpreadBps ?? 0)}</td>
+        <td class="num">${formatNumber(instrument.crossedBookCount ?? 0)}</td>
+        <td>${escapeHtml((instrument.failures ?? []).join("; ") || "none")}</td>
+      </tr>`).join("")}
     </tbody>
   </table>`;
 }

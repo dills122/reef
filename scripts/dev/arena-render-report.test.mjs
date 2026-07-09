@@ -44,6 +44,22 @@ writeFileSync(
       accountingGap: 0,
       terminalCommands: 12,
     },
+    marketQualitySummary: {
+      schemaVersion: "reef.arena.marketQualitySummary.v0",
+      status: "warn",
+      instruments: [
+        {
+          instrumentId: "AAPL",
+          status: "warn",
+          failures: ["p95QuotedSpreadBps 60.00 > 50"],
+          topOfBookPct: 100,
+          depthPct: 100,
+          medianQuotedSpreadBps: 20,
+          p95QuotedSpreadBps: 60,
+          crossedBookCount: 0,
+        },
+      ],
+    },
     venueReadback: {
       projectionDrained: true,
     },
@@ -142,6 +158,8 @@ assert.match(html, /arena-test-run/);
 assert.match(html, /Twin Ion Quant/);
 assert.match(html, /Thermal Exhaust Stressor/);
 assert.match(html, /Trading Metrics/);
+assert.match(html, /Market Quality/);
+assert.match(html, /p95QuotedSpreadBps 60.00 &gt; 50/);
 assert.match(html, /Scoring Assumptions/);
 assert.match(html, /pending attribution/);
 assert.match(html, /custom-technical-indicator/);

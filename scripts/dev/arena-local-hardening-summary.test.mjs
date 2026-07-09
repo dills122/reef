@@ -95,6 +95,24 @@ writeFileSync(reportPath, JSON.stringify({
     crossedBookCount: 0,
     emptyBookCount: 0,
   },
+  marketQualitySummary: {
+    schemaVersion: "reef.arena.marketQualitySummary.v0",
+    status: "pass",
+    failures: [],
+    instruments: [
+      {
+        instrumentId: "AAPL",
+        status: "pass",
+        failures: [],
+        sampleCount: 60,
+        topOfBookPct: 100,
+        depthPct: 100,
+        medianQuotedSpreadBps: 20,
+        p95QuotedSpreadBps: 25,
+        crossedBookCount: 0,
+      },
+    ],
+  },
   venueReadback: {
     projectionDrained: true,
     ownOrders: [
@@ -163,6 +181,7 @@ assert.equal(summary.commands.rejects.byCode.SELF_TRADE_PREVENTION, 5);
 assert.equal(summary.commandPressure.totals.cancelCommands, 12);
 assert.equal(summary.commandPressure.totals.houseCommands, 40);
 assert.equal(summary.latency.source, "compact-report-aggregates");
-assert.equal(summary.marketQuality.source, "compact-report-health-summary");
+assert.equal(summary.marketQuality.source, "compact-report-market-quality-summary");
+assert.equal(summary.marketQuality.byInstrument[0].instrumentId, "AAPL");
 
 console.log("arena local hardening compact summary checks passed");

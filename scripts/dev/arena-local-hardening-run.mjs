@@ -447,6 +447,29 @@ function summarizeMarketQuality(report) {
   }
 
   if (!Array.isArray(report.sessionReports)) {
+    if (report.marketQualitySummary !== undefined) {
+      return {
+        status: report.marketQualitySummary.status === "pass" ? "pass" : "fail",
+        failures: report.marketQualitySummary.failures ?? [],
+        thresholds: report.marketQualitySummary.thresholds ?? {
+          minTopOfBookPct,
+          minDepthPct,
+          maxP95QuotedSpreadBps,
+          minTradesPerInstrument: 1,
+          requireSideFillCoverage,
+        },
+        byInstrument: report.marketQualitySummary.instruments ?? [],
+        totals: {
+          instruments: report.marketQualitySummary.instruments?.length ?? 0,
+          tradeCount: 0,
+          tradedQuantity: 0,
+          submittedCommands: report.commandStatusSummary?.commandCount ?? 0,
+          filledCommands: 0,
+          fillRatePct: 0,
+        },
+        source: "compact-report-market-quality-summary",
+      };
+    }
     return {
       status: report.healthSummary?.status === "pass" ? "pass" : "fail",
       failures: report.healthSummary?.failures ?? (report.healthSummary?.status === "pass" ? [] : [`health status ${report.healthSummary?.status ?? "unknown"}`]),

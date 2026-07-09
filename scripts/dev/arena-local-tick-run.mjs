@@ -709,6 +709,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, completedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0 },
   );
   const healthSummary = summarizeHealth(healthSamples, totals);
+  const marketQualitySummary = summarizeMarketQuality(healthSamples);
   const status = reportStatus(enforcementEvents, healthSummary);
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
@@ -745,6 +746,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     latencySummary: summarizeReportLatency(tickResults),
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
+    marketQualitySummary,
     healthSamples,
     venueReadback,
     enforcementEvents,
@@ -786,6 +788,7 @@ function compactArenaReport(report) {
     latencySummary: report.latencySummary,
     activityBySchedulingClass: report.activityBySchedulingClass,
     healthSummary: report.healthSummary,
+    marketQualitySummary: report.marketQualitySummary,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,
@@ -1093,6 +1096,104 @@ function summarizeHealth(healthSamples, totals) {
       maxMedianQuotedSpreadBps,
       maxP95QuotedSpreadBps,
     },
+  };
+}
+
+function summarizeMarketQuality(healthSamples) {
+  const postWarmupSamples = healthSamples.filter((sample) => sample.postWarmup);
+  const samples = postWarmupSamples.length > 0 ? postWarmupSamples : healthSamples;
+  const minTopOfBookPct = Number(mode.healthTargets?.minTopOfBookPct ?? 90);
+  const minDepthPct = Number(mode.healthTargets?.minDepthPct ?? 90);
+  const maxMedianQuotedSpreadBps = Number(mode.healthTargets?.maxMedianQuotedSpreadBps ?? 25);
+  const maxP95QuotedSpreadBps = Number(mode.healthTargets?.maxP95QuotedSpreadBps ?? 50);
+  const byInstrument = new Map();
+
+  for (const sample of samples) {
+    for (const snapshot of sample.snapshots ?? []) {
+      const instrumentId = String(snapshot.instrumentId ?? "");
+      if (instrumentId.length === 0) continue;
+      const bucket = byInstrument.get(instrumentId) ?? {
+        instrumentId,
+        sampleCount: 0,
+        topOfBookCount: 0,
+        depthCount: 0,
+        crossedBookCount: 0,
+        lockedBookCount: 0,
+        emptyBookCount: 0,
+        spreadBps: [],
+        firstCrossedAt: null,
+        firstEmptyAt: null,
+      };
+      bucket.sampleCount += 1;
+      if (snapshot.topOfBook) bucket.topOfBookCount += 1;
+      if (snapshot.bidDepthAvailable && snapshot.askDepthAvailable) bucket.depthCount += 1;
+      if (snapshot.crossedBook) {
+        bucket.crossedBookCount += 1;
+        bucket.firstCrossedAt ??= sample.occurredAt ?? null;
+      }
+      if (snapshot.lockedBook) bucket.lockedBookCount += 1;
+      if (snapshot.emptyBook) {
+        bucket.emptyBookCount += 1;
+        bucket.firstEmptyAt ??= sample.occurredAt ?? null;
+      }
+      if (snapshot.quotedSpreadBps !== null && Number.isFinite(Number(snapshot.quotedSpreadBps))) {
+        bucket.spreadBps.push(Number(snapshot.quotedSpreadBps));
+      }
+      byInstrument.set(instrumentId, bucket);
+    }
+  }
+
+  const instruments = Array.from(byInstrument.values())
+    .sort((left, right) => left.instrumentId.localeCompare(right.instrumentId))
+    .map((bucket) => {
+      const spreadBps = bucket.spreadBps.slice().sort((left, right) => left - right);
+      const topOfBookPct = pct(bucket.topOfBookCount, bucket.sampleCount);
+      const depthPct = pct(bucket.depthCount, bucket.sampleCount);
+      const medianQuotedSpreadBps = percentile(spreadBps, 0.5);
+      const p95QuotedSpreadBps = percentile(spreadBps, 0.95);
+      const failures = [];
+      if (bucket.sampleCount === 0) failures.push("no_health_samples");
+      if (topOfBookPct < minTopOfBookPct) failures.push(`topOfBookPct ${topOfBookPct.toFixed(2)} < ${minTopOfBookPct}`);
+      if (depthPct < minDepthPct) failures.push(`depthPct ${depthPct.toFixed(2)} < ${minDepthPct}`);
+      if (medianQuotedSpreadBps !== null && medianQuotedSpreadBps > maxMedianQuotedSpreadBps) {
+        failures.push(`medianQuotedSpreadBps ${medianQuotedSpreadBps.toFixed(2)} > ${maxMedianQuotedSpreadBps}`);
+      }
+      if (p95QuotedSpreadBps !== null && p95QuotedSpreadBps > maxP95QuotedSpreadBps) {
+        failures.push(`p95QuotedSpreadBps ${p95QuotedSpreadBps.toFixed(2)} > ${maxP95QuotedSpreadBps}`);
+      }
+      if (bucket.crossedBookCount > 0) failures.push(`crossedBookCount ${bucket.crossedBookCount} > 0`);
+      return {
+        instrumentId: bucket.instrumentId,
+        status: failures.length === 0 ? "pass" : "warn",
+        failures,
+        sampleCount: bucket.sampleCount,
+        topOfBookPct,
+        depthPct,
+        medianQuotedSpreadBps,
+        p95QuotedSpreadBps,
+        crossedBookCount: bucket.crossedBookCount,
+        lockedBookCount: bucket.lockedBookCount,
+        emptyBookCount: bucket.emptyBookCount,
+        firstCrossedAt: bucket.firstCrossedAt,
+        firstEmptyAt: bucket.firstEmptyAt,
+      };
+    });
+  const failures = instruments.flatMap((instrument) =>
+    instrument.failures.map((failure) => `${instrument.instrumentId}: ${failure}`),
+  );
+  return {
+    schemaVersion: "reef.arena.marketQualitySummary.v0",
+    status: failures.length === 0 ? "pass" : "warn",
+    failures,
+    sampleCount: instruments.reduce((total, instrument) => total + instrument.sampleCount, 0),
+    postWarmupSampleCount: postWarmupSamples.length,
+    thresholds: {
+      minTopOfBookPct,
+      minDepthPct,
+      maxMedianQuotedSpreadBps,
+      maxP95QuotedSpreadBps,
+    },
+    instruments,
   };
 }
 

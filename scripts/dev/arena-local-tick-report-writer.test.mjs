@@ -60,5 +60,7 @@ assert.equal(compactReport.omitted.healthSamples, 2);
 assert.equal(compactReport.latencySummary.tickElapsedMs.count, 16);
 assert.deepEqual(compactReport.commandStatusSummary.rejectedByCode, {});
 assert.deepEqual(compactReport.commandStatusSummary.rejectedByBotId, {});
+assert.equal(compactReport.marketQualitySummary.schemaVersion, "reef.arena.marketQualitySummary.v0");
+assert.ok(compactReport.marketQualitySummary.instruments.some((instrument) => instrument.instrumentId === "AAPL"));
 
 console.log("arena local tick report writer checks passed");
