@@ -248,6 +248,12 @@ jobs:
           - name: platform-runtime
             context: services/platform-runtime
             dockerfile: services/platform-runtime/Dockerfile
+          - name: stock-data
+            context: services/stock-data
+            dockerfile: services/stock-data/Dockerfile
+          - name: simulator
+            context: services/simulator
+            dockerfile: services/simulator/Dockerfile
     steps:
       - uses: actions/checkout@v4
       - name: Build ${{ matrix.name }} image
