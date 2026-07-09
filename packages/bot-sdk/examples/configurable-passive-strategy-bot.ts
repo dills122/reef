@@ -17,6 +17,23 @@ export default class ConfigurablePassiveStrategyBot extends ReefBotV1 {
     const side = ctx.config.optionalString("side") === "SELL" ? "SELL" : "BUY";
     const orderSize = ctx.config.number("orderSize");
     const priceOffset = ctx.config.optionalNumber("priceOffset") ?? 1;
+    const ownOrders = await ctx.orders.current();
+
+    if (!ownOrders.ok) {
+      return [ctx.actions.noop("own orders unavailable")];
+    }
+
+    const hasActiveRestingOrder = ownOrders.value.some(
+      (order) =>
+        order.instrumentId === instrumentId &&
+        order.side === side &&
+        (order.status === "OPEN" || order.status === "PARTIALLY_FILLED") &&
+        order.remainingQuantity > 0,
+    );
+    if (hasActiveRestingOrder) {
+      return [ctx.actions.noop("passive order already resting")];
+    }
+
     const snapshot = await ctx.marketData.snapshot(instrumentId);
 
     if (!snapshot.ok) {

@@ -15,7 +15,9 @@ await assertLiveReadClientsRun();
 await assertLifecycleSafeMarketMakerRun();
 await assertRefreshingMarketMakerHealthyNoopRun();
 await assertRefreshingMarketMakerStaleRefreshRun();
+await assertConfigurablePassiveStrategyRestingOrderRun();
 await assertAggressiveTakerRun();
+await assertAggressiveTakerWarmupRun();
 await assertPolicyBlockedRunDoesNotSendOrApply();
 
 console.log("bot SDK scenario runner checks passed");
@@ -169,6 +171,7 @@ async function assertRefreshingMarketMakerStaleRefreshRun() {
       config: {
         ...fixture.config,
         quoteTtlMs: 400,
+        maxCancelsPerTick: 2,
       },
       ticks: [
         ...fixture.ticks,
@@ -223,12 +226,75 @@ async function assertAggressiveTakerRun() {
 
   assert.equal(report.status, "completed");
   assert.equal(report.ticksRun, 2);
-  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.orderActionsProposed, 1);
   assert.equal(report.ticks[0].venueCommands[0].body.side, "BUY");
   assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "100550000000");
-  assert.equal(report.ticks[1].venueCommands[0].body.side, "SELL");
-  assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "99950000000");
-  assert.equal(transport.requests.length, 2);
+  assert.equal(report.ticks[1].venueCommands.length, 0);
+  assert.equal(report.ticks[1].actions[0].type, "noop");
+  assert.equal(report.ticks[1].actions[0].reason, "taker order already active");
+  assert.equal(transport.requests.length, 1);
+}
+
+async function assertAggressiveTakerWarmupRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      botId: "configurable-aggressive-taker-bot",
+      actorId: "actor-configurable-aggressive-taker-bot",
+      config: {
+        instrumentId: "AAPL",
+        side: "BUY",
+        orderSize: 1,
+        crossOffset: 0.05,
+        startAfterTicks: 1,
+      },
+      ticks: fixture.ticks.slice(0, 2),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.orderActionsProposed, 1);
+  assert.equal(report.ticks[0].venueCommands.length, 0);
+  assert.equal(report.ticks[0].actions[0].type, "noop");
+  assert.equal(report.ticks[0].actions[0].reason, "waiting for liquidity warmup");
+  assert.equal(report.ticks[1].venueCommands.length, 1);
+  assert.equal(report.ticks[1].venueCommands[0].body.side, "BUY");
+  assert.equal(transport.requests.length, 1);
+}
+
+async function assertConfigurablePassiveStrategyRestingOrderRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/configurable-passive-strategy-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      botId: "configurable-passive-strategy-bot",
+      actorId: "actor-configurable-passive-strategy-bot",
+      config: {
+        instrumentId: "AAPL",
+        side: "BUY",
+        orderSize: 1,
+        priceOffset: 0.1,
+      },
+      ticks: fixture.ticks.slice(0, 2),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.ticksRun, 2);
+  assert.equal(report.orderActionsProposed, 1);
+  assert.equal(report.ticks[0].venueCommands.length, 1);
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99900000000");
+  assert.equal(report.ticks[1].venueCommands.length, 0);
+  assert.equal(report.ticks[1].actions[0].type, "noop");
+  assert.equal(report.ticks[1].actions[0].reason, "passive order already resting");
+  assert.equal(transport.requests.length, 1);
 }
 
 async function assertPolicyBlockedRunDoesNotSendOrApply() {

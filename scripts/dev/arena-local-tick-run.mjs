@@ -8,6 +8,11 @@ import { performance } from "node:perf_hooks";
 import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 import { writeJsonFileStreaming } from "./lib/large-json-writer.mjs";
 import { createOpenBaoRuntimeSecretProvider, runtimeConfigPreflightReport } from "./lib/openbao-runtime-config.mjs";
+import {
+  enrichBotResultsWithExecutionDiagnostics,
+  marketPriceValue,
+  priceFromExecutionPrice,
+} from "./lib/arena-execution-diagnostics.mjs";
 
 loadDotEnv();
 
@@ -124,8 +129,11 @@ async function main() {
     const sessionReports = await runArenaSessions(bots, healthSamples);
     const enforcementEvents = sessionReports.flatMap((result) => enforceBot(result.bot, result));
 
-    const botResults = scoreBots(sessionReports, enforcementEvents);
-    const venueReadback = await collectVenueReadback(botResults);
+    const baseBotResults = scoreBots(sessionReports, enforcementEvents);
+    const venueReadback = await collectVenueReadback(baseBotResults);
+    const botResults = enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
+      fallbackInstruments: mode.instruments ?? [],
+    });
     const completedAtIso = new Date().toISOString();
     const report = buildReport({
       botResults,
@@ -395,7 +403,7 @@ function tickPolicyViolation(session, tickResult, offsetMs) {
 }
 
 async function refreshLiveSessionOrders(session) {
-  if (config.submitMode !== "live" || session.schedulingClass !== "house_responsive") {
+  if (config.submitMode !== "live") {
     return undefined;
   }
   const participantId = participantIdForBot(session.bot);
@@ -549,6 +557,7 @@ function scoreBots(sessionReports, enforcementEvents) {
     );
     return {
       botId: session.bot.botId,
+      displayName: displayNameForBot(session.bot),
       versionId: session.bot.versionId,
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
@@ -567,8 +576,125 @@ function scoreBots(sessionReports, enforcementEvents) {
       operationalPauseCount,
       disqualified: freezeCount > 0,
       score,
+      tradingMetrics: summarizeTradingMetrics(session, counters),
     };
   });
+}
+
+function displayNameForBot(bot) {
+  return typeof bot.displayName === "string" && bot.displayName.trim().length > 0
+    ? bot.displayName.trim()
+    : bot.botId;
+}
+
+function scoringAssumptions() {
+  return {
+    schemaVersion: "reef.arena.scoringAssumptions.v0",
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoreBasis: "participation-and-policy-compliance",
+    leaderboardScope: "score-eligible public competitor bots only",
+    houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
+    pnl: {
+      status: "diagnostic-not-ranked",
+      basis: "zero-fee cash/inventory diagnostics from participant-scoped fill readback; public score remains participation/policy-compliance",
+      markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+      fees: "zero placeholder until maker/taker fee policy is configured",
+    },
+    tradingMetrics: {
+      status: "command-mix plus execution diagnostics v0",
+      source: "runner pre-submit venue commands, command status summaries, and participant-scoped order-fill readback",
+      fillsAndExecutions: "diagnostic inputs only; public score weighting is a follow-up scoring-policy slice",
+    },
+  };
+}
+
+function summarizeTradingMetrics(session, counters) {
+  const byRoute = {};
+  const submittedByRoute = {};
+  const byInstrument = {};
+  const bySide = {};
+  let buyQuantity = 0;
+  let sellQuantity = 0;
+  let grossSubmittedQuantity = 0;
+  let grossSubmittedNotional = 0;
+
+  for (const tick of session.ticks) {
+    for (const command of tick.venueCommands ?? []) {
+      increment(byRoute, command.route ?? "unknown");
+      const body = command.body ?? {};
+      const instrumentId = typeof body.instrumentId === "string" && body.instrumentId.length > 0 ? body.instrumentId : "unknown";
+      const side = body.side === "SELL" ? "SELL" : body.side === "BUY" ? "BUY" : "unknown";
+
+      if (command.route === "/api/v1/orders/submit" || command.route === "/api/v1/orders/modify") {
+        increment(byInstrument, instrumentId);
+        increment(bySide, side);
+      }
+
+      if (command.route === "/api/v1/orders/submit") {
+        const quantity = numberValue(body.quantityUnits);
+        const price = priceFromNanos(body.limitPrice);
+        grossSubmittedQuantity += quantity;
+        if (side === "BUY") buyQuantity += quantity;
+        if (side === "SELL") sellQuantity += quantity;
+        if (price !== undefined) {
+          grossSubmittedNotional += quantity * price;
+        }
+      }
+    }
+    for (const command of tick.submission?.commands ?? []) {
+      increment(submittedByRoute, command.route ?? "unknown");
+    }
+  }
+
+  return {
+    schemaVersion: "reef.arena.tradingMetrics.v0",
+    basis: "report-only command mix; PnL/fill attribution pending",
+    commands: {
+      proposed: counters.venueCommands,
+      submitted: counters.submittedCommands,
+      completed: counters.completedCommands,
+      failed: counters.failedCommands,
+      rejected: counters.rejectedCommands,
+      timedOut: counters.timedOutCommands,
+      byRoute: sortedRecord(byRoute),
+      submittedByRoute: sortedRecord(submittedByRoute),
+    },
+    orderFlow: {
+      submittedLimitOrders: Number(byRoute["/api/v1/orders/submit"] ?? 0),
+      modifyCommands: Number(byRoute["/api/v1/orders/modify"] ?? 0),
+      cancelCommands: Number(byRoute["/api/v1/orders/cancel"] ?? 0),
+      byInstrument: sortedRecord(byInstrument),
+      bySide: sortedRecord(bySide),
+      buyQuantity,
+      sellQuantity,
+      grossSubmittedQuantity,
+      grossSubmittedNotional: Number(grossSubmittedNotional.toFixed(6)),
+    },
+    pnl: {
+      realized: null,
+      unrealized: null,
+      total: null,
+      currency: "USD",
+      available: false,
+      reason: "venue fill readback unavailable before live execution diagnostics are attached",
+    },
+    fees: {
+      total: 0,
+      maker: 0,
+      taker: 0,
+      currency: "USD",
+      policy: "fees-v0-zero-placeholder",
+    },
+    inventory: {
+      netQuantityByInstrument: {},
+      grossNotional: null,
+      markPriceSource: "pending final-mid/last/reference mark",
+    },
+    marketQuality: {
+      available: false,
+      reason: "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices",
+    },
+  };
 }
 
 function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {
@@ -591,6 +717,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, completedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0 },
   );
   const healthSummary = summarizeHealth(healthSamples, totals);
+  const marketQualitySummary = summarizeMarketQuality(healthSamples);
   const status = reportStatus(enforcementEvents, healthSummary);
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
@@ -611,6 +738,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     },
     runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
     commandWaitMode: config.commandWaitMode,
+    scoringAssumptions: scoringAssumptions(),
     status,
     elapsedMs,
     totals,
@@ -626,6 +754,8 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     latencySummary: summarizeReportLatency(tickResults),
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
+    marketQualitySummary,
+    executionSummary: venueReadback?.executionSummary,
     healthSamples,
     venueReadback,
     enforcementEvents,
@@ -658,6 +788,7 @@ function compactArenaReport(report) {
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
     commandWaitMode: report.commandWaitMode,
+    scoringAssumptions: report.scoringAssumptions,
     status: report.status,
     elapsedMs: report.elapsedMs,
     totals: report.totals,
@@ -666,6 +797,8 @@ function compactArenaReport(report) {
     latencySummary: report.latencySummary,
     activityBySchedulingClass: report.activityBySchedulingClass,
     healthSummary: report.healthSummary,
+    marketQualitySummary: report.marketQualitySummary,
+    executionSummary: report.executionSummary,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,
@@ -689,6 +822,7 @@ function compactVenueReadback(venueReadback) {
     projectionDrainRequired: venueReadback.projectionDrainRequired,
     availability: venueReadback.availability,
     snapshots: venueReadback.snapshots,
+    executionSummary: venueReadback.executionSummary,
     ownOrders: Array.isArray(venueReadback.ownOrders)
       ? venueReadback.ownOrders.map((entry) => ({
         botId: entry.botId,
@@ -697,6 +831,8 @@ function compactVenueReadback(venueReadback) {
         currentOrderCount: entry.current?.body?.orders?.length ?? 0,
         historyStatusCode: entry.history?.statusCode,
         historyOrderCount: entry.history?.body?.orders?.length ?? 0,
+        fillsStatusCode: entry.fills?.statusCode,
+        fillCount: entry.fills?.body?.fills?.length ?? 0,
       }))
       : [],
   };
@@ -746,12 +882,20 @@ function summarizeCommandStatuses(tickResults) {
   const byRoute = {};
   const byFinalStatus = {};
   const byFirstStatus = {};
+  const rejectedByCode = {};
+  const rejectedByBotId = {};
   let intakeElapsedMsTotal = 0;
   let statusElapsedMsTotal = 0;
   for (const command of commands) {
     increment(byRoute, command.route || "unknown");
     increment(byFinalStatus, command.finalStatus || "unknown");
     increment(byFirstStatus, command.firstStatus || "unknown");
+    if (command.finalStatus === "REJECTED" || command.rejected === true) {
+      const payload = safeJson(command.statusBody?.responsePayloadJson);
+      const code = payload?.rejected?.code ?? command.statusBody?.resultStatus ?? "unknown";
+      increment(rejectedByCode, code);
+      increment(rejectedByBotId, botIdFromCommandId(command.commandId));
+    }
     intakeElapsedMsTotal += Number(command.intakeElapsedMs ?? 0);
     statusElapsedMsTotal += Number(command.statusElapsedMs ?? 0);
   }
@@ -761,6 +905,8 @@ function summarizeCommandStatuses(tickResults) {
     byRoute,
     byFinalStatus,
     byFirstStatus,
+    rejectedByCode,
+    rejectedByBotId,
     avgIntakeElapsedMs: commands.length === 0 ? 0 : intakeElapsedMsTotal / commands.length,
     avgStatusElapsedMs: commands.length === 0 ? 0 : statusElapsedMsTotal / commands.length,
   };
@@ -802,6 +948,20 @@ function summarizeActivityBySchedulingClass(sessionReports) {
 
 function increment(counter, key) {
   counter[key] = Number(counter[key] ?? 0) + 1;
+}
+
+function sortedRecord(record) {
+  return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function botIdFromCommandId(commandId) {
+  const value = String(commandId ?? "");
+  const prefix = `${mode.modeId}-`;
+  const suffixIndex = value.lastIndexOf("-cmd-");
+  if (!value.startsWith(prefix) || suffixIndex <= prefix.length) {
+    return "unknown";
+  }
+  return value.slice(prefix.length, suffixIndex);
 }
 
 function rankBotResults(results) {
@@ -868,9 +1028,9 @@ function dryRunHealthSnapshots(tick) {
 }
 
 function normalizeSnapshot(instrumentId, rawSnapshot, statusCode) {
-  const bid = nullableNumber(rawSnapshot.bestBidPrice ?? rawSnapshot.bidPrice);
-  const ask = nullableNumber(rawSnapshot.bestAskPrice ?? rawSnapshot.askPrice);
-  const mid = nullableNumber(rawSnapshot.midPrice) ?? midpoint(bid, ask);
+  const bid = marketPriceValue(rawSnapshot.bestBidPrice ?? rawSnapshot.bidPrice);
+  const ask = marketPriceValue(rawSnapshot.bestAskPrice ?? rawSnapshot.askPrice);
+  const mid = marketPriceValue(rawSnapshot.midPrice) ?? midpoint(bid, ask);
   const topOfBook = bid !== null && ask !== null && bid > 0 && ask > 0;
   const spread = topOfBook ? ask - bid : null;
   return {
@@ -952,6 +1112,104 @@ function summarizeHealth(healthSamples, totals) {
   };
 }
 
+function summarizeMarketQuality(healthSamples) {
+  const postWarmupSamples = healthSamples.filter((sample) => sample.postWarmup);
+  const samples = postWarmupSamples.length > 0 ? postWarmupSamples : healthSamples;
+  const minTopOfBookPct = Number(mode.healthTargets?.minTopOfBookPct ?? 90);
+  const minDepthPct = Number(mode.healthTargets?.minDepthPct ?? 90);
+  const maxMedianQuotedSpreadBps = Number(mode.healthTargets?.maxMedianQuotedSpreadBps ?? 25);
+  const maxP95QuotedSpreadBps = Number(mode.healthTargets?.maxP95QuotedSpreadBps ?? 50);
+  const byInstrument = new Map();
+
+  for (const sample of samples) {
+    for (const snapshot of sample.snapshots ?? []) {
+      const instrumentId = String(snapshot.instrumentId ?? "");
+      if (instrumentId.length === 0) continue;
+      const bucket = byInstrument.get(instrumentId) ?? {
+        instrumentId,
+        sampleCount: 0,
+        topOfBookCount: 0,
+        depthCount: 0,
+        crossedBookCount: 0,
+        lockedBookCount: 0,
+        emptyBookCount: 0,
+        spreadBps: [],
+        firstCrossedAt: null,
+        firstEmptyAt: null,
+      };
+      bucket.sampleCount += 1;
+      if (snapshot.topOfBook) bucket.topOfBookCount += 1;
+      if (snapshot.bidDepthAvailable && snapshot.askDepthAvailable) bucket.depthCount += 1;
+      if (snapshot.crossedBook) {
+        bucket.crossedBookCount += 1;
+        bucket.firstCrossedAt ??= sample.occurredAt ?? null;
+      }
+      if (snapshot.lockedBook) bucket.lockedBookCount += 1;
+      if (snapshot.emptyBook) {
+        bucket.emptyBookCount += 1;
+        bucket.firstEmptyAt ??= sample.occurredAt ?? null;
+      }
+      if (snapshot.quotedSpreadBps !== null && Number.isFinite(Number(snapshot.quotedSpreadBps))) {
+        bucket.spreadBps.push(Number(snapshot.quotedSpreadBps));
+      }
+      byInstrument.set(instrumentId, bucket);
+    }
+  }
+
+  const instruments = Array.from(byInstrument.values())
+    .sort((left, right) => left.instrumentId.localeCompare(right.instrumentId))
+    .map((bucket) => {
+      const spreadBps = bucket.spreadBps.slice().sort((left, right) => left - right);
+      const topOfBookPct = pct(bucket.topOfBookCount, bucket.sampleCount);
+      const depthPct = pct(bucket.depthCount, bucket.sampleCount);
+      const medianQuotedSpreadBps = percentile(spreadBps, 0.5);
+      const p95QuotedSpreadBps = percentile(spreadBps, 0.95);
+      const failures = [];
+      if (bucket.sampleCount === 0) failures.push("no_health_samples");
+      if (topOfBookPct < minTopOfBookPct) failures.push(`topOfBookPct ${topOfBookPct.toFixed(2)} < ${minTopOfBookPct}`);
+      if (depthPct < minDepthPct) failures.push(`depthPct ${depthPct.toFixed(2)} < ${minDepthPct}`);
+      if (medianQuotedSpreadBps !== null && medianQuotedSpreadBps > maxMedianQuotedSpreadBps) {
+        failures.push(`medianQuotedSpreadBps ${medianQuotedSpreadBps.toFixed(2)} > ${maxMedianQuotedSpreadBps}`);
+      }
+      if (p95QuotedSpreadBps !== null && p95QuotedSpreadBps > maxP95QuotedSpreadBps) {
+        failures.push(`p95QuotedSpreadBps ${p95QuotedSpreadBps.toFixed(2)} > ${maxP95QuotedSpreadBps}`);
+      }
+      if (bucket.crossedBookCount > 0) failures.push(`crossedBookCount ${bucket.crossedBookCount} > 0`);
+      return {
+        instrumentId: bucket.instrumentId,
+        status: failures.length === 0 ? "pass" : "warn",
+        failures,
+        sampleCount: bucket.sampleCount,
+        topOfBookPct,
+        depthPct,
+        medianQuotedSpreadBps,
+        p95QuotedSpreadBps,
+        crossedBookCount: bucket.crossedBookCount,
+        lockedBookCount: bucket.lockedBookCount,
+        emptyBookCount: bucket.emptyBookCount,
+        firstCrossedAt: bucket.firstCrossedAt,
+        firstEmptyAt: bucket.firstEmptyAt,
+      };
+    });
+  const failures = instruments.flatMap((instrument) =>
+    instrument.failures.map((failure) => `${instrument.instrumentId}: ${failure}`),
+  );
+  return {
+    schemaVersion: "reef.arena.marketQualitySummary.v0",
+    status: failures.length === 0 ? "pass" : "warn",
+    failures,
+    sampleCount: instruments.reduce((total, instrument) => total + instrument.sampleCount, 0),
+    postWarmupSampleCount: postWarmupSamples.length,
+    thresholds: {
+      minTopOfBookPct,
+      minDepthPct,
+      maxMedianQuotedSpreadBps,
+      maxP95QuotedSpreadBps,
+    },
+    instruments,
+  };
+}
+
 async function collectVenueReadback(botResults) {
   if (config.submitMode !== "live") {
     return { mode: config.submitMode, skipped: true };
@@ -973,6 +1231,7 @@ async function collectVenueReadback(botResults) {
       participantId,
       current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
       history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      fills: await getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
     });
   }
   return {
@@ -985,7 +1244,74 @@ async function collectVenueReadback(botResults) {
     projectionDrainRequired: config.requireProjectionDrain,
     snapshots,
     ownOrders,
+    executionSummary: summarizeVenueReadbackExecutions(ownOrders),
   };
+}
+
+function summarizeVenueReadbackExecutions(ownOrders) {
+  const byInstrument = {};
+  const byBotId = {};
+  const byRole = {};
+  let fillCount = 0;
+  let filledQuantity = 0;
+  let filledNotional = 0;
+
+  for (const entry of ownOrders ?? []) {
+    const fills = Array.isArray(entry.fills?.body?.fills) ? entry.fills.body.fills : [];
+    const bot = selectedBots.find((candidate) => candidate.botId === entry.botId);
+    const role = bot?.role ?? "unknown";
+    for (const fill of fills) {
+      const quantity = numberValue(fill.quantityUnits);
+      const price = priceFromExecutionPrice(fill.executionPrice);
+      fillCount += 1;
+      filledQuantity += quantity;
+      if (price !== undefined) {
+        filledNotional += quantity * price;
+      }
+      const instrumentId = typeof fill.instrumentId === "string" && fill.instrumentId.length > 0 ? fill.instrumentId : "unknown";
+      incrementExecutionBucket(byInstrument, instrumentId, quantity, price);
+      incrementExecutionBucket(byBotId, entry.botId, quantity, price);
+      incrementExecutionBucket(byRole, role, quantity, price);
+    }
+  }
+
+  return {
+    schemaVersion: "reef.arena.executionSummary.v0",
+    source: "venue-readback-order-fills",
+    fillCount,
+    filledQuantity,
+    filledNotional: Number(filledNotional.toFixed(6)),
+    avgFillPrice: filledQuantity === 0 ? null : Number((filledNotional / filledQuantity).toFixed(6)),
+    byInstrument: sortedExecutionBuckets(byInstrument),
+    byBotId: sortedExecutionBuckets(byBotId),
+    byRole: sortedExecutionBuckets(byRole),
+  };
+}
+
+function incrementExecutionBucket(buckets, key, quantity, price) {
+  const bucket = buckets[key] ?? { fillCount: 0, filledQuantity: 0, filledNotional: 0 };
+  bucket.fillCount += 1;
+  bucket.filledQuantity += quantity;
+  if (price !== undefined) {
+    bucket.filledNotional += quantity * price;
+  }
+  buckets[key] = bucket;
+}
+
+function sortedExecutionBuckets(buckets) {
+  return Object.fromEntries(
+    Object.entries(buckets)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, bucket]) => [
+        key,
+        {
+          fillCount: bucket.fillCount,
+          filledQuantity: bucket.filledQuantity,
+          filledNotional: Number(bucket.filledNotional.toFixed(6)),
+          avgFillPrice: bucket.filledQuantity === 0 ? null : Number((bucket.filledNotional / bucket.filledQuantity).toFixed(6)),
+        },
+      ]),
+  );
 }
 
 async function waitForDataAvailability(baseUrl) {
@@ -1130,9 +1456,11 @@ async function ensureArenaBot(baseUrl, bot, correlationId) {
   return await postArenaOk(baseUrl, "/internal/admin/arena/bots", {
     botId: bot.botId,
     fileName: `${bot.entryPath}#${bot.botId}`,
-    name: bot.botId,
+    name: displayNameForBot(bot),
     publisher: "Reef Built-In",
     email: "arena-local@reef.local",
+    description: `${bot.role ?? "bot"} ${bot.botId} for local arena mode ${mode.modeId}`,
+    version: bot.catalogVersionId ?? bot.versionId,
     actorId: config.actorId,
     correlationId,
   }, { allowAlreadyExists: true });

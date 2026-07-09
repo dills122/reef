@@ -13,11 +13,15 @@ const config = {
   compartment: stringOption("--compartment", "ses"),
   out: stringOption("--out", "/tmp/reef-arena-local-hardening.json"),
   summaryOut: stringOption("--summary-out", ""),
+  inputReport: stringOption("--input-report", ""),
   projectionDrainTimeoutMs: numberOption("--projection-drain-timeout-ms", 60000),
   projectionDrainPollMs: numberOption("--projection-drain-poll-ms", 500),
 };
 
 const summaryOut = config.summaryOut || config.out.replace(/\.json$/i, ".summary.json");
+requireProjectorEnabled("ORDER_LIFECYCLE_PROJECTOR_ENABLED", "order-lifecycle");
+requireProjectorEnabled("MARKET_DATA_PROJECTOR_ENABLED", "market-data");
+
 const passthrough = args.filter((arg) =>
   !arg.startsWith("--duration-seconds=")
   && !arg.startsWith("--mode=")
@@ -26,9 +30,11 @@ const passthrough = args.filter((arg) =>
   && !arg.startsWith("--compartment=")
   && !arg.startsWith("--out=")
   && !arg.startsWith("--summary-out=")
+  && !arg.startsWith("--input-report=")
   && !arg.startsWith("--projection-drain-timeout-ms=")
   && !arg.startsWith("--projection-drain-poll-ms="),
 );
+const hasReportShapeOverride = passthrough.some((arg) => arg.startsWith("--report-shape="));
 
 const runArgs = [
   "scripts/dev/arena-local-tick-run.mjs",
@@ -43,19 +49,23 @@ const runArgs = [
   `--projection-drain-timeout-ms=${config.projectionDrainTimeoutMs}`,
   `--projection-drain-poll-ms=${config.projectionDrainPollMs}`,
   "--require-projection-drain",
+  ...(hasReportShapeOverride ? [] : ["--report-shape=compact"]),
   `--out=${config.out}`,
   ...passthrough,
 ];
 
-const result = spawnSync(process.execPath, runArgs, {
-  cwd: new URL("../../", import.meta.url).pathname,
-  stdio: "inherit",
-});
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+if (config.inputReport.length === 0) {
+  const result = spawnSync(process.execPath, runArgs, {
+    cwd: new URL("../../", import.meta.url).pathname,
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
 }
 
-const report = JSON.parse(readFileSync(config.out, "utf8"));
+const reportPath = config.inputReport.length === 0 ? config.out : config.inputReport;
+const report = JSON.parse(readFileSync(reportPath, "utf8"));
 const summary = hardeningSummary(report);
 await writeJsonFileStreaming(summaryOut, summary, { space: 2 });
 
@@ -66,6 +76,14 @@ console.log(
 
 if (summary.status !== "pass") {
   process.exitCode = 1;
+}
+
+function requireProjectorEnabled(envName, label) {
+  if (String(process.env[envName] ?? "").toLowerCase() === "true") return;
+  console.error(
+    `arena local hardening requires ${label} projector startup: set ${envName}=true when starting/resetting the local stack and when running this command.`,
+  );
+  process.exit(1);
 }
 
 function hardeningSummary(report) {
@@ -79,14 +97,16 @@ function hardeningSummary(report) {
     .filter(([code]) => !allowedRejectCodes.has(code))
     .reduce((sum, [, count]) => sum + Number(count ?? 0), 0);
   const marketQuality = summarizeMarketQuality(report);
+  const executionSummary = report.executionSummary ?? report.venueReadback?.executionSummary ?? {};
+  const executionPressure = summarizeExecutionPressure(report, executionSummary, healthTargets);
   const latency = summarizeLatency(report);
   const commandPressure = summarizeCommandPressure(report);
   const ownOrderCounts = (report.venueReadback?.ownOrders ?? [])
     .filter((entry) => String(entry.botId ?? "").startsWith("builtin-mm"))
     .map((entry) => ({
       botId: entry.botId,
-      current: entry.current?.body?.orders?.length ?? 0,
-      history: entry.history?.body?.orders?.length ?? 0,
+      current: entry.current?.body?.orders?.length ?? entry.currentOrderCount ?? 0,
+      history: entry.history?.body?.orders?.length ?? entry.historyOrderCount ?? 0,
   }));
   const failures = [];
   if (report.status !== "completed") failures.push(`report status ${report.status}`);
@@ -95,6 +115,7 @@ function hardeningSummary(report) {
   if ((commandStatusSummary.byFinalStatus?.COMPLETED ?? 0) + (rejectSummary.count ?? 0) !== commandStatusSummary.commandCount) failures.push("not all commands reached terminal accounting");
   if (healthSummary.status !== "pass") failures.push(`health status ${healthSummary.status}`);
   for (const failure of marketQuality.failures) failures.push(failure);
+  for (const failure of executionPressure.failures) failures.push(failure);
   for (const failure of commandPressure.failures) failures.push(failure);
   if (report.venueReadback?.projectionDrained !== true) failures.push("projection did not drain");
   if ((report.enforcementEvents ?? []).some((event) => event.decision === "freeze")) failures.push("freeze events present");
@@ -104,7 +125,7 @@ function hardeningSummary(report) {
     schemaVersion: "reef.arena.localHardeningSummary.v0",
     status: failures.length === 0 ? "pass" : "fail",
     failures,
-    reportPath: resolve(config.out),
+    reportPath: resolve(reportPath),
     durationSeconds: report.runPlan?.durationSeconds ?? config.durationSeconds,
     startedAt: report.startedAt,
     completedAt: report.completedAt,
@@ -137,6 +158,16 @@ function hardeningSummary(report) {
       emptyBookCount: healthSummary.emptyBookCount ?? 0,
     },
     marketQuality,
+    executionSummary: {
+      source: executionSummary.source ?? "unavailable",
+      fillCount: Number(executionSummary.fillCount ?? 0),
+      filledQuantity: Number(executionSummary.filledQuantity ?? 0),
+      filledNotional: Number(executionSummary.filledNotional ?? 0),
+      avgFillPrice: executionSummary.avgFillPrice ?? null,
+      pressure: executionPressure,
+      byInstrument: executionSummary.byInstrument ?? {},
+      byRole: executionSummary.byRole ?? {},
+    },
     house: {
       botCount: house.botCount ?? 0,
       ticks: house.ticks ?? 0,
@@ -146,6 +177,51 @@ function hardeningSummary(report) {
       ownOrderCounts,
     },
     activityBySchedulingClass: report.activityBySchedulingClass ?? {},
+  };
+}
+
+function summarizeExecutionPressure(report, executionSummary, healthTargets) {
+  const instruments = healthTargets.primaryInstruments ?? report.runPlan?.instruments ?? [];
+  const minTotalFills = Number(healthTargets.minTotalFills ?? 0);
+  const minFillsPerInstrument = Number(healthTargets.minFillsPerInstrument ?? 0);
+  const totalFills = Number(executionSummary.fillCount ?? 0);
+  const byInstrument = {};
+  const failures = [];
+
+  for (const instrumentId of instruments) {
+    const key = String(instrumentId ?? "");
+    if (key.length === 0) continue;
+    const bucket = executionSummary.byInstrument?.[key] ?? {};
+    byInstrument[key] = {
+      fillCount: Number(bucket.fillCount ?? 0),
+      filledQuantity: Number(bucket.filledQuantity ?? 0),
+      filledNotional: Number(bucket.filledNotional ?? 0),
+      avgFillPrice: bucket.avgFillPrice ?? null,
+    };
+    if (byInstrument[key].fillCount < minFillsPerInstrument) {
+      failures.push(`fills ${key} ${byInstrument[key].fillCount} < ${minFillsPerInstrument}`);
+    }
+  }
+
+  if (totalFills < minTotalFills) {
+    failures.push(`fills total ${totalFills} < ${minTotalFills}`);
+  }
+
+  return {
+    status: failures.length === 0 ? "pass" : "fail",
+    failures,
+    thresholds: {
+      minTotalFills,
+      minFillsPerInstrument,
+      instruments,
+    },
+    totals: {
+      fillCount: totalFills,
+      filledQuantity: Number(executionSummary.filledQuantity ?? 0),
+      filledNotional: Number(executionSummary.filledNotional ?? 0),
+      avgFillPrice: executionSummary.avgFillPrice ?? null,
+    },
+    byInstrument,
   };
 }
 
@@ -161,6 +237,23 @@ function summarizeCommandPressure(report) {
   const byRoute = {};
   const bySchedulingClass = {};
   const byRole = {};
+
+  if (!Array.isArray(report.sessionReports)) {
+    for (const [route, count] of Object.entries(report.commandStatusSummary?.byRoute ?? {})) {
+      byRoute[route] = Number(count ?? 0);
+    }
+    for (const [schedulingClass, activity] of Object.entries(report.activityBySchedulingClass ?? {})) {
+      bySchedulingClass[schedulingClass] = {
+        "/api/v1/orders/submit": Number(activity.submittedCommands ?? 0),
+      };
+    }
+    for (const result of report.botResults ?? []) {
+      const role = result.role ?? "unknown";
+      for (const [route, count] of Object.entries(result.tradingMetrics?.commands?.submittedByRoute ?? result.tradingMetrics?.commands?.byRoute ?? {})) {
+        incrementNested(byRole, role, route, Number(count ?? 0));
+      }
+    }
+  }
 
   for (const session of report.sessionReports ?? []) {
     const schedulingClass = session.schedulingClass ?? session.bot?.schedulingClass ?? "unknown";
@@ -209,6 +302,59 @@ function summarizeCommandPressure(report) {
 }
 
 function summarizeLatency(report) {
+  if (!Array.isArray(report.sessionReports)) {
+    return {
+      overall: {
+        ticks: report.latencySummary?.tickElapsedMs?.count ?? report.totals?.ticks ?? 0,
+        failedTicks: report.totals?.failedTicks ?? 0,
+        commands: report.commandStatusSummary?.commandCount ?? 0,
+        completedCommands: report.commandStatusSummary?.byFinalStatus?.COMPLETED ?? 0,
+        rejectedCommands: report.commandStatusSummary?.byFinalStatus?.REJECTED ?? report.totals?.rejectedCommands ?? 0,
+        timedOutCommands: report.commandStatusSummary?.timedOut ?? 0,
+        tickElapsedMs: report.latencySummary?.tickElapsedMs ?? distribution([]),
+        commandElapsedMs: distribution([]),
+        intakeElapsedMs: {
+          count: report.commandStatusSummary?.commandCount ?? 0,
+          avg: report.commandStatusSummary?.avgIntakeElapsedMs ?? null,
+          p50: null,
+          p95: null,
+          p99: null,
+          max: null,
+        },
+        statusElapsedMs: {
+          count: report.commandStatusSummary?.commandCount ?? 0,
+          avg: report.commandStatusSummary?.avgStatusElapsedMs ?? null,
+          p50: null,
+          p95: null,
+          p99: null,
+          max: null,
+        },
+        firstStatusElapsedMs: distribution([]),
+        statusPollCount: distribution([]),
+      },
+      bySchedulingClass: Object.fromEntries(
+        Object.entries(report.activityBySchedulingClass ?? {})
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, activity]) => [key, {
+            ticks: activity.ticks ?? 0,
+            failedTicks: activity.failedTicks ?? 0,
+            commands: activity.submittedCommands ?? activity.venueCommands ?? 0,
+            completedCommands: activity.completedCommands ?? 0,
+            rejectedCommands: activity.rejectedCommands ?? 0,
+            timedOutCommands: activity.timedOutCommands ?? 0,
+            tickElapsedMs: distribution([]),
+            commandElapsedMs: distribution([]),
+            intakeElapsedMs: distribution([]),
+            statusElapsedMs: distribution([]),
+            firstStatusElapsedMs: distribution([]),
+            statusPollCount: distribution([]),
+          }]),
+      ),
+      byRole: {},
+      source: "compact-report-aggregates",
+    };
+  }
+
   const overall = createLatencyBucket();
   const bySchedulingClass = {};
   const byRole = {};
@@ -356,6 +502,53 @@ function summarizeMarketQuality(report) {
         instrument.spreadBps.push(Number(snapshot.quotedSpreadBps));
       }
     }
+  }
+
+  if (!Array.isArray(report.sessionReports)) {
+    if (report.marketQualitySummary !== undefined) {
+      return {
+        status: report.marketQualitySummary.status === "pass" ? "pass" : "fail",
+        failures: report.marketQualitySummary.failures ?? [],
+        thresholds: report.marketQualitySummary.thresholds ?? {
+          minTopOfBookPct,
+          minDepthPct,
+          maxP95QuotedSpreadBps,
+          minTradesPerInstrument: 1,
+          requireSideFillCoverage,
+        },
+        byInstrument: report.marketQualitySummary.instruments ?? [],
+        totals: {
+          instruments: report.marketQualitySummary.instruments?.length ?? 0,
+          tradeCount: 0,
+          tradedQuantity: 0,
+          submittedCommands: report.commandStatusSummary?.commandCount ?? 0,
+          filledCommands: 0,
+          fillRatePct: 0,
+        },
+        source: "compact-report-market-quality-summary",
+      };
+    }
+    return {
+      status: report.healthSummary?.status === "pass" ? "pass" : "fail",
+      failures: report.healthSummary?.failures ?? (report.healthSummary?.status === "pass" ? [] : [`health status ${report.healthSummary?.status ?? "unknown"}`]),
+      thresholds: {
+        minTopOfBookPct,
+        minDepthPct,
+        maxP95QuotedSpreadBps,
+        minTradesPerInstrument: 1,
+        requireSideFillCoverage,
+      },
+      byInstrument: [],
+      totals: {
+        instruments: 0,
+        tradeCount: 0,
+        tradedQuantity: 0,
+        submittedCommands: report.commandStatusSummary?.commandCount ?? 0,
+        filledCommands: 0,
+        fillRatePct: 0,
+      },
+      source: "compact-report-health-summary",
+    };
   }
 
   for (const session of report.sessionReports ?? []) {
@@ -522,6 +715,14 @@ function ensureSideStats(instrument, side) {
 }
 
 function summarizeRejects(report) {
+  if (!Array.isArray(report.sessionReports)) {
+    return {
+      count: report.commandStatusSummary?.byFinalStatus?.REJECTED ?? report.totals?.rejectedCommands ?? 0,
+      byCode: report.commandStatusSummary?.rejectedByCode ?? { unknown: report.commandStatusSummary?.byFinalStatus?.REJECTED ?? report.totals?.rejectedCommands ?? 0 },
+      byBotId: {},
+      source: "compact-report-aggregates",
+    };
+  }
   const commands = (report.sessionReports ?? [])
     .flatMap((session) => session.ticks ?? [])
     .flatMap((tick) => tick.submission?.commands ?? [])
@@ -569,14 +770,14 @@ function botIdFromCommandId(commandId) {
   return match?.[1] ?? "unknown";
 }
 
-function increment(counter, key) {
-  counter[key] = Number(counter[key] ?? 0) + 1;
+function increment(counter, key, amount = 1) {
+  counter[key] = Number(counter[key] ?? 0) + Number(amount ?? 0);
 }
 
-function incrementNested(counter, group, key) {
+function incrementNested(counter, group, key, amount = 1) {
   const groupKey = String(group ?? "unknown");
   counter[groupKey] ??= {};
-  increment(counter[groupKey], key);
+  increment(counter[groupKey], key, amount);
 }
 
 function pushFinite(values, value) {

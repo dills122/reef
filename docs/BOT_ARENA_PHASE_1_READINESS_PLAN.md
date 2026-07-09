@@ -363,6 +363,36 @@ Next scoring slices after the 15 minute reporting/infra gate:
 Until those slices land, `score-v0` should be treated as a participation and
 policy-compliance score, not a competitive trading-performance score.
 
+Current scoring/reporting assumptions:
+
+- The current score/report follow-up plan is tracked in
+  [`BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md`](./BOT_ARENA_SCORING_AND_REPORTING_NEXT_STEPS.md).
+- Public competitive scoring ranks only score-eligible competitor bots. House
+  and NPC bots remain diagnostics-only unless a future mode explicitly changes
+  that behavior.
+- House liquidity providers are market-health infrastructure actors. They should
+  not be considered bad actors for losing money, accumulating inventory, or
+  trading aggressively when they stay inside configured house risk controls.
+- Bot display names are presentation metadata only. Reports and persisted facts
+  must continue carrying stable `botId` and `versionId` for audit, replay, and
+  joins.
+- The current operator report may include command-mix trading metrics such as
+  submitted/canceled/modified commands, side and instrument counts, and gross
+  submitted notional. These are diagnostic inputs, not the final economic score.
+- Participant-scoped fill attribution and zero-fee cash/inventory diagnostics
+  are now present in local arena reports. They are diagnostic inputs only:
+  public `score-v0` still ranks participation and policy compliance, not
+  trading performance. Realized lot-matched P&L, fee-adjusted final equity,
+  quote-quality contribution, and price-impact attribution are not scored until
+  the next scoring-policy version is accepted.
+- Fee handling starts as a zero-fee placeholder. The next scoring version should
+  make maker/taker fees configurable by mode before using P&L competitively.
+- Inventory penalties should start mild and configurable so they discourage
+  one-way risk hoarding without punishing normal liquidity-provision inventory.
+- Price movement should be descriptive first. Rewards or penalties for impact
+  should wait until the report can separate useful price discovery from
+  destabilizing behavior.
+
 ### 6. Real Run-Result Ingestion
 
 Extend the current result ingestion smoke so it can ingest the actual hosted bot
@@ -415,13 +445,43 @@ After the short smoke is stable, use the local hardening gate for meaningful
 pre-soak evidence:
 
 ```bash
+COMPOSE_PROJECT_NAME=reef \
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+ORDER_LIFECYCLE_PROJECTOR_POLL_MS=100 \
+MARKET_DATA_PROJECTOR_POLL_MS=100 \
+make dev-reset
+
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+ORDER_LIFECYCLE_PROJECTOR_POLL_MS=100 \
+MARKET_DATA_PROJECTOR_POLL_MS=100 \
 make dev-hardening-bot-arena-local
 ```
 
 This defaults to the multi-instrument local arena mode for `180` seconds, uses
-terminal command accounting, requires projection drain, and writes both the full
-arena report and a compact hardening summary. The summary includes per-ticker
-market-quality evidence: sampled top-of-book/depth, spread distribution,
+terminal command accounting, requires projection drain, writes a compact arena
+report, and writes a compact hardening summary. The hardening wrapper requests
+`--report-shape=compact` from the arena runner by default so multi-minute runs
+do not create massive per-tick JSON artifacts that exceed Node's maximum string
+size during summary/report rendering. Use `ARGS="--report-shape=full"` only for
+short debugging runs where the full per-tick `sessionReports` payload is needed.
+Existing compact reports can be summarized again with:
+
+```bash
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+node scripts/dev/arena-local-hardening-run.mjs \
+  --input-report=/tmp/reef-arena-local-hardening.json \
+  --summary-out=/tmp/reef-arena-local-hardening.summary.json
+```
+
+It must run against a local stack started with both
+`ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and
+`MARKET_DATA_PROJECTOR_ENABLED=true`; otherwise top-of-book/depth health samples
+do not reflect the live projected book and the hardening runner fails closed
+before traffic starts. The summary includes per-ticker market-quality evidence:
+sampled top-of-book/depth, spread distribution,
 submitted/completed/rejected/timed-out commands, filled commands, trade count,
 side-level fill coverage, traded quantity, notional, fill rate, and actor-class
 contribution. It also records tick runtime and command intake/status/total

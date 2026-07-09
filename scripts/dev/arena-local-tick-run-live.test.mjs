@@ -97,6 +97,25 @@ const server = http.createServer(async (req, res) => {
     const participantId = url.searchParams.get("participantId") ?? "";
     return json(res, 200, { orders: openOrdersByParticipant.get(participantId) ?? [] });
   }
+  if (req.method === "GET" && url.pathname === "/api/v1/orders/fills") {
+    const participantId = url.searchParams.get("participantId") ?? "";
+    const fills = participantId.endsWith("builtin-mm-simple")
+      ? [{
+        executionId: "exec-mm-simple-1",
+        orderId: "order-mm-simple-1",
+        instrumentId: "AAPL",
+        side: "BUY",
+        quantityUnits: "1",
+        executionPrice: "100000000000",
+        occurredAt: "2026-07-07T00:00:00.000Z",
+      }]
+      : [];
+    return json(res, 200, {
+      participantId,
+      meta: { source: "mock", freshness: "mock", scope: "participant" },
+      fills,
+    });
+  }
   if (url.pathname.startsWith("/internal/admin/arena/")) {
     return await handleArenaAdmin(req, res, url);
   }
@@ -132,6 +151,7 @@ try {
   assert.ok(commandStatusReads.length >= receivedCommands.length);
   assert.ok(commandStatusReads.every((read) => commands.get(read.commandId)?.participantId === read.participantId));
   assert.equal(arena.bots.size, 5);
+  assert.equal(arena.bots.get("builtin-mm-simple").name, "Blue Saber Trading");
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
   assert.equal(arena.results.length, 5);
@@ -141,12 +161,22 @@ try {
   assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
   assert.equal(report.runPlan.totalTickCount, 24);
   assert.equal(report.commandWaitMode, "accepted");
+  assert.equal(report.scoringAssumptions.scoreBasis, "participation-and-policy-compliance");
+  assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.displayName, "Blue Saber Trading");
+  assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.tradingMetrics.schemaVersion, "reef.arena.tradingMetrics.v0");
   assert.equal(report.healthSamples.length, 3);
   assert.equal(report.activityBySchedulingClass.house_responsive.ticks, 18);
   assert.equal(report.activityBySchedulingClass.house_responsive.submittedCommands, 18);
   assert.equal(report.activityBySchedulingClass.contestant_tick.ticks, 3);
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
+  assert.equal(report.executionSummary.fillCount, 1);
+  const simpleMarketMaker = report.botResults.find((result) => result.botId === "builtin-mm-simple");
+  assert.equal(simpleMarketMaker?.tradingMetrics.executions.fillCount, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.inventory.netQuantityByInstrument.AAPL, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.pnl.cash, -100);
+  assert.equal(simpleMarketMaker?.tradingMetrics.pnl.inventoryValue, 100.5);
+  assert.equal(simpleMarketMaker?.tradingMetrics.pnl.total, 0.5);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
   assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);
