@@ -74,6 +74,7 @@ function hardeningSummary(report) {
   const healthSummary = report.healthSummary ?? {};
   const rejectSummary = summarizeRejects(report);
   const marketQuality = summarizeMarketQuality(report);
+  const latency = summarizeLatency(report);
   const ownOrderCounts = (report.venueReadback?.ownOrders ?? [])
     .filter((entry) => String(entry.botId ?? "").startsWith("builtin-mm"))
     .map((entry) => ({
@@ -117,6 +118,7 @@ function hardeningSummary(report) {
       avgIntakeElapsedMs: commandStatusSummary.avgIntakeElapsedMs ?? 0,
       avgStatusElapsedMs: commandStatusSummary.avgStatusElapsedMs ?? 0,
     },
+    latency,
     health: {
       status: healthSummary.status ?? "unknown",
       topOfBookPct: healthSummary.topOfBookPct ?? 0,
@@ -136,6 +138,103 @@ function hardeningSummary(report) {
       ownOrderCounts,
     },
     activityBySchedulingClass: report.activityBySchedulingClass ?? {},
+  };
+}
+
+function summarizeLatency(report) {
+  const overall = createLatencyBucket();
+  const bySchedulingClass = {};
+  const byRole = {};
+
+  for (const session of report.sessionReports ?? []) {
+    const schedulingClass = session.schedulingClass ?? session.bot?.schedulingClass ?? "unknown";
+    const role = session.bot?.role ?? "unknown";
+    const classBucket = ensureLatencyBucket(bySchedulingClass, schedulingClass);
+    const roleBucket = ensureLatencyBucket(byRole, role);
+
+    for (const tick of session.ticks ?? []) {
+      recordTickLatency(overall, tick);
+      recordTickLatency(classBucket, tick);
+      recordTickLatency(roleBucket, tick);
+
+      for (const command of tick.submission?.commands ?? []) {
+        recordCommandLatency(overall, command);
+        recordCommandLatency(classBucket, command);
+        recordCommandLatency(roleBucket, command);
+      }
+    }
+  }
+
+  return {
+    overall: finalizeLatencyBucket(overall),
+    bySchedulingClass: finalizeLatencyBuckets(bySchedulingClass),
+    byRole: finalizeLatencyBuckets(byRole),
+  };
+}
+
+function createLatencyBucket() {
+  return {
+    ticks: 0,
+    failedTicks: 0,
+    commands: 0,
+    completedCommands: 0,
+    rejectedCommands: 0,
+    timedOutCommands: 0,
+    tickElapsedMs: [],
+    commandElapsedMs: [],
+    intakeElapsedMs: [],
+    statusElapsedMs: [],
+    firstStatusElapsedMs: [],
+    statusPollCount: [],
+  };
+}
+
+function ensureLatencyBucket(collection, key) {
+  const normalized = String(key ?? "unknown");
+  if (!collection[normalized]) collection[normalized] = createLatencyBucket();
+  return collection[normalized];
+}
+
+function recordTickLatency(bucket, tick) {
+  bucket.ticks += 1;
+  if (tick.ok === false) bucket.failedTicks += 1;
+  pushFinite(bucket.tickElapsedMs, tick.elapsedMs);
+}
+
+function recordCommandLatency(bucket, command) {
+  bucket.commands += 1;
+  if (command.finalStatus === "COMPLETED") bucket.completedCommands += 1;
+  if (command.finalStatus === "REJECTED" || command.rejected === true) bucket.rejectedCommands += 1;
+  if (command.timedOut === true) bucket.timedOutCommands += 1;
+  pushFinite(bucket.commandElapsedMs, command.elapsedMs);
+  pushFinite(bucket.intakeElapsedMs, command.intakeElapsedMs);
+  pushFinite(bucket.statusElapsedMs, command.statusElapsedMs);
+  pushFinite(bucket.firstStatusElapsedMs, command.firstStatusElapsedMs);
+  pushFinite(bucket.statusPollCount, command.statusPollCount);
+}
+
+function finalizeLatencyBuckets(collection) {
+  return Object.fromEntries(
+    Object.entries(collection)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, bucket]) => [key, finalizeLatencyBucket(bucket)]),
+  );
+}
+
+function finalizeLatencyBucket(bucket) {
+  return {
+    ticks: bucket.ticks,
+    failedTicks: bucket.failedTicks,
+    commands: bucket.commands,
+    completedCommands: bucket.completedCommands,
+    rejectedCommands: bucket.rejectedCommands,
+    timedOutCommands: bucket.timedOutCommands,
+    tickElapsedMs: distribution(bucket.tickElapsedMs),
+    commandElapsedMs: distribution(bucket.commandElapsedMs),
+    intakeElapsedMs: distribution(bucket.intakeElapsedMs),
+    statusElapsedMs: distribution(bucket.statusElapsedMs),
+    firstStatusElapsedMs: distribution(bucket.firstStatusElapsedMs),
+    statusPollCount: distribution(bucket.statusPollCount),
   };
 }
 
@@ -383,6 +482,24 @@ function botIdFromCommandId(commandId) {
 
 function increment(counter, key) {
   counter[key] = Number(counter[key] ?? 0) + 1;
+}
+
+function pushFinite(values, value) {
+  const number = Number(value);
+  if (Number.isFinite(number)) values.push(number);
+}
+
+function distribution(values) {
+  const sorted = values.slice().sort((left, right) => left - right);
+  const total = sorted.reduce((sum, value) => sum + value, 0);
+  return {
+    count: sorted.length,
+    avg: sorted.length === 0 ? null : total / sorted.length,
+    p50: percentile(sorted, 0.5),
+    p95: percentile(sorted, 0.95),
+    p99: percentile(sorted, 0.99),
+    max: sorted.length === 0 ? null : sorted[sorted.length - 1],
+  };
 }
 
 function pct(numerator, denominator) {
