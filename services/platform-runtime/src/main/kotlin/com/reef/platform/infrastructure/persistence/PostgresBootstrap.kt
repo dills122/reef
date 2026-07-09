@@ -696,6 +696,43 @@ object PostgresSchemaRequirements {
         )
     }
 
+    fun adminAuth(
+        oauthStates: String,
+        sessions: String,
+        serviceTokens: String
+    ): PostgresSchemaRequirement {
+        val oauthStatesTable = PostgresSchemaObject.parse(oauthStates)
+        val sessionsTable = PostgresSchemaObject.parse(sessions)
+        val serviceTokensTable = PostgresSchemaObject.parse(serviceTokens)
+        return PostgresSchemaRequirement(
+            tables = listOf(
+                oauthStatesTable,
+                sessionsTable,
+                serviceTokensTable
+            ),
+            columns = listOf(
+                PostgresSchemaColumn(oauthStatesTable, "state_hash", "text"),
+                PostgresSchemaColumn(oauthStatesTable, "provider", "text"),
+                PostgresSchemaColumn(oauthStatesTable, "redirect_path", "text"),
+                PostgresSchemaColumn(oauthStatesTable, "expires_at", "timestamp with time zone"),
+                PostgresSchemaColumn(oauthStatesTable, "consumed_at", "timestamp with time zone"),
+                PostgresSchemaColumn(sessionsTable, "session_hash", "text"),
+                PostgresSchemaColumn(sessionsTable, "reef_user_id", "text"),
+                PostgresSchemaColumn(sessionsTable, "auth_provider", "text"),
+                PostgresSchemaColumn(sessionsTable, "expires_at", "timestamp with time zone"),
+                PostgresSchemaColumn(sessionsTable, "last_seen_at", "timestamp with time zone"),
+                PostgresSchemaColumn(sessionsTable, "revoked_at", "timestamp with time zone"),
+                PostgresSchemaColumn(serviceTokensTable, "token_id", "text"),
+                PostgresSchemaColumn(serviceTokensTable, "token_hash", "text"),
+                PostgresSchemaColumn(serviceTokensTable, "token_family", "text"),
+                PostgresSchemaColumn(serviceTokensTable, "subject_actor_id", "text"),
+                PostgresSchemaColumn(serviceTokensTable, "expires_at", "timestamp with time zone"),
+                PostgresSchemaColumn(serviceTokensTable, "last_used_at", "timestamp with time zone"),
+                PostgresSchemaColumn(serviceTokensTable, "revoked_at", "timestamp with time zone")
+            )
+        )
+    }
+
     fun analyticsRunExports(simulationRunExports: String): PostgresSchemaRequirement {
         val table = PostgresSchemaObject.parse(simulationRunExports)
         return PostgresSchemaRequirement(

@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.PostgresBoundarySqlNames
+import com.reef.platform.application.admin.PostgresAdminAuthSqlNames
 import com.reef.platform.application.admin.PostgresAdminIdentitySqlNames
 import com.reef.platform.application.arena.PostgresArenaSqlNames
 import kotlin.test.Test
@@ -425,6 +426,41 @@ class PostgresSchemaRequirementsTest {
                         "admin.user_bot_ownerships.ownership_state:text",
                         "admin.audit_events.event_type:text",
                         "admin.audit_events.target_id:text"
+                    )
+                )
+        )
+    }
+
+    @Test
+    fun adminAuthRequirementsCoverOAuthSessionsAndServiceTokens() {
+        val names = PostgresAdminAuthSqlNames()
+        val requirements = PostgresSchemaRequirements.adminAuth(
+            oauthStates = names.oauthStates,
+            sessions = names.sessions,
+            serviceTokens = names.serviceTokens
+        )
+
+        assertEquals(
+            setOf(
+                "admin.oauth_states",
+                "admin.sessions",
+                "admin.service_tokens"
+            ),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(
+            requirements.columns
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .containsAll(
+                    setOf(
+                        "admin.oauth_states.state_hash:text",
+                        "admin.oauth_states.consumed_at:timestamp with time zone",
+                        "admin.sessions.session_hash:text",
+                        "admin.sessions.reef_user_id:text",
+                        "admin.sessions.revoked_at:timestamp with time zone",
+                        "admin.service_tokens.token_hash:text",
+                        "admin.service_tokens.token_family:text",
+                        "admin.service_tokens.subject_actor_id:text"
                     )
                 )
         )

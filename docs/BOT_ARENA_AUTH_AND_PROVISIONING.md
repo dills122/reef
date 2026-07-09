@@ -79,7 +79,14 @@ admin.user_roles
 admin.user_bot_limits
 admin.user_bot_ownerships
 admin.audit_events
+admin.oauth_states
+admin.sessions
+admin.service_tokens
 ```
+
+OAuth states, browser session tokens, and service tokens must be stored as
+server-side hashes only. Raw token values are returned once at issue time and
+must not be persisted in Admin DB audit records or logs.
 
 Trust states:
 
@@ -180,6 +187,74 @@ run-plane -> Admin/Analytics API: scoped bearer token first, workload identity l
 operator -> host: SSH key
 backup -> R2: R2 access key scoped to backup bucket
 ```
+
+## Admin HTTP Auth Boundary
+
+The platform runtime exposes the first admin auth HTTP boundary when
+`PLATFORM_ADMIN_AUTH_ENABLED=true`.
+
+Required environment:
+
+```text
+PLATFORM_ADMIN_AUTH_ENABLED=true
+ADMIN_POSTGRES_JDBC_URL or RUNTIME_POSTGRES_JDBC_URL
+ADMIN_POSTGRES_USER or RUNTIME_POSTGRES_USER
+ADMIN_POSTGRES_PASSWORD or RUNTIME_POSTGRES_PASSWORD
+GITHUB_OAUTH_CLIENT_ID
+GITHUB_OAUTH_CLIENT_SECRET
+GITHUB_OAUTH_REDIRECT_URI
+```
+
+Optional environment:
+
+```text
+ADMIN_SESSION_COOKIE_NAME=reef_admin_session
+ADMIN_SESSION_COOKIE_SECURE=true
+```
+
+`GITHUB_OAUTH_REDIRECT_URI` must be HTTPS, except `http://localhost...` is
+allowed for local development. Local browser development over plain HTTP should
+set `ADMIN_SESSION_COOKIE_SECURE=false`; hosted environments should keep secure
+cookies enabled.
+
+Browser routes:
+
+```text
+GET  /admin/auth/github/start?redirectPath=/admin
+GET  /admin/auth/github/callback
+GET  /admin/auth/session
+POST /admin/auth/logout
+```
+
+The GitHub callback consumes the one-time OAuth state, upserts the GitHub-backed
+Reef user, issues a server-side session, and sets the admin session cookie. Raw
+session tokens and OAuth state tokens are stored as hashes only.
+
+Admin API gateway routes now accept either the admin session cookie or a scoped
+server-side service token. Scoped service token families are route-specific:
+
+```text
+/admin/v1/arena/bots                    -> ci, admin
+/admin/v1/arena/bots/openbao-provision  -> ci, admin
+/admin/v1/analytics/run-exports         -> sim, admin
+/admin/v1/risk/account-controls         -> admin
+/admin/v1/risk/circuit-breakers         -> admin
+/admin/v1/risk/price-collars            -> admin
+```
+
+The existing static bearer-token environment variables remain as compatibility
+fallbacks:
+
+```text
+ARENA_ADMIN_API_TOKEN
+ANALYTICS_EXPORT_API_TOKEN
+ADMIN_API_TOKEN
+```
+
+When the Admin DB auth layer is configured, authenticated session and service
+tokens bind the internal admin actor id from the trusted token record instead of
+from caller-controlled headers. The static fallback preserves the older header
+behavior for legacy scripts until those callers move to service tokens.
 
 ## Bot Submission Flow
 
