@@ -31,7 +31,10 @@ data class PlatformRuntimeProfileConfig(
     val streamAckProjectorEnabled: Boolean,
     val streamAckProjectionSource: CanonicalProjectionSource,
     val marketDataProjectorEnabled: Boolean,
-    val orderLifecycleProjectorEnabled: Boolean
+    val orderLifecycleProjectorEnabled: Boolean,
+    val acceptedAsyncInFlightPerLane: Int,
+    val acceptedAsyncTerminalStatusMaxRecords: Int,
+    val acceptedAsyncAllowOversizedWindow: Boolean
 ) {
     val effectivePostTradeProfileId: String
         get() = postTradeProfileRaw.ifBlank { "ops-realistic-v1" }
@@ -91,7 +94,24 @@ data class PlatformRuntimeProfileConfig(
                     )
                 ),
                 marketDataProjectorEnabled = RuntimeEnv.bool("MARKET_DATA_PROJECTOR_ENABLED", false, lookup),
-                orderLifecycleProjectorEnabled = RuntimeEnv.bool("ORDER_LIFECYCLE_PROJECTOR_ENABLED", false, lookup)
+                orderLifecycleProjectorEnabled = RuntimeEnv.bool("ORDER_LIFECYCLE_PROJECTOR_ENABLED", false, lookup),
+                acceptedAsyncInFlightPerLane = RuntimeEnv.int(
+                    "EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE",
+                    32,
+                    min = 1,
+                    lookup = lookup
+                ),
+                acceptedAsyncTerminalStatusMaxRecords = RuntimeEnv.int(
+                    "EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS",
+                    100_000,
+                    min = 0,
+                    lookup = lookup
+                ),
+                acceptedAsyncAllowOversizedWindow = RuntimeEnv.bool(
+                    "EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW",
+                    false,
+                    lookup
+                )
             )
         }
     }
@@ -106,6 +126,8 @@ class PlatformRuntimeProfileValidationException(val violations: List<String>) : 
 )
 
 object PlatformRuntimeProfileValidator {
+    private const val ACCEPTED_ASYNC_MAX_IN_FLIGHT_PER_LANE = 128
+
     /**
      * Returns every validation violation for the given config; an empty list means the profile is
      * safe to run. Settlement profile selection applies to every non-local runtime. Stream-ack
@@ -116,6 +138,23 @@ object PlatformRuntimeProfileValidator {
         val issues = mutableListOf<String>()
         if (!config.isLocalDeploymentProfile && config.postTradeProfileRaw.isBlank()) {
             issues += "non-local runtime requires explicit POST_TRADE_PROFILE; local default is ${config.effectivePostTradeProfileId}"
+        }
+
+        if (config.commandProcessingMode == CommandProcessingMode.AcceptedAsync) {
+            if (config.acceptedAsyncTerminalStatusMaxRecords <= 0) {
+                issues += "accepted-async requires bounded " +
+                    "EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS > 0; " +
+                    "got ${config.acceptedAsyncTerminalStatusMaxRecords} (unbounded)"
+            }
+            if (
+                config.acceptedAsyncInFlightPerLane > ACCEPTED_ASYNC_MAX_IN_FLIGHT_PER_LANE &&
+                !config.acceptedAsyncAllowOversizedWindow
+            ) {
+                issues += "accepted-async requires " +
+                    "EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE <= $ACCEPTED_ASYNC_MAX_IN_FLIGHT_PER_LANE; " +
+                    "got ${config.acceptedAsyncInFlightPerLane}. Set " +
+                    "EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW=true only for explicit stress tests"
+            }
         }
 
         if (config.commandProcessingMode != CommandProcessingMode.StreamAck) {

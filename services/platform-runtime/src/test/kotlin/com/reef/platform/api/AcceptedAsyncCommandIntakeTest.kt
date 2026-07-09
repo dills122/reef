@@ -36,7 +36,8 @@ class AcceptedAsyncCommandIntakeTest {
                 )
             ),
             laneCount = 1,
-            queueCapacityPerLane = 10
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 1
         )
 
         intake.start()
@@ -75,6 +76,137 @@ class AcceptedAsyncCommandIntakeTest {
                 listOf("ord-1", "ord-2"),
                 persistence.acceptedOrders().map { it.orderId }
             )
+        } finally {
+            intake.stop()
+        }
+    }
+
+    @Test
+    fun sameLanePipelineSubmitsUpToWindowButPersistsInIntakeOrder() {
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 2
+        )
+
+        try {
+            val first = intake.enqueueSubmit(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-1",
+                correlationId = "corr-1",
+                body = validSubmitBody("cmd-accepted-async-1", "trace-1", "ord-1")
+            )
+            val second = intake.enqueueSubmit(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-2",
+                correlationId = "corr-2",
+                body = validSubmitBody("cmd-accepted-async-2", "trace-2", "ord-2")
+            )
+            val third = intake.enqueueSubmit(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-3",
+                correlationId = "corr-3",
+                body = validSubmitBody("cmd-accepted-async-3", "trace-3", "ord-3")
+            )
+            intake.start()
+
+            assertTrue(first.accepted)
+            assertTrue(second.accepted)
+            assertTrue(third.accepted)
+            assertTrue(
+                waitFor(timeoutMs = 30_000) { gateway.submittedCount() == 2 },
+                "submitted=${gateway.submittedCount()} pending=${gateway.pendingCount()} stats=${intake.stats()}"
+            )
+            assertTrue(waitFor(timeoutMs = 30_000) { intake.stats().inFlight == 2L })
+            assertEquals(1, intake.stats().saturatedLaneCount)
+            assertEquals(2, gateway.pendingCount())
+
+            gateway.completeOrderAccepted("ord-2")
+            assertTrue(waitFor { intake.stats().completedWaiting == 1L })
+            assertEquals(null, persistence.submitResult("cmd-accepted-async-1"))
+            assertEquals(null, persistence.submitResult("cmd-accepted-async-2"))
+            assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-1")?.status)
+            assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-2")?.status)
+
+            gateway.completeOrderAccepted("ord-1")
+            assertTrue(waitFor(timeoutMs = 30_000) { gateway.submittedCount() == 3 })
+            assertTrue(waitFor(timeoutMs = 30_000) { intake.stats().inFlight == 1L })
+            assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-1")?.status)
+            assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-2")?.status)
+            assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-3")?.status)
+
+            gateway.completeOrderAccepted("ord-3")
+            assertTrue(waitFor { intake.stats().completed == 3L })
+            assertEquals(
+                listOf("ord-1", "ord-2", "ord-3"),
+                persistence.acceptedOrders().map { it.orderId }
+            )
+        } finally {
+            intake.stop()
+        }
+    }
+
+    @Test
+    fun evictsOldTerminalStatusesWhenRetentionWindowIsFull() {
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 1,
+            terminalStatusMaxRecords = 1
+        )
+
+        intake.start()
+        try {
+            assertTrue(
+                intake.enqueueSubmit(
+                    clientId = "client-1",
+                    route = "/api/v1/orders/submit",
+                    idempotencyKey = "idem-1",
+                    correlationId = "corr-1",
+                    body = validSubmitBody("cmd-accepted-async-1", "trace-1", "ord-1")
+                ).accepted
+            )
+            assertTrue(waitFor { gateway.pendingCount() == 1 })
+            gateway.completeNextAccepted()
+            assertTrue(waitFor { intake.findCommandStatus("cmd-accepted-async-1")?.status == CommandLogStatus.COMPLETED })
+
+            assertTrue(
+                intake.enqueueSubmit(
+                    clientId = "client-1",
+                    route = "/api/v1/orders/submit",
+                    idempotencyKey = "idem-2",
+                    correlationId = "corr-2",
+                    body = validSubmitBody("cmd-accepted-async-2", "trace-2", "ord-2")
+                ).accepted
+            )
+            assertTrue(waitFor { gateway.pendingCount() == 1 })
+            gateway.completeNextAccepted()
+
+            assertTrue(waitFor { intake.stats().statusRecordsEvicted == 1L })
+            assertEquals(null, intake.findCommandStatus("cmd-accepted-async-1"))
+            assertEquals(null, intake.findCommandStatus("client-1", "/api/v1/orders/submit", "idem-1"))
+            assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-2")?.status)
+            assertEquals(1L, intake.stats().retainedTerminalStatusRecords)
+            assertEquals(1L, intake.stats().retainedStatusRecords)
         } finally {
             intake.stop()
         }
@@ -152,6 +284,17 @@ private class ControlledAsyncSubmitGateway : EngineGateway, AsyncSubmitEngineGat
 
     fun completeNextAccepted() {
         val next = pending.poll() ?: error("no pending submit")
+        completeAccepted(next)
+    }
+
+    fun completeOrderAccepted(orderId: String) {
+        val next = pending.firstOrNull { it.command.orderId == orderId }
+            ?: error("no pending submit for order $orderId")
+        pending.remove(next)
+        completeAccepted(next)
+    }
+
+    private fun completeAccepted(next: PendingSubmit) {
         next.future.complete(
             SubmitOrderResult(
                 accepted = EngineOrderAccepted(
