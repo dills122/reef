@@ -1163,10 +1163,7 @@ async function terminalStatusForAcceptedCommand(command, intakeBody) {
   if (config.commandWaitMode === "none") {
     return intakeStatus(command, intakeBody, "intake_response");
   }
-  if (typeof intakeBody.statusUrl === "string" && intakeBody.statusUrl.length > 0) {
-    return await waitForCommandStatus(command);
-  }
-  return intakeStatus(command, intakeBody, "intake_response");
+  return await waitForCommandStatus(command);
 }
 
 function intakeStatus(command, intakeBody, source) {
