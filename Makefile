@@ -94,6 +94,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/arena-render-report-index.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-render-report.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-execution-diagnostics.test.mjs
+	$(JS_RUNTIME) scripts/dev/arena-local-hardening-summary.test.mjs
 	$(JS_RUNTIME) scripts/dev/large-json-writer.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-local-tick-report-writer.test.mjs
 	node --check scripts/dev/bot-sdk-live-smoke.mjs
