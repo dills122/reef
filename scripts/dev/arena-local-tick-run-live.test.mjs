@@ -99,10 +99,21 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/api/v1/orders/fills") {
     const participantId = url.searchParams.get("participantId") ?? "";
+    const fills = participantId.endsWith("builtin-mm-simple")
+      ? [{
+        executionId: "exec-mm-simple-1",
+        orderId: "order-mm-simple-1",
+        instrumentId: "AAPL",
+        side: "BUY",
+        quantityUnits: "1",
+        executionPrice: "100000000000",
+        occurredAt: "2026-07-07T00:00:00.000Z",
+      }]
+      : [];
     return json(res, 200, {
       participantId,
       meta: { source: "mock", freshness: "mock", scope: "participant" },
-      fills: [],
+      fills,
     });
   }
   if (url.pathname.startsWith("/internal/admin/arena/")) {
@@ -159,7 +170,13 @@ try {
   assert.equal(report.activityBySchedulingClass.contestant_tick.ticks, 3);
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
-  assert.equal(report.executionSummary.fillCount, 0);
+  assert.equal(report.executionSummary.fillCount, 1);
+  const simpleMarketMaker = report.botResults.find((result) => result.botId === "builtin-mm-simple");
+  assert.equal(simpleMarketMaker?.tradingMetrics.executions.fillCount, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.inventory.netQuantityByInstrument.AAPL, 1);
+  assert.equal(simpleMarketMaker?.tradingMetrics.pnl.cash, -100);
+  assert.equal(simpleMarketMaker?.tradingMetrics.pnl.inventoryValue, 100.5);
+  assert.equal(simpleMarketMaker?.tradingMetrics.pnl.total, 0.5);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
   assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);

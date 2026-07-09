@@ -377,9 +377,12 @@ Current scoring/reporting assumptions:
 - The current operator report may include command-mix trading metrics such as
   submitted/canceled/modified commands, side and instrument counts, and gross
   submitted notional. These are diagnostic inputs, not the final economic score.
-- Realized P&L, unrealized P&L, final equity, fees, inventory marks, fills,
+- Participant-scoped fill attribution and zero-fee cash/inventory diagnostics
+  are now present in local arena reports. They are diagnostic inputs only:
+  public `score-v0` still ranks participation and policy compliance, not
+  trading performance. Realized lot-matched P&L, fee-adjusted final equity,
   quote-quality contribution, and price-impact attribution are not scored until
-  execution attribution and deterministic mark-price rules are added.
+  the next scoring-policy version is accepted.
 - Fee handling starts as a zero-fee placeholder. The next scoring version should
   make maker/taker fees configurable by mode before using P&L competitively.
 - Inventory penalties should start mild and configurable so they discourage

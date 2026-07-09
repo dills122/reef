@@ -379,8 +379,10 @@ function tradingMetricsTable(results) {
         <th>Bot</th>
         <th class="num">Submits</th>
         <th class="num">Cancels</th>
+        <th class="num">Fills</th>
         <th class="num">Buy Qty</th>
         <th class="num">Sell Qty</th>
+        <th class="num">Net Inv</th>
         <th class="num">Gross Notional</th>
         <th>P&L</th>
       </tr>
@@ -389,13 +391,19 @@ function tradingMetricsTable(results) {
       ${results.map((result) => {
         const metrics = result.tradingMetrics ?? {};
         const orderFlow = metrics.orderFlow ?? {};
+        const executions = metrics.executions ?? {};
+        const inventory = metrics.inventory ?? {};
         const pnl = metrics.pnl ?? {};
+        const netInventory = Object.values(inventory.netQuantityByInstrument ?? {})
+          .reduce((total, value) => total + Number(value ?? 0), 0);
         return `<tr>
           <td>${botLabel(result)}</td>
           <td class="num">${formatNumber(orderFlow.submittedLimitOrders ?? 0)}</td>
           <td class="num">${formatNumber(orderFlow.cancelCommands ?? 0)}</td>
+          <td class="num">${formatNumber(executions.fillCount ?? 0)}</td>
           <td class="num">${formatNumber(orderFlow.buyQuantity ?? 0)}</td>
           <td class="num">${formatNumber(orderFlow.sellQuantity ?? 0)}</td>
+          <td class="num">${formatNumber(netInventory)}</td>
           <td class="num">${formatNumber(orderFlow.grossSubmittedNotional ?? 0)}</td>
           <td>${pnl.available === false ? `<span class="pill warn">pending attribution</span>` : formatNumber(pnl.total ?? 0)}</td>
         </tr>`;

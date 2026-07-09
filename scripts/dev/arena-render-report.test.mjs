@@ -113,7 +113,15 @@ writeFileSync(
             sellQuantity: 2,
             grossSubmittedNotional: 400.5,
           },
-          pnl: { available: false },
+          executions: {
+            fillCount: 1,
+          },
+          inventory: {
+            netQuantityByInstrument: {
+              AAPL: 1,
+            },
+          },
+          pnl: { available: true, total: 0.5 },
         },
       },
       {
@@ -175,7 +183,7 @@ assert.match(html, /TOTAL/);
 assert.match(html, /100.5/);
 assert.match(html, /p95QuotedSpreadBps 60.00 &gt; 50/);
 assert.match(html, /Scoring Assumptions/);
-assert.match(html, /pending attribution/);
+assert.match(html, /0.5/);
 assert.match(html, /custom-technical-indicator/);
 assert.match(html, /custom-too-many-orders/);
 assert.match(html, /maxActionsPerTick 20 &gt; 5/);

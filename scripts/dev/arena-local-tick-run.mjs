@@ -124,8 +124,9 @@ async function main() {
     const sessionReports = await runArenaSessions(bots, healthSamples);
     const enforcementEvents = sessionReports.flatMap((result) => enforceBot(result.bot, result));
 
-    const botResults = scoreBots(sessionReports, enforcementEvents);
-    const venueReadback = await collectVenueReadback(botResults);
+    const baseBotResults = scoreBots(sessionReports, enforcementEvents);
+    const venueReadback = await collectVenueReadback(baseBotResults);
+    const botResults = enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples);
     const completedAtIso = new Date().toISOString();
     const report = buildReport({
       botResults,
@@ -452,6 +453,21 @@ function priceFromNanos(value) {
   return Number.isFinite(parsed) ? parsed / 1_000_000_000 : undefined;
 }
 
+function priceFromExecutionPrice(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.abs(parsed) >= 1_000_000 ? parsed / 1_000_000_000 : parsed;
+}
+
+function marketPriceValue(value) {
+  const parsed = nullableNumber(value);
+  if (parsed === null) return null;
+  return Math.abs(parsed) >= 1_000_000 ? parsed / 1_000_000_000 : parsed;
+}
+
 function ownOrderStatus(status) {
   if (status === "OPEN" || status === "PARTIALLY_FILLED" || status === "FILLED" || status === "CANCELED" || status === "REJECTED") {
     return status;
@@ -587,15 +603,15 @@ function scoringAssumptions() {
     leaderboardScope: "score-eligible public competitor bots only",
     houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
     pnl: {
-      status: "not-yet-scored",
-      basis: "report-only synthetic placeholders until execution attribution lands",
-      markPriceSource: "future final mid/last/reference mark",
+      status: "diagnostic-not-ranked",
+      basis: "zero-fee cash/inventory diagnostics from participant-scoped fill readback; public score remains participation/policy-compliance",
+      markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
       fees: "zero placeholder until maker/taker fee policy is configured",
     },
     tradingMetrics: {
-      status: "command-mix v0",
-      source: "runner pre-submit venue commands and command status summaries",
-      fillsAndExecutions: "unavailable until command result execution attribution is added to arena reports",
+      status: "command-mix plus execution diagnostics v0",
+      source: "runner pre-submit venue commands, command status summaries, and participant-scoped order-fill readback",
+      fillsAndExecutions: "diagnostic inputs only; public score weighting is a follow-up scoring-policy slice",
     },
   };
 }
@@ -668,7 +684,7 @@ function summarizeTradingMetrics(session, counters) {
       total: null,
       currency: "USD",
       available: false,
-      reason: "execution attribution and deterministic mark prices are a follow-up scoring slice",
+      reason: "venue fill readback unavailable before live execution diagnostics are attached",
     },
     fees: {
       total: 0,
@@ -687,6 +703,188 @@ function summarizeTradingMetrics(session, counters) {
       reason: "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices",
     },
   };
+}
+
+function enrichBotResultsWithExecutionDiagnostics(botResults, venueReadback, healthSamples) {
+  if (venueReadback?.skipped === true || !Array.isArray(venueReadback?.ownOrders)) {
+    return botResults;
+  }
+  const fillsByBotId = new Map();
+  for (const entry of venueReadback?.ownOrders ?? []) {
+    fillsByBotId.set(entry.botId, Array.isArray(entry.fills?.body?.fills) ? entry.fills.body.fills : []);
+  }
+  const markPrices = markPricesByInstrument(venueReadback, healthSamples);
+  return botResults.map((result) => {
+    const diagnostics = summarizeExecutionDiagnostics(fillsByBotId.get(result.botId) ?? [], markPrices);
+    return {
+      ...result,
+      tradingMetrics: {
+        ...result.tradingMetrics,
+        basis: "report-only command mix plus zero-fee execution diagnostics; public score remains participation/policy-compliance",
+        executions: diagnostics.executions,
+        pnl: diagnostics.pnl,
+        fees: diagnostics.fees,
+        inventory: diagnostics.inventory,
+      },
+    };
+  });
+}
+
+function summarizeExecutionDiagnostics(fills, markPrices) {
+  const byInstrument = {};
+  let fillCount = 0;
+  let buyFillCount = 0;
+  let sellFillCount = 0;
+  let buyQuantity = 0;
+  let sellQuantity = 0;
+  let filledQuantity = 0;
+  let grossNotional = 0;
+  let cash = 0;
+
+  for (const fill of fills) {
+    const instrumentId = typeof fill.instrumentId === "string" && fill.instrumentId.length > 0 ? fill.instrumentId : "unknown";
+    const side = fill.side === "SELL" ? "SELL" : "BUY";
+    const quantity = numberValue(fill.quantityUnits);
+    const price = priceFromExecutionPrice(fill.executionPrice);
+    const notional = price === undefined ? 0 : quantity * price;
+    const bucket = byInstrument[instrumentId] ?? createExecutionInstrumentBucket(instrumentId);
+
+    fillCount += 1;
+    filledQuantity += quantity;
+    grossNotional += notional;
+    bucket.fillCount += 1;
+    bucket.filledQuantity += quantity;
+    bucket.grossNotional += notional;
+
+    if (side === "BUY") {
+      buyFillCount += 1;
+      buyQuantity += quantity;
+      cash -= notional;
+      bucket.buyQuantity += quantity;
+      bucket.netQuantity += quantity;
+      bucket.cash -= notional;
+    } else {
+      sellFillCount += 1;
+      sellQuantity += quantity;
+      cash += notional;
+      bucket.sellQuantity += quantity;
+      bucket.netQuantity -= quantity;
+      bucket.cash += notional;
+    }
+    byInstrument[instrumentId] = bucket;
+  }
+
+  let inventoryValue = 0;
+  let grossMarkedNotional = 0;
+  const netQuantityByInstrument = {};
+  const markPriceByInstrument = {};
+  const instrumentRows = {};
+
+  for (const [instrumentId, bucket] of Object.entries(byInstrument).sort(([left], [right]) => left.localeCompare(right))) {
+    const markPrice = markPrices[instrumentId] ?? syntheticSnapshot(instrumentId).midPrice;
+    const markedValue = bucket.netQuantity * markPrice;
+    inventoryValue += markedValue;
+    grossMarkedNotional += Math.abs(markedValue);
+    netQuantityByInstrument[instrumentId] = bucket.netQuantity;
+    markPriceByInstrument[instrumentId] = markPrice;
+    instrumentRows[instrumentId] = {
+      fillCount: bucket.fillCount,
+      filledQuantity: bucket.filledQuantity,
+      buyQuantity: bucket.buyQuantity,
+      sellQuantity: bucket.sellQuantity,
+      netQuantity: bucket.netQuantity,
+      grossNotional: Number(bucket.grossNotional.toFixed(6)),
+      avgFillPrice: bucket.filledQuantity === 0 ? null : Number((bucket.grossNotional / bucket.filledQuantity).toFixed(6)),
+      cash: Number(bucket.cash.toFixed(6)),
+      markPrice,
+      markedValue: Number(markedValue.toFixed(6)),
+    };
+  }
+
+  const total = cash + inventoryValue;
+  return {
+    executions: {
+      fillCount,
+      buyFillCount,
+      sellFillCount,
+      filledQuantity,
+      buyQuantity,
+      sellQuantity,
+      grossNotional: Number(grossNotional.toFixed(6)),
+      avgFillPrice: filledQuantity === 0 ? null : Number((grossNotional / filledQuantity).toFixed(6)),
+      byInstrument: instrumentRows,
+    },
+    pnl: {
+      available: true,
+      realized: null,
+      unrealized: null,
+      cash: Number(cash.toFixed(6)),
+      inventoryValue: Number(inventoryValue.toFixed(6)),
+      total: Number(total.toFixed(6)),
+      finalEquityDiagnostic: Number((1_000_000 + total).toFixed(6)),
+      currency: "USD",
+      basis: "zero-fee cash plus marked inventory from participant-scoped fills",
+      markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+    },
+    fees: {
+      total: 0,
+      maker: 0,
+      taker: 0,
+      currency: "USD",
+      policy: "fees-v0-zero-placeholder",
+    },
+    inventory: {
+      netQuantityByInstrument,
+      markPriceByInstrument,
+      grossNotional: Number(grossMarkedNotional.toFixed(6)),
+      markPriceSource: "final venue top-of-book mid, latest health sample mid, then deterministic fixture mid",
+    },
+  };
+}
+
+function createExecutionInstrumentBucket(instrumentId) {
+  return {
+    instrumentId,
+    fillCount: 0,
+    filledQuantity: 0,
+    buyQuantity: 0,
+    sellQuantity: 0,
+    netQuantity: 0,
+    grossNotional: 0,
+    cash: 0,
+  };
+}
+
+function markPricesByInstrument(venueReadback, healthSamples) {
+  const prices = {};
+  for (const snapshot of latestHealthSnapshotsByInstrument(healthSamples)) {
+    const mid = marketPriceValue(snapshot.midPrice);
+    if (mid !== null) prices[snapshot.instrumentId] = mid;
+  }
+  for (const entry of venueReadback?.snapshots ?? []) {
+    const snapshot = entry.body?.snapshot ?? entry.snapshot ?? entry;
+    const instrumentId = String(entry.instrumentId ?? snapshot.instrumentId ?? "");
+    const mid = marketPriceValue(snapshot.midPrice) ??
+      midpoint(
+        marketPriceValue(snapshot.bestBidPrice ?? snapshot.bidPrice),
+        marketPriceValue(snapshot.bestAskPrice ?? snapshot.askPrice),
+      );
+    if (instrumentId.length > 0 && mid !== null) prices[instrumentId] = mid;
+  }
+  for (const instrumentId of mode.instruments ?? []) {
+    prices[instrumentId] ??= syntheticSnapshot(instrumentId).midPrice;
+  }
+  return prices;
+}
+
+function latestHealthSnapshotsByInstrument(healthSamples) {
+  const snapshots = new Map();
+  for (const sample of healthSamples ?? []) {
+    for (const snapshot of sample.snapshots ?? []) {
+      if (snapshot.instrumentId !== undefined) snapshots.set(snapshot.instrumentId, snapshot);
+    }
+  }
+  return Array.from(snapshots.values());
 }
 
 function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {
@@ -1020,9 +1218,9 @@ function dryRunHealthSnapshots(tick) {
 }
 
 function normalizeSnapshot(instrumentId, rawSnapshot, statusCode) {
-  const bid = nullableNumber(rawSnapshot.bestBidPrice ?? rawSnapshot.bidPrice);
-  const ask = nullableNumber(rawSnapshot.bestAskPrice ?? rawSnapshot.askPrice);
-  const mid = nullableNumber(rawSnapshot.midPrice) ?? midpoint(bid, ask);
+  const bid = marketPriceValue(rawSnapshot.bestBidPrice ?? rawSnapshot.bidPrice);
+  const ask = marketPriceValue(rawSnapshot.bestAskPrice ?? rawSnapshot.askPrice);
+  const mid = marketPriceValue(rawSnapshot.midPrice) ?? midpoint(bid, ask);
   const topOfBook = bid !== null && ask !== null && bid > 0 && ask > 0;
   const spread = topOfBook ? ask - bid : null;
   return {
@@ -1254,7 +1452,7 @@ function summarizeVenueReadbackExecutions(ownOrders) {
     const role = bot?.role ?? "unknown";
     for (const fill of fills) {
       const quantity = numberValue(fill.quantityUnits);
-      const price = priceFromNanos(fill.executionPrice);
+      const price = priceFromExecutionPrice(fill.executionPrice);
       fillCount += 1;
       filledQuantity += quantity;
       if (price !== undefined) {
