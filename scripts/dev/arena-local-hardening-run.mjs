@@ -103,8 +103,8 @@ function hardeningSummary(report) {
     .filter((entry) => String(entry.botId ?? "").startsWith("builtin-mm"))
     .map((entry) => ({
       botId: entry.botId,
-      current: entry.current?.body?.orders?.length ?? 0,
-      history: entry.history?.body?.orders?.length ?? 0,
+      current: entry.current?.body?.orders?.length ?? entry.currentOrderCount ?? 0,
+      history: entry.history?.body?.orders?.length ?? entry.historyOrderCount ?? 0,
   }));
   const failures = [];
   if (report.status !== "completed") failures.push(`report status ${report.status}`);

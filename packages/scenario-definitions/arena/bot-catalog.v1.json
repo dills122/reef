@@ -179,7 +179,7 @@
           "instrumentId": "AAPL",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0.6
+          "crossOffset": 0
         }
       },
       "scoreEligible": false,
@@ -200,7 +200,7 @@
           "instrumentId": "MSFT",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0.05
+          "crossOffset": 0
         }
       },
       "scoreEligible": false,
@@ -221,7 +221,7 @@
           "instrumentId": "NVDA",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0.05
+          "crossOffset": 0
         }
       },
       "scoreEligible": false,
@@ -242,7 +242,7 @@
           "instrumentId": "TSLA",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0.05
+          "crossOffset": 0
         }
       },
       "scoreEligible": false,
@@ -263,7 +263,7 @@
           "instrumentId": "AMZN",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0.05
+          "crossOffset": 0
         }
       },
       "scoreEligible": false,
@@ -294,7 +294,7 @@
           "instrumentId": "AAPL",
           "side": "BUY",
           "orderSize": 1,
-          "priceOffset": 1.5
+          "priceOffset": 0.1
         }
       },
       "scoreEligible": true,
@@ -314,7 +314,7 @@
           "instrumentId": "AAPL",
           "side": "SELL",
           "orderSize": 1,
-          "priceOffset": 1.5
+          "priceOffset": 0.1
         }
       },
       "scoreEligible": true,
@@ -334,7 +334,7 @@
           "instrumentId": "MSFT",
           "side": "BUY",
           "orderSize": 1,
-          "priceOffset": 2
+          "priceOffset": 0.2
         }
       },
       "scoreEligible": true,
@@ -354,7 +354,7 @@
           "instrumentId": "MSFT",
           "side": "SELL",
           "orderSize": 1,
-          "priceOffset": 2
+          "priceOffset": 0.2
         }
       },
       "scoreEligible": true,
@@ -374,7 +374,7 @@
           "instrumentId": "NVDA",
           "side": "BUY",
           "orderSize": 1,
-          "priceOffset": 5
+          "priceOffset": 0.5
         }
       },
       "scoreEligible": true,
@@ -394,7 +394,7 @@
           "instrumentId": "NVDA",
           "side": "SELL",
           "orderSize": 1,
-          "priceOffset": 5
+          "priceOffset": 0.5
         }
       },
       "scoreEligible": true,
@@ -414,7 +414,7 @@
           "instrumentId": "TSLA",
           "side": "BUY",
           "orderSize": 1,
-          "priceOffset": 2.5
+          "priceOffset": 0.25
         }
       },
       "scoreEligible": true,
@@ -434,7 +434,7 @@
           "instrumentId": "TSLA",
           "side": "SELL",
           "orderSize": 1,
-          "priceOffset": 2.5
+          "priceOffset": 0.25
         }
       },
       "scoreEligible": true,
@@ -454,7 +454,7 @@
           "instrumentId": "AMZN",
           "side": "BUY",
           "orderSize": 1,
-          "priceOffset": 1.5
+          "priceOffset": 0.15
         }
       },
       "scoreEligible": true,
@@ -474,7 +474,7 @@
           "instrumentId": "AMZN",
           "side": "SELL",
           "orderSize": 1,
-          "priceOffset": 1.5
+          "priceOffset": 0.15
         }
       },
       "scoreEligible": true,

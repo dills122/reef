@@ -19,6 +19,21 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
     const orderSize = ctx.config.number("orderSize");
     const crossOffset = ctx.config.optionalNumber("crossOffset") ?? 0.01;
     const configuredSide = ctx.config.optionalString("side") ?? "ALTERNATE";
+    const ownOrders = await ctx.orders.current();
+    if (!ownOrders.ok) {
+      return [ctx.actions.noop("own orders unavailable")];
+    }
+
+    const activeOrders = ownOrders.value.filter(
+      (order) =>
+        order.instrumentId === instrumentId &&
+        (order.status === "OPEN" || order.status === "PARTIALLY_FILLED") &&
+        order.remainingQuantity > 0,
+    );
+    if (activeOrders.length > 0) {
+      return [ctx.actions.noop("taker order already active")];
+    }
+
     const snapshot = await ctx.marketData.snapshot(instrumentId);
     if (!snapshot.ok) {
       return [ctx.actions.noop("snapshot unavailable")];

@@ -117,6 +117,7 @@ writeFileSync(reportPath, JSON.stringify({
     projectionDrained: true,
     ownOrders: [
       { botId: "builtin-mm-lifecycle-safe", current: { body: { orders: [{ orderId: "o1" }] } } },
+      { botId: "builtin-mm-msft-lifecycle-safe", currentOrderCount: 2, historyOrderCount: 4 },
     ],
   },
   enforcementEvents: [],
@@ -183,5 +184,9 @@ assert.equal(summary.commandPressure.totals.houseCommands, 40);
 assert.equal(summary.latency.source, "compact-report-aggregates");
 assert.equal(summary.marketQuality.source, "compact-report-market-quality-summary");
 assert.equal(summary.marketQuality.byInstrument[0].instrumentId, "AAPL");
+assert.deepEqual(summary.house.ownOrderCounts, [
+  { botId: "builtin-mm-lifecycle-safe", current: 1, history: 0 },
+  { botId: "builtin-mm-msft-lifecycle-safe", current: 2, history: 4 },
+]);
 
 console.log("arena local hardening compact summary checks passed");
