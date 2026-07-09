@@ -27,7 +27,9 @@ class PostgresSchemaRequirementsTest {
                 "runtime.canonical_command_results",
                 "runtime.canonical_venue_events",
                 "runtime.canonical_venue_event_batches",
+                "runtime.canonical_venue_event_batches_archive",
                 "runtime.canonical_command_outcomes",
+                "runtime.canonical_command_outcomes_archive",
                 "runtime.projection_watermarks",
                 "runtime.order_lifecycle_state",
                 "runtime.order_lifecycle_dirty",
@@ -165,6 +167,19 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.canonical_venue_event_batches_archive.batch_id:text",
+                "runtime.canonical_venue_event_batches_archive.payload_checksum:text",
+                "runtime.canonical_venue_event_batches_archive.payload_json:jsonb",
+                "runtime.canonical_venue_event_batches_archive.materialized_at:timestamp with time zone",
+                "runtime.canonical_venue_event_batches_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.canonical_venue_event_batches_archive" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.canonical_command_outcomes.command_id:text",
                 "runtime.canonical_command_outcomes.stream_sequence:bigint",
                 "runtime.canonical_command_outcomes.result_payload:jsonb",
@@ -172,6 +187,19 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_command_outcomes" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.canonical_command_outcomes_archive.command_id:text",
+                "runtime.canonical_command_outcomes_archive.stream_sequence:bigint",
+                "runtime.canonical_command_outcomes_archive.result_payload:jsonb",
+                "runtime.canonical_command_outcomes_archive.materialized_at:timestamp with time zone",
+                "runtime.canonical_command_outcomes_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.canonical_command_outcomes_archive" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

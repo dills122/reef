@@ -57,7 +57,9 @@ object PostgresSchemaRequirements {
         val canonicalCommandResults = PostgresSchemaObject.parse(names.canonicalCommandResults)
         val canonicalVenueEvents = PostgresSchemaObject.parse(names.canonicalVenueEvents)
         val canonicalVenueEventBatches = PostgresSchemaObject.parse(names.canonicalVenueEventBatches)
+        val canonicalVenueEventBatchesArchive = PostgresSchemaObject.parse(names.canonicalVenueEventBatchesArchive)
         val canonicalCommandOutcomes = PostgresSchemaObject.parse(names.canonicalCommandOutcomes)
+        val canonicalCommandOutcomesArchive = PostgresSchemaObject.parse(names.canonicalCommandOutcomesArchive)
         val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
@@ -84,7 +86,9 @@ object PostgresSchemaRequirements {
                 names.canonicalCommandResults,
                 names.canonicalVenueEvents,
                 names.canonicalVenueEventBatches,
+                names.canonicalVenueEventBatchesArchive,
                 names.canonicalCommandOutcomes,
+                names.canonicalCommandOutcomesArchive,
                 names.projectionWatermarks,
                 names.orderLifecycleState,
                 names.orderLifecycleDirty,
@@ -152,10 +156,20 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(canonicalVenueEventBatches, "payload_checksum", "text"),
                 PostgresSchemaColumn(canonicalVenueEventBatches, "payload_json", "jsonb"),
                 PostgresSchemaColumn(canonicalVenueEventBatches, "created_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "batch_id", "text"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "payload_checksum", "text"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "payload_json", "jsonb"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "materialized_at", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "command_id", "text"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "stream_sequence", "bigint"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "result_payload", "jsonb"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "command_id", "text"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "stream_sequence", "bigint"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "result_payload", "jsonb"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "materialized_at", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(projectionWatermarks, "projection_name", "text"),
                 PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
                 PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),

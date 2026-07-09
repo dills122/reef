@@ -492,7 +492,7 @@ Summary:
 - partitioning should first target terminal history/archive tables where `completed_at`, `received_at`, or run/session metadata are natural lifecycle keys.
 - command payloads should be split from the hot command index before partitioning bulky command history.
 - active queue rows should stay small through active-only semantics, pruning, and worker drain improvements rather than time partitioning.
-- the next implementation slice is run/session attribution so arena and simulator workloads can be retained, pruned, and diagnosed by run.
+- command-result archive tables now exist for command-log terminal results and canonical venue materialization history; archive movement and drop/export tooling should remain explicit, bounded, and dry-run-first.
 
 Primary references:
 - [`docs/COMMAND_LOG_PARTITIONING_PLAN.md`](./COMMAND_LOG_PARTITIONING_PLAN.md)

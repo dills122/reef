@@ -139,6 +139,7 @@ Progress:
 - `command_log.command_results_archive` now provides the first partitioned terminal-history target keyed by `completed_at`.
 - `PostgresCommandLogStore.archiveTerminalResults(...)` and `make dev-command-log-archive` move bounded unpinned batches from live results to archive while preserving exact status lookup/accounting.
 - `make dev-command-log-archive-partitions` manages monthly archive partition list/create/drop/export operations; scheduled automation and default-partition drain automation are still pending.
+- `runtime.canonical_venue_event_batches_archive` and `runtime.canonical_command_outcomes_archive` add partitioned archive targets for canonical venue materialization history; runtime archive movement is still pending.
 
 ## Immediate Work Plan
 

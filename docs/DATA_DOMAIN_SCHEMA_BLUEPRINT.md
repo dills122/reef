@@ -54,7 +54,12 @@ Do not put synchronous normalized order, trade, execution, or UI table writes ba
 - `command_id text pk`, `batch_id text`, `shard_id text`, `partition_id int`, `command_stream text`, `event_stream text`, `stream_sequence bigint`, `delivered_count bigint`, `command_type text`, `payload_hash text`, `instrument_id text`, `order_id text`, `result_status text`, `reject_code text`, `result_payload jsonb default '{}'`, `materialized_at timestamptz default now()`, plus typed companion `occurred_at_ts timestamptz` (`0033`).
 - unique on `(batch_id, stream_sequence)`.
 
-3. `runtime.canonical_command_results` / `runtime.canonical_venue_events` (`runtime/0006`, `0033`)
+3. `runtime.canonical_venue_event_batches_archive` / `runtime.canonical_command_outcomes_archive` (`runtime/0036`)
+- partitioned archive targets for canonical venue-batch materialization history; these are not primary read/projection paths.
+- both are range partitioned by non-null `materialized_at`, include `archived_at timestamptz default now()`, and bootstrap default partitions (`*_archive_default`) so archive jobs have a safe landing zone before operators create time-bucket partitions.
+- archive primary keys include `materialized_at` to satisfy PostgreSQL partitioned-table uniqueness constraints: `(materialized_at, event_stream, batch_id)` for batch archive rows and `(materialized_at, command_id)` for command outcome archive rows.
+
+4. `runtime.canonical_command_results` / `runtime.canonical_venue_events` (`runtime/0006`, `0033`)
 - an earlier canonical append-only pair (`canonical_command_results` keyed by `command_id`; `canonical_venue_events` keyed by `event_id`) used by `runtime.runtime_append_canonical_submit_outcomes` / `runtime.runtime_project_canonical_submit_outcomes`.
 - per `docs/DB_SPLIT_READINESS.md`, this pair is a legacy/compat path pending consolidation onto `runtime.canonical_command_outcomes`; do not add new consumers here without checking current status first.
 
