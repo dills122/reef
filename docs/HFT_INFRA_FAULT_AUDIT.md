@@ -137,7 +137,7 @@ Target:
 
 Progress:
 - `command_log.command_results_archive` now provides the first partitioned terminal-history target keyed by `completed_at`.
-- `PostgresCommandLogStore.archiveTerminalResults(...)` moves bounded unpinned batches from live results to archive while preserving exact status lookup/accounting; operator scheduling and partition-drop automation are still pending.
+- `PostgresCommandLogStore.archiveTerminalResults(...)` and `make dev-command-log-archive` move bounded unpinned batches from live results to archive while preserving exact status lookup/accounting; scheduled automation and partition-drop automation are still pending.
 
 ## Immediate Work Plan
 

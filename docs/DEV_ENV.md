@@ -762,6 +762,22 @@ When command accounting is enabled, the report also includes `commandAccounting`
 
 ## Command-log lifecycle
 
+Archive old terminal command results out of the live result table with a dry-run-first dev tool:
+
+```bash
+make dev-command-log-archive
+```
+
+The default mode reports how many completed/failed result rows are eligible for archive movement but does not change rows. Apply archiving explicitly:
+
+```bash
+DEV_COMMAND_LOG_ARCHIVE_APPLY=1 \
+DEV_COMMAND_LOG_ARCHIVE_OLDER_THAN=24h \
+make dev-command-log-archive
+```
+
+The archive tool copies eligible `command_results` rows into `command_results_archive`, deletes only the live result rows successfully archived, and leaves `commands`/`command_payloads` intact so exact status lookup still works. Useful knobs mirror prune: `DEV_COMMAND_LOG_ARCHIVE_BATCH_SIZE`, `DEV_COMMAND_LOG_ARCHIVE_MAX_BATCHES`, `DEV_COMMAND_LOG_ARCHIVE_VACUUM`, and `DEV_COMMAND_LOG_ARCHIVE_CAPTURE_DB_DIAGNOSTICS`.
+
 Prune terminal command-log history with a dry-run-first dev tool:
 
 ```bash
