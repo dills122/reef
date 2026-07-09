@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setDefault } from "./lib/dev-utils.mjs";
 
 import "./stream-direct-nodb-up.mjs";
 
@@ -37,12 +38,6 @@ console.log(`  directDrainWaitMs=${process.env.DEV_STRESS_STREAM_DIRECT_DRAIN_WA
 console.log(`  artifactDir=${process.env.DEV_STRESS_ARTIFACT_DIR}`);
 
 await import("./stress.mjs");
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
 
 function setDefaultGeneratedSessionConfig() {
   if (!process.env.DEV_STRESS_SESSION_CONFIG) {

@@ -1,3 +1,4 @@
+import { setDefault } from "./lib/dev-utils.mjs";
 import "./captured-ack-up.mjs";
 
 setDefault("DEV_STRESS_MODE", "capacity-baseline");
@@ -11,9 +12,3 @@ setDefault("DEV_STRESS_ARTIFACT_DIR", "/tmp/reef-captured-ack-stress");
 setDefault("DEV_STRESS_REPORT_OUT", "/tmp/reef-captured-ack-stress/captured-ack-stress.json");
 
 await import("./stress.mjs");
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}

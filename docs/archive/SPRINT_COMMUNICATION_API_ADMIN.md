@@ -8,7 +8,7 @@ Define and execute a contained implementation sprint that introduces:
 3. admin layer using CLI-first adapters with reusable application logic
 
 Related standards:
-- [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md)
+- [`docs/POST_MATCH_STANDARDS.md`](../POST_MATCH_STANDARDS.md)
 
 ## Sprint Scope
 

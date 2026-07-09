@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 import { selectPartitionSpreadInstruments } from "./lib/stream-partition-spread.mjs";
@@ -109,16 +109,6 @@ printStreamProfileSummary("materializer-soak");
 await import("./stream-ack-up.mjs");
 await stopIdleBackgroundServices();
 await import("./stress.mjs");
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
-
-function setValue(name, value) {
-  process.env[name] = value;
-}
 
 function appendProfiles(raw, additions) {
   const profiles = new Set(

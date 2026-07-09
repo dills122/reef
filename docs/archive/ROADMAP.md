@@ -13,7 +13,7 @@ It is intentionally biased toward:
 
 ## Current Execution Checkpoint
 
-For the shortest current snapshot, read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) before using this roadmap.
+For the shortest current snapshot, read [`CURRENT_STATUS.md`](../CURRENT_STATUS.md) before using this roadmap.
 
 As of 2026-07-04, Reef is no longer just a repository skeleton. The current implementation has:
 
@@ -252,13 +252,13 @@ Early simplification is acceptable:
 - a single Angular app can host multiple operational surfaces before splitting
 
 Implementation detail reference:
-- [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](./EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
+- [`docs/EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md`](../EVENT_DATA_LIFECYCLE_IMPLEMENTATION_SPEC.md)
 
 ## Near-Term Priority Order
 
 If starting fresh from the current repository state, the recommended order is:
 
-1. read [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) and [`WORK_PLAN.md`](./WORK_PLAN.md)
+1. read [`CURRENT_STATUS.md`](../CURRENT_STATUS.md) and [`WORK_PLAN.md`](../WORK_PLAN.md)
 2. preserve durable command acceptance semantics before changing ingress paths
 3. validate the direct engine ingestion path and benchmark evidence gates
 4. complete persistence/projection and lifecycle-query gaps

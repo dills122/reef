@@ -10,7 +10,7 @@ Latest checkpoint addendum: 2026-07-04
 
 This review reconciles Reef's stated vision, roadmap, steering documents, and current implementation state. It is intended to prevent planning drift as the project grows from an API-first venue slice into a simulation-first market-infrastructure platform.
 
-For the current operational summary, use [`CURRENT_STATUS.md`](./CURRENT_STATUS.md). This review is retained as planning analysis and historical critique.
+For the current operational summary, use [`CURRENT_STATUS.md`](../CURRENT_STATUS.md). This review is retained as planning analysis and historical critique.
 
 ## 2026-07-04 Checkpoint Addendum
 
@@ -30,7 +30,7 @@ Near-term work should therefore not restart broad schema, UI, or post-trade expa
 
 ## 2026-07-03 Checkpoint Addendum
 
-The critique below remains useful for the broad product direction, but it predates the merged stream-ack architecture shift and the latest latency/backpressure work. For the high-throughput track, the current execution checkpoint is now the stream-ack path described by D-036, D-037, [`STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md), [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](./ARCHITECTURE_THROUGHPUT_TRACKER.md), and [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md).
+The critique below remains useful for the broad product direction, but it predates the merged stream-ack architecture shift and the latest latency/backpressure work. For the high-throughput track, the current execution checkpoint is now the stream-ack path described by D-036, D-037, [`STREAM_ACK_ARCHITECTURE_PLAN.md`](../STREAM_ACK_ARCHITECTURE_PLAN.md), [`ARCHITECTURE_THROUGHPUT_TRACKER.md`](../ARCHITECTURE_THROUGHPUT_TRACKER.md), and [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](../DIGITALOCEAN_STRESS_TEST_PLAN.md).
 
 Current state:
 

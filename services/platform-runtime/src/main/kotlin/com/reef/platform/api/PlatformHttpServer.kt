@@ -3120,6 +3120,8 @@ class PlatformHttpServer(
                 200,
                 JsonCodec.writeObject("status" to "ok", "botId" to botId, "flow" to flow)
             )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid submitterIdentity or botId")))
         } catch (ex: OpenBaoClientException) {
             PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao provisioning failed")))
         }

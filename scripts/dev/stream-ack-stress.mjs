@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setDefault } from "./lib/dev-utils.mjs";
 
 setDefault("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
@@ -19,12 +20,6 @@ setDefaultGeneratedSessionConfig();
 
 await import("./stream-ack-up.mjs");
 await import("./stress.mjs");
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
 
 function setDefaultGeneratedSessionConfig() {
   if (!process.env.DEV_STRESS_SESSION_CONFIG) {

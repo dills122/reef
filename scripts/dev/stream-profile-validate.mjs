@@ -1,4 +1,4 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, setDefault } from "./lib/dev-utils.mjs";
 import { printStreamProfileSummary, streamProfileNames, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 
 loadDotEnv();
@@ -44,11 +44,5 @@ function applyProfileDefaults(profileName) {
     setDefault("DEV_STRESS_MAX_VENUE_EVENT_MATERIALIZER_COMPLETION_GAP", "0");
     setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "1000");
     setDefault("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", "250000");
-  }
-}
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
   }
 }

@@ -1,3 +1,4 @@
+import { setDefault } from "./lib/dev-utils.mjs";
 import "./runtime-nodb-up.mjs";
 
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
@@ -28,9 +29,3 @@ console.log(`  traceCheckLimit=${process.env.DEV_STRESS_TRACE_CHECK_LIMIT}`);
 console.log(`  artifactDir=${process.env.DEV_STRESS_ARTIFACT_DIR}`);
 
 await import("./stress.mjs");
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}

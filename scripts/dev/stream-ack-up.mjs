@@ -1,5 +1,5 @@
 import { devUp } from "./lib/dev-stack.mjs";
-import { env, loadDotEnv, run } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
 
 loadDotEnv();
@@ -204,16 +204,6 @@ async function streamExists(stream) {
   } catch (_error) {
     return false;
   }
-}
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
-
-function setValue(name, value) {
-  process.env[name] = value;
 }
 
 function streamAckWorkerDurables() {
