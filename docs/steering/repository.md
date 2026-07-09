@@ -31,6 +31,7 @@ For product and architecture priorities that should guide every change, read [`r
 
 - prefer `bun`-executed JavaScript/TypeScript scripts for repository automation
 - keep `make` targets as thin wrappers around versioned scripts in `scripts/`
+- prefer grouped local CLIs such as `scripts/dev/reef-dev.mjs` for stack, stress, and local link profiles instead of adding one-off wrapper scripts
 - avoid adding new shell-heavy automation unless there is a clear platform/runtime reason
 - when scripts call external tools (for example Docker/Go), keep argument handling explicit and cross-platform friendly
 - performance scripts should report attempted, durably accepted, processed, and projected throughput separately when those stages apply

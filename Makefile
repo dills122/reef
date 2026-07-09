@@ -110,6 +110,7 @@ test-bot-sdk:
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
 	node scripts/dev/report-taxonomy.test.mjs
 	node scripts/dev/stream-partition-spread.test.mjs
+	node scripts/dev/lib/dev-profiles.test.mjs
 	node scripts/dev/do-benchmark-check.test.mjs
 	node scripts/dev/do-materializer-10k-gate.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
@@ -123,7 +124,7 @@ check-js-runtime:
 
 dev-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/up.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up
 
 backbone-local-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -159,23 +160,23 @@ backbone-local-down:
 
 dev-up-runtime-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/runtime-nodb-up.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up runtime-nodb
 
 dev-up-captured-ack:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/captured-ack-up.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up captured-ack
 
 dev-up-stream-ack:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/stream-ack-up.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up stream-ack
 
 dev-up-stream-direct-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/stream-direct-nodb-up.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack up stream-direct-nodb
 
 dev-compose-config:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/compose-config.mjs $(ARGS)
+	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stack compose-config $(ARGS)
 
 dev-compose-parity:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -183,15 +184,15 @@ dev-compose-parity:
 
 dev-validate-stream-profile:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/stream-profile-validate.mjs $(PROFILE)
+	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stream validate $(PROFILE)
 
 dev-down:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/down.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack down
 
 dev-reset:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reset.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stack reset
 
 dev-db-migrate:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -328,7 +329,7 @@ dev-stress:
 
 dev-stress-runtime-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/runtime-nodb-stress.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stress run runtime-nodb
 
 dev-stress-accepted-async-jfr:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -336,15 +337,15 @@ dev-stress-accepted-async-jfr:
 
 dev-stress-captured-ack:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/captured-ack-stress.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stress run captured-ack
 
 dev-stress-stream-ack:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/stream-ack-stress.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stress run stream-ack
 
 dev-stress-stream-direct-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/stream-direct-nodb-stress.mjs
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/reef-dev.mjs stress run stream-direct-nodb
 
 dev-stream-publish-bench:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

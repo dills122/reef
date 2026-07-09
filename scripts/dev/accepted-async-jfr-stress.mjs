@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 
 import { composeArgs } from "./lib/compose-utils.mjs";
 import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
+import { runStressProfile } from "./lib/dev-stress-profiles.mjs";
 
 loadDotEnv();
 
@@ -57,7 +58,7 @@ if (isolatedCompose) {
 
 let stressError = null;
 try {
-  await import("./runtime-nodb-stress.mjs");
+  await runStressProfile("runtime-nodb");
 } catch (error) {
   stressError = error;
 } finally {

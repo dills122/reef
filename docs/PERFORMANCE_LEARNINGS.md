@@ -61,7 +61,7 @@ Local long-soak investigation showed the failed no-DB stream-ack run was not pri
 Evidence:
 
 - heap dump from the failed `10k/sec`, `15m` API-front-door run retained millions of `StreamCommandReference` and `InMemoryStreamCommandIntakeStore.Entry` objects, plus matching `String` and map-node overhead.
-- `scripts/dev/stream-direct-nodb-up.mjs` already set `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`, but `docker-compose.yml` did not pass those values into platform-runtime containers. Runtime default `0` meant unlimited in-memory retention.
+- The `stream-direct-nodb` stack profile already set `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256`, but `docker-compose.yml` did not pass those values into platform-runtime containers. Runtime default `0` meant unlimited in-memory retention.
 - after compose pass-through and bounded sharded intake, local no-op publisher evidence recovered:
   - `10k/sec`, `15m`, `448` workers: `8,999,952` requests, `8,999,952` success, `0` failures, `9999.89 rps`, p99 `47.40ms`, API `restartCount=0`, post-run API RSS about `1.17GiB`.
   - `11k/sec`, `2m`, `448` workers: `1,320,000` requests, `0` failures, `10999.48 rps`, p99 `34.46ms`.

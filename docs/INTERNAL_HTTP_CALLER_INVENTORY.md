@@ -20,7 +20,7 @@ These callers may keep raw `/internal/*` while they run against loopback, compos
 - `scripts/dev/stress.mjs`: captures command accounting, stream health, worker stats, materializer stats, projector status, hot-path metrics, DB pool metrics, and matching-engine stream-direct stats.
 - `scripts/dev/intake-bench.mjs`: captures command accounting, stream health, materializer stats, projector status, and lifecycle projector status.
 - `scripts/dev/venue-event-materializer-smoke.mjs`: validates materializer/projector/lifecycle/market-data local drain surfaces.
-- `scripts/dev/venue-event-materializer-stress.mjs`, `scripts/dev/stream-ack-stress.mjs`, `scripts/dev/stream-direct-nodb-stress.mjs`: local throughput and diagnostics workflows.
+- `scripts/dev/venue-event-materializer-stress.mjs` and `scripts/dev/reef-dev.mjs stress run stream-ack|stream-direct-nodb`: local throughput and diagnostics workflows.
 - `scripts/dev/throughput-campaign.mjs`: local abuse stats capture.
 - `infra/hetzner-core/server/scripts/start-stream-ack.sh`: operator-side local health probe from inside the server.
 - `infra/hetzner-core/server/scripts/verify-runtime.sh`, `infra/hetzner-core/server/scripts/run-soak.sh`: local loopback health/soak checks.

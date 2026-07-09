@@ -35,8 +35,7 @@ export async function* walkDirs(root) {
   }
 }
 
-// Shared between scripts/dev/setup-codex-links.mjs and
-// scripts/dev/setup-claude-links.mjs so a skill has the same link name under
+// Shared by reef-dev link setup so a skill has the same link name under
 // .codex/skills/ and .claude/skills/.
 export function skillLinkName(parts, name) {
   if (!name) {

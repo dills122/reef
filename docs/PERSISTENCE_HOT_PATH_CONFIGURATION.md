@@ -49,7 +49,7 @@ Isolation tools:
 
 - `make dev-stream-publish-bench` measures configured stream publisher capacity without HTTP, intake reservation, or matching-engine work.
 - `STREAM_ACK_PUBLISHER=noop make dev-up-stream-direct-nodb` keeps the API stream-ack front door active but replaces durable broker publish with an immediate ack. Use only to isolate HTTP/API ceiling; it is not a durable-acceptance profile.
-- `make dev-validate-stream-profile PROFILE=stream-direct-nodb` checks the intended profile environment without starting a load run. Use `PROFILE=noop-ceiling` for no-op API-front-door isolation and `PROFILE=materializer-soak` for durable canonical materializer runs.
+- `make dev-validate-stream-profile PROFILE=stream-direct-nodb` or `bun scripts/dev/reef-dev.mjs stream validate stream-direct-nodb` checks the intended profile environment without starting a load run. Use `PROFILE=noop-ceiling` for no-op API-front-door isolation and `PROFILE=materializer-soak` for durable canonical materializer runs.
 
 ### Venue Event Materializer
 
@@ -262,7 +262,7 @@ No-op publisher evidence is useful only for front-door capacity. A production th
 
 Short-run cleanup gates before another long soak:
 
-1. Validate the profile with `make dev-validate-stream-profile PROFILE=materializer-soak`.
+1. Validate the profile with `make dev-validate-stream-profile PROFILE=materializer-soak` or `bun scripts/dev/reef-dev.mjs stream validate materializer-soak`.
 2. Run `make dev-smoke-venue-event-materializer` to prove one durable command reaches canonical outcome and compact projection replay is idempotent.
 3. Run a short durable materializer stress, not a long soak, with strict drain checks and small duration such as `DEV_STRESS_DURATION=60s`.
 4. Inspect report equality: accepted, stream-direct acked, and materialized outcomes should have zero unexplained gap after drain.

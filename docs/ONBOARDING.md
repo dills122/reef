@@ -52,6 +52,12 @@ User-local Codex skill and template links are intentionally not committed becaus
 bun run codex:links
 ```
 
+The package alias runs `bun scripts/dev/reef-dev.mjs links codex`. Claude skill links use the same grouped CLI:
+
+```bash
+bun scripts/dev/reef-dev.mjs links claude
+```
+
 If your template checkout is somewhere other than `~/Documents/ai-central/templates`:
 
 ```bash
@@ -71,10 +77,21 @@ make dev-smoke
 
 `make dev-up` starts Postgres first, applies DB migrations, then starts the full stack.
 
+The underlying grouped CLI is available for discovery and lower-level profile work:
+
+```bash
+bun scripts/dev/reef-dev.mjs list
+bun scripts/dev/reef-dev.mjs stack up stream-ack
+bun scripts/dev/reef-dev.mjs stress run stream-direct-nodb
+```
+
+Prefer `make` for common daily workflows and `reef-dev.mjs` when adding or inspecting grouped script profiles.
+
 The default local stack is resolved from `compose.base.yml` plus `compose.local.yml`. To inspect it without starting containers:
 
 ```bash
 make dev-compose-config ARGS="--services"
+bun scripts/dev/reef-dev.mjs stack compose-config --services
 ```
 
 If Bun is missing locally:
