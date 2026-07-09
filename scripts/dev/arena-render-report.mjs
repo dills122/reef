@@ -29,6 +29,7 @@ function renderReport(report, context) {
   const venueReadback = report.venueReadback ?? {};
   const scoringAssumptions = report.scoringAssumptions ?? {};
   const marketQualitySummary = report.marketQualitySummary ?? {};
+  const executionSummary = report.executionSummary ?? venueReadback.executionSummary ?? {};
   const statusClass = String(report.status ?? "unknown").includes("freeze") ? "warn" : "ok";
   const persisted = persistence.enabled && !persistence.skipped;
   const projectionDrained = venueReadback.projectionDrained === true;
@@ -233,6 +234,7 @@ function renderReport(report, context) {
       ${metric("Bots", botResults.length, "registered in report")}
       ${metric("Ticks", totals.ticks ?? 0, `${totals.failedTicks ?? 0} failed`)}
       ${metric("Venue commands", totals.venueCommands ?? 0, `${totals.submittedCommands ?? 0} submitted`)}
+      ${metric("Fills", executionSummary.fillCount ?? 0, `${formatNumber(executionSummary.filledQuantity ?? 0)} quantity`)}
       ${metric("Accounting gap", accounting.accountingGap ?? 0, `${accounting.terminalCommands ?? 0} terminal`)}
     </section>
 
@@ -271,6 +273,11 @@ function renderReport(report, context) {
     <section class="section">
       <h2>Market Quality</h2>
       ${marketQualityTable(marketQualitySummary)}
+    </section>
+
+    <section class="section">
+      <h2>Execution Summary</h2>
+      ${executionSummaryTable(executionSummary)}
     </section>
 
     <section class="section">
@@ -425,6 +432,41 @@ function marketQualityTable(summary) {
         <td class="num">${formatNumber(instrument.p95QuotedSpreadBps ?? 0)}</td>
         <td class="num">${formatNumber(instrument.crossedBookCount ?? 0)}</td>
         <td>${escapeHtml((instrument.failures ?? []).join("; ") || "none")}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function executionSummaryTable(summary) {
+  const byInstrument = summary.byInstrument ?? {};
+  const entries = Object.entries(byInstrument);
+  if ((summary.fillCount ?? 0) === 0 && entries.length === 0) {
+    return `<div class="empty">No fills attributed in venue readback.</div>`;
+  }
+  return `<table>
+    <thead>
+      <tr>
+        <th>Instrument</th>
+        <th class="num">Fills</th>
+        <th class="num">Quantity</th>
+        <th class="num">Notional</th>
+        <th class="num">Avg Fill Price</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">TOTAL</td>
+        <td class="num">${formatNumber(summary.fillCount ?? 0)}</td>
+        <td class="num">${formatNumber(summary.filledQuantity ?? 0)}</td>
+        <td class="num">${formatNumber(summary.filledNotional ?? 0)}</td>
+        <td class="num">${summary.avgFillPrice === null || summary.avgFillPrice === undefined ? "n/a" : formatNumber(summary.avgFillPrice)}</td>
+      </tr>
+      ${entries.map(([instrumentId, bucket]) => `<tr>
+        <td class="mono">${escapeHtml(instrumentId)}</td>
+        <td class="num">${formatNumber(bucket.fillCount ?? 0)}</td>
+        <td class="num">${formatNumber(bucket.filledQuantity ?? 0)}</td>
+        <td class="num">${formatNumber(bucket.filledNotional ?? 0)}</td>
+        <td class="num">${bucket.avgFillPrice === null || bucket.avgFillPrice === undefined ? "n/a" : formatNumber(bucket.avgFillPrice)}</td>
       </tr>`).join("")}
     </tbody>
   </table>`;

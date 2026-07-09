@@ -395,7 +395,7 @@ function tickPolicyViolation(session, tickResult, offsetMs) {
 }
 
 async function refreshLiveSessionOrders(session) {
-  if (config.submitMode !== "live" || session.schedulingClass !== "house_responsive") {
+  if (config.submitMode !== "live") {
     return undefined;
   }
   const participantId = participantIdForBot(session.bot);
@@ -747,6 +747,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
     marketQualitySummary,
+    executionSummary: venueReadback?.executionSummary,
     healthSamples,
     venueReadback,
     enforcementEvents,
@@ -789,6 +790,7 @@ function compactArenaReport(report) {
     activityBySchedulingClass: report.activityBySchedulingClass,
     healthSummary: report.healthSummary,
     marketQualitySummary: report.marketQualitySummary,
+    executionSummary: report.executionSummary,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,
@@ -812,6 +814,7 @@ function compactVenueReadback(venueReadback) {
     projectionDrainRequired: venueReadback.projectionDrainRequired,
     availability: venueReadback.availability,
     snapshots: venueReadback.snapshots,
+    executionSummary: venueReadback.executionSummary,
     ownOrders: Array.isArray(venueReadback.ownOrders)
       ? venueReadback.ownOrders.map((entry) => ({
         botId: entry.botId,
@@ -820,6 +823,8 @@ function compactVenueReadback(venueReadback) {
         currentOrderCount: entry.current?.body?.orders?.length ?? 0,
         historyStatusCode: entry.history?.statusCode,
         historyOrderCount: entry.history?.body?.orders?.length ?? 0,
+        fillsStatusCode: entry.fills?.statusCode,
+        fillCount: entry.fills?.body?.fills?.length ?? 0,
       }))
       : [],
   };
@@ -1218,6 +1223,7 @@ async function collectVenueReadback(botResults) {
       participantId,
       current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
       history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      fills: await getJson(`${baseUrl}/api/v1/orders/fills?participantId=${encodeURIComponent(participantId)}&limit=200`, readbackHeaders(participantId)),
     });
   }
   return {
@@ -1230,7 +1236,74 @@ async function collectVenueReadback(botResults) {
     projectionDrainRequired: config.requireProjectionDrain,
     snapshots,
     ownOrders,
+    executionSummary: summarizeVenueReadbackExecutions(ownOrders),
   };
+}
+
+function summarizeVenueReadbackExecutions(ownOrders) {
+  const byInstrument = {};
+  const byBotId = {};
+  const byRole = {};
+  let fillCount = 0;
+  let filledQuantity = 0;
+  let filledNotional = 0;
+
+  for (const entry of ownOrders ?? []) {
+    const fills = Array.isArray(entry.fills?.body?.fills) ? entry.fills.body.fills : [];
+    const bot = selectedBots.find((candidate) => candidate.botId === entry.botId);
+    const role = bot?.role ?? "unknown";
+    for (const fill of fills) {
+      const quantity = numberValue(fill.quantityUnits);
+      const price = priceFromNanos(fill.executionPrice);
+      fillCount += 1;
+      filledQuantity += quantity;
+      if (price !== undefined) {
+        filledNotional += quantity * price;
+      }
+      const instrumentId = typeof fill.instrumentId === "string" && fill.instrumentId.length > 0 ? fill.instrumentId : "unknown";
+      incrementExecutionBucket(byInstrument, instrumentId, quantity, price);
+      incrementExecutionBucket(byBotId, entry.botId, quantity, price);
+      incrementExecutionBucket(byRole, role, quantity, price);
+    }
+  }
+
+  return {
+    schemaVersion: "reef.arena.executionSummary.v0",
+    source: "venue-readback-order-fills",
+    fillCount,
+    filledQuantity,
+    filledNotional: Number(filledNotional.toFixed(6)),
+    avgFillPrice: filledQuantity === 0 ? null : Number((filledNotional / filledQuantity).toFixed(6)),
+    byInstrument: sortedExecutionBuckets(byInstrument),
+    byBotId: sortedExecutionBuckets(byBotId),
+    byRole: sortedExecutionBuckets(byRole),
+  };
+}
+
+function incrementExecutionBucket(buckets, key, quantity, price) {
+  const bucket = buckets[key] ?? { fillCount: 0, filledQuantity: 0, filledNotional: 0 };
+  bucket.fillCount += 1;
+  bucket.filledQuantity += quantity;
+  if (price !== undefined) {
+    bucket.filledNotional += quantity * price;
+  }
+  buckets[key] = bucket;
+}
+
+function sortedExecutionBuckets(buckets) {
+  return Object.fromEntries(
+    Object.entries(buckets)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, bucket]) => [
+        key,
+        {
+          fillCount: bucket.fillCount,
+          filledQuantity: bucket.filledQuantity,
+          filledNotional: Number(bucket.filledNotional.toFixed(6)),
+          avgFillPrice: bucket.filledQuantity === 0 ? null : Number((bucket.filledNotional / bucket.filledQuantity).toFixed(6)),
+        },
+      ]),
+  );
 }
 
 async function waitForDataAvailability(baseUrl) {

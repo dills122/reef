@@ -97,6 +97,14 @@ const server = http.createServer(async (req, res) => {
     const participantId = url.searchParams.get("participantId") ?? "";
     return json(res, 200, { orders: openOrdersByParticipant.get(participantId) ?? [] });
   }
+  if (req.method === "GET" && url.pathname === "/api/v1/orders/fills") {
+    const participantId = url.searchParams.get("participantId") ?? "";
+    return json(res, 200, {
+      participantId,
+      meta: { source: "mock", freshness: "mock", scope: "participant" },
+      fills: [],
+    });
+  }
   if (url.pathname.startsWith("/internal/admin/arena/")) {
     return await handleArenaAdmin(req, res, url);
   }
@@ -151,6 +159,7 @@ try {
   assert.equal(report.activityBySchedulingClass.contestant_tick.ticks, 3);
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
+  assert.equal(report.executionSummary.fillCount, 0);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
   assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);

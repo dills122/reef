@@ -60,6 +60,17 @@ writeFileSync(
         },
       ],
     },
+    executionSummary: {
+      schemaVersion: "reef.arena.executionSummary.v0",
+      source: "venue-readback-order-fills",
+      fillCount: 2,
+      filledQuantity: 4,
+      filledNotional: 402,
+      avgFillPrice: 100.5,
+      byInstrument: {
+        AAPL: { fillCount: 2, filledQuantity: 4, filledNotional: 402, avgFillPrice: 100.5 },
+      },
+    },
     venueReadback: {
       projectionDrained: true,
     },
@@ -159,6 +170,9 @@ assert.match(html, /Twin Ion Quant/);
 assert.match(html, /Thermal Exhaust Stressor/);
 assert.match(html, /Trading Metrics/);
 assert.match(html, /Market Quality/);
+assert.match(html, /Execution Summary/);
+assert.match(html, /TOTAL/);
+assert.match(html, /100.5/);
 assert.match(html, /p95QuotedSpreadBps 60.00 &gt; 50/);
 assert.match(html, /Scoring Assumptions/);
 assert.match(html, /pending attribution/);

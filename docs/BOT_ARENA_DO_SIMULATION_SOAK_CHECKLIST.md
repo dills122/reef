@@ -95,6 +95,14 @@ Use local runs to prove behavior before spending remote-cycle time:
    accounting, projection/readback health, market health, bot summaries,
    enforcement events, rendered HTML, and export JSON.
 
+Local hardening runs require the local stack to be started with both
+`ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and
+`MARKET_DATA_PROJECTOR_ENABLED=true`; the runner refuses to grade a hardening
+artifact without those read models enabled. Current local hardening gates also
+include controlled fill pressure through `healthTargets.minTotalFills` and
+`healthTargets.minFillsPerInstrument`, using venue order-fill readback as the
+source of execution evidence.
+
 The first multi-instrument mode should declare:
 
 - active ticker set
@@ -312,6 +320,41 @@ Next proof target:
 
 - Add controlled taker/fill pressure and open-order/cancel-budget enforcement,
   then run a real paced `3-5m` wall-clock gate.
+
+## Latest Fill-Pressure Local Gate
+
+Run artifact: `/tmp/reef-arena-local-hardening-5m-fill-pressure.json`
+
+- [x] Real local hardening duration was `300s`.
+- [x] Mode covered `5` active symbols: `AAPL`, `MSFT`, `NVDA`, `TSLA`,
+      `AMZN`.
+- [x] Order-lifecycle and market-data projectors were enabled.
+- [x] Projection drain required and passed.
+- [x] Market-health summary passed.
+- [x] Controlled taker pressure produced fills on every active symbol.
+- [x] Cancel pressure remained present through house LP quote refresh.
+
+Evidence:
+
+- total submitted venue commands: `465`
+- route mix: `248` submit, `217` cancel
+- terminal statuses: `465` `COMPLETED`
+- `0` timed-out commands
+- `0` failed/rejected commands
+- `0` freezes
+- top-of-book availability: `100%`
+- depth availability: `100%`
+- median/p95 quoted spread: `20` bps
+- total fills: `10`
+- filled quantity: `10`
+- average fill price: `239.76`
+- per-instrument fills: `2` each for `AAPL`, `MSFT`, `NVDA`, `TSLA`, and
+  `AMZN`
+
+Finding: the simulator now has enough controlled fill pressure to prove the
+matching/fill/readback path during short local hardening. The next quality slice
+should turn these execution facts into better scoring and market-quality metrics
+instead of treating all successfully active bots as roughly equal.
 
 ## Previous Local Multi-Instrument Attempt
 

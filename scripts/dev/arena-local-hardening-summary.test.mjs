@@ -19,6 +19,11 @@ writeFileSync(reportPath, JSON.stringify({
     modeId: "equity-multi-local",
     scoringPolicyVersion: "score-v0",
     riskPolicyVersion: "arena-risk-v0",
+    healthTargets: {
+      primaryInstruments: ["AAPL"],
+      minTotalFills: 3,
+      minFillsPerInstrument: 1,
+    },
   },
   runPlan: {
     durationSeconds: 60,
@@ -113,6 +118,21 @@ writeFileSync(reportPath, JSON.stringify({
       },
     ],
   },
+  executionSummary: {
+    schemaVersion: "reef.arena.executionSummary.v0",
+    source: "venue-readback-order-fills",
+    fillCount: 3,
+    filledQuantity: 6,
+    filledNotional: 603,
+    avgFillPrice: 100.5,
+    byInstrument: {
+      AAPL: { fillCount: 3, filledQuantity: 6, filledNotional: 603, avgFillPrice: 100.5 },
+    },
+    byRole: {
+      "market-maker": { fillCount: 2, filledQuantity: 4, filledNotional: 402, avgFillPrice: 100.5 },
+      npc: { fillCount: 1, filledQuantity: 2, filledNotional: 201, avgFillPrice: 100.5 },
+    },
+  },
   venueReadback: {
     projectionDrained: true,
     ownOrders: [
@@ -184,6 +204,11 @@ assert.equal(summary.commandPressure.totals.houseCommands, 40);
 assert.equal(summary.latency.source, "compact-report-aggregates");
 assert.equal(summary.marketQuality.source, "compact-report-market-quality-summary");
 assert.equal(summary.marketQuality.byInstrument[0].instrumentId, "AAPL");
+assert.equal(summary.executionSummary.fillCount, 3);
+assert.equal(summary.executionSummary.byInstrument.AAPL.filledQuantity, 6);
+assert.equal(summary.executionSummary.pressure.status, "pass");
+assert.equal(summary.executionSummary.pressure.thresholds.minTotalFills, 3);
+assert.equal(summary.executionSummary.pressure.byInstrument.AAPL.fillCount, 3);
 assert.deepEqual(summary.house.ownOrderCounts, [
   { botId: "builtin-mm-lifecycle-safe", current: 1, history: 0 },
   { botId: "builtin-mm-msft-lifecycle-safe", current: 2, history: 4 },

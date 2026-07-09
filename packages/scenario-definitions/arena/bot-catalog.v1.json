@@ -179,7 +179,8 @@
           "instrumentId": "AAPL",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0
+          "crossOffset": 0.01,
+          "startAfterTicks": 5
         }
       },
       "scoreEligible": false,
@@ -200,7 +201,8 @@
           "instrumentId": "MSFT",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0
+          "crossOffset": 0.01,
+          "startAfterTicks": 5
         }
       },
       "scoreEligible": false,
@@ -221,7 +223,8 @@
           "instrumentId": "NVDA",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0
+          "crossOffset": 0.01,
+          "startAfterTicks": 5
         }
       },
       "scoreEligible": false,
@@ -242,7 +245,8 @@
           "instrumentId": "TSLA",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0
+          "crossOffset": 0.01,
+          "startAfterTicks": 5
         }
       },
       "scoreEligible": false,
@@ -263,7 +267,8 @@
           "instrumentId": "AMZN",
           "side": "ALTERNATE",
           "orderSize": 1,
-          "crossOffset": 0
+          "crossOffset": 0.01,
+          "startAfterTicks": 5
         }
       },
       "scoreEligible": false,

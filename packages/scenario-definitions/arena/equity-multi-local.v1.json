@@ -65,6 +65,8 @@
     "maxFreezeCount": 0,
     "minCancelCommandsPerMinute": 12,
     "minHouseCommandsPerMinute": 30,
+    "minTotalFills": 5,
+    "minFillsPerInstrument": 1,
     "requireSideFillCoverage": false,
     "allowedRejectCodes": ["SELF_TRADE_PREVENTION"]
   }

@@ -97,6 +97,8 @@ function hardeningSummary(report) {
     .filter(([code]) => !allowedRejectCodes.has(code))
     .reduce((sum, [, count]) => sum + Number(count ?? 0), 0);
   const marketQuality = summarizeMarketQuality(report);
+  const executionSummary = report.executionSummary ?? report.venueReadback?.executionSummary ?? {};
+  const executionPressure = summarizeExecutionPressure(report, executionSummary, healthTargets);
   const latency = summarizeLatency(report);
   const commandPressure = summarizeCommandPressure(report);
   const ownOrderCounts = (report.venueReadback?.ownOrders ?? [])
@@ -113,6 +115,7 @@ function hardeningSummary(report) {
   if ((commandStatusSummary.byFinalStatus?.COMPLETED ?? 0) + (rejectSummary.count ?? 0) !== commandStatusSummary.commandCount) failures.push("not all commands reached terminal accounting");
   if (healthSummary.status !== "pass") failures.push(`health status ${healthSummary.status}`);
   for (const failure of marketQuality.failures) failures.push(failure);
+  for (const failure of executionPressure.failures) failures.push(failure);
   for (const failure of commandPressure.failures) failures.push(failure);
   if (report.venueReadback?.projectionDrained !== true) failures.push("projection did not drain");
   if ((report.enforcementEvents ?? []).some((event) => event.decision === "freeze")) failures.push("freeze events present");
@@ -155,6 +158,16 @@ function hardeningSummary(report) {
       emptyBookCount: healthSummary.emptyBookCount ?? 0,
     },
     marketQuality,
+    executionSummary: {
+      source: executionSummary.source ?? "unavailable",
+      fillCount: Number(executionSummary.fillCount ?? 0),
+      filledQuantity: Number(executionSummary.filledQuantity ?? 0),
+      filledNotional: Number(executionSummary.filledNotional ?? 0),
+      avgFillPrice: executionSummary.avgFillPrice ?? null,
+      pressure: executionPressure,
+      byInstrument: executionSummary.byInstrument ?? {},
+      byRole: executionSummary.byRole ?? {},
+    },
     house: {
       botCount: house.botCount ?? 0,
       ticks: house.ticks ?? 0,
@@ -164,6 +177,51 @@ function hardeningSummary(report) {
       ownOrderCounts,
     },
     activityBySchedulingClass: report.activityBySchedulingClass ?? {},
+  };
+}
+
+function summarizeExecutionPressure(report, executionSummary, healthTargets) {
+  const instruments = healthTargets.primaryInstruments ?? report.runPlan?.instruments ?? [];
+  const minTotalFills = Number(healthTargets.minTotalFills ?? 0);
+  const minFillsPerInstrument = Number(healthTargets.minFillsPerInstrument ?? 0);
+  const totalFills = Number(executionSummary.fillCount ?? 0);
+  const byInstrument = {};
+  const failures = [];
+
+  for (const instrumentId of instruments) {
+    const key = String(instrumentId ?? "");
+    if (key.length === 0) continue;
+    const bucket = executionSummary.byInstrument?.[key] ?? {};
+    byInstrument[key] = {
+      fillCount: Number(bucket.fillCount ?? 0),
+      filledQuantity: Number(bucket.filledQuantity ?? 0),
+      filledNotional: Number(bucket.filledNotional ?? 0),
+      avgFillPrice: bucket.avgFillPrice ?? null,
+    };
+    if (byInstrument[key].fillCount < minFillsPerInstrument) {
+      failures.push(`fills ${key} ${byInstrument[key].fillCount} < ${minFillsPerInstrument}`);
+    }
+  }
+
+  if (totalFills < minTotalFills) {
+    failures.push(`fills total ${totalFills} < ${minTotalFills}`);
+  }
+
+  return {
+    status: failures.length === 0 ? "pass" : "fail",
+    failures,
+    thresholds: {
+      minTotalFills,
+      minFillsPerInstrument,
+      instruments,
+    },
+    totals: {
+      fillCount: totalFills,
+      filledQuantity: Number(executionSummary.filledQuantity ?? 0),
+      filledNotional: Number(executionSummary.filledNotional ?? 0),
+      avgFillPrice: executionSummary.avgFillPrice ?? null,
+    },
+    byInstrument,
   };
 }
 
