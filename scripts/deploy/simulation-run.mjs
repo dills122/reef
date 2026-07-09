@@ -27,11 +27,11 @@ const runId = option("run-id", env("REEF_SIM_RUN_ID", `sim-do-${timestamp()}`));
 const reportRoot = resolve(repoRoot, option("report-root", env("REEF_SIM_REPORT_ROOT", "reports/simulations/ephemeral-do")));
 const reportDir = resolve(reportRoot, runId);
 const profile = option("profile", env("REEF_SIM_PROFILE", "stream-ack"));
-if (profile !== "stream-ack" && profile !== "materializer") {
-  console.error(`Invalid profile: ${profile}. Expected stream-ack or materializer.`);
+if (profile !== "stream-ack" && profile !== "materializer" && profile !== "arena") {
+  console.error(`Invalid profile: ${profile}. Expected stream-ack, materializer, or arena.`);
   process.exit(2);
 }
-const imageMode = option("image-mode", env("REEF_SIM_IMAGE_MODE", "dockerhub"));
+const imageMode = option("image-mode", env("REEF_SIM_IMAGE_MODE", profile === "arena" ? "source" : "dockerhub"));
 if (imageMode !== "dockerhub" && imageMode !== "source") {
   console.error(`Invalid image mode: ${imageMode}. Expected dockerhub or source.`);
   process.exit(2);
@@ -175,7 +175,7 @@ Options:
   --duration <duration>         stress duration; maps to REEF_DO_STRESS_DURATION
   --workers <count>             stress workers; maps to REEF_DO_STRESS_WORKERS
   --min-rps <rps>               attempted/accepted rps gate; default 90% of the lowest requested rate
-  --profile <name>              benchmark profile: stream-ack or materializer; default stream-ack
+  --profile <name>              benchmark profile: stream-ack, materializer, or arena; default stream-ack
   --goal <name>                 fixed, latency-knee, sustain, or ceiling; maps to REEF_DO_BENCHMARK_GOAL
   --target-rps <rps>            accepted-rps target; maps to REEF_DO_TARGET_ACCEPTED_RPS
   --target-p95-ms <ms>          p95 report gate; maps to REEF_DO_TARGET_P95_MS

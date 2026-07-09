@@ -29,9 +29,15 @@ const config = {
   actorId: stringOption("--actor-id", env("ADMIN_ACTOR_ID", "admin-cli")),
   commandTimeoutMs: numberOption("--command-timeout-ms", 15000),
   commandPollMs: numberOption("--command-poll-ms", 250),
+  commandWaitMode: stringOption("--command-wait-mode", "terminal"),
   projectionDrainTimeoutMs: numberOption("--projection-drain-timeout-ms", 0),
   projectionDrainPollMs: numberOption("--projection-drain-poll-ms", 500),
+  durationSeconds: numberOption("--duration-seconds", 0),
+  tickIntervalMs: numberOption("--tick-interval-ms", 0),
+  warmupSeconds: numberOption("--warmup-seconds", 0),
+  healthSampleIntervalMs: numberOption("--health-sample-interval-ms", 0),
   requireProjectionDrain: args.includes("--require-projection-drain"),
+  paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
 };
 
@@ -40,6 +46,9 @@ if (!["vm", "ses"].includes(config.compartment)) {
 }
 if (!["dry-run", "live"].includes(config.submitMode)) {
   throw new Error(`unsupported --submit-mode=${config.submitMode}; expected dry-run or live`);
+}
+if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
+  throw new Error(`unsupported --command-wait-mode=${config.commandWaitMode}; expected terminal, accepted, or none`);
 }
 if (config.submitMode === "live" && config.venueUrl.length === 0) {
   throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
@@ -51,7 +60,6 @@ if (config.persistResults && config.arenaAdminUrl.length === 0) {
 const mode = readJson(config.mode);
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
-const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
 const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
@@ -63,6 +71,8 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   }
   return { ...entry, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
 });
+const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
+const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots.length);
 
 const outDir = mkdtempSync(join(tmpdir(), "reef-arena-local-tick-"));
 let worker;
@@ -70,6 +80,7 @@ let worker;
 async function main() {
   worker = new RunnerWorker("arena-tick-worker-0", config.compartment);
   const startedAt = performance.now();
+  const startedAtIso = new Date().toISOString();
 
   try {
     if (config.submitMode === "live") {
@@ -105,15 +116,28 @@ async function main() {
 
     const sessionReports = [];
     const enforcementEvents = [];
-    for (const bot of bots) {
-      const result = await runBotSession(bot);
+    const healthSamples = [];
+    for (const [botIndex, bot] of bots.entries()) {
+      console.log(`arena bot start ${botIndex + 1}/${bots.length}: ${bot.botId} ticks=${runPlan.tickCount}`);
+      const result = await runBotSession(bot, healthSamples);
       sessionReports.push(result);
       enforcementEvents.push(...enforceBot(bot, result));
+      console.log(`arena bot complete ${botIndex + 1}/${bots.length}: ${bot.botId} ticks=${result.ticks.length}`);
     }
 
     const botResults = scoreBots(sessionReports, enforcementEvents);
     const venueReadback = await collectVenueReadback(botResults);
-    const report = buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs: performance.now() - startedAt });
+    const completedAtIso = new Date().toISOString();
+    const report = buildReport({
+      botResults,
+      enforcementEvents,
+      sessionReports,
+      healthSamples,
+      venueReadback,
+      startedAt: startedAtIso,
+      completedAt: completedAtIso,
+      elapsedMs: performance.now() - startedAt,
+    });
     report.persistence = await persistArenaResults(report);
     mkdirSync(dirname(config.out), { recursive: true });
     writeFileSync(config.out, `${JSON.stringify(report, null, 2)}\n`);
@@ -132,7 +156,7 @@ async function main() {
   }
 }
 
-async function runBotSession(bot) {
+async function runBotSession(bot, healthSamples) {
   const fixture = fixtureForBot(bot);
   const sessionId = `${mode.modeId}-${bot.runnerKey}-${Date.now()}`;
   const start = await worker.request({ type: "startSession", botKey: bot.runnerKey, sessionId, fixture });
@@ -140,7 +164,8 @@ async function runBotSession(bot) {
     return { bot, sessionId, start, ticks: [], stop: undefined };
   }
   const ticks = [];
-  for (const tick of fixture.ticks.slice(0, mode.ticks)) {
+  const scheduled = fixture.ticks.slice(0, runPlan.tickCount);
+  for (const [tickIndex, tick] of scheduled.entries()) {
     const tickResult = await worker.request({ type: "runTick", sessionId, tick });
     const policyViolation = tickPolicyViolation(bot, tickResult);
     if (policyViolation !== undefined) {
@@ -154,10 +179,18 @@ async function runBotSession(bot) {
       });
       break;
     }
-    ticks.push({
+    const tickReport = {
       ...tickResult,
       submission: await submitVenueCommands(tickResult.venueCommands ?? []),
-    });
+    };
+    ticks.push(tickReport);
+    await maybeCollectHealthSample(healthSamples, bot, tick, tickIndex, tickReport);
+    if (tickIndex === 0 || (tickIndex + 1) % 10 === 0 || tickIndex + 1 === scheduled.length) {
+      console.log(`arena bot progress ${bot.botId}: tick=${tickIndex + 1}/${scheduled.length} commands=${tickReport.submission?.submitted ?? 0} timedOut=${tickReport.submission?.timedOut ?? 0}`);
+    }
+    if (config.paceTicks && tickIndex + 1 < scheduled.length) {
+      await sleep(runPlan.tickIntervalMs);
+    }
   }
   const stop = await worker.request({ type: "stopSession", sessionId });
   return { bot, sessionId, start, ticks, stop };
@@ -246,8 +279,9 @@ function scoreBots(sessionReports, enforcementEvents) {
   });
 }
 
-function buildReport({ botResults, enforcementEvents, sessionReports, venueReadback, elapsedMs }) {
+function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {
   const tickResults = sessionReports.flatMap((session) => session.ticks);
+  const commandStatusSummary = summarizeCommandStatuses(tickResults);
   const totals = tickResults.reduce(
     (acc, tick) => {
       acc.ticks += 1;
@@ -264,9 +298,12 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
     },
     { ticks: 0, failedTicks: 0, actions: 0, venueCommands: 0, submittedCommands: 0, completedCommands: 0, failedCommands: 0, rejectedCommands: 0, timedOutCommands: 0, dataCalls: 0 },
   );
+  const healthSummary = summarizeHealth(healthSamples, totals);
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
     generatedAt: new Date().toISOString(),
+    startedAt,
+    completedAt,
     runId: config.runId,
     mode: {
       modeId: mode.modeId,
@@ -275,10 +312,12 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
     },
+    runPlan,
     expectations: {
       freezeBots: config.expectFreezeBots,
     },
     runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
+    commandWaitMode: config.commandWaitMode,
     status: enforcementEvents.some((event) => event.decision === "freeze") ? "completed_with_freezes" : "completed",
     elapsedMs,
     totals,
@@ -290,6 +329,9 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
         ? totals.venueCommands - totals.submittedCommands
         : 0,
     },
+    commandStatusSummary,
+    healthSummary,
+    healthSamples,
     venueReadback,
     enforcementEvents,
     botResults,
@@ -299,6 +341,35 @@ function buildReport({ botResults, enforcementEvents, sessionReports, venueReadb
     diagnosticLeaderboard: rankBotResults(botResults.filter((result) => result.scoreEligible)),
     sessionReports,
   };
+}
+
+function summarizeCommandStatuses(tickResults) {
+  const commands = tickResults.flatMap((tick) => tick.submission?.commands ?? []);
+  const byRoute = {};
+  const byFinalStatus = {};
+  const byFirstStatus = {};
+  let intakeElapsedMsTotal = 0;
+  let statusElapsedMsTotal = 0;
+  for (const command of commands) {
+    increment(byRoute, command.route || "unknown");
+    increment(byFinalStatus, command.finalStatus || "unknown");
+    increment(byFirstStatus, command.firstStatus || "unknown");
+    intakeElapsedMsTotal += Number(command.intakeElapsedMs ?? 0);
+    statusElapsedMsTotal += Number(command.statusElapsedMs ?? 0);
+  }
+  return {
+    commandCount: commands.length,
+    timedOut: commands.filter((command) => command.timedOut).length,
+    byRoute,
+    byFinalStatus,
+    byFirstStatus,
+    avgIntakeElapsedMs: commands.length === 0 ? 0 : intakeElapsedMsTotal / commands.length,
+    avgStatusElapsedMs: commands.length === 0 ? 0 : statusElapsedMsTotal / commands.length,
+  };
+}
+
+function increment(counter, key) {
+  counter[key] = Number(counter[key] ?? 0) + 1;
 }
 
 function rankBotResults(results) {
@@ -319,6 +390,129 @@ function assertExpectedFreezeBots(report) {
       throw new Error(`expected disqualified result for frozen bot ${botId}: ${JSON.stringify(result)}`);
     }
   }
+}
+
+async function maybeCollectHealthSample(healthSamples, bot, tick, tickIndex, tickReport) {
+  if (tickIndex % runPlan.healthSampleEveryTicks !== 0) {
+    return;
+  }
+  const snapshots = config.submitMode === "live"
+    ? await liveHealthSnapshots()
+    : dryRunHealthSnapshots(tick);
+  healthSamples.push({
+    sampleIndex: healthSamples.length,
+    tickIndex,
+    botId: bot.botId,
+    occurredAt: tick.occurredAt,
+    postWarmup: tickIndex >= runPlan.warmupTicks,
+    submittedCommands: Number(tickReport.submission?.submitted ?? 0),
+    completedCommands: Number(tickReport.submission?.completed ?? 0),
+    snapshots,
+  });
+}
+
+async function liveHealthSnapshots() {
+  const baseUrl = config.venueUrl.replace(/\/$/, "");
+  const snapshots = [];
+  for (const instrumentId of runPlan.healthInstruments) {
+    const response = await getJson(`${baseUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}`, readbackHeaders());
+    snapshots.push(normalizeSnapshot(instrumentId, response.body?.snapshot ?? response.body, response.statusCode));
+  }
+  return snapshots;
+}
+
+function dryRunHealthSnapshots(tick) {
+  const snapshots = [];
+  const marketSnapshots = tick.marketSnapshots ?? {};
+  for (const instrumentId of runPlan.healthInstruments) {
+    snapshots.push(normalizeSnapshot(instrumentId, marketSnapshots[instrumentId] ?? {}, 200));
+  }
+  return snapshots;
+}
+
+function normalizeSnapshot(instrumentId, rawSnapshot, statusCode) {
+  const bid = nullableNumber(rawSnapshot.bestBidPrice ?? rawSnapshot.bidPrice);
+  const ask = nullableNumber(rawSnapshot.bestAskPrice ?? rawSnapshot.askPrice);
+  const mid = nullableNumber(rawSnapshot.midPrice) ?? midpoint(bid, ask);
+  const topOfBook = bid !== null && ask !== null && bid > 0 && ask > 0;
+  const spread = topOfBook ? ask - bid : null;
+  return {
+    instrumentId,
+    statusCode,
+    bidPrice: bid,
+    askPrice: ask,
+    midPrice: mid,
+    topOfBook,
+    emptyBook: !topOfBook,
+    lockedBook: topOfBook && bid === ask,
+    crossedBook: topOfBook && bid > ask,
+    quotedSpread: spread,
+    quotedSpreadBps: spread !== null && mid !== null && mid > 0 ? (spread / mid) * 10000 : null,
+    bidDepthAvailable: topOfBook,
+    askDepthAvailable: topOfBook,
+  };
+}
+
+function summarizeHealth(healthSamples, totals) {
+  const postWarmupSamples = healthSamples.filter((sample) => sample.postWarmup);
+  const samples = postWarmupSamples.length > 0 ? postWarmupSamples : healthSamples;
+  const instrumentSamples = samples.flatMap((sample) => sample.snapshots ?? []);
+  const spreadBps = instrumentSamples
+    .map((snapshot) => snapshot.quotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value))
+    .sort((left, right) => left - right);
+  const topOfBookCount = instrumentSamples.filter((snapshot) => snapshot.topOfBook).length;
+  const depthCount = instrumentSamples.filter((snapshot) => snapshot.bidDepthAvailable && snapshot.askDepthAvailable).length;
+  const sampleCount = instrumentSamples.length;
+  const minTopOfBookPct = Number(mode.healthTargets?.minTopOfBookPct ?? 90);
+  const minDepthPct = Number(mode.healthTargets?.minDepthPct ?? 90);
+  const maxMedianQuotedSpreadBps = Number(mode.healthTargets?.maxMedianQuotedSpreadBps ?? 25);
+  const maxP95QuotedSpreadBps = Number(mode.healthTargets?.maxP95QuotedSpreadBps ?? 50);
+  const failures = [];
+  const topOfBookPct = pct(topOfBookCount, sampleCount);
+  const depthPct = pct(depthCount, sampleCount);
+  const medianQuotedSpreadBps = percentile(spreadBps, 0.5);
+  const p95QuotedSpreadBps = percentile(spreadBps, 0.95);
+  const crossedBookCount = instrumentSamples.filter((snapshot) => snapshot.crossedBook).length;
+  const emptyBookCount = instrumentSamples.filter((snapshot) => snapshot.emptyBook).length;
+  const ticksWithVenueCommandsPct = pct(
+    healthSamples.filter((sample) => sample.submittedCommands > 0 || config.submitMode === "dry-run").length,
+    healthSamples.length,
+  );
+
+  if (sampleCount === 0) failures.push("no_health_samples");
+  if (topOfBookPct < minTopOfBookPct) failures.push(`topOfBookPct ${topOfBookPct.toFixed(2)} < ${minTopOfBookPct}`);
+  if (depthPct < minDepthPct) failures.push(`depthPct ${depthPct.toFixed(2)} < ${minDepthPct}`);
+  if (medianQuotedSpreadBps !== null && medianQuotedSpreadBps > maxMedianQuotedSpreadBps) {
+    failures.push(`medianQuotedSpreadBps ${medianQuotedSpreadBps.toFixed(2)} > ${maxMedianQuotedSpreadBps}`);
+  }
+  if (p95QuotedSpreadBps !== null && p95QuotedSpreadBps > maxP95QuotedSpreadBps) {
+    failures.push(`p95QuotedSpreadBps ${p95QuotedSpreadBps.toFixed(2)} > ${maxP95QuotedSpreadBps}`);
+  }
+  if (crossedBookCount > 0) failures.push(`crossedBookCount ${crossedBookCount} > 0`);
+  if (totals.failedTicks > Number(mode.healthTargets?.maxFailedTicks ?? 0)) failures.push(`failedTicks ${totals.failedTicks} > ${Number(mode.healthTargets?.maxFailedTicks ?? 0)}`);
+
+  return {
+    status: failures.length === 0 ? "pass" : "warn",
+    failures,
+    sampleCount,
+    postWarmupSampleCount: postWarmupSamples.length,
+    instrumentSampleCount: sampleCount,
+    topOfBookPct,
+    depthPct,
+    medianQuotedSpreadBps,
+    p95QuotedSpreadBps,
+    crossedBookCount,
+    lockedBookCount: instrumentSamples.filter((snapshot) => snapshot.lockedBook).length,
+    emptyBookCount,
+    ticksWithVenueCommandsPct,
+    thresholds: {
+      minTopOfBookPct,
+      minDepthPct,
+      maxMedianQuotedSpreadBps,
+      maxP95QuotedSpreadBps,
+    },
+  };
 }
 
 async function collectVenueReadback(botResults) {
@@ -565,29 +759,35 @@ async function submitVenueCommands(commands) {
     return emptySubmission(config.submitMode);
   }
 
-  const results = [];
-  for (const command of commands) {
+  const results = await Promise.all(commands.map(async (command) => {
     const submittedAt = performance.now();
     const intake = await postJson(`${config.venueUrl.replace(/\/$/, "")}${command.route}`, command.body, command.headers);
+    const intakeElapsedMs = performance.now() - submittedAt;
     const intakeBody = safeJson(intake.body);
     const status = intake.statusCode >= 200 && intake.statusCode < 300
       ? await terminalStatusForAcceptedCommand(command, intakeBody)
       : { timedOut: false, statusCode: intake.statusCode, body: safeJson(intake.body) };
     const finalStatus = String(status.body?.status ?? "");
     const responseStatus = Number(status.body?.responseStatus ?? 0);
-    results.push({
+    return {
       commandId: command.body.commandId,
       route: command.route,
       intakeStatus: intake.statusCode,
       intakeBody,
+      intakeElapsedMs,
       finalStatus,
       responseStatus,
       rejected: responseStatus >= 400 || String(status.body?.resultStatus ?? "").toLowerCase() === "rejected",
       timedOut: status.timedOut,
+      statusWaitMode: config.commandWaitMode,
+      statusPollCount: status.pollCount ?? 0,
+      firstStatus: status.firstStatus ?? "",
+      firstStatusElapsedMs: status.firstStatusElapsedMs ?? null,
+      statusElapsedMs: status.elapsedMs ?? 0,
       elapsedMs: performance.now() - submittedAt,
       statusBody: status.body,
-    });
-  }
+    };
+  }));
   return summarizeSubmissionResults(results);
 }
 
@@ -617,18 +817,29 @@ function summarizeSubmissionResults(results) {
 }
 
 async function terminalStatusForAcceptedCommand(command, intakeBody) {
+  if (config.commandWaitMode === "none") {
+    return intakeStatus(command, intakeBody, "intake_response");
+  }
   if (typeof intakeBody.statusUrl === "string" && intakeBody.statusUrl.length > 0) {
     return await waitForCommandStatus(command);
   }
+  return intakeStatus(command, intakeBody, "intake_response");
+}
+
+function intakeStatus(command, intakeBody, source) {
   return {
     timedOut: false,
     statusCode: 200,
+    pollCount: 0,
+    elapsedMs: 0,
+    firstStatus: String(intakeBody.status ?? "ACCEPTED"),
+    firstStatusElapsedMs: 0,
     body: {
       commandId: command.body.commandId,
-      status: "COMPLETED",
-      responseStatus: 200,
+      status: String(intakeBody.status ?? "ACCEPTED"),
+      responseStatus: 202,
       responsePayloadJson: JSON.stringify(intakeBody),
-      source: "intake_response",
+      source,
     },
   };
 }
@@ -636,19 +847,31 @@ async function terminalStatusForAcceptedCommand(command, intakeBody) {
 async function waitForCommandStatus(command) {
   const deadline = Date.now() + config.commandTimeoutMs;
   let last = { statusCode: 0, body: {} };
+  const startedAt = performance.now();
+  let pollCount = 0;
+  let firstStatus = "";
+  let firstStatusElapsedMs = null;
   while (Date.now() <= deadline) {
     const response = await getJson(
       `${config.venueUrl.replace(/\/$/, "")}/api/v1/commands/${encodeURIComponent(command.body.commandId)}`,
       statusReadHeaders(command),
     );
+    pollCount += 1;
     last = response;
     const status = String(response.body?.status ?? "");
+    if (firstStatus === "") {
+      firstStatus = status;
+      firstStatusElapsedMs = performance.now() - startedAt;
+    }
+    if (config.commandWaitMode === "accepted" && ["ACCEPTED", "EVENT_PUBLISHED", "COMPLETED", "FAILED"].includes(status)) {
+      return { timedOut: false, statusCode: response.statusCode, body: response.body, pollCount, firstStatus, firstStatusElapsedMs, elapsedMs: performance.now() - startedAt };
+    }
     if (status === "COMPLETED" || status === "FAILED") {
-      return { timedOut: false, statusCode: response.statusCode, body: response.body };
+      return { timedOut: false, statusCode: response.statusCode, body: response.body, pollCount, firstStatus, firstStatusElapsedMs, elapsedMs: performance.now() - startedAt };
     }
     await sleep(config.commandPollMs);
   }
-  return { timedOut: true, statusCode: last.statusCode, body: last.body };
+  return { timedOut: true, statusCode: last.statusCode, body: last.body, pollCount, firstStatus, firstStatusElapsedMs, elapsedMs: performance.now() - startedAt };
 }
 
 async function seedReferenceData(bots) {
@@ -825,10 +1048,70 @@ function fixtureForBot(bot) {
       ...bot.runtimeConfigPreflight.values,
     },
   };
+  const scheduledFixture = {
+    ...fixture,
+    policy: {
+      ...(fixture.policy ?? {}),
+      tickIntervalMs: runPlan.tickIntervalMs,
+    },
+    ticks: scheduledTicks(fixture.ticks, runPlan),
+  };
   if (bot.runnerKey === "multi-symbol" || bot.runnerKey === "technical") {
-    return withMultiSymbolData(fixture);
+    return withMultiSymbolData(scheduledFixture);
   }
-  return fixture;
+  return scheduledFixture;
+}
+
+function buildRunPlan(modeConfig, runtimeConfig, fixture, botCount) {
+  const tickIntervalMs = positiveNumber(
+    runtimeConfig.tickIntervalMs,
+    positiveNumber(modeConfig.tickIntervalMs, positiveNumber(fixture.policy?.tickIntervalMs, 500)),
+  );
+  const durationSeconds = positiveNumber(runtimeConfig.durationSeconds, positiveNumber(modeConfig.durationSeconds, 0));
+  const selectedBotCount = Math.max(1, Number(botCount ?? 1));
+  const totalTickCount = durationSeconds > 0
+    ? Math.max(1, Math.ceil((durationSeconds * 1000) / tickIntervalMs))
+    : Math.max(1, Number(modeConfig.ticks ?? fixture.ticks?.length ?? 1)) * selectedBotCount;
+  const tickCount = durationSeconds > 0
+    ? Math.max(1, Math.ceil(totalTickCount / selectedBotCount))
+    : Math.max(1, Number(modeConfig.ticks ?? fixture.ticks?.length ?? 1));
+  const plannedTotalTickCount = tickCount * selectedBotCount;
+  const warmupSeconds = Math.max(0, positiveNumber(runtimeConfig.warmupSeconds, positiveNumber(modeConfig.warmupSeconds, 0)));
+  const healthSampleIntervalMs = positiveNumber(runtimeConfig.healthSampleIntervalMs, positiveNumber(modeConfig.healthSampleIntervalMs, tickIntervalMs));
+  return {
+    durationSeconds: durationSeconds > 0 ? Number(((plannedTotalTickCount * tickIntervalMs) / 1000).toFixed(3)) : Number(((tickCount * tickIntervalMs) / 1000).toFixed(3)),
+    configuredDurationSeconds: durationSeconds,
+    tickIntervalMs,
+    tickCount,
+    perBotTickCount: tickCount,
+    selectedBotCount,
+    totalTickCount: plannedTotalTickCount,
+    perBotDurationSeconds: Number(((tickCount * tickIntervalMs) / 1000).toFixed(3)),
+    warmupSeconds,
+    warmupTicks: Math.min(tickCount, Math.floor((warmupSeconds * 1000) / tickIntervalMs)),
+    healthSampleIntervalMs,
+    healthSampleEveryTicks: Math.max(1, Math.ceil(healthSampleIntervalMs / tickIntervalMs)),
+    healthInstruments: nonEmptyArray(modeConfig.healthTargets?.primaryInstruments, [modeConfig.instruments?.[0] ?? "AAPL"]),
+  };
+}
+
+function scheduledTicks(sourceTicks, plan) {
+  const ticks = Array.isArray(sourceTicks) && sourceTicks.length > 0 ? sourceTicks : [{}];
+  const baseTime = Date.parse(ticks[0].occurredAt ?? "2026-07-04T14:30:00.000Z");
+  return Array.from({ length: plan.tickCount }, (_, index) => {
+    const template = ticks[index % ticks.length];
+    const occurredAt = new Date(baseTime + index * plan.tickIntervalMs).toISOString();
+    return {
+      ...template,
+      occurredAt,
+      marketSnapshots: Object.fromEntries(
+        Object.entries(template.marketSnapshots ?? {}).map(([instrumentId, snapshot]) => [
+          instrumentId,
+          { ...snapshot, asOf: occurredAt },
+        ]),
+      ),
+    };
+  });
 }
 
 async function resolveRuntimeConfigForBot(bot) {
@@ -988,6 +1271,29 @@ function percentile(sortedValues, pct) {
   if (sortedValues.length === 0) return 0;
   const index = Math.min(sortedValues.length - 1, Math.ceil(sortedValues.length * pct) - 1);
   return sortedValues[index];
+}
+
+function nullableNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function midpoint(bid, ask) {
+  if (bid === null || ask === null) return null;
+  return (bid + ask) / 2;
+}
+
+function pct(count, total) {
+  return total > 0 ? (count / total) * 100 : 0;
+}
+
+function positiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function nonEmptyArray(value, fallback) {
+  return Array.isArray(value) && value.length > 0 ? value : fallback;
 }
 
 async function postJson(url, payload, headers = {}) {

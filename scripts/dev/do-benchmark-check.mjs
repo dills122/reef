@@ -39,6 +39,12 @@ for (const entry of jsonFiles.map((path) => readJson(path)).filter((entry) => !e
   failures.push(`invalid JSON: ${entry.path}: ${entry.error}`);
 }
 
+if (reportProfile === "arena") {
+  validateArenaArtifacts(jsonFiles);
+  finish();
+  process.exit(0);
+}
+
 for (const rate of requiredRates) {
   const matches = reports.filter(({ report }) => reportRatePerSecond(report) === rate);
   if (matches.length === 0) {
@@ -192,6 +198,88 @@ function validateMaterializerReport(label, report) {
       failures.push(`${label}: durable-canonical accepted/materialized gap ${accepted - materialized} must be 0`);
     }
   }
+}
+
+function validateArenaArtifacts(jsonFiles) {
+  const arenaReports = jsonFiles
+    .map((path) => readJson(path))
+    .filter((entry) => entry.ok && entry.json?.schemaVersion === "reef.arena.localTickRun.v0")
+    .map((entry) => ({ path: entry.path, report: entry.json }));
+  const exports = jsonFiles
+    .map((path) => readJson(path))
+    .filter((entry) => entry.ok && entry.json?.runKind === "arena-do")
+    .map((entry) => ({ path: entry.path, report: entry.json }));
+
+  if (arenaReports.length === 0) {
+    failures.push("missing arena local tick report");
+    return;
+  }
+  if (exports.length === 0) {
+    failures.push("missing arena simulation export");
+  }
+
+  for (const { path, report } of arenaReports) {
+    const label = `${path} run=${report.runId ?? "unknown"}`;
+    const totals = report.totals ?? {};
+    const accounting = report.commandAccounting ?? {};
+    const commandStatus = report.commandStatusSummary ?? {};
+    const health = report.healthSummary ?? {};
+    const runPlan = report.runPlan ?? {};
+    evidenceRows.push({
+      path,
+      rate: 0,
+      evidence: arenaEvidenceSummary(report),
+    });
+
+    if (report.status !== "completed" && report.status !== "completed_with_freezes") {
+      failures.push(`${label}: status must be completed or completed_with_freezes, got ${report.status}`);
+    }
+    if (Number(runPlan.tickCount ?? 0) <= 0) {
+      failures.push(`${label}: runPlan.tickCount must be > 0`);
+    }
+    if (Number(totals.ticks ?? 0) <= 0) {
+      failures.push(`${label}: totals.ticks must be > 0`);
+    }
+    if (Number(totals.venueCommands ?? 0) <= 0) {
+      failures.push(`${label}: totals.venueCommands must be > 0`);
+    }
+    if (Number(accounting.accountingGap ?? 0) !== 0) {
+      failures.push(`${label}: command accounting gap must be 0, got ${accounting.accountingGap}`);
+    }
+    if (Number(commandStatus.timedOut ?? 0) !== 0) {
+      failures.push(`${label}: command status timeouts must be 0, got ${commandStatus.timedOut}`);
+    }
+    if (Number(totals.failedTicks ?? 0) !== 0) {
+      failures.push(`${label}: failedTicks must be 0, got ${totals.failedTicks}`);
+    }
+    if (Number(health.sampleCount ?? 0) <= 0) {
+      failures.push(`${label}: healthSummary.sampleCount must be > 0`);
+    }
+    if (process.env.REEF_DO_ARENA_REQUIRE_HEALTH_PASS === "1" && health.status !== "pass") {
+      failures.push(`${label}: healthSummary.status must be pass, got ${health.status}: ${(health.failures ?? []).join("; ")}`);
+    }
+  }
+}
+
+function arenaEvidenceSummary(report) {
+  const totals = report.totals ?? {};
+  const health = report.healthSummary ?? {};
+  return {
+    attempted: Number(totals.venueCommands ?? 0),
+    accepted: Number(totals.submittedCommands ?? 0),
+    directAcked: Number(totals.completedCommands ?? 0),
+    materialized: Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0),
+    projected: Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0),
+    lag: Number(report.venueReadback?.availability?.body?.projections?.[0]?.lag ?? 0),
+    p95LatencyMs: Number(report.botResults?.reduce((max, bot) => Math.max(max, Number(bot.latencyP95Ms ?? 0)), 0) ?? 0),
+    p99LatencyMs: 0,
+    healthStatus: health.status ?? "unknown",
+    topOfBookPct: Number(health.topOfBookPct ?? 0),
+    medianQuotedSpreadBps: Number(health.medianQuotedSpreadBps ?? 0),
+    gaps: {
+      acceptedToMaterialized: Number(totals.submittedCommands ?? 0) - Number(report.venueReadback?.availability?.body?.projections?.[0]?.projectedCount ?? 0),
+    },
+  };
 }
 
 function validateStreamDirectPartitionSpread(label, directDelta) {

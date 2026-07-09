@@ -47,6 +47,21 @@ export async function buildSimulationRunExport(options) {
 }
 
 export function exportCounts(report) {
+  if (isArenaLocalTickReport(report)) {
+    const totals = report.totals ?? {};
+    const projections = report.venueReadback?.availability?.body?.projections;
+    const projected = Array.isArray(projections)
+      ? projections.reduce((sum, projection) => sum + numberOrZero(projection.projectedCount), 0)
+      : 0;
+    return {
+      attempted: numberOrZero(totals.venueCommands),
+      accepted: numberOrZero(totals.submittedCommands),
+      completed: numberOrZero(totals.completedCommands),
+      materialized: projected,
+      projected,
+      failed: numberOrZero(totals.failedCommands) + numberOrZero(totals.rejectedCommands) + numberOrZero(totals.timedOutCommands),
+    };
+  }
   const statusCodes = report.statusCodes ?? {};
   return {
     attempted: numberOrZero(report.totalRequests ?? report.quality?.totalRequests),
@@ -59,6 +74,18 @@ export function exportCounts(report) {
 }
 
 export function exportLatency(report) {
+  if (isArenaLocalTickReport(report)) {
+    const latencies = report.sessionReports
+      ?.flatMap((session) => session.ticks ?? [])
+      ?.map((tick) => Number(tick.elapsedMs ?? 0))
+      ?.filter((value) => Number.isFinite(value))
+      ?.sort((left, right) => left - right) ?? [];
+    return {
+      p50: percentile(latencies, 0.5),
+      p95: percentile(latencies, 0.95),
+      p99: percentile(latencies, 0.99),
+    };
+  }
   const latency = report.latencyMs ?? report.bestByThroughput ?? report.averages ?? {};
   return {
     p50: nullableNumber(latency.p50 ?? latency.p50LatencyMs),
@@ -174,6 +201,37 @@ async function fileArtifact(filePath, rootPath) {
 }
 
 function compactSummary(report, reportPath) {
+  if (isArenaLocalTickReport(report)) {
+    return {
+      reportPath,
+      generatedAt: report.generatedAt ?? "",
+      runId: report.runId ?? "",
+      mode: report.mode ?? {},
+      runnerProfile: report.runnerProfile ?? {},
+      status: report.status ?? "",
+      totals: report.totals ?? {},
+      commandAccounting: report.commandAccounting ?? {},
+      commandStatusSummary: report.commandStatusSummary ?? {},
+      healthSummary: report.healthSummary ?? {},
+      venueReadback: {
+        mode: report.venueReadback?.mode ?? "",
+        skipped: Boolean(report.venueReadback?.skipped),
+        projectionDrained: Boolean(report.venueReadback?.projectionDrained),
+      },
+      botResults: Array.isArray(report.botResults)
+        ? report.botResults.map((bot) => ({
+          botId: bot.botId,
+          role: bot.role,
+          ticksRun: numberOrZero(bot.ticksRun),
+          venueCommands: numberOrZero(bot.venueCommands),
+          failedTicks: numberOrZero(bot.failedTicks),
+          freezeCount: numberOrZero(bot.freezeCount),
+          disqualified: Boolean(bot.disqualified),
+        }))
+        : [],
+      enforcementEvents: Array.isArray(report.enforcementEvents) ? report.enforcementEvents.length : 0,
+    };
+  }
   return {
     reportPath,
     generatedAt: report.generatedAt ?? "",
@@ -190,6 +248,10 @@ function compactSummary(report, reportPath) {
     bestByThroughput: report.bestByThroughput ?? null,
     bestByAccepted: report.bestByAccepted ?? null,
   };
+}
+
+function isArenaLocalTickReport(report) {
+  return report?.schemaVersion === "reef.arena.localTickRun.v0";
 }
 
 function compactTraceChecks(traceChecks) {
@@ -259,6 +321,12 @@ function firstNonBlank(...values) {
 function nullableNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function percentile(sortedValues, pct) {
+  if (!Array.isArray(sortedValues) || sortedValues.length === 0) return null;
+  const index = Math.min(sortedValues.length - 1, Math.ceil(sortedValues.length * pct) - 1);
+  return sortedValues[index];
 }
 
 function numberOrZero(value) {

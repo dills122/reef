@@ -63,7 +63,7 @@ optional:
   REEF_DO_ALLOWED_SSH_CIDRS=203.0.113.10/32
   REEF_DO_REGION=sfo2
   REEF_DO_SIZE=c-8
-  REEF_DO_BENCHMARK_PROFILE=stream-ack|materializer
+  REEF_DO_BENCHMARK_PROFILE=stream-ack|materializer|arena
   REEF_DO_BENCHMARK_GOAL=fixed|latency-knee|sustain|ceiling
   REEF_DO_TARGET_ACCEPTED_RPS=10000
   REEF_DO_TARGET_P95_MS=100
@@ -345,6 +345,11 @@ remote_run_benchmark() {
   local drain_backpressure_policy="${REEF_DO_DRAIN_BACKPRESSURE_POLICY:-${STREAM_ACK_DRAIN_BACKPRESSURE_POLICY:-venue-core}}"
   local image_mode="${REEF_DO_IMAGE_MODE:-source}"
 
+  local arena_duration_seconds="${REEF_DO_ARENA_DURATION_SECONDS:-$(duration_to_seconds "$duration")}"
+  local arena_tick_interval_ms="${REEF_DO_ARENA_TICK_INTERVAL_MS:-1000}"
+  local arena_warmup_seconds="${REEF_DO_ARENA_WARMUP_SECONDS:-30}"
+  local arena_health_sample_interval_ms="${REEF_DO_ARENA_HEALTH_SAMPLE_INTERVAL_MS:-1000}"
+
   echo "running remote benchmark profile=$profile run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers repeat_samples=$repeat_samples duration=$duration drain_backpressure_policy=$drain_backpressure_policy image_mode=$image_mode"
   remote_script \
     REEF_BENCHMARK_PROFILE="$profile" \
@@ -362,6 +367,10 @@ remote_run_benchmark() {
     REEF_BENCHMARK_TRACE_LIMIT="$trace_limit" \
     REEF_BENCHMARK_MIN_SUCCESS="$min_success" \
     REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY="$drain_backpressure_policy" \
+    REEF_BENCHMARK_ARENA_DURATION_SECONDS="$arena_duration_seconds" \
+    REEF_BENCHMARK_ARENA_TICK_INTERVAL_MS="$arena_tick_interval_ms" \
+    REEF_BENCHMARK_ARENA_WARMUP_SECONDS="$arena_warmup_seconds" \
+    REEF_BENCHMARK_ARENA_HEALTH_SAMPLE_INTERVAL_MS="$arena_health_sample_interval_ms" \
     REEF_BENCHMARK_IMAGE_MODE="$image_mode" <<'REMOTE'
 set -euo pipefail
 artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
@@ -398,7 +407,7 @@ export DEV_STRESS_MIN_SUCCESS_RATE_PCT="$REEF_BENCHMARK_MIN_SUCCESS"
 export DEV_STRESS_RATE_SCHEDULE=precise
 export DEV_STRESS_CAPTURE_DB_DIAGNOSTICS=1
 
-if [ "$REEF_BENCHMARK_IMAGE_MODE" = "dockerhub" ]; then
+if [ "$REEF_BENCHMARK_IMAGE_MODE" = "dockerhub" ] && [ "$REEF_BENCHMARK_PROFILE" != "arena" ]; then
   export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}"
   export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}"
   export DEV_COMPOSE_BUILD=0
@@ -438,6 +447,59 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
   echo "[$(date -Is)] stage: make dev-stress-venue-event-materializer"
   make dev-stress-venue-event-materializer </dev/null
   echo "[$(date -Is)] stage complete: make dev-stress-venue-event-materializer"
+elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
+  arena_report="$artifact_dir/arena-local-tick-run.json"
+  arena_export="$artifact_dir/arena-export.json"
+  arena_command_timeout_ms="${REEF_BENCHMARK_ARENA_COMMAND_TIMEOUT_MS:-3000}"
+  arena_timeout_seconds="${REEF_BENCHMARK_ARENA_TIMEOUT_SECONDS:-$((REEF_BENCHMARK_ARENA_DURATION_SECONDS + 900))}"
+
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "[$(date -Is)] stage: install bun"
+    curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
+    bash /tmp/bun-install.sh
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    echo "[$(date -Is)] stage complete: install bun"
+  fi
+
+  echo "[$(date -Is)] stage: bun install"
+  bun install </dev/null
+  echo "[$(date -Is)] stage complete: bun install"
+  echo "[$(date -Is)] stage: make dev-up-stream-ack"
+  make dev-up-stream-ack </dev/null
+  echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
+  echo "[$(date -Is)] stage: make dev-smoke"
+  make dev-smoke </dev/null
+  echo "[$(date -Is)] stage complete: make dev-smoke"
+  echo "[$(date -Is)] stage: arena local tick run"
+  timeout --preserve-status "${arena_timeout_seconds}s" bun scripts/dev/arena-local-tick-run.mjs \
+    --run-id="$REEF_BENCHMARK_RUN_ID" \
+    --compartment=ses \
+    --submit-mode=live \
+    --venue-url=http://127.0.0.1:8080 \
+    --arena-admin-url=http://127.0.0.1:8080 \
+    --seed-reference \
+    --persist-results \
+    --duration-seconds="$REEF_BENCHMARK_ARENA_DURATION_SECONDS" \
+    --tick-interval-ms="$REEF_BENCHMARK_ARENA_TICK_INTERVAL_MS" \
+    --warmup-seconds="$REEF_BENCHMARK_ARENA_WARMUP_SECONDS" \
+    --health-sample-interval-ms="$REEF_BENCHMARK_ARENA_HEALTH_SAMPLE_INTERVAL_MS" \
+    --command-timeout-ms="$arena_command_timeout_ms" \
+    --command-wait-mode="${REEF_BENCHMARK_ARENA_COMMAND_WAIT_MODE:-accepted}" \
+    --pace-ticks \
+    --projection-drain-timeout-ms=30000 \
+    --require-projection-drain \
+    --out="$arena_report" </dev/null
+  echo "[$(date -Is)] stage complete: arena local tick run"
+  echo "[$(date -Is)] stage: arena export"
+  node scripts/dev/export-simulation-run.mjs \
+    --report "$arena_report" \
+    --artifact-root "$artifact_dir" \
+    --run-kind arena-do \
+    --source digitalocean \
+    --profile "arena-${REEF_BENCHMARK_DURATION}" \
+    --out "$arena_export" </dev/null
+  echo "[$(date -Is)] stage complete: arena export"
 else
   echo "unsupported REEF_DO_BENCHMARK_PROFILE=$REEF_BENCHMARK_PROFILE" >&2
   exit 2
@@ -772,7 +834,7 @@ expand_path() {
 benchmark_profile() {
   local profile="${REEF_DO_BENCHMARK_PROFILE:-stream-ack}"
   case "$profile" in
-    stream-ack|materializer) printf '%s' "$profile" ;;
+    stream-ack|materializer|arena) printf '%s' "$profile" ;;
     *)
       echo "unsupported REEF_DO_BENCHMARK_PROFILE=$profile" >&2
       exit 2
@@ -825,6 +887,7 @@ benchmark_default_rates() {
 
 benchmark_fixed_default_rates() {
   case "$1" in
+    arena) printf '%s' "arena" ;;
     materializer) printf '%s' "10000" ;;
     *) printf '%s' "2500,5000" ;;
   esac
@@ -837,6 +900,7 @@ benchmark_default_workers() {
   target="$(benchmark_target_rps "$profile")"
   if [ "$goal" = "fixed" ] || [ -z "$target" ]; then
     case "$profile" in
+      arena) printf '%s' "1" ;;
       materializer) printf '%s' "384" ;;
       *) printf '%s' "256" ;;
     esac
@@ -853,6 +917,7 @@ benchmark_default_workers() {
 
 benchmark_default_duration() {
   case "$1" in
+    arena) printf '%s' "3m" ;;
     materializer) printf '%s' "60s" ;;
     *) printf '%s' "30s" ;;
   esac
@@ -860,6 +925,7 @@ benchmark_default_duration() {
 
 benchmark_default_trace_limit() {
   case "$1" in
+    arena) printf '%s' "0" ;;
     materializer) printf '%s' "0" ;;
     *) printf '%s' "200" ;;
   esac
@@ -945,6 +1011,10 @@ benchmark_default_size() {
 benchmark_default_min_rps() {
   local profile="$1"
   local goal rates min_rate
+  if [ "$profile" = "arena" ]; then
+    printf ''
+    return
+  fi
   goal="$(benchmark_goal)"
   if [ "$goal" != "fixed" ]; then
     rates="${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}"
@@ -982,6 +1052,34 @@ min_csv_rate() {
 round_rate() {
   local value="$1"
   printf '%s' "$(( ((value + 50) / 100) * 100 ))"
+}
+
+duration_to_seconds() {
+  local raw="$1"
+  case "$raw" in
+    *ms)
+      local value="${raw%ms}"
+      printf '%s' "$(( (value + 999) / 1000 ))"
+      ;;
+    *s)
+      printf '%s' "${raw%s}"
+      ;;
+    *m)
+      local value="${raw%m}"
+      printf '%s' "$(( value * 60 ))"
+      ;;
+    *h)
+      local value="${raw%h}"
+      printf '%s' "$(( value * 3600 ))"
+      ;;
+    ''|*[!0-9]*)
+      echo "unsupported duration: $raw" >&2
+      exit 2
+      ;;
+    *)
+      printf '%s' "$raw"
+      ;;
+  esac
 }
 
 benchmark_run_id() {
