@@ -74,6 +74,31 @@ const materializerResult = spawnSync(process.execPath, ["scripts/dev/do-benchmar
 assert.equal(materializerResult.status, 0, materializerResult.stderr);
 assert.match(materializerResult.stdout, /rate=10000 attempted=1000 accepted=1000 directAcked=1000 materialized=1000/);
 
+const arenaArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-"));
+writeArenaReport(arenaArtifactDir, { healthStatus: "warn" });
+const arenaResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "arena",
+  },
+  encoding: "utf8",
+});
+assert.equal(arenaResult.status, 0, arenaResult.stderr);
+assert.match(arenaResult.stdout, /DO benchmark report gates passed/);
+
+const arenaHealthGateResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "arena",
+    REEF_DO_ARENA_REQUIRE_HEALTH_PASS: "1",
+  },
+  encoding: "utf8",
+});
+assert.equal(arenaHealthGateResult.status, 1);
+assert.match(arenaHealthGateResult.stderr, /healthSummary\.status must be pass/);
+
 const blockedArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-blocked-"));
 writeBlockedStreamAckReport(blockedArtifactDir, "rate-2500.json", 2500);
 writeTelemetry(blockedArtifactDir);
@@ -214,6 +239,54 @@ function writeReport(name, rate, values) {
       null,
       2,
     ),
+  );
+}
+
+function writeArenaReport(dir, { healthStatus }) {
+  writeFileSync(
+    join(dir, "arena-local-tick-run.json"),
+    JSON.stringify({
+      schemaVersion: "reef.arena.localTickRun.v0",
+      runId: "arena-do-test",
+      status: "completed",
+      runPlan: { tickCount: 3 },
+      totals: {
+        ticks: 15,
+        venueCommands: 14,
+        submittedCommands: 14,
+        completedCommands: 14,
+        failedTicks: 0,
+      },
+      commandAccounting: {
+        accountingGap: 0,
+      },
+      commandStatusSummary: {
+        timedOut: 0,
+      },
+      healthSummary: {
+        status: healthStatus,
+        sampleCount: 15,
+        topOfBookPct: 100,
+        medianQuotedSpreadBps: 99.5,
+        failures: healthStatus === "pass" ? [] : ["medianQuotedSpreadBps 99.50 > 25"],
+      },
+      botResults: [{ botId: "builtin-mm-simple", latencyP95Ms: 1 }],
+      venueReadback: {
+        availability: {
+          body: {
+            projections: [{ projectedCount: 14, lag: 0 }],
+          },
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "arena-export.json"),
+    JSON.stringify({
+      runId: "arena-do-test",
+      runKind: "arena-do",
+      status: "completed",
+    }),
   );
 }
 

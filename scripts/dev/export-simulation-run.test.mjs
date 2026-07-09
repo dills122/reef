@@ -89,6 +89,103 @@ test("extracts counts and latency from KPI report shape", () => {
   assert.deepEqual(exportLatency(report), { p50: null, p95: 11, p99: 22 });
 });
 
+test("extracts counts, latency, and summary from arena local tick report", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "reef-export-arena-test-"));
+  const reportPath = path.join(dir, "arena-report.json");
+  await writeFile(
+    reportPath,
+    JSON.stringify({
+      schemaVersion: "reef.arena.localTickRun.v0",
+      generatedAt: "2026-07-08T12:00:00Z",
+      runId: "arena-run-1",
+      status: "completed",
+      mode: { modeId: "equity-sprint", version: "v1" },
+      runnerProfile: { compartment: "ses", submitMode: "live" },
+      totals: {
+        ticks: 4,
+        failedTicks: 0,
+        venueCommands: 8,
+        submittedCommands: 8,
+        completedCommands: 7,
+        failedCommands: 0,
+        rejectedCommands: 1,
+        timedOutCommands: 0,
+      },
+      commandAccounting: {
+        draftCommands: 8,
+        submittedCommands: 8,
+        terminalCommands: 8,
+        accountingGap: 0,
+      },
+      commandStatusSummary: {
+        commandCount: 8,
+        timedOut: 0,
+        byRoute: { "/api/v1/orders/submit": 6, "/api/v1/orders/cancel": 2 },
+        byFinalStatus: { COMPLETED: 7, FAILED: 1 },
+        byFirstStatus: { ACCEPTED: 8 },
+      },
+      healthSummary: {
+        status: "pass",
+        topOfBookPct: 100,
+      },
+      venueReadback: {
+        mode: "live",
+        skipped: false,
+        projectionDrained: true,
+        availability: {
+          body: {
+            projections: [{ projectionName: "runtime-normalized-venue-outcomes", projectedCount: 7, lag: 0 }],
+          },
+        },
+      },
+      botResults: [
+        {
+          botId: "builtin-mm-simple",
+          role: "market-maker",
+          ticksRun: 2,
+          venueCommands: 4,
+          failedTicks: 0,
+          freezeCount: 0,
+          disqualified: false,
+        },
+      ],
+      enforcementEvents: [],
+      sessionReports: [
+        {
+          ticks: [
+            { elapsedMs: 2 },
+            { elapsedMs: 4 },
+            { elapsedMs: 8 },
+            { elapsedMs: 16 },
+          ],
+        },
+      ],
+    }),
+  );
+
+  const payload = await buildSimulationRunExport({
+    reportPath,
+    runKind: "arena-local-tick",
+    profile: "equity-sprint-v1",
+  });
+
+  assert.equal(payload.runId, "arena-run-1");
+  assert.equal(payload.runKind, "arena-local-tick");
+  assert.deepEqual(payload.counts, {
+    attempted: 8,
+    accepted: 8,
+    completed: 7,
+    materialized: 7,
+    projected: 7,
+    failed: 1,
+  });
+  assert.deepEqual(payload.latencyMs, { p50: 4, p95: 16, p99: 16 });
+  assert.equal(payload.summary.commandAccounting.accountingGap, 0);
+  assert.equal(payload.summary.commandStatusSummary.byRoute["/api/v1/orders/cancel"], 2);
+  assert.equal(payload.summary.healthSummary.status, "pass");
+  assert.equal(payload.summary.botResults[0].botId, "builtin-mm-simple");
+});
+
 test("parses cli flags", () => {
   const options = parseArgs([
     "--report",

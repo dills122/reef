@@ -341,8 +341,28 @@ class OrderApplicationService(
             return existingResult
         }
 
+        val outcome = prepareCancelOrder(command)
+        HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+            runtimePersistence.persistSubmitOutcome(outcome)
+        }
+        return outcome.result
+    }
+
+    fun prepareCancelOrder(command: CancelOrderCommand): PersistableSubmitOutcome {
+        val existingResult = HotPathMetrics.time("runtime.submitResult.lookup") {
+            runtimePersistence.submitResult(command.commandId)
+        }
+        if (existingResult != null) {
+            return PersistableSubmitOutcome(
+                commandId = command.commandId,
+                result = existingResult,
+                acceptedOrder = null,
+                lifecycleEvents = emptyList()
+            )
+        }
+
         val authorizationError = HotPathMetrics.time("runtime.authorization") {
-            rejectUnauthorizedActor(
+            rejectUnauthorizedActorOutcome(
                 commandId = command.commandId,
                 traceId = traceId(command.traceId, command.orderId),
                 correlationId = command.correlationId,
@@ -361,23 +381,16 @@ class OrderApplicationService(
             engineGateway.cancelOrder(command)
         }
         val traceId = traceId(command.traceId, command.orderId)
-        HotPathMetrics.time("runtime.persistence.saveSubmitResult") {
-            runtimePersistence.saveSubmitResult(command.commandId, result)
-        }
-        HotPathMetrics.time("runtime.persistence.appendLifecycleEvent") {
-            appendLifecycleEvent(
-                command.orderId,
-                command.commandId,
-                command.correlationId,
-                command.actorId,
-                traceId,
-                result.accepted,
-                result.rejected,
-                "OrderCancelled",
-                "OrderCancelRejected"
-            )
-        }
-        return result
+        return lifecycleCommandOutcome(
+            commandId = command.commandId,
+            orderId = command.orderId,
+            correlationId = command.correlationId,
+            actorId = command.actorId,
+            traceId = traceId,
+            result = result,
+            acceptedEventType = "OrderCancelled",
+            rejectedEventType = "OrderCancelRejected"
+        )
     }
 
     fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
@@ -388,8 +401,28 @@ class OrderApplicationService(
             return existingResult
         }
 
+        val outcome = prepareModifyOrder(command)
+        HotPathMetrics.time("runtime.persistence.persistSubmitOutcome") {
+            runtimePersistence.persistSubmitOutcome(outcome)
+        }
+        return outcome.result
+    }
+
+    fun prepareModifyOrder(command: ModifyOrderCommand): PersistableSubmitOutcome {
+        val existingResult = HotPathMetrics.time("runtime.submitResult.lookup") {
+            runtimePersistence.submitResult(command.commandId)
+        }
+        if (existingResult != null) {
+            return PersistableSubmitOutcome(
+                commandId = command.commandId,
+                result = existingResult,
+                acceptedOrder = null,
+                lifecycleEvents = emptyList()
+            )
+        }
+
         val authorizationError = HotPathMetrics.time("runtime.authorization") {
-            rejectUnauthorizedActor(
+            rejectUnauthorizedActorOutcome(
                 commandId = command.commandId,
                 traceId = traceId(command.traceId, command.orderId),
                 correlationId = command.correlationId,
@@ -408,26 +441,51 @@ class OrderApplicationService(
             engineGateway.modifyOrder(command)
         }
         val traceId = traceId(command.traceId, command.orderId)
-        HotPathMetrics.time("runtime.persistence.saveSubmitResult") {
-            runtimePersistence.saveSubmitResult(command.commandId, result)
-        }
-        HotPathMetrics.time("runtime.persistence.appendLifecycleEvent") {
-            appendLifecycleEvent(
-                command.orderId,
-                command.commandId,
-                command.correlationId,
-                command.actorId,
-                traceId,
-                result.accepted,
-                result.rejected,
-                "OrderModified",
-                "OrderModifyRejected"
-            )
-        }
-        return result
+        return lifecycleCommandOutcome(
+            commandId = command.commandId,
+            orderId = command.orderId,
+            correlationId = command.correlationId,
+            actorId = command.actorId,
+            traceId = traceId,
+            result = result,
+            acceptedEventType = "OrderModified",
+            rejectedEventType = "OrderModifyRejected"
+        )
+    }
+
+    private fun lifecycleCommandOutcome(
+        commandId: String,
+        orderId: String,
+        correlationId: String,
+        actorId: String,
+        traceId: String,
+        result: SubmitOrderResult,
+        acceptedEventType: String,
+        rejectedEventType: String
+    ): PersistableSubmitOutcome {
+        val events = mutableListOf<RuntimeEvent>()
+        appendLifecycleEvent(
+            events = events,
+            defaultOrderId = orderId,
+            commandId = commandId,
+            correlationId = correlationId,
+            actorId = actorId,
+            traceId = traceId,
+            accepted = result.accepted,
+            rejected = result.rejected,
+            acceptedEventType = acceptedEventType,
+            rejectedEventType = rejectedEventType
+        )
+        return PersistableSubmitOutcome(
+            commandId = commandId,
+            result = result,
+            acceptedOrder = null,
+            lifecycleEvents = events
+        )
     }
 
     private fun appendLifecycleEvent(
+        events: MutableList<RuntimeEvent>,
         defaultOrderId: String,
         commandId: String,
         correlationId: String,
@@ -439,7 +497,7 @@ class OrderApplicationService(
         rejectedEventType: String
     ) {
         if (accepted != null) {
-            runtimePersistence.saveEvent(
+            events.add(
                 lifecycleEvent(
                     eventId = accepted.eventId,
                     eventType = acceptedEventType,
@@ -456,7 +514,7 @@ class OrderApplicationService(
         }
 
         if (rejected != null) {
-            runtimePersistence.saveEvent(
+            events.add(
                 lifecycleEvent(
                     eventId = rejected.eventId,
                     eventType = rejectedEventType,
@@ -508,7 +566,7 @@ class OrderApplicationService(
         )
     }
 
-    private fun rejectUnauthorizedActor(
+    private fun rejectUnauthorizedActorOutcome(
         commandId: String,
         traceId: String,
         correlationId: String,
@@ -517,14 +575,19 @@ class OrderApplicationService(
         occurredAt: String,
         permission: String,
         rejectedEventType: String
-    ): SubmitOrderResult? {
+    ): PersistableSubmitOutcome? {
         if (hasPermission(actorId, permission)) {
             return null
         }
 
         val result = unauthorizedResult(commandId, orderId, occurredAt, actorId, permission)
-        val rejected = result.rejected ?: return result
-        runtimePersistence.persistSubmitOutcome(
+        val rejected = result.rejected ?: return PersistableSubmitOutcome(
+            commandId = commandId,
+            result = result,
+            acceptedOrder = null,
+            lifecycleEvents = emptyList()
+        )
+        return PersistableSubmitOutcome(
             commandId = commandId,
             result = result,
             acceptedOrder = null,
@@ -542,7 +605,6 @@ class OrderApplicationService(
                 )
             )
         )
-        return result
     }
 
     private fun unauthorizedResult(

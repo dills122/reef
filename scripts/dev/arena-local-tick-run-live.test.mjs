@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import http from "node:http";
 
 const repoRoot = new URL("../../", import.meta.url).pathname;
@@ -11,6 +12,7 @@ const arena = {
   versions: new Map(),
   runs: new Map(),
   results: [],
+  enforcementEvents: [],
 };
 
 const server = http.createServer(async (req, res) => {
@@ -73,6 +75,7 @@ try {
     `--arena-admin-url=${baseUrl}`,
     "--seed-reference",
     "--persist-results",
+    "--command-wait-mode=accepted",
     "--out=/tmp/reef-arena-local-tick-run-live-test.json",
   ]);
 
@@ -83,6 +86,33 @@ try {
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
   assert.equal(arena.results.length, 5);
+  const report = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-live-test.json", "utf8"));
+  assert.equal(report.runPlan.tickCount, 3);
+  assert.equal(report.runPlan.durationSeconds, 1.5);
+  assert.equal(report.commandWaitMode, "accepted");
+  assert.equal(report.healthSamples.length, 15);
+  assert.equal(report.healthSummary.topOfBookPct, 100);
+  assert.equal(report.healthSummary.crossedBookCount, 0);
+  const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
+  assert.ok(submittedCommands.length > 0);
+  assert.ok(submittedCommands.every((command) => command.statusPollCount >= 1));
+  assert.ok(submittedCommands.every((command) => command.firstStatus === "COMPLETED"));
+  assert.ok(submittedCommands.every((command) => Number.isFinite(command.intakeElapsedMs)));
+
+  await run("bun", [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=dry-run",
+    "--duration-seconds=2",
+    "--tick-interval-ms=500",
+    "--out=/tmp/reef-arena-local-tick-run-duration-test.json",
+  ]);
+  const durationReport = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-duration-test.json", "utf8"));
+  assert.equal(durationReport.runPlan.selectedBotCount, 5);
+  assert.equal(durationReport.runPlan.perBotTickCount, 1);
+  assert.equal(durationReport.runPlan.totalTickCount, 5);
+  assert.equal(durationReport.runPlan.durationSeconds, 2.5);
+  assert.equal(durationReport.totals.ticks, 5);
   console.log("arena local tick live path checks passed");
 } finally {
   await new Promise((resolve) => server.close(resolve));
@@ -126,9 +156,18 @@ async function handleArenaAdmin(req, res, url) {
     arena.results.push(body);
     return json(res, 200, { result: body });
   }
+  if (req.method === "POST" && url.pathname === "/internal/admin/arena/run-enforcement-events") {
+    const body = await readJson(req);
+    arena.enforcementEvents.push(body);
+    return json(res, 200, { event: body });
+  }
   if (req.method === "GET" && url.pathname === "/internal/admin/arena/run-bot-results") {
     const runId = url.searchParams.get("runId");
     return json(res, 200, { results: arena.results.filter((result) => result.runId === runId) });
+  }
+  if (req.method === "GET" && url.pathname === "/internal/admin/arena/run-enforcement-events") {
+    const runId = url.searchParams.get("runId");
+    return json(res, 200, { events: arena.enforcementEvents.filter((event) => event.runId === runId) });
   }
   if (req.method === "GET" && url.pathname === "/internal/admin/arena/leaderboard") {
     const modeId = url.searchParams.get("modeId");

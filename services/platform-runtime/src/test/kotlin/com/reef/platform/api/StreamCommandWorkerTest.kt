@@ -365,6 +365,77 @@ class StreamCommandWorkerTest {
     }
 
     @Test
+    fun cancelWorkerPersistsCanonicalOutcomeBeforeAck() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        var ackObservedCanonical = false
+        val delivery = RecordingDelivery(
+            subject = "reef.cmd.v1.p00.session-1.AAPL.CancelOrder",
+            payloadJson = validCancelBody("cmd-cancel-worker", "ord-cancel-worker"),
+            onAck = {
+                ackObservedCanonical = persistence.canonicalSubmitOutcomes()
+                    .any { it.commandId == "cmd-cancel-worker" }
+            }
+        )
+        val worker = StreamCommandWorker(source = FixedStreamCommandSource(delivery), api = api, partition = 0)
+
+        worker.processOnce()
+
+        assertEquals(1, gateway.cancelCalls)
+        assertEquals(1, delivery.ackCalls)
+        assertTrue(ackObservedCanonical)
+        assertEquals(0, delivery.nakCalls)
+        assertEquals(0, delivery.termCalls)
+        assertNotNull(persistence.submitResult("cmd-cancel-worker"))
+        val canonical = persistence.canonicalSubmitOutcomes().single()
+        assertEquals("CancelOrder", canonical.commandType)
+        assertEquals("AAPL", canonical.instrumentId)
+        assertEquals("accepted", canonical.resultStatus)
+
+        val projected = persistence.projectCanonicalSubmitOutcomes("runtime-normalized-submit", 100, emptyList())
+
+        assertEquals(1, projected)
+        assertEquals(0, persistence.projectionStatus("runtime-normalized-submit", emptyList()).lag)
+    }
+
+    @Test
+    fun modifyWorkerPersistsCanonicalOutcomeBeforeAck() {
+        StreamCommandWorkerMetrics.resetForTests()
+        val persistence = seededPersistence()
+        val gateway = CountingAcceptedGateway()
+        val api = PlatformApi(
+            OrderApplicationService(
+                engineGateway = gateway,
+                runtimePersistence = persistence
+            )
+        )
+        val delivery = RecordingDelivery(
+            subject = "reef.cmd.v1.p00.session-1.AAPL.ModifyOrder",
+            payloadJson = validModifyBody("cmd-modify-worker", "ord-modify-worker")
+        )
+        val worker = StreamCommandWorker(source = FixedStreamCommandSource(delivery), api = api, partition = 0)
+
+        worker.processOnce()
+
+        assertEquals(1, gateway.modifyCalls)
+        assertEquals(1, delivery.ackCalls)
+        assertEquals(0, delivery.nakCalls)
+        assertEquals(0, delivery.termCalls)
+        assertNotNull(persistence.submitResult("cmd-modify-worker"))
+        val canonical = persistence.canonicalSubmitOutcomes().single()
+        assertEquals("ModifyOrder", canonical.commandType)
+        assertEquals("AAPL", canonical.instrumentId)
+        assertEquals("accepted", canonical.resultStatus)
+    }
+
+    @Test
     fun unsupportedStreamCommandIsTerminated() {
         StreamCommandWorkerMetrics.resetForTests()
         val persistence = seededPersistence()
@@ -375,8 +446,8 @@ class StreamCommandWorkerTest {
             )
         )
         val delivery = RecordingDelivery(
-            subject = "reef.cmd.v1.p00.session-1.AAPL.CancelOrder",
-            payloadJson = """{"commandId":"cmd-cancel"}"""
+            subject = "reef.cmd.v1.p00.session-1.AAPL.ReplaceOrder",
+            payloadJson = """{"commandId":"cmd-replace"}"""
         )
         val worker = StreamCommandWorker(source = FixedStreamCommandSource(delivery), api = api)
 
@@ -473,7 +544,7 @@ class StreamCommandWorkerTest {
             persistence.saveRole(
                 RoleDefinition(
                     "order_trader",
-                    listOf(Permission.ORDER_SUBMIT)
+                    listOf(Permission.ORDER_SUBMIT, Permission.ORDER_CANCEL, Permission.ORDER_MODIFY)
                 )
             )
             persistence.saveActorRoleBinding(ActorRoleBinding("bot-worker-1", "order_trader"))
@@ -502,6 +573,43 @@ class StreamCommandWorkerTest {
               "limitPrice":"150250000000",
               "currency":"USD",
               "timeInForce":"DAY"
+            }
+        """.trimIndent()
+    }
+
+    private fun validCancelBody(commandId: String, orderId: String): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"trace-$commandId",
+              "causationId":"",
+              "correlationId":"corr-$commandId",
+              "actorId":"bot-worker-1",
+              "occurredAt":"2026-07-03T00:00:00Z",
+              "runId":"run-worker-1",
+              "venueSessionId":"session-worker-1",
+              "instrumentId":"AAPL",
+              "orderId":"$orderId",
+              "reason":"bot_refresh"
+            }
+        """.trimIndent()
+    }
+
+    private fun validModifyBody(commandId: String, orderId: String): String {
+        return """
+            {
+              "commandId":"$commandId",
+              "traceId":"trace-$commandId",
+              "causationId":"",
+              "correlationId":"corr-$commandId",
+              "actorId":"bot-worker-1",
+              "occurredAt":"2026-07-03T00:00:00Z",
+              "runId":"run-worker-1",
+              "venueSessionId":"session-worker-1",
+              "instrumentId":"AAPL",
+              "orderId":"$orderId",
+              "quantityUnits":"50",
+              "limitPrice":"150300000000"
             }
         """.trimIndent()
     }
@@ -622,6 +730,8 @@ private class RecordingDelivery(
 
 private class CountingAcceptedGateway : EngineGateway {
     var submitCalls = 0
+    var cancelCalls = 0
+    var modifyCalls = 0
 
     override fun submitOrder(command: SubmitOrderCommand): SubmitOrderResult {
         submitCalls++
@@ -636,10 +746,26 @@ private class CountingAcceptedGateway : EngineGateway {
     }
 
     override fun cancelOrder(command: CancelOrderCommand): SubmitOrderResult {
-        error("not used")
+        cancelCalls++
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-cancel-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = command.occurredAt
+            )
+        )
     }
 
     override fun modifyOrder(command: ModifyOrderCommand): SubmitOrderResult {
-        error("not used")
+        modifyCalls++
+        return SubmitOrderResult(
+            accepted = EngineOrderAccepted(
+                eventId = "evt-modify-${command.orderId}",
+                orderId = command.orderId,
+                engineOrderId = "eng-${command.orderId}",
+                occurredAt = command.occurredAt
+            )
+        )
     }
 }
