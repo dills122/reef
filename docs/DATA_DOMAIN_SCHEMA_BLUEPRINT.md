@@ -54,7 +54,12 @@ Do not put synchronous normalized order, trade, execution, or UI table writes ba
 - `command_id text pk`, `batch_id text`, `shard_id text`, `partition_id int`, `command_stream text`, `event_stream text`, `stream_sequence bigint`, `delivered_count bigint`, `command_type text`, `payload_hash text`, `instrument_id text`, `order_id text`, `result_status text`, `reject_code text`, `result_payload jsonb default '{}'`, `materialized_at timestamptz default now()`, plus typed companion `occurred_at_ts timestamptz` (`0033`).
 - unique on `(batch_id, stream_sequence)`.
 
-3. `runtime.canonical_command_results` / `runtime.canonical_venue_events` (`runtime/0006`, `0033`)
+3. `runtime.canonical_venue_event_batches_archive` / `runtime.canonical_command_outcomes_archive` (`runtime/0036`)
+- partitioned archive targets for canonical venue-batch materialization history; these are not primary read/projection paths.
+- both are range partitioned by non-null `materialized_at`, include `archived_at timestamptz default now()`, and bootstrap default partitions (`*_archive_default`) so archive jobs have a safe landing zone before operators create time-bucket partitions.
+- archive primary keys include `materialized_at` to satisfy PostgreSQL partitioned-table uniqueness constraints: `(materialized_at, event_stream, batch_id)` for batch archive rows and `(materialized_at, command_id)` for command outcome archive rows.
+
+4. `runtime.canonical_command_results` / `runtime.canonical_venue_events` (`runtime/0006`, `0033`)
 - an earlier canonical append-only pair (`canonical_command_results` keyed by `command_id`; `canonical_venue_events` keyed by `event_id`) used by `runtime.runtime_append_canonical_submit_outcomes` / `runtime.runtime_project_canonical_submit_outcomes`.
 - per `docs/DB_SPLIT_READINESS.md`, this pair is a legacy/compat path pending consolidation onto `runtime.canonical_command_outcomes`; do not add new consumers here without checking current status first.
 
@@ -125,6 +130,10 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - typed companions: `event_id_uuid uuid`, `quantity_units_num numeric`, `price_num numeric`, `occurred_at_ts timestamptz`.
 - indexes include `idx_trades_instrument_sequence (instrument_id, sequence desc)` for the public trade tape read path.
 
+7a. `runtime.trades_archive` (`runtime/0037`)
+- partitioned archive target for old trade-tape facts; not a current trade read path.
+- range partitioned by non-null `occurred_at_ts`, with bootstrap default partition `runtime.trades_archive_default`, `archived_at timestamptz default now()`, and primary key `(occurred_at_ts, event_id)`.
+
 8. `runtime.submit_results` (`runtime/0003`, `0030`)
 - `command_id text pk`, `result_type text not null`, `event_id text not null`, `order_id text not null`, `engine_order_id text not null`, `code text not null`, `reason text not null`, `occurred_at text not null`.
 - typed companions: `event_id_uuid uuid`, `occurred_at_ts timestamptz`.
@@ -151,6 +160,10 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - `occurred_at text not null`
 - `created_at timestamptz not null default now()`
 - typed companions: `event_id_uuid uuid`, `occurred_at_ts timestamptz`
+
+11a. `runtime.runtime_events_archive` (`runtime/0037`)
+- partitioned archive target for old runtime event backbone rows; not a current order trace/read path.
+- range partitioned by non-null `occurred_at_ts`, with bootstrap default partition `runtime.runtime_events_archive_default`, `archived_at timestamptz default now()`, and primary key `(occurred_at_ts, event_id)`.
 
 Indexes:
 - `(occurred_at)`
@@ -232,10 +245,14 @@ Append-only durable inbound command capture, independent of `boundary` and `runt
 4. `command_log.command_results` (`command_log/0003`, `0004`, `0005`)
 - terminal outcomes only: `command_id text pk`, `response_status int not null`, `response_payload_json jsonb default '{}'`, `completed_at timestamptz default now()`, `status text default 'COMPLETED' check (in ('COMPLETED','FAILED'))`, `attempt_count int default 0`, `last_error text default ''`.
 
-5. `command_log.retention_pins` (`command_log/0007`, `0009`)
+5. `command_log.command_results_archive` (`command_log/0015`)
+- partitioned terminal-history archive, range partitioned by `completed_at`: `command_id text`, `status text default 'COMPLETED' check (in ('COMPLETED','FAILED'))`, `attempt_count int default 0`, `last_error text default ''`, `response_status int not null`, `response_payload_json jsonb default '{}'`, `completed_at timestamptz`, `archived_at timestamptz default now()`, primary key `(completed_at, command_id)`.
+- `command_log.command_results_archive_default` is the bootstrap default partition; operators can add/drop time-bucket partitions around it as archive retention matures.
+
+6. `command_log.retention_pins` (`command_log/0007`, `0009`)
 - named retention pins protecting rows from prune: `pin_id text pk`, `selector_type text check (in ('command_id','idempotency_prefix','trace_id','correlation_id','client_id','run_id'))`, `selector_value text`, `reason text default ''`, `created_at timestamptz default now()`, `updated_at timestamptz default now()`, unique `(selector_type, selector_value)`.
 
-6. `command_log.command_integrity_violations` (view, `command_log/0014`) / `command_log.command_integrity_summary()` (function)
+7. `command_log.command_integrity_violations` (view, `command_log/0014`) / `command_log.command_integrity_summary()` (function)
 - read-only cross-table integrity diagnostics (orphaned payload/queue/result rows, active commands missing queue rows, terminal results still queued) that replace the visibility lost when hot-path same-schema foreign keys were dropped (`command_log/0013`).
 
 Routine: `command_log.command_append(...)` performs append + duplicate-replay + work-queue enqueue in one call; same-schema foreign keys from the child tables back to `commands` were intentionally dropped (`command_log/0013`) to keep hot insert/delete paths cheap.

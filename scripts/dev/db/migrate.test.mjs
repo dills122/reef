@@ -50,6 +50,8 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0033_typed_canonical_time_facts.sql",
       "runtime/0034_post_trade_profile_references.sql",
       "runtime/0035_drop_batch_payload_gin_lookup_index.sql",
+      "runtime/0036_canonical_archive_tables.sql",
+      "runtime/0037_runtime_event_trade_archive_tables.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -76,6 +78,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0012_command_payloads.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0013_drop_hot_path_foreign_keys.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0014_integrity_audit_views.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "command_log/0015_command_results_archive.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
@@ -194,6 +197,39 @@ test("batch payload gin index is removed from hot canonical materialization", as
 
   assert.ok(migration);
   assert.match(migration.sql, /DROP INDEX IF EXISTS runtime\.idx_canonical_venue_event_batches_payload_json_gin/);
+});
+
+test("command-log archive migration creates partitioned terminal result archive", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find((candidate) => candidate.id === "command_log/0015_command_results_archive.sql");
+
+  assert.ok(migration);
+  assert.match(migration.sql, /CREATE TABLE IF NOT EXISTS command_log\.command_results_archive/);
+  assert.match(migration.sql, /PARTITION BY RANGE \(completed_at\)/);
+  assert.match(migration.sql, /PARTITION OF command_log\.command_results_archive DEFAULT/);
+  assert.match(migration.sql, /PRIMARY KEY \(completed_at, command_id\)/);
+});
+
+test("runtime archive migrations create partitioned cold-history targets", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const canonicalMigration = migrations.find(
+    (candidate) => candidate.id === "runtime/0036_canonical_archive_tables.sql",
+  );
+  const marketHistoryMigration = migrations.find(
+    (candidate) => candidate.id === "runtime/0037_runtime_event_trade_archive_tables.sql",
+  );
+
+  assert.ok(canonicalMigration);
+  assert.match(canonicalMigration.sql, /CREATE TABLE IF NOT EXISTS runtime\.canonical_venue_event_batches_archive/);
+  assert.match(canonicalMigration.sql, /PARTITION BY RANGE \(materialized_at\)/);
+  assert.match(canonicalMigration.sql, /PARTITION OF runtime\.canonical_command_outcomes_archive DEFAULT/);
+  assert.match(canonicalMigration.sql, /PRIMARY KEY \(materialized_at, command_id\)/);
+
+  assert.ok(marketHistoryMigration);
+  assert.match(marketHistoryMigration.sql, /CREATE TABLE IF NOT EXISTS runtime\.trades_archive/);
+  assert.match(marketHistoryMigration.sql, /PARTITION BY RANGE \(occurred_at_ts\)/);
+  assert.match(marketHistoryMigration.sql, /PARTITION OF runtime\.runtime_events_archive DEFAULT/);
+  assert.match(marketHistoryMigration.sql, /PRIMARY KEY \(occurred_at_ts, event_id\)/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

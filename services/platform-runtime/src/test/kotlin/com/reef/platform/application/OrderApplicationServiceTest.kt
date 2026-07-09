@@ -16,6 +16,8 @@ import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.TradeCreated
 import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
+import com.reef.platform.infrastructure.persistence.ReferenceDataValidation
+import com.reef.platform.infrastructure.persistence.RuntimePersistence
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -179,6 +181,74 @@ class OrderApplicationServiceTest {
         assertEquals("actorId missing permission order.submit", result.rejected?.reason)
         assertEquals(0, gateway.submitCalls)
         assertEquals(listOf("OrderRejected"), service.persistedTraceEvents("trace-unauthorized-submit-1").map { it.eventType })
+    }
+
+    @Test
+    fun submitOrderReusesAuthorizationCacheForSameActor() {
+        val gateway = RecordingEngineGateway()
+        val persistence = CountingRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+        seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-cache")
+
+        service.submitOrder(submitCommand("cmd-auth-cache-1", "ord-auth-cache-1", "trader-cache"))
+        service.submitOrder(submitCommand("cmd-auth-cache-2", "ord-auth-cache-2", "trader-cache"))
+
+        assertEquals(2, gateway.submitCalls)
+        assertEquals(1, persistence.actorRoleBindingReads)
+        assertEquals(1, persistence.roleReads)
+    }
+
+    @Test
+    fun assignRoleInvalidatesAuthorizationCache() {
+        val gateway = RecordingEngineGateway()
+        val persistence = CountingRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+        seedReferenceData(service)
+        service.createRole(RoleDefinition("order_trader", listOf(Permission.ORDER_SUBMIT)))
+
+        val rejected = service.submitOrder(submitCommand("cmd-auth-cache-miss", "ord-auth-cache-miss", "trader-new"))
+        assertEquals("AUTHORIZATION_ERROR", rejected.rejected?.code)
+
+        service.assignRole(ActorRoleBinding("trader-new", "order_trader"))
+        val accepted = service.submitOrder(submitCommand("cmd-auth-cache-hit", "ord-auth-cache-hit", "trader-new"))
+
+        assertNotNull(accepted.accepted)
+        assertEquals(1, gateway.submitCalls)
+    }
+
+    @Test
+    fun submitOrderReusesReferenceDataCacheForSameTriple() {
+        val gateway = RecordingEngineGateway()
+        val persistence = CountingRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+        seedReferenceData(service)
+        seedOrderAuthorization(service, "trader-ref-cache")
+
+        service.submitOrder(submitCommand("cmd-ref-cache-1", "ord-ref-cache-1", "trader-ref-cache"))
+        service.submitOrder(submitCommand("cmd-ref-cache-2", "ord-ref-cache-2", "trader-ref-cache"))
+
+        assertEquals(2, gateway.submitCalls)
+        assertEquals(1, persistence.referenceDataReads)
+    }
+
+    @Test
+    fun referenceDataWritesInvalidateReferenceDataCache() {
+        val gateway = RecordingEngineGateway()
+        val persistence = CountingRuntimePersistence()
+        val service = OrderApplicationService(gateway, persistence)
+        service.createInstrument(Instrument("AAPL", "AAPL"))
+        service.createParticipant(Participant("participant-1", "Participant 1"))
+        seedOrderAuthorization(service, "trader-ref-cache")
+
+        val rejected = service.submitOrder(submitCommand("cmd-ref-cache-miss", "ord-ref-cache-miss", "trader-ref-cache"))
+        assertEquals("REFERENCE_DATA_ERROR", rejected.rejected?.code)
+
+        service.createAccount(Account("account-1", "participant-1"))
+        val accepted = service.submitOrder(submitCommand("cmd-ref-cache-hit", "ord-ref-cache-hit", "trader-ref-cache"))
+
+        assertNotNull(accepted.accepted)
+        assertEquals(1, gateway.submitCalls)
     }
 
     @Test
@@ -355,6 +425,54 @@ private fun seedOrderAuthorization(
 ) {
     service.createRole(RoleDefinition("order_trader", permissions))
     service.assignRole(ActorRoleBinding(actorId, "order_trader"))
+}
+
+private fun submitCommand(commandId: String, orderId: String, actorId: String): SubmitOrderCommand {
+    return SubmitOrderCommand(
+        commandId = commandId,
+        traceId = "trace-$commandId",
+        causationId = "",
+        correlationId = "corr-$commandId",
+        actorId = actorId,
+        occurredAt = "2026-03-14T18:00:00Z",
+        orderId = orderId,
+        instrumentId = "AAPL",
+        participantId = "participant-1",
+        accountId = "account-1",
+        side = "BUY",
+        orderType = "LIMIT",
+        quantityUnits = "100",
+        limitPrice = "150250000000",
+        currency = "USD",
+        timeInForce = "DAY"
+    )
+}
+
+private class CountingRuntimePersistence(
+    private val delegate: RuntimePersistence = InMemoryRuntimePersistence()
+) : RuntimePersistence by delegate {
+    var roleReads = 0
+    var actorRoleBindingReads = 0
+    var referenceDataReads = 0
+
+    override fun roles(): List<RoleDefinition> {
+        roleReads += 1
+        return delegate.roles()
+    }
+
+    override fun actorRoleBindings(actorId: String): List<ActorRoleBinding> {
+        actorRoleBindingReads += 1
+        return delegate.actorRoleBindings(actorId)
+    }
+
+    override fun validateReferenceData(
+        instrumentId: String,
+        participantId: String,
+        accountId: String
+    ): ReferenceDataValidation {
+        referenceDataReads += 1
+        return delegate.validateReferenceData(instrumentId, participantId, accountId)
+    }
 }
 
 private class RecordingEngineGateway : EngineGateway {

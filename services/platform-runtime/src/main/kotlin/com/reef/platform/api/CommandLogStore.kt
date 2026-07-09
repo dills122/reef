@@ -205,14 +205,14 @@ class PostgresCommandLogStore(
             conn.prepareStatement(
                 if (terminalStatus) {
                     """
-                    ${selectComposedCommandLogRecord()}
+                    ${selectComposedCommandLogRecord(includeArchive = false)}
                     WHERE results.status = ?
                     ORDER BY results.completed_at, commands.command_id
                     LIMIT ?
                     """.trimIndent()
                 } else {
                     """
-                    ${selectComposedCommandLogRecord()}
+                    ${selectComposedCommandLogRecord(includeArchive = false)}
                     WHERE queue.status = ?
                     ORDER BY commands.received_at, commands.command_id
                     LIMIT ?
@@ -267,7 +267,7 @@ class PostgresCommandLogStore(
                   WHERE queue.command_id = claimed.command_id
                   RETURNING queue.*
                 )
-                ${selectComposedCommandLogRecord(queueTable = "updated queue", queueJoin = "JOIN")}
+                ${selectComposedCommandLogRecord(queueTable = "updated queue", queueJoin = "JOIN", includeArchive = false)}
                 """.trimIndent()
             ).use { ps ->
                 ps.setLong(1, processingLeaseMs)
@@ -333,11 +333,24 @@ class PostgresCommandLogStore(
                 ),
                 result_counts AS (
                   SELECT
-                    COUNT(*) FILTER (WHERE results.status = 'COMPLETED') AS completed,
-                    COUNT(*) FILTER (WHERE results.status = 'FAILED') AS failed
-                  FROM ${names.commandResults} results
-                  JOIN ${names.commands} commands ON commands.command_id = results.command_id
-                  WHERE (? = '' OR commands.run_id = ?)
+                    COUNT(*) FILTER (WHERE terminal.status = 'COMPLETED') AS completed,
+                    COUNT(*) FILTER (WHERE terminal.status = 'FAILED') AS failed
+                  FROM (
+                    SELECT results.command_id, results.status
+                    FROM ${names.commandResults} results
+                    JOIN ${names.commands} commands ON commands.command_id = results.command_id
+                    WHERE (? = '' OR commands.run_id = ?)
+                    UNION ALL
+                    SELECT archived.command_id, archived.status
+                    FROM ${names.commandResultsArchive} archived
+                    JOIN ${names.commands} commands ON commands.command_id = archived.command_id
+                    WHERE (? = '' OR commands.run_id = ?)
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM ${names.commandResults} live_results
+                        WHERE live_results.command_id = archived.command_id
+                      )
+                  ) terminal
                 )
                 SELECT
                   command_count.accepted,
@@ -356,6 +369,8 @@ class PostgresCommandLogStore(
                 ps.setString(5, runId)
                 ps.setString(6, runId)
                 ps.setString(7, runId)
+                ps.setString(8, runId)
+                ps.setString(9, runId)
                 ps.executeQuery().use { rs ->
                     if (rs.next()) {
                         val accepted = rs.getLong("accepted")
@@ -393,6 +408,98 @@ class PostgresCommandLogStore(
             accountingGap = 0L,
             staleProcessing = 0L
         )
+    }
+
+    fun archiveTerminalResults(cutoffCompletedAt: java.time.Instant, limit: Int): CommandResultsArchiveResult {
+        if (limit <= 0) {
+            return CommandResultsArchiveResult(candidateCount = 0, archivedCount = 0, deletedLiveCount = 0)
+        }
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                """
+                WITH candidates AS (
+                  SELECT
+                    results.command_id,
+                    results.status,
+                    results.attempt_count,
+                    results.last_error,
+                    results.response_status,
+                    results.response_payload_json,
+                    results.completed_at
+                  FROM ${names.commandResults} results
+                  JOIN ${names.commands} commands ON commands.command_id = results.command_id
+                  WHERE results.completed_at < ?::timestamptz
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM ${names.retentionPins} pins
+                      WHERE (pins.selector_type = 'command_id' AND pins.selector_value = commands.command_id)
+                         OR (pins.selector_type = 'idempotency_prefix' AND commands.idempotency_key LIKE pins.selector_value || '%')
+                         OR (pins.selector_type = 'trace_id' AND pins.selector_value = commands.trace_id)
+                         OR (pins.selector_type = 'correlation_id' AND pins.selector_value = commands.correlation_id)
+                         OR (pins.selector_type = 'client_id' AND pins.selector_value = commands.client_id)
+                         OR (pins.selector_type = 'run_id' AND pins.selector_value = commands.run_id)
+                    )
+                  ORDER BY results.completed_at, results.command_id
+                  LIMIT ?
+                  FOR UPDATE OF results SKIP LOCKED
+                ),
+                archived AS (
+                  INSERT INTO ${names.commandResultsArchive}(
+                    command_id,
+                    status,
+                    attempt_count,
+                    last_error,
+                    response_status,
+                    response_payload_json,
+                    completed_at,
+                    archived_at
+                  )
+                  SELECT
+                    command_id,
+                    status,
+                    attempt_count,
+                    last_error,
+                    response_status,
+                    response_payload_json,
+                    completed_at,
+                    NOW()
+                  FROM candidates
+                  ON CONFLICT (completed_at, command_id) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    attempt_count = EXCLUDED.attempt_count,
+                    last_error = EXCLUDED.last_error,
+                    response_status = EXCLUDED.response_status,
+                    response_payload_json = EXCLUDED.response_payload_json,
+                    archived_at = EXCLUDED.archived_at
+                  RETURNING command_id, completed_at
+                ),
+                deleted_live AS (
+                  DELETE FROM ${names.commandResults} results
+                  USING archived
+                  WHERE results.command_id = archived.command_id
+                    AND results.completed_at = archived.completed_at
+                  RETURNING results.command_id
+                )
+                SELECT
+                  (SELECT COUNT(*) FROM candidates) AS candidate_count,
+                  (SELECT COUNT(*) FROM archived) AS archived_count,
+                  (SELECT COUNT(*) FROM deleted_live) AS deleted_live_count
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, cutoffCompletedAt.toString())
+                ps.setInt(2, limit)
+                ps.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        return CommandResultsArchiveResult(
+                            candidateCount = rs.getLong("candidate_count"),
+                            archivedCount = rs.getLong("archived_count"),
+                            deletedLiveCount = rs.getLong("deleted_live_count")
+                        )
+                    }
+                }
+            }
+        }
+        return CommandResultsArchiveResult(candidateCount = 0, archivedCount = 0, deletedLiveCount = 0)
     }
 
     override fun markProcessing(commandId: String) {
@@ -620,8 +727,27 @@ class PostgresCommandLogStore(
 
     private fun selectComposedCommandLogRecord(
         queueTable: String = "${names.commandWorkQueue} queue",
-        queueJoin: String = "LEFT JOIN"
+        queueJoin: String = "LEFT JOIN",
+        includeArchive: Boolean = true
     ): String {
+        val archivedStatus = if (includeArchive) "archived.status" else "NULL::TEXT"
+        val archivedAttemptCount = if (includeArchive) "archived.attempt_count" else "NULL::INTEGER"
+        val archivedLastError = if (includeArchive) "archived.last_error" else "NULL::TEXT"
+        val archivedResponseStatus = if (includeArchive) "archived.response_status" else "NULL::INTEGER"
+        val archivedResponsePayload = if (includeArchive) "archived.response_payload_json" else "NULL::JSONB"
+        val archiveJoin = if (includeArchive) {
+            """
+            LEFT JOIN LATERAL (
+              SELECT archive.*
+              FROM ${names.commandResultsArchive} archive
+              WHERE archive.command_id = commands.command_id
+              ORDER BY archive.completed_at DESC
+              LIMIT 1
+            ) archived ON true
+            """.trimIndent()
+        } else {
+            ""
+        }
         return """
             SELECT
               commands.command_id,
@@ -637,15 +763,21 @@ class PostgresCommandLogStore(
               commands.scenario_id,
               commands.received_at,
               COALESCE(payloads.payload_json, commands.payload_json) AS payload_json,
-              COALESCE(queue.status, results.status, commands.status) AS status,
-              COALESCE(queue.attempt_count, results.attempt_count, commands.attempt_count) AS attempt_count,
-              COALESCE(queue.last_error, results.last_error, commands.last_error) AS last_error,
-              COALESCE(results.response_status, commands.response_status, 0) AS response_status,
-              COALESCE(results.response_payload_json, commands.response_payload_json, '{}'::jsonb) AS response_payload_json
+              COALESCE(queue.status, results.status, $archivedStatus, commands.status) AS status,
+              COALESCE(queue.attempt_count, results.attempt_count, $archivedAttemptCount, commands.attempt_count) AS attempt_count,
+              COALESCE(queue.last_error, results.last_error, $archivedLastError, commands.last_error) AS last_error,
+              COALESCE(results.response_status, $archivedResponseStatus, commands.response_status, 0) AS response_status,
+              COALESCE(
+                results.response_payload_json,
+                $archivedResponsePayload,
+                commands.response_payload_json,
+                '{}'::jsonb
+              ) AS response_payload_json
             FROM ${names.commands} commands
             $queueJoin $queueTable ON queue.command_id = commands.command_id
             LEFT JOIN ${names.commandPayloads} payloads ON payloads.command_id = commands.command_id
             LEFT JOIN ${names.commandResults} results ON results.command_id = commands.command_id
+            $archiveJoin
         """.trimIndent()
     }
 

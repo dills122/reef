@@ -316,6 +316,169 @@ func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 	}
 }
 
+func TestPublishFailureRollbackRestoresMultiCommandBatch(t *testing.T) {
+	submit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 25, map[string]string{
+		"commandId":      "cmd-rollback-submit",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-rollback-life",
+		"venueSessionId": "session",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "100000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	})
+	modify := newFakeDelivery("reef.cmd.v1.p00.session.STK001.ModifyOrder", 26, map[string]string{
+		"commandId":     "cmd-rollback-modify",
+		"occurredAt":    "2026-07-04T00:00:01Z",
+		"orderId":       "ord-rollback-life",
+		"quantityUnits": "120",
+		"limitPrice":    "100100000000",
+	})
+	cancel := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 27, map[string]string{
+		"commandId":  "cmd-rollback-cancel",
+		"occurredAt": "2026-07-04T00:00:02Z",
+		"orderId":    "ord-rollback-life",
+		"reason":     "test",
+	})
+	service := app.NewService()
+	failingPublisher := &fakePublisher{err: errors.New("publish failed")}
+	firstProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{submit, modify, cancel}}, failingPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := firstProcessor.ProcessOnce(context.Background()); err == nil {
+		t.Fatal("expected publish failure")
+	}
+	if _, ok := service.OrderState("ord-rollback-life"); ok {
+		t.Fatal("expected multi-command failed batch to remove newly created order state")
+	}
+	if got := service.RestingOrdersInSession("session", "STK001", domain.SideBuy); got != 0 {
+		t.Fatalf("expected no resting buy after rollback, got %d", got)
+	}
+	if submit.acked != 0 || modify.acked != 0 || cancel.acked != 0 {
+		t.Fatalf("expected no ack on failed publish, got submit=%d modify=%d cancel=%d", submit.acked, modify.acked, cancel.acked)
+	}
+
+	redeliveredSubmit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 25, map[string]string{
+		"commandId":      "cmd-rollback-submit",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-rollback-life",
+		"venueSessionId": "session",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "100000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	})
+	redeliveredModify := newFakeDelivery("reef.cmd.v1.p00.session.STK001.ModifyOrder", 26, map[string]string{
+		"commandId":     "cmd-rollback-modify",
+		"occurredAt":    "2026-07-04T00:00:01Z",
+		"orderId":       "ord-rollback-life",
+		"quantityUnits": "120",
+		"limitPrice":    "100100000000",
+	})
+	redeliveredCancel := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 27, map[string]string{
+		"commandId":  "cmd-rollback-cancel",
+		"occurredAt": "2026-07-04T00:00:02Z",
+		"orderId":    "ord-rollback-life",
+		"reason":     "test",
+	})
+	successPublisher := &fakePublisher{}
+	redeliveryProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redeliveredSubmit, redeliveredModify, redeliveredCancel}}, successPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := redeliveryProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("redelivery ProcessOnce returned error: %v", err)
+	}
+	if len(successPublisher.batches) != 1 || len(successPublisher.batches[0].Outcomes) != 3 {
+		t.Fatalf("expected redelivered three-outcome batch, got %#v", successPublisher.batches)
+	}
+	state, ok := service.OrderState("ord-rollback-life")
+	if !ok || state.Status != domain.OrderStatusCancelled {
+		t.Fatalf("expected redelivered lifecycle to end cancelled, got %#v", state)
+	}
+}
+
+func TestProcessorDoesNotMatchSameInstrumentAcrossVenueSessions(t *testing.T) {
+	sell := newFakeDelivery("reef.cmd.v1.p00.session-1.STK001.SubmitOrder", 23, map[string]string{
+		"commandId":      "cmd-session-1-sell",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-session-1-sell",
+		"venueSessionId": "session-1",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "SELL",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "100000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	})
+	buy := newFakeDelivery("reef.cmd.v1.p01.session-2.STK001.SubmitOrder", 24, map[string]string{
+		"commandId":      "cmd-session-2-buy",
+		"occurredAt":     "2026-07-04T00:00:01Z",
+		"orderId":        "ord-session-2-buy",
+		"venueSessionId": "session-2",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-2",
+		"accountId":      "account-2",
+		"actorId":        "actor-2",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "101000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	})
+	service := app.NewService()
+	source := &fakeSource{deliveries: []CommandDelivery{sell, buy}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(service, source, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	processed, err := processor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	if processed != 2 || len(publisher.batches) != 1 {
+		t.Fatalf("expected one two-command batch, processed=%d batches=%d", processed, len(publisher.batches))
+	}
+	batch := publisher.batches[0]
+	if len(batch.Outcomes) != 2 {
+		t.Fatalf("expected two outcomes, got %#v", batch.Outcomes)
+	}
+	for _, outcome := range batch.Outcomes {
+		if outcome.Status != "accepted" || len(outcome.Result.Trades) != 0 || len(outcome.Result.Executions) != 0 {
+			t.Fatalf("expected accepted non-trading outcome across sessions, got %#v", outcome)
+		}
+	}
+	if got := service.RestingOrdersInSession("session-1", "STK001", domain.SideSell); got != 1 {
+		t.Fatalf("expected session-1 sell liquidity to remain, got %d", got)
+	}
+	if got := service.RestingOrdersInSession("session-2", "STK001", domain.SideBuy); got != 1 {
+		t.Fatalf("expected session-2 buy liquidity to rest separately, got %d", got)
+	}
+}
+
 func TestProcessorPublishesFailedOutcomeForUnsupportedCommands(t *testing.T) {
 	delivery := newFakeDelivery("reef.cmd.v1.p00.session.STK001.CancelOrder", 12, map[string]string{
 		"commandId": "cmd-cancel-1",
@@ -604,6 +767,80 @@ func TestScenario3_MatchingEngineFailsBeforeEventBatchPublishLeavesCommandOffset
 	}
 	if resting := service.RestingOrders("STK001", domain.SideSell); resting != 1 {
 		t.Fatalf("expected exactly one resting order in the book after the redelivered accept, got %d", resting)
+	}
+}
+
+func TestPublishFailureRollbackRestoresPassiveMatchedLiquidity(t *testing.T) {
+	service := app.NewService()
+	seed := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-resting-sell",
+		VenueSessionID: "session",
+		InstrumentID:   "STK001",
+		ParticipantID:  "participant-2",
+		AccountID:      "account-2",
+		Side:           domain.SideSell,
+		QuantityUnits:  "100",
+		LimitPrice:     "100000000000",
+		Currency:       "USD",
+	})
+	if seed.Accepted == nil {
+		t.Fatalf("expected resting seed accepted, got %#v", seed)
+	}
+
+	payload := map[string]string{
+		"commandId":      "cmd-rollback-match",
+		"occurredAt":     "2026-07-04T00:00:00Z",
+		"orderId":        "ord-taking-buy",
+		"venueSessionId": "session",
+		"instrumentId":   "STK001",
+		"participantId":  "participant-1",
+		"accountId":      "account-1",
+		"actorId":        "actor-1",
+		"side":           "BUY",
+		"orderType":      "LIMIT",
+		"quantityUnits":  "100",
+		"limitPrice":     "101000000000",
+		"currency":       "USD",
+		"timeInForce":    "DAY",
+	}
+	failingPublisher := &fakePublisher{err: errors.New("publish failed")}
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 51, payload)
+	firstProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{first}}, failingPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := firstProcessor.ProcessOnce(context.Background()); err == nil {
+		t.Fatal("expected publish failure")
+	}
+
+	if _, ok := service.OrderState("ord-taking-buy"); ok {
+		t.Fatal("expected failed-publish taker to be removed from order state")
+	}
+	restored, ok := service.OrderState("ord-resting-sell")
+	if !ok || restored.Status != domain.OrderStatusAccepted || restored.RemainingQuantity != "100" {
+		t.Fatalf("expected passive resting sell restored after rollback, got %#v", restored)
+	}
+	if got := service.RestingOrdersInSession("session", "STK001", domain.SideSell); got != 1 {
+		t.Fatalf("expected restored sell to rest after rollback, got %d", got)
+	}
+
+	successPublisher := &fakePublisher{}
+	redelivered := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 51, payload)
+	redeliveredProcessor := NewProcessor(service, &fakeSource{deliveries: []CommandDelivery{redelivered}}, successPublisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+	if _, err := redeliveredProcessor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("redelivered ProcessOnce returned error: %v", err)
+	}
+	if len(successPublisher.batches) != 1 || len(successPublisher.batches[0].Outcomes) != 1 {
+		t.Fatalf("expected one redelivered outcome batch, got %#v", successPublisher.batches)
+	}
+	outcome := successPublisher.batches[0].Outcomes[0]
+	if outcome.Status != "accepted" || len(outcome.Result.Trades) != 1 {
+		t.Fatalf("expected redelivery to match restored liquidity, got %#v", outcome)
 	}
 }
 

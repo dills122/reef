@@ -57,14 +57,18 @@ object PostgresSchemaRequirements {
         val canonicalCommandResults = PostgresSchemaObject.parse(names.canonicalCommandResults)
         val canonicalVenueEvents = PostgresSchemaObject.parse(names.canonicalVenueEvents)
         val canonicalVenueEventBatches = PostgresSchemaObject.parse(names.canonicalVenueEventBatches)
+        val canonicalVenueEventBatchesArchive = PostgresSchemaObject.parse(names.canonicalVenueEventBatchesArchive)
         val canonicalCommandOutcomes = PostgresSchemaObject.parse(names.canonicalCommandOutcomes)
+        val canonicalCommandOutcomesArchive = PostgresSchemaObject.parse(names.canonicalCommandOutcomesArchive)
         val projectionWatermarks = PostgresSchemaObject.parse(names.projectionWatermarks)
         val marketDataSnapshots = PostgresSchemaObject.parse(names.marketDataSnapshots)
         val orderLifecycleState = PostgresSchemaObject.parse(names.orderLifecycleState)
         val orders = PostgresSchemaObject.parse(names.orders)
         val executions = PostgresSchemaObject.parse(names.executions)
         val trades = PostgresSchemaObject.parse(names.trades)
+        val tradesArchive = PostgresSchemaObject.parse(names.tradesArchive)
         val submitResults = PostgresSchemaObject.parse(names.submitResults)
+        val runtimeEventsArchive = PostgresSchemaObject.parse(names.runtimeEventsArchive)
         val postTradeProfiles = PostgresSchemaObject.parse(names.adminPostTradeProfiles)
         val scenarioRuns = PostgresSchemaObject.parse(names.referenceScenarioRuns)
         val venueSessions = PostgresSchemaObject.parse(names.referenceVenueSessions)
@@ -78,13 +82,17 @@ object PostgresSchemaRequirements {
                 names.orders,
                 names.executions,
                 names.trades,
+                names.tradesArchive,
                 names.runtimeEvents,
+                names.runtimeEventsArchive,
                 names.runtimeTraceSequences,
                 names.submitResults,
                 names.canonicalCommandResults,
                 names.canonicalVenueEvents,
                 names.canonicalVenueEventBatches,
+                names.canonicalVenueEventBatchesArchive,
                 names.canonicalCommandOutcomes,
+                names.canonicalCommandOutcomesArchive,
                 names.projectionWatermarks,
                 names.orderLifecycleState,
                 names.orderLifecycleDirty,
@@ -125,6 +133,11 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(trades, "price_num", "numeric"),
                 PostgresSchemaColumn(trades, "occurred_at", "text"),
                 PostgresSchemaColumn(trades, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(tradesArchive, "event_id", "text"),
+                PostgresSchemaColumn(tradesArchive, "instrument_id", "text"),
+                PostgresSchemaColumn(tradesArchive, "price_num", "numeric"),
+                PostgresSchemaColumn(tradesArchive, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(tradesArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "event_id_uuid", "uuid"),
                 PostgresSchemaColumn(runtimeEvents, "occurred_at", "text"),
@@ -132,6 +145,11 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "payload_json", "jsonb"),
                 PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint"),
+                PostgresSchemaColumn(runtimeEventsArchive, "event_id", "text"),
+                PostgresSchemaColumn(runtimeEventsArchive, "event_id_uuid", "uuid"),
+                PostgresSchemaColumn(runtimeEventsArchive, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(runtimeEventsArchive, "payload_json", "jsonb"),
+                PostgresSchemaColumn(runtimeEventsArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(submitResults, "command_id", "text"),
                 PostgresSchemaColumn(submitResults, "event_id", "text"),
                 PostgresSchemaColumn(submitResults, "event_id_uuid", "uuid"),
@@ -152,10 +170,20 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(canonicalVenueEventBatches, "payload_checksum", "text"),
                 PostgresSchemaColumn(canonicalVenueEventBatches, "payload_json", "jsonb"),
                 PostgresSchemaColumn(canonicalVenueEventBatches, "created_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "batch_id", "text"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "payload_checksum", "text"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "payload_json", "jsonb"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "materialized_at", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalVenueEventBatchesArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "command_id", "text"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "stream_sequence", "bigint"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "result_payload", "jsonb"),
                 PostgresSchemaColumn(canonicalCommandOutcomes, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "command_id", "text"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "stream_sequence", "bigint"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "result_payload", "jsonb"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "materialized_at", "timestamp with time zone"),
+                PostgresSchemaColumn(canonicalCommandOutcomesArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(projectionWatermarks, "projection_name", "text"),
                 PostgresSchemaColumn(projectionWatermarks, "partition_id", "integer"),
                 PostgresSchemaColumn(projectionWatermarks, "last_partition_seq", "bigint"),
@@ -458,6 +486,7 @@ object PostgresSchemaRequirements {
         payloads: String = "command_log.command_payloads",
         workQueue: String = "command_log.command_work_queue",
         results: String = "command_log.command_results",
+        resultsArchive: String = "command_log.command_results_archive",
         retentionPins: String = "command_log.retention_pins",
         appendFunction: String = "command_log.command_append"
     ): PostgresSchemaRequirement {
@@ -465,9 +494,10 @@ object PostgresSchemaRequirements {
         val payloadTable = PostgresSchemaObject.parse(payloads)
         val queueTable = PostgresSchemaObject.parse(workQueue)
         val resultTable = PostgresSchemaObject.parse(results)
+        val resultArchiveTable = PostgresSchemaObject.parse(resultsArchive)
         val retentionPinTable = PostgresSchemaObject.parse(retentionPins)
         return PostgresSchemaRequirement(
-            tables = listOf(commandTable, payloadTable, queueTable, resultTable, retentionPinTable),
+            tables = listOf(commandTable, payloadTable, queueTable, resultTable, resultArchiveTable, retentionPinTable),
             functions = listOf(PostgresSchemaObject.parse(appendFunction)),
             columns = listOf(
                 listOf(
@@ -514,6 +544,16 @@ object PostgresSchemaRequirements {
                     "response_payload_json",
                     "completed_at"
                 ).map { column -> PostgresSchemaColumn(resultTable, column) },
+                listOf(
+                    "command_id",
+                    "status",
+                    "attempt_count",
+                    "last_error",
+                    "response_status",
+                    "response_payload_json",
+                    "completed_at",
+                    "archived_at"
+                ).map { column -> PostgresSchemaColumn(resultArchiveTable, column) },
                 listOf(
                     "pin_id",
                     "selector_type",

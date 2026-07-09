@@ -22,7 +22,7 @@ The safe direction is to preserve existing Makefile/package entrypoint names and
 | Dev stack lifecycle | `up.mjs`, `down.mjs`, `reset.mjs`, `runtime-nodb-up.mjs`, `captured-ack-up.mjs`, `stream-ack-up.mjs`, `stream-direct-nodb-up.mjs` | Keep entrypoints; move profile-specific env defaults into config-driven helpers. |
 | Stress and performance profiles | `stress.mjs`, `runtime-nodb-stress.mjs`, `stream-ack-stress.mjs`, `stream-direct-nodb-stress.mjs`, `venue-event-materializer-stress.mjs`, `throughput-campaign.mjs` | Keep domain workflows; consolidate repeated profile/session config generation. |
 | Bot SDK and arena tooling | `bot-sdk-*.mjs`, `arena-*.mjs` | Keep. These are contract and runner tools with package/docs references. Refactor only behind stable commands. |
-| Command-log maintenance | `command-log-pin.mjs`, `command-log-prune.mjs`, `command-log-integrity-check.mjs` | Keep separate entrypoints because the operations have different blast radius. Share SQL/CLI helpers if they grow. |
+| Command-log maintenance | `command-log-pin.mjs`, `command-log-archive.mjs`, `command-log-archive-partitions.mjs`, `command-log-prune.mjs`, `command-log-integrity-check.mjs` | Keep separate entrypoints because the operations have different blast radius. Share SQL/CLI helpers if they grow. |
 | Replay and simulation export | `replay-pack.mjs`, `sim-run.mjs`, `sim-batch.mjs`, `export-simulation-run.mjs` | Keep. These preserve scenario/replay evidence workflows. |
 | Kube and remote infra | `kube.mjs`, `do-benchmark-host.sh`, `scripts/deploy/*.mjs` | Keep, but harden checks. `do-benchmark-host.sh` is the main shell-heavy exception. |
 | Setup links | `setup-codex-links.mjs`, `setup-claude-links.mjs` | Candidate for one config-driven link setup script while retaining aliases. |
@@ -54,7 +54,7 @@ The safe direction is to preserve existing Makefile/package entrypoint names and
 
 ## Do Not Slim Yet
 
-- Do not collapse command-log pin/prune/integrity into one script. Their safety profiles differ, and separate commands make reviews and runbooks clearer.
+- Do not collapse command-log pin/archive/archive-partitions/prune/integrity into one script. Their safety profiles differ, and separate commands make reviews and runbooks clearer.
 - Do not delete smoke scripts just because they overlap with stress scripts. Smoke gates encode operational readiness assumptions; stress scripts encode load evidence.
 - Do not move bot SDK contract tests out of scripts until package-level test ownership is redesigned. They are heavily referenced by docs, Makefile, and package scripts.
 - Do not rename Makefile targets without a compatibility layer.

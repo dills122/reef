@@ -21,13 +21,17 @@ class PostgresSchemaRequirementsTest {
                 "runtime.orders",
                 "runtime.executions",
                 "runtime.trades",
+                "runtime.trades_archive",
                 "runtime.runtime_events",
+                "runtime.runtime_events_archive",
                 "runtime.runtime_trace_sequences",
                 "runtime.submit_results",
                 "runtime.canonical_command_results",
                 "runtime.canonical_venue_events",
                 "runtime.canonical_venue_event_batches",
+                "runtime.canonical_venue_event_batches_archive",
                 "runtime.canonical_command_outcomes",
+                "runtime.canonical_command_outcomes_archive",
                 "runtime.projection_watermarks",
                 "runtime.order_lifecycle_state",
                 "runtime.order_lifecycle_dirty",
@@ -98,6 +102,19 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.trades_archive.event_id:text",
+                "runtime.trades_archive.instrument_id:text",
+                "runtime.trades_archive.price_num:numeric",
+                "runtime.trades_archive.occurred_at_ts:timestamp with time zone",
+                "runtime.trades_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.trades_archive" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.runtime_events.event_id:text",
                 "runtime.runtime_events.event_id_uuid:uuid",
                 "runtime.runtime_events.occurred_at:text",
@@ -108,6 +125,19 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.runtime_events" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.runtime_events_archive.event_id:text",
+                "runtime.runtime_events_archive.event_id_uuid:uuid",
+                "runtime.runtime_events_archive.occurred_at_ts:timestamp with time zone",
+                "runtime.runtime_events_archive.payload_json:jsonb",
+                "runtime.runtime_events_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.runtime_events_archive" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )
@@ -165,6 +195,19 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.canonical_venue_event_batches_archive.batch_id:text",
+                "runtime.canonical_venue_event_batches_archive.payload_checksum:text",
+                "runtime.canonical_venue_event_batches_archive.payload_json:jsonb",
+                "runtime.canonical_venue_event_batches_archive.materialized_at:timestamp with time zone",
+                "runtime.canonical_venue_event_batches_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.canonical_venue_event_batches_archive" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.canonical_command_outcomes.command_id:text",
                 "runtime.canonical_command_outcomes.stream_sequence:bigint",
                 "runtime.canonical_command_outcomes.result_payload:jsonb",
@@ -172,6 +215,19 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.canonical_command_outcomes" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.canonical_command_outcomes_archive.command_id:text",
+                "runtime.canonical_command_outcomes_archive.stream_sequence:bigint",
+                "runtime.canonical_command_outcomes_archive.result_payload:jsonb",
+                "runtime.canonical_command_outcomes_archive.materialized_at:timestamp with time zone",
+                "runtime.canonical_command_outcomes_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.canonical_command_outcomes_archive" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )
@@ -563,6 +619,7 @@ class PostgresSchemaRequirementsTest {
                 "command_log.command_payloads",
                 "command_log.command_work_queue",
                 "command_log.command_results",
+                "command_log.command_results_archive",
                 "command_log.retention_pins"
             ),
             requirements.tables.map { it.qualifiedName }.toSet()
@@ -606,6 +663,14 @@ class PostgresSchemaRequirementsTest {
                 "command_log.command_results.response_status",
                 "command_log.command_results.response_payload_json",
                 "command_log.command_results.completed_at",
+                "command_log.command_results_archive.command_id",
+                "command_log.command_results_archive.status",
+                "command_log.command_results_archive.attempt_count",
+                "command_log.command_results_archive.last_error",
+                "command_log.command_results_archive.response_status",
+                "command_log.command_results_archive.response_payload_json",
+                "command_log.command_results_archive.completed_at",
+                "command_log.command_results_archive.archived_at",
                 "command_log.retention_pins.pin_id",
                 "command_log.retention_pins.selector_type",
                 "command_log.retention_pins.selector_value",

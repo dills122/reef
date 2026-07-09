@@ -312,6 +312,48 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.tradesArchive} (
+                      event_id TEXT NOT NULL,
+                      trade_id TEXT NOT NULL,
+                      execution_id TEXT NOT NULL,
+                      buy_order_id TEXT NOT NULL,
+                      sell_order_id TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      quantity_units TEXT NOT NULL,
+                      price TEXT NOT NULL,
+                      currency TEXT NOT NULL,
+                      occurred_at TEXT NOT NULL,
+                      event_id_uuid UUID,
+                      quantity_units_num NUMERIC,
+                      price_num NUMERIC,
+                      occurred_at_ts TIMESTAMPTZ NOT NULL,
+                      sequence BIGINT,
+                      archived_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (occurred_at_ts, event_id)
+                    ) PARTITION BY RANGE (occurred_at_ts)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.tradesArchiveDefault}
+                    PARTITION OF ${names.tradesArchive} DEFAULT
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_archive_instrument_occurred
+                    ON ${names.tradesArchive}(instrument_id, occurred_at_ts, event_id)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_trades_archive_sequence
+                    ON ${names.tradesArchive}(instrument_id, sequence DESC)
+                    WHERE sequence IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.runtimeEvents} (
                       event_id TEXT PRIMARY KEY,
                       event_type TEXT NOT NULL,
@@ -347,6 +389,46 @@ class PostgresRuntimePersistence(
                     ALTER TABLE ${names.runtimeEvents}
                     ADD COLUMN IF NOT EXISTS event_id_uuid UUID,
                     ADD COLUMN IF NOT EXISTS occurred_at_ts TIMESTAMPTZ
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeEventsArchive} (
+                      event_id TEXT NOT NULL,
+                      event_type TEXT NOT NULL,
+                      order_id TEXT NOT NULL,
+                      trace_id TEXT NOT NULL,
+                      causation_id TEXT NOT NULL,
+                      correlation_id TEXT NOT NULL,
+                      actor_id TEXT NOT NULL DEFAULT '',
+                      producer TEXT NOT NULL,
+                      schema_version TEXT NOT NULL,
+                      sequence_number BIGINT NOT NULL,
+                      payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      occurred_at TEXT NOT NULL,
+                      event_id_uuid UUID,
+                      occurred_at_ts TIMESTAMPTZ NOT NULL,
+                      archived_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (occurred_at_ts, event_id)
+                    ) PARTITION BY RANGE (occurred_at_ts)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runtimeEventsArchiveDefault}
+                    PARTITION OF ${names.runtimeEventsArchive} DEFAULT
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_archive_trace_seq
+                    ON ${names.runtimeEventsArchive}(trace_id, sequence_number)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runtime_events_archive_order_occurred
+                    ON ${names.runtimeEventsArchive}(order_id, occurred_at_ts, event_id)
                     """.trimIndent()
                 )
                 stmt.execute(
@@ -680,6 +762,47 @@ class PostgresRuntimePersistence(
                 )
                 stmt.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEventBatchesArchive} (
+                      batch_id TEXT NOT NULL,
+                      shard_id TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      command_stream TEXT NOT NULL,
+                      event_stream TEXT NOT NULL,
+                      first_sequence BIGINT NOT NULL,
+                      last_sequence BIGINT NOT NULL,
+                      command_count INTEGER NOT NULL,
+                      payload_checksum TEXT NOT NULL,
+                      payload_format TEXT NOT NULL DEFAULT 'venue-event-batch-json',
+                      payload_version TEXT NOT NULL DEFAULT 'v1',
+                      payload_json JSONB NOT NULL,
+                      created_at TEXT NOT NULL,
+                      materialized_at TIMESTAMPTZ NOT NULL,
+                      created_at_ts TIMESTAMPTZ,
+                      archived_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (materialized_at, event_stream, batch_id)
+                    ) PARTITION BY RANGE (materialized_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalVenueEventBatchesArchiveDefault}
+                    PARTITION OF ${names.canonicalVenueEventBatchesArchive} DEFAULT
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_archive_batch
+                    ON ${names.canonicalVenueEventBatchesArchive}(event_stream, batch_id, materialized_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_venue_event_batches_archive_partition_seq
+                    ON ${names.canonicalVenueEventBatchesArchive}(partition_id, first_sequence, last_sequence)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS ${names.canonicalCommandOutcomes} (
                       command_id TEXT PRIMARY KEY,
                       batch_id TEXT NOT NULL,
@@ -725,6 +848,49 @@ class PostgresRuntimePersistence(
                     CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_occurred_typed
                     ON ${names.canonicalCommandOutcomes}(occurred_at_ts, partition_id, stream_sequence)
                     WHERE occurred_at_ts IS NOT NULL
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalCommandOutcomesArchive} (
+                      command_id TEXT NOT NULL,
+                      batch_id TEXT NOT NULL,
+                      shard_id TEXT NOT NULL,
+                      partition_id INTEGER NOT NULL,
+                      command_stream TEXT NOT NULL,
+                      event_stream TEXT NOT NULL,
+                      stream_sequence BIGINT NOT NULL,
+                      delivered_count BIGINT NOT NULL,
+                      command_type TEXT NOT NULL,
+                      payload_hash TEXT NOT NULL,
+                      instrument_id TEXT NOT NULL,
+                      order_id TEXT NOT NULL,
+                      result_status TEXT NOT NULL,
+                      reject_code TEXT NOT NULL,
+                      result_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      materialized_at TIMESTAMPTZ NOT NULL,
+                      occurred_at_ts TIMESTAMPTZ,
+                      archived_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (materialized_at, command_id)
+                    ) PARTITION BY RANGE (materialized_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.canonicalCommandOutcomesArchiveDefault}
+                    PARTITION OF ${names.canonicalCommandOutcomesArchive} DEFAULT
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_archive_command
+                    ON ${names.canonicalCommandOutcomesArchive}(command_id, materialized_at)
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_canonical_command_outcomes_archive_partition_seq
+                    ON ${names.canonicalCommandOutcomesArchive}(partition_id, stream_sequence, materialized_at)
                     """.trimIndent()
                 )
                 stmt.execute(

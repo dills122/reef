@@ -113,6 +113,7 @@ Immediate low-risk hardening from that audit is included in the command-log migr
 - `command_log/0014_integrity_audit_views.sql` adds `command_log.command_integrity_violations`.
 - `command_log.command_integrity_summary()` groups integrity violations for CI, smoke, and operator checks.
 - These diagnostics replace the visibility lost when hot-path same-schema foreign keys were removed, without adding write-time FK checks back onto command intake, queue, or result writes.
+- `command_log/0015_command_results_archive.sql` adds a `completed_at` range-partitioned archive target for terminal results; `PostgresCommandLogStore.archiveTerminalResults(...)` and `make dev-command-log-archive` move bounded unpinned live-result batches while preserving exact status lookup/accounting.
 - `make dev-command-log-integrity-check` fails when any grouped integrity violation count is nonzero.
 - `scripts/dev/command-log-prune.mjs` removes orphan command-log child rows in apply mode before terminal-history pruning.
 

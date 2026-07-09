@@ -74,11 +74,13 @@ External boundary config:
 - `EXTERNAL_API_ABUSE_BREAKER_ROUTES` comma list (default `/api/v1/orders/submit,/api/v1/orders/modify,/api/v1/orders/cancel`)
 - `EXTERNAL_API_ABUSE_BREAKER_ROUTE_POLICIES` optional comma list of `route:maxRejects/windowSeconds/blockSeconds` (example: `/api/v1/orders/modify:10/30/120`)
 - `EXTERNAL_API_ABUSE_BREAKER_WARN_ONLY=true|false` (default `false`)
+- `EXTERNAL_API_AUTHORIZATION_CACHE_TTL_MS` (default `1000`) bounds how long submit/cancel/modify hot paths reuse actor-role and role-permission reads before rechecking persistence.
+- `EXTERNAL_API_REFERENCE_DATA_CACHE_TTL_MS` (default `1000`) bounds how long submit hot paths reuse instrument/participant/account validation results before rechecking persistence.
 - `EXTERNAL_API_IDEMPOTENCY_STORE=inmemory|postgres` (default `inmemory`)
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=postgres|inmemory|disabled` (default `postgres`)
 - `EXTERNAL_API_COMMAND_LOG_MODE=disabled|postgres|inmemory` (default `disabled`; `postgres` appends inbound `/api/v1` commands to `command_log.commands`)
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=sync-result|captured-sync-engine|captured-ack|stream-ack|accepted-async` (default `sync-result`; captured modes require command-log capture, `stream-ack` requires JetStream, and `accepted-async` is an in-memory no-DB isolation mode)
-- `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, and `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` tune the no-DB accepted-async submit intake. The default in-flight window is `32` per lane to avoid flooding the engine stream.
+- `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, and `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS` tune the no-DB accepted-async submit intake. The default in-flight window is `32` per lane to avoid flooding the engine stream. `EXTERNAL_API_ACCEPTED_ASYNC_STATUS_RETENTION_MAX_RECORDS` (default `1000000`) and `EXTERNAL_API_ACCEPTED_ASYNC_STATUS_RETENTION_TTL_MS` (default `900000`) bound in-memory command status/idempotency retention.
 - `RUNTIME_PERSISTENCE=inmemory|postgres|noop` (`noop` is benchmark-only: keeps reference/auth setup data but drops command outcomes, orders, trades, events, canonical facts, and projections)
 - `STREAM_ACK_INTAKE_STORE=postgres|inmemory` selects stream-ack idempotency/intake reservation storage. For no-DB long soaks with `inmemory`, keep `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES` positive to bound replay-window memory and use `STREAM_ACK_INMEMORY_INTAKE_SHARDS` to reduce monitor contention.
 - `STREAM_ACK_PUBLISHER=stream|log|noop` selects the stream-ack publisher override. `noop` is benchmark-only and must not be used for durable acceptance claims because the response no longer proves broker append.

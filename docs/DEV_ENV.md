@@ -645,6 +645,7 @@ Accepted-async no-DB isolation knobs:
 - `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW=false` keeps startup validation from accepting in-flight windows above `128` unless the run is an explicit stress test.
 - `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`.
 - `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS=100000` caps retained completed/failed command status records for the in-memory accepted-async isolation path. Set it to `0` only when intentionally measuring unlimited status/idempotency retention.
+- `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_TTL_MS=900000` evicts retained terminal command statuses and idempotency reservations after the configured age; set it to `0` to rely only on the max-records cap.
 - JFR wrapper knobs: `DEV_JFR_ARTIFACT_DIR`, `DEV_JFR_CONTAINER_PATH`, `DEV_JFR_RECORDING_NAME`, `DEV_JFR_SETTINGS`, and `DEV_JFR_MAX_SIZE` control recording location and size.
 - `GET /internal/commands/async/stats` includes an `acceptedAsync` block with aggregate queued, in-flight, completed-waiting, processing, completed, failed, duplicate, and backpressure counters plus per-lane queue/drain/window counters for accepted-async no-DB diagnostics.
 
@@ -766,6 +767,32 @@ Use this before architecture changes when the goal is to separate `platform-api`
 When command accounting is enabled, the report also includes `commandAccounting` with before/after/drained snapshots, accepted rps, completed-during-load rps, active backlog after load, final active depth, final accounting gap, drain seconds, post-load drained count, and post-load drain rps. This is the preferred local gate for captured-ack throughput work because accepted rps alone does not prove the worker queue can drain.
 
 ## Command-log lifecycle
+
+Archive old terminal command results out of the live result table with a dry-run-first dev tool:
+
+```bash
+make dev-command-log-archive
+```
+
+The default mode reports how many completed/failed result rows are eligible for archive movement but does not change rows. Apply archiving explicitly:
+
+```bash
+DEV_COMMAND_LOG_ARCHIVE_APPLY=1 \
+DEV_COMMAND_LOG_ARCHIVE_OLDER_THAN=24h \
+make dev-command-log-archive
+```
+
+The archive tool copies eligible `command_results` rows into `command_results_archive`, deletes only the live result rows successfully archived, and leaves `commands`/`command_payloads` intact so exact status lookup still works. Useful knobs mirror prune: `DEV_COMMAND_LOG_ARCHIVE_BATCH_SIZE`, `DEV_COMMAND_LOG_ARCHIVE_MAX_BATCHES`, `DEV_COMMAND_LOG_ARCHIVE_VACUUM`, and `DEV_COMMAND_LOG_ARCHIVE_CAPTURE_DB_DIAGNOSTICS`.
+
+Manage monthly archive partitions with a separate dry-run-first tool:
+
+```bash
+DEV_COMMAND_LOG_ARCHIVE_PARTITION_ACTION=create \
+DEV_COMMAND_LOG_ARCHIVE_PARTITION_MONTH=2026-07 \
+make dev-command-log-archive-partitions
+```
+
+Supported actions are `list`, `create`, `drop`, and `export`. `create`, `drop`, and `export` require `DEV_COMMAND_LOG_ARCHIVE_PARTITION_APPLY=1` to execute. Create monthly partitions before archiving rows for that month; otherwise eligible rows land in the default partition until moved manually.
 
 Prune terminal command-log history with a dry-run-first dev tool:
 
@@ -892,7 +919,7 @@ Compose sets:
 - async command worker runtime pool: `EXTERNAL_API_COMMAND_ASYNC_WORKER_DEDICATED_RUNTIME_POOL_ENABLED=true` makes captured-ack workers execute through a separate `async-runtime` persistence pool. The dev default is `false` because captured-ack intake no longer uses runtime persistence on the hot accept path; turn it on for isolation A/B runs.
 - async command worker lease: claimed `PROCESSING` rows are reclaimable after `EXTERNAL_API_COMMAND_ASYNC_WORKER_LEASE_MS`; this prevents runtime restarts from permanently stranding in-flight commands.
 - async command worker stats: `GET /internal/commands/async/stats` returns worker settings, active queue status counts from `command_log.command_work_queue`, and async claim/complete/fail counters. Postgres mode does not count historical terminal results on this hot probe.
-- accepted-async tuning: `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW`, `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS`, and `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS` tune the in-memory no-DB accepted-async isolation path.
+- accepted-async tuning: `EXTERNAL_API_ACCEPTED_ASYNC_LANES`, `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY`, `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE`, `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW`, `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS`, `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS`, and `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_TTL_MS` tune the in-memory no-DB accepted-async isolation path.
 - DB pool stats: `GET /internal/perf/db-pools` returns Hikari pool name plus active/idle/total/waiter counts for runtime-managed pools.
 - DB pool sizing: `RUNTIME_DB_POOL_MAX` and `RUNTIME_DB_POOL_MIN_IDLE` are global defaults. Named hot-path pools apply conservative role defaults so those values do not multiply directly across every pool. Override individual pools with `RUNTIME_DB_POOL_<POOL>_MAX` and `RUNTIME_DB_POOL_<POOL>_MIN_IDLE`, where `<POOL>` is the uppercase pool id with punctuation converted to underscores, such as `COMMAND_LOG` or `ASYNC_RUNTIME`.
 - legacy/internal mutation routes: `PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true` in local compose; POSTs to `/orders/*` and `/reference/*` must include `X-Reef-Internal-Route: true`

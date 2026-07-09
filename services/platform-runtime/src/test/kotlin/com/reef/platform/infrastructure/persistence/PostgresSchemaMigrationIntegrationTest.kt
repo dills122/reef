@@ -69,6 +69,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0032_typed_order_facts.sql',
                   'runtime/0033_typed_canonical_time_facts.sql',
                   'runtime/0034_post_trade_profile_references.sql',
+                  'runtime/0036_canonical_archive_tables.sql',
+                  'runtime/0037_runtime_event_trade_archive_tables.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -91,7 +93,8 @@ class PostgresSchemaMigrationIntegrationTest {
                   'command_log/0011_unlogged_active_queue.sql',
                   'command_log/0012_command_payloads.sql',
                   'command_log/0013_drop_hot_path_foreign_keys.sql',
-                  'command_log/0014_integrity_audit_views.sql'
+                  'command_log/0014_integrity_audit_views.sql',
+                  'command_log/0015_command_results_archive.sql'
                 )
                 ORDER BY migration_id
                 """.trimIndent()
@@ -128,6 +131,7 @@ class PostgresSchemaMigrationIntegrationTest {
                     "command_log/0012_command_payloads.sql",
                     "command_log/0013_drop_hot_path_foreign_keys.sql",
                     "command_log/0014_integrity_audit_views.sql",
+                    "command_log/0015_command_results_archive.sql",
                     "runtime/0003_live_runtime_persistence.sql",
                     "runtime/0004_bulk_submit_outcomes.sql",
                     "runtime/0005_set_based_submit_outcomes.sql",
@@ -149,7 +153,9 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0031_typed_execution_trade_facts.sql",
                     "runtime/0032_typed_order_facts.sql",
                     "runtime/0033_typed_canonical_time_facts.sql",
-                    "runtime/0034_post_trade_profile_references.sql"
+                    "runtime/0034_post_trade_profile_references.sql",
+                    "runtime/0036_canonical_archive_tables.sql",
+                    "runtime/0037_runtime_event_trade_archive_tables.sql"
                 ),
                 appliedMigrations
             )
@@ -167,6 +173,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "command_log.command_payloads",
                 "command_log.command_integrity_violations",
                 "command_log.command_results",
+                "command_log.command_results_archive",
+                "command_log.command_results_archive_default",
                 "command_log.command_work_queue",
                 "command_log.commands",
                 "command_log.retention_pins",
@@ -174,15 +182,23 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.orders",
                 "runtime.reference_instruments",
                 "runtime.runtime_events",
+                "runtime.runtime_events_archive",
+                "runtime.runtime_events_archive_default",
                 "runtime.submit_results",
                 "runtime.canonical_command_results",
                 "runtime.canonical_venue_events",
                 "runtime.canonical_venue_event_batches",
+                "runtime.canonical_venue_event_batches_archive",
+                "runtime.canonical_venue_event_batches_archive_default",
                 "runtime.canonical_command_outcomes",
+                "runtime.canonical_command_outcomes_archive",
+                "runtime.canonical_command_outcomes_archive_default",
                 "runtime.market_data_snapshots",
                 "runtime.order_lifecycle_state",
                 "runtime.projection_watermarks",
-                "runtime.trades"
+                "runtime.trades",
+                "runtime.trades_archive",
+                "runtime.trades_archive_default"
             )
 
             val actualTables = conn.prepareStatement(
@@ -194,12 +210,20 @@ class PostgresSchemaMigrationIntegrationTest {
                     'orders',
                     'executions',
                     'trades',
+                    'trades_archive',
+                    'trades_archive_default',
                     'runtime_events',
+                    'runtime_events_archive',
+                    'runtime_events_archive_default',
                     'submit_results',
                     'canonical_command_results',
                     'canonical_venue_events',
                     'canonical_venue_event_batches',
+                    'canonical_venue_event_batches_archive',
+                    'canonical_venue_event_batches_archive_default',
                     'canonical_command_outcomes',
+                    'canonical_command_outcomes_archive',
+                    'canonical_command_outcomes_archive_default',
                     'market_data_snapshots',
                     'order_lifecycle_state',
                     'projection_watermarks',
@@ -218,6 +242,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     'command_integrity_violations',
                     'command_work_queue',
                     'command_results',
+                    'command_results_archive',
+                    'command_results_archive_default',
                     'retention_pins'
                   )
                 """.trimIndent()
@@ -309,6 +335,59 @@ class PostgresSchemaMigrationIntegrationTest {
             }
 
             assertTrue(commandLogForeignKeys.isEmpty(), "unexpected command-log hot-path foreign keys: $commandLogForeignKeys")
+
+            val commandResultsArchivePartitions = conn.prepareStatement(
+                """
+                SELECT parent.relname || ':' || child.relname AS partition_name
+                FROM pg_inherits
+                JOIN pg_class parent ON parent.oid = pg_inherits.inhparent
+                JOIN pg_class child ON child.oid = pg_inherits.inhrelid
+                JOIN pg_namespace namespace ON namespace.oid = parent.relnamespace
+                WHERE namespace.nspname = 'command_log'
+                  AND parent.relname = 'command_results_archive'
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("partition_name"))
+                    rows
+                }
+            }
+
+            assertEquals(setOf("command_results_archive:command_results_archive_default"), commandResultsArchivePartitions)
+
+            val runtimeArchivePartitions = conn.prepareStatement(
+                """
+                SELECT parent.relname || ':' || child.relname AS partition_name
+                FROM pg_inherits
+                JOIN pg_class parent ON parent.oid = pg_inherits.inhparent
+                JOIN pg_class child ON child.oid = pg_inherits.inhrelid
+                JOIN pg_namespace namespace ON namespace.oid = parent.relnamespace
+                WHERE namespace.nspname = 'runtime'
+                  AND parent.relname IN (
+                    'canonical_venue_event_batches_archive',
+                    'canonical_command_outcomes_archive',
+                    'runtime_events_archive',
+                    'trades_archive'
+                  )
+                """.trimIndent()
+            ).use { ps ->
+                ps.executeQuery().use { rs ->
+                    val rows = mutableSetOf<String>()
+                    while (rs.next()) rows.add(rs.getString("partition_name"))
+                    rows
+                }
+            }
+
+            assertEquals(
+                setOf(
+                    "canonical_venue_event_batches_archive:canonical_venue_event_batches_archive_default",
+                    "canonical_command_outcomes_archive:canonical_command_outcomes_archive_default",
+                    "runtime_events_archive:runtime_events_archive_default",
+                    "trades_archive:trades_archive_default"
+                ),
+                runtimeArchivePartitions
+            )
 
             val commandCaptureColumns = conn.prepareStatement(
                 """

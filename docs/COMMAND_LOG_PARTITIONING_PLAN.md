@@ -164,16 +164,16 @@ Candidate:
 Flow:
 
 1. terminal result lands in live result table
-2. archive job copies terminal rows older than a live retention window
-3. archive job verifies row counts/checksums
-4. prune deletes live command/result rows not protected by pins
+2. archive operation copies terminal rows older than a live retention window into `command_results_archive`
+3. archive operation deletes live result rows only after the archive insert returns the same `(completed_at, command_id)` row
+4. archive operation skips commands protected by retention pins
 5. old archive partitions can be detached/dropped/exported
 
 Acceptance criteria:
 
 - dropping an old archive partition is O(1) relative to row count
 - pinned commands are excluded from archive-drop cleanup
-- status APIs clearly define whether archived commands are queryable online
+- exact command/idempotency status lookups remain online for archived terminal results; broad terminal status scans stay live-table scoped unless explicit archive tooling is added
 
 ### P4: Optional Native Partitioning For New V2 Tables
 
@@ -234,13 +234,14 @@ Required metrics:
 
 ## Next Slice
 
-P1 (run/session attribution) and P2 (payload split from the hot command index) are done; see the migration references under each phase above.
+P1 (run/session attribution), P2 (payload split from the hot command index), and the first P3 archive-table/store/operator slice are done; see the migration references under each phase above.
 
-Implement P3: archive terminal results by time into `command_results_archive` (or an equivalent archive table). No archive table exists yet.
+Implement the remaining P3 scheduled operational wiring for archiving terminal results by time into `command_results_archive`.
 
-The smallest useful change:
+The archive target now exists as a `completed_at` range-partitioned table with a default partition so archive writes have a safe landing zone before operators add time-bucket partitions. `PostgresCommandLogStore.archiveTerminalResults(...)` and `make dev-command-log-archive` move bounded batches, exclude retention pins, delete live rows only after archive insert success, and keep exact status/accounting lookups correct. `make dev-command-log-archive-partitions` lists, creates, drops, and exports monthly archive partitions.
 
-- add a partitioned `command_results_archive` table keyed by `completed_at`
-- add an archive job that copies terminal rows older than a live retention window and verifies row counts/checksums before prune deletes them
-- keep pinned commands excluded from archive-drop cleanup
-- decide and document whether archived commands remain queryable through the existing status API
+The next smallest useful change:
+
+- schedule archive runs for local/stress profiles with live retention and batch-size controls
+- report archive batch counts and checksum/sampling diagnostics before partition-drop cleanup
+- add a tested default-partition drain path that moves already-archived rows into newly-created monthly partitions

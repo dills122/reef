@@ -57,6 +57,12 @@ data class CommandTerminalUpdate(
     val errorMessage: String = ""
 )
 
+data class CommandResultsArchiveResult(
+    val candidateCount: Long,
+    val archivedCount: Long,
+    val deletedLiveCount: Long
+)
+
 interface CommandLogStore {
     fun append(record: CommandLogRecord): CommandLogAppendResult
     fun findByCommandId(commandId: String): CommandLogRecord?
@@ -117,6 +123,8 @@ data class PostgresCommandLogSqlNames(
     val commandPayloads = "$schemaName.command_payloads"
     val commandWorkQueue = "$schemaName.command_work_queue"
     val commandResults = "$schemaName.command_results"
+    val commandResultsArchive = "$schemaName.command_results_archive"
+    val commandResultsArchiveDefault = "$schemaName.command_results_archive_default"
     val retentionPins = "$schemaName.retention_pins"
     val commandAppendFunction = "$schemaName.command_append"
 

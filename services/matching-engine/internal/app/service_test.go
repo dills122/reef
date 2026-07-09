@@ -424,6 +424,50 @@ func TestSubmitOrderDoesNotMatchAcrossInstruments(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderDoesNotMatchAcrossVenueSessions(t *testing.T) {
+	service := NewService()
+	resting := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-session-1-sell",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideSell,
+		QuantityUnits:  "100",
+		LimitPrice:     "150000000000",
+		Currency:       "USD",
+	})
+	if resting.Accepted == nil {
+		t.Fatalf("expected resting sell accepted, got %#v", resting)
+	}
+
+	crossSessionBuy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-session-2-buy",
+		VenueSessionID: "session-2",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "100",
+		LimitPrice:     "151000000000",
+		Currency:       "USD",
+	})
+	if crossSessionBuy.Accepted == nil {
+		t.Fatalf("expected cross-session buy accepted, got %#v", crossSessionBuy)
+	}
+	if len(crossSessionBuy.Trades) != 0 || len(crossSessionBuy.Executions) != 0 {
+		t.Fatalf("expected no cross-session trade, got %#v", crossSessionBuy)
+	}
+	if got := service.RestingOrdersInSession("session-1", "AAPL", domain.SideSell); got != 1 {
+		t.Fatalf("expected session-1 sell liquidity to remain, got %d", got)
+	}
+	if got := service.RestingOrdersInSession("session-2", "AAPL", domain.SideBuy); got != 1 {
+		t.Fatalf("expected session-2 buy liquidity to rest separately, got %d", got)
+	}
+	if got := service.RestingOrders("AAPL", domain.SideSell); got != 1 {
+		t.Fatalf("expected aggregate sell liquidity to include session-1 only, got %d", got)
+	}
+	if got := service.RestingOrders("AAPL", domain.SideBuy); got != 1 {
+		t.Fatalf("expected aggregate buy liquidity to include session-2 only, got %d", got)
+	}
+}
+
 func TestSubmitOrderUsesRestingOrderPriceForExecution(t *testing.T) {
 	service := NewService()
 	submitRestingSell(t, service, "AAPL", "ord-sell-resting", "100", "150000000000")
@@ -785,6 +829,43 @@ func TestSubmitOrderRejectsSelfTradeReachableAfterOtherLiquidity(t *testing.T) {
 	}
 }
 
+func TestSubmitOrderSelfTradePreventionIgnoresNonCrossingPrice(t *testing.T) {
+	service := NewService()
+	own := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-sell-own-away",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideSell,
+		QuantityUnits: "100",
+		LimitPrice:    "151000000000",
+		Currency:      "USD",
+	})
+	if own.Accepted == nil {
+		t.Fatalf("expected away sell to accept, got %#v", own)
+	}
+
+	buy := service.SubmitOrder(domain.SubmitOrder{
+		OrderID:       "ord-buy-own-below",
+		InstrumentID:  "AAPL",
+		ParticipantID: "participant-1",
+		AccountID:     "account-1",
+		Side:          domain.SideBuy,
+		QuantityUnits: "100",
+		LimitPrice:    "150000000000",
+		Currency:      "USD",
+	})
+	if buy.Accepted == nil {
+		t.Fatalf("expected non-crossing own buy to rest, got %#v", buy)
+	}
+	if buy.Rejected != nil || len(buy.Trades) != 0 {
+		t.Fatalf("expected no self-trade rejection or trade, got %#v", buy)
+	}
+	if service.RestingOrders("AAPL", domain.SideSell) != 1 || service.RestingOrders("AAPL", domain.SideBuy) != 1 {
+		t.Fatalf("expected both non-crossing own orders to rest")
+	}
+}
+
 func TestSubmitOrderAllowsDifferentParticipantCross(t *testing.T) {
 	service := NewService()
 	resting := service.SubmitOrder(domain.SubmitOrder{
@@ -929,9 +1010,10 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 		LimitPrice:    "150250000000",
 		Currency:      "USD",
 	})
+	beforeChecksum := service.Snapshot().Checksum
 
-	rollback := service.BeginBatch([]string{"AAPL"})
-	result := service.SubmitOrder(domain.SubmitOrder{
+	rollback := service.BeginBatch([]BookScope{{InstrumentID: "AAPL"}})
+	result := service.SubmitOrderInBatch(rollback, domain.SubmitOrder{
 		OrderID:       "ord-buy-failed-publish",
 		InstrumentID:  "AAPL",
 		Side:          domain.SideBuy,
@@ -946,7 +1028,7 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 		t.Fatal("expected failed batch mutation to touch terminal retention before rollback")
 	}
 
-	rollback.Rollback(map[string][]string{"AAPL": {"ord-buy-failed-publish"}})
+	rollback.Rollback(map[string][]string{BookScope{InstrumentID: "AAPL"}.Key(): {"ord-buy-failed-publish"}})
 
 	tracked := service.terminalRetention.snapshot()
 	if len(tracked.order)-tracked.head != 0 {
@@ -962,12 +1044,31 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 	if resting := service.RestingOrders("AAPL", domain.SideSell); resting != 1 {
 		t.Fatalf("expected restored sell liquidity after rollback, got %d", resting)
 	}
+	if afterChecksum := service.Snapshot().Checksum; afterChecksum != beforeChecksum {
+		t.Fatalf("expected rollback checksum %s, got %s", beforeChecksum, afterChecksum)
+	}
 }
 
 func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	service := NewService()
-	submitRestingSell(t, service, "AAPL", "ord-sell-1", "100", "150000000000")
-	submitRestingSell(t, service, "AAPL", "ord-sell-2", "100", "150100000000")
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-sell-1",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideSell,
+		QuantityUnits:  "100",
+		LimitPrice:     "150000000000",
+		Currency:       "USD",
+	})
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-sell-2",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideSell,
+		QuantityUnits:  "100",
+		LimitPrice:     "150100000000",
+		Currency:       "USD",
+	})
 	firstMatch := service.SubmitOrder(domain.SubmitOrder{
 		OrderID:        "ord-buy-1",
 		VenueSessionID: "session-1",
@@ -981,7 +1082,15 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if len(firstMatch.Trades) != 1 {
 		t.Fatalf("expected seed trade, got %#v", firstMatch.Trades)
 	}
-	submitRestingBuy(t, service, "ord-buy-resting", "100", "149900000000")
+	service.SubmitOrder(domain.SubmitOrder{
+		OrderID:        "ord-buy-resting",
+		VenueSessionID: "session-1",
+		InstrumentID:   "AAPL",
+		Side:           domain.SideBuy,
+		QuantityUnits:  "100",
+		LimitPrice:     "149900000000",
+		Currency:       "USD",
+	})
 	modified := service.ModifyOrder(domain.ModifyOrder{
 		OrderID:       "ord-buy-resting",
 		QuantityUnits: "90",
@@ -1002,7 +1111,7 @@ func TestServiceSnapshotRestorePreservesReplayChecksum(t *testing.T) {
 	if snapshot.Metadata.BookCount != 1 || snapshot.Metadata.OrderCount != 4 {
 		t.Fatalf("unexpected snapshot metadata counts: %#v", snapshot.Metadata)
 	}
-	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"AAPL"}) {
+	if !reflect.DeepEqual(snapshot.Metadata.BookKeys, []string{"session-1|AAPL"}) {
 		t.Fatalf("unexpected snapshot book keys: %#v", snapshot.Metadata.BookKeys)
 	}
 	restored, ok := Restore(snapshot)
