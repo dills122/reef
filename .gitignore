@@ -24,6 +24,7 @@ infra/hetzner-core/tofu/*.tfplan
 infra/hetzner-core/tofu/tfplan
 infra/hetzner-core/server/.env
 infra/hetzner-core/server/secrets/
+infra/hetzner-core/server/openbao/logs/
 .tmp-do-known-hosts
 
 # Codex local integration links. These point at user-specific template

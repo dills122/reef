@@ -29,6 +29,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-throughput-campaign dev-throughput-compare
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-materializer-up
 .PHONY: kube-smoke-venue-event-materializer kube-port-forward
+.PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
 .PHONY: do-benchmark do-materializer-10k-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
@@ -121,6 +122,38 @@ check-js-runtime:
 dev-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/up.mjs
+
+backbone-local-up:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs up
+
+backbone-local-up-infra:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs up-infra
+
+backbone-local-init-openbao:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs init-openbao
+
+backbone-local-migrate:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs migrate
+
+backbone-local-verify:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs verify
+
+backbone-local-status:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs status
+
+backbone-local-logs:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs logs $(ARGS)
+
+backbone-local-down:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/backbone-local.mjs down
 
 dev-up-runtime-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

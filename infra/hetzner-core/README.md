@@ -94,6 +94,49 @@ make hetzner-core ARGS=deploy
 make hetzner-core ARGS=status
 ```
 
+## Local Backbone Stack
+
+The root Compose files are for local simulation/runtime development. The
+backbone has its own local stack using the deploy-shaped files under
+`infra/hetzner-core/server/`, with a separate Compose project and non-conflicting
+host ports.
+
+```bash
+make backbone-local-up-infra
+make backbone-local-init-openbao
+make backbone-local-up
+make backbone-local-status
+make backbone-local-down
+```
+
+Defaults:
+
+```text
+COMPOSE_PROJECT_NAME=reef-backbone-local
+REEF_BACKBONE_PLATFORM_HOST_PORT=18180
+REEF_BACKBONE_OPENBAO_HOST_PORT=18200
+```
+
+That allows the backbone Admin API and OpenBao to run beside a simulation stack
+using the root `make dev-up` workflow. The local helper generates ignored
+secrets under `infra/hetzner-core/server/secrets/`, builds local service images
+through `docker-compose.local.yml`, applies migrations to the main, admin, and
+analytics Postgres containers, and runs the backbone runtime verifier.
+
+For local development only, `make backbone-local-up-infra` and
+`make backbone-local-up` also initialize and unseal OpenBao when needed. The
+one-shot local root token and unseal key are saved to ignored files under
+`infra/hetzner-core/server/secrets/`, then the normal Reef OpenBao bootstrap
+runs to configure the `secret/` KV v2 mount, runtime AppRole policies, and
+GitHub Actions JWT provisioning policy. It also enables API-managed file audit
+logging when the OpenBao image supports it; OpenBao 2.5 requires declarative
+audit devices and the local helper reports that as a non-fatal skip. Run
+`make backbone-local-init-openbao` directly if the Bao container was started
+separately or restarted sealed.
+
+Hosted OpenBao must still use the manual threshold init flow below. Do not use
+the local single-key init script for hosted deployments.
+
 `deploy` syncs the server bundle, syncs SQL migrations from
 `scripts/dev/db/migrations`, generates missing local env files, starts
 Postgres/OpenBao/matching-engine, applies migrations, and then starts the full
@@ -102,10 +145,11 @@ Compose stack.
 Admin and analytics data live in two dedicated Postgres containers
 (`postgres-admin`, `postgres-analytics`), separate from the main `reef`
 database used for trading/runtime state and separate from each other - see
-[D-046](../../docs/DECISIONS.md). Migrations for those domains still live
-under `scripts/dev/db/migrations/admin/` and `.../analytics/`; `deploy` applies
-them against their own containers via `REEF_MIGRATION_DOMAINS`/
-`REEF_POSTGRES_SERVICE`/`REEF_POSTGRES_DB` overrides to `apply-migrations.sh`.
+[D-046](../../docs/DECISIONS.md). Migrations for those domains still live under
+`scripts/dev/db/migrations/`; `deploy` applies `admin` and `arena` domains to
+`postgres-admin`, and `analytics` to `postgres-analytics`, through
+`REEF_MIGRATION_DOMAINS`/`REEF_POSTGRES_SERVICE`/`REEF_POSTGRES_DB` overrides to
+`apply-migrations.sh`.
 
 If Docker Hub images are not public or ready yet, build the images on the Hetzner
 host and use local image tags:
