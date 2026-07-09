@@ -5841,7 +5841,7 @@ class PlatformHttpServer(
     }
 
     private fun marketDataProjectorShouldStart(): Boolean {
-        return runtimeRole.backgroundWorkersEnabled && marketDataProjectorEnabled
+        return runtimeRole == PlatformRuntimeRole.Projector && marketDataProjectorEnabled
     }
 
     private fun startMarketDataProjector() {
@@ -5856,7 +5856,7 @@ class PlatformHttpServer(
     }
 
     private fun orderLifecycleProjectorShouldStart(): Boolean {
-        return runtimeRole.backgroundWorkersEnabled && orderLifecycleProjectorEnabled
+        return runtimeRole == PlatformRuntimeRole.Projector && orderLifecycleProjectorEnabled
     }
 
     private fun startOrderLifecycleProjector() {

@@ -78,6 +78,7 @@ optional:
   REEF_DO_REQUIRE_DB_DIAGNOSTICS=1
   REEF_DO_REQUIRE_PG_STAT_IO=1
   REEF_DO_IMAGE_MODE=dockerhub|source
+  REEF_DO_STAGE_LOG_TAIL=80
 
 optional R2 artifact export (compressed debug data, uploaded from the worker
 before fetch/destroy, reusing the backbone's Postgres/OpenBao backup R2
@@ -349,6 +350,7 @@ remote_run_benchmark() {
   local arena_tick_interval_ms="${REEF_DO_ARENA_TICK_INTERVAL_MS:-1000}"
   local arena_warmup_seconds="${REEF_DO_ARENA_WARMUP_SECONDS:-30}"
   local arena_health_sample_interval_ms="${REEF_DO_ARENA_HEALTH_SAMPLE_INTERVAL_MS:-1000}"
+  local stage_log_tail="${REEF_DO_STAGE_LOG_TAIL:-80}"
 
   echo "running remote benchmark profile=$profile run_id=$run_id stream=$stream_name subject_prefix=$subject_prefix rates=$rates workers=$workers repeat_samples=$repeat_samples duration=$duration drain_backpressure_policy=$drain_backpressure_policy image_mode=$image_mode"
   remote_script \
@@ -371,6 +373,7 @@ remote_run_benchmark() {
     REEF_BENCHMARK_ARENA_TICK_INTERVAL_MS="$arena_tick_interval_ms" \
     REEF_BENCHMARK_ARENA_WARMUP_SECONDS="$arena_warmup_seconds" \
     REEF_BENCHMARK_ARENA_HEALTH_SAMPLE_INTERVAL_MS="$arena_health_sample_interval_ms" \
+    REEF_BENCHMARK_STAGE_LOG_TAIL="$stage_log_tail" \
     REEF_BENCHMARK_IMAGE_MODE="$image_mode" <<'REMOTE'
 set -euo pipefail
 artifact_dir="$REMOTE_ARTIFACT_ROOT/$REEF_BENCHMARK_RUN_ID"
@@ -390,6 +393,28 @@ echo "event_subject_prefix=$REEF_BENCHMARK_EVENT_SUBJECT_PREFIX"
 echo "rates=$REEF_BENCHMARK_RATES workers=$REEF_BENCHMARK_WORKERS repeat_samples=$REEF_BENCHMARK_REPEAT_SAMPLES duration=$REEF_BENCHMARK_DURATION"
 echo "drain_backpressure_policy=$REEF_BENCHMARK_DRAIN_BACKPRESSURE_POLICY"
 echo "image_mode=$REEF_BENCHMARK_IMAGE_MODE"
+
+run_stage() {
+  local name="$1"
+  shift
+  local log_file="$log_dir/stage-${name}.log"
+  local started_at
+  started_at="$(date +%s)"
+  echo "[$(date -Is)] stage: $name (log=$log_file)"
+  if "$@" >"$log_file" 2>&1 </dev/null; then
+    local finished_at
+    finished_at="$(date +%s)"
+    echo "[$(date -Is)] stage complete: $name duration_seconds=$((finished_at - started_at))"
+    return 0
+  fi
+  local status=$?
+  local finished_at
+  finished_at="$(date +%s)"
+  echo "[$(date -Is)] stage failed: $name status=$status duration_seconds=$((finished_at - started_at)) log=$log_file" >&2
+  echo "[$(date -Is)] tail: $name last ${REEF_BENCHMARK_STAGE_LOG_TAIL:-80} lines" >&2
+  tail -n "${REEF_BENCHMARK_STAGE_LOG_TAIL:-80}" "$log_file" >&2 || true
+  return "$status"
+}
 
 export JS_RUNTIME=node
 export PLATFORM_INTERNAL_HTTP_MODE=enabled
@@ -411,9 +436,7 @@ if [ "$REEF_BENCHMARK_IMAGE_MODE" = "dockerhub" ] && [ "$REEF_BENCHMARK_PROFILE"
   export REEF_PLATFORM_RUNTIME_IMAGE="${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}"
   export REEF_MATCHING_ENGINE_IMAGE="${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}"
   export DEV_COMPOSE_BUILD=0
-  echo "[$(date -Is)] stage: docker compose pull Docker Hub runtime images"
-  docker compose pull platform-api matching-engine platform-materializer platform-materializer-1 platform-materializer-2 platform-materializer-3
-  echo "[$(date -Is)] stage complete: docker compose pull Docker Hub runtime images"
+  run_stage docker-compose-pull docker compose pull platform-api matching-engine platform-materializer platform-materializer-1 platform-materializer-2 platform-materializer-3
 else
   export DEV_COMPOSE_BUILD="${DEV_COMPOSE_BUILD:-1}"
 fi
@@ -424,15 +447,9 @@ if [ "$REEF_BENCHMARK_PROFILE" = "stream-ack" ]; then
   export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
   export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
 
-  echo "[$(date -Is)] stage: make dev-up-stream-ack"
-  make dev-up-stream-ack </dev/null
-  echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
-  echo "[$(date -Is)] stage: make dev-smoke"
-  make dev-smoke </dev/null
-  echo "[$(date -Is)] stage complete: make dev-smoke"
-  echo "[$(date -Is)] stage: make dev-stress-stream-ack"
-  make dev-stress-stream-ack </dev/null
-  echo "[$(date -Is)] stage complete: make dev-stress-stream-ack"
+  run_stage make-dev-up-stream-ack make dev-up-stream-ack
+  run_stage make-dev-smoke make dev-smoke
+  run_stage make-dev-stress-stream-ack make dev-stress-stream-ack
 elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
   export DEV_STRESS_REPORT_OUT="$artifact_dir/venue-event-materializer-stress.json"
   export MATCHING_ENGINE_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
@@ -441,38 +458,29 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
   export VENUE_EVENT_MATERIALIZER_GROUP_ID="$REEF_BENCHMARK_MATERIALIZER_GROUP"
   export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
 
-  echo "[$(date -Is)] stage: make dev-smoke-venue-event-materializer"
-  make dev-smoke-venue-event-materializer </dev/null
-  echo "[$(date -Is)] stage complete: make dev-smoke-venue-event-materializer"
-  echo "[$(date -Is)] stage: make dev-stress-venue-event-materializer"
-  make dev-stress-venue-event-materializer </dev/null
-  echo "[$(date -Is)] stage complete: make dev-stress-venue-event-materializer"
+  run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
+  run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   arena_report="$artifact_dir/arena-local-tick-run.json"
   arena_export="$artifact_dir/arena-export.json"
   arena_command_timeout_ms="${REEF_BENCHMARK_ARENA_COMMAND_TIMEOUT_MS:-3000}"
   arena_timeout_seconds="${REEF_BENCHMARK_ARENA_TIMEOUT_SECONDS:-$((REEF_BENCHMARK_ARENA_DURATION_SECONDS + 900))}"
+  export ORDER_LIFECYCLE_PROJECTOR_ENABLED="${ORDER_LIFECYCLE_PROJECTOR_ENABLED:-true}"
+  export MARKET_DATA_PROJECTOR_ENABLED="${MARKET_DATA_PROJECTOR_ENABLED:-true}"
+  export ORDER_LIFECYCLE_PROJECTOR_POLL_MS="${ORDER_LIFECYCLE_PROJECTOR_POLL_MS:-100}"
+  export MARKET_DATA_PROJECTOR_POLL_MS="${MARKET_DATA_PROJECTOR_POLL_MS:-100}"
 
   if ! command -v bun >/dev/null 2>&1; then
-    echo "[$(date -Is)] stage: install bun"
-    curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
-    bash /tmp/bun-install.sh
+    run_stage install-bun curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
+    run_stage install-bun-script bash /tmp/bun-install.sh
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
-    echo "[$(date -Is)] stage complete: install bun"
   fi
 
-  echo "[$(date -Is)] stage: bun install"
-  bun install </dev/null
-  echo "[$(date -Is)] stage complete: bun install"
-  echo "[$(date -Is)] stage: make dev-up-stream-ack"
-  make dev-up-stream-ack </dev/null
-  echo "[$(date -Is)] stage complete: make dev-up-stream-ack"
-  echo "[$(date -Is)] stage: make dev-smoke"
-  make dev-smoke </dev/null
-  echo "[$(date -Is)] stage complete: make dev-smoke"
-  echo "[$(date -Is)] stage: arena local tick run"
-  timeout --preserve-status "${arena_timeout_seconds}s" bun scripts/dev/arena-local-tick-run.mjs \
+  run_stage bun-install bun install
+  run_stage make-dev-up-stream-ack make dev-up-stream-ack
+  run_stage make-dev-smoke make dev-smoke
+  run_stage arena-local-tick-run timeout --preserve-status "${arena_timeout_seconds}s" bun scripts/dev/arena-local-tick-run.mjs \
     --run-id="$REEF_BENCHMARK_RUN_ID" \
     --compartment=ses \
     --submit-mode=live \
@@ -489,17 +497,14 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --pace-ticks \
     --projection-drain-timeout-ms=30000 \
     --require-projection-drain \
-    --out="$arena_report" </dev/null
-  echo "[$(date -Is)] stage complete: arena local tick run"
-  echo "[$(date -Is)] stage: arena export"
-  node scripts/dev/export-simulation-run.mjs \
+    --out="$arena_report"
+  run_stage arena-export node scripts/dev/export-simulation-run.mjs \
     --report "$arena_report" \
     --artifact-root "$artifact_dir" \
     --run-kind arena-do \
     --source digitalocean \
     --profile "arena-${REEF_BENCHMARK_DURATION}" \
-    --out "$arena_export" </dev/null
-  echo "[$(date -Is)] stage complete: arena export"
+    --out "$arena_export"
 else
   echo "unsupported REEF_DO_BENCHMARK_PROFILE=$REEF_BENCHMARK_PROFILE" >&2
   exit 2
