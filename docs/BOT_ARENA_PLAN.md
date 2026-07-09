@@ -183,6 +183,14 @@ The arena should support specialized competitions and aggregate seasons:
 - execution-quality challenge
 - overall ranking across multiple game modes and seed sets
 
+Game modes should eventually classify instruments/assets with explicit arena
+metadata such as liquidity tier, volatility tier, quality/risk bucket, and
+allowed house-liquidity profile. For example, a mode can include "junk" tier
+tickers together with liquidity providers calibrated for that same tier. These
+categories belong in scenario/mode metadata and bot configuration, not in the
+matching engine, so the venue stays neutral while the arena can create varied
+market-quality outcomes.
+
 The game layer must not redefine Reef as a retail trading application. It should remain a controlled simulation and benchmarking surface for strategy behavior, market microstructure, and platform throughput.
 
 Arena readiness depends on completed-throughput capacity, not only request intake. Before attaching public bot traffic, Reef should prove that accepted bot-originated commands are durably captured, terminally accounted, and drained without unexplained gaps under the `stream-ack` stress profile. Postgres `captured-ack` remains useful for local fallback and A/B comparison.

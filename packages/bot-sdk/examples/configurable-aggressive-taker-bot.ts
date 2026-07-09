@@ -36,6 +36,7 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
         side,
         quantity: orderSize,
         limitPrice: Number((referencePrice + signedOffset).toFixed(2)),
+        timeInForce: "IOC",
       }),
     ];
   }
