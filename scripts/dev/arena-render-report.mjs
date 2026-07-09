@@ -27,6 +27,7 @@ function renderReport(report, context) {
   const enforcementEvents = report.enforcementEvents ?? [];
   const persistence = report.persistence ?? {};
   const venueReadback = report.venueReadback ?? {};
+  const scoringAssumptions = report.scoringAssumptions ?? {};
   const statusClass = String(report.status ?? "unknown").includes("freeze") ? "warn" : "ok";
   const persisted = persistence.enabled && !persistence.skipped;
   const projectionDrained = venueReadback.projectionDrained === true;
@@ -262,6 +263,25 @@ function renderReport(report, context) {
     </section>
 
     <section class="section">
+      <h2>Trading Metrics</h2>
+      ${tradingMetricsTable(botResults)}
+    </section>
+
+    <section class="section">
+      <h2>Scoring Assumptions</h2>
+      <table>
+        <tbody>
+          ${kv("Policy", scoringAssumptions.scoringPolicyVersion ?? mode.scoringPolicyVersion)}
+          ${kv("Score basis", scoringAssumptions.scoreBasis)}
+          ${kv("Leaderboard scope", scoringAssumptions.leaderboardScope)}
+          ${kv("House bots", scoringAssumptions.houseBots)}
+          ${kv("P&L", scoringAssumptions.pnl?.status)}
+          ${kv("Trading metrics", scoringAssumptions.tradingMetrics?.status)}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
       <h2>Enforcement</h2>
       ${enforcementEvents.length === 0 ? `<div class="empty">No freeze or disqualification events.</div>` : `<div class="event-list">${enforcementEvents.map(enforcementEvent).join("")}</div>`}
     </section>
@@ -297,7 +317,7 @@ function leaderboardTable(entries) {
     <tbody>
       ${entries.map((entry) => `<tr>
         <td class="mono">${escapeHtml(entry.rank)}</td>
-        <td>${escapeHtml(entry.botId)}</td>
+        <td>${botLabel(entry)}</td>
         <td class="num">${formatNumber(entry.score ?? entry.finalEquity)}</td>
         <td class="num">${formatNumber(entry.venueCommands ?? entry.orderActionsProposed ?? 0)}</td>
         <td>${entry.disqualified ? `<span class="pill bad">disqualified</span>` : `<span class="pill ok">eligible</span>`}</td>
@@ -324,7 +344,7 @@ function botResultsTable(results) {
     </thead>
     <tbody>
       ${results.map((result) => `<tr>
-        <td>${escapeHtml(result.botId)}</td>
+        <td>${botLabel(result)}</td>
         <td class="mono">${escapeHtml(result.versionId)}</td>
         <td class="num">${formatNumber(result.score ?? result.finalEquity)}</td>
         <td class="num">${formatNumber(result.actionsProposed ?? 0)}</td>
@@ -332,6 +352,41 @@ function botResultsTable(results) {
         <td class="num">${formatNumber(result.dataCalls ?? 0)}</td>
         <td>${result.disqualified ? `<span class="pill bad">disqualified</span>` : result.scoreEligible === false ? `<span class="pill warn">diagnostic</span>` : `<span class="pill ok">eligible</span>`}</td>
       </tr>`).join("")}
+    </tbody>
+  </table>`;
+}
+
+function tradingMetricsTable(results) {
+  if (results.length === 0) {
+    return `<div class="empty">No trading metric rows.</div>`;
+  }
+  return `<table>
+    <thead>
+      <tr>
+        <th>Bot</th>
+        <th class="num">Submits</th>
+        <th class="num">Cancels</th>
+        <th class="num">Buy Qty</th>
+        <th class="num">Sell Qty</th>
+        <th class="num">Gross Notional</th>
+        <th>P&L</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${results.map((result) => {
+        const metrics = result.tradingMetrics ?? {};
+        const orderFlow = metrics.orderFlow ?? {};
+        const pnl = metrics.pnl ?? {};
+        return `<tr>
+          <td>${botLabel(result)}</td>
+          <td class="num">${formatNumber(orderFlow.submittedLimitOrders ?? 0)}</td>
+          <td class="num">${formatNumber(orderFlow.cancelCommands ?? 0)}</td>
+          <td class="num">${formatNumber(orderFlow.buyQuantity ?? 0)}</td>
+          <td class="num">${formatNumber(orderFlow.sellQuantity ?? 0)}</td>
+          <td class="num">${formatNumber(orderFlow.grossSubmittedNotional ?? 0)}</td>
+          <td>${pnl.available === false ? `<span class="pill warn">pending attribution</span>` : formatNumber(pnl.total ?? 0)}</td>
+        </tr>`;
+      }).join("")}
     </tbody>
   </table>`;
 }
@@ -346,6 +401,14 @@ function enforcementEvent(event) {
 
 function kv(key, value) {
   return `<tr><th>${escapeHtml(key)}</th><td class="mono">${escapeHtml(value === undefined ? "n/a" : String(value))}</td></tr>`;
+}
+
+function botLabel(bot) {
+  const displayName = bot.displayName ?? bot.botId;
+  if (displayName === bot.botId) {
+    return `<span>${escapeHtml(bot.botId)}</span>`;
+  }
+  return `<span>${escapeHtml(displayName)}</span><div class="subtle mono">${escapeHtml(bot.botId)}</div>`;
 }
 
 function formatNumber(value) {

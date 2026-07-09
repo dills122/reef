@@ -132,6 +132,7 @@ try {
   assert.ok(commandStatusReads.length >= receivedCommands.length);
   assert.ok(commandStatusReads.every((read) => commands.get(read.commandId)?.participantId === read.participantId));
   assert.equal(arena.bots.size, 5);
+  assert.equal(arena.bots.get("builtin-mm-simple").name, "Blue Saber Trading");
   assert.equal(arena.versions.size, 5);
   assert.equal(arena.runs.size, 1);
   assert.equal(arena.results.length, 5);
@@ -141,6 +142,9 @@ try {
   assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
   assert.equal(report.runPlan.totalTickCount, 24);
   assert.equal(report.commandWaitMode, "accepted");
+  assert.equal(report.scoringAssumptions.scoreBasis, "participation-and-policy-compliance");
+  assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.displayName, "Blue Saber Trading");
+  assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.tradingMetrics.schemaVersion, "reef.arena.tradingMetrics.v0");
   assert.equal(report.healthSamples.length, 3);
   assert.equal(report.activityBySchedulingClass.house_responsive.ticks, 18);
   assert.equal(report.activityBySchedulingClass.house_responsive.submittedCommands, 18);

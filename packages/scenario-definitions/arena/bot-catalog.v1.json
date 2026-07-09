@@ -5,6 +5,7 @@
   "bots": [
     {
       "botId": "builtin-mm-simple",
+      "displayName": "Blue Saber Trading",
       "versionId": "local-1",
       "runnerKey": "simple",
       "role": "market-maker",
@@ -24,6 +25,7 @@
     },
     {
       "botId": "builtin-mm-lifecycle-safe",
+      "displayName": "Twin Sun Liquidity",
       "versionId": "local-1",
       "runnerKey": "lifecycle",
       "role": "market-maker",
@@ -43,6 +45,7 @@
     },
     {
       "botId": "builtin-mm-refreshing",
+      "displayName": "Red Five Markets",
       "versionId": "local-1",
       "runnerKey": "refreshing",
       "role": "market-maker",
@@ -65,6 +68,7 @@
     },
     {
       "botId": "builtin-mm-msft-lifecycle",
+      "displayName": "Echo Base Markets",
       "versionId": "local-1",
       "runnerKey": "lifecycle",
       "role": "market-maker",
@@ -84,6 +88,7 @@
     },
     {
       "botId": "builtin-mm-nvda-lifecycle",
+      "displayName": "Nova Squadron Liquidity",
       "versionId": "local-1",
       "runnerKey": "lifecycle",
       "role": "market-maker",
@@ -103,6 +108,7 @@
     },
     {
       "botId": "builtin-mm-tsla-lifecycle",
+      "displayName": "Binary Sunset Markets",
       "versionId": "local-1",
       "runnerKey": "lifecycle",
       "role": "market-maker",
@@ -122,6 +128,7 @@
     },
     {
       "botId": "builtin-mm-amzn-lifecycle",
+      "displayName": "Outer Rim Liquidity",
       "versionId": "local-1",
       "runnerKey": "lifecycle",
       "role": "market-maker",
@@ -141,6 +148,7 @@
     },
     {
       "botId": "builtin-npc-momentum",
+      "displayName": "Kessel Momentum",
       "versionId": "local-1",
       "runnerKey": "multi-symbol",
       "role": "npc",
@@ -158,6 +166,7 @@
     },
     {
       "botId": "builtin-npc-taker-aapl",
+      "displayName": "AAPL Rogue Taker",
       "versionId": "local-1",
       "runnerKey": "aggressive-taker",
       "role": "npc",
@@ -178,6 +187,7 @@
     },
     {
       "botId": "builtin-npc-taker-msft",
+      "displayName": "MSFT Rogue Taker",
       "versionId": "local-1",
       "runnerKey": "aggressive-taker",
       "role": "npc",
@@ -198,6 +208,7 @@
     },
     {
       "botId": "builtin-npc-taker-nvda",
+      "displayName": "NVDA Rogue Taker",
       "versionId": "local-1",
       "runnerKey": "aggressive-taker",
       "role": "npc",
@@ -218,6 +229,7 @@
     },
     {
       "botId": "builtin-npc-taker-tsla",
+      "displayName": "TSLA Rogue Taker",
       "versionId": "local-1",
       "runnerKey": "aggressive-taker",
       "role": "npc",
@@ -238,6 +250,7 @@
     },
     {
       "botId": "builtin-npc-taker-amzn",
+      "displayName": "AMZN Rogue Taker",
       "versionId": "local-1",
       "runnerKey": "aggressive-taker",
       "role": "npc",
@@ -258,6 +271,7 @@
     },
     {
       "botId": "custom-technical-indicator",
+      "displayName": "Twin Ion Quant",
       "versionId": "local-1",
       "runnerKey": "technical",
       "role": "competitor",
@@ -268,6 +282,7 @@
     },
     {
       "botId": "custom-passive-aapl-buy",
+      "displayName": "AAPL Blue Bid",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -287,6 +302,7 @@
     },
     {
       "botId": "custom-passive-aapl-sell",
+      "displayName": "AAPL Red Offer",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -306,6 +322,7 @@
     },
     {
       "botId": "custom-passive-msft-buy",
+      "displayName": "MSFT Blue Bid",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -325,6 +342,7 @@
     },
     {
       "botId": "custom-passive-msft-sell",
+      "displayName": "MSFT Red Offer",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -344,6 +362,7 @@
     },
     {
       "botId": "custom-passive-nvda-buy",
+      "displayName": "NVDA Blue Bid",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -363,6 +382,7 @@
     },
     {
       "botId": "custom-passive-nvda-sell",
+      "displayName": "NVDA Red Offer",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -382,6 +402,7 @@
     },
     {
       "botId": "custom-passive-tsla-buy",
+      "displayName": "TSLA Blue Bid",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -401,6 +422,7 @@
     },
     {
       "botId": "custom-passive-tsla-sell",
+      "displayName": "TSLA Red Offer",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -420,6 +442,7 @@
     },
     {
       "botId": "custom-passive-amzn-buy",
+      "displayName": "AMZN Blue Bid",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -439,6 +462,7 @@
     },
     {
       "botId": "custom-passive-amzn-sell",
+      "displayName": "AMZN Red Offer",
       "versionId": "local-1",
       "runnerKey": "passive",
       "role": "competitor",
@@ -458,6 +482,7 @@
     },
     {
       "botId": "custom-too-many-orders",
+      "displayName": "Thermal Exhaust Stressor",
       "versionId": "local-1",
       "runnerKey": "too-many-orders",
       "role": "competitor",

@@ -23,6 +23,14 @@ writeFileSync(
       riskPolicyVersion: "arena-risk-v0",
     },
     runnerProfile: { submitMode: "live" },
+    scoringAssumptions: {
+      scoringPolicyVersion: "score-v0",
+      scoreBasis: "participation-and-policy-compliance",
+      leaderboardScope: "score-eligible public competitor bots only",
+      houseBots: "diagnostics-only",
+      pnl: { status: "not-yet-scored" },
+      tradingMetrics: { status: "command-mix v0" },
+    },
     totals: {
       ticks: 3,
       failedTicks: 1,
@@ -52,6 +60,7 @@ writeFileSync(
       {
         rank: 1,
         botId: "custom-technical-indicator",
+        displayName: "Twin Ion Quant",
         versionId: "local",
         score: 1000450,
         venueCommands: 5,
@@ -61,6 +70,7 @@ writeFileSync(
     botResults: [
       {
         botId: "custom-technical-indicator",
+        displayName: "Twin Ion Quant",
         versionId: "local",
         score: 1000450,
         actionsProposed: 5,
@@ -68,9 +78,20 @@ writeFileSync(
         dataCalls: 3,
         scoreEligible: true,
         disqualified: false,
+        tradingMetrics: {
+          orderFlow: {
+            submittedLimitOrders: 4,
+            cancelCommands: 1,
+            buyQuantity: 2,
+            sellQuantity: 2,
+            grossSubmittedNotional: 400.5,
+          },
+          pnl: { available: false },
+        },
       },
       {
         botId: "custom-too-many-orders",
+        displayName: "Thermal Exhaust Stressor",
         versionId: "local",
         score: 750000,
         actionsProposed: 20,
@@ -78,6 +99,16 @@ writeFileSync(
         dataCalls: 0,
         scoreEligible: true,
         disqualified: true,
+        tradingMetrics: {
+          orderFlow: {
+            submittedLimitOrders: 0,
+            cancelCommands: 0,
+            buyQuantity: 0,
+            sellQuantity: 0,
+            grossSubmittedNotional: 0,
+          },
+          pnl: { available: false },
+        },
       },
     ],
     enforcementEvents: [
@@ -108,6 +139,11 @@ assert.equal(result.status, 0, result.stderr);
 const html = readFileSync(htmlPath, "utf8");
 assert.match(html, /Reef Arena Operator Report/);
 assert.match(html, /arena-test-run/);
+assert.match(html, /Twin Ion Quant/);
+assert.match(html, /Thermal Exhaust Stressor/);
+assert.match(html, /Trading Metrics/);
+assert.match(html, /Scoring Assumptions/);
+assert.match(html, /pending attribution/);
 assert.match(html, /custom-technical-indicator/);
 assert.match(html, /custom-too-many-orders/);
 assert.match(html, /maxActionsPerTick 20 &gt; 5/);

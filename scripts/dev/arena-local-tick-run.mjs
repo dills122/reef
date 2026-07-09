@@ -549,6 +549,7 @@ function scoreBots(sessionReports, enforcementEvents) {
     );
     return {
       botId: session.bot.botId,
+      displayName: displayNameForBot(session.bot),
       versionId: session.bot.versionId,
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
@@ -567,8 +568,125 @@ function scoreBots(sessionReports, enforcementEvents) {
       operationalPauseCount,
       disqualified: freezeCount > 0,
       score,
+      tradingMetrics: summarizeTradingMetrics(session, counters),
     };
   });
+}
+
+function displayNameForBot(bot) {
+  return typeof bot.displayName === "string" && bot.displayName.trim().length > 0
+    ? bot.displayName.trim()
+    : bot.botId;
+}
+
+function scoringAssumptions() {
+  return {
+    schemaVersion: "reef.arena.scoringAssumptions.v0",
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    scoreBasis: "participation-and-policy-compliance",
+    leaderboardScope: "score-eligible public competitor bots only",
+    houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
+    pnl: {
+      status: "not-yet-scored",
+      basis: "report-only synthetic placeholders until execution attribution lands",
+      markPriceSource: "future final mid/last/reference mark",
+      fees: "zero placeholder until maker/taker fee policy is configured",
+    },
+    tradingMetrics: {
+      status: "command-mix v0",
+      source: "runner pre-submit venue commands and command status summaries",
+      fillsAndExecutions: "unavailable until command result execution attribution is added to arena reports",
+    },
+  };
+}
+
+function summarizeTradingMetrics(session, counters) {
+  const byRoute = {};
+  const submittedByRoute = {};
+  const byInstrument = {};
+  const bySide = {};
+  let buyQuantity = 0;
+  let sellQuantity = 0;
+  let grossSubmittedQuantity = 0;
+  let grossSubmittedNotional = 0;
+
+  for (const tick of session.ticks) {
+    for (const command of tick.venueCommands ?? []) {
+      increment(byRoute, command.route ?? "unknown");
+      const body = command.body ?? {};
+      const instrumentId = typeof body.instrumentId === "string" && body.instrumentId.length > 0 ? body.instrumentId : "unknown";
+      const side = body.side === "SELL" ? "SELL" : body.side === "BUY" ? "BUY" : "unknown";
+
+      if (command.route === "/api/v1/orders/submit" || command.route === "/api/v1/orders/modify") {
+        increment(byInstrument, instrumentId);
+        increment(bySide, side);
+      }
+
+      if (command.route === "/api/v1/orders/submit") {
+        const quantity = numberValue(body.quantityUnits);
+        const price = priceFromNanos(body.limitPrice);
+        grossSubmittedQuantity += quantity;
+        if (side === "BUY") buyQuantity += quantity;
+        if (side === "SELL") sellQuantity += quantity;
+        if (price !== undefined) {
+          grossSubmittedNotional += quantity * price;
+        }
+      }
+    }
+    for (const command of tick.submission?.commands ?? []) {
+      increment(submittedByRoute, command.route ?? "unknown");
+    }
+  }
+
+  return {
+    schemaVersion: "reef.arena.tradingMetrics.v0",
+    basis: "report-only command mix; PnL/fill attribution pending",
+    commands: {
+      proposed: counters.venueCommands,
+      submitted: counters.submittedCommands,
+      completed: counters.completedCommands,
+      failed: counters.failedCommands,
+      rejected: counters.rejectedCommands,
+      timedOut: counters.timedOutCommands,
+      byRoute: sortedRecord(byRoute),
+      submittedByRoute: sortedRecord(submittedByRoute),
+    },
+    orderFlow: {
+      submittedLimitOrders: Number(byRoute["/api/v1/orders/submit"] ?? 0),
+      modifyCommands: Number(byRoute["/api/v1/orders/modify"] ?? 0),
+      cancelCommands: Number(byRoute["/api/v1/orders/cancel"] ?? 0),
+      byInstrument: sortedRecord(byInstrument),
+      bySide: sortedRecord(bySide),
+      buyQuantity,
+      sellQuantity,
+      grossSubmittedQuantity,
+      grossSubmittedNotional: Number(grossSubmittedNotional.toFixed(6)),
+    },
+    pnl: {
+      realized: null,
+      unrealized: null,
+      total: null,
+      currency: "USD",
+      available: false,
+      reason: "execution attribution and deterministic mark prices are a follow-up scoring slice",
+    },
+    fees: {
+      total: 0,
+      maker: 0,
+      taker: 0,
+      currency: "USD",
+      policy: "fees-v0-zero-placeholder",
+    },
+    inventory: {
+      netQuantityByInstrument: {},
+      grossNotional: null,
+      markPriceSource: "pending final-mid/last/reference mark",
+    },
+    marketQuality: {
+      available: false,
+      reason: "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices",
+    },
+  };
 }
 
 function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {
@@ -611,6 +729,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     },
     runnerProfile: { compartment: config.compartment, workerCount: 1, submitMode: config.submitMode },
     commandWaitMode: config.commandWaitMode,
+    scoringAssumptions: scoringAssumptions(),
     status,
     elapsedMs,
     totals,
@@ -658,6 +777,7 @@ function compactArenaReport(report) {
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
     commandWaitMode: report.commandWaitMode,
+    scoringAssumptions: report.scoringAssumptions,
     status: report.status,
     elapsedMs: report.elapsedMs,
     totals: report.totals,
@@ -802,6 +922,10 @@ function summarizeActivityBySchedulingClass(sessionReports) {
 
 function increment(counter, key) {
   counter[key] = Number(counter[key] ?? 0) + 1;
+}
+
+function sortedRecord(record) {
+  return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 function rankBotResults(results) {
@@ -1130,9 +1254,11 @@ async function ensureArenaBot(baseUrl, bot, correlationId) {
   return await postArenaOk(baseUrl, "/internal/admin/arena/bots", {
     botId: bot.botId,
     fileName: `${bot.entryPath}#${bot.botId}`,
-    name: bot.botId,
+    name: displayNameForBot(bot),
     publisher: "Reef Built-In",
     email: "arena-local@reef.local",
+    description: `${bot.role ?? "bot"} ${bot.botId} for local arena mode ${mode.modeId}`,
+    version: bot.catalogVersionId ?? bot.versionId,
     actorId: config.actorId,
     correlationId,
   }, { allowAlreadyExists: true });

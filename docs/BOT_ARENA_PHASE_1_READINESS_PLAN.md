@@ -363,6 +363,31 @@ Next scoring slices after the 15 minute reporting/infra gate:
 Until those slices land, `score-v0` should be treated as a participation and
 policy-compliance score, not a competitive trading-performance score.
 
+Current scoring/reporting assumptions:
+
+- Public competitive scoring ranks only score-eligible competitor bots. House
+  and NPC bots remain diagnostics-only unless a future mode explicitly changes
+  that behavior.
+- House liquidity providers are market-health infrastructure actors. They should
+  not be considered bad actors for losing money, accumulating inventory, or
+  trading aggressively when they stay inside configured house risk controls.
+- Bot display names are presentation metadata only. Reports and persisted facts
+  must continue carrying stable `botId` and `versionId` for audit, replay, and
+  joins.
+- The current operator report may include command-mix trading metrics such as
+  submitted/canceled/modified commands, side and instrument counts, and gross
+  submitted notional. These are diagnostic inputs, not the final economic score.
+- Realized P&L, unrealized P&L, final equity, fees, inventory marks, fills,
+  quote-quality contribution, and price-impact attribution are not scored until
+  execution attribution and deterministic mark-price rules are added.
+- Fee handling starts as a zero-fee placeholder. The next scoring version should
+  make maker/taker fees configurable by mode before using P&L competitively.
+- Inventory penalties should start mild and configurable so they discourage
+  one-way risk hoarding without punishing normal liquidity-provision inventory.
+- Price movement should be descriptive first. Rewards or penalties for impact
+  should wait until the report can separate useful price discovery from
+  destabilizing behavior.
+
 ### 6. Real Run-Result Ingestion
 
 Extend the current result ingestion smoke so it can ingest the actual hosted bot
