@@ -1,0 +1,65 @@
+@import 'tailwindcss';
+@import '@fontsource/courier-prime/400.css';
+@import '@fontsource/courier-prime/700.css';
+
+/* Palette sampled from the Reef logo (reef-logo-main.png): deep navy field,
+   cyan/teal coral, blue-to-indigo network gradient. */
+:root {
+	--bg: #0a0f1a;
+	--ink: #e8edf3;
+	--muted: #8993a6;
+	--rule: #232c3d;
+	--rule-strong: #37435a;
+	--accent: #22d3c4;
+	--accent-hover: #7ff2e6;
+	--accent-ink: #062421;
+	--accent-soft: rgb(34 211 196 / 12%);
+	--accent-2: #4f8fe0;
+	--accent-3: #7c6fe0;
+	--selection: #1c2940;
+	--destructive: #ef7a63;
+}
+
+@theme inline {
+	--color-bg: var(--bg);
+	--color-ink: var(--ink);
+	--color-muted: var(--muted);
+	--color-rule: var(--rule);
+	--color-rule-strong: var(--rule-strong);
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-accent-ink: var(--accent-ink);
+	--color-accent-soft: var(--accent-soft);
+	--color-accent-2: var(--accent-2);
+	--color-accent-3: var(--accent-3);
+	--color-destructive: var(--destructive);
+	--font-mono: 'Courier Prime', 'Courier New', 'Nimbus Mono PS', monospace;
+}
+
+@layer base {
+	html {
+		background: var(--bg);
+		color: var(--ink);
+		font-family: var(--font-mono);
+	}
+	body {
+		margin: 0;
+	}
+	::selection {
+		background: var(--selection);
+	}
+	a {
+		color: var(--accent);
+		text-decoration-thickness: 1px;
+		text-underline-offset: 0.18em;
+	}
+	a:hover,
+	a:focus {
+		color: var(--accent-hover);
+	}
+	a:focus-visible,
+	button:focus-visible {
+		outline: 2px solid var(--accent-hover);
+		outline-offset: 3px;
+	}
+}

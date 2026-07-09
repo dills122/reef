@@ -611,10 +611,12 @@ class PostgresArenaBotRegistryStore(
         connection().use { conn ->
             conn.prepareStatement(
                 """
-                SELECT r.run_id, rb.bot_id, rb.version_id, rb.scoring_policy_version, rb.final_equity,
+                SELECT r.run_id, rb.bot_id, b.name AS bot_name, b.publisher AS owner_handle,
+                       rb.version_id, rb.scoring_policy_version, rb.final_equity,
                        rb.realized_pnl, rb.max_drawdown, rb.disqualified
                 FROM ${names.runBotResults} rb
                 JOIN ${names.runRecords} r ON r.run_id = rb.run_id
+                JOIN ${names.bots} b ON b.bot_id = rb.bot_id
                 WHERE r.mode_id = ?
                   AND r.status = ?
                   AND rb.scoring_policy_version = ?
@@ -867,6 +869,8 @@ class PostgresArenaBotRegistryStore(
             rank = rank,
             runId = getString("run_id"),
             botId = getString("bot_id"),
+            botName = getString("bot_name"),
+            ownerHandle = getString("owner_handle"),
             versionId = getString("version_id"),
             scoringPolicyVersion = getString("scoring_policy_version"),
             finalEquity = getLong("final_equity"),

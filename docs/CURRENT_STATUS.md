@@ -4,7 +4,7 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-08.
+Last aligned: 2026-07-09.
 
 ## Current Project State
 
@@ -47,6 +47,7 @@ Current decision anchors:
 - D-049 tracks the active API/control-plane hardening backlog: finish remaining account/object authorization, migrate remaining hosted/CI/operator callers from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md) off raw `/internal/*`, add internal gRPC service identity, expand readiness, and make stream lane identity deterministic by run/session/instrument when command models support it.
 - D-050 keeps one post-trade domain model with policy/timing profiles (`ops-realistic-v1` industry-baseline default, `instant-post-trade-v1` for simulator/game runs) rather than separate settlement models; see [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md).
 - D-051 makes GitHub the first human identity provider for Bot Arena, keyed by GitHub's immutable numeric user id; see [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md).
+- D-052 defines the Bot Arena admin UI (`apps/arena-admin`, SvelteKit static, deployed behind Caddy on the backbone host): public landing/leaderboard pages plus a GitHub-OAuth-gated admin area. Public leaderboard reads land under the venue-intake `/api/v1/...` family, not `/admin/v1/...`; game types move from a free-form `mode_id` string to a seeded `arena.game_modes` reference table with a `mandatory` flag, with per-bot opt-out deferred past v1.
 - Stream command envelope tests now prove submit and cancel commands for the same `runId + venueSessionId + instrumentId` share the same partition lane, and stream-ack HTTP boundary tests prove cancels missing hot-path routing metadata are rejected before intake reservation or durable publish.
 - Local 2026-07-04 evidence shows the venue event batch materializer can keep compact canonical Postgres storage correct under mixed submit/modify/cancel direct-stream load at `5k rps` and `10k rps` for `3m`; see [`PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md`](./PERSISTENCE_MATERIALIZER_TEST_RESULTS_2026-07-04.md).
 - The first persistence-layer test gate after materialization projects `SubmitOrder`, `ModifyOrder`, and `CancelOrder` lifecycle outcomes from `runtime.canonical_command_outcomes` into `submit_results`, `runtime_events`, and accepted submit `orders`. No-DB direct-consume batches carry the compact `acceptedOrder` projection fact; `command_log.command_payloads` is a fallback for older or command-log-backed batches.

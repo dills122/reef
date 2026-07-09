@@ -118,6 +118,8 @@ data class ArenaLeaderboardEntry(
     val rank: Int,
     val runId: String,
     val botId: String,
+    val botName: String,
+    val ownerHandle: String,
     val versionId: String,
     val scoringPolicyVersion: String,
     val finalEquity: Long,

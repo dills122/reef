@@ -925,3 +925,21 @@ Primary references:
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
 - [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
 - [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
+
+### D-052: Bot Arena Admin UI And Public Leaderboard Surface
+
+Status: accepted
+
+Summary:
+- Bot Arena gets a dedicated web app (`apps/arena-admin`), not a general Reef admin site: a public landing/info page, per-game-type descriptions, public leaderboards, and a gated admin-only area. Scope is Bot Arena v1 release readiness.
+- Stack is SvelteKit with the static adapter, built with Bun (matching the `apps/docs-site` build pattern), deployed as static assets behind Caddy on the Hetzner backbone host alongside the Admin API. Astro is rejected because `docs/steering/astro.md` scopes it to non-operational public docs/marketing, not an app with a gated authenticated area; React and Angular are rejected on team preference, Angular specifically as more ceremony than this scope needs.
+- Public leaderboard reads belong to the Venue Intake And Trading Information family in `docs/API_SURFACE_POLICY.md`, not Admin/Data: they are public, unauthenticated, versioned reads of game state, the same visibility class as trade tape/top-of-book. Expose them as a new public route (e.g. `/api/v1/arena/leaderboard`) reusing the existing `ArenaControlPlaneService.leaderboard` logic, with an explicit public-visibility declaration. Mutating/control-plane leaderboard operations stay under `/admin/v1/...`.
+- Game types (modes) become an explicit reference-data concept instead of the current free-form `arena.run_records.mode_id` string: defined as code-level config (id, name, description, mandatory flag) and seeded into a new `arena.game_modes` table, following the existing admin CLI reference-data pattern (D-003).
+- Per-bot opt-in/opt-out of optional game modes is deferred past v1. The `mandatory` flag is added to `arena.game_modes` now so mandatory modes (for example weekly/major runs) can auto-include all active, non-banned bots without opt-out, but the opt-out UI/API itself is not built yet.
+- The admin-only area reuses the existing GitHub OAuth session flow and `AdminIdentityService` role/trust-state model from D-051 for gating. It starts scoped to a single operator but uses the existing role model so access can expand without a new auth mechanism.
+
+Primary references:
+- [`docs/BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+- [`docs/SYSTEM_INFRASTRUCTURE_BACKBONE.md`](./SYSTEM_INFRASTRUCTURE_BACKBONE.md)
+- [`docs/API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md)
+- [`docs/steering/astro.md`](./steering/astro.md)

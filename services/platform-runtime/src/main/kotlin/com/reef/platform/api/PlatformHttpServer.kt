@@ -855,6 +855,18 @@ class PlatformHttpServer(
             writeJson(exchange, 200, api.tradeTape(instrumentId, limit, beforeSequence))
         }
 
+        server.createContext("/api/v1/arena/leaderboard") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            if (!allowApiV1Read(exchange, "/api/v1/arena/leaderboard")) {
+                return@createContext
+            }
+            val response = arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
+            writeJson(exchange, response.status, response.body)
+        }
+
         server.createContext("/api/v1/market-data/bars/") { exchange ->
             if (exchange.requestMethod != "GET") {
                 methodNotAllowed(exchange)
@@ -1588,6 +1600,10 @@ class PlatformHttpServer(
                     beforeSequence = queryValue(request.query, "before").toLongOrNull()
                 )
                 PlatformHotPathResponse(status = 200, body = response)
+            }
+            request.path == "/api/v1/arena/leaderboard" && request.method == "GET" -> {
+                val readError = apiV1ReadErrorResponse(request, "/api/v1/arena/leaderboard")
+                readError ?: arenaLeaderboardPublicResponse(request.query)
             }
             request.path.startsWith("/api/v1/market-data/bars/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/bars/{instrumentId}")
@@ -3624,6 +3640,28 @@ class PlatformHttpServer(
         )
     }
 
+    // Public, unauthenticated leaderboard read (D-052) — venue-intake visibility class,
+    // not admin/data. No AdminActor derivation: this must not require an admin session.
+    private fun arenaLeaderboardPublicResponse(query: String?): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena service unavailable"))
+        val modeId = queryValue(query, "modeId")
+        val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
+        }
+        val entries = service.arenaLeaderboardPublic(modeId, scoringPolicyVersion, limit)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "modeId" to modeId,
+                "scoringPolicyVersion" to scoringPolicyVersion,
+                "entries" to entries.map { arenaLeaderboardEntryJson(it) }
+            )
+        )
+    }
+
     private fun recordAnalyticsRunExportResponse(body: String): PlatformHotPathResponse {
         val service = analyticsRunExportService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
@@ -5084,6 +5122,8 @@ class PlatformHttpServer(
             "rank" to entry.rank,
             "runId" to entry.runId,
             "botId" to entry.botId,
+            "botName" to entry.botName,
+            "ownerHandle" to entry.ownerHandle,
             "versionId" to entry.versionId,
             "scoringPolicyVersion" to entry.scoringPolicyVersion,
             "finalEquity" to entry.finalEquity,
