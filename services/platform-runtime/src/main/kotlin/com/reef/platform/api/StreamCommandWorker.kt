@@ -92,20 +92,21 @@ class StreamCommandWorker(
     }
 
     private fun processBatch(deliveries: List<StreamCommandDelivery>) {
-        val preparedSubmits = mutableListOf<PreparedStreamSubmit>()
+        val preparedCommands = mutableListOf<PreparedStreamCommand>()
         deliveries.forEach { delivery ->
-            if (commandType(delivery.subject) != "SubmitOrder") {
+            val type = commandType(delivery.subject)
+            if (type !in SupportedCommandTypes) {
                 delivery.term()
                 StreamCommandWorkerMetrics.recordUnsupported(partition)
                 return@forEach
             }
 
             try {
-                val outcome = HotPathMetrics.time("streamWorker.prepareSubmitOrder") {
-                    api.prepareSubmitOrder(delivery.payloadJson)
+                val outcome = HotPathMetrics.time("streamWorker.prepareCommand") {
+                    prepareCommand(type, delivery.payloadJson)
                 }
-                preparedSubmits.add(
-                    PreparedStreamSubmit(
+                preparedCommands.add(
+                    PreparedStreamCommand(
                         delivery = delivery,
                         outcome = outcome,
                         canonicalOutcome = canonicalSubmitOutcome(delivery, outcome)
@@ -117,15 +118,15 @@ class StreamCommandWorker(
             }
         }
 
-        if (preparedSubmits.isEmpty()) return
+        if (preparedCommands.isEmpty()) return
 
         try {
             HotPathMetrics.time("streamWorker.appendCanonicalSubmitOutcomes") {
-                api.appendCanonicalSubmitOutcomes(preparedSubmits.map { it.canonicalOutcome })
+                api.appendCanonicalSubmitOutcomes(preparedCommands.map { it.canonicalOutcome })
             }
         } catch (ex: Exception) {
             val error = ex.message ?: ex::class.simpleName ?: "unknown"
-            preparedSubmits.forEach { prepared ->
+            preparedCommands.forEach { prepared ->
                 safeNak(prepared.delivery)
                 StreamCommandWorkerMetrics.recordFailed(partition, error)
             }
@@ -133,17 +134,17 @@ class StreamCommandWorker(
         }
 
         try {
-            markPublished(preparedSubmits)
+            markPublished(preparedCommands)
         } catch (ex: Exception) {
             val error = ex.message ?: ex::class.simpleName ?: "unknown"
-            preparedSubmits.forEach { prepared ->
+            preparedCommands.forEach { prepared ->
                 safeNak(prepared.delivery)
                 StreamCommandWorkerMetrics.recordFailed(partition, error)
             }
             return
         }
 
-        preparedSubmits.forEach { prepared ->
+        preparedCommands.forEach { prepared ->
             try {
                 prepared.delivery.ack()
                 StreamCommandWorkerMetrics.recordCompleted(partition, prepared.delivery.streamSequence)
@@ -153,7 +154,16 @@ class StreamCommandWorker(
         }
     }
 
-    private fun markPublished(preparedSubmits: List<PreparedStreamSubmit>) {
+    private fun prepareCommand(commandType: String, payloadJson: String): PersistableSubmitOutcome {
+        return when (commandType) {
+            "SubmitOrder" -> api.prepareSubmitOrder(payloadJson)
+            "CancelOrder" -> api.prepareCancelOrder(payloadJson)
+            "ModifyOrder" -> api.prepareModifyOrder(payloadJson)
+            else -> throw IllegalArgumentException("unsupported stream command type: $commandType")
+        }
+    }
+
+    private fun markPublished(preparedSubmits: List<PreparedStreamCommand>) {
         val marker = publicationMarker ?: return
         val marked = HotPathMetrics.time("streamWorker.markPublishedBatch") {
             marker.markPublishedByCommandIds(
@@ -216,11 +226,13 @@ class StreamCommandWorker(
     }
 }
 
-private data class PreparedStreamSubmit(
+private data class PreparedStreamCommand(
     val delivery: StreamCommandDelivery,
     val outcome: PersistableSubmitOutcome,
     val canonicalOutcome: CanonicalSubmitOutcome
 )
+
+private val SupportedCommandTypes = setOf("SubmitOrder", "CancelOrder", "ModifyOrder")
 
 class NatsStreamCommandSource(
     private val natsUrl: String = RuntimeEnv.string("STREAM_ACK_NATS_URL", "nats://localhost:4222"),

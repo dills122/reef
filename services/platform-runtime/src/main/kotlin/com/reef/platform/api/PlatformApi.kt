@@ -1,8 +1,10 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.domain.CancelOrderCommand
 import com.reef.platform.domain.ExecutionCreated
 import com.reef.platform.domain.IntradayBar
+import com.reef.platform.domain.ModifyOrderCommand
 import com.reef.platform.domain.OwnExecutionView
 import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
@@ -68,6 +70,32 @@ class PlatformApi(
     fun prepareSubmitOrderAsync(command: SubmitOrderCommand): CompletableFuture<PersistableSubmitOutcome> {
         return HotPathMetrics.time("api.orderService.prepareSubmitOrderAsync") {
             orderService.prepareSubmitOrderAsync(command)
+        }
+    }
+
+    fun prepareCancelOrder(body: String): PersistableSubmitOutcome {
+        val command = HotPathMetrics.time("api.parse.cancelOrder") {
+            PlatformCommandParsers.cancelOrder(body)
+        }
+        return prepareCancelOrder(command)
+    }
+
+    fun prepareCancelOrder(command: CancelOrderCommand): PersistableSubmitOutcome {
+        return HotPathMetrics.time("api.orderService.prepareCancelOrder") {
+            orderService.prepareCancelOrder(command)
+        }
+    }
+
+    fun prepareModifyOrder(body: String): PersistableSubmitOutcome {
+        val command = HotPathMetrics.time("api.parse.modifyOrder") {
+            PlatformCommandParsers.modifyOrder(body)
+        }
+        return prepareModifyOrder(command)
+    }
+
+    fun prepareModifyOrder(command: ModifyOrderCommand): PersistableSubmitOutcome {
+        return HotPathMetrics.time("api.orderService.prepareModifyOrder") {
+            orderService.prepareModifyOrder(command)
         }
     }
 
