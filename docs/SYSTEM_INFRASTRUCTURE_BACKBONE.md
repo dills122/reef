@@ -391,6 +391,41 @@ ssh -L 8080:127.0.0.1:8080 ops@<backbone-ip>
 curl http://127.0.0.1:8080/health
 ```
 
+Bootstrap the first web-admin user (see D-052 and
+[`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
+Open Follow-Ups): a fresh GitHub OAuth login has no `arena.admin` permission
+by default — `AdminIdentityService` (GitHub identity/trust-state) and the
+`AdminApplicationService.requirePermission` role system are unconnected, and
+there is no HTTP-reachable grant path. Grant it manually, once, over the
+Admin API tunnel above. These are legacy internal routes
+(`PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=true`, `X-Reef-Internal-Route`
+marker), not Caddy-exposed — only reachable through the tunnel:
+
+```bash
+# reefUserId is "user-gh-<your numeric GitHub user id>", not your login —
+# find it at https://api.github.com/users/<your-login> ("id" field).
+curl -X POST http://127.0.0.1:8080/auth/roles \
+  -H 'X-Reef-Internal-Route: true' -H 'content-type: application/json' \
+  -d '{"roleId":"arena-operator","permissions":"arena.admin"}'
+
+curl -X POST http://127.0.0.1:8080/auth/actor-roles \
+  -H 'X-Reef-Internal-Route: true' -H 'content-type: application/json' \
+  -d '{"actorId":"user-gh-<your-github-numeric-id>","roleId":"arena-operator"}'
+```
+
+Equivalent as raw SQL against the `postgres` (runtime) database, if the
+tunnel/curl path isn't available:
+
+```sql
+INSERT INTO auth.auth_roles (role_id, permissions)
+VALUES ('arena-operator', 'arena.admin')
+ON CONFLICT (role_id) DO UPDATE SET permissions = EXCLUDED.permissions;
+
+INSERT INTO auth.auth_actor_roles (actor_id, role_id)
+VALUES ('user-gh-<your-github-numeric-id>', 'arena-operator')
+ON CONFLICT DO NOTHING;
+```
+
 Backup:
 
 ```bash
