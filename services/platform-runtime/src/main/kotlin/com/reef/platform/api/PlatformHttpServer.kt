@@ -3,6 +3,10 @@ package com.reef.platform.api
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminActor
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.AdminAuthService
+import com.reef.platform.application.admin.AdminGitHubOAuthClient
+import com.reef.platform.application.admin.AdminIdentityService
+import com.reef.platform.application.admin.AdminServiceTokenFamily
 import com.reef.platform.application.admin.ArenaBotRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionRegistrationCommand
 import com.reef.platform.application.admin.ArenaBotVersionDecisionCommand
@@ -10,6 +14,9 @@ import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionComm
 import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
 import com.reef.platform.application.admin.ArenaRunRegistrationCommand
 import com.reef.platform.application.admin.ArenaRunStatusCommand
+import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
+import com.reef.platform.application.admin.PostgresAdminAuthStore
+import com.reef.platform.application.admin.PostgresAdminIdentityStore
 import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
 import com.reef.platform.application.analytics.PostgresAnalyticsSqlNames
 import com.reef.platform.application.analytics.PostgresSimulationRunExportStore
@@ -82,6 +89,7 @@ import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.InetAddress
+import java.net.URLDecoder
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -110,17 +118,42 @@ private data class CachedStreamCommandDrainBackpressureSnapshot(
 
 internal data class AdminGatewayRoute(
     val internalPath: String,
-    val tokenFamily: String
+    val fallbackTokenFamily: String,
+    val serviceTokenFamilies: Set<AdminServiceTokenFamily>
 )
 
 internal fun adminGatewayRouteFor(path: String): AdminGatewayRoute? = when (path) {
-    "/admin/v1/arena/bots" -> AdminGatewayRoute("/internal/admin/arena/bots", "arena")
+    "/admin/v1/arena/bots" -> AdminGatewayRoute(
+        "/internal/admin/arena/bots",
+        "arena",
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+    )
     "/admin/v1/arena/bots/openbao-provision" ->
-        AdminGatewayRoute("/internal/admin/arena/bots/openbao-provision", "arena")
-    "/admin/v1/analytics/run-exports" -> AdminGatewayRoute("/internal/admin/analytics/run-exports", "analytics")
-    "/admin/v1/risk/account-controls" -> AdminGatewayRoute("/internal/admin/account-risk/controls", "admin")
-    "/admin/v1/risk/circuit-breakers" -> AdminGatewayRoute("/internal/admin/circuit-breakers", "admin")
-    "/admin/v1/risk/price-collars" -> AdminGatewayRoute("/internal/admin/price-collars", "admin")
+        AdminGatewayRoute(
+            "/internal/admin/arena/bots/openbao-provision",
+            "arena",
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        )
+    "/admin/v1/analytics/run-exports" -> AdminGatewayRoute(
+        "/internal/admin/analytics/run-exports",
+        "analytics",
+        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/risk/account-controls" -> AdminGatewayRoute(
+        "/internal/admin/account-risk/controls",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/risk/circuit-breakers" -> AdminGatewayRoute(
+        "/internal/admin/circuit-breakers",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/risk/price-collars" -> AdminGatewayRoute(
+        "/internal/admin/price-collars",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
     else -> null
 }
 
@@ -195,6 +228,9 @@ class PlatformHttpServer(
     private val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     private val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
     private val arenaAdminService: AdminApplicationService? = null,
+    private val adminAuthService: AdminAuthService? = null,
+    private val adminIdentityService: AdminIdentityService? = null,
+    private val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
     private val analyticsRunExportService: SimulationRunExportService? = null,
     private val settlementFactStore: SettlementFactStore? = null,
     private val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
@@ -302,6 +338,9 @@ class PlatformHttpServer(
     private val maxRequestBodyBytes: Int =
         RuntimeEnv.int("PLATFORM_HTTP_MAX_REQUEST_BYTES", 1024 * 1024, min = 1024)
     private val internalHttpExposureMode: InternalHttpExposureMode = InternalHttpExposureMode.fromEnv()
+    private val adminSessionCookieName: String =
+        RuntimeEnv.string("ADMIN_SESSION_COOKIE_NAME", "reef_admin_session").trim().ifBlank { "reef_admin_session" }
+    private val adminSessionCookieSecure: Boolean = RuntimeEnv.bool("ADMIN_SESSION_COOKIE_SECURE", true)
     @Volatile
     private var backpressureSnapshot: CommandIntakeBackpressureSnapshot? = null
     private val backpressureSnapshotLock = Any()
@@ -406,6 +445,9 @@ class PlatformHttpServer(
         instrumentPriceCollarCheck = deps.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = deps.instrumentPriceCollarStore,
         arenaAdminService = deps.arenaAdminService,
+        adminAuthService = deps.adminAuthService,
+        adminIdentityService = deps.adminIdentityService,
+        adminGitHubOAuthClient = deps.adminGitHubOAuthClient,
         analyticsRunExportService = deps.analyticsRunExportService,
         settlementFactStore = deps.settlementFactStore,
         settlementObligationMaterializer = deps.settlementObligationMaterializer,
@@ -440,6 +482,7 @@ class PlatformHttpServer(
         server.executor = Executors.newFixedThreadPool(workerThreads)
 
         registerDiagnosticRoutes(server)
+        registerAdminAuthRoutes(server)
 
         server.createContext("/internal/admin/settlement/facts") { exchange ->
             if (!allowInternalHttpRoute(exchange)) return@createContext
@@ -1115,6 +1158,120 @@ class PlatformHttpServer(
         }
     }
 
+    private fun registerAdminAuthRoutes(server: HttpServer) {
+        server.createContext("/admin/auth/github/start") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val auth = adminAuthService
+            val github = adminGitHubOAuthClient
+            if (auth == null || github == null) {
+                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
+                return@createContext
+            }
+            try {
+                val redirectPath = queryParam(exchange, "redirectPath")
+                    .ifBlank { queryParam(exchange, "redirect") }
+                    .ifBlank { "/" }
+                val start = auth.beginGitHubOAuth(redirectPath)
+                redirect(exchange, github.authorizationUrl(start.stateToken))
+            } catch (ex: IllegalArgumentException) {
+                writeHotPathResponse(exchange, PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid admin auth start"))))
+            }
+        }
+
+        server.createContext("/admin/auth/github/callback") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val auth = adminAuthService
+            val identity = adminIdentityService
+            val github = adminGitHubOAuthClient
+            if (auth == null || identity == null || github == null) {
+                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
+                return@createContext
+            }
+            val error = queryParam(exchange, "error")
+            if (error.isNotBlank()) {
+                writeHotPathResponse(exchange, PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "GitHub OAuth rejected request")))
+                return@createContext
+            }
+            val code = queryParam(exchange, "code")
+            val stateToken = queryParam(exchange, "state")
+            if (code.isBlank() || stateToken.isBlank()) {
+                writeHotPathResponse(exchange, PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "code and state are required")))
+                return@createContext
+            }
+            try {
+                val state = auth.consumeGitHubOAuthState(stateToken)
+                val githubIdentity = github.exchangeCode(code)
+                val user = identity.ensureGitHubUser(githubIdentity)
+                val session = auth.createSession(user.reefUserId)
+                setAdminSessionCookie(exchange, session.token)
+                redirect(exchange, state.redirectPath)
+            } catch (ex: IllegalArgumentException) {
+                writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "admin auth failed")))
+            }
+        }
+
+        server.createContext("/admin/auth/session") { exchange ->
+            if (exchange.requestMethod != "GET") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val auth = adminAuthService
+            if (auth == null) {
+                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
+                return@createContext
+            }
+            val token = adminSessionCookie(exchange)
+            if (token.isBlank()) {
+                writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
+                return@createContext
+            }
+            try {
+                val session = auth.authenticateSession(token)
+                writeJson(
+                    exchange,
+                    200,
+                    JsonCodec.writeObject(
+                        "status" to "ok",
+                        "reefUserId" to session.reefUserId,
+                        "authProvider" to session.authProvider.dbValue,
+                        "expiresAt" to session.expiresAt.toString()
+                    )
+                )
+            } catch (ex: IllegalArgumentException) {
+                clearAdminSessionCookie(exchange)
+                writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
+            }
+        }
+
+        server.createContext("/admin/auth/logout") { exchange ->
+            if (exchange.requestMethod != "POST") {
+                methodNotAllowed(exchange)
+                return@createContext
+            }
+            val auth = adminAuthService
+            if (auth == null) {
+                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
+                return@createContext
+            }
+            val token = adminSessionCookie(exchange)
+            if (token.isNotBlank()) {
+                try {
+                    auth.revokeSession(token)
+                } catch (_: IllegalArgumentException) {
+                    // Logout is idempotent from the browser perspective.
+                }
+            }
+            clearAdminSessionCookie(exchange)
+            writeJson(exchange, 200, JsonCodec.writeObject("status" to "ok"))
+        }
+    }
+
     private fun allowInternalHttpRoute(exchange: HttpExchange): Boolean {
         return when (internalHttpExposureMode) {
             InternalHttpExposureMode.Disabled -> {
@@ -1192,6 +1349,62 @@ class PlatformHttpServer(
         return headers[name]?.firstOrNull().orEmpty()
     }
 
+    private fun queryParam(exchange: HttpExchange, name: String): String {
+        val raw = exchange.requestURI.rawQuery ?: return ""
+        return raw.split("&").asSequence()
+            .mapNotNull { part ->
+                val index = part.indexOf('=')
+                if (index < 0) return@mapNotNull null
+                val key = urlDecode(part.substring(0, index))
+                if (key == name) urlDecode(part.substring(index + 1)) else null
+            }
+            .firstOrNull()
+            .orEmpty()
+    }
+
+    private fun urlDecode(value: String): String {
+        return URLDecoder.decode(value, Charsets.UTF_8)
+    }
+
+    private fun redirect(exchange: HttpExchange, location: String) {
+        exchange.responseHeaders.add("Location", location)
+        exchange.sendResponseHeaders(302, -1)
+        exchange.close()
+    }
+
+    private fun adminAuthUnavailableResponse(): PlatformHotPathResponse {
+        return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin auth is not configured"))
+    }
+
+    private fun adminSessionCookie(exchange: HttpExchange): String {
+        return headerValue(exchange, "Cookie")
+            .split(";")
+            .asSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("$adminSessionCookieName=") }
+            ?.substringAfter("=")
+            .orEmpty()
+    }
+
+    private fun setAdminSessionCookie(exchange: HttpExchange, token: String) {
+        exchange.responseHeaders.add(
+            "Set-Cookie",
+            adminCookieValue("$adminSessionCookieName=$token; Max-Age=43200")
+        )
+    }
+
+    private fun clearAdminSessionCookie(exchange: HttpExchange) {
+        exchange.responseHeaders.add(
+            "Set-Cookie",
+            adminCookieValue("$adminSessionCookieName=; Max-Age=0")
+        )
+    }
+
+    private fun adminCookieValue(prefix: String): String {
+        val secure = if (adminSessionCookieSecure) "; Secure" else ""
+        return "$prefix; Path=/; HttpOnly; SameSite=Lax$secure"
+    }
+
     private fun currentAdminPrincipal(): AdminRequestPrincipal {
         return adminRequestPrincipal.get() ?: AdminRequestPrincipal(
             actorId = "admin-cli",
@@ -1207,13 +1420,13 @@ class PlatformHttpServer(
             exchange.close()
             return
         }
-        if (!authorizeAdminGateway(exchange, route.tokenFamily)) return
+        val principal = authorizeAdminGateway(exchange, route) ?: return
         val body = if (exchange.requestMethod == "POST") {
             readRequestBody(exchange) ?: return
         } else {
             ""
         }
-        withAdminRequestPrincipal(exchange) {
+        withAdminRequestPrincipal(principal) {
             val response = diagnosticRoutes.handle(
                 method = exchange.requestMethod,
                 path = route.internalPath,
@@ -1224,23 +1437,63 @@ class PlatformHttpServer(
         }
     }
 
-    private fun authorizeAdminGateway(exchange: HttpExchange, tokenFamily: String): Boolean {
-        val envName = when (tokenFamily) {
+    private fun authorizeAdminGateway(exchange: HttpExchange, route: AdminGatewayRoute): AdminRequestPrincipal? {
+        val auth = adminAuthService
+        if (auth != null) {
+            val sessionToken = adminSessionCookie(exchange)
+            if (sessionToken.isNotBlank()) {
+                try {
+                    val session = auth.authenticateSession(sessionToken)
+                    return adminPrincipalForActor(exchange, session.reefUserId)
+                } catch (_: IllegalArgumentException) {
+                    clearAdminSessionCookie(exchange)
+                    writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
+                    return null
+                }
+            }
+            bearerToken(exchange)?.let { token ->
+                route.serviceTokenFamilies.forEach { family ->
+                    try {
+                        val serviceToken = auth.authenticateServiceToken(token, family)
+                        return adminPrincipalForActor(exchange, serviceToken.subjectActorId)
+                    } catch (_: IllegalArgumentException) {
+                        // Try the next permitted service-token family for this route.
+                    }
+                }
+            }
+        }
+
+        val envName = when (route.fallbackTokenFamily) {
             "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
             "admin" -> "ADMIN_API_TOKEN"
             else -> "ARENA_ADMIN_API_TOKEN"
         }
         val token = RuntimeEnv.string(envName, "")
+        val expected = "Bearer $token"
+        if (token.isNotBlank() && headerValue(exchange, "Authorization") == expected) {
+            return adminPrincipal(exchange)
+        }
+        if (auth != null) {
+            writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
+            return null
+        }
         if (token.isBlank()) {
             writeHotPathResponse(exchange, PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "$envName is not configured")))
-            return false
+            return null
         }
-        val expected = "Bearer $token"
-        if (headerValue(exchange, "Authorization") != expected) {
-            writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
-            return false
-        }
-        return true
+        writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
+        return null
+    }
+
+    private fun bearerToken(exchange: HttpExchange): String? {
+        val authorization = headerValue(exchange, "Authorization")
+        if (!authorization.startsWith("Bearer ")) return null
+        return authorization.removePrefix("Bearer ").trim().ifBlank { null }
+    }
+
+    private fun adminPrincipalForActor(exchange: HttpExchange, actorId: String): AdminRequestPrincipal {
+        val headerPrincipal = adminPrincipal(exchange)
+        return headerPrincipal.copy(actorId = actorId)
     }
 
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
@@ -5690,6 +5943,7 @@ private fun defaultBoundary(): ServerBoundaryDeps {
     val hooks = defaultBoundaryHooks()
     PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
     val runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver")
+    val adminHttpAuth = defaultAdminHttpAuth()
     val postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
         runtimePersistence = runtimePersistence,
         environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
@@ -5715,6 +5969,9 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
         instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService = defaultArenaAdminService(hooks),
+        adminAuthService = adminHttpAuth?.authService,
+        adminIdentityService = adminHttpAuth?.identityService,
+        adminGitHubOAuthClient = adminHttpAuth?.githubOAuthClient,
         analyticsRunExportService = defaultAnalyticsRunExportService(),
         settlementFactStore = settlementFactStore,
         settlementObligationMaterializer = settlementFactStore?.let {
@@ -5746,6 +6003,38 @@ private fun defaultBoundary(): ServerBoundaryDeps {
         streamCommandHealthCheck = streamPublisher as? StreamCommandHealthCheck,
         streamCommandConfig = StreamCommandConfig(),
         commandProcessingMode = hooks.commandProcessingMode
+    )
+}
+
+private data class AdminHttpAuthDefaults(
+    val authService: AdminAuthService,
+    val identityService: AdminIdentityService,
+    val githubOAuthClient: AdminGitHubOAuthClient
+)
+
+private fun defaultAdminHttpAuth(): AdminHttpAuthDefaults? {
+    if (!RuntimeEnv.bool("PLATFORM_ADMIN_AUTH_ENABLED", false)) return null
+    val jdbcUrl = RuntimeEnv.string("ADMIN_POSTGRES_JDBC_URL", RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", ""))
+        .ifBlank { error("ADMIN_POSTGRES_JDBC_URL or RUNTIME_POSTGRES_JDBC_URL is required when PLATFORM_ADMIN_AUTH_ENABLED=true") }
+    val dbUser = RuntimeEnv.string("ADMIN_POSTGRES_USER", RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef"))
+    val dbPassword = RuntimeEnv.string("ADMIN_POSTGRES_PASSWORD", RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef"))
+    val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "admin-auth")
+    val identityStore = PostgresAdminIdentityStore(dataSource)
+    val authStore = PostgresAdminAuthStore(dataSource)
+    val identityService = AdminIdentityService(identityStore)
+    val authService = AdminAuthService(authStore = authStore, identityStore = identityStore)
+    val githubClient = ConfiguredAdminGitHubOAuthClient(
+        clientId = RuntimeEnv.string("GITHUB_OAUTH_CLIENT_ID", "")
+            .ifBlank { error("GITHUB_OAUTH_CLIENT_ID is required when PLATFORM_ADMIN_AUTH_ENABLED=true") },
+        clientSecret = RuntimeEnv.string("GITHUB_OAUTH_CLIENT_SECRET", "")
+            .ifBlank { error("GITHUB_OAUTH_CLIENT_SECRET is required when PLATFORM_ADMIN_AUTH_ENABLED=true") },
+        redirectUri = RuntimeEnv.string("GITHUB_OAUTH_REDIRECT_URI", "")
+            .ifBlank { error("GITHUB_OAUTH_REDIRECT_URI is required when PLATFORM_ADMIN_AUTH_ENABLED=true") }
+    )
+    return AdminHttpAuthDefaults(
+        authService = authService,
+        identityService = identityService,
+        githubOAuthClient = githubClient
     )
 }
 
@@ -5825,6 +6114,9 @@ data class ServerBoundaryDeps(
     val instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
     val instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
     val arenaAdminService: AdminApplicationService? = null,
+    val adminAuthService: AdminAuthService? = null,
+    val adminIdentityService: AdminIdentityService? = null,
+    val adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
     val analyticsRunExportService: SimulationRunExportService? = null,
     val settlementFactStore: SettlementFactStore? = null,
     val settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,

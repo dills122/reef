@@ -1,7 +1,14 @@
 package com.reef.platform.api
 
 import com.reef.platform.application.OrderApplicationService
+import com.reef.platform.application.admin.AdminAuthService
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.AdminGitHubOAuthClient
+import com.reef.platform.application.admin.AdminIdentityService
+import com.reef.platform.application.admin.AdminServiceTokenFamily
+import com.reef.platform.application.admin.GitHubUserIdentity
+import com.reef.platform.application.admin.InMemoryAdminAuthStore
+import com.reef.platform.application.admin.InMemoryAdminIdentityStore
 import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
 import com.reef.platform.application.analytics.SimulationRunExportService
 import com.reef.platform.application.arena.ArenaBotMetadata
@@ -70,17 +77,122 @@ class PlatformHttpServerBoundaryTest {
     @Test
     fun adminGatewayRouteMapIncludesRiskControlAliases() {
         assertEquals(
-            AdminGatewayRoute("/internal/admin/account-risk/controls", "admin"),
+            AdminGatewayRoute(
+                "/internal/admin/account-risk/controls",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
             adminGatewayRouteFor("/admin/v1/risk/account-controls")
         )
         assertEquals(
-            AdminGatewayRoute("/internal/admin/circuit-breakers", "admin"),
+            AdminGatewayRoute(
+                "/internal/admin/circuit-breakers",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
             adminGatewayRouteFor("/admin/v1/risk/circuit-breakers")
         )
         assertEquals(
-            AdminGatewayRoute("/internal/admin/price-collars", "admin"),
+            AdminGatewayRoute(
+                "/internal/admin/price-collars",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
             adminGatewayRouteFor("/admin/v1/risk/price-collars")
         )
+    }
+
+    @Test
+    fun adminGitHubOAuthCallbackIssuesSessionCookie() {
+        val auth = testAdminAuth()
+        val github = FakeAdminGitHubOAuthClient()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = github
+        )
+        try {
+            val start = get(server.address.port, "/admin/auth/github/start?redirectPath=/admin")
+            assertEquals(302, start.status)
+            val location = responseHeader(start, "Location")
+            assertContains(location, "https://github.test/oauth?")
+            val state = location.substringAfter("state=").substringBefore("&")
+            assertTrue(state.isNotBlank())
+
+            val callback = get(server.address.port, "/admin/auth/github/callback?code=github-code&state=$state")
+
+            assertEquals(302, callback.status)
+            assertEquals("/admin", responseHeader(callback, "Location"))
+            val cookie = responseHeader(callback, "Set-Cookie")
+            assertTrue(cookie.isNotBlank())
+            assertContains(cookie, "reef_admin_session=")
+            assertContains(cookie, "HttpOnly")
+            assertContains(cookie, "SameSite=Lax")
+
+            val session = get(
+                server.address.port,
+                "/admin/auth/session",
+                headers = mapOf("Cookie" to cookie.substringBefore(";"))
+            )
+            assertEquals(200, session.status)
+            assertContains(session.body, "\"reefUserId\":\"user-gh-12345\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayAcceptsSessionCookieAndServiceToken() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Admin,
+            subjectActorId = "ci-admin",
+            ttl = null
+        )
+        val wrongFamilyToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Ci,
+            subjectActorId = "ci-arena",
+            ttl = null
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
+        )
+        try {
+            val denied = post(server.address.port, "/admin/v1/risk/account-controls", emptyMap(), "{}")
+            val allowedByCookie = post(
+                server.address.port,
+                "/admin/v1/risk/account-controls",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
+                body = "{}"
+            )
+            val allowedByServiceToken = post(
+                server.address.port,
+                "/admin/v1/risk/account-controls",
+                headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
+                body = "{}"
+            )
+            val deniedByWrongFamily = post(
+                server.address.port,
+                "/admin/v1/risk/account-controls",
+                headers = mapOf("Authorization" to "Bearer ${wrongFamilyToken.token}"),
+                body = "{}"
+            )
+
+            assertEquals(401, denied.status)
+            assertEquals(503, allowedByCookie.status)
+            assertContains(allowedByCookie.body, "account risk control store unavailable")
+            assertEquals(503, allowedByServiceToken.status)
+            assertContains(allowedByServiceToken.body, "account risk control store unavailable")
+            assertEquals(401, deniedByWrongFamily.status)
+        } finally {
+            server.stop(0)
+        }
     }
 
     @Test
@@ -4185,7 +4297,46 @@ class PlatformHttpServerBoundaryTest {
         }
     }
 
-    data class HttpResponse(val status: Int, val body: String)
+    data class HttpResponse(
+        val status: Int,
+        val body: String,
+        val headers: Map<String, List<String>> = emptyMap()
+    )
+
+    private data class TestAdminAuth(
+        val authService: AdminAuthService,
+        val identityService: AdminIdentityService
+    )
+
+    private fun testAdminAuth(): TestAdminAuth {
+        val identityStore = InMemoryAdminIdentityStore()
+        val authStore = InMemoryAdminAuthStore()
+        val identityService = AdminIdentityService(identityStore)
+        return TestAdminAuth(
+            authService = AdminAuthService(
+                authStore = authStore,
+                identityStore = identityStore,
+                tokenFactory = { "tok-${tokenCounter.incrementAndGet()}-abcdefghijklmnopqrstuvwxyz0123456789" },
+                tokenIdFactory = { "svc-${tokenCounter.incrementAndGet()}" }
+            ),
+            identityService = identityService
+        )
+    }
+
+    private class FakeAdminGitHubOAuthClient : AdminGitHubOAuthClient {
+        override fun authorizationUrl(stateToken: String): String {
+            return "https://github.test/oauth?state=$stateToken"
+        }
+
+        override fun exchangeCode(code: String): GitHubUserIdentity {
+            require(code == "github-code") { "unexpected code" }
+            return GitHubUserIdentity(12345, "octo", "Octo User")
+        }
+    }
+
+    private companion object {
+        val tokenCounter = AtomicInteger(0)
+    }
 
     private fun testServer(boundary: ExternalApiBoundary = ExternalApiBoundary()): com.sun.net.httpserver.HttpServer {
         return testServerWithGateway(StaticAcceptedEngineGateway(), boundary = boundary)
@@ -4205,6 +4356,9 @@ class PlatformHttpServerBoundaryTest {
         instrumentPriceCollarCheck: InstrumentPriceCollarCheck = AllowAllInstrumentPriceCollarCheck(),
         instrumentPriceCollarStore: InstrumentPriceCollarStore? = instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
         arenaAdminService: AdminApplicationService? = null,
+        adminAuthService: AdminAuthService? = null,
+        adminIdentityService: AdminIdentityService? = null,
+        adminGitHubOAuthClient: AdminGitHubOAuthClient? = null,
         analyticsRunExportService: SimulationRunExportService? = null,
         settlementFactStore: SettlementFactStore? = null,
         settlementObligationMaterializer: TradeSettlementObligationMaterializer? = null,
@@ -4262,6 +4416,9 @@ class PlatformHttpServerBoundaryTest {
             instrumentPriceCollarCheck = instrumentPriceCollarCheck,
             instrumentPriceCollarStore = instrumentPriceCollarStore,
             arenaAdminService = arenaAdminService,
+            adminAuthService = adminAuthService,
+            adminIdentityService = adminIdentityService,
+            adminGitHubOAuthClient = adminGitHubOAuthClient,
             analyticsRunExportService = analyticsRunExportService,
             settlementFactStore = settlementFactStore,
             settlementObligationMaterializer = settlementObligationMaterializer,
@@ -4361,21 +4518,37 @@ class PlatformHttpServerBoundaryTest {
     private fun post(port: Int, path: String, headers: Map<String, String>, body: String): HttpResponse {
         val connection = java.net.URI.create("http://localhost:$port$path").toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
+        connection.instanceFollowRedirects = false
         connection.doOutput = true
         headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
         connection.outputStream.use { it.write(body.toByteArray()) }
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
-        val text = stream.bufferedReader().readText()
-        return HttpResponse(connection.responseCode, text)
+        val text = stream?.bufferedReader()?.readText().orEmpty()
+        return HttpResponse(connection.responseCode, text, responseHeaders(connection))
     }
 
     private fun get(port: Int, path: String, headers: Map<String, String> = emptyMap()): HttpResponse {
         val connection = java.net.URI.create("http://localhost:$port$path").toURL().openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
+        connection.instanceFollowRedirects = false
         headers.forEach { (k, v) -> connection.setRequestProperty(k, v) }
         val stream = if (connection.responseCode >= 400) connection.errorStream else connection.inputStream
-        val text = stream.bufferedReader().readText()
-        return HttpResponse(connection.responseCode, text)
+        val text = stream?.bufferedReader()?.readText().orEmpty()
+        return HttpResponse(connection.responseCode, text, responseHeaders(connection))
+    }
+
+    private fun responseHeaders(connection: HttpURLConnection): Map<String, List<String>> {
+        return connection.headerFields.entries.mapNotNull { (key, value) ->
+            key?.let { it to value.toList() }
+        }.toMap()
+    }
+
+    private fun responseHeader(response: HttpResponse, name: String): String {
+        return response.headers.entries
+            .firstOrNull { (key, _) -> key.equals(name, ignoreCase = true) }
+            ?.value
+            ?.firstOrNull()
+            .orEmpty()
     }
 
     private fun waitForCommandStatus(
