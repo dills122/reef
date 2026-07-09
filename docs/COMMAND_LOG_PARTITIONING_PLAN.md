@@ -238,10 +238,10 @@ P1 (run/session attribution), P2 (payload split from the hot command index), and
 
 Implement the remaining P3 scheduled operational wiring for archiving terminal results by time into `command_results_archive`.
 
-The archive target now exists as a `completed_at` range-partitioned table with a default partition so archive writes have a safe landing zone before operators add time-bucket partitions. `PostgresCommandLogStore.archiveTerminalResults(...)` and `make dev-command-log-archive` move bounded batches, exclude retention pins, delete live rows only after archive insert success, and keep exact status/accounting lookups correct.
+The archive target now exists as a `completed_at` range-partitioned table with a default partition so archive writes have a safe landing zone before operators add time-bucket partitions. `PostgresCommandLogStore.archiveTerminalResults(...)` and `make dev-command-log-archive` move bounded batches, exclude retention pins, delete live rows only after archive insert success, and keep exact status/accounting lookups correct. `make dev-command-log-archive-partitions` lists, creates, drops, and exports monthly archive partitions.
 
 The next smallest useful change:
 
 - schedule archive runs for local/stress profiles with live retention and batch-size controls
 - report archive batch counts and checksum/sampling diagnostics before partition-drop cleanup
-- add partition creation/drop/export tooling around the default partition
+- add a tested default-partition drain path that moves already-archived rows into newly-created monthly partitions

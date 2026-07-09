@@ -778,6 +778,16 @@ make dev-command-log-archive
 
 The archive tool copies eligible `command_results` rows into `command_results_archive`, deletes only the live result rows successfully archived, and leaves `commands`/`command_payloads` intact so exact status lookup still works. Useful knobs mirror prune: `DEV_COMMAND_LOG_ARCHIVE_BATCH_SIZE`, `DEV_COMMAND_LOG_ARCHIVE_MAX_BATCHES`, `DEV_COMMAND_LOG_ARCHIVE_VACUUM`, and `DEV_COMMAND_LOG_ARCHIVE_CAPTURE_DB_DIAGNOSTICS`.
 
+Manage monthly archive partitions with a separate dry-run-first tool:
+
+```bash
+DEV_COMMAND_LOG_ARCHIVE_PARTITION_ACTION=create \
+DEV_COMMAND_LOG_ARCHIVE_PARTITION_MONTH=2026-07 \
+make dev-command-log-archive-partitions
+```
+
+Supported actions are `list`, `create`, `drop`, and `export`. `create`, `drop`, and `export` require `DEV_COMMAND_LOG_ARCHIVE_PARTITION_APPLY=1` to execute. Create monthly partitions before archiving rows for that month; otherwise eligible rows land in the default partition until moved manually.
+
 Prune terminal command-log history with a dry-run-first dev tool:
 
 ```bash
