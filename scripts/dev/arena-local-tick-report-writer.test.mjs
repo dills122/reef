@@ -58,5 +58,7 @@ assert.equal(compactReport.healthSamples, undefined);
 assert.equal(compactReport.omitted.sessionReports, 5);
 assert.equal(compactReport.omitted.healthSamples, 2);
 assert.equal(compactReport.latencySummary.tickElapsedMs.count, 16);
+assert.deepEqual(compactReport.commandStatusSummary.rejectedByCode, {});
+assert.deepEqual(compactReport.commandStatusSummary.rejectedByBotId, {});
 
 console.log("arena local tick report writer checks passed");

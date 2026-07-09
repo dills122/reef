@@ -866,12 +866,20 @@ function summarizeCommandStatuses(tickResults) {
   const byRoute = {};
   const byFinalStatus = {};
   const byFirstStatus = {};
+  const rejectedByCode = {};
+  const rejectedByBotId = {};
   let intakeElapsedMsTotal = 0;
   let statusElapsedMsTotal = 0;
   for (const command of commands) {
     increment(byRoute, command.route || "unknown");
     increment(byFinalStatus, command.finalStatus || "unknown");
     increment(byFirstStatus, command.firstStatus || "unknown");
+    if (command.finalStatus === "REJECTED" || command.rejected === true) {
+      const payload = safeJson(command.statusBody?.responsePayloadJson);
+      const code = payload?.rejected?.code ?? command.statusBody?.resultStatus ?? "unknown";
+      increment(rejectedByCode, code);
+      increment(rejectedByBotId, botIdFromCommandId(command.commandId));
+    }
     intakeElapsedMsTotal += Number(command.intakeElapsedMs ?? 0);
     statusElapsedMsTotal += Number(command.statusElapsedMs ?? 0);
   }
@@ -881,6 +889,8 @@ function summarizeCommandStatuses(tickResults) {
     byRoute,
     byFinalStatus,
     byFirstStatus,
+    rejectedByCode,
+    rejectedByBotId,
     avgIntakeElapsedMs: commands.length === 0 ? 0 : intakeElapsedMsTotal / commands.length,
     avgStatusElapsedMs: commands.length === 0 ? 0 : statusElapsedMsTotal / commands.length,
   };
@@ -926,6 +936,16 @@ function increment(counter, key) {
 
 function sortedRecord(record) {
   return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function botIdFromCommandId(commandId) {
+  const value = String(commandId ?? "");
+  const prefix = `${mode.modeId}-`;
+  const suffixIndex = value.lastIndexOf("-cmd-");
+  if (!value.startsWith(prefix) || suffixIndex <= prefix.length) {
+    return "unknown";
+  }
+  return value.slice(prefix.length, suffixIndex);
 }
 
 function rankBotResults(results) {

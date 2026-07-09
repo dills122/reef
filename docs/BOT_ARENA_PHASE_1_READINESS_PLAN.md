@@ -455,9 +455,24 @@ make dev-hardening-bot-arena-local
 ```
 
 This defaults to the multi-instrument local arena mode for `180` seconds, uses
-terminal command accounting, requires projection drain, and writes both the full
-arena report and a compact hardening summary. It must run against a local stack
-started with both `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and
+terminal command accounting, requires projection drain, writes a compact arena
+report, and writes a compact hardening summary. The hardening wrapper requests
+`--report-shape=compact` from the arena runner by default so multi-minute runs
+do not create massive per-tick JSON artifacts that exceed Node's maximum string
+size during summary/report rendering. Use `ARGS="--report-shape=full"` only for
+short debugging runs where the full per-tick `sessionReports` payload is needed.
+Existing compact reports can be summarized again with:
+
+```bash
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+node scripts/dev/arena-local-hardening-run.mjs \
+  --input-report=/tmp/reef-arena-local-hardening.json \
+  --summary-out=/tmp/reef-arena-local-hardening.summary.json
+```
+
+It must run against a local stack started with both
+`ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and
 `MARKET_DATA_PROJECTOR_ENABLED=true`; otherwise top-of-book/depth health samples
 do not reflect the live projected book and the hardening runner fails closed
 before traffic starts. The summary includes per-ticker market-quality evidence:
