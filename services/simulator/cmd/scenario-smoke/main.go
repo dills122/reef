@@ -616,10 +616,20 @@ func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, p
 	} else {
 		failAssertion(report, "p2-obligation-references-trade", "settlement_fact_causation", "one obligation with tradeId", obligationTradeIDs(facts.Obligations), proofSource)
 	}
+	if len(facts.Obligations) == 1 && facts.Obligations[0].State == "OBLIGATION_CREATED" {
+		passAssertion(report, "p2-obligation-state-created", "OBLIGATION_CREATED", facts.Obligations[0].State, proofSource)
+	} else {
+		failAssertion(report, "p2-obligation-state-created", "settlement_fact_state", "OBLIGATION_CREATED", obligationStates(facts.Obligations), proofSource)
+	}
 	if len(facts.Breaks) == 1 && facts.Breaks[0].Reason == "CASH_LEG_FAILED" {
 		passAssertion(report, "p2-break-reason-cash-leg-failed", "CASH_LEG_FAILED", facts.Breaks[0].Reason, proofSource)
 	} else {
 		failAssertion(report, "p2-break-reason-cash-leg-failed", "settlement_fact_reason", "CASH_LEG_FAILED", breakReasons(facts.Breaks), proofSource)
+	}
+	if len(facts.Breaks) == 1 && facts.Breaks[0].State == "BROKEN" {
+		passAssertion(report, "p2-break-state-broken", "BROKEN", facts.Breaks[0].State, proofSource)
+	} else {
+		failAssertion(report, "p2-break-state-broken", "settlement_fact_state", "BROKEN", breakStates(facts.Breaks), proofSource)
 	}
 	if len(facts.Repairs) == 1 && facts.Repairs[0].RepairAction == "POST_CASH_LEG_REPAIR" {
 		passAssertion(report, "p2-repair-action-posted", "POST_CASH_LEG_REPAIR", facts.Repairs[0].RepairAction, proofSource)
@@ -641,10 +651,20 @@ func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, p
 	} else {
 		failAssertion(report, "p2-no-direct-resolution-without-repair", "settlement_fact_causation", "resolution references repair", "missing repair linkage", proofSource)
 	}
+	if p2SettlementChainLinked(facts) {
+		passAssertion(report, "p2-settlement-chain-linked", "obligation -> break -> repair -> resolution", "all fact references linked", proofSource)
+	} else {
+		failAssertion(report, "p2-settlement-chain-linked", "settlement_fact_causation", "obligation -> break -> repair -> resolution", p2SettlementChainObserved(facts), proofSource)
+	}
 	if settlementFactsHaveCausation(facts) {
 		passAssertion(report, "p2-settlement-causation-fields", "scenarioRunId/correlationId/causationId on every fact", "all facts carry causation fields", proofSource)
 	} else {
 		failAssertion(report, "p2-settlement-causation-fields", "settlement_fact_causation", "scenarioRunId/correlationId/causationId on every fact", "missing causation field", proofSource)
+	}
+	if settlementFactsScopedToScenarioRun(facts, report.ScenarioRunID) {
+		passAssertion(report, "p2-settlement-scope-consistent", report.ScenarioRunID, "all facts match scenarioRunId", proofSource)
+	} else {
+		failAssertion(report, "p2-settlement-scope-consistent", "settlement_fact_scope", report.ScenarioRunID, settlementScenarioRunIDs(facts), proofSource)
 	}
 }
 
@@ -666,6 +686,49 @@ func p2ResolutionReferencesRepair(facts settlementFactsReport) bool {
 		resolution.SettlementRepairID == repair.SettlementRepairID &&
 		resolution.SettlementBreakID == repair.SettlementBreakID &&
 		resolution.SettlementObligationID == repair.SettlementObligationID
+}
+
+func p2SettlementChainLinked(facts settlementFactsReport) bool {
+	if len(facts.Obligations) != 1 || len(facts.Breaks) != 1 || len(facts.Repairs) != 1 || len(facts.Resolutions) != 1 {
+		return false
+	}
+	obligation := facts.Obligations[0]
+	breakFact := facts.Breaks[0]
+	repair := facts.Repairs[0]
+	resolution := facts.Resolutions[0]
+	return obligation.SettlementObligationID != "" &&
+		breakFact.SettlementBreakID != "" &&
+		repair.SettlementRepairID != "" &&
+		resolution.SettlementResolutionID != "" &&
+		breakFact.SettlementObligationID == obligation.SettlementObligationID &&
+		repair.SettlementBreakID == breakFact.SettlementBreakID &&
+		repair.SettlementObligationID == obligation.SettlementObligationID &&
+		resolution.SettlementRepairID == repair.SettlementRepairID &&
+		resolution.SettlementBreakID == breakFact.SettlementBreakID &&
+		resolution.SettlementObligationID == obligation.SettlementObligationID
+}
+
+func p2SettlementChainObserved(facts settlementFactsReport) string {
+	if len(facts.Obligations) != 1 || len(facts.Breaks) != 1 || len(facts.Repairs) != 1 || len(facts.Resolutions) != 1 {
+		return fmt.Sprintf("counts obligations=%d breaks=%d repairs=%d resolutions=%d", len(facts.Obligations), len(facts.Breaks), len(facts.Repairs), len(facts.Resolutions))
+	}
+	obligation := facts.Obligations[0]
+	breakFact := facts.Breaks[0]
+	repair := facts.Repairs[0]
+	resolution := facts.Resolutions[0]
+	return fmt.Sprintf(
+		"obligation=%s break(obligation=%s,id=%s) repair(obligation=%s,break=%s,id=%s) resolution(obligation=%s,break=%s,repair=%s,id=%s)",
+		obligation.SettlementObligationID,
+		breakFact.SettlementObligationID,
+		breakFact.SettlementBreakID,
+		repair.SettlementObligationID,
+		repair.SettlementBreakID,
+		repair.SettlementRepairID,
+		resolution.SettlementObligationID,
+		resolution.SettlementBreakID,
+		resolution.SettlementRepairID,
+		resolution.SettlementResolutionID,
+	)
 }
 
 func settlementFactsHaveCausation(facts settlementFactsReport) bool {
@@ -698,6 +761,50 @@ func hasCausationFields(scenarioRunID string, correlationID string, causationID 
 		strings.TrimSpace(causationID) != ""
 }
 
+func settlementFactsScopedToScenarioRun(facts settlementFactsReport, expectedScenarioRunID string) bool {
+	if facts.ScenarioRunID != expectedScenarioRunID {
+		return false
+	}
+	for _, obligation := range facts.Obligations {
+		if obligation.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, breakFact := range facts.Breaks {
+		if breakFact.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, repair := range facts.Repairs {
+		if repair.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, resolution := range facts.Resolutions {
+		if resolution.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	return true
+}
+
+func settlementScenarioRunIDs(facts settlementFactsReport) string {
+	values := []string{"bundle:" + facts.ScenarioRunID}
+	for _, obligation := range facts.Obligations {
+		values = append(values, "obligation:"+obligation.ScenarioRunID)
+	}
+	for _, breakFact := range facts.Breaks {
+		values = append(values, "break:"+breakFact.ScenarioRunID)
+	}
+	for _, repair := range facts.Repairs {
+		values = append(values, "repair:"+repair.ScenarioRunID)
+	}
+	for _, resolution := range facts.Resolutions {
+		values = append(values, "resolution:"+resolution.ScenarioRunID)
+	}
+	return strings.Join(values, ",")
+}
+
 func obligationTradeIDs(obligations []settlementObligation) string {
 	values := make([]string, 0, len(obligations))
 	for _, obligation := range obligations {
@@ -706,10 +813,26 @@ func obligationTradeIDs(obligations []settlementObligation) string {
 	return strings.Join(values, ",")
 }
 
+func obligationStates(obligations []settlementObligation) string {
+	values := make([]string, 0, len(obligations))
+	for _, obligation := range obligations {
+		values = append(values, obligation.State)
+	}
+	return strings.Join(values, ",")
+}
+
 func breakReasons(breaks []settlementBreak) string {
 	values := make([]string, 0, len(breaks))
 	for _, breakFact := range breaks {
 		values = append(values, breakFact.Reason)
+	}
+	return strings.Join(values, ",")
+}
+
+func breakStates(breaks []settlementBreak) string {
+	values := make([]string, 0, len(breaks))
+	for _, breakFact := range breaks {
+		values = append(values, breakFact.State)
 	}
 	return strings.Join(values, ",")
 }

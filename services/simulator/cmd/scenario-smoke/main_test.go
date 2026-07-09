@@ -676,6 +676,12 @@ func TestScenarioSmokeLiveAssertionsAttachP2SettlementFacts(t *testing.T) {
 	if !hasAssertion(report, "p2-settlement-causation-fields", "pass") {
 		t.Fatalf("missing settlement causation field assertion: %+v", report.Assertions)
 	}
+	if !hasAssertion(report, "p2-settlement-chain-linked", "pass") {
+		t.Fatalf("missing settlement chain assertion: %+v", report.Assertions)
+	}
+	if !hasAssertion(report, "p2-settlement-scope-consistent", "pass") {
+		t.Fatalf("missing settlement scope assertion: %+v", report.Assertions)
+	}
 }
 
 func TestScenarioSmokeLiveAssertionsFailOnP2SettlementFactsWithoutRepairLink(t *testing.T) {
@@ -711,6 +717,78 @@ func TestScenarioSmokeLiveAssertionsFailOnP2SettlementFactsWithoutRepairLink(t *
 	}
 	if !hasFailure(report, "p2-no-direct-resolution-without-repair") {
 		t.Fatalf("expected repair linkage failure: %+v", report.Failures)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnP2SettlementBrokenChain(t *testing.T) {
+	settlementPath := filepath.Join(t.TempDir(), "settlement-facts.json")
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","state":"OBLIGATION_CREATED"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"other-obligation","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-2","reason":"CASH_LEG_FAILED","state":"BROKEN"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_CASH_LEG_REPAIR"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED"}]
+	}`
+	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
+		t.Fatalf("write settlement facts: %v", err)
+	}
+	server := p2SettlementServer(t, "")
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+		"--settlement-facts-report", settlementPath,
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected settlement fact chain failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p2-settlement-chain-linked") {
+		t.Fatalf("expected full chain linkage failure: %+v", report.Failures)
+	}
+}
+
+func TestScenarioSmokeLiveAssertionsFailOnP2SettlementCrossRunFact(t *testing.T) {
+	settlementPath := filepath.Join(t.TempDir(), "settlement-facts.json")
+	settlementJSON := `{
+		"scenarioRunId":"p2-settlement-live",
+		"obligations":[{"settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-1","tradeId":"trade-1","state":"OBLIGATION_CREATED"}],
+		"breaks":[{"settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"other-run","correlationId":"corr-1","causationId":"cause-2","reason":"CASH_LEG_FAILED","state":"BROKEN"}],
+		"repairs":[{"settlementRepairId":"repair-1","settlementBreakId":"break-1","settlementObligationId":"obl-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-3","repairAction":"POST_CASH_LEG_REPAIR"}],
+		"resolutions":[{"settlementResolutionId":"resolution-1","settlementObligationId":"obl-1","settlementBreakId":"break-1","settlementRepairId":"repair-1","scenarioRunId":"p2-settlement-live","correlationId":"corr-1","causationId":"cause-4","settlementState":"RESOLVED","exceptionState":"RESOLVED"}]
+	}`
+	if err := os.WriteFile(settlementPath, []byte(settlementJSON), 0o644); err != nil {
+		t.Fatalf("write settlement facts: %v", err)
+	}
+	server := p2SettlementServer(t, "")
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P2_SETTLEMENT_BREAK_REPAIR.yaml"),
+		"--scenario-run-id", "p2-settlement-live",
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+		"--settlement-facts-report", settlementPath,
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected settlement fact scope failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("assertion json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if !hasFailure(report, "p2-settlement-scope-consistent") {
+		t.Fatalf("expected scenario scope failure: %+v", report.Failures)
 	}
 }
 
