@@ -1027,9 +1027,8 @@ func (s *Service) BeginBatch(scopes []BookScope) *BatchRollback {
 }
 
 // Rollback restores journaled book entries and order records to their
-// pre-batch state. touchedOrderIDs is retained for older call sites; the
-// journal is authoritative.
-func (rb *BatchRollback) Rollback(_ map[string][]string) {
+// pre-batch state.
+func (rb *BatchRollback) Rollback() {
 	rb.service.terminalRetention.restore(rb.terminalRetention)
 	for _, snap := range rb.instruments {
 		snap.book.mu.Lock()

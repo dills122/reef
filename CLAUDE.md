@@ -4,7 +4,7 @@ AI guidance for this repo lives in [`AGENTS.md`](AGENTS.md) — read it first, e
 
 It is tool-agnostic (written for Codex originally, applies equally here) and indexes:
 
-- `docs/steering/` — canonical architecture/language/repo steering (11 docs)
+- `docs/steering/` — canonical architecture/language/repo steering (10 docs)
 - `docs/DECISIONS.md`, `docs/ENGINEERING_DELIVERY_POLICY.md`, `docs/PERFORMANCE_LEARNINGS.md`
 - `REEF_PROJECT_OVERVIEW.md`, `REEF_TECHNICAL_DESIGN.md`
 

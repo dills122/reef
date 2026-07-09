@@ -35,4 +35,33 @@ class OpenBaoProvisioningServiceTest {
             server.stop(0)
         }
     }
+
+    @Test
+    fun rejectsSubmitterIdentityWithPathTraversal() {
+        val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig("http://127.0.0.1:1"))
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            service.provisionBotSecretSlice(
+                githubOidcToken = "oidc",
+                submitterIdentity = "../../secret/metadata/root",
+                botId = "bot-1",
+                secretData = mapOf("key" to "value")
+            )
+        }
+
+        assertContains(error.message ?: "", "invalid OpenBao secret path segment")
+    }
+
+    @Test
+    fun rejectsBotIdWithSlash() {
+        val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig("http://127.0.0.1:1"))
+
+        assertFailsWith<IllegalArgumentException> {
+            service.revokeBotSecretSlice(
+                githubOidcToken = "oidc",
+                submitterIdentity = "submitter-1",
+                botId = "bot/../other"
+            )
+        }
+    }
 }

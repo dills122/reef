@@ -806,7 +806,7 @@ Summary:
 
 Primary references:
 - [`docs/BOT_ARENA_PLAN.md`](./BOT_ARENA_PLAN.md)
-- [`docs/ARENA_INTAKE_GAP_ANALYSIS.md`](./ARENA_INTAKE_GAP_ANALYSIS.md)
+- [`docs/archive/ARENA_INTAKE_GAP_ANALYSIS.md`](archive/ARENA_INTAKE_GAP_ANALYSIS.md)
 - [`infra/hetzner-core/`](../infra/hetzner-core/)
 - [`infra/simulation-runner/README.md`](../infra/simulation-runner/README.md)
 

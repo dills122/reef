@@ -1028,7 +1028,7 @@ func TestBatchRollbackRestoresTerminalRetentionState(t *testing.T) {
 		t.Fatal("expected failed batch mutation to touch terminal retention before rollback")
 	}
 
-	rollback.Rollback(map[string][]string{BookScope{InstrumentID: "AAPL"}.Key(): {"ord-buy-failed-publish"}})
+	rollback.Rollback()
 
 	tracked := service.terminalRetention.snapshot()
 	if len(tracked.order)-tracked.head != 0 {

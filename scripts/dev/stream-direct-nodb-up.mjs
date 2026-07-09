@@ -1,4 +1,4 @@
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, setDefault, setValue } from "./lib/dev-utils.mjs";
 import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 
 loadDotEnv();
@@ -82,16 +82,6 @@ validateStreamProfile(env("STREAM_ACK_PUBLISHER", "").trim().toLowerCase() === "
 printStreamProfileSummary(env("STREAM_ACK_PUBLISHER", "").trim().toLowerCase() === "noop" ? "noop-ceiling" : "stream-direct-nodb");
 
 await import("./stream-ack-up.mjs");
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
-
-function setValue(name, value) {
-  process.env[name] = value;
-}
 
 function streamAckLogProvider() {
   const raw = env("STREAM_ACK_LOG_PROVIDER", "jetstream").trim().toLowerCase();

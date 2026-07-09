@@ -29,28 +29,15 @@ The safe direction is to preserve existing Makefile/package entrypoint names and
 
 ## Best Consolidation Candidates
 
-1. **Profile-driven stack wrappers**
+1. **Profile-driven stack wrappers** — Done (2026-07-08 cleanup pass). The repeated `setDefault`/`setValue` helpers across all `*-up.mjs`/`*-stress.mjs` files now live once in `scripts/dev/lib/dev-utils.mjs`. Profile-specific env defaults and summary printing remain per-file (they legitimately differ by profile), only the shared primitives moved.
 
-   The `*-up.mjs` files mainly set environment variables and call the shared stack runner. Keep the command names, but move profile definitions into a shared profile map, for example:
-
-   - `runtime-nodb`
-   - `captured-ack`
-   - `stream-ack`
-   - `stream-direct-nodb`
-
-   This would reduce repeated `setDefault`, `setValue`, provider normalization, and summary printing logic.
-
-2. **Shared generated stress session config**
-
-   `stream-ack-stress.mjs` and `stream-direct-nodb-stress.mjs` both generate spread-equity submit scenarios with similar actors, market fields, and mix settings. Move that into a small shared builder such as `scripts/dev/lib/stress-session-config.mjs`.
+2. **Shared generated stress session config** — Still open. `stream-ack-stress.mjs` and `stream-direct-nodb-stress.mjs` both generate spread-equity submit scenarios with similar actors, market fields, and mix settings. Move that into a small shared builder such as `scripts/dev/lib/stress-session-config.mjs`.
 
 3. **Bot/arena worker children stay hidden behind parents**
 
    Files such as `arena-runner-pool-worker.mjs`, `arena-runner-bench-node.mjs`, and `arena-runner-bench-deno.ts` are implementation children. Keep them as separate files because worker isolation is useful, but they should remain referenced by parent commands rather than exposed as new Make targets.
 
-4. **Setup link scripts**
-
-   `setup-codex-links.mjs` and `setup-claude-links.mjs` can probably share a single implementation with per-agent config. This is low risk and low priority.
+4. **Setup link scripts** — Done (2026-07-08 cleanup pass). `setup-codex-links.mjs` and `setup-claude-links.mjs` now share `scripts/dev/lib/symlink-sync.mjs` (path checks, dir walk, skill-link naming, symlink creation, result summary); each script keeps only its own target dirs and steering-link handling.
 
 ## Do Not Slim Yet
 

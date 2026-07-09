@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
-import { env, loadDotEnv, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 
@@ -654,16 +654,6 @@ function assertAccepted(body) {
 
 function sqlLiteral(value) {
   return String(value).replaceAll("'", "''");
-}
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
-
-function setValue(name, value) {
-  process.env[name] = value;
 }
 
 function appendProfiles(raw, additions) {

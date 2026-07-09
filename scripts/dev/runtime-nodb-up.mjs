@@ -1,5 +1,5 @@
 import { devUp } from "./lib/dev-stack.mjs";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, setDefault, setValue } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 
@@ -26,13 +26,3 @@ console.log(`  streamWorker=${env("STREAM_ACK_WORKER_ENABLED")}`);
 console.log(`  streamProjector=${env("STREAM_ACK_PROJECTOR_ENABLED")}`);
 
 await devUp();
-
-function setValue(name, value) {
-  process.env[name] = value;
-}
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}

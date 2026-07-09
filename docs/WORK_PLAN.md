@@ -18,6 +18,7 @@ Active execution planning starts from:
 - [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md)
 - [`SETTLEMENT_EXCEPTION_FACTS.md`](./SETTLEMENT_EXCEPTION_FACTS.md)
 - [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md)
+- [`BOT_ARENA_AUTH_AND_PROVISIONING.md`](./BOT_ARENA_AUTH_AND_PROVISIONING.md)
 - [`TRADING_MARKET_DATA_BOUNDARIES.md`](./TRADING_MARKET_DATA_BOUNDARIES.md)
 - [`DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 - [`HOT_BOOK_SHARDING_PLAN.md`](./HOT_BOOK_SHARDING_PLAN.md)
@@ -307,5 +308,6 @@ These documents remain useful as evidence or design context, but they are no lon
 - `BOT_ARENA_STRESS_BASELINE_2026-07-01.md`
 - May 2026 throughput and abuse-breaker baseline reports
 - `THROUGHPUT_SCALING_WORK_PLAN.md` — P2 (stream-ack ingress), P3 (stream idempotency/partition workers), and P5.5 (engine shards/hot book) are superseded by D-041 and the July 2026 stream-ack sunset and hot-book checkpoints (see `DECISIONS.md` and `PERFORMANCE_LEARNINGS.md`); it is still cited elsewhere (`ARCHITECTURE_THROUGHPUT_PLAN.md`, `ARCHITECTURE_THROUGHPUT_TRACKER.md`, `BOT_ARENA_PLAN.md`, `DECISIONS.md`) for the `7500`/`10000` completed-commands/sec per-instance target, which remains valid
+- `ARCHITECTURE_THROUGHPUT_PLAN.md`, `ARCHITECTURE_THROUGHPUT_TRACKER.md`, `STREAM_ACK_ARCHITECTURE_PLAN.md` — narrate the pre-D-041 stream-ack-centric throughput story; superseded by the D-041 Kafka-direct-consumption direction (see `DECISIONS.md`). Retained as evidence of the evolution, not as the current design.
 
 If one of these becomes active again, update this file and [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) with the reason.

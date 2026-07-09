@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dills122/reef/services/simulator/internal/strategyname"
 	"gopkg.in/yaml.v3"
 )
 
@@ -373,22 +374,7 @@ func validateFaultRules(faults []FaultRule, marketSymbols map[string]struct{}) e
 }
 
 func isKnownStrategyName(name string) bool {
-	switch name {
-	case "two_sided_quote",
-		"inventory_skew_quote",
-		"undercut_spread",
-		"momentum_taker",
-		"momentum_follow",
-		"vwap_slice",
-		"tactical_entry",
-		"intraday_rotation",
-		"dip_buyer",
-		"breakout_chaser",
-		"passive_limit":
-		return true
-	default:
-		return false
-	}
+	return strategyname.Known(name)
 }
 
 func ToRuntimeConfig(session SessionFile) (RuntimeConfig, error) {

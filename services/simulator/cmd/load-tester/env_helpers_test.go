@@ -32,6 +32,10 @@ func TestEnvInt(t *testing.T) {
 	if got := envInt(key, 7); got != 7 {
 		t.Errorf("envInt invalid = %d, want fallback 7", got)
 	}
+	t.Setenv(key, "100xyz")
+	if got := envInt(key, 7); got != 7 {
+		t.Errorf("envInt trailing garbage = %d, want fallback 7", got)
+	}
 }
 
 func TestEnvInt64(t *testing.T) {
@@ -47,6 +51,10 @@ func TestEnvInt64(t *testing.T) {
 	t.Setenv(key, "not-a-number")
 	if got := envInt64(key, 700); got != 700 {
 		t.Errorf("envInt64 invalid = %d, want fallback 700", got)
+	}
+	t.Setenv(key, "9000000000xyz")
+	if got := envInt64(key, 700); got != 700 {
+		t.Errorf("envInt64 trailing garbage = %d, want fallback 700", got)
 	}
 }
 

@@ -1,5 +1,5 @@
 import { devUp } from "./lib/dev-stack.mjs";
-import { env, loadDotEnv } from "./lib/dev-utils.mjs";
+import { env, loadDotEnv, setDefault, setValue } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
 
@@ -41,16 +41,6 @@ console.log(`  intakeMaxActive=${env("EXTERNAL_API_COMMAND_INTAKE_MAX_ACTIVE_COM
 console.log(`  intakeBackpressureSampleMs=${env("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS")}`);
 
 await devUp();
-
-function setDefault(name, value) {
-  if (!process.env[name]) {
-    process.env[name] = value;
-  }
-}
-
-function setValue(name, value) {
-  process.env[name] = value;
-}
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);

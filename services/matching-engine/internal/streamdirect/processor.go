@@ -221,10 +221,10 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	p.stats.LastFetchedAt.Store(now)
 	p.stats.LastFetchedSequence.Store(maxDeliverySequence(deliveries))
 
-	batch, ackable, rollback, touchedOrderIDs, err := p.buildBatch(deliveries, now)
+	batch, ackable, rollback, err := p.buildBatch(deliveries, now)
 	if err != nil {
 		if rollback != nil {
-			rollback.Rollback(touchedOrderIDs)
+			rollback.Rollback()
 		}
 		p.nakAll(ackable)
 		return len(deliveries), err
@@ -236,7 +236,7 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 		// canonical record and a redelivered retry reprocesses cleanly
 		// instead of being rejected as a duplicate (WORK_PLAN.md crash/
 		// restart scenario 3).
-		rollback.Rollback(touchedOrderIDs)
+		rollback.Rollback()
 		p.nakAll(ackable)
 		return len(deliveries), err
 	}
@@ -248,10 +248,9 @@ func (p *Processor) ProcessOnce(ctx context.Context) (int, error) {
 	return len(deliveries), nil
 }
 
-func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, *app.BatchRollback, map[string][]string, error) {
+func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (VenueEventBatch, []CommandDelivery, *app.BatchRollback, error) {
 	ackable := make([]CommandDelivery, 0, len(deliveries))
 	outcomes := make([]CommandOutcomeFact, 0, len(deliveries))
-	touchedOrderIDs := make(map[string][]string)
 	firstSeq := uint64(0)
 	lastSeq := uint64(0)
 	checksumInput := strings.Builder{}
@@ -327,14 +326,10 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		checksumInput.WriteByte(';')
 		outcomes = append(outcomes, fact)
 		ackable = append(ackable, delivery)
-		if fact.OrderID != "" {
-			scope := app.BookScope{VenueSessionID: outcome.VenueSessionID, InstrumentID: fact.InstrumentID}
-			touchedOrderIDs[scope.Key()] = append(touchedOrderIDs[scope.Key()], fact.OrderID)
-		}
 	}
 
 	if len(outcomes) == 0 {
-		return VenueEventBatch{}, ackable, rollback, touchedOrderIDs, nil
+		return VenueEventBatch{}, ackable, rollback, nil
 	}
 	batch := VenueEventBatch{
 		BatchID:         fmt.Sprintf("%s-p%d-%d-%d", p.config.ShardID, p.config.Partition, firstSeq, lastSeq),
@@ -350,7 +345,7 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 		Outcomes:        outcomes,
 	}
 	p.stats.Processed.Add(uint64(len(outcomes)))
-	return batch, ackable, rollback, touchedOrderIDs, nil
+	return batch, ackable, rollback, nil
 }
 
 func (p *Processor) poisonOutcomeFact(delivery CommandDelivery, commandType string, commandID string, code string, reason string, instrumentID string) CommandOutcomeFact {

@@ -4,6 +4,8 @@ This runbook defines the Docker-first local workflow introduced by the dev-env s
 
 ## Prerequisites
 
+Full prerequisite list (Docker, Bun, Go, Java) lives in [`ONBOARDING.md`](./ONBOARDING.md#1-prerequisites). For the Docker-first workflow on this page specifically, you need at minimum:
+
 - Docker with Compose plugin
 - `curl`
 - Bun runtime

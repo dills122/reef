@@ -3,7 +3,7 @@
 ## Purpose
 
 This sprint follows `SPRINT_COMMUNICATION_API_ADMIN.md` and establishes the first production-shaped post-match lifecycle across compare, clearing, netting, and settlement intake.
-Implementation in this sprint should follow [`docs/POST_MATCH_STANDARDS.md`](./POST_MATCH_STANDARDS.md).
+Implementation in this sprint should follow [`docs/POST_MATCH_STANDARDS.md`](../POST_MATCH_STANDARDS.md).
 
 ## Sprint Goal
 

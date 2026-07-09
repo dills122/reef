@@ -106,7 +106,7 @@ Runtime, boundary, and auth persistence now targets explicit domain schemas inst
 
 ## HFT SQL audit checkpoint
 
-The current HFT/finance SQL audit is tracked in [`HFT_SQL_AUDIT.md`](./HFT_SQL_AUDIT.md).
+The current HFT/finance SQL audit is tracked in [`HFT_SQL_AUDIT.md`](archive/HFT_SQL_AUDIT.md).
 
 Immediate low-risk hardening from that audit is included in the command-log migration stream:
 

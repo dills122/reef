@@ -2,27 +2,14 @@ package strategy
 
 import (
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
+	"github.com/dills122/reef/services/simulator/internal/strategyname"
 )
 
-type ActionMix struct {
-	SubmitPct int
-	ModifyPct int
-	CancelPct int
-}
-
-var namedDefaults = map[string]ActionMix{
-	"two_sided_quote":      {SubmitPct: 45, ModifyPct: 40, CancelPct: 15},
-	"inventory_skew_quote": {SubmitPct: 42, ModifyPct: 43, CancelPct: 15},
-	"undercut_spread":      {SubmitPct: 48, ModifyPct: 37, CancelPct: 15},
-	"momentum_taker":       {SubmitPct: 66, ModifyPct: 24, CancelPct: 10},
-	"momentum_follow":      {SubmitPct: 66, ModifyPct: 24, CancelPct: 10},
-	"vwap_slice":           {SubmitPct: 58, ModifyPct: 30, CancelPct: 12},
-	"tactical_entry":       {SubmitPct: 62, ModifyPct: 28, CancelPct: 10},
-	"intraday_rotation":    {SubmitPct: 60, ModifyPct: 30, CancelPct: 10},
-	"dip_buyer":            {SubmitPct: 72, ModifyPct: 18, CancelPct: 10},
-	"breakout_chaser":      {SubmitPct: 69, ModifyPct: 21, CancelPct: 10},
-	"passive_limit":        {SubmitPct: 64, ModifyPct: 23, CancelPct: 13},
-}
+// ActionMix is an alias for strategyname.ActionMix so existing callers keep
+// referring to strategy.ActionMix while the canonical name/mix data lives in
+// internal/strategyname (importable from both this package and
+// internal/config without a cycle).
+type ActionMix = strategyname.ActionMix
 
 func ResolveActionMix(actor *sessionconfig.Actor, profiles map[string]sessionconfig.StrategyProfile) (ActionMix, bool) {
 	if actor == nil {
@@ -49,13 +36,12 @@ func ActionMixForProfile(profile sessionconfig.StrategyProfile) (ActionMix, bool
 }
 
 func ActionMixForStrategyName(name string) (ActionMix, bool) {
-	mix, ok := namedDefaults[name]
+	mix, ok := strategyname.NamedDefaultMixes[name]
 	return mix, ok
 }
 
 func IsKnownStrategy(name string) bool {
-	_, ok := namedDefaults[name]
-	return ok
+	return strategyname.Known(name)
 }
 
 func intParam(params map[string]interface{}, key string) (int, bool) {

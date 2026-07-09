@@ -36,11 +36,15 @@ class OpenBaoProvisioningService(
         botId: String,
         secretData: Map<String, String>
     ) {
+        secretPathSegment(submitterIdentity)
+        secretPathSegment(botId)
         val baoToken = exchangeJwtForToken(githubOidcToken)
         writeSecret(baoToken, submitterIdentity, botId, secretData)
     }
 
     fun revokeBotSecretSlice(githubOidcToken: String, submitterIdentity: String, botId: String) {
+        secretPathSegment(submitterIdentity)
+        secretPathSegment(botId)
         val baoToken = exchangeJwtForToken(githubOidcToken)
         deleteSecret(baoToken, submitterIdentity, botId)
     }
@@ -94,8 +98,22 @@ class OpenBaoProvisioningService(
         return response
     }
 
-    private fun dataPath(submitterIdentity: String, botId: String) = "secret/data/bots/$submitterIdentity/$botId"
+    private fun dataPath(submitterIdentity: String, botId: String) =
+        "secret/data/bots/${secretPathSegment(submitterIdentity)}/${secretPathSegment(botId)}"
 
     private fun metadataPath(submitterIdentity: String, botId: String) =
-        "secret/metadata/bots/$submitterIdentity/$botId"
+        "secret/metadata/bots/${secretPathSegment(submitterIdentity)}/${secretPathSegment(botId)}"
+
+    private fun secretPathSegment(value: String): String {
+        require(secretPathSegmentPattern.matches(value)) {
+            "invalid OpenBao secret path segment: $value"
+        }
+        return value
+    }
+
+    private companion object {
+        // Rejects "/", "..", and anything else that could escape the intended
+        // secret/data/bots/<submitter>/<bot> prefix scoped by the jwt role's policy.
+        val secretPathSegmentPattern = Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}")
+    }
 }

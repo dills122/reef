@@ -8,6 +8,16 @@ export function env(name, fallback = "") {
   return value == null || value === "" ? fallback : value;
 }
 
+export function setDefault(name, value) {
+  if (!process.env[name]) {
+    process.env[name] = value;
+  }
+}
+
+export function setValue(name, value) {
+  process.env[name] = value;
+}
+
 export function loadDotEnv(paths = [".env", ".env.local"]) {
   for (const path of paths) {
     if (!existsSync(path)) continue;
