@@ -9,6 +9,7 @@ const openOrdersByParticipant = new Map();
 const receivedCommands = [];
 const commandStatusReads = [];
 const referenceWrites = [];
+let syncResultMode = false;
 const arena = {
   bots: new Map(),
   versions: new Map(),
@@ -56,6 +57,18 @@ const server = http.createServer(async (req, res) => {
       resultStatus: "accepted",
       canonicalMaterialized: true,
     });
+    if (syncResultMode) {
+      return json(res, 200, {
+        accepted: {
+          eventId: `${body.commandId}-accepted`,
+          orderId: body.clientOrderId ?? body.commandId,
+          engineOrderId: `${body.commandId}-engine`,
+          occurredAt: body.occurredAt ?? "2026-07-07T00:00:00.000Z",
+        },
+        executions: [],
+        trades: [],
+      });
+    }
     return json(res, 202, { commandId: body.commandId, status: "RECEIVED", statusUrl: `/api/v1/commands/${body.commandId}` });
   }
   if (req.method === "GET" && url.pathname.startsWith("/api/v1/commands/")) {
@@ -139,6 +152,28 @@ try {
   assert.ok(submittedCommands.every((command) => command.statusPollCount >= 1));
   assert.ok(submittedCommands.every((command) => command.firstStatus === "COMPLETED"));
   assert.ok(submittedCommands.every((command) => Number.isFinite(command.intakeElapsedMs)));
+
+  const statusReadsBeforeSyncResultRun = commandStatusReads.length;
+  syncResultMode = true;
+  await run("bun", [
+    "scripts/dev/arena-local-tick-run.mjs",
+    "--compartment=vm",
+    "--submit-mode=live",
+    `--venue-url=${baseUrl}`,
+    `--arena-admin-url=${baseUrl}`,
+    "--command-wait-mode=terminal",
+    "--out=/tmp/reef-arena-local-tick-run-sync-result-test.json",
+  ]);
+  syncResultMode = false;
+  const syncResultReport = JSON.parse(await readFile("/tmp/reef-arena-local-tick-run-sync-result-test.json", "utf8"));
+  assert.equal(commandStatusReads.length, statusReadsBeforeSyncResultRun);
+  assert.equal(syncResultReport.commandWaitMode, "terminal");
+  assert.equal(syncResultReport.commandStatusSummary.timedOut, 0);
+  assert.equal(syncResultReport.commandStatusSummary.byFinalStatus.COMPLETED, syncResultReport.commandStatusSummary.commandCount);
+  const syncResultCommands = syncResultReport.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
+  assert.ok(syncResultCommands.length > 0);
+  assert.ok(syncResultCommands.every((command) => command.statusPollCount === 0));
+  assert.ok(syncResultCommands.every((command) => command.statusBody.source === "sync_result_intake_response"));
 
   await run("bun", [
     "scripts/dev/arena-local-tick-run.mjs",
@@ -268,7 +303,7 @@ function json(res, status, body) {
 
 async function listenOnAvailablePort(server, configuredPort) {
   const ports = configuredPort === undefined
-    ? Array.from({ length: 50 }, (_, index) => 45000 + ((process.pid + Date.now() + index) % 10000))
+    ? [0]
     : [configuredPort];
   let lastError;
   for (const port of ports) {

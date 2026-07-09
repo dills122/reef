@@ -4188,7 +4188,7 @@ class PostgresRuntimePersistence(
             if (instrumentId.isNotBlank()) add(instrumentId)
             if (boundedLimit > 0) add(boundedLimit.toString())
         }
-        return projectionQueryList(
+        val lifecycleOrders = projectionQueryList(
             """
             SELECT ols.order_id, ols.instrument_id, ols.side, ols.original_quantity_units, ols.remaining_quantity_units, ols.limit_price, ols.status
             FROM ${names.orderLifecycleState} ols
@@ -4210,6 +4210,44 @@ class PostgresRuntimePersistence(
                 status = getString("status")
             )
         }
+        if (lifecycleOrders.isNotEmpty()) return lifecycleOrders
+        return acceptedOrdersForParticipantFallback(participantId, instrumentId, boundedLimit)
+    }
+
+    private fun acceptedOrdersForParticipantFallback(
+        participantId: String,
+        instrumentId: String,
+        boundedLimit: Int
+    ): List<OwnOrderView> {
+        val instrumentFilter = if (instrumentId.isBlank()) "" else "AND instrument_id = ?"
+        val limitClause = if (boundedLimit > 0) "LIMIT ?::integer" else ""
+        val params = buildList {
+            add(participantId)
+            if (instrumentId.isNotBlank()) add(instrumentId)
+            if (boundedLimit > 0) add(boundedLimit.toString())
+        }
+        val sql = """
+            SELECT order_id, instrument_id, side, quantity_units, limit_price
+            FROM ${names.orders}
+            WHERE participant_id = ?
+            $instrumentFilter
+            ORDER BY accepted_at_ts DESC NULLS LAST, accepted_at DESC, order_id DESC
+            $limitClause
+            """.trimIndent()
+        val mapOrder: java.sql.ResultSet.() -> OwnOrderView = {
+            OwnOrderView(
+                orderId = getString("order_id"),
+                instrumentId = getString("instrument_id"),
+                side = getString("side"),
+                quantityUnits = getString("quantity_units"),
+                remainingQuantityUnits = getString("quantity_units"),
+                limitPrice = getString("limit_price"),
+                status = "OPEN"
+            )
+        }
+        val projectionOrders = projectionQueryList(sql, *params.toTypedArray(), map = mapOrder)
+        if (projectionOrders.isNotEmpty() || !projectionStoreSeparated()) return projectionOrders
+        return queryList(sql, *params.toTypedArray(), map = mapOrder)
     }
 
     override fun executionsForParticipant(

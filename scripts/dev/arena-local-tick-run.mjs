@@ -1163,7 +1163,41 @@ async function terminalStatusForAcceptedCommand(command, intakeBody) {
   if (config.commandWaitMode === "none") {
     return intakeStatus(command, intakeBody, "intake_response");
   }
+  if (isTerminalIntakeBody(intakeBody)) {
+    return terminalIntakeStatus(command, intakeBody);
+  }
+  if (typeof intakeBody.statusUrl !== "string" || intakeBody.statusUrl.length === 0) {
+    return intakeStatus(command, intakeBody, "intake_response_without_status_url");
+  }
   return await waitForCommandStatus(command);
+}
+
+function isTerminalIntakeBody(intakeBody) {
+  return intakeBody !== null
+    && typeof intakeBody === "object"
+    && (intakeBody.accepted !== undefined || intakeBody.rejected !== undefined);
+}
+
+function terminalIntakeStatus(command, intakeBody) {
+  const rejected = intakeBody.rejected !== undefined;
+  const status = rejected ? "REJECTED" : "COMPLETED";
+  const responseStatus = rejected ? 400 : 200;
+  return {
+    timedOut: false,
+    statusCode: responseStatus,
+    pollCount: 0,
+    elapsedMs: 0,
+    firstStatus: status,
+    firstStatusElapsedMs: 0,
+    body: {
+      commandId: command.body.commandId,
+      status,
+      responseStatus,
+      responsePayloadJson: JSON.stringify(intakeBody),
+      resultStatus: rejected ? "rejected" : "accepted",
+      source: "sync_result_intake_response",
+    },
+  };
 }
 
 function intakeStatus(command, intakeBody, source) {
