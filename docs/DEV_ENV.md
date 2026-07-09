@@ -49,6 +49,7 @@ Inspect the resolved stack before starting containers:
 make dev-compose-config ARGS="--services"
 bun scripts/dev/reef-dev.mjs stack compose-config --services
 make dev-compose-parity
+bun scripts/dev/reef-dev.mjs stack compose-parity
 ```
 
 Use the compatibility monolith only when debugging the migration:
@@ -733,6 +734,7 @@ Run ad hoc simulator load against active dev env:
 
 ```bash
 make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode strict-lifecycle --pretty-summary"
+bun scripts/dev/reef-dev.mjs sim run --duration 30s --workers 8 --rate 100 --mode strict-lifecycle --pretty-summary
 ```
 
 Simulator mutating traffic uses `/api/v1` routes by default (idempotency + client headers enabled):
@@ -771,6 +773,7 @@ Disable boundary route usage only for legacy comparison/debug:
 
 ```bash
 make dev-sim ARGS="--duration 30s --workers 8 --rate 100 --mode capacity-baseline --use-api-v1=false --pretty-summary"
+bun scripts/dev/reef-dev.mjs sim run --duration 30s --workers 8 --rate 100 --mode capacity-baseline --use-api-v1=false --pretty-summary
 ```
 
 Raw accepted-command intake benchmark:

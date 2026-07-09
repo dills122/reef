@@ -180,7 +180,7 @@ dev-compose-config:
 
 dev-compose-parity:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/compose-config-parity.mjs
+	$(JS_RUNTIME) scripts/dev/reef-dev.mjs stack compose-parity
 
 dev-validate-stream-profile:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
@@ -403,11 +403,11 @@ dev-seed-p2-settlement-facts:
 
 dev-sim:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/sim-run.mjs $(ARGS)
+	$(JS_RUNTIME) scripts/dev/reef-dev.mjs sim run $(ARGS)
 
 dev-sim-batch:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	$(JS_RUNTIME) scripts/dev/sim-batch.mjs $(ARGS)
+	$(JS_RUNTIME) scripts/dev/reef-dev.mjs sim batch $(ARGS)
 
 dev-scenario-plan:
 	cd $(SIMULATOR_DIR) && GOCACHE=/tmp/reef-go-build-cache go run ./cmd/scenario-plan --scenario $(SCENARIO) --scenario-run-id $(SCENARIO_RUN_ID) --start $(SCENARIO_START) $(ARGS)

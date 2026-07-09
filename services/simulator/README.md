@@ -122,12 +122,13 @@ Set `--seed` or `REEF_SEED` to force deterministic worker random sources for non
 
 ## Multi-Seed Batch Runs
 
-`make dev-sim-batch` runs the load tester repeatedly with different deterministic seeds and writes one report per seed plus an aggregate report.
+`make dev-sim-batch` runs the load tester repeatedly with different deterministic seeds and writes one report per seed plus an aggregate report. The grouped CLI form is `bun scripts/dev/reef-dev.mjs sim batch`.
 
 ```bash
 DEV_SIM_BATCH_SEEDS=101,202,303 \
 DEV_SIM_BATCH_ARTIFACT_DIR=/tmp/reef-sim-batch \
 make dev-sim-batch ARGS="--duration 20s --workers 8 --rate 120 --mode strict-lifecycle"
+bun scripts/dev/reef-dev.mjs sim batch --duration 20s --workers 8 --rate 120 --mode strict-lifecycle
 ```
 
 The aggregate report summarizes totals, canonical throughput fields, p95 latency, trace pass rate, and per-seed report paths.

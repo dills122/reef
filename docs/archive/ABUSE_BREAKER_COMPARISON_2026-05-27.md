@@ -9,7 +9,7 @@ Validate boundary breaker runtime overhead in a non-tripping configuration befor
 - stack: `docker compose` local dev
 - runtime image: branch `codex/abuse-control-circuit-breakers`
 - simulator command (both runs):
-  - `node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --workers 128 --rate 1200 --pretty-summary --report-out <path>`
+  - `node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --workers 128 --rate 1200 --pretty-summary --report-out <path>`
 - run A (off): `EXTERNAL_API_ABUSE_BREAKER_MODE=off`
 - run B (on, non-tripping):
   - `EXTERNAL_API_ABUSE_BREAKER_MODE=reject-rate`
