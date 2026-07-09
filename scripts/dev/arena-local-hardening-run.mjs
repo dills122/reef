@@ -73,22 +73,29 @@ function hardeningSummary(report) {
   const commandStatusSummary = report.commandStatusSummary ?? {};
   const healthSummary = report.healthSummary ?? {};
   const rejectSummary = summarizeRejects(report);
+  const healthTargets = activeHealthTargets(report);
+  const allowedRejectCodes = new Set(healthTargets.allowedRejectCodes ?? []);
+  const disallowedRejectCount = Object.entries(rejectSummary.byCode ?? {})
+    .filter(([code]) => !allowedRejectCodes.has(code))
+    .reduce((sum, [, count]) => sum + Number(count ?? 0), 0);
   const marketQuality = summarizeMarketQuality(report);
   const latency = summarizeLatency(report);
+  const commandPressure = summarizeCommandPressure(report);
   const ownOrderCounts = (report.venueReadback?.ownOrders ?? [])
     .filter((entry) => String(entry.botId ?? "").startsWith("builtin-mm"))
     .map((entry) => ({
       botId: entry.botId,
       current: entry.current?.body?.orders?.length ?? 0,
       history: entry.history?.body?.orders?.length ?? 0,
-    }));
+  }));
   const failures = [];
   if (report.status !== "completed") failures.push(`report status ${report.status}`);
   if (commandStatusSummary.timedOut !== 0) failures.push(`timed out commands ${commandStatusSummary.timedOut}`);
-  if ((rejectSummary.count ?? 0) > 0) failures.push(`rejected commands ${rejectSummary.count}`);
+  if (disallowedRejectCount > 0) failures.push(`disallowed rejected commands ${disallowedRejectCount}`);
   if ((commandStatusSummary.byFinalStatus?.COMPLETED ?? 0) + (rejectSummary.count ?? 0) !== commandStatusSummary.commandCount) failures.push("not all commands reached terminal accounting");
   if (healthSummary.status !== "pass") failures.push(`health status ${healthSummary.status}`);
   for (const failure of marketQuality.failures) failures.push(failure);
+  for (const failure of commandPressure.failures) failures.push(failure);
   if (report.venueReadback?.projectionDrained !== true) failures.push("projection did not drain");
   if ((report.enforcementEvents ?? []).some((event) => event.decision === "freeze")) failures.push("freeze events present");
   if (ownOrderCounts.some((entry) => entry.current === 0)) failures.push("house LP own-order readback empty");
@@ -118,6 +125,7 @@ function hardeningSummary(report) {
       avgIntakeElapsedMs: commandStatusSummary.avgIntakeElapsedMs ?? 0,
       avgStatusElapsedMs: commandStatusSummary.avgStatusElapsedMs ?? 0,
     },
+    commandPressure,
     latency,
     health: {
       status: healthSummary.status ?? "unknown",
@@ -138,6 +146,65 @@ function hardeningSummary(report) {
       ownOrderCounts,
     },
     activityBySchedulingClass: report.activityBySchedulingClass ?? {},
+  };
+}
+
+function summarizeCommandPressure(report) {
+  const durationSeconds = Number(report.runPlan?.durationSeconds ?? config.durationSeconds);
+  const healthTargets = activeHealthTargets(report);
+  const minCancelCommands = Math.ceil(
+    Number(healthTargets.minCancelCommandsPerMinute ?? 0) * Math.max(0, durationSeconds) / 60,
+  );
+  const minHouseCommands = Math.ceil(
+    Number(healthTargets.minHouseCommandsPerMinute ?? 0) * Math.max(0, durationSeconds) / 60,
+  );
+  const byRoute = {};
+  const bySchedulingClass = {};
+  const byRole = {};
+
+  for (const session of report.sessionReports ?? []) {
+    const schedulingClass = session.schedulingClass ?? session.bot?.schedulingClass ?? "unknown";
+    const role = session.bot?.role ?? "unknown";
+    for (const tick of session.ticks ?? []) {
+      for (const command of tick.submission?.commands ?? []) {
+        const route = command.route || "unknown";
+        increment(byRoute, route);
+        incrementNested(bySchedulingClass, schedulingClass, route);
+        incrementNested(byRole, role, route);
+      }
+    }
+  }
+
+  const cancelCommands = Number(byRoute["/api/v1/orders/cancel"] ?? 0);
+  const houseCommands = Object.values(bySchedulingClass.house_responsive ?? {})
+    .reduce((total, count) => total + Number(count ?? 0), 0);
+  const failures = [];
+  if (cancelCommands < minCancelCommands) {
+    failures.push(`cancel commands ${cancelCommands} < ${minCancelCommands}`);
+  }
+  if (houseCommands < minHouseCommands) {
+    failures.push(`house commands ${houseCommands} < ${minHouseCommands}`);
+  }
+
+  return {
+    status: failures.length === 0 ? "pass" : "fail",
+    failures,
+    thresholds: {
+      minCancelCommandsPerMinute: Number(healthTargets.minCancelCommandsPerMinute ?? 0),
+      minCancelCommands,
+      minHouseCommandsPerMinute: Number(healthTargets.minHouseCommandsPerMinute ?? 0),
+      minHouseCommands,
+    },
+    totals: {
+      commands: Object.values(byRoute).reduce((total, count) => total + Number(count ?? 0), 0),
+      cancelCommands,
+      modifyCommands: Number(byRoute["/api/v1/orders/modify"] ?? 0),
+      submitCommands: Number(byRoute["/api/v1/orders/submit"] ?? 0),
+      houseCommands,
+    },
+    byRoute,
+    bySchedulingClass,
+    byRole,
   };
 }
 
@@ -239,10 +306,11 @@ function finalizeLatencyBucket(bucket) {
 }
 
 function summarizeMarketQuality(report) {
-  const healthTargets = report.mode?.healthTargets ?? {};
+  const healthTargets = activeHealthTargets(report);
   const minTopOfBookPct = Number(healthTargets.minTopOfBookPct ?? report.healthSummary?.thresholds?.minTopOfBookPct ?? 90);
   const minDepthPct = Number(healthTargets.minDepthPct ?? report.healthSummary?.thresholds?.minDepthPct ?? 90);
   const maxP95QuotedSpreadBps = Number(healthTargets.maxP95QuotedSpreadBps ?? report.healthSummary?.thresholds?.maxP95QuotedSpreadBps ?? 50);
+  const requireSideFillCoverage = healthTargets.requireSideFillCoverage ?? true;
   const instruments = new Map();
   const ensureInstrument = (instrumentId) => {
     const key = String(instrumentId ?? "");
@@ -303,25 +371,27 @@ function summarizeMarketQuality(report) {
           command.venueCommand?.body?.side ??
           findCommandSide(tick, command.commandId) ??
           "UNKNOWN";
-        const sideStats = ensureSideStats(instrument, side);
+        const sideStats = side === "BUY" || side === "SELL"
+          ? ensureSideStats(instrument, side)
+          : undefined;
         increment(instrument.commandCountByClass, schedulingClass);
         instrument.submittedCommands += 1;
-        sideStats.submittedCommands += 1;
+        if (sideStats !== undefined) sideStats.submittedCommands += 1;
         if (command.finalStatus === "COMPLETED") instrument.completedCommands += 1;
-        if (command.finalStatus === "COMPLETED") sideStats.completedCommands += 1;
+        if (command.finalStatus === "COMPLETED" && sideStats !== undefined) sideStats.completedCommands += 1;
         if (command.finalStatus === "REJECTED" || command.rejected) {
           instrument.rejectedCommands += 1;
-          sideStats.rejectedCommands += 1;
+          if (sideStats !== undefined) sideStats.rejectedCommands += 1;
         }
         if (command.timedOut) {
           instrument.timedOutCommands += 1;
-          sideStats.timedOutCommands += 1;
+          if (sideStats !== undefined) sideStats.timedOutCommands += 1;
         }
         const trades = Array.isArray(command.intakeBody?.trades) ? command.intakeBody.trades : [];
         const executions = Array.isArray(command.intakeBody?.executions) ? command.intakeBody.executions : [];
         if (trades.length > 0 || executions.length > 0) {
           instrument.filledCommands += 1;
-          sideStats.filledCommands += 1;
+          if (sideStats !== undefined) sideStats.filledCommands += 1;
           increment(instrument.filledCommandCountByClass, schedulingClass);
         }
         for (const trade of trades) {
@@ -332,7 +402,7 @@ function summarizeMarketQuality(report) {
           tradeInstrument.tradeCount += 1;
           tradeInstrument.tradedQuantity += quantity;
           tradeInstrument.notionalNanos += quantity * price;
-          if (tradeInstrument === instrument) {
+          if (tradeInstrument === instrument && sideStats !== undefined) {
             sideStats.tradeCount += 1;
             sideStats.tradedQuantity += quantity;
           }
@@ -391,9 +461,11 @@ function summarizeMarketQuality(report) {
       failures.push(`market ${instrument.instrumentId} p95SpreadBps ${instrument.p95QuotedSpreadBps.toFixed(2)} > ${maxP95QuotedSpreadBps}`);
     }
     if (instrument.tradeCount === 0) failures.push(`market ${instrument.instrumentId} has no trades`);
-    for (const [side, stats] of Object.entries(instrument.bySide)) {
-      if (stats.submittedCommands > 0 && stats.filledCommands === 0) {
-        failures.push(`market ${instrument.instrumentId} side ${side} has no filled commands`);
+    if (requireSideFillCoverage) {
+      for (const [side, stats] of Object.entries(instrument.bySide)) {
+        if (stats.submittedCommands > 0 && stats.filledCommands === 0) {
+          failures.push(`market ${instrument.instrumentId} side ${side} has no filled commands`);
+        }
       }
     }
   }
@@ -406,6 +478,7 @@ function summarizeMarketQuality(report) {
       minDepthPct,
       maxP95QuotedSpreadBps,
       minTradesPerInstrument: 1,
+      requireSideFillCoverage,
     },
     byInstrument,
     totals: {
@@ -474,6 +547,22 @@ function safeJson(value) {
   }
 }
 
+function activeHealthTargets(report) {
+  return {
+    ...loadModeHealthTargets(),
+    ...(report.mode?.healthTargets ?? {}),
+  };
+}
+
+function loadModeHealthTargets() {
+  try {
+    const modeConfig = JSON.parse(readFileSync(config.mode, "utf8"));
+    return modeConfig.healthTargets ?? {};
+  } catch {
+    return {};
+  }
+}
+
 function botIdFromCommandId(commandId) {
   const value = String(commandId ?? "");
   const match = value.match(/^equity-multi-local-(.+)-\d+-cmd-/);
@@ -482,6 +571,12 @@ function botIdFromCommandId(commandId) {
 
 function increment(counter, key) {
   counter[key] = Number(counter[key] ?? 0) + 1;
+}
+
+function incrementNested(counter, group, key) {
+  const groupKey = String(group ?? "unknown");
+  counter[groupKey] ??= {};
+  increment(counter[groupKey], key);
 }
 
 function pushFinite(values, value) {

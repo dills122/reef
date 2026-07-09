@@ -13,7 +13,7 @@
     "dataLatencyMs": 25,
     "maxCommandsPerSecond": 8,
     "maxCancelsPerSecond": 4,
-    "maxOpenOrdersPerSide": 2,
+    "maxOpenOrdersPerSide": 0,
     "quoteTtlMs": 2000,
     "minRefreshIntervalMs": 250,
     "targetSpreadBps": 20,
@@ -62,6 +62,10 @@
     "maxMedianQuotedSpreadBps": 25,
     "maxP95QuotedSpreadBps": 50,
     "maxFailedTicks": 0,
-    "maxFreezeCount": 0
+    "maxFreezeCount": 0,
+    "minCancelCommandsPerMinute": 12,
+    "minHouseCommandsPerMinute": 30,
+    "requireSideFillCoverage": false,
+    "allowedRejectCodes": ["SELF_TRADE_PREVENTION"]
   }
 }

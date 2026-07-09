@@ -1281,6 +1281,20 @@ class PostgresRuntimePersistence(
                         ON CONFLICT (event_id) DO NOTHING;
                       END IF;
 
+                      INSERT INTO ${names.orderLifecycleDirty}(order_id)
+                      SELECT DISTINCT order_id FROM (
+                        SELECT p_result_order_id AS order_id
+                        WHERE COALESCE(p_result_order_id, '') <> ''
+                        UNION ALL
+                        SELECT event->>'orderId' FROM jsonb_array_elements(COALESCE(p_events, '[]'::jsonb)) AS event
+                        UNION ALL
+                        SELECT trade->>'buyOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
+                        UNION ALL
+                        SELECT trade->>'sellOrderId' FROM jsonb_array_elements(COALESCE(p_trades, '[]'::jsonb)) AS trade
+                      ) dirty_ids
+                      WHERE COALESCE(order_id, '') <> ''
+                      ON CONFLICT (order_id) DO UPDATE SET dirtied_at = now();
+
                       IF p_events IS NULL OR jsonb_array_length(p_events) = 0 THEN
                         RETURN;
                       END IF;

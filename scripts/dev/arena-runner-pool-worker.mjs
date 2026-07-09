@@ -510,6 +510,7 @@ function resourceReport() {
 function contextForSession(session, tick, counters = { dataCalls: 0, dataCallsThisTick: 0 }) {
   return harness.createFixtureBotContextV1({
     policy: session.policy,
+    nowIso: tick?.occurredAt,
     fixtureData: {
       marketSnapshots: tick?.marketSnapshots,
       historicalBars: {

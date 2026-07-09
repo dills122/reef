@@ -405,11 +405,18 @@ side-level fill coverage, traded quantity, notional, fill rate, and actor-class
 contribution. It also records tick runtime and command intake/status/total
 latency distributions overall, by scheduling class, and by bot role so tuning
 can distinguish house-responsive pressure from NPC and contestant tick traffic.
-It must fail closed when commands time out, command finality is incomplete,
-market health fails, per-ticker market quality fails, a submitted side has no
-fills, projection drain fails, freeze events appear, or house liquidity
-providers have empty own-order readback. This is the working gate before
-promoting a profile to the longer `15` minute
+The mode-level health targets can also require per-minute command pressure, such
+as cancel-route activity and house liquidity-provider command activity, so short
+smokes and 180 second hardening runs prove lifecycle plumbing is exercised at
+their own scale. The local profile records per-side fill coverage but does not
+require every submitted side to fill on every instrument; that stricter assertion
+belongs on longer market-quality gates where the traffic mix is tuned for side
+coverage instead of local infrastructure pressure. It must fail closed when
+commands time out, command finality is incomplete, market health fails,
+per-ticker market quality fails, required command pressure is missing, projection
+drain fails, freeze events appear, or house liquidity providers have empty
+own-order readback. This is the working gate before promoting a profile to the
+longer `15` minute
 quickest-real-game simulation check.
 
 First operator-facing UI artifact:

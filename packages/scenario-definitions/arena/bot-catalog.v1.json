@@ -54,7 +54,10 @@
         "values": {
           "instrumentId": "AAPL",
           "orderSize": 10,
-          "spread": 1
+          "spread": 1,
+          "quoteTtlMs": 1000,
+          "replacementCooldownMs": 1000,
+          "cancelSuppressMs": 300000
         }
       },
       "scoreEligible": false,
