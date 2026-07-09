@@ -18,6 +18,9 @@ const config = {
 };
 
 const summaryOut = config.summaryOut || config.out.replace(/\.json$/i, ".summary.json");
+requireProjectorEnabled("ORDER_LIFECYCLE_PROJECTOR_ENABLED", "order-lifecycle");
+requireProjectorEnabled("MARKET_DATA_PROJECTOR_ENABLED", "market-data");
+
 const passthrough = args.filter((arg) =>
   !arg.startsWith("--duration-seconds=")
   && !arg.startsWith("--mode=")
@@ -66,6 +69,14 @@ console.log(
 
 if (summary.status !== "pass") {
   process.exitCode = 1;
+}
+
+function requireProjectorEnabled(envName, label) {
+  if (String(process.env[envName] ?? "").toLowerCase() === "true") return;
+  console.error(
+    `arena local hardening requires ${label} projector startup: set ${envName}=true when starting/resetting the local stack and when running this command.`,
+  );
+  process.exit(1);
 }
 
 function hardeningSummary(report) {

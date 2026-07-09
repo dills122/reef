@@ -415,13 +415,28 @@ After the short smoke is stable, use the local hardening gate for meaningful
 pre-soak evidence:
 
 ```bash
+COMPOSE_PROJECT_NAME=reef \
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+ORDER_LIFECYCLE_PROJECTOR_POLL_MS=100 \
+MARKET_DATA_PROJECTOR_POLL_MS=100 \
+make dev-reset
+
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+ORDER_LIFECYCLE_PROJECTOR_POLL_MS=100 \
+MARKET_DATA_PROJECTOR_POLL_MS=100 \
 make dev-hardening-bot-arena-local
 ```
 
 This defaults to the multi-instrument local arena mode for `180` seconds, uses
 terminal command accounting, requires projection drain, and writes both the full
-arena report and a compact hardening summary. The summary includes per-ticker
-market-quality evidence: sampled top-of-book/depth, spread distribution,
+arena report and a compact hardening summary. It must run against a local stack
+started with both `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and
+`MARKET_DATA_PROJECTOR_ENABLED=true`; otherwise top-of-book/depth health samples
+do not reflect the live projected book and the hardening runner fails closed
+before traffic starts. The summary includes per-ticker market-quality evidence:
+sampled top-of-book/depth, spread distribution,
 submitted/completed/rejected/timed-out commands, filled commands, trade count,
 side-level fill coverage, traded quantity, notional, fill rate, and actor-class
 contribution. It also records tick runtime and command intake/status/total
