@@ -13,6 +13,7 @@ export default defineConfig({
       tagline: "Simulation-first institutional trading venue and post-trade platform",
       description:
         "Reef project overview, bot arena/game docs, trading API surface, and data schema reference. Pre-release, under heavy development.",
+      customCss: ["./src/styles/reef.css"],
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/dills122/reef" },
       ],
