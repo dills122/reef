@@ -52,9 +52,11 @@ The runtime supports multiple internal processing modes behind the same external
 | [`/api/v1/orders/submit`](../orders/) | POST | Submit a new order |
 | [`/api/v1/orders/modify`](../orders/) | POST | Modify quantity/price of a resting order |
 | [`/api/v1/orders/cancel`](../orders/) | POST | Cancel an order |
+| [`/api/v1/orders/cancel-by-client-order`](../orders/) | POST | Resolve a client-order cancel outside the hot path, then emit a normal cancel |
 | [`/api/v1/orders/lifecycle-state`](../orders/) | POST | Rebuild order lifecycle projection |
 | [`/api/v1/orders/current`](../market-data/) | GET | Participant-scoped current own-order state |
 | [`/api/v1/orders/history`](../market-data/) | GET | Participant-scoped own-order history |
+| [`/api/v1/orders/fills`](../market-data/) | GET | Participant-scoped fills |
 | [`/api/v1/market-data/snapshots/{instrumentId}`](../market-data/) | GET | Top-of-book snapshot |
 | [`/api/v1/market-data/snapshots`](../market-data/) | POST | Refresh snapshot projection |
 | [`/api/v1/market-data/depth/{instrumentId}`](../market-data/) | GET | Bounded depth snapshot |
@@ -64,6 +66,8 @@ The runtime supports multiple internal processing modes behind the same external
 | [`/api/v1/settlement/facts/{scenarioRunId}`](../settlement/) | GET | Append-only settlement facts for one scenario run |
 | [`/api/v1/settlement/obligations/{scenarioRunId}`](../settlement/) | GET | Current settlement obligation state projected from facts |
 | [`/api/v1/settlement/ledger/{scenarioRunId}`](../settlement/) | GET | Replayable balances and settlement proof totals |
+| [`/api/v1/settlement/proof/{scenarioRunId}`](../settlement/) | GET | Replayable settlement finality proof |
+| [`/api/v1/settlement/score/{scenarioRunId}`](../settlement/) | GET | Scenario settlement score/proof summary |
 | [`/api/v1/commands/{commandId}`](../commands/) | GET | Command status lookup |
 
 `/internal/*` routes exist only as local/migration operator tooling and diagnostics — see [Internal & Admin Routes](../internal-admin/). They are not part of the public client contract and must not be exposed raw outside private operator networks.

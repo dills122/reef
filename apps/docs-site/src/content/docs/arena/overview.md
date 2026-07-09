@@ -2,7 +2,7 @@
 title: Bot Arena Overview
 description: The work-in-progress trading-bot game built on top of Reef's simulation control plane.
 banner:
-  content: Planning/early-build stage. This is not an accepted final design — see Learn More for the living planning document.
+  content: Early-build stage. Local control-plane and run gates exist; public submissions and hosted scale are not open yet.
 ---
 
 Bot Arena is the game layer on top of Reef. Bots compete in deterministic simulated markets, but their orders still enter the same venue as everyone else. That keeps the arena more interesting than a backtest: bot behavior can change liquidity, fills, and outcomes for other bots.
@@ -17,7 +17,7 @@ Competitor bots are not passive observers. Their orders enter the simulated venu
 - operator-controlled background-traffic bots
 - optional built-in benchmark bots for calibration
 
-Planned game modes include an equity-sprint winner, momentum challenge, market-making trial, low-drawdown/survival league, execution-quality challenge, and an aggregate season across modes.
+Current local modes cover equity-sprint-style runs and multi-instrument liquidity/provider tuning. Planned modes include a momentum challenge, market-making trial, low-drawdown/survival league, execution-quality challenge, and an aggregate season across modes.
 
 ## Pipeline
 
@@ -38,16 +38,17 @@ Built:
 - Registration/qualification harness, deterministic tick runner, SES-compatible hosted runner
 - Arena control-plane registry: bot identity, bot versions, artifact hashes, approval lifecycle (`draft` → `submitted` → `checks_passed` → `approved` → `active` / `suspended` / `quarantined` / `banned` / `archived`), operator decisions, run records
 - Bot-originated orders can flow through the real venue command boundary with bot client identity and pre-acceptance risk checks (a quarantined bot version is rejected before order acceptance)
+- Local positive/negative persisted smoke gates, static operator report rendering, report-index rendering, and a shared-time multi-instrument simulation proof with 5 active symbols and 18 bots
 
 Not yet built:
 
 - Sandboxed execution at scale connected to a dedicated arena runtime protocol (gRPC/protobuf)
-- Modular game-mode loading, scoring policies, leaderboards
+- Production-grade modular game-mode loading, scoring policies, and leaderboard service
 - Public bot submission flow, UI (registry, run monitor, leaderboard, replay)
 
 ## Learn More
 
-- `docs/BOT_ARENA_PLAN.md` — full product concept, rollout phases, open questions (this page's source)
+- `docs/BOT_ARENA_PLAN.md` and `docs/BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md` — full product concept, rollout phases, and latest local gate evidence
 - `docs/BOT_SDK_DESIGN.md` — SDK contract detail
 - [How The Game Works](../how-the-game-works/) — architecture/pipeline detail on this site
 - [How To Play](../how-to-play/) — player-facing walkthrough

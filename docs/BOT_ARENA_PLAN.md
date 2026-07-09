@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document captures a proposed direction for adding a tournament-style trading bot arena to Reef.
+This document captures the current direction for adding a tournament-style trading bot arena to Reef.
 
 The goal is to let users build strategy bots that compete in deterministic simulated markets while preserving Reef's core architecture:
 
@@ -12,13 +12,13 @@ The goal is to let users build strategy bots that compete in deterministic simul
 - tournament runs are replayable, inspectable, and auditable
 - game modes are modular configurations rather than hard-coded venue behavior
 
-This is a planning document, not an accepted architecture decision. If the direction is adopted, the stable parts should move into `docs/DECISIONS.md`, steering docs, and versioned contracts.
+This is an active early-build planning document, not a final architecture decision. Stable shipped parts should move into `docs/DECISIONS.md`, steering docs, and versioned contracts when they become durable platform commitments.
 
-## Deferred Second Review
+## Current Review Status
 
-Status: pending second review after the current active work settles.
+Status: accepted as an active early-build workstream for local proof; hosted/public submission design remains pre-production.
 
-Current checkpoint: the Bot SDK runtime bridge is merged. Bot-originated order commands can use the normal venue command boundary with bot client identity, run metadata, stream-ack intake, command-log capture, canonical outcome persistence, projection, and replay-idempotency coverage. The next non-throughput slice should move from command-path proof to arena control-plane source facts and operator approval controls.
+Current checkpoint: the Bot SDK runtime bridge, arena control-plane source facts, operator approval controls, local positive/negative persisted gates, static operator reports, and shared-time multi-instrument simulation proof exist. Bot-originated order commands use the normal venue command boundary with bot client identity, run metadata, stream-ack intake, command-log capture, canonical outcome persistence, projection, and replay-idempotency coverage. The next local proof is a paced `3-5m` wall-clock gate with controlled taker/fill pressure and cancel-budget enforcement before the `15m` DigitalOcean promotion run.
 
 This section captures follow-up review material from handwritten planning notes. It is not an implementation commitment. Before this area moves into accepted architecture, review it against the current runtime, simulator, API-boundary, and data-platform work so the arena design does not bypass Reef's deterministic command, replay, audit, and storage rules.
 

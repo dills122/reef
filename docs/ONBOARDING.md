@@ -214,7 +214,8 @@ make dev-smoke
 
 `smoke` fails at submit/cancel
 - Check service health:
-  - `curl http://localhost:8080/health`
+  - `curl http://localhost:8080/healthz`
+  - `curl http://localhost:8080/readyz`
   - `curl http://localhost:8081/health`
 - Ensure reference seeding endpoints are reachable.
 
