@@ -398,11 +398,15 @@ make dev-hardening-bot-arena-local
 
 This defaults to the multi-instrument local arena mode for `180` seconds, uses
 terminal command accounting, requires projection drain, and writes both the full
-arena report and a compact hardening summary. The summary must fail closed when
-commands time out, command finality is incomplete, market health fails,
-projection drain fails, freeze events appear, or house liquidity providers have
-empty own-order readback. This is the working gate before promoting a profile to
-the longer `15` minute quickest-real-game simulation check.
+arena report and a compact hardening summary. The summary includes per-ticker
+market-quality evidence: sampled top-of-book/depth, spread distribution,
+submitted/completed/rejected/timed-out commands, filled commands, trade count,
+traded quantity, notional, fill rate, and actor-class contribution. It must fail
+closed when commands time out, command finality is incomplete, market health
+fails, per-ticker market quality fails, projection drain fails, freeze events
+appear, or house liquidity providers have empty own-order readback. This is the
+working gate before promoting a profile to the longer `15` minute
+quickest-real-game simulation check.
 
 First operator-facing UI artifact:
 

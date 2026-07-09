@@ -73,6 +73,7 @@ function hardeningSummary(report) {
   const commandStatusSummary = report.commandStatusSummary ?? {};
   const healthSummary = report.healthSummary ?? {};
   const rejectSummary = summarizeRejects(report);
+  const marketQuality = summarizeMarketQuality(report);
   const ownOrderCounts = (report.venueReadback?.ownOrders ?? [])
     .filter((entry) => String(entry.botId ?? "").startsWith("builtin-mm"))
     .map((entry) => ({
@@ -86,6 +87,7 @@ function hardeningSummary(report) {
   if ((rejectSummary.count ?? 0) > 0) failures.push(`rejected commands ${rejectSummary.count}`);
   if ((commandStatusSummary.byFinalStatus?.COMPLETED ?? 0) + (rejectSummary.count ?? 0) !== commandStatusSummary.commandCount) failures.push("not all commands reached terminal accounting");
   if (healthSummary.status !== "pass") failures.push(`health status ${healthSummary.status}`);
+  for (const failure of marketQuality.failures) failures.push(failure);
   if (report.venueReadback?.projectionDrained !== true) failures.push("projection did not drain");
   if ((report.enforcementEvents ?? []).some((event) => event.decision === "freeze")) failures.push("freeze events present");
   if (ownOrderCounts.some((entry) => entry.current === 0)) failures.push("house LP own-order readback empty");
@@ -124,6 +126,7 @@ function hardeningSummary(report) {
       crossedBookCount: healthSummary.crossedBookCount ?? 0,
       emptyBookCount: healthSummary.emptyBookCount ?? 0,
     },
+    marketQuality,
     house: {
       botCount: house.botCount ?? 0,
       ticks: house.ticks ?? 0,
@@ -134,6 +137,159 @@ function hardeningSummary(report) {
     },
     activityBySchedulingClass: report.activityBySchedulingClass ?? {},
   };
+}
+
+function summarizeMarketQuality(report) {
+  const healthTargets = report.mode?.healthTargets ?? {};
+  const minTopOfBookPct = Number(healthTargets.minTopOfBookPct ?? report.healthSummary?.thresholds?.minTopOfBookPct ?? 90);
+  const minDepthPct = Number(healthTargets.minDepthPct ?? report.healthSummary?.thresholds?.minDepthPct ?? 90);
+  const maxP95QuotedSpreadBps = Number(healthTargets.maxP95QuotedSpreadBps ?? report.healthSummary?.thresholds?.maxP95QuotedSpreadBps ?? 50);
+  const instruments = new Map();
+  const ensureInstrument = (instrumentId) => {
+    const key = String(instrumentId ?? "");
+    if (key.length === 0) return undefined;
+    if (!instruments.has(key)) {
+      instruments.set(key, {
+        instrumentId: key,
+        samples: 0,
+        topOfBookSamples: 0,
+        depthSamples: 0,
+        emptyBookCount: 0,
+        lockedBookCount: 0,
+        crossedBookCount: 0,
+        spreadBps: [],
+        submittedCommands: 0,
+        completedCommands: 0,
+        rejectedCommands: 0,
+        timedOutCommands: 0,
+        filledCommands: 0,
+        tradeCount: 0,
+        tradedQuantity: 0,
+        notionalNanos: 0,
+        commandCountByClass: {},
+        filledCommandCountByClass: {},
+        tradeCountByClass: {},
+      });
+    }
+    return instruments.get(key);
+  };
+
+  for (const sample of report.healthSamples ?? []) {
+    for (const snapshot of sample.snapshots ?? []) {
+      const instrument = ensureInstrument(snapshot.instrumentId);
+      if (instrument === undefined) continue;
+      instrument.samples += 1;
+      if (snapshot.topOfBook) instrument.topOfBookSamples += 1;
+      if (snapshot.bidDepthAvailable && snapshot.askDepthAvailable) instrument.depthSamples += 1;
+      if (snapshot.emptyBook) instrument.emptyBookCount += 1;
+      if (snapshot.lockedBook) instrument.lockedBookCount += 1;
+      if (snapshot.crossedBook) instrument.crossedBookCount += 1;
+      if (Number.isFinite(Number(snapshot.quotedSpreadBps))) {
+        instrument.spreadBps.push(Number(snapshot.quotedSpreadBps));
+      }
+    }
+  }
+
+  for (const session of report.sessionReports ?? []) {
+    const schedulingClass = session.schedulingClass ?? session.bot?.schedulingClass ?? "unknown";
+    for (const tick of session.ticks ?? []) {
+      for (const command of tick.submission?.commands ?? []) {
+        const instrumentId = command.statusBody?.instrumentId ?? command.body?.instrumentId ?? command.intakeBody?.accepted?.instrumentId ?? command.commandBody?.instrumentId ?? command.routeInstrumentId ?? command.request?.instrumentId ?? command.venueCommand?.body?.instrumentId;
+        const commandInstrumentId = instrumentId ?? findCommandInstrument(tick, command.commandId);
+        const instrument = ensureInstrument(commandInstrumentId);
+        if (instrument === undefined) continue;
+        increment(instrument.commandCountByClass, schedulingClass);
+        instrument.submittedCommands += 1;
+        if (command.finalStatus === "COMPLETED") instrument.completedCommands += 1;
+        if (command.finalStatus === "REJECTED" || command.rejected) instrument.rejectedCommands += 1;
+        if (command.timedOut) instrument.timedOutCommands += 1;
+        const trades = Array.isArray(command.intakeBody?.trades) ? command.intakeBody.trades : [];
+        const executions = Array.isArray(command.intakeBody?.executions) ? command.intakeBody.executions : [];
+        if (trades.length > 0 || executions.length > 0) {
+          instrument.filledCommands += 1;
+          increment(instrument.filledCommandCountByClass, schedulingClass);
+        }
+        for (const trade of trades) {
+          const tradeInstrument = ensureInstrument(trade.instrumentId ?? commandInstrumentId);
+          if (tradeInstrument === undefined) continue;
+          const quantity = numberValue(trade.quantityUnits);
+          const price = numberValue(trade.price);
+          tradeInstrument.tradeCount += 1;
+          tradeInstrument.tradedQuantity += quantity;
+          tradeInstrument.notionalNanos += quantity * price;
+          increment(tradeInstrument.tradeCountByClass, schedulingClass);
+        }
+      }
+    }
+  }
+
+  const byInstrument = Array.from(instruments.values())
+    .sort((left, right) => left.instrumentId.localeCompare(right.instrumentId))
+    .map((instrument) => {
+      const spreadValues = instrument.spreadBps.slice().sort((left, right) => left - right);
+      return {
+        instrumentId: instrument.instrumentId,
+        samples: instrument.samples,
+        topOfBookPct: pct(instrument.topOfBookSamples, instrument.samples),
+        depthPct: pct(instrument.depthSamples, instrument.samples),
+        emptyBookCount: instrument.emptyBookCount,
+        lockedBookCount: instrument.lockedBookCount,
+        crossedBookCount: instrument.crossedBookCount,
+        medianQuotedSpreadBps: percentile(spreadValues, 0.5),
+        p95QuotedSpreadBps: percentile(spreadValues, 0.95),
+        submittedCommands: instrument.submittedCommands,
+        completedCommands: instrument.completedCommands,
+        rejectedCommands: instrument.rejectedCommands,
+        timedOutCommands: instrument.timedOutCommands,
+        filledCommands: instrument.filledCommands,
+        fillRatePct: pct(instrument.filledCommands, instrument.submittedCommands),
+        tradeCount: instrument.tradeCount,
+        tradedQuantity: instrument.tradedQuantity,
+        notional: instrument.notionalNanos / 1_000_000_000,
+        commandCountByClass: instrument.commandCountByClass,
+        filledCommandCountByClass: instrument.filledCommandCountByClass,
+        tradeCountByClass: instrument.tradeCountByClass,
+      };
+    });
+
+  const failures = [];
+  for (const instrument of byInstrument) {
+    if (instrument.samples === 0) failures.push(`market ${instrument.instrumentId} has no health samples`);
+    if (instrument.topOfBookPct < minTopOfBookPct) failures.push(`market ${instrument.instrumentId} topOfBookPct ${instrument.topOfBookPct.toFixed(2)} < ${minTopOfBookPct}`);
+    if (instrument.depthPct < minDepthPct) failures.push(`market ${instrument.instrumentId} depthPct ${instrument.depthPct.toFixed(2)} < ${minDepthPct}`);
+    if (instrument.p95QuotedSpreadBps !== null && instrument.p95QuotedSpreadBps > maxP95QuotedSpreadBps) {
+      failures.push(`market ${instrument.instrumentId} p95SpreadBps ${instrument.p95QuotedSpreadBps.toFixed(2)} > ${maxP95QuotedSpreadBps}`);
+    }
+    if (instrument.tradeCount === 0) failures.push(`market ${instrument.instrumentId} has no trades`);
+  }
+
+  return {
+    status: failures.length === 0 ? "pass" : "fail",
+    failures,
+    thresholds: {
+      minTopOfBookPct,
+      minDepthPct,
+      maxP95QuotedSpreadBps,
+      minTradesPerInstrument: 1,
+    },
+    byInstrument,
+    totals: {
+      instruments: byInstrument.length,
+      tradeCount: byInstrument.reduce((total, instrument) => total + instrument.tradeCount, 0),
+      tradedQuantity: byInstrument.reduce((total, instrument) => total + instrument.tradedQuantity, 0),
+      submittedCommands: byInstrument.reduce((total, instrument) => total + instrument.submittedCommands, 0),
+      filledCommands: byInstrument.reduce((total, instrument) => total + instrument.filledCommands, 0),
+      fillRatePct: pct(
+        byInstrument.reduce((total, instrument) => total + instrument.filledCommands, 0),
+        byInstrument.reduce((total, instrument) => total + instrument.submittedCommands, 0),
+      ),
+    },
+  };
+}
+
+function findCommandInstrument(tick, commandId) {
+  const venueCommand = (tick.venueCommands ?? []).find((candidate) => candidate.body?.commandId === commandId);
+  return venueCommand?.body?.instrumentId;
 }
 
 function summarizeRejects(report) {
@@ -166,6 +322,25 @@ function botIdFromCommandId(commandId) {
   const value = String(commandId ?? "");
   const match = value.match(/^equity-multi-local-(.+)-\d+-cmd-/);
   return match?.[1] ?? "unknown";
+}
+
+function increment(counter, key) {
+  counter[key] = Number(counter[key] ?? 0) + 1;
+}
+
+function pct(numerator, denominator) {
+  return denominator === 0 ? 0 : (numerator / denominator) * 100;
+}
+
+function percentile(sortedValues, percentileValue) {
+  if (sortedValues.length === 0) return null;
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil(sortedValues.length * percentileValue) - 1));
+  return sortedValues[index];
+}
+
+function numberValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function stringOption(name, fallback) {
