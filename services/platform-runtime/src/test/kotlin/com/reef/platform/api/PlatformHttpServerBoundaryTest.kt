@@ -104,6 +104,39 @@ class PlatformHttpServerBoundaryTest {
             ),
             adminGatewayRouteFor("/admin/v1/risk/price-collars")
         )
+        // GET reads the boundary's read-only mirror instead of the write path.
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/boundary/account-risk/controls",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/risk/account-controls", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/boundary/circuit-breakers",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/risk/circuit-breakers", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/boundary/price-collars",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/risk/price-collars", "GET")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/arena/bot-versions/transition",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/bot-versions/transition")
+        )
     }
 
     @Test
@@ -229,6 +262,144 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(409, response.status)
             assertContains(response.body, "missing permission arena.admin")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayArenaBotsListReturnsRosterWhenBotIdOmitted() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
+        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com"),
+                createdAt = now
+            )
+        )
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-2",
+                fileName = "bot-2.ts",
+                metadata = ArenaBotMetadata(name = "Bot 2", publisher = "Publisher", email = "p2@example.com"),
+                createdAt = now.plusSeconds(1)
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val response = get(
+                server.address.port,
+                "/admin/v1/arena/bots",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"bots\":[")
+            assertContains(response.body, "\"botId\":\"bot-1\"")
+            assertContains(response.body, "\"botId\":\"bot-2\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayRiskAccountControlsGetReturnsCurrentState() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val accountRiskStore = RecordingAccountRiskStore()
+        accountRiskStore.upsertControl(
+            scopeType = "BOT",
+            scopeId = "bot-1",
+            decision = AccountRiskDecision.DISABLED_BOT,
+            reason = "operator disabled",
+            maxQuantityUnits = "",
+            maxNotional = "",
+            currency = "USD"
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            accountRiskCheck = accountRiskStore,
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient()
+        )
+        try {
+            val response = get(
+                server.address.port,
+                "/admin/v1/risk/account-controls",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"scopeId\":\"bot-1\"")
+            assertContains(response.body, "\"decision\":\"DISABLED_BOT\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayArenaBotVersionTransitionBansThroughPublicGateway() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
+        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
+        controlPlane.registerBot(
+            RegisterArenaBotCommand(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com")
+            )
+        )
+        controlPlane.registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = "bot-1",
+                versionId = "v1",
+                sourceHash = "sha256:source",
+                artifactHash = "sha256:artifact",
+                sdkVersion = "1.5.0",
+                apiVersion = "v1",
+                dependencyManifestHash = "sha256:deps"
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val response = post(
+                server.address.port,
+                "/admin/v1/arena/bot-versions/transition",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
+                body = """{"botId":"bot-1","versionId":"v1","status":"banned","reason":"policy violation"}"""
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"botVersionStatus\":\"Banned\"")
         } finally {
             server.stop(0)
         }

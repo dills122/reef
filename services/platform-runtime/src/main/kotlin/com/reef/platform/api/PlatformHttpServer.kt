@@ -122,7 +122,7 @@ internal data class AdminGatewayRoute(
     val serviceTokenFamilies: Set<AdminServiceTokenFamily>
 )
 
-internal fun adminGatewayRouteFor(path: String): AdminGatewayRoute? = when (path) {
+internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminGatewayRoute? = when (path) {
     "/admin/v1/arena/bots" -> AdminGatewayRoute(
         "/internal/admin/arena/bots",
         "arena",
@@ -134,23 +134,30 @@ internal fun adminGatewayRouteFor(path: String): AdminGatewayRoute? = when (path
             "arena",
             setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
         )
+    "/admin/v1/arena/bot-versions/transition" -> AdminGatewayRoute(
+        "/internal/admin/arena/bot-versions/transition",
+        "arena",
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+    )
     "/admin/v1/analytics/run-exports" -> AdminGatewayRoute(
         "/internal/admin/analytics/run-exports",
         "analytics",
         setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
     )
+    // GET reads the boundary's read-only mirror; POST writes through the admin
+    // mutation path. Same public path, two different internal targets.
     "/admin/v1/risk/account-controls" -> AdminGatewayRoute(
-        "/internal/admin/account-risk/controls",
+        if (method == "GET") "/internal/boundary/account-risk/controls" else "/internal/admin/account-risk/controls",
         "admin",
         setOf(AdminServiceTokenFamily.Admin)
     )
     "/admin/v1/risk/circuit-breakers" -> AdminGatewayRoute(
-        "/internal/admin/circuit-breakers",
+        if (method == "GET") "/internal/boundary/circuit-breakers" else "/internal/admin/circuit-breakers",
         "admin",
         setOf(AdminServiceTokenFamily.Admin)
     )
     "/admin/v1/risk/price-collars" -> AdminGatewayRoute(
-        "/internal/admin/price-collars",
+        if (method == "GET") "/internal/boundary/price-collars" else "/internal/admin/price-collars",
         "admin",
         setOf(AdminServiceTokenFamily.Admin)
     )
@@ -559,6 +566,7 @@ class PlatformHttpServer(
         for (path in listOf(
             "/admin/v1/arena/bots",
             "/admin/v1/arena/bots/openbao-provision",
+            "/admin/v1/arena/bot-versions/transition",
             "/admin/v1/analytics/run-exports",
             "/admin/v1/risk/account-controls",
             "/admin/v1/risk/circuit-breakers",
@@ -1426,7 +1434,7 @@ class PlatformHttpServer(
     }
 
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
-        val route = adminGatewayRouteFor(exchange.requestURI.path)
+        val route = adminGatewayRouteFor(exchange.requestURI.path, exchange.requestMethod)
         if (route == null) {
             exchange.sendResponseHeaders(404, -1)
             exchange.close()
@@ -3404,7 +3412,7 @@ class PlatformHttpServer(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         val botId = queryValue(query, "botId")
         if (botId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
+            return arenaBotsListResponse(service, query)
         }
         return try {
             val bot = service.arenaBot(arenaAdminActor(query), botId)
@@ -3412,6 +3420,20 @@ class PlatformHttpServer(
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot lookup failed")))
+        }
+    }
+
+    // botId omitted -> roster listing, most-recently-registered first.
+    private fun arenaBotsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        return try {
+            val bots = service.arenaBots(arenaAdminActor(query), limit)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "bots" to bots.map { arenaBotJson(it) })
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bots query failed")))
         }
     }
 

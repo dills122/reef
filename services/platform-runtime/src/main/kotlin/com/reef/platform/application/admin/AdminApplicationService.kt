@@ -385,6 +385,11 @@ class AdminApplicationService(
         return arenaStore().bot(botId)
     }
 
+    fun arenaBots(actor: AdminActor, limit: Int = 50): List<ArenaBot> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().bots(limit)
+    }
+
     fun arenaBotVersion(actor: AdminActor, botId: String, versionId: String): ArenaBotVersion? {
         requirePermission(actor, Permission.ARENA_ADMIN)
         return arenaStore().version(botId, versionId)

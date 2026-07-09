@@ -237,6 +237,26 @@ class PostgresArenaBotRegistryStore(
         return queryBot("bot_id = ?", botId)
     }
 
+    override fun bots(limit: Int): List<ArenaBot> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT bot_id, file_name, name, publisher, email, description, version, created_at
+                FROM ${names.bots}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, limit.coerceIn(1, 500))
+                ps.executeQuery().use { rs ->
+                    val result = mutableListOf<ArenaBot>()
+                    while (rs.next()) result.add(rs.toArenaBot())
+                    return result
+                }
+            }
+        }
+    }
+
     override fun botByFileName(fileName: String): ArenaBot? {
         return queryBot("file_name = ?", fileName)
     }
