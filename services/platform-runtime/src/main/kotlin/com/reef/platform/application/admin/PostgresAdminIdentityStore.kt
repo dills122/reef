@@ -162,11 +162,41 @@ class PostgresAdminIdentityStore(
     }
 
     override fun userByReefUserId(reefUserId: String): AdminUser? {
-        return queryUser("reef_user_id = ?", AdminIdentityValidation.reefUserId(reefUserId))
+        val id = AdminIdentityValidation.reefUserId(reefUserId)
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT reef_user_id, github_user_id, github_login, display_name,
+                       trust_state, created_at, last_seen_at, updated_at
+                FROM ${names.users}
+                WHERE reef_user_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, id)
+                ps.executeQuery().use { rs ->
+                    return if (rs.next()) userFrom(rs) else null
+                }
+            }
+        }
     }
 
     override fun userByGithubUserId(githubUserId: Long): AdminUser? {
-        return queryUser("github_user_id = ?", AdminIdentityValidation.requireGitHubUserId(githubUserId))
+        val id = AdminIdentityValidation.requireGitHubUserId(githubUserId)
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT reef_user_id, github_user_id, github_login, display_name,
+                       trust_state, created_at, last_seen_at, updated_at
+                FROM ${names.users}
+                WHERE github_user_id = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setLong(1, id)
+                ps.executeQuery().use { rs ->
+                    return if (rs.next()) userFrom(rs) else null
+                }
+            }
+        }
     }
 
     override fun saveRole(role: AdminRole): AdminRole {
@@ -392,27 +422,6 @@ class PostgresAdminIdentityStore(
             type,
             targetId
         ) { rs -> auditEventFrom(rs) }
-    }
-
-    private fun queryUser(predicate: String, value: Any): AdminUser? {
-        connection().use { conn ->
-            conn.prepareStatement(
-                """
-                SELECT reef_user_id, github_user_id, github_login, display_name,
-                       trust_state, created_at, last_seen_at, updated_at
-                FROM ${names.users}
-                WHERE $predicate
-                """.trimIndent()
-            ).use { ps ->
-                when (value) {
-                    is Long -> ps.setLong(1, value)
-                    else -> ps.setString(1, value.toString())
-                }
-                ps.executeQuery().use { rs ->
-                    return if (rs.next()) userFrom(rs) else null
-                }
-            }
-        }
     }
 
     private fun <T> queryList(sql: String, vararg params: String, mapper: (ResultSet) -> T): List<T> {

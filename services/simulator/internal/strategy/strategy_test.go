@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	sessionconfig "github.com/dills122/reef/services/simulator/internal/config"
+	"github.com/dills122/reef/services/simulator/internal/strategyname"
 )
 
 func TestResolveActionMixProfileOverride(t *testing.T) {
@@ -70,7 +71,7 @@ func TestActionMixForProfileInvalidParamsFallsBackToDefault(t *testing.T) {
 	if !ok {
 		t.Fatal("expected fallback mix to succeed")
 	}
-	if mix != namedDefaults["two_sided_quote"] {
+	if mix != strategyname.NamedDefaultMixes["two_sided_quote"] {
 		t.Fatalf("expected default mix on invalid params, got %+v", mix)
 	}
 }
@@ -84,7 +85,7 @@ func TestActionMixForProfileRejectsNegativePctEvenWhenSumIsOneHundred(t *testing
 	if !ok {
 		t.Fatal("expected fallback mix to succeed")
 	}
-	if mix != namedDefaults["two_sided_quote"] {
+	if mix != strategyname.NamedDefaultMixes["two_sided_quote"] {
 		t.Fatalf("expected default mix on negative params, got %+v", mix)
 	}
 }

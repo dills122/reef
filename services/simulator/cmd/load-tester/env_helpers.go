@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,8 +20,8 @@ func envInt(key string, fallback int) int {
 	if value == "" {
 		return fallback
 	}
-	var parsed int
-	if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
 		return fallback
 	}
 	return parsed
@@ -32,8 +32,8 @@ func envInt64(key string, fallback int64) int64 {
 	if value == "" {
 		return fallback
 	}
-	var parsed int64
-	if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
 		return fallback
 	}
 	return parsed
