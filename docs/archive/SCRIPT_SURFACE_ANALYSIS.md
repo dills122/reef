@@ -6,9 +6,9 @@ Date: 2026-07-08
 
 The repository has a large script surface, but most of it is intentional operational automation rather than accidental clutter.
 
-- `125` JavaScript/TypeScript/shell script files under `scripts/` after the `reef-dev.mjs` consolidation pass
+- `126` JavaScript/TypeScript/shell script files under `scripts/` after the `reef-dev.mjs` consolidation pass
 - `80` SQL migrations under `scripts/dev/db/migrations/`
-- `scripts/dev/reef-dev.mjs` now groups stack, stress, and local link setup profiles
+- `scripts/dev/reef-dev.mjs` now groups stack, stress, compose, stream validation, simulator launch, and local link setup profiles
 - `3` deploy entrypoints and `3` CI helper scripts
 
 The safe direction is to preserve existing Makefile/package entrypoint names and consolidate implementation behind them. Many commands are documented operational workflows, so deleting or renaming them without a compatibility layer would create more churn than value. For live counts, run `node scripts/dev/script-surface-check.mjs`.
@@ -21,7 +21,7 @@ The safe direction is to preserve existing Makefile/package entrypoint names and
 | Stress and performance profiles | `reef-dev.mjs stress run [profile]`, `stress.mjs`, `venue-event-materializer-stress.mjs`, `throughput-campaign.mjs` | Keep domain workflows; consolidate repeated profile/session config generation. |
 | Bot SDK and arena tooling | `bot-sdk-*.mjs`, `arena-*.mjs` | Keep. These are contract and runner tools with package/docs references. Refactor only behind stable commands. |
 | Command-log maintenance | `command-log-pin.mjs`, `command-log-archive.mjs`, `command-log-archive-partitions.mjs`, `command-log-prune.mjs`, `command-log-integrity-check.mjs` | Keep separate entrypoints because the operations have different blast radius. Share SQL/CLI helpers if they grow. |
-| Replay and simulation export | `replay-pack.mjs`, `sim-run.mjs`, `sim-batch.mjs`, `export-simulation-run.mjs` | Keep. These preserve scenario/replay evidence workflows. |
+| Replay and simulation export | `reef-dev.mjs sim run|batch`, `replay-pack.mjs`, `export-simulation-run.mjs` | Keep stable Make targets; group simulator launch wrappers behind `reef-dev.mjs`. |
 | Kube and remote infra | `kube.mjs`, `do-benchmark-host.sh`, `scripts/deploy/*.mjs` | Keep, but harden checks. `do-benchmark-host.sh` is the main shell-heavy exception. |
 | Setup links | `reef-dev.mjs links codex|claude` | Keep package aliases; keep link logic in `scripts/dev/lib/dev-links.mjs`. |
 

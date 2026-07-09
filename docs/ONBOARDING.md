@@ -156,6 +156,7 @@ Simulator run against active dev env:
 
 ```bash
 make dev-sim ARGS="--duration 20s --workers 6 --rate 80 --mode strict-lifecycle --pretty-summary"
+bun scripts/dev/reef-dev.mjs sim run --duration 20s --workers 6 --rate 80 --mode strict-lifecycle --pretty-summary
 ```
 
 ## 7. Optional Compose Profiles

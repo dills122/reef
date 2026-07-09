@@ -45,8 +45,8 @@ This lets later commits move YAML into layered files while preserving the existi
 
 ## Migration Phases
 
-1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` delegates to `reef-dev.mjs stack compose-config`, `make dev-compose-parity` exists, and dev scripts call the shared Compose helper.
-2. Add `compose.base.yml` and `compose.local.yml` while keeping `docker-compose.yml` working. Done: both files exist, and `scripts/dev/compose-config-parity.mjs` (run by `make dev-compose-parity`) fails the build if `docker-compose.yml` config output diverges from `compose.base.yml` + `compose.local.yml` merged config. `docker-compose.yml` remains the full monolith kept in parity with the layered files rather than being removed.
+1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` delegates to `reef-dev.mjs stack compose-config`, `make dev-compose-parity` delegates to `reef-dev.mjs stack compose-parity`, and dev scripts call the shared Compose helper.
+2. Add `compose.base.yml` and `compose.local.yml` while keeping `docker-compose.yml` working. Done: both files exist, and `reef-dev.mjs stack compose-parity` (run by `make dev-compose-parity`) fails the build if `docker-compose.yml` config output diverges from `compose.base.yml` + `compose.local.yml` merged config. `docker-compose.yml` remains the full monolith kept in parity with the layered files rather than being removed.
 3. Move stream-ack and materializer shape into local overlays. Not started: no `compose.local.stream-ack.yml` exists.
 4. Move benchmark-only no-DB/direct-stream settings into a benchmark overlay. Not started: no `compose.local.benchmark.yml` exists.
 5. Add hosted overlays only after the local split is stable. Not started: no `compose.hosted*.yml` files exist.

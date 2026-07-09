@@ -37,7 +37,7 @@ make dev-stress
 Capacity baseline at 1k target:
 
 ```bash
-node scripts/dev/sim-run.mjs \
+node scripts/dev/reef-dev.mjs sim run \
   --duration 60s \
   --mode capacity-baseline \
   --rate 1000 \
@@ -50,7 +50,7 @@ node scripts/dev/sim-run.mjs \
 Capacity baseline at 3k target:
 
 ```bash
-node scripts/dev/sim-run.mjs \
+node scripts/dev/reef-dev.mjs sim run \
   --duration 60s \
   --mode capacity-baseline \
   --rate 3000 \
@@ -147,7 +147,7 @@ After the baseline, the simulator lifecycle recovery policy was tightened so lif
 Comparison run:
 
 ```bash
-node scripts/dev/sim-run.mjs \
+node scripts/dev/reef-dev.mjs sim run \
   --duration 30s \
   --mode strict-lifecycle \
   --rate 400 \
@@ -178,10 +178,10 @@ After adding report-level quality metrics, a current-code ceiling sweep was run 
 Commands:
 
 ```bash
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 5000 --workers 512 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-5k-512w-20260701.json
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 6500 --workers 768 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-6500-768w-20260701.json
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 4000 --workers 448 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-4k-448w-20260701.json
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-3k-384w-20260701-current.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 5000 --workers 512 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-5k-512w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 6500 --workers 768 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-6500-768w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 4000 --workers 448 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-4k-448w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-ceiling-3k-384w-20260701-current.json
 ```
 
 | Target RPS | Workers | Wall Window | Observed RPS | Accepted RPS | Success % | Valid-Intent Success % | Invalid-Intent % | System-Failure % | p50 ms | p95 ms | p99 ms | Max ms | Trace Pass |
@@ -270,10 +270,10 @@ Immediately after reset, the `reef` database was `8359kB` and the hot runtime/bo
 Clean-stack commands:
 
 ```bash
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-3k-384w-20260701.json
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 4000 --workers 448 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-4k-448w-20260701.json
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 5000 --workers 512 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-5k-512w-20260701.json
-node scripts/dev/sim-run.mjs --duration 60s --mode capacity-baseline --rate 6500 --workers 768 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-6500-768w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-3k-384w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 4000 --workers 448 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-4k-448w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 5000 --workers 512 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-5k-512w-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 60s --mode capacity-baseline --rate 6500 --workers 768 --trace-check-limit 100 --pretty-summary --report-out /tmp/reef-clean-ceiling-6500-768w-20260701.json
 ```
 
 | Target RPS | Workers | Wall Window | Observed RPS | Accepted RPS | Success % | Invalid-Intent % | System-Failure % | p50 ms | p95 ms | p99 ms | Trace Pass |
@@ -325,7 +325,7 @@ The runtime phase timing points instead to synchronous DB-backed command durabil
 Command:
 
 ```bash
-node scripts/dev/sim-run.mjs --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-api-v1-3k-384w-30s-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-api-v1-3k-384w-30s-20260701.json
 ```
 
 Result:
@@ -356,7 +356,7 @@ EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled docker compose -f docker-compose.yml 
 Command:
 
 ```bash
-node scripts/dev/sim-run.mjs --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-capture-disabled-3k-384w-30s-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-capture-disabled-3k-384w-30s-20260701.json
 ```
 
 Result:
@@ -385,7 +385,7 @@ EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled EXTERNAL_API_IDEMPOTENCY_STORE=inmemo
 Command:
 
 ```bash
-node scripts/dev/sim-run.mjs --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-boundary-memory-3k-384w-30s-20260701.json
+node scripts/dev/reef-dev.mjs sim run --duration 30s --mode capacity-baseline --rate 3000 --workers 384 --trace-check-limit 50 --pretty-summary --report-out /tmp/reef-hotpath-boundary-memory-3k-384w-30s-20260701.json
 ```
 
 Result:

@@ -7,13 +7,13 @@ Lock a high-load baseline for the current simulator/runtime branch and validate 
 ```bash
 docker compose -f docker-compose.yml down --volumes --remove-orphans
 JS_RUNTIME=node make dev-up
-node scripts/dev/sim-run.mjs --duration 5m --mode capacity-baseline --rate 5000 --workers 512 --pretty-summary --report-out /private/tmp/reef-sim-5k-5m.json
+node scripts/dev/reef-dev.mjs sim run --duration 5m --mode capacity-baseline --rate 5000 --workers 512 --pretty-summary --report-out /private/tmp/reef-sim-5k-5m.json
 ```
 
 Post-tuning validation:
 
 ```bash
-node scripts/dev/sim-run.mjs --duration 5m --mode capacity-baseline --rate 5000 --workers 512 --pretty-summary --report-out /private/tmp/reef-sim-5k-5m-tuned.json
+node scripts/dev/reef-dev.mjs sim run --duration 5m --mode capacity-baseline --rate 5000 --workers 512 --pretty-summary --report-out /private/tmp/reef-sim-5k-5m-tuned.json
 ```
 
 ## Baseline (Pre-Tuning)

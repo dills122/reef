@@ -17,7 +17,7 @@ Runtime breaker config:
 Soak command:
 
 ```bash
-node scripts/dev/sim-run.mjs \
+node scripts/dev/reef-dev.mjs sim run \
   --duration 6m \
   --mode chaos \
   --workers 128 \
