@@ -137,6 +137,7 @@ services:
       - ./secrets/caddy.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./arena-admin:/srv/arena-admin:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
