@@ -21,7 +21,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
-.PHONY: dev-stress dev-stress-runtime-nodb dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
+.PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin
 .PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
@@ -274,6 +274,10 @@ dev-stress:
 dev-stress-runtime-nodb:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/runtime-nodb-stress.mjs
+
+dev-stress-accepted-async-jfr:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/accepted-async-jfr-stress.mjs
 
 dev-stress-captured-ack:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

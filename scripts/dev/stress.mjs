@@ -121,7 +121,7 @@ const diagnosticsSummaryOut = join(artifactDir, `${reportBaseName}-diagnostics-s
 const actionMix = resolveActionMix(profile);
 const invalidIntentCodes = env(
   "DEV_STRESS_INVALID_INTENT_CODES",
-  "INVALID_STATE,NOT_FOUND,VALIDATION_ERROR",
+  "INVALID_STATE,NOT_FOUND,SELF_TRADE_PREVENTION,VALIDATION_ERROR",
 )
   .split(",")
   .map((value) => value.trim())

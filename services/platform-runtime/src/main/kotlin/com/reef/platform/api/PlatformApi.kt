@@ -8,6 +8,7 @@ import com.reef.platform.domain.OwnOrderView
 import com.reef.platform.domain.PersistedOrder
 import com.reef.platform.domain.PublicTradeTapeEntry
 import com.reef.platform.domain.RuntimeEvent
+import com.reef.platform.domain.SubmitOrderCommand
 import com.reef.platform.domain.SubmitOrderResult
 import com.reef.platform.domain.SupportedIntradayBarIntervals
 import com.reef.platform.domain.TradeCreated
@@ -61,6 +62,10 @@ class PlatformApi(
         val command = HotPathMetrics.time("api.parse.submitOrder") {
             PlatformCommandParsers.submitOrder(body)
         }
+        return prepareSubmitOrderAsync(command)
+    }
+
+    fun prepareSubmitOrderAsync(command: SubmitOrderCommand): CompletableFuture<PersistableSubmitOutcome> {
         return HotPathMetrics.time("api.orderService.prepareSubmitOrderAsync") {
             orderService.prepareSubmitOrderAsync(command)
         }

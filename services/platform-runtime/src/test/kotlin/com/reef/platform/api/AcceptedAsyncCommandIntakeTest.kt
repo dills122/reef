@@ -83,7 +83,7 @@ class AcceptedAsyncCommandIntakeTest {
     }
 
     @Test
-    fun sameLaneCommandsHonorConfiguredInFlightWindow() {
+    fun sameLanePipelineSubmitsUpToWindowButPersistsInIntakeOrder() {
         val persistence = seededPersistence()
         val gateway = ControlledAsyncSubmitGateway()
         val intake = AcceptedAsyncCommandIntake(
@@ -98,40 +98,68 @@ class AcceptedAsyncCommandIntakeTest {
             inFlightPerLane = 2
         )
 
-        intake.start()
         try {
             val first = intake.enqueueSubmit(
                 clientId = "client-1",
                 route = "/api/v1/orders/submit",
                 idempotencyKey = "idem-1",
                 correlationId = "corr-1",
-                body = validSubmitBody("cmd-accepted-async-window-1", "trace-1", "ord-window-1")
+                body = validSubmitBody("cmd-accepted-async-1", "trace-1", "ord-1")
             )
             val second = intake.enqueueSubmit(
                 clientId = "client-1",
                 route = "/api/v1/orders/submit",
                 idempotencyKey = "idem-2",
                 correlationId = "corr-2",
-                body = validSubmitBody("cmd-accepted-async-window-2", "trace-2", "ord-window-2")
+                body = validSubmitBody("cmd-accepted-async-2", "trace-2", "ord-2")
             )
+            val third = intake.enqueueSubmit(
+                clientId = "client-1",
+                route = "/api/v1/orders/submit",
+                idempotencyKey = "idem-3",
+                correlationId = "corr-3",
+                body = validSubmitBody("cmd-accepted-async-3", "trace-3", "ord-3")
+            )
+            intake.start()
 
             assertTrue(first.accepted)
             assertTrue(second.accepted)
-            assertTrue(waitFor { gateway.pendingCount() == 2 })
-            assertEquals(2, intake.stats().inFlightPerLane)
-            assertEquals(2, intake.stats().processing)
+            assertTrue(third.accepted)
+            assertTrue(
+                waitFor(timeoutMs = 30_000) { gateway.submittedCount() == 2 },
+                "submitted=${gateway.submittedCount()} pending=${gateway.pendingCount()} stats=${intake.stats()}"
+            )
+            assertTrue(waitFor(timeoutMs = 30_000) { intake.stats().inFlight == 2L })
+            assertEquals(1, intake.stats().saturatedLaneCount)
+            assertEquals(2, gateway.pendingCount())
 
-            gateway.completeNextAccepted()
-            gateway.completeNextAccepted()
-            assertTrue(waitFor { persistence.submitResult("cmd-accepted-async-window-1") != null })
-            assertTrue(waitFor { persistence.submitResult("cmd-accepted-async-window-2") != null })
+            gateway.completeOrderAccepted("ord-2")
+            assertTrue(waitFor { intake.stats().completedWaiting == 1L })
+            assertEquals(null, persistence.submitResult("cmd-accepted-async-1"))
+            assertEquals(null, persistence.submitResult("cmd-accepted-async-2"))
+            assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-1")?.status)
+            assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-2")?.status)
+
+            gateway.completeOrderAccepted("ord-1")
+            assertTrue(waitFor(timeoutMs = 30_000) { gateway.submittedCount() == 3 })
+            assertTrue(waitFor(timeoutMs = 30_000) { intake.stats().inFlight == 1L })
+            assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-1")?.status)
+            assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-accepted-async-2")?.status)
+            assertEquals(CommandLogStatus.PROCESSING, intake.findCommandStatus("cmd-accepted-async-3")?.status)
+
+            gateway.completeOrderAccepted("ord-3")
+            assertTrue(waitFor { intake.stats().completed == 3L })
+            assertEquals(
+                listOf("ord-1", "ord-2", "ord-3"),
+                persistence.acceptedOrders().map { it.orderId }
+            )
         } finally {
             intake.stop()
         }
     }
 
     @Test
-    fun terminalStatusesAreBoundedByRetentionMaxRecords() {
+    fun evictsOldTerminalStatusesWhenRetentionWindowIsFull() {
         val persistence = seededPersistence()
         val gateway = ControlledAsyncSubmitGateway()
         val intake = AcceptedAsyncCommandIntake(
@@ -144,8 +172,7 @@ class AcceptedAsyncCommandIntakeTest {
             laneCount = 1,
             queueCapacityPerLane = 10,
             inFlightPerLane = 1,
-            statusRetentionMaxRecords = 1,
-            statusRetentionTtlMs = 0L
+            terminalStatusMaxRecords = 1
         )
 
         intake.start()
@@ -158,12 +185,15 @@ class AcceptedAsyncCommandIntakeTest {
             assertTrue(enqueue(intake, "cmd-retention-2", "ord-retention-2", "idem-retention-2").accepted)
             assertTrue(waitFor { gateway.pendingCount() == 1 })
             gateway.completeNextAccepted()
-            assertTrue(waitFor { intake.findCommandStatus("cmd-retention-2")?.status == CommandLogStatus.COMPLETED })
 
+            assertTrue(waitFor { intake.stats().statusRecordsEvicted == 1L })
             assertNull(intake.findCommandStatus("cmd-retention-1"))
             assertNull(intake.findCommandStatus("client-1", "/api/v1/orders/submit", "idem-retention-1"))
-            assertEquals(1, intake.stats().retainedStatuses)
-            assertEquals(1, intake.stats().retentionEvicted)
+            assertEquals(CommandLogStatus.COMPLETED, intake.findCommandStatus("cmd-retention-2")?.status)
+            assertEquals(1L, intake.stats().retainedTerminalStatusRecords)
+            assertEquals(1L, intake.stats().retainedStatusRecords)
+            assertEquals(1L, intake.stats().retainedStatuses)
+            assertEquals(1L, intake.stats().retentionEvicted)
 
             val reused = enqueue(intake, "cmd-retention-3", "ord-retention-3", "idem-retention-1")
             assertTrue(reused.accepted, "evicted idempotency key should be reusable")
@@ -187,8 +217,8 @@ class AcceptedAsyncCommandIntakeTest {
             laneCount = 1,
             queueCapacityPerLane = 10,
             inFlightPerLane = 1,
-            statusRetentionMaxRecords = 10,
-            statusRetentionTtlMs = 100L,
+            terminalStatusMaxRecords = 10,
+            terminalStatusTtlMs = 100L,
             clockMillis = { now }
         )
 
@@ -206,8 +236,9 @@ class AcceptedAsyncCommandIntakeTest {
             assertTrue(waitFor { intake.findCommandStatus("cmd-retention-ttl-2")?.status == CommandLogStatus.COMPLETED })
 
             assertNull(intake.findCommandStatus("cmd-retention-ttl-1"))
-            assertEquals(1, intake.stats().retainedStatuses)
-            assertEquals(1, intake.stats().retentionEvicted)
+            assertEquals(1L, intake.stats().retainedTerminalStatusRecords)
+            assertEquals(1L, intake.stats().statusRecordsEvicted)
+            assertEquals(100L, intake.stats().terminalStatusTtlMs)
         } finally {
             intake.stop()
         }
@@ -300,6 +331,17 @@ private class ControlledAsyncSubmitGateway : EngineGateway, AsyncSubmitEngineGat
 
     fun completeNextAccepted() {
         val next = pending.poll() ?: error("no pending submit")
+        completeAccepted(next)
+    }
+
+    fun completeOrderAccepted(orderId: String) {
+        val next = pending.firstOrNull { it.command.orderId == orderId }
+            ?: error("no pending submit for order $orderId")
+        pending.remove(next)
+        completeAccepted(next)
+    }
+
+    private fun completeAccepted(next: PendingSubmit) {
         next.future.complete(
             SubmitOrderResult(
                 accepted = EngineOrderAccepted(
