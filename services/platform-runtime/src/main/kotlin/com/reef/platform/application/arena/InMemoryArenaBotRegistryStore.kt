@@ -18,6 +18,10 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
 
     override fun bot(botId: String): ArenaBot? = bots[botId]
 
+    override fun bots(limit: Int): List<ArenaBot> {
+        return bots.values.sortedByDescending { it.createdAt }.take(limit.coerceIn(1, 500))
+    }
+
     override fun botByFileName(fileName: String): ArenaBot? {
         val botId = botIdsByFileName[fileName] ?: return null
         return bots[botId]

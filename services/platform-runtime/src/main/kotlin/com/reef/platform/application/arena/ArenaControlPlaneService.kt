@@ -178,6 +178,7 @@ data class RegisterArenaRunCommand(
 interface ArenaBotRegistryStore {
     fun saveBot(bot: ArenaBot)
     fun bot(botId: String): ArenaBot?
+    fun bots(limit: Int = 50): List<ArenaBot>
     fun botByFileName(fileName: String): ArenaBot?
     fun saveVersion(version: ArenaBotVersion)
     fun version(botId: String, versionId: String): ArenaBotVersion?
