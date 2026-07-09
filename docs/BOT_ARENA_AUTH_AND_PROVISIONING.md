@@ -79,7 +79,14 @@ admin.user_roles
 admin.user_bot_limits
 admin.user_bot_ownerships
 admin.audit_events
+admin.oauth_states
+admin.sessions
+admin.service_tokens
 ```
+
+OAuth states, browser session tokens, and service tokens must be stored as
+server-side hashes only. Raw token values are returned once at issue time and
+must not be persisted in Admin DB audit records or logs.
 
 Trust states:
 
