@@ -1,6 +1,7 @@
 package com.reef.platform.infrastructure.persistence
 
 import com.reef.platform.api.PostgresBoundarySqlNames
+import com.reef.platform.application.admin.PostgresAdminIdentitySqlNames
 import com.reef.platform.application.arena.PostgresArenaSqlNames
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -384,6 +385,48 @@ class PostgresSchemaRequirementsTest {
                 .filter { it.table.qualifiedName == "arena.run_bot_results" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
+        )
+    }
+
+    @Test
+    fun adminIdentityRequirementsCoverUserRoleLimitAndAuditObjects() {
+        val names = PostgresAdminIdentitySqlNames()
+        val requirements = PostgresSchemaRequirements.adminIdentity(
+            users = names.users,
+            roles = names.roles,
+            userRoles = names.userRoles,
+            userBotLimits = names.userBotLimits,
+            userBotOwnerships = names.userBotOwnerships,
+            auditEvents = names.auditEvents
+        )
+
+        assertEquals(
+            setOf(
+                "admin.users",
+                "admin.roles",
+                "admin.user_roles",
+                "admin.user_bot_limits",
+                "admin.user_bot_ownerships",
+                "admin.audit_events"
+            ),
+            requirements.tables.map { it.qualifiedName }.toSet()
+        )
+        assertTrue(
+            requirements.columns
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .containsAll(
+                    setOf(
+                        "admin.users.github_user_id:bigint",
+                        "admin.users.trust_state:text",
+                        "admin.user_roles.role_id:text",
+                        "admin.user_bot_limits.max_bots:integer",
+                        "admin.user_bot_limits.max_active_bots:integer",
+                        "admin.user_bot_ownerships.bot_id:text",
+                        "admin.user_bot_ownerships.ownership_state:text",
+                        "admin.audit_events.event_type:text",
+                        "admin.audit_events.target_id:text"
+                    )
+                )
         )
     }
 

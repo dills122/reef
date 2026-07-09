@@ -70,6 +70,17 @@ created_at
 last_seen_at
 ```
 
+Initial Admin DB tables:
+
+```text
+admin.users
+admin.roles
+admin.user_roles
+admin.user_bot_limits
+admin.user_bot_ownerships
+admin.audit_events
+```
+
 Trust states:
 
 ```text
