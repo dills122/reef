@@ -1,0 +1,904 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reef-stream-ack-profile-env
+  namespace: reef-local
+data:
+  PLATFORM_RUNTIME_PORT: "8080"
+  ENGINE_TRANSPORT: grpc
+  MATCHING_ENGINE_BASE_URL: http://matching-engine:8081
+  MATCHING_ENGINE_GRPC_TARGET: matching-engine:9081
+  ENGINE_GRPC_DEADLINE_MS: "2000"
+  ENGINE_GRPC_STREAM_LANES: "16"
+  ENGINE_GRPC_STREAM_QUEUE_CAPACITY: "100000"
+  RUNTIME_PERSISTENCE: postgres
+  RUNTIME_DB_BOOTSTRAP_MODE: validate
+  RUNTIME_POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/reef?currentSchema=runtime
+  RUNTIME_POSTGRES_USER: reef
+  RUNTIME_POSTGRES_PASSWORD: reef
+  RUNTIME_PROJECTION_POSTGRES_JDBC_URL: jdbc:postgresql://projection-postgres:5432/reef?currentSchema=runtime
+  RUNTIME_PROJECTION_POSTGRES_USER: reef
+  RUNTIME_PROJECTION_POSTGRES_PASSWORD: reef
+  RUNTIME_DB_URL: jdbc:postgresql://boundary-postgres:5432/reef?currentSchema=boundary
+  RUNTIME_DB_USER: reef
+  RUNTIME_DB_PASSWORD: reef
+  ARENA_POSTGRES_JDBC_URL: jdbc:postgresql://arena-postgres:5432/reef?currentSchema=arena
+  ARENA_POSTGRES_USER: reef
+  ARENA_POSTGRES_PASSWORD: reef
+  EXTERNAL_API_IDEMPOTENCY_STORE: postgres
+  EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE: allow-all
+  EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE: allow-all
+  EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE: allow-all
+  EXTERNAL_API_BOUNDARY_REJECTION_LOG: auto
+  EXTERNAL_API_COMMAND_CAPTURE_MODE: disabled
+  EXTERNAL_API_COMMAND_LOG_MODE: disabled
+  EXTERNAL_API_COMMAND_PROCESSING_MODE: stream-ack
+  EXTERNAL_API_COMMAND_ASYNC_WORKER_ENABLED: "false"
+  STREAM_ACK_LOG_PROVIDER: redpanda
+  STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+  STREAM_ACK_KAFKA_COMPRESSION_TYPE: lz4
+  STREAM_ACK_COMMAND_STREAM: REEF_KUBE_STREAM_ACK_COMMANDS
+  STREAM_ACK_SUBJECT_PREFIX: reef.kube.stream.cmd.v1
+  STREAM_ACK_PARTITION_COUNT: "64"
+  STREAM_ACK_INTAKE_STORE: postgres
+  STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS: "2000"
+  STREAM_ACK_PUBLISH_PIPELINE_ENABLED: "false"
+  STREAM_ACK_BACKPRESSURE_SAMPLE_MS: "100"
+  STREAM_ACK_MARK_PUBLISHED_MODE: worker
+  STREAM_ACK_MARK_PUBLISHED_WORKERS: "4"
+  STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY: "500000"
+  STREAM_ACK_WORKER_BATCH_SIZE: "1000"
+  STREAM_ACK_WORKER_POLL_MS: "10"
+  STREAM_ACK_WORKER_FETCH_TIMEOUT_MS: "200"
+  STREAM_ACK_WORKER_ACK_WAIT_MS: "60000"
+  STREAM_ACK_WORKER_MAX_ACK_PENDING: "4000"
+  STREAM_ACK_WORKER_DEDICATED_RUNTIME_POOL_ENABLED: "true"
+  STREAM_ACK_CANONICAL_EVENT_ROWS_ENABLED: "false"
+  STREAM_ACK_CANONICAL_QUERY_INDEXES_ENABLED: "false"
+  STREAM_ACK_MAX_WORKER_STREAM_LAG: "50000"
+  STREAM_ACK_MAX_PROJECTOR_LAG: "0"
+  STREAM_ACK_DRAIN_BACKPRESSURE_POLICY: venue-core
+  STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS: "500"
+  STREAM_ACK_PROJECTOR_BATCH_SIZE: "2000"
+  STREAM_ACK_PROJECTOR_POLL_MS: "10"
+  RUNTIME_DB_POOL_STREAM_INTAKE_MAX: "4"
+  RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE: "0"
+  RUNTIME_DB_POOL_STREAM_RUNTIME_MAX: "24"
+  RUNTIME_DB_POOL_STREAM_RUNTIME_MIN_IDLE: "8"
+  RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MAX: "24"
+  RUNTIME_DB_POOL_STREAM_RUNTIME_PROJECTION_MIN_IDLE: "8"
+  PLATFORM_INTERNAL_HTTP_MODE: local
+  PLATFORM_HTTP_SERVER: jdk
+  JAVA_TOOL_OPTIONS: -XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=70 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-worker-0
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-worker-0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-worker-0
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-worker
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h boundary-postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-redpanda
+          image: redpandadata/redpanda:v26.1.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until rpk cluster info --brokers=redpanda:9092 >/dev/null 2>&1; do sleep 2; done
+      containers:
+        - name: platform-worker-0
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: worker
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-worker-0
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "true"
+            - name: STREAM_ACK_WORKER_PARTITIONS
+              value: 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+            - name: STREAM_ACK_WORKER_DURABLE_PREFIX
+              value: reef-kube-stream-worker-w0
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-worker-1
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-worker-1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-worker-1
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-worker
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h boundary-postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-redpanda
+          image: redpandadata/redpanda:v26.1.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until rpk cluster info --brokers=redpanda:9092 >/dev/null 2>&1; do sleep 2; done
+      containers:
+        - name: platform-worker-1
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: worker
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-worker-1
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "true"
+            - name: STREAM_ACK_WORKER_PARTITIONS
+              value: 16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+            - name: STREAM_ACK_WORKER_DURABLE_PREFIX
+              value: reef-kube-stream-worker-w1
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-worker-2
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-worker-2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-worker-2
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-worker
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h boundary-postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-redpanda
+          image: redpandadata/redpanda:v26.1.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until rpk cluster info --brokers=redpanda:9092 >/dev/null 2>&1; do sleep 2; done
+      containers:
+        - name: platform-worker-2
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: worker
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-worker-2
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "true"
+            - name: STREAM_ACK_WORKER_PARTITIONS
+              value: 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+            - name: STREAM_ACK_WORKER_DURABLE_PREFIX
+              value: reef-kube-stream-worker-w2
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-worker-3
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-worker-3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-worker-3
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-worker
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h boundary-postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+        - name: wait-for-redpanda
+          image: redpandadata/redpanda:v26.1.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until rpk cluster info --brokers=redpanda:9092 >/dev/null 2>&1; do sleep 2; done
+      containers:
+        - name: platform-worker-3
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: worker
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-worker-3
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "true"
+            - name: STREAM_ACK_WORKER_PARTITIONS
+              value: 48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63
+            - name: STREAM_ACK_WORKER_DURABLE_PREFIX
+              value: reef-kube-stream-worker-w3
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "false"
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-projector-0
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-projector-0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-projector-0
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-projector
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+      containers:
+        - name: platform-projector-0
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: projector
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-projector-0
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "true"
+            - name: STREAM_ACK_PROJECTOR_PARTITIONS
+              value: 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 150m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-projector-1
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-projector-1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-projector-1
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-projector
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+      containers:
+        - name: platform-projector-1
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: projector
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-projector-1
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "true"
+            - name: STREAM_ACK_PROJECTOR_PARTITIONS
+              value: 16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 150m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-projector-2
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-projector-2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-projector-2
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-projector
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+      containers:
+        - name: platform-projector-2
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: projector
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-projector-2
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "true"
+            - name: STREAM_ACK_PROJECTOR_PARTITIONS
+              value: 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 150m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-projector-3
+  namespace: reef-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: platform-projector-3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-projector-3
+        app.kubernetes.io/part-of: reef
+        reef.openai.local/role: stream-projector
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command:
+            - sh
+            - -ec
+            - until pg_isready -h postgres -U reef -d reef && pg_isready -h projection-postgres -U reef -d reef; do sleep 2; done
+      containers:
+        - name: platform-projector-3
+          image: reef-platform-runtime:local-kube
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: reef-stream-ack-profile-env
+          env:
+            - name: PLATFORM_RUNTIME_ROLE
+              value: projector
+            - name: OTEL_SERVICE_NAME
+              value: reef-platform-projector-3
+            - name: STREAM_ACK_WORKER_ENABLED
+              value: "false"
+            - name: STREAM_ACK_PROJECTOR_ENABLED
+              value: "true"
+            - name: STREAM_ACK_PROJECTOR_PARTITIONS
+              value: 48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 150m
+              memory: 512Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+              ephemeral-storage: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

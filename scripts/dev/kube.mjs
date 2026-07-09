@@ -44,6 +44,18 @@ switch (command) {
   case "materializer-smoke":
     await materializerSmoke();
     break;
+  case "materializer-scale":
+    await materializerScale();
+    break;
+  case "stream-ack-up":
+    await streamAckUp();
+    break;
+  case "stream-ack-smoke":
+    await streamAckSmoke();
+    break;
+  case "autoscale-apply":
+    await autoscaleApply();
+    break;
   case "build-images":
     await buildImages();
     break;
@@ -115,6 +127,71 @@ async function materializerUp() {
   await waitDeployments(["matching-engine", "platform-api", "platform-materializer", "platform-projector-0", "platform-read-api"]);
 }
 
+async function materializerScale() {
+  await materializerUp();
+  const replicas = Number(env("KUBE_MATERIALIZER_REPLICAS", "4"));
+  if (!Number.isInteger(replicas) || replicas < 1) {
+    throw new Error(`KUBE_MATERIALIZER_REPLICAS must be a positive integer, got ${env("KUBE_MATERIALIZER_REPLICAS")}`);
+  }
+  await kubectl(["scale", "deployment/platform-materializer", `--replicas=${replicas}`]);
+  await waitDeployments(["platform-materializer"]);
+}
+
+async function streamAckUp() {
+  await up();
+  await kubectl(["apply", "-f", manifest("50-redpanda.yaml")]);
+  await waitStatefulSets(["redpanda"]);
+  await configureStreamAckProfile();
+  await kubectl(["apply", "-f", manifest("70-stream-ack-profile.yaml")]);
+  for (const deployment of [
+    "platform-worker-0",
+    "platform-worker-1",
+    "platform-worker-2",
+    "platform-worker-3",
+    "platform-projector-0",
+    "platform-projector-1",
+    "platform-projector-2",
+    "platform-projector-3",
+  ]) {
+    await kubectl(["set", "image", `deployment/${deployment}`, `${deployment}=${config.runtimeImage}`]);
+  }
+  await waitDeployments([
+    "matching-engine",
+    "platform-api",
+    "platform-worker-0",
+    "platform-worker-1",
+    "platform-worker-2",
+    "platform-worker-3",
+    "platform-projector-0",
+    "platform-projector-1",
+    "platform-projector-2",
+    "platform-projector-3",
+  ]);
+}
+
+async function streamAckSmoke() {
+  await streamAckUp();
+  const forwards = await startPortForwards([
+    ["svc/platform-api", config.runtimeHostPort, 8080],
+    ["svc/matching-engine", config.engineHostPort, 8081],
+  ]);
+  const smokeId = env("DEV_KUBE_STREAM_ACK_SMOKE_ID", `kube-stream-ack-smoke-${Date.now()}`);
+  try {
+    await sleep(1500);
+    await run(env("JS_RUNTIME", "bun"), ["scripts/dev/kube-stream-ack-smoke.mjs"], {
+      env: {
+        DEV_KUBE_STREAM_ACK_SMOKE_ID: smokeId,
+        KUBE_NAMESPACE: config.namespace,
+        KUBE_CONTEXT: config.context,
+        RUNTIME_BASE_URL: `http://127.0.0.1:${config.runtimeHostPort}`,
+        ENGINE_BASE_URL: `http://127.0.0.1:${config.engineHostPort}`,
+      },
+    });
+  } finally {
+    stopProcesses(forwards);
+  }
+}
+
 async function configureMaterializerProfile() {
   await kubectl([
     "set",
@@ -165,6 +242,45 @@ async function configureMaterializerProfile() {
     "EXTERNAL_API_ABUSE_BREAKER_MODE=off",
   ]);
   await waitDeployments(["matching-engine", "platform-api"]);
+}
+
+async function configureStreamAckProfile() {
+  await kubectl([
+    "set",
+    "env",
+    "deployment/platform-api",
+    "EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack",
+    "EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled",
+    "EXTERNAL_API_COMMAND_LOG_MODE=disabled",
+    "STREAM_ACK_LOG_PROVIDER=redpanda",
+    "STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092",
+    "STREAM_ACK_KAFKA_COMPRESSION_TYPE=lz4",
+    "STREAM_ACK_COMMAND_STREAM=REEF_KUBE_STREAM_ACK_COMMANDS",
+    "STREAM_ACK_SUBJECT_PREFIX=reef.kube.stream.cmd.v1",
+    "STREAM_ACK_PARTITION_COUNT=64",
+    "STREAM_ACK_INTAKE_STORE=postgres",
+    "STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS=2000",
+    "STREAM_ACK_PUBLISH_PIPELINE_ENABLED=false",
+    "STREAM_ACK_BACKPRESSURE_SAMPLE_MS=100",
+    "STREAM_ACK_MARK_PUBLISHED_MODE=worker",
+    "STREAM_ACK_MARK_PUBLISHED_WORKERS=4",
+    "STREAM_ACK_MARK_PUBLISHED_QUEUE_CAPACITY=500000",
+    `STREAM_ACK_BACKPRESSURE_WORKER_DURABLES=${streamAckWorkerDurables()}`,
+    "STREAM_ACK_MAX_WORKER_STREAM_LAG=50000",
+    "STREAM_ACK_MAX_PROJECTOR_LAG=0",
+    "STREAM_ACK_DRAIN_BACKPRESSURE_POLICY=venue-core",
+    "STREAM_ACK_DRAIN_BACKPRESSURE_SAMPLE_MS=500",
+    "STREAM_ACK_WORKER_ENABLED=false",
+    "STREAM_ACK_PROJECTOR_ENABLED=false",
+    "RUNTIME_DB_POOL_STREAM_INTAKE_MAX=64",
+    "RUNTIME_DB_POOL_STREAM_INTAKE_MIN_IDLE=16",
+  ]);
+  await waitDeployments(["platform-api"]);
+}
+
+async function autoscaleApply() {
+  await kubectl(["apply", "-f", manifest("80-autoscaling.yaml")]);
+  await kubectl(["get", "hpa", "-o", "wide"]);
 }
 
 async function buildImages() {
@@ -369,6 +485,30 @@ function assertManifests() {
   }
 }
 
+function streamAckWorkerDurables() {
+  const partitionGroups = [
+    range(0, 15),
+    range(16, 31),
+    range(32, 47),
+    range(48, 63),
+  ];
+  return partitionGroups
+    .flatMap((partitions, workerIndex) =>
+      partitions.map((partition) => `reef-kube-stream-worker-w${workerIndex}-${partitionToken(partition)}`),
+    )
+    .join(",");
+}
+
+function range(first, last) {
+  return Array.from({ length: last - first + 1 }, (_, index) => first + index);
+}
+
+function partitionToken(partition) {
+  const partitionCount = 64;
+  const width = Math.max(2, String(partitionCount - 1).length);
+  return `p${String(partition).padStart(width, "0")}`;
+}
+
 function run(cmd, args = [], options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
@@ -445,6 +585,10 @@ commands:
   reset          delete and recreate the base local kube stack
   materializer-up     start the Redpanda/materializer local kube profile
   materializer-smoke  start materializer profile and run durable projection smoke
+  materializer-scale  start materializer profile and scale platform-materializer
+  stream-ack-up       start Redpanda stream-ack worker/projector profile
+  stream-ack-smoke    start stream-ack profile and prove command completion
+  autoscale-apply     apply opt-in HPA rules for scalable materializer/read roles
   build-images   build local runtime and engine images
   import-images  import local runtime and engine images into k3d
   migrate        run database migrations through kubectl exec
@@ -459,6 +603,7 @@ environment:
   KUBE_CONTEXT=k3d-reef-local
   KUBE_BUILD_IMAGES=1
   KUBE_IMPORT_IMAGES=1
+  KUBE_MATERIALIZER_REPLICAS=4
   REEF_PLATFORM_API_HOST_PORT=8080
   REEF_MATCHING_ENGINE_HOST_PORT=8081
 `.trim());

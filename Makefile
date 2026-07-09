@@ -27,8 +27,8 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-replay
 .PHONY: dev-throughput-campaign dev-throughput-compare
-.PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-materializer-up
-.PHONY: kube-smoke-venue-event-materializer kube-port-forward
+.PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
+.PHONY: kube-materializer-scale kube-autoscale-apply kube-smoke-venue-event-materializer kube-port-forward
 .PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
 .PHONY: do-benchmark do-materializer-10k-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
@@ -223,9 +223,25 @@ kube-smoke:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/kube.mjs smoke
 
+kube-stream-ack-up:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/kube.mjs stream-ack-up
+
+kube-smoke-stream-ack:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/kube.mjs stream-ack-smoke
+
 kube-materializer-up:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/kube.mjs materializer-up
+
+kube-materializer-scale:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/kube.mjs materializer-scale
+
+kube-autoscale-apply:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) scripts/dev/kube.mjs autoscale-apply
 
 kube-smoke-venue-event-materializer:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
