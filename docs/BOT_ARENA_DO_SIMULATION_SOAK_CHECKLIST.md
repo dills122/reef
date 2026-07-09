@@ -34,8 +34,9 @@ The path should ramp in this order:
 - [x] Arena runner is wired into the DigitalOcean simulation harness.
 - [x] First-pass healthy-market gates are computed from live venue readbacks.
 - [x] DigitalOcean stack setup and `make dev-smoke` pass for arena profile.
-- [ ] DigitalOcean arena shakedown completes with an arena report.
-- [ ] Final run export includes full arena health evidence.
+- [x] DigitalOcean arena shakedown completes with an arena report.
+- [x] DigitalOcean shakedown export includes arena health evidence.
+- [ ] DigitalOcean 15 minute run completes with full arena health evidence.
 
 ## Latest DigitalOcean Shakedown
 
@@ -80,6 +81,49 @@ can legitimately sit at `ACCEPTED`/`EVENT_PUBLISHED` until downstream canonical
 projection catches up. Arena DO now uses accepted-mode command waiting and
 emits route/status timing summary so the next run can separate intake speed,
 status readback lag, and unsupported command gaps.
+
+Run: `arena-do-3m-quiet-20260709T020000Z`
+
+- [x] Worker provisioned on DigitalOcean.
+- [x] Remote stage logs written to per-stage files instead of streaming full
+      Docker/Gradle output into the local terminal.
+- [x] `make dev-up-stream-ack` completed.
+- [x] `make dev-smoke` passed.
+- [x] Arena report completed.
+- [x] Arena export completed.
+- [x] Worker destroyed after run.
+
+Finding: quiet stage logging fixed the local context/model-limit flood and the
+arena run finished, but health remained `warn`: `146` commands submitted,
+`0` timed out, projection drained, yet market-data snapshots returned `404` and
+own-order reads returned `403`. Root cause was arena profile startup not enabling
+the order-lifecycle and market-data projector env vars, plus missing
+`X-Participant-Id` on participant-scoped order readbacks.
+
+Run: `arena-do-3m-health-20260709T021000Z`
+
+- [x] Worker provisioned on DigitalOcean.
+- [x] `make dev-up-stream-ack` completed with order-lifecycle and market-data
+      projectors enabled.
+- [x] `make dev-smoke` passed.
+- [x] Arena report completed.
+- [x] Arena export completed.
+- [x] Health verdict passed for the actively quoted instrument.
+- [x] Own-order readbacks returned `200`.
+- [x] Worker destroyed after run.
+
+Evidence: `180` ticks, `146` submitted commands, `0` failed/rejected/timed-out
+commands, zero command-accounting gap, and projection drained by run end. AAPL
+had `30` post-warmup samples with `100%` top-of-book and depth availability,
+median/p95 quoted spread `24.906600249066003` bps, and zero crossed, locked, or
+empty-book samples. Own-order readback returned `200` for current and history:
+`builtin-mm-simple` had `50/50`, `builtin-mm-lifecycle-safe` had `2/2`, and
+`builtin-mm-refreshing` had `0/36`.
+
+Remaining gap before calling the arena market broadly healthy: this bot mix only
+quoted AAPL, so MSFT/NVDA/TSLA snapshot readbacks still returned `404`. Next
+step is to broaden the bot/instrument mix or scope health gates to the
+instrument set actively quoted by the selected arena mode.
 
 ## Success Definition
 

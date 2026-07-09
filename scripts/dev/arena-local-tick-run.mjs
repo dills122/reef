@@ -530,11 +530,12 @@ async function collectVenueReadback(botResults) {
   }
   const ownOrders = [];
   for (const result of botResults) {
+    const participantId = `participant-${result.runnerKey}`;
     ownOrders.push({
       botId: result.botId,
-      participantId: `participant-${result.runnerKey}`,
-      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`, readbackHeaders()),
-      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(`participant-${result.runnerKey}`)}&limit=50`, readbackHeaders()),
+      participantId,
+      current: await getJson(`${baseUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
+      history: await getJson(`${baseUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&limit=50`, readbackHeaders(participantId)),
     });
   }
   return {
@@ -569,8 +570,11 @@ function availabilityDrained(availability) {
   return Array.isArray(projections) && projections.every((projection) => Number(projection.lag ?? 0) === 0);
 }
 
-function readbackHeaders() {
-  return { "X-Client-Id": "arena-local-readback" };
+function readbackHeaders(participantId = "") {
+  return {
+    "X-Client-Id": "arena-local-readback",
+    ...(participantId ? { "X-Participant-Id": participantId } : {}),
+  };
 }
 
 async function persistArenaResults(report) {
