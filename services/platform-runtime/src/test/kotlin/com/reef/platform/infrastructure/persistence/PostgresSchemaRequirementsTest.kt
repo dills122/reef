@@ -21,7 +21,9 @@ class PostgresSchemaRequirementsTest {
                 "runtime.orders",
                 "runtime.executions",
                 "runtime.trades",
+                "runtime.trades_archive",
                 "runtime.runtime_events",
+                "runtime.runtime_events_archive",
                 "runtime.runtime_trace_sequences",
                 "runtime.submit_results",
                 "runtime.canonical_command_results",
@@ -100,6 +102,19 @@ class PostgresSchemaRequirementsTest {
         )
         assertEquals(
             setOf(
+                "runtime.trades_archive.event_id:text",
+                "runtime.trades_archive.instrument_id:text",
+                "runtime.trades_archive.price_num:numeric",
+                "runtime.trades_archive.occurred_at_ts:timestamp with time zone",
+                "runtime.trades_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.trades_archive" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
                 "runtime.runtime_events.event_id:text",
                 "runtime.runtime_events.event_id_uuid:uuid",
                 "runtime.runtime_events.occurred_at:text",
@@ -110,6 +125,19 @@ class PostgresSchemaRequirementsTest {
             ),
             requirements.columns
                 .filter { it.table.qualifiedName == "runtime.runtime_events" }
+                .map { "${it.qualifiedName}:${it.expectedDataType}" }
+                .toSet()
+        )
+        assertEquals(
+            setOf(
+                "runtime.runtime_events_archive.event_id:text",
+                "runtime.runtime_events_archive.event_id_uuid:uuid",
+                "runtime.runtime_events_archive.occurred_at_ts:timestamp with time zone",
+                "runtime.runtime_events_archive.payload_json:jsonb",
+                "runtime.runtime_events_archive.archived_at:timestamp with time zone"
+            ),
+            requirements.columns
+                .filter { it.table.qualifiedName == "runtime.runtime_events_archive" }
                 .map { "${it.qualifiedName}:${it.expectedDataType}" }
                 .toSet()
         )

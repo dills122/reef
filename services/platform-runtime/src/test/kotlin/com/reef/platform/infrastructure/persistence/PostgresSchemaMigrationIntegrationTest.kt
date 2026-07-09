@@ -70,6 +70,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0033_typed_canonical_time_facts.sql',
                   'runtime/0034_post_trade_profile_references.sql',
                   'runtime/0036_canonical_archive_tables.sql',
+                  'runtime/0037_runtime_event_trade_archive_tables.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -153,7 +154,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0032_typed_order_facts.sql",
                     "runtime/0033_typed_canonical_time_facts.sql",
                     "runtime/0034_post_trade_profile_references.sql",
-                    "runtime/0036_canonical_archive_tables.sql"
+                    "runtime/0036_canonical_archive_tables.sql",
+                    "runtime/0037_runtime_event_trade_archive_tables.sql"
                 ),
                 appliedMigrations
             )
@@ -180,6 +182,8 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.orders",
                 "runtime.reference_instruments",
                 "runtime.runtime_events",
+                "runtime.runtime_events_archive",
+                "runtime.runtime_events_archive_default",
                 "runtime.submit_results",
                 "runtime.canonical_command_results",
                 "runtime.canonical_venue_events",
@@ -192,7 +196,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 "runtime.market_data_snapshots",
                 "runtime.order_lifecycle_state",
                 "runtime.projection_watermarks",
-                "runtime.trades"
+                "runtime.trades",
+                "runtime.trades_archive",
+                "runtime.trades_archive_default"
             )
 
             val actualTables = conn.prepareStatement(
@@ -204,7 +210,11 @@ class PostgresSchemaMigrationIntegrationTest {
                     'orders',
                     'executions',
                     'trades',
+                    'trades_archive',
+                    'trades_archive_default',
                     'runtime_events',
+                    'runtime_events_archive',
+                    'runtime_events_archive_default',
                     'submit_results',
                     'canonical_command_results',
                     'canonical_venue_events',
@@ -356,7 +366,9 @@ class PostgresSchemaMigrationIntegrationTest {
                 WHERE namespace.nspname = 'runtime'
                   AND parent.relname IN (
                     'canonical_venue_event_batches_archive',
-                    'canonical_command_outcomes_archive'
+                    'canonical_command_outcomes_archive',
+                    'runtime_events_archive',
+                    'trades_archive'
                   )
                 """.trimIndent()
             ).use { ps ->
@@ -370,7 +382,9 @@ class PostgresSchemaMigrationIntegrationTest {
             assertEquals(
                 setOf(
                     "canonical_venue_event_batches_archive:canonical_venue_event_batches_archive_default",
-                    "canonical_command_outcomes_archive:canonical_command_outcomes_archive_default"
+                    "canonical_command_outcomes_archive:canonical_command_outcomes_archive_default",
+                    "runtime_events_archive:runtime_events_archive_default",
+                    "trades_archive:trades_archive_default"
                 ),
                 runtimeArchivePartitions
             )

@@ -66,7 +66,9 @@ object PostgresSchemaRequirements {
         val orders = PostgresSchemaObject.parse(names.orders)
         val executions = PostgresSchemaObject.parse(names.executions)
         val trades = PostgresSchemaObject.parse(names.trades)
+        val tradesArchive = PostgresSchemaObject.parse(names.tradesArchive)
         val submitResults = PostgresSchemaObject.parse(names.submitResults)
+        val runtimeEventsArchive = PostgresSchemaObject.parse(names.runtimeEventsArchive)
         val postTradeProfiles = PostgresSchemaObject.parse(names.adminPostTradeProfiles)
         val scenarioRuns = PostgresSchemaObject.parse(names.referenceScenarioRuns)
         val venueSessions = PostgresSchemaObject.parse(names.referenceVenueSessions)
@@ -80,7 +82,9 @@ object PostgresSchemaRequirements {
                 names.orders,
                 names.executions,
                 names.trades,
+                names.tradesArchive,
                 names.runtimeEvents,
+                names.runtimeEventsArchive,
                 names.runtimeTraceSequences,
                 names.submitResults,
                 names.canonicalCommandResults,
@@ -129,6 +133,11 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(trades, "price_num", "numeric"),
                 PostgresSchemaColumn(trades, "occurred_at", "text"),
                 PostgresSchemaColumn(trades, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(tradesArchive, "event_id", "text"),
+                PostgresSchemaColumn(tradesArchive, "instrument_id", "text"),
+                PostgresSchemaColumn(tradesArchive, "price_num", "numeric"),
+                PostgresSchemaColumn(tradesArchive, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(tradesArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(runtimeEvents, "event_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "event_id_uuid", "uuid"),
                 PostgresSchemaColumn(runtimeEvents, "occurred_at", "text"),
@@ -136,6 +145,11 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(runtimeEvents, "actor_id", "text"),
                 PostgresSchemaColumn(runtimeEvents, "payload_json", "jsonb"),
                 PostgresSchemaColumn(runtimeEvents, "sequence_number", "bigint"),
+                PostgresSchemaColumn(runtimeEventsArchive, "event_id", "text"),
+                PostgresSchemaColumn(runtimeEventsArchive, "event_id_uuid", "uuid"),
+                PostgresSchemaColumn(runtimeEventsArchive, "occurred_at_ts", "timestamp with time zone"),
+                PostgresSchemaColumn(runtimeEventsArchive, "payload_json", "jsonb"),
+                PostgresSchemaColumn(runtimeEventsArchive, "archived_at", "timestamp with time zone"),
                 PostgresSchemaColumn(submitResults, "command_id", "text"),
                 PostgresSchemaColumn(submitResults, "event_id", "text"),
                 PostgresSchemaColumn(submitResults, "event_id_uuid", "uuid"),

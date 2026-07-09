@@ -130,6 +130,10 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - typed companions: `event_id_uuid uuid`, `quantity_units_num numeric`, `price_num numeric`, `occurred_at_ts timestamptz`.
 - indexes include `idx_trades_instrument_sequence (instrument_id, sequence desc)` for the public trade tape read path.
 
+7a. `runtime.trades_archive` (`runtime/0037`)
+- partitioned archive target for old trade-tape facts; not a current trade read path.
+- range partitioned by non-null `occurred_at_ts`, with bootstrap default partition `runtime.trades_archive_default`, `archived_at timestamptz default now()`, and primary key `(occurred_at_ts, event_id)`.
+
 8. `runtime.submit_results` (`runtime/0003`, `0030`)
 - `command_id text pk`, `result_type text not null`, `event_id text not null`, `order_id text not null`, `engine_order_id text not null`, `code text not null`, `reason text not null`, `occurred_at text not null`.
 - typed companions: `event_id_uuid uuid`, `occurred_at_ts timestamptz`.
@@ -156,6 +160,10 @@ There is no `status` or `updated_at` column on `runtime.orders` — it is an imm
 - `occurred_at text not null`
 - `created_at timestamptz not null default now()`
 - typed companions: `event_id_uuid uuid`, `occurred_at_ts timestamptz`
+
+11a. `runtime.runtime_events_archive` (`runtime/0037`)
+- partitioned archive target for old runtime event backbone rows; not a current order trace/read path.
+- range partitioned by non-null `occurred_at_ts`, with bootstrap default partition `runtime.runtime_events_archive_default`, `archived_at timestamptz default now()`, and primary key `(occurred_at_ts, event_id)`.
 
 Indexes:
 - `(occurred_at)`
