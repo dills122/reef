@@ -127,6 +127,7 @@ jobs:
           mkdir -p coverage/node-dev-tooling/v8
           node --test --experimental-test-coverage \
             scripts/dev/lib/dev-stack.test.mjs \
+            scripts/dev/lib/dev-profiles.test.mjs \
             scripts/dev/db/migrate.test.mjs \
             scripts/dev/command-log-integrity-check.test.mjs \
             scripts/dev/command-log-pin.test.mjs \
@@ -268,7 +269,7 @@ jobs:
         with:
           node-version: '22'
       - name: Validate dev migration scripts
-        run: node --test scripts/dev/lib/dev-stack.test.mjs scripts/dev/db/migrate.test.mjs
+        run: node --test scripts/dev/lib/dev-stack.test.mjs scripts/dev/lib/dev-profiles.test.mjs scripts/dev/db/migrate.test.mjs
       - name: Start Postgres databases
         run: docker compose -f compose.base.yml -f compose.local.yml up -d postgres boundary-postgres projection-postgres arena-postgres --wait --wait-timeout 120
       - name: Apply migrations

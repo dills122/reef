@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
@@ -70,7 +71,7 @@ setValue("DEV_VENUE_EVENT_REPLAY_CHECK_EVENT_STREAM", eventStream);
 process.env.COMPOSE_PROFILES = env("DEV_COMPOSE_PROFILES");
 
 console.log("starting Redpanda direct-stream crash gate stack...");
-await import("./stream-direct-nodb-up.mjs");
+await runStackUp("stream-direct-nodb");
 
 console.log("waiting for runtime, engine, materializer, projector health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeoutSeconds);

@@ -66,6 +66,14 @@ make dev-throughput-campaign
 make dev-admin CMD="instrument-upsert AAPL AAPL"
 ```
 
+Script discoverability:
+
+```bash
+bun scripts/dev/reef-dev.mjs list
+```
+
+`make` targets remain the stable daily interface. `scripts/dev/reef-dev.mjs` groups lower-level stack, stress, and local link setup profiles behind one CLI so new automation does not need a new one-off wrapper file.
+
 Use `JS_RUNTIME=node` when Bun is not installed:
 
 ```bash

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
+import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
 
 loadDotEnv();
@@ -70,7 +71,7 @@ console.log("starting Redpanda direct-stream materializer smoke stack...");
 if (env("DEV_VENUE_EVENT_MATERIALIZER_SKIP_STACK_UP", "0") === "1") {
   console.log("skipping stack startup; using existing materializer smoke stack");
 } else {
-  await import("./stream-direct-nodb-up.mjs");
+  await runStackUp("stream-direct-nodb");
 }
 
 console.log("waiting for platform-api, matching-engine, materializer, and read projector health...");

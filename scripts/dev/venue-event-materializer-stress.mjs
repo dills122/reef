@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { env, loadDotEnv, run, setDefault, setValue } from "./lib/dev-utils.mjs";
 import { composeArgs } from "./lib/compose-utils.mjs";
+import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { printStreamProfileSummary, validateStreamProfile } from "./lib/stream-profile-guard.mjs";
 import { selectPartitionSpreadInstruments } from "./lib/stream-partition-spread.mjs";
 
@@ -12,8 +13,8 @@ const MATERIALIZER_STRESS_RUN_ID = "venue-event-materializer-mixed-lifecycle-str
 loadDotEnv();
 
 // Inlines the stream-direct no-db setup (services/matching-engine consumes the durable command
-// stream directly, Postgres stays out of the matching hot path) instead of importing
-// stream-direct-nodb-up.mjs, because that script unconditionally forces
+// stream directly, Postgres stays out of the matching hot path) instead of using the
+// stream-direct-nodb stack profile, because that profile unconditionally forces
 // STREAM_ACK_PROJECTOR_ENABLED=false. This script and the ablation ladder need that flag
 // controllable per rung, so it is left as a plain setDefault below instead.
 setValue("RUNTIME_PERSISTENCE", "noop");
@@ -106,7 +107,7 @@ console.log(`  stopIdleBackgroundServices=${process.env.DEV_STRESS_STOP_IDLE_BAC
 validateStreamProfile("materializer-soak");
 printStreamProfileSummary("materializer-soak");
 
-await import("./stream-ack-up.mjs");
+await runStackUp("stream-ack");
 await stopIdleBackgroundServices();
 await import("./stress.mjs");
 

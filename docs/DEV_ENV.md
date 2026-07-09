@@ -20,6 +20,17 @@ make dev-up
 make dev-smoke
 ```
 
+`make` targets are the stable daily interface. Underneath them, grouped local automation lives in `scripts/dev/reef-dev.mjs`:
+
+```bash
+bun scripts/dev/reef-dev.mjs list
+bun scripts/dev/reef-dev.mjs stack up stream-ack
+bun scripts/dev/reef-dev.mjs stress run stream-direct-nodb
+bun scripts/dev/reef-dev.mjs links codex --dry-run
+```
+
+Use `reef-dev.mjs` for grouped stack, stress, and local link profiles; avoid adding new one-off wrapper scripts when a profile can fit this CLI.
+
 Recommended first step for configuration:
 
 ```bash
@@ -36,6 +47,7 @@ Inspect the resolved stack before starting containers:
 
 ```bash
 make dev-compose-config ARGS="--services"
+bun scripts/dev/reef-dev.mjs stack compose-config --services
 make dev-compose-parity
 ```
 
@@ -43,6 +55,7 @@ Use the compatibility monolith only when debugging the migration:
 
 ```bash
 REEF_COMPOSE_FILES=docker-compose.yml make dev-compose-config ARGS="--services"
+REEF_COMPOSE_FILES=docker-compose.yml bun scripts/dev/reef-dev.mjs stack compose-config --services
 ```
 
 If Bun is not available locally yet, you can temporarily run with Node:
@@ -217,6 +230,8 @@ make dev-up-captured-ack
 make dev-stress-captured-ack
 ```
 
+Equivalent grouped CLI forms are `bun scripts/dev/reef-dev.mjs stack up captured-ack` and `bun scripts/dev/reef-dev.mjs stress run captured-ack`.
+
 `dev-up-captured-ack` starts the separated local runtime roles (`platform-api`, `platform-worker-0`, `platform-worker-1`, `platform-projector-0`, and `platform-projector-1`) with:
 - `EXTERNAL_API_COMMAND_CAPTURE_MODE=disabled`
 - `EXTERNAL_API_COMMAND_LOG_MODE=postgres`
@@ -261,6 +276,8 @@ Run the first JetStream-backed accepted-command profile:
 ```bash
 make dev-up-stream-ack
 ```
+
+Equivalent grouped CLI form: `bun scripts/dev/reef-dev.mjs stack up stream-ack`.
 
 `dev-up-stream-ack` starts the deploy-shaped local stack (`platform-api`, `platform-worker-0` through `platform-worker-3`, `platform-projector-0` through `platform-projector-3`, `matching-engine`, `nats`, and Postgres services), boots NATS with JetStream enabled, and creates the retained `REEF_COMMANDS` stream for `reef.cmd.v1.>` subjects. The runtime roles are configured with:
 - `EXTERNAL_API_COMMAND_PROCESSING_MODE=stream-ack`
@@ -340,6 +357,8 @@ Run the engine-direct no-DB stress profile:
 make dev-stress-stream-direct-nodb
 ```
 
+Equivalent grouped CLI form: `bun scripts/dev/reef-dev.mjs stress run stream-direct-nodb`.
+
 This starts the stream-ack command intake profile with DB-backed hot-path persistence disabled, disables stream workers/projectors, enables `MATCHING_ENGINE_DIRECT_STREAM_ENABLED=true`, uses the Netty hot-path adapter, enables the bounded partitioned command-publish pipeline, and runs submit-only stress steps at `5000,10000,15000,20000` rps for `90s` by default. Reports are written under `/tmp/reef-stream-direct-nodb-stress`. The profile uses isolated high-capacity JetStream defaults, `STREAM_ACK_COMMAND_STREAM=REEF_DIRECT_NODB_COMMANDS_V2`, `STREAM_ACK_SUBJECT_PREFIX=reef.direct.nodb.v2.cmd.v1`, `STREAM_ACK_COMMAND_STREAM_MAX_BYTES=34359738368`, `MATCHING_ENGINE_EVENT_STREAM=REEF_DIRECT_NODB_VENUE_EVENTS_V2`, and `MATCHING_ENGINE_EVENT_SUBJECT_PREFIX=reef.direct.nodb.v2.venue.events.v1`, so retained local streams from older profiles do not overlap subjects or hit the older 1 GiB command-stream cap. Trace validation is disabled with `DEV_STRESS_TRACE_CHECK_LIMIT=0` because trace/event persistence is intentionally not part of this ceiling test. The profile caps the in-memory stream-intake idempotency window with `STREAM_ACK_INMEMORY_INTAKE_MAX_ENTRIES=100000` and shards it with `STREAM_ACK_INMEMORY_INTAKE_SHARDS=256` by default so long no-DB soaks do not measure unbounded heap retention or a single in-memory monitor instead of command intake.
 
 Run the same no-DB direct profile against Redpanda/Kafka-compatible command and event topics:
@@ -376,6 +395,7 @@ Validate stream profile settings without starting a load run:
 make dev-validate-stream-profile PROFILE=stream-direct-nodb
 make dev-validate-stream-profile PROFILE=noop-ceiling
 make dev-validate-stream-profile PROFILE=materializer-soak
+bun scripts/dev/reef-dev.mjs stream validate stream-direct-nodb
 ```
 
 These checks catch profile drift before a soak, including unbounded in-memory intake, accidental `STREAM_ACK_PUBLISHER=noop` on durable materializer paths, disabled publish pipeline, missing direct/materializer capture, nonzero direct/materializer completion-gap tolerances, or missing terminal-order retention bounds.
@@ -541,6 +561,8 @@ Run the submit-only stream-ack stress profile:
 make dev-stress-stream-ack
 ```
 
+Equivalent grouped CLI form: `bun scripts/dev/reef-dev.mjs stress run stream-ack`.
+
 This starts the stream-ack stack, enables all partition workers, runs `1000,2500,5000` rps submit-only steps, writes reports under `/tmp/reef-stream-ack-stress`, and attaches stream-worker before/after global and per-partition deltas to each report. Because stream-ack completion is asynchronous after `202`, the stream-ack wrapper waits up to `DEV_STRESS_STREAM_ACK_DRAIN_WAIT_MS` before final worker sampling so `completedDelta` reflects durable worker drain instead of only commands finished during the load-generator window. `DEV_STRESS_STREAM_ACK_WORKER_PROBE_TIMEOUT_MS` controls the worker stats HTTP timeout for partitioned durable-log snapshots. Stress telemetry also samples runtime health, hot-path timings, DB pool stats, stream health, stream worker stats, engine health, and Docker container stats into `*-telemetry.ndjson`.
 
 The stream-ack stress target generates a 64-instrument session config under `/tmp/reef-stream-ack-stress` by default so submit traffic has enough independent routing keys to exercise deterministic stream partitions. Set `DEV_STRESS_STREAM_ACK_INSTRUMENTS` to change the generated instrument count, or set `DEV_STRESS_SESSION_CONFIG` to run a fixed session file instead. For isolated reruns on a retained NATS volume, override both `STREAM_ACK_COMMAND_STREAM` and `STREAM_ACK_SUBJECT_PREFIX`; JetStream rejects streams with overlapping subject filters.
@@ -609,6 +631,8 @@ Run the runtime + engine no-DB benchmark profile:
 ```bash
 make dev-stress-runtime-nodb
 ```
+
+Equivalent grouped CLI form: `bun scripts/dev/reef-dev.mjs stress run runtime-nodb`.
 
 This profile is for bottleneck isolation only. It starts the normal local runtime and matching-engine path, but configures the platform request path with:
 

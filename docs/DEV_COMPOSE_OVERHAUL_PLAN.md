@@ -38,14 +38,14 @@ The first implementation slice keeps `docker-compose.yml` as a compatibility fil
 
 - `REEF_COMPOSE_FILES` or `DEV_COMPOSE_FILES` can opt into an ordered file list.
 - The default local dev stack is `compose.base.yml,compose.local.yml`.
-- `make dev-compose-config ARGS="--services"` prints the resolved configuration.
+- `make dev-compose-config ARGS="--services"` or `bun scripts/dev/reef-dev.mjs stack compose-config --services` prints the resolved configuration.
 - Dev stack scripts should call the shared Compose helper instead of hard-coding `docker-compose.yml`.
 
 This lets later commits move YAML into layered files while preserving the existing Make targets.
 
 ## Migration Phases
 
-1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` and `make dev-compose-parity` exist and dev scripts call the shared Compose helper.
+1. Centralize Compose invocation in scripts. Done: `make dev-compose-config` delegates to `reef-dev.mjs stack compose-config`, `make dev-compose-parity` exists, and dev scripts call the shared Compose helper.
 2. Add `compose.base.yml` and `compose.local.yml` while keeping `docker-compose.yml` working. Done: both files exist, and `scripts/dev/compose-config-parity.mjs` (run by `make dev-compose-parity`) fails the build if `docker-compose.yml` config output diverges from `compose.base.yml` + `compose.local.yml` merged config. `docker-compose.yml` remains the full monolith kept in parity with the layered files rather than being removed.
 3. Move stream-ack and materializer shape into local overlays. Not started: no `compose.local.stream-ack.yml` exists.
 4. Move benchmark-only no-DB/direct-stream settings into a benchmark overlay. Not started: no `compose.local.benchmark.yml` exists.
