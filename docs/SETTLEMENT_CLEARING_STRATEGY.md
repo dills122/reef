@@ -169,11 +169,13 @@ Policy storage:
 
 Obligation materialization:
 
-- internal command: `POST /internal/admin/settlement/obligations/materialize`
-- cash repair command: `POST /internal/admin/settlement/repairs/cash`
-- security repair command: `POST /internal/admin/settlement/repairs/security`
-- force-settle command: `POST /internal/admin/settlement/force-settle`
-- reverse-ledger command: `POST /internal/admin/settlement/reverse-ledger-entry`
+- gateway fact append command: `POST /admin/v1/settlement/facts`
+- gateway materialization command: `POST /admin/v1/settlement/obligations/materialize`
+- gateway cash repair command: `POST /admin/v1/settlement/repairs/cash`
+- gateway security repair command: `POST /admin/v1/settlement/repairs/security`
+- gateway force-settle command: `POST /admin/v1/settlement/force-settle`
+- gateway reverse-ledger command: `POST /admin/v1/settlement/reverse-ledger-entry`
+- local-only aliases remain available under the same `/internal/admin/settlement/...` suffixes when `PLATFORM_INTERNAL_HTTP_MODE` allows them
 - input: `scenarioRunId`/`runId`, optional `venueSessionId`
 - source: persisted runtime trades plus accepted buy/sell orders
 - deterministic obligation id: `settlement-obligation-{tradeId}`

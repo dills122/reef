@@ -4,7 +4,7 @@
 
 This is the short operational snapshot for Reef. Use it to orient current work before reading deeper planning, benchmark, or sprint documents.
 
-Last aligned: 2026-07-09.
+Last aligned: 2026-07-10.
 
 ## Current Project State
 
@@ -76,6 +76,8 @@ Work should follow this order unless a new decision supersedes it. The active ch
 6. Prove compact persistence projection end to end under the same gate: durable event batch, canonical Postgres rows, projected submit result/runtime event, and idempotent projector replay.
 7. Order-lifecycle-state and market-data top-of-book snapshot maintenance are both now incremental (dirty-tracked, not full-table rebuild). Public trade tape and intraday bars are now live (`/api/v1/market-data/trades/{instrumentId}`, `/api/v1/market-data/bars/{instrumentId}`), and the Bot SDK live-read clients can be injected into `runner.ts`/`strategy-runner.ts`/`hosted-runner.ts` through `readClients`, plus participant-scoped own-order reads (`/api/v1/orders/current`, `/api/v1/orders/history`). Depth reads (`/api/v1/market-data/depth/{instrumentId}`) still aggregate remaining open lifecycle quantity at request time rather than from a maintained projection; venue-session-specific depth needs a projected session key on order lifecycle facts before it can be truthfully exposed.
 8. Lock the first deterministic lifecycle scenarios against [`SCENARIO_CONTRACTS.md`](./SCENARIO_CONTRACTS.md) and [`SCENARIO_ASSERTION_PLAN.md`](./SCENARIO_ASSERTION_PLAN.md): `P1_GOLDEN_HIDDEN_CROSS_T1` and `P2_SETTLEMENT_BREAK_REPAIR`.
+   - 2026-07-10 local P1 live assertion passed on a clean rebuilt `sync-result` stack with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and `MARKET_DATA_PROJECTOR_ENABLED=true`; report: `/tmp/reef-p1-live-assertion-ready-20260710.json`. The run proved command completion through `GET /api/v1/commands/{commandId}`, participant-scoped own-order lifecycle and fill reads, public trade tape, public depth non-leakage, read-surface inventory, and zero projection lag in `/api/v1/data/availability`.
+   - 2026-07-10 local P2 live assertion passed on the same local stack after seeding settlement facts with `node scripts/dev/seed-p2-settlement-facts.mjs --scenario-run-id=p2-settlement-local-ready-20260710-node`; report: `/tmp/reef-p2-live-assertion-ready-20260710.json`. The run proved command completion plus the settlement fact chain from `/api/v1/settlement/facts/{scenarioRunId}`: one obligation, one `CASH_LEG_FAILED` break, one repair, one resolution, repair-linked causation, and scenario-run scoping.
 9. Keep Bot Arena Phase 1 moving without overlapping the real-time stress dashboard work: local arena run evidence, persisted positive/negative gates, static operator reports, shared-time multi-instrument hardening, then paced local and hosted/backbone gate planning.
 10. Expand post-trade modules only after timeline and replay assertions prove causation end to end.
 

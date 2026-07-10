@@ -104,8 +104,9 @@ class NoopCommandCaptureStore : CommandCaptureStore {
     }
 }
 
-class InMemoryCommandCaptureStore : CommandCaptureStore {
+class InMemoryCommandCaptureStore : CommandCaptureStore, CommandStatusLookup {
     private data class CapturedCommand(
+        val commandId: String,
         val clientId: String,
         val route: String,
         val idempotencyKey: String,
@@ -131,11 +132,13 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
     ): CommandCaptureReceipt {
         val now = Instant.now().epochSecond
         val key = key(clientId, route, idempotencyKey)
+        val commandId = commandId(clientId, route, idempotencyKey, requestPayload)
         var accepted = false
         records.compute(key) { _, existing ->
             if (existing == null) {
                 accepted = true
                 CapturedCommand(
+                    commandId = commandId,
                     clientId = clientId,
                     route = route,
                     idempotencyKey = idempotencyKey,
@@ -208,8 +211,43 @@ class InMemoryCommandCaptureStore : CommandCaptureStore {
         }
     }
 
+    override fun findCommandStatus(commandId: String): CommandStatusView? {
+        return records.values.firstOrNull { it.commandId == commandId }?.toStatusView()
+    }
+
+    override fun findCommandStatus(clientId: String, route: String, idempotencyKey: String): CommandStatusView? {
+        return records[key(clientId, route, idempotencyKey)]?.toStatusView()
+    }
+
     private fun key(clientId: String, route: String, idempotencyKey: String): String {
         return "$clientId|$route|$idempotencyKey"
+    }
+
+    private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
+        val parsedCommandId = try {
+            JsonCodec.parseObject(requestPayload).string("commandId")
+        } catch (_: Exception) {
+            ""
+        }
+        if (parsedCommandId.isNotBlank()) return parsedCommandId
+        val source = "$clientId|$route|$idempotencyKey"
+        return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
+    }
+
+    private fun CapturedCommand.toStatusView(): CommandStatusView {
+        return CommandStatusView(
+            commandId = commandId,
+            clientId = clientId,
+            route = route,
+            idempotencyKey = idempotencyKey,
+            status = CommandLogStatus.valueOf(status),
+            processingMode = CommandProcessingMode.SyncResult,
+            responseStatus = responseStatus,
+            responsePayloadJson = responsePayload,
+            lastError = errorMessage,
+            participantId = commandStatusParticipantId(requestPayload),
+            source = "command_capture"
+        )
     }
 }
 
@@ -386,7 +424,7 @@ class PostgresCommandCaptureStore(
     private val dataSource: DataSource,
     private val names: PostgresBoundarySqlNames = PostgresBoundarySqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
-) : CommandCaptureStore {
+) : CommandCaptureStore, CommandStatusLookup {
     init {
         connection().use { conn ->
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
@@ -547,6 +585,88 @@ class PostgresCommandCaptureStore(
                 ps.executeUpdate()
             }
         }
+    }
+
+    override fun findCommandStatus(commandId: String): CommandStatusView? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT client_id,
+                       route,
+                       idempotency_key,
+                       request_payload,
+                       status,
+                       response_status,
+                       response_payload,
+                       error_message
+                FROM ${names.commandCaptures}
+                WHERE request_payload::jsonb ->> 'commandId' = ?
+                LIMIT 1
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, commandId)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return postgresStatusView(commandId, rs)
+                }
+            }
+        }
+    }
+
+    override fun findCommandStatus(clientId: String, route: String, idempotencyKey: String): CommandStatusView? {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT client_id,
+                       route,
+                       idempotency_key,
+                       request_payload,
+                       status,
+                       response_status,
+                       response_payload,
+                       error_message
+                FROM ${names.commandCaptures}
+                WHERE client_id = ? AND route = ? AND idempotency_key = ?
+                LIMIT 1
+                """.trimIndent()
+            ).use { ps ->
+                ps.setString(1, clientId)
+                ps.setString(2, route)
+                ps.setString(3, idempotencyKey)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return postgresStatusView(commandId(clientId, route, idempotencyKey, rs.getString("request_payload")), rs)
+                }
+            }
+        }
+    }
+
+    private fun postgresStatusView(commandId: String, rs: java.sql.ResultSet): CommandStatusView {
+        val requestPayload = rs.getString("request_payload")
+        return CommandStatusView(
+            commandId = commandId,
+            clientId = rs.getString("client_id"),
+            route = rs.getString("route"),
+            idempotencyKey = rs.getString("idempotency_key"),
+            status = CommandLogStatus.valueOf(rs.getString("status")),
+            processingMode = CommandProcessingMode.SyncResult,
+            responseStatus = rs.getInt("response_status"),
+            responsePayloadJson = rs.getString("response_payload"),
+            lastError = rs.getString("error_message"),
+            participantId = commandStatusParticipantId(requestPayload),
+            source = "command_capture"
+        )
+    }
+
+    private fun commandId(clientId: String, route: String, idempotencyKey: String, requestPayload: String): String {
+        val parsedCommandId = try {
+            JsonCodec.parseObject(requestPayload).string("commandId")
+        } catch (_: Exception) {
+            ""
+        }
+        if (parsedCommandId.isNotBlank()) return parsedCommandId
+        val source = "$clientId|$route|$idempotencyKey"
+        return "generated-${UUID.nameUUIDFromBytes(source.toByteArray(StandardCharsets.UTF_8))}"
     }
 
     private fun connection() = dataSource.connection

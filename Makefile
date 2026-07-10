@@ -38,7 +38,7 @@ lint:
 	cd $(GO_MATCHING_ENGINE_DIR) && go vet ./...
 	cd $(SIMULATOR_DIR) && go vet ./...
 	cd $(PLATFORM_RUNTIME_DIR) && ./gradlew compileKotlin compileTestKotlin
-	bunx tsc -p packages/bot-sdk/tsconfig.json --noEmit
+	bunx --bun tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	node scripts/dev/script-surface-check.mjs
 
 check-scripts:
@@ -72,7 +72,7 @@ test-platform-runtime:
 
 test-bot-sdk:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	bunx tsc -p packages/bot-sdk/tsconfig.json --noEmit
+	bunx --bun tsc -p packages/bot-sdk/tsconfig.json --noEmit
 	$(JS_RUNTIME) scripts/dev/bot-sdk-contract.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-batch-clients.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-venue-adapter.test.mjs

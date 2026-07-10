@@ -149,7 +149,9 @@
       "headers": {
         "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-001",
         "X-Client-Id": "scenario-smoke-1",
-        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-001"
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-001",
+        "X-Participant-Id": "HIDDEN_SELLER_A",
+        "X-Reef-Actor-Id": "HIDDEN_SELLER_A_MAIN"
       },
       "payload": {
         "accountId": "HIDDEN_SELLER_A_MAIN",
@@ -187,7 +189,9 @@
       "headers": {
         "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-002",
         "X-Client-Id": "scenario-smoke-2",
-        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-002"
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-002",
+        "X-Participant-Id": "VISIBLE_BUYER_B",
+        "X-Reef-Actor-Id": "VISIBLE_BUYER_B_MAIN"
       },
       "payload": {
         "accountId": "VISIBLE_BUYER_B_MAIN",
@@ -225,7 +229,9 @@
       "headers": {
         "Idempotency-Key": "p1_golden_hidden_cross_t1-cmd-003",
         "X-Client-Id": "scenario-smoke-3",
-        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-003"
+        "X-Correlation-Id": "p1_golden_hidden_cross_t1-trace-003",
+        "X-Participant-Id": "VISIBLE_BUYER_C",
+        "X-Reef-Actor-Id": "VISIBLE_BUYER_C_MAIN"
       },
       "payload": {
         "accountId": "VISIBLE_BUYER_C_MAIN",

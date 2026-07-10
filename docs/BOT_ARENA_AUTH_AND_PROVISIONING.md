@@ -240,6 +240,12 @@ server-side service token. Scoped service token families are route-specific:
 /admin/v1/risk/account-controls         -> admin
 /admin/v1/risk/circuit-breakers         -> admin
 /admin/v1/risk/price-collars            -> admin
+/admin/v1/settlement/facts              -> admin
+/admin/v1/settlement/repairs/cash       -> admin
+/admin/v1/settlement/repairs/security   -> admin
+/admin/v1/settlement/force-settle       -> admin
+/admin/v1/settlement/reverse-ledger-entry -> admin
+/admin/v1/settlement/obligations/materialize -> admin
 ```
 
 The existing static bearer-token environment variables remain as compatibility

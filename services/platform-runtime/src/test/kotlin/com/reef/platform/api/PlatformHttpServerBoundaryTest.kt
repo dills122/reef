@@ -137,6 +137,22 @@ class PlatformHttpServerBoundaryTest {
             ),
             adminGatewayRouteFor("/admin/v1/arena/bot-versions/transition")
         )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/settlement/facts",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/settlement/facts")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/settlement/obligations/materialize",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/settlement/obligations/materialize")
+        )
     }
 
     @Test
@@ -227,6 +243,46 @@ class PlatformHttpServerBoundaryTest {
             assertEquals(503, allowedByServiceToken.status)
             assertContains(allowedByServiceToken.body, "account risk control store unavailable")
             assertEquals(401, deniedByWrongFamily.status)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewaySettlementFactsAliasAppendsFacts() {
+        val auth = testAdminAuth()
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Admin,
+            subjectActorId = "settlement-admin",
+            ttl = null
+        )
+        val settlementStore = InMemorySettlementFactStore()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            settlementFactStore = settlementStore
+        )
+        try {
+            val denied = post(
+                server.address.port,
+                "/admin/v1/settlement/facts",
+                emptyMap(),
+                p2SettlementFactsBody("p2-admin-gateway")
+            )
+            val posted = post(
+                server.address.port,
+                "/admin/v1/settlement/facts",
+                headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
+                body = p2SettlementFactsBody("p2-admin-gateway")
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-admin-gateway")
+
+            assertEquals(401, denied.status)
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"status\":\"ok\"")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"settlementObligationId\":\"obl-1\"")
         } finally {
             server.stop(0)
         }
@@ -4527,6 +4583,43 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(404, response.status)
             assertContains(response.body, "\"error\":\"command not found\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun syncResultCommandCaptureExposesCommandStatusEndpoint() {
+        val captureStore = InMemoryCommandCaptureStore()
+        val server = testServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            captureStore = captureStore
+        )
+        try {
+            val submitted = post(
+                port = server.address.port,
+                path = "/api/v1/orders/submit",
+                headers = mapOf(
+                    "X-Client-Id" to "client-sync-status",
+                    "Idempotency-Key" to "idem-sync-status"
+                ),
+                body = validSubmitBody("cmd-sync-status", "trace-sync-status", "ord-sync-status")
+            )
+            val ready = get(server.address.port, "/readyz")
+            val status = get(
+                server.address.port,
+                "/api/v1/commands/cmd-sync-status",
+                headers = apiReadHeaders("client-sync-status")
+            )
+
+            assertEquals(200, submitted.status)
+            assertEquals(200, ready.status)
+            assertContains(ready.body, "\"commandStatusLookup\":true")
+            assertEquals(200, status.status)
+            assertContains(status.body, "\"commandId\":\"cmd-sync-status\"")
+            assertContains(status.body, "\"status\":\"COMPLETED\"")
+            assertContains(status.body, "\"processingMode\":\"sync-result\"")
+            assertContains(status.body, "\"source\":\"command_capture\"")
         } finally {
             server.stop(0)
         }

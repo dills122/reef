@@ -80,6 +80,36 @@ class CommandCaptureStoreTest {
     }
 
     @Test
+    fun inMemoryCaptureStoreExposesCommandStatusLookup() {
+        val store = InMemoryCommandCaptureStore()
+
+        store.captureReceived(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            correlationId = "corr-1",
+            requestPayload = """{"commandId":"cmd-1","participantId":"participant-1"}"""
+        )
+        store.markCompleted(
+            clientId = "client-1",
+            route = "/api/v1/orders/submit",
+            idempotencyKey = "idem-1",
+            responseStatus = 200,
+            responsePayload = """{"accepted":{"orderId":"order-1"}}"""
+        )
+
+        val status = store.findCommandStatus("cmd-1")
+
+        assertNotNull(status)
+        assertEquals("cmd-1", status.commandId)
+        assertEquals("client-1", status.clientId)
+        assertEquals(CommandLogStatus.COMPLETED, status.status)
+        assertEquals(CommandProcessingMode.SyncResult, status.processingMode)
+        assertEquals("participant-1", status.participantId)
+        assertEquals("command_capture", status.source)
+    }
+
+    @Test
     fun defaultCaptureStoreRejectsUnsupportedCommandLogMode() {
         assertFailsWith<IllegalArgumentException> {
             defaultCommandCaptureStore(CommandProcessingMode.SyncResult) { key ->

@@ -113,7 +113,9 @@
       "headers": {
         "Idempotency-Key": "p2_settlement_break_repair-cmd-001",
         "X-Client-Id": "scenario-smoke-1",
-        "X-Correlation-Id": "p2_settlement_break_repair-trace-001"
+        "X-Correlation-Id": "p2_settlement_break_repair-trace-001",
+        "X-Participant-Id": "BUY_SIDE_1",
+        "X-Reef-Actor-Id": "BUY_SIDE_1_MAIN"
       },
       "payload": {
         "accountId": "BUY_SIDE_1_MAIN",
@@ -151,7 +153,9 @@
       "headers": {
         "Idempotency-Key": "p2_settlement_break_repair-cmd-002",
         "X-Client-Id": "scenario-smoke-2",
-        "X-Correlation-Id": "p2_settlement_break_repair-trace-002"
+        "X-Correlation-Id": "p2_settlement_break_repair-trace-002",
+        "X-Participant-Id": "SELL_SIDE_1",
+        "X-Reef-Actor-Id": "SELL_SIDE_1_MAIN"
       },
       "payload": {
         "accountId": "SELL_SIDE_1_MAIN",
