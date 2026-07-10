@@ -561,6 +561,57 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayArenaBotVersionRegisterWorksThroughPublicGateway() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
+        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
+        controlPlane.registerBot(
+            RegisterArenaBotCommand(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com")
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val response = post(
+                server.address.port,
+                "/admin/v1/arena/bot-versions",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
+                body = """
+                    {
+                      "botId": "bot-1",
+                      "versionId": "v1",
+                      "sourceHash": "sha256:source",
+                      "artifactHash": "sha256:artifact",
+                      "sdkVersion": "1.5.0",
+                      "apiVersion": "v1",
+                      "dependencyManifestHash": "sha256:deps"
+                    }
+                """.trimIndent()
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"botId\":\"bot-1\"")
+            assertContains(response.body, "\"versionId\":\"v1\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun adminGatewayArenaBotVersionTransitionBansThroughPublicGateway() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))

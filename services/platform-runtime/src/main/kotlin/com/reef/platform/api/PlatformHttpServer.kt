@@ -660,6 +660,7 @@ class PlatformHttpServer(
             "/admin/v1/arena/bots",
             "/admin/v1/arena/bots/openbao-provision",
             "/admin/v1/arena/bots/config",
+            "/admin/v1/arena/bot-versions",
             "/admin/v1/arena/bot-versions/transition",
             "/admin/v1/arena/runs",
             "/admin/v1/arena/run-bot-results",
