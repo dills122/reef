@@ -5,6 +5,8 @@
 Prove Reef can run a bot arena simulation with a healthy market throughout and
 a successful simulation data export.
 
+Scope note (2026-07-09): this is the Bot Arena simulation gate checklist. It refines the Bot Arena item in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder); it is not a second repo-wide execution ladder.
+
 The near-term hardening path is local-first: use local 3-5 minute live runs to
 shake out arena behavior, health metrics, projection/readback gaps, and artifact
 capture. Keep the 15 minute run as a later promotion gate because `15m` is the

@@ -8,6 +8,8 @@ The current Postgres `captured-ack` path is useful as a correctness baseline and
 
 The accepted target architecture uses a durable, ordered ingress log and Postgres as the canonical venue outcome/event store. JetStream remains the stream-ack baseline and fallback/comparison provider. D-041 moves the active hot-ingress work toward a Kafka-compatible producer plus matching-engine direct partition consumption. [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) is the current implementation contract for submit/cancel intake, idempotency, accepted-but-not-completed accounting, and readiness gates.
 
+Status note (2026-07-09): this plan spans both the earlier JetStream stream-ack baseline and the current Kafka-compatible direct-materializer path. When wording below says JetStream specifically, treat it as applying to the fallback/comparison provider unless the section explicitly names Redpanda/Kafka-compatible direct consumption.
+
 ## Product Framing
 
 Reef's high-throughput path is a deterministic simulated market venue. It should borrow the shape of real market infrastructure for command durability, same-book ordering, matching correctness, audit, replay, and projections, while staying local-first and game/simulator oriented.
@@ -77,8 +79,8 @@ Use these definitions in stress reports, docs, and release gates:
 | Metric | Definition | Release meaning |
 |---|---|---|
 | `attempted/sec` | client attempted requests per second | load-generator pressure only |
-| `accepted/sec` | API returned `202` after durable JetStream publish acknowledgement | durable ingress capacity |
-| `completed/sec` | worker processed command, canonical result/events committed, and JetStream message acked | primary venue throughput target |
+| `accepted/sec` | API returned `202` after the configured durable ingress provider acknowledged the command | durable ingress capacity |
+| `completed/sec` | worker or direct engine path processed the command and the configured completion boundary acknowledged or committed it after durable venue facts | primary venue throughput target |
 | `projected/sec` | async projections caught up from canonical facts | read-model and scoring capacity |
 | `visible/sec` | projected state visible to UI/control-room users | operator experience capacity |
 
@@ -172,7 +174,9 @@ Use a hybrid model:
 
 This guard can live in Postgres first. If it becomes the acceptance bottleneck, it should be narrowed or partitioned before changing semantics.
 
-## Worker Ack Rule
+## Historical JetStream Worker Ack Rule
+
+This rule applies to the generic JetStream worker path. The active direct path uses matching-engine command offset commit only after durable `VenueEventBatch` publication, followed by materializer event-batch offset commit only after compact canonical Postgres rows commit.
 
 Partition workers acknowledge JetStream only after canonical facts are durable.
 

@@ -6,6 +6,8 @@ Define the next architecture improvements after Reef proved that a single local 
 
 The active goal is to move from tuned synchronous throughput to a production-shaped write architecture that can sustain at least `7500` completed commands per second per runtime instance, preferably `10000`, while preserving command capture, auditability, deterministic replay, and zero silent loss of accepted commands.
 
+Status note (2026-07-09): this is a design direction document, not the active execution ladder. The durable stream/direct materializer pieces described as target architecture have partly landed; use [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder) and [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) for current sequencing and evidence.
+
 Detailed execution plan:
 - [`docs/THROUGHPUT_SCALING_WORK_PLAN.md`](./THROUGHPUT_SCALING_WORK_PLAN.md)
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
@@ -18,6 +20,7 @@ Standing interpretation:
 - The next capacity gate is not whether the API can accept commands; it is whether accepted commands reach terminal state at `7500-10000 completed/sec` without unbounded backlog, unexplained gaps, or lossy overload behavior.
 - The write path is dominated by synchronous boundary capture, idempotency, runtime persistence, and event/table growth — target architecture, not only tuning.
 - The current Postgres `captured-ack` path remains a useful fallback and baseline, but it should not be treated as the final bot-arena throughput architecture.
+- D-041/D-043 moved the active venue-core path beyond generic stream workers: Kafka-compatible durable ingress, matching-engine direct consumption, durable venue event batches, and asynchronous compact Postgres materialization are now the measured path.
 
 ## Per-Instance Scaling Model
 

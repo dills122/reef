@@ -6,6 +6,8 @@ Define the execution plan for making Reef ready for bot-arena traffic, high-thro
 
 This plan supersedes the earlier `5k accepted rps` target for the active bot-arena scaling track. The current goal is completed lifecycle throughput: commands accepted by the runtime must be durably captured, processed to a terminal state, and accounted for without silent drops.
 
+Status note (2026-07-09): this document is a phased throughput reference, not the single active execution ladder. Current sequencing lives in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder). Older P0-P8 items below remain useful for why the path changed, but items marked shipped/superseded must not be reopened as "next" work unless a later decision or `WORK_PLAN.md` reactivates them.
+
 ## Non-Negotiable Goals
 
 1. No accepted command is silently lost.
@@ -75,10 +77,12 @@ Interpretation:
 - Reef is not blocked on the matching engine for this traffic shape.
 - The API can accept near the minimum target in narrow intake tests, but the full accepted-to-terminal lifecycle cannot yet drain at the required rate.
 - The Postgres `captured-ack` path remains valuable for local fallback and measurement, but more small command-log tuning is unlikely to reach the target alone.
-- The next major work should introduce stream-ack ingress, deterministic partition workers, canonical DB commit before stream ack, and projection isolation before relying on more workers or pods.
+- JetStream stream-ack ingress, deterministic partitioning, canonical commit before stream ack, and projection isolation have landed enough to become fallback/comparison evidence. D-041 moved the active venue-core hot path to Kafka-compatible durable ingress with matching-engine direct partition consumption and durable venue event batches.
 - Later July 2026 evidence moved the venue-core hot path toward direct matching-engine partition consumption and durable event-batch publication. Generic runtime workers and per-command unary engine calls remain transitional scaffolding.
 
 ## Work Plan
+
+The P0-P8 ladder below is historical phase structure. Use it for context and gap classification; use [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder) for execution order.
 
 ### P0: Accounting And Run Attribution
 
@@ -247,7 +251,9 @@ Exit criteria:
 
 The hot-book replacement slice is complete locally: `services/matching-engine/internal/book` owns ordered price levels, FIFO queues, and direct order-id unlinking, and the July 4 engine-only benchmarks show the book is no longer the active limiter.
 
-The next implementation slice should be:
+This slice has partly landed: profile validation, local materializer smoke, event-batch replay/checksum, direct-path crash gate, and the short DigitalOcean `10k` materializer gate now exist. Remaining active work is longer remote direct-materializer soak evidence, API/control-plane hardening, and lifecycle/scenario locks as ordered in `WORK_PLAN.md`.
+
+Historical implementation slice:
 
 1. Keep named stream profiles honest with profile validation before throughput runs, especially no-op publisher, bounded in-memory intake retention, direct-stream, Redpanda/Kafka-compatible, and materializer profiles.
 2. Add broader crash/restart integration coverage for API publish-before-marker enqueue, matching-engine direct consumption, worker repair, projector replay, and materializer offset commit.
