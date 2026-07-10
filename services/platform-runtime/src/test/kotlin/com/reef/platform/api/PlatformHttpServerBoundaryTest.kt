@@ -268,6 +268,33 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayUnknownBearerTokenReturnsCleanUnauthorizedWhenAdminAuthEnabled() {
+        val auth = testAdminAuth()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = InMemoryArenaBotRegistryStore()
+            )
+        )
+        try {
+            val response = get(
+                server.address.port,
+                "/admin/v1/arena/bots?botId=bot-1",
+                headers = mapOf("Authorization" to "Bearer static-fallback-token")
+            )
+
+            assertEquals(401, response.status)
+            assertContains(response.body, "unauthorized")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun adminGatewaySettlementFactsAliasAppendsFacts() {
         val auth = testAdminAuth()
         val serviceToken = auth.authService.issueServiceToken(

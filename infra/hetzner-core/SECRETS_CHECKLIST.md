@@ -138,6 +138,14 @@ and prints anything still requiring a human check. The helper derives
 explicitly, and can read `root_token` from `REEF_OPENBAO_INIT_JSON` when
 `BAO_TOKEN` is not set.
 
+The bot-submission workflow authenticates as service actor `bot-submission-ci`
+through `ARENA_ADMIN_API_TOKEN`. That actor must have `arena.admin` in runtime
+role bindings before registry diff and OpenBao provisioning can pass:
+
+```bash
+ADMIN_ACTOR_ID=bot-submission-ci make hetzner-core ARGS=admin-actor-role-grant
+```
+
 ## Current Gaps
 
 - R2 bucket creation and encrypted object upload have succeeded for
