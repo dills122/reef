@@ -254,6 +254,43 @@ control-plane domain changes, update the OpenTofu `api_domain`, Caddy
 `API_DOMAIN`, and the GitHub `ARENA_ADMIN_API_URL` secret together. Do not
 hardcode this host in scripts.
 
+### Admin UI auto-deploy
+
+`.github/workflows/admin-ui-deploy.yml` deploys only the static
+`apps/arena-admin` build to the backbone host. It runs on pushes to
+`master`/`main` that touch the admin app, the Hetzner deploy helper, or the
+workflow itself, and it can also be run manually with `workflow_dispatch`.
+
+The workflow calls the same operator command used locally:
+
+```bash
+bun scripts/deploy/hetzner-core.mjs arena-admin
+```
+
+That command builds the SvelteKit static app with an empty
+`PUBLIC_ARENA_API_BASE_URL` so browser requests stay same-origin behind Caddy,
+then rsyncs `apps/arena-admin/build/` to `/opt/reef/arena-admin/`. It does not
+restart `platform-runtime`, OpenBao, Postgres, or Caddy; API/runtime deploys
+remain manual until a separate promoted runtime deploy workflow exists.
+
+Required GitHub repository secrets:
+
+| Name | Purpose |
+| --- | --- |
+| `REEF_HETZNER_HOST` | Backbone server IPv4 or DNS name. |
+| `REEF_HETZNER_SSH_PRIVATE_KEY` | Private key for a deploy-capable SSH principal on the backbone host. Prefer a dedicated key scoped to the `ops` account. |
+| `REEF_HETZNER_SSH_KNOWN_HOSTS` | Pinned host key line(s), for example from `ssh-keyscan -H <host>` after verifying the fingerprint out of band. |
+
+Optional GitHub repository/environment variables:
+
+| Name | Default | Purpose |
+| --- | --- | --- |
+| `REEF_HETZNER_OPS_USER` | `ops` | SSH user for the deploy command. |
+| `REEF_HETZNER_DEPLOY_DIR` | `/opt/reef` | Host deploy directory. |
+
+Use the GitHub Actions `backbone-admin` environment for deployment protection
+rules if you want human approval before publishing admin UI changes.
+
 When public Caddy is enabled, only narrow bearer-token admin gateway routes are exposed:
 
 - `GET|POST /admin/v1/arena/bots`

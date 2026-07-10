@@ -145,6 +145,15 @@ function commandOrFallback(command, fallbackPath) {
   return command;
 }
 
+function runBun(args, options = {}) {
+  const fnm = captureOptional("fnm", ["--version"]);
+  if (fnm.status === 0) {
+    run("fnm", ["exec", "--using=22.22.1", "--", "bun", ...args], options);
+    return;
+  }
+  run("bun", args, options);
+}
+
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
@@ -288,8 +297,8 @@ function buildAndSyncArenaAdmin() {
   // Empty base URL bakes relative fetch paths (e.g. "/api/v1/...") into the
   // static build, matching the same-origin Caddy reverse-proxy setup — the
   // deployed site must not point back at localhost.
-  run("fnm", ["exec", "--using=22.22.1", "--", "bun", "install", "--frozen-lockfile"], { cwd: arenaAdminDir });
-  run("fnm", ["exec", "--using=22.22.1", "--", "bun", "run", "build"], {
+  runBun(["install", "--frozen-lockfile"], { cwd: arenaAdminDir });
+  runBun(["run", "build"], {
     cwd: arenaAdminDir,
     env: { ...process.env, PUBLIC_ARENA_API_BASE_URL: "" },
   });
