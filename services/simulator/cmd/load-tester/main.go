@@ -79,6 +79,7 @@ type Config struct {
 	UseApiV1            bool
 	LegacyInternalRoute bool
 	ClientIDPrefix      string
+	APIBearerToken      string `json:"-"`
 	CommandClockStart   string
 	CommandClockStep    time.Duration
 }
@@ -425,6 +426,7 @@ func parseConfig() (Config, error) {
 	flag.BoolVar(&cfg.UseApiV1, "use-api-v1", cfg.UseApiV1, "submit/modify/cancel via /api/v1 boundary routes")
 	flag.BoolVar(&cfg.LegacyInternalRoute, "legacy-internal-route", cfg.LegacyInternalRoute, "send internal marker header when use-api-v1=false")
 	flag.StringVar(&cfg.ClientIDPrefix, "client-id-prefix", cfg.ClientIDPrefix, "X-Client-Id prefix used for /api/v1 traffic")
+	flag.StringVar(&cfg.APIBearerToken, "api-bearer-token", cfg.APIBearerToken, "bearer token used for /api/v1 static-token auth")
 	flag.StringVar(&cfg.CommandClockStart, "command-clock-start", cfg.CommandClockStart, "optional RFC3339 start time for deterministic command occurredAt values")
 	flag.DurationVar(&cfg.CommandClockStep, "command-clock-step", cfg.CommandClockStep, "deterministic command clock step")
 	flag.Parse()
@@ -561,6 +563,7 @@ func defaultConfigFromEnv() Config {
 		UseApiV1:            envBool("REEF_USE_API_V1", true),
 		LegacyInternalRoute: envBool("REEF_LEGACY_INTERNAL_ROUTE", false),
 		ClientIDPrefix:      envOr("REEF_CLIENT_ID_PREFIX", "sim-client"),
+		APIBearerToken:      envOr("REEF_API_BEARER_TOKEN", ""),
 		CommandClockStart:   envOr("REEF_COMMAND_CLOCK_START", ""),
 		CommandClockStep:    envDuration("REEF_COMMAND_CLOCK_STEP", time.Second),
 	}
@@ -1663,11 +1666,15 @@ func commandHeaders(cfg Config, workerID int, commandID, traceID string) map[str
 		}
 		return nil
 	}
-	return map[string]string{
+	headers := map[string]string{
 		"X-Client-Id":      fmt.Sprintf("%s-%d", cfg.ClientIDPrefix, workerID),
 		"Idempotency-Key":  commandID,
 		"X-Correlation-Id": traceID,
 	}
+	if token := strings.TrimSpace(cfg.APIBearerToken); token != "" {
+		headers["Authorization"] = "Bearer " + token
+	}
+	return headers
 }
 
 func buildCommandPayload(cfg Config, sessionID, commandID, traceID, actorID, actorType, persona, strategyID string, reqID int64) map[string]string {

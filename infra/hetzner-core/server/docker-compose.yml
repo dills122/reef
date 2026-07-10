@@ -1,5 +1,18 @@
+x-service-hardening: &service-hardening
+  init: true
+  pids_limit: 512
+  security_opt:
+    - no-new-privileges:true
+
+x-app-hardening: &app-hardening
+  <<: *service-hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
 services:
   postgres:
+    <<: *service-hardening
     image: postgres:16-alpine
     restart: unless-stopped
     command:
@@ -30,10 +43,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    security_opt:
-      - no-new-privileges:true
 
   postgres-admin:
+    <<: *service-hardening
     image: postgres:16-alpine
     restart: unless-stopped
     env_file:
@@ -48,10 +60,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    security_opt:
-      - no-new-privileges:true
 
   postgres-analytics:
+    <<: *service-hardening
     image: postgres:16-alpine
     restart: unless-stopped
     env_file:
@@ -66,10 +77,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    security_opt:
-      - no-new-privileges:true
 
   openbao:
+    <<: *service-hardening
     image: openbao/openbao:2.5.5
     restart: unless-stopped
     command: server -config=/bao/config/openbao.hcl
@@ -85,10 +95,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    security_opt:
-      - no-new-privileges:true
 
   matching-engine:
+    <<: *app-hardening
     image: ${REEF_MATCHING_ENGINE_IMAGE:-dills122/reef-matching-engine:latest}
     restart: unless-stopped
     env_file:
@@ -97,10 +106,9 @@ services:
       - "8081"
     networks:
       - internal
-    security_opt:
-      - no-new-privileges:true
 
   platform-runtime:
+    <<: *app-hardening
     image: ${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}
     restart: unless-stopped
     env_file:
@@ -120,10 +128,9 @@ services:
         condition: service_started
       matching-engine:
         condition: service_started
-    security_opt:
-      - no-new-privileges:true
 
   caddy:
+    <<: *app-hardening
     image: caddy:2-alpine
     profiles:
       - public
@@ -144,10 +151,9 @@ services:
       - internal
     depends_on:
       - platform-runtime
-    security_opt:
-      - no-new-privileges:true
 
   simulator:
+    <<: *app-hardening
     image: ${REEF_SIMULATOR_IMAGE:-dills122/reef-simulator:latest}
     profiles:
       - manual
@@ -162,8 +168,6 @@ services:
         condition: service_started
       platform-runtime:
         condition: service_started
-    security_opt:
-      - no-new-privileges:true
 
 networks:
   internal:

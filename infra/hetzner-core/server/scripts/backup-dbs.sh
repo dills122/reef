@@ -9,6 +9,11 @@ source "$BASE/secrets/db.env"
 # shellcheck disable=SC1091
 source "$BASE/secrets/backup.env"
 
+if [[ -z "${AGE_RECIPIENT:-}" ]]; then
+  echo "AGE_RECIPIENT must be set in $BASE/secrets/backup.env" >&2
+  exit 1
+fi
+
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 WORKDIR="$BASE/backups/$TS"
 ARCHIVE="$BASE/backups/reef-db-$TS.tar"
@@ -53,22 +58,26 @@ tar -C "$WORKDIR" -cf "$ARCHIVE" .
 echo "Encrypting..."
 age -r "$AGE_RECIPIENT" -o "$ENCRYPTED" "$ARCHIVE"
 
-echo "Uploading to R2..."
-if command -v aws >/dev/null 2>&1; then
-  AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-  AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-  AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}" \
-  aws --endpoint-url "$R2_ENDPOINT" \
-    s3 cp "$ENCRYPTED" "s3://$R2_BUCKET/db/reef-db-$TS.tar.age"
+if [[ -n "${R2_ENDPOINT:-}" && -n "${R2_BUCKET:-}" && -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+  echo "Uploading to R2..."
+  if command -v aws >/dev/null 2>&1; then
+    AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+    AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+    AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}" \
+    aws --endpoint-url "$R2_ENDPOINT" \
+      s3 cp "$ENCRYPTED" "s3://$R2_BUCKET/db/reef-db-$TS.tar.age"
+  else
+    docker run --rm \
+      -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+      -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+      -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}" \
+      -v "$BASE/backups:/backups:ro" \
+      amazon/aws-cli:2 \
+      --endpoint-url "$R2_ENDPOINT" \
+      s3 cp "/backups/$(basename "$ENCRYPTED")" "s3://$R2_BUCKET/db/reef-db-$TS.tar.age"
+  fi
 else
-  docker run --rm \
-    -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-    -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-    -e AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-auto}" \
-    -v "$BASE/backups:/backups:ro" \
-    amazon/aws-cli:2 \
-    --endpoint-url "$R2_ENDPOINT" \
-    s3 cp "/backups/$(basename "$ENCRYPTED")" "s3://$R2_BUCKET/db/reef-db-$TS.tar.age"
+  echo "R2_ENDPOINT/R2_BUCKET/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY not fully set; keeping encrypted local backup only"
 fi
 
 # Keep local encrypted copies for 14 days.

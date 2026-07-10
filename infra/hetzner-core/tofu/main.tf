@@ -88,6 +88,7 @@ resource "hcloud_server" "core" {
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     ops_user       = var.ops_user
     ssh_public_key = local.ssh_public_key
+    admin_cidrs    = var.admin_cidrs
   })
 
   lifecycle {

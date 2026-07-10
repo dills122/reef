@@ -128,11 +128,11 @@ For local development only, `make backbone-local-up-infra` and
 one-shot local root token and unseal key are saved to ignored files under
 `infra/hetzner-core/server/secrets/`, then the normal Reef OpenBao bootstrap
 runs to configure the `secret/` KV v2 mount, runtime AppRole policies, and
-GitHub Actions JWT provisioning policy. It also enables API-managed file audit
-logging when the OpenBao image supports it; OpenBao 2.5 requires declarative
-audit devices and the local helper reports that as a non-fatal skip. Run
-`make backbone-local-init-openbao` directly if the Bao container was started
-separately or restarted sealed.
+GitHub Actions JWT provisioning policy. OpenBao 2.5 audit logging is configured
+declaratively in `server/openbao/config/openbao.hcl`; the bootstrap script keeps
+the older API-managed audit attempt as a compatibility fallback and reports the
+expected 2.5 skip as non-fatal. Run `make backbone-local-init-openbao` directly
+if the Bao container was started separately or restarted sealed.
 
 Hosted OpenBao must still use the manual threshold init flow below. Do not use
 the local single-key init script for hosted deployments.
@@ -228,15 +228,44 @@ BAO_TOKEN="..." /opt/reef/scripts/print-openbao-approle.sh reef-platform-runtime
 
 Append the printed `BAO_ROLE_ID` and `BAO_SECRET_ID` to
 `/opt/reef/secrets/platform-runtime.env`, then restart the platform runtime.
-Generate simulator AppRole credentials only when needed:
+Future deploys preserve existing platform-runtime and simulator AppRole env
+entries when regenerating local service secret files. Generate simulator
+AppRole credentials only when needed:
 
 ```bash
 BAO_TOKEN="..." /opt/reef/scripts/print-openbao-approle.sh reef-simulator
 ```
 
+### OpenBao Unseal After Restart
+
+Hosted OpenBao uses Shamir unseal keys. After a host reboot, Docker restart, or
+OpenBao container recreation, check seal state:
+
+```bash
+ssh "ops@$IP"
+cd /opt/reef
+curl -fsS http://127.0.0.1:8200/v1/sys/seal-status | jq '{initialized,sealed}'
+```
+
+If `sealed` is `true`, retrieve any three unseal keys from the offline vault and
+run:
+
+```bash
+docker compose exec openbao bao operator unseal
+docker compose exec openbao bao operator unseal
+docker compose exec openbao bao operator unseal
+curl -fsS http://127.0.0.1:8200/v1/sys/seal-status | jq '{initialized,sealed}'
+```
+
+Do not keep root tokens or unseal keys on the host. Use the root/admin token
+only for deliberate OpenBao administration, then return it to the offline vault.
+
 ## Backup
 
-Create `/opt/reef/secrets/backup.env` on the server:
+Create `/opt/reef/secrets/backup.env` on the server. `AGE_RECIPIENT` is
+required. R2 settings are optional but strongly recommended for off-host
+scheduled backups; when they are omitted, the script still writes an encrypted
+archive under `/opt/reef/backups`.
 
 ```bash
 R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
@@ -278,6 +307,11 @@ network:
 ```bash
 RATE=10000 DURATION=3m WORKERS=384 make hetzner-core ARGS=soak
 ```
+
+The hosted runtime uses `EXTERNAL_API_AUTH_MODE=static-token`. The secret
+generator creates a simulator bearer token, maps `sim-client-*` entries into
+`EXTERNAL_API_TOKENS`, and writes the matching `REEF_API_BEARER_TOKEN` into
+`secrets/simulator.env`; do not replace those with hardcoded values.
 
 For stream-ack submit-spread probes, target the stream-ack API container and
 generate the same 64-instrument submit-only session shape used locally:

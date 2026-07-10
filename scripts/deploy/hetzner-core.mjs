@@ -87,7 +87,7 @@ const target = `${opsUser}@${host}`;
 const remoteCompose = `cd ${deployDir} && docker compose`;
 
 function syncServerBundle() {
-  run("rsync", ["-av", "--exclude", "secrets/", `${serverDir}/`, `${target}:${deployDir}/`]);
+  run("rsync", ["-av", "--exclude", "secrets/", "--exclude", "openbao/logs/", `${serverDir}/`, `${target}:${deployDir}/`]);
 }
 
 function syncMigrations() {

@@ -48,15 +48,16 @@ func TestDoPOSTReturnsErrorOnUnreachableServer(t *testing.T) {
 }
 
 func TestSubmitCommandUsesHTTPTransport(t *testing.T) {
-	var gotPath string
+	var gotPath, gotAuthorization string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
+		gotAuthorization = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"accepted":true}`))
 	}))
 	defer server.Close()
 
-	cfg := Config{BaseURL: server.URL, Transport: transportHTTP, UseApiV1: true, ClientIDPrefix: "bot"}
+	cfg := Config{BaseURL: server.URL, Transport: transportHTTP, UseApiV1: true, ClientIDPrefix: "bot", APIBearerToken: "token-1"}
 	client := &http.Client{Timeout: 2 * time.Second}
 
 	status, body, err := submitCommand(client, nil, cfg, 0, "cmd-1", "trace-1", map[string]string{"orderId": "ord-1"}, ActionSubmit)
@@ -68,6 +69,9 @@ func TestSubmitCommandUsesHTTPTransport(t *testing.T) {
 	}
 	if gotPath != "/api/v1/orders/submit" {
 		t.Errorf("path = %s, want /api/v1/orders/submit", gotPath)
+	}
+	if gotAuthorization != "Bearer token-1" {
+		t.Errorf("Authorization = %s, want Bearer token-1", gotAuthorization)
 	}
 	if len(body) == 0 {
 		t.Error("expected non-empty response body")
