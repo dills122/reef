@@ -184,6 +184,18 @@ If a public API is intentionally needed later, set `enable_public_web = true`,
 set `api_domain`, open the matching host UFW ports, and run Compose with the
 `public` profile so Caddy starts.
 
+Current development domain target:
+
+```text
+api_domain = "reef-arena-admin.shrimpworks.dev"
+ARENA_ADMIN_API_URL=https://reef-arena-admin.shrimpworks.dev
+```
+
+Treat `shrimpworks.dev` as a configurable development zone. If the public
+control-plane domain changes, update Cloudflare DNS, `api_domain`/Caddy
+`API_DOMAIN`, and the GitHub `ARENA_ADMIN_API_URL` secret together. Do not
+hardcode this host in scripts.
+
 When public Caddy is enabled, only narrow bearer-token admin gateway routes are exposed:
 
 - `GET|POST /admin/v1/arena/bots`
