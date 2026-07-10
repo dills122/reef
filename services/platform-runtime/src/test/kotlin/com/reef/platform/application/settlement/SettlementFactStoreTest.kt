@@ -497,6 +497,9 @@ class SettlementFactStoreTest {
 
         assertEquals("settlement.resource_positions", names.resourcePositions)
         assertEquals("settlement.obligations", names.obligations)
+        assertEquals("settlement.allocations", names.allocations)
+        assertEquals("settlement.confirmations", names.confirmations)
+        assertEquals("settlement.affirmations", names.affirmations)
         assertEquals("settlement.instructions", names.instructions)
         assertEquals("settlement.attempts", names.attempts)
         assertEquals("settlement.leg_outcomes", names.legOutcomes)
@@ -615,6 +618,15 @@ private fun SettlementFactBundle.withProfile(profileId: String, policyVersion: I
         obligations = obligations.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
+        allocations = allocations.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        confirmations = confirmations.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
+        affirmations = affirmations.map {
+            it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
+        },
         instructions = instructions.map {
             it.copy(postTradeProfileId = profileId, postTradePolicyVersion = policyVersion)
         },
@@ -646,6 +658,9 @@ private fun SettlementFactBundle.profileIds(): Set<String> {
     return (
         resourcePositions.map { it.postTradeProfileId } +
             obligations.map { it.postTradeProfileId } +
+            allocations.map { it.postTradeProfileId } +
+            confirmations.map { it.postTradeProfileId } +
+            affirmations.map { it.postTradeProfileId } +
             instructions.map { it.postTradeProfileId } +
             attempts.map { it.postTradeProfileId } +
             legOutcomes.map { it.postTradeProfileId } +
@@ -661,6 +676,9 @@ private fun SettlementFactBundle.policyVersions(): Set<Int> {
     return (
         resourcePositions.map { it.postTradePolicyVersion } +
             obligations.map { it.postTradePolicyVersion } +
+            allocations.map { it.postTradePolicyVersion } +
+            confirmations.map { it.postTradePolicyVersion } +
+            affirmations.map { it.postTradePolicyVersion } +
             instructions.map { it.postTradePolicyVersion } +
             attempts.map { it.postTradePolicyVersion } +
             legOutcomes.map { it.postTradePolicyVersion } +

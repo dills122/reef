@@ -218,6 +218,17 @@ tokens must stay offline, not on the server and not in git.
 The backbone is private by default. Caddy is enabled only with the `public`
 profile and should expose only explicit routes.
 
+Current development host:
+
+```text
+reef-arena-admin.shrimpworks.dev
+```
+
+This host is configuration, not an architectural dependency. `shrimpworks.dev`
+is the current Cloudflare-managed development zone; a later domain move should
+change DNS, Caddy `API_DOMAIN`, and the GitHub `ARENA_ADMIN_API_URL` secret
+together without script changes.
+
 Current Caddy route intent:
 
 ```text

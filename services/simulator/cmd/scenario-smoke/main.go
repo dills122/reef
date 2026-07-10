@@ -170,11 +170,17 @@ type ownExecutionBody struct {
 }
 
 type settlementFactsReport struct {
-	ScenarioRunID string                 `json:"scenarioRunId"`
-	Obligations   []settlementObligation `json:"obligations"`
-	Breaks        []settlementBreak      `json:"breaks"`
-	Repairs       []settlementRepair     `json:"repairs"`
-	Resolutions   []settlementResolution `json:"resolutions"`
+	ScenarioRunID string                   `json:"scenarioRunId"`
+	Obligations   []settlementObligation   `json:"obligations"`
+	Allocations   []settlementAllocation   `json:"allocations"`
+	Confirmations []settlementConfirmation `json:"confirmations"`
+	Affirmations  []settlementAffirmation  `json:"affirmations"`
+	Instructions  []settlementInstruction  `json:"instructions"`
+	Attempts      []settlementAttempt      `json:"attempts"`
+	Settlements   []settlementSettled      `json:"settlements"`
+	Breaks        []settlementBreak        `json:"breaks"`
+	Repairs       []settlementRepair       `json:"repairs"`
+	Resolutions   []settlementResolution   `json:"resolutions"`
 }
 
 type settlementObligation struct {
@@ -184,6 +190,71 @@ type settlementObligation struct {
 	CausationID            string `json:"causationId"`
 	TradeID                string `json:"tradeId"`
 	State                  string `json:"state"`
+}
+
+type settlementAllocation struct {
+	SettlementAllocationID string `json:"settlementAllocationId"`
+	SettlementObligationID string `json:"settlementObligationId"`
+	ScenarioRunID          string `json:"scenarioRunId"`
+	CorrelationID          string `json:"correlationId"`
+	CausationID            string `json:"causationId"`
+	TradeID                string `json:"tradeId"`
+	BuyOrderID             string `json:"buyOrderId"`
+	SellOrderID            string `json:"sellOrderId"`
+	State                  string `json:"state"`
+}
+
+type settlementConfirmation struct {
+	SettlementConfirmationID string `json:"settlementConfirmationId"`
+	SettlementAllocationID   string `json:"settlementAllocationId"`
+	SettlementObligationID   string `json:"settlementObligationId"`
+	ScenarioRunID            string `json:"scenarioRunId"`
+	CorrelationID            string `json:"correlationId"`
+	CausationID              string `json:"causationId"`
+	TradeID                  string `json:"tradeId"`
+	State                    string `json:"state"`
+}
+
+type settlementAffirmation struct {
+	SettlementAffirmationID  string `json:"settlementAffirmationId"`
+	SettlementConfirmationID string `json:"settlementConfirmationId"`
+	SettlementAllocationID   string `json:"settlementAllocationId"`
+	SettlementObligationID   string `json:"settlementObligationId"`
+	ScenarioRunID            string `json:"scenarioRunId"`
+	CorrelationID            string `json:"correlationId"`
+	CausationID              string `json:"causationId"`
+	TradeID                  string `json:"tradeId"`
+	State                    string `json:"state"`
+}
+
+type settlementInstruction struct {
+	SettlementInstructionID string `json:"settlementInstructionId"`
+	SettlementObligationID  string `json:"settlementObligationId"`
+	ScenarioRunID           string `json:"scenarioRunId"`
+	CorrelationID           string `json:"correlationId"`
+	CausationID             string `json:"causationId"`
+	State                   string `json:"state"`
+}
+
+type settlementAttempt struct {
+	SettlementAttemptID     string `json:"settlementAttemptId"`
+	SettlementObligationID  string `json:"settlementObligationId"`
+	SettlementInstructionID string `json:"settlementInstructionId"`
+	ScenarioRunID           string `json:"scenarioRunId"`
+	CorrelationID           string `json:"correlationId"`
+	CausationID             string `json:"causationId"`
+	State                   string `json:"state"`
+}
+
+type settlementSettled struct {
+	SettlementID            string `json:"settlementId"`
+	SettlementObligationID  string `json:"settlementObligationId"`
+	SettlementInstructionID string `json:"settlementInstructionId"`
+	SettlementAttemptID     string `json:"settlementAttemptId"`
+	ScenarioRunID           string `json:"scenarioRunId"`
+	CorrelationID           string `json:"correlationId"`
+	CausationID             string `json:"causationId"`
+	SettlementState         string `json:"settlementState"`
 }
 
 type settlementBreak struct {
@@ -648,15 +719,29 @@ func attachSettlementFactAPIAssertions(cfg config, client *http.Client, report *
 }
 
 func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, proofSource string) {
-	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
-	assertCount(report, "p2-one-cash-leg-break", "settlement_fact_count", len(facts.Breaks), 1, proofSource)
-	assertCount(report, "p2-one-manual-repair", "settlement_fact_count", len(facts.Repairs), 1, proofSource)
-	assertCount(report, "p2-one-settlement-resolution", "settlement_fact_count", len(facts.Resolutions), 1, proofSource)
 	if facts.ScenarioRunID == report.ScenarioRunID {
 		passAssertion(report, "p2-settlement-scenario-run", report.ScenarioRunID, facts.ScenarioRunID, proofSource)
 	} else {
 		failAssertion(report, "p2-settlement-scenario-run", "settlement_fact_scope", report.ScenarioRunID, facts.ScenarioRunID, proofSource)
 	}
+	if hasPostTradeSettlementChainFacts(facts) {
+		assertPostTradeSettlementChain(report, facts, proofSource)
+		if settlementFactsHaveCausation(facts) {
+			passAssertion(report, "p2-settlement-causation-fields", "scenarioRunId/correlationId/causationId on every fact", "all facts carry causation fields", proofSource)
+		} else {
+			failAssertion(report, "p2-settlement-causation-fields", "settlement_fact_causation", "scenarioRunId/correlationId/causationId on every fact", "missing causation field", proofSource)
+		}
+		if settlementFactsScopedToScenarioRun(facts, report.ScenarioRunID) {
+			passAssertion(report, "p2-settlement-scope-consistent", report.ScenarioRunID, "all facts match scenarioRunId", proofSource)
+		} else {
+			failAssertion(report, "p2-settlement-scope-consistent", "settlement_fact_scope", report.ScenarioRunID, settlementScenarioRunIDs(facts), proofSource)
+		}
+		return
+	}
+	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
+	assertCount(report, "p2-one-cash-leg-break", "settlement_fact_count", len(facts.Breaks), 1, proofSource)
+	assertCount(report, "p2-one-manual-repair", "settlement_fact_count", len(facts.Repairs), 1, proofSource)
+	assertCount(report, "p2-one-settlement-resolution", "settlement_fact_count", len(facts.Resolutions), 1, proofSource)
 	if len(facts.Obligations) == 1 && strings.TrimSpace(facts.Obligations[0].TradeID) != "" {
 		passAssertion(report, "p2-obligation-references-trade", "non-empty tradeId", facts.Obligations[0].TradeID, proofSource)
 	} else {
@@ -711,6 +796,30 @@ func assertP2SettlementFacts(report *smokeReport, facts settlementFactsReport, p
 		passAssertion(report, "p2-settlement-scope-consistent", report.ScenarioRunID, "all facts match scenarioRunId", proofSource)
 	} else {
 		failAssertion(report, "p2-settlement-scope-consistent", "settlement_fact_scope", report.ScenarioRunID, settlementScenarioRunIDs(facts), proofSource)
+	}
+}
+
+func hasPostTradeSettlementChainFacts(facts settlementFactsReport) bool {
+	return len(facts.Allocations) > 0 || len(facts.Confirmations) > 0 || len(facts.Affirmations) > 0 || len(facts.Settlements) > 0
+}
+
+func assertPostTradeSettlementChain(report *smokeReport, facts settlementFactsReport, proofSource string) {
+	assertCount(report, "p2-one-settlement-obligation", "settlement_fact_count", len(facts.Obligations), 1, proofSource)
+	assertCount(report, "p2-one-allocation-proposed", "settlement_fact_count", len(facts.Allocations), 1, proofSource)
+	assertCount(report, "p2-one-confirmation-generated", "settlement_fact_count", len(facts.Confirmations), 1, proofSource)
+	assertCount(report, "p2-one-affirmation-accepted", "settlement_fact_count", len(facts.Affirmations), 1, proofSource)
+	assertCount(report, "p2-one-settlement-instruction", "settlement_fact_count", len(facts.Instructions), 1, proofSource)
+	assertCount(report, "p2-one-settlement-attempt", "settlement_fact_count", len(facts.Attempts), 1, proofSource)
+	assertCount(report, "p2-one-settled-finality", "settlement_fact_count", len(facts.Settlements), 1, proofSource)
+	if len(facts.Obligations) == 1 && strings.TrimSpace(facts.Obligations[0].TradeID) != "" {
+		passAssertion(report, "p2-obligation-references-trade", "non-empty tradeId", facts.Obligations[0].TradeID, proofSource)
+	} else {
+		failAssertion(report, "p2-obligation-references-trade", "settlement_fact_causation", "one obligation with tradeId", obligationTradeIDs(facts.Obligations), proofSource)
+	}
+	if postTradeSettlementChainLinked(facts) {
+		passAssertion(report, "p2-post-trade-chain-linked", "trade -> obligation -> allocation -> confirmation -> affirmation -> settlement", "all fact references linked", proofSource)
+	} else {
+		failAssertion(report, "p2-post-trade-chain-linked", "settlement_fact_causation", "trade -> obligation -> allocation -> confirmation -> affirmation -> settlement", postTradeSettlementChainObserved(facts), proofSource)
 	}
 }
 
@@ -777,9 +886,137 @@ func p2SettlementChainObserved(facts settlementFactsReport) string {
 	)
 }
 
+func postTradeSettlementChainLinked(facts settlementFactsReport) bool {
+	if len(facts.Obligations) != 1 || len(facts.Allocations) != 1 || len(facts.Confirmations) != 1 ||
+		len(facts.Affirmations) != 1 || len(facts.Instructions) != 1 || len(facts.Attempts) != 1 ||
+		len(facts.Settlements) != 1 {
+		return false
+	}
+	obligation := facts.Obligations[0]
+	allocation := facts.Allocations[0]
+	confirmation := facts.Confirmations[0]
+	affirmation := facts.Affirmations[0]
+	instruction := facts.Instructions[0]
+	attempt := facts.Attempts[0]
+	settlement := facts.Settlements[0]
+	return obligation.SettlementObligationID != "" &&
+		obligation.TradeID != "" &&
+		allocation.SettlementAllocationID != "" &&
+		confirmation.SettlementConfirmationID != "" &&
+		affirmation.SettlementAffirmationID != "" &&
+		instruction.SettlementInstructionID != "" &&
+		attempt.SettlementAttemptID != "" &&
+		settlement.SettlementID != "" &&
+		allocation.SettlementObligationID == obligation.SettlementObligationID &&
+		allocation.TradeID == obligation.TradeID &&
+		allocation.CausationID == obligation.SettlementObligationID &&
+		allocation.BuyOrderID != "" &&
+		allocation.SellOrderID != "" &&
+		confirmation.SettlementAllocationID == allocation.SettlementAllocationID &&
+		confirmation.SettlementObligationID == obligation.SettlementObligationID &&
+		confirmation.TradeID == obligation.TradeID &&
+		confirmation.CausationID == allocation.SettlementAllocationID &&
+		affirmation.SettlementConfirmationID == confirmation.SettlementConfirmationID &&
+		affirmation.SettlementAllocationID == allocation.SettlementAllocationID &&
+		affirmation.SettlementObligationID == obligation.SettlementObligationID &&
+		affirmation.TradeID == obligation.TradeID &&
+		affirmation.CausationID == confirmation.SettlementConfirmationID &&
+		instruction.SettlementObligationID == obligation.SettlementObligationID &&
+		instruction.CausationID == affirmation.SettlementAffirmationID &&
+		attempt.SettlementObligationID == obligation.SettlementObligationID &&
+		attempt.SettlementInstructionID == instruction.SettlementInstructionID &&
+		attempt.CausationID == instruction.SettlementInstructionID &&
+		settlement.SettlementObligationID == obligation.SettlementObligationID &&
+		settlement.SettlementInstructionID == instruction.SettlementInstructionID &&
+		settlement.SettlementAttemptID == attempt.SettlementAttemptID &&
+		settlement.CausationID == attempt.SettlementAttemptID &&
+		settlement.SettlementState == "SETTLED"
+}
+
+func postTradeSettlementChainObserved(facts settlementFactsReport) string {
+	if len(facts.Obligations) != 1 || len(facts.Allocations) != 1 || len(facts.Confirmations) != 1 ||
+		len(facts.Affirmations) != 1 || len(facts.Instructions) != 1 || len(facts.Attempts) != 1 ||
+		len(facts.Settlements) != 1 {
+		return fmt.Sprintf(
+			"counts obligations=%d allocations=%d confirmations=%d affirmations=%d instructions=%d attempts=%d settlements=%d",
+			len(facts.Obligations),
+			len(facts.Allocations),
+			len(facts.Confirmations),
+			len(facts.Affirmations),
+			len(facts.Instructions),
+			len(facts.Attempts),
+			len(facts.Settlements),
+		)
+	}
+	obligation := facts.Obligations[0]
+	allocation := facts.Allocations[0]
+	confirmation := facts.Confirmations[0]
+	affirmation := facts.Affirmations[0]
+	instruction := facts.Instructions[0]
+	attempt := facts.Attempts[0]
+	settlement := facts.Settlements[0]
+	return fmt.Sprintf(
+		"obligation(id=%s,trade=%s) allocation(id=%s,obligation=%s,trade=%s,cause=%s,buyOrder=%s,sellOrder=%s) confirmation(id=%s,allocation=%s,cause=%s) affirmation(id=%s,confirmation=%s,cause=%s) instruction(id=%s,obligation=%s,cause=%s) attempt(id=%s,instruction=%s,cause=%s) settlement(id=%s,attempt=%s,cause=%s,state=%s)",
+		obligation.SettlementObligationID,
+		obligation.TradeID,
+		allocation.SettlementAllocationID,
+		allocation.SettlementObligationID,
+		allocation.TradeID,
+		allocation.CausationID,
+		allocation.BuyOrderID,
+		allocation.SellOrderID,
+		confirmation.SettlementConfirmationID,
+		confirmation.SettlementAllocationID,
+		confirmation.CausationID,
+		affirmation.SettlementAffirmationID,
+		affirmation.SettlementConfirmationID,
+		affirmation.CausationID,
+		instruction.SettlementInstructionID,
+		instruction.SettlementObligationID,
+		instruction.CausationID,
+		attempt.SettlementAttemptID,
+		attempt.SettlementInstructionID,
+		attempt.CausationID,
+		settlement.SettlementID,
+		settlement.SettlementAttemptID,
+		settlement.CausationID,
+		settlement.SettlementState,
+	)
+}
+
 func settlementFactsHaveCausation(facts settlementFactsReport) bool {
 	for _, obligation := range facts.Obligations {
 		if !hasCausationFields(obligation.ScenarioRunID, obligation.CorrelationID, obligation.CausationID) {
+			return false
+		}
+	}
+	for _, allocation := range facts.Allocations {
+		if !hasCausationFields(allocation.ScenarioRunID, allocation.CorrelationID, allocation.CausationID) {
+			return false
+		}
+	}
+	for _, confirmation := range facts.Confirmations {
+		if !hasCausationFields(confirmation.ScenarioRunID, confirmation.CorrelationID, confirmation.CausationID) {
+			return false
+		}
+	}
+	for _, affirmation := range facts.Affirmations {
+		if !hasCausationFields(affirmation.ScenarioRunID, affirmation.CorrelationID, affirmation.CausationID) {
+			return false
+		}
+	}
+	for _, instruction := range facts.Instructions {
+		if !hasCausationFields(instruction.ScenarioRunID, instruction.CorrelationID, instruction.CausationID) {
+			return false
+		}
+	}
+	for _, attempt := range facts.Attempts {
+		if !hasCausationFields(attempt.ScenarioRunID, attempt.CorrelationID, attempt.CausationID) {
+			return false
+		}
+	}
+	for _, settlement := range facts.Settlements {
+		if !hasCausationFields(settlement.ScenarioRunID, settlement.CorrelationID, settlement.CausationID) {
 			return false
 		}
 	}
@@ -816,6 +1053,36 @@ func settlementFactsScopedToScenarioRun(facts settlementFactsReport, expectedSce
 			return false
 		}
 	}
+	for _, allocation := range facts.Allocations {
+		if allocation.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, confirmation := range facts.Confirmations {
+		if confirmation.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, affirmation := range facts.Affirmations {
+		if affirmation.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, instruction := range facts.Instructions {
+		if instruction.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, attempt := range facts.Attempts {
+		if attempt.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
+	for _, settlement := range facts.Settlements {
+		if settlement.ScenarioRunID != expectedScenarioRunID {
+			return false
+		}
+	}
 	for _, breakFact := range facts.Breaks {
 		if breakFact.ScenarioRunID != expectedScenarioRunID {
 			return false
@@ -838,6 +1105,24 @@ func settlementScenarioRunIDs(facts settlementFactsReport) string {
 	values := []string{"bundle:" + facts.ScenarioRunID}
 	for _, obligation := range facts.Obligations {
 		values = append(values, "obligation:"+obligation.ScenarioRunID)
+	}
+	for _, allocation := range facts.Allocations {
+		values = append(values, "allocation:"+allocation.ScenarioRunID)
+	}
+	for _, confirmation := range facts.Confirmations {
+		values = append(values, "confirmation:"+confirmation.ScenarioRunID)
+	}
+	for _, affirmation := range facts.Affirmations {
+		values = append(values, "affirmation:"+affirmation.ScenarioRunID)
+	}
+	for _, instruction := range facts.Instructions {
+		values = append(values, "instruction:"+instruction.ScenarioRunID)
+	}
+	for _, attempt := range facts.Attempts {
+		values = append(values, "attempt:"+attempt.ScenarioRunID)
+	}
+	for _, settlement := range facts.Settlements {
+		values = append(values, "settlement:"+settlement.ScenarioRunID)
 	}
 	for _, breakFact := range facts.Breaks {
 		values = append(values, "break:"+breakFact.ScenarioRunID)

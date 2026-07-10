@@ -258,6 +258,33 @@ ANALYTICS_EXPORT_API_TOKEN
 ADMIN_API_TOKEN
 ```
 
+Bot-submission CI uses the scoped `ci` token path:
+
+```text
+ARENA_ADMIN_API_URL
+ARENA_ADMIN_API_TOKEN
+BOT_SUBMISSION_OPENBAO_MODE=real
+ACTIONS_ID_TOKEN_REQUEST_URL
+ACTIONS_ID_TOKEN_REQUEST_TOKEN
+```
+
+Current hosted value:
+
+```text
+ARENA_ADMIN_API_URL=https://reef-arena-admin.shrimpworks.dev
+```
+
+Keep this as configuration only. `shrimpworks.dev` is the current Cloudflare
+zone for development projects, not a permanent product domain; moving to a new
+domain should require changing Cloudflare DNS, backbone Caddy `API_DOMAIN`, and
+the GitHub `ARENA_ADMIN_API_URL` secret, not changing code.
+
+`ACTIONS_ID_TOKEN_REQUEST_URL` and `ACTIONS_ID_TOKEN_REQUEST_TOKEN` are supplied
+by GitHub Actions when the workflow grants `id-token: write`. Local developer
+checks should leave `BOT_SUBMISSION_OPENBAO_MODE` unset or set it to `dry-run`;
+real local calls must explicitly set `BOT_SUBMISSION_OPENBAO_MODE=real` and may
+provide `GITHUB_OIDC_TOKEN` when not running inside GitHub Actions.
+
 When the Admin DB auth layer is configured, authenticated session and service
 tokens bind the internal admin actor id from the trusted token record instead of
 from caller-controlled headers. The static fallback preserves the older header
@@ -462,7 +489,10 @@ and relevant object ids. Audit records must not contain secret values.
 - Add Admin API authorization middleware that binds actor identity from the
   authenticated principal, not caller-controlled headers.
 - Move CI-to-Admin API auth from scoped bearer token to GitHub Actions OIDC.
-- Add pre-merge OpenBao-slice verification check.
+- ~~Add pre-merge OpenBao-slice verification check.~~ Done:
+  `scripts/dev/bot-submission-provision-openbao.mjs` calls
+  `/admin/v1/arena/bots/openbao-provision` in real CI mode and keeps explicit
+  dry-run mode for local workflow checks.
 - Add participant config editor backed by Admin API and OpenBao.
 - Define public bot submission contract after the current bot testing bugs are
   worked out.
