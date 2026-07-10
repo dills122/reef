@@ -17,6 +17,7 @@ import com.reef.platform.application.admin.ArenaRunStatusCommand
 import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
 import com.reef.platform.application.admin.PostgresAdminAuthStore
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
+import com.reef.platform.application.analytics.BotRunPerformanceSummaryRecord
 import com.reef.platform.application.analytics.InMemorySimulationRunExportStore
 import com.reef.platform.application.analytics.PostgresAnalyticsSqlNames
 import com.reef.platform.application.analytics.PostgresSimulationRunExportStore
@@ -180,6 +181,11 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     }
     "/admin/v1/analytics/run-exports" -> AdminGatewayRoute(
         "/internal/admin/analytics/run-exports",
+        "analytics",
+        setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/analytics/run-bot-summaries" -> AdminGatewayRoute(
+        "/internal/admin/analytics/run-bot-summaries",
         "analytics",
         setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
     )
@@ -492,6 +498,7 @@ class PlatformHttpServer(
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
             analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
             recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
+            analyticsRunBotSummariesJson = { query -> analyticsRunBotSummariesResponse(query) },
             appendSettlementFactsJson = { body -> appendSettlementFactsResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
@@ -642,6 +649,7 @@ class PlatformHttpServer(
             "/admin/v1/arena/run-enforcement-events",
             "/admin/v1/arena/leaderboard",
             "/admin/v1/analytics/run-exports",
+            "/admin/v1/analytics/run-bot-summaries",
             "/admin/v1/risk/account-controls",
             "/admin/v1/risk/circuit-breakers",
             "/admin/v1/risk/price-collars",
@@ -3835,6 +3843,7 @@ class PlatformHttpServer(
         val json = JsonCodec.parseObjectOrEmpty(body)
         val counts = json.obj("counts")
         val latency = json.obj("latencyMs")
+        val summaryJson = analyticsExportSummaryJson(json)
         return try {
             val record = service.ingest(
                 SimulationRunExportCommand(
@@ -3858,7 +3867,7 @@ class PlatformHttpServer(
                     p95LatencyMs = doubleValue(json, latency, "p95LatencyMs", "p95"),
                     p99LatencyMs = doubleValue(json, latency, "p99LatencyMs", "p99"),
                     artifactManifestJson = normalizedRawJson(json.raw("artifactManifest").ifBlank { json.raw("artifacts") }, "[]"),
-                    summaryJson = normalizedRawJson(json.raw("summary"), "{}")
+                    summaryJson = summaryJson
                 )
             )
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "export" to analyticsRunExportJson(record)))
@@ -3867,6 +3876,20 @@ class PlatformHttpServer(
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "analytics run export ingestion failed")))
         }
+    }
+
+    private fun analyticsExportSummaryJson(json: JsonDocument): String {
+        val explicitSummary = json.raw("summary")
+        if (explicitSummary.isNotBlank()) return normalizedRawJson(explicitSummary, "{}")
+        if (!json.has("botResults") && !json.has("settlementScore") && !json.has("settlementScoreSummary")) {
+            return "{}"
+        }
+        return JsonCodec.writeObject(
+            "botResults" to JsonCodec.rawJsonOrText(json.raw("botResults").ifBlank { "[]" }),
+            "settlementScore" to JsonCodec.rawJsonOrText(
+                json.raw("settlementScore").ifBlank { json.raw("settlementScoreSummary").ifBlank { "{}" } }
+            )
+        )
     }
 
     private fun analyticsRunExportsResponse(query: String?): PlatformHotPathResponse {
@@ -3887,6 +3910,29 @@ class PlatformHttpServer(
                 "exports" to records.map { analyticsRunExportJson(it) },
                 "exportsCount" to records.size,
                 "limit" to limit.coerceIn(1, 500)
+            )
+        )
+    }
+
+    private fun analyticsRunBotSummariesResponse(query: String?): PlatformHotPathResponse {
+        val service = analyticsRunExportService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
+        val runId = queryValue(query, "runId")
+        val botId = queryValue(query, "botId")
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        val records = service.listBotPerformanceSummaries(runId, botId, limit)
+        return PlatformHotPathResponse(
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "summaries" to records.map { analyticsRunBotSummaryJson(it) },
+                "summariesCount" to records.size,
+                "limit" to limit.coerceIn(1, 500),
+                "meta" to mapOf(
+                    "sourceFacts" to "analytics.simulation_run_exports summary.botResults plus optional settlementScore participants",
+                    "freshness" to "rebuilt during simulation-run export ingestion; idempotent upsert by runId and botId",
+                    "authoritative" to false
+                )
             )
         )
     }
@@ -3918,6 +3964,26 @@ class PlatformHttpServer(
             ),
             "artifacts" to JsonCodec.rawJsonOrText(record.artifactManifestJson),
             "summary" to JsonCodec.rawJsonOrText(record.summaryJson)
+        )
+    }
+
+    private fun analyticsRunBotSummaryJson(record: BotRunPerformanceSummaryRecord): Map<String, Any?> {
+        return mapOf(
+            "runId" to record.runId,
+            "botId" to record.botId,
+            "scenarioId" to record.scenarioId,
+            "profile" to record.profile,
+            "source" to record.source,
+            "completedAt" to record.completedAt?.toString(),
+            "exportedAt" to record.exportedAt.toString(),
+            "projectedAt" to record.projectedAt.toString(),
+            "finalEquity" to record.finalEquity,
+            "realizedPnl" to record.realizedPnl,
+            "maxDrawdown" to record.maxDrawdown,
+            "failCount" to record.failCount,
+            "commandCount" to record.commandCount,
+            "settlementScoreSummary" to JsonCodec.rawJsonOrText(record.settlementScoreSummaryJson),
+            "sourceSummary" to JsonCodec.rawJsonOrText(record.sourceSummaryJson)
         )
     }
 

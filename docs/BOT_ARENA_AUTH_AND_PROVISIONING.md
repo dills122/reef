@@ -241,6 +241,7 @@ GET /admin/v1/arena/run-bot-results     -> ci, admin
 GET /admin/v1/arena/run-enforcement-events -> ci, admin
 GET /admin/v1/arena/leaderboard         -> ci, admin
 /admin/v1/analytics/run-exports         -> sim, admin
+/admin/v1/analytics/run-bot-summaries   -> sim, admin
 /admin/v1/risk/account-controls         -> admin
 /admin/v1/risk/circuit-breakers         -> admin
 /admin/v1/risk/price-collars            -> admin

@@ -31,7 +31,7 @@ If a future extraction is justified, candidate tables remain `market_data.book_s
 
 ## Analytics Expansion
 
-`analytics.simulation_run_exports` exists today. The daily derived facts and views below remain planned.
+`analytics.simulation_run_exports` and `analytics.run_bot_performance_summaries` exist today. The daily derived facts and views below remain planned.
 
 Daily derived tables: `analytics.trade_fact_daily` (partitioned by `market_date`), `analytics.order_lifecycle_fact_daily`, `analytics.event_counts_daily`, `analytics.exception_fact_daily`.
 

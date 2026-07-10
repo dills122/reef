@@ -199,7 +199,8 @@ Reef can currently claim:
 - direct matching-engine consume plus durable event-batch materialization has
   short local proof at `10k/sec` with canonical counts and replay checks clean
 - simulation-run export summaries can now be posted to the backbone admin API
-  at `/admin/v1/analytics/run-exports`
+  at `/admin/v1/analytics/run-exports`, which also rebuilds bot/run analytics
+  rows queryable from `/admin/v1/analytics/run-bot-summaries`
 - migration/schema placement and Node dev tooling CI are guarding the current
   DB layout and dev scripts
 - cancel/modify commands are processed end-to-end on the direct

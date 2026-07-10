@@ -205,9 +205,10 @@ When public Caddy is enabled, only narrow bearer-token admin gateway routes are 
 - `GET /admin/v1/arena/run-enforcement-events`
 - `GET /admin/v1/arena/leaderboard`
 - `POST /admin/v1/analytics/run-exports`
+- `GET /admin/v1/analytics/run-bot-summaries`
 
 The analytics export route uses `ANALYTICS_EXPORT_API_TOKEN` from
-`/opt/reef/secrets/caddy.env`. Keep read/list access tunnel-only.
+`/opt/reef/secrets/caddy.env`. Keep raw export read/list access tunnel-only.
 
 Initialize and unseal OpenBao manually through an SSH tunnel. Store unseal keys
 and the root token in an offline vault or password manager, not on the server.

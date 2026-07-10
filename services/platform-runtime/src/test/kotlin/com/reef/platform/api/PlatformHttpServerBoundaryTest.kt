@@ -2526,12 +2526,28 @@ class PlatformHttpServerBoundaryTest {
                       },
                       "latencyMs":{"p50":4.2,"p95":12.5,"p99":25.1},
                       "artifacts":[{"type":"report","path":"artifacts/run-export-1/report.json","sha256":"sha256:report"}],
-                      "summary":{"directConsumeMatched":true,"replayAuditClean":true}
+                      "summary":{
+                        "directConsumeMatched":true,
+                        "replayAuditClean":true,
+                        "botResults":[
+                          {
+                            "botId":"bot-a",
+                            "finalEquity":1002500,
+                            "realizedPnl":2500,
+                            "maxDrawdown":125,
+                            "tradingMetrics":{"commands":{"submitted":12,"failed":1,"rejected":1,"timedOut":0}}
+                          }
+                        ],
+                        "settlementScore":{
+                          "participants":[{"participantId":"bot-a","scorePenaltyPoints":25,"agedFailCount":0}]
+                        }
+                      }
                     }
                 """.trimIndent()
             )
             val fetched = get(server.address.port, "/internal/admin/analytics/run-exports?runId=run-export-1")
             val listed = get(server.address.port, "/internal/admin/analytics/run-exports?limit=5")
+            val summaries = get(server.address.port, "/internal/admin/analytics/run-bot-summaries?runId=run-export-1")
 
             assertEquals(200, posted.status)
             assertContains(posted.body, "\"runId\":\"run-export-1\"")
@@ -2541,6 +2557,12 @@ class PlatformHttpServerBoundaryTest {
             assertContains(fetched.body, "\"profile\":\"10k-15m\"")
             assertEquals(200, listed.status)
             assertContains(listed.body, "\"exportsCount\":1")
+            assertEquals(200, summaries.status)
+            assertContains(summaries.body, "\"summariesCount\":1")
+            assertContains(summaries.body, "\"botId\":\"bot-a\"")
+            assertContains(summaries.body, "\"finalEquity\":1002500.0")
+            assertContains(summaries.body, "\"failCount\":2")
+            assertContains(summaries.body, "\"authoritative\":false")
         } finally {
             server.stop(0)
         }

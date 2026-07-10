@@ -405,13 +405,19 @@ Intake risk checks should use a hot, bounded account/risk view before durable or
 
 ## Analytics Schema
 
-`analytics.simulation_run_exports` (`analytics/0001`) is live today; the daily-fact/reporting tables below remain planned/future work.
+`analytics.simulation_run_exports` (`analytics/0001`) and `analytics.run_bot_performance_summaries` are live today; the daily-fact/reporting tables below remain planned/future work.
 
 ### Current
 
 1. `analytics.simulation_run_exports`
 - `run_id text pk`, `scenario_id text default ''`, `run_kind text default ''`, `source text default ''`, `git_sha text default ''`, `profile text default ''`, `started_at timestamptz`, `completed_at timestamptz`, `exported_at timestamptz default now()`, `status text default ''`, `attempted_count bigint default 0`, `accepted_count bigint default 0`, `completed_count bigint default 0`, `materialized_count bigint default 0`, `projected_count bigint default 0`, `failed_count bigint default 0`, `p50_latency_ms double precision`, `p95_latency_ms double precision`, `p99_latency_ms double precision`, `artifact_manifest jsonb default '[]'`, `summary jsonb default '{}'`, `created_at timestamptz default now()`, `updated_at timestamptz default now()`
 - indexes: `(completed_at desc, exported_at desc)`, `(scenario_id, completed_at desc)`
+
+2. `analytics.run_bot_performance_summaries`
+- `primary key (run_id, bot_id)`, `scenario_id text default ''`, `profile text default ''`, `source text default ''`, `completed_at timestamptz`, `exported_at timestamptz`, `projected_at timestamptz default now()`, `final_equity double precision`, `realized_pnl double precision`, `max_drawdown double precision`, `fail_count bigint default 0`, `command_count bigint default 0`, `settlement_score_summary jsonb default '{}'`, `source_summary jsonb default '{}'`, `created_at timestamptz default now()`, `updated_at timestamptz default now()`
+- source facts: arena export `summary.botResults` and optional `summary.settlementScore.participants`
+- freshness: rebuilt on export ingestion; replay/idempotency key is `(run_id, bot_id)`
+- status: non-authoritative analytics row for reporting/admin query only
 
 ### Planned / future daily derived tables
 

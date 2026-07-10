@@ -66,6 +66,7 @@ interface SimulationRunExportStore {
 
 class SimulationRunExportService(
     private val store: SimulationRunExportStore,
+    private val botPerformanceStore: BotRunPerformanceSummaryStore? = store as? BotRunPerformanceSummaryStore,
     private val now: () -> Instant = { Instant.now() }
 ) {
     fun ingest(command: SimulationRunExportCommand): SimulationRunExportRecord {
@@ -93,16 +94,27 @@ class SimulationRunExportService(
             artifactManifestJson = command.artifactManifestJson.ifBlank { "[]" },
             summaryJson = command.summaryJson.ifBlank { "{}" }
         )
-        return store.upsert(record)
+        val saved = store.upsert(record)
+        botPerformanceStore?.upsertAll(BotRunPerformanceProjection.fromExport(saved, now()))
+        return saved
     }
 
     fun find(runId: String): SimulationRunExportRecord? = store.find(runId)
 
     fun list(limit: Int = 50): List<SimulationRunExportRecord> = store.list(limit.coerceIn(1, 500))
+
+    fun listBotPerformanceSummaries(
+        runId: String = "",
+        botId: String = "",
+        limit: Int = 50
+    ): List<BotRunPerformanceSummaryRecord> {
+        return botPerformanceStore?.list(runId, botId, limit.coerceIn(1, 500)).orEmpty()
+    }
 }
 
-class InMemorySimulationRunExportStore : SimulationRunExportStore {
+class InMemorySimulationRunExportStore : SimulationRunExportStore, BotRunPerformanceSummaryStore {
     private val records = ConcurrentHashMap<String, SimulationRunExportRecord>()
+    private val botPerformanceSummaries = ConcurrentHashMap<Pair<String, String>, BotRunPerformanceSummaryRecord>()
 
     override fun upsert(record: SimulationRunExportRecord): SimulationRunExportRecord {
         records[record.runId] = record
@@ -116,6 +128,25 @@ class InMemorySimulationRunExportStore : SimulationRunExportStore {
             .sortedWith(compareByDescending<SimulationRunExportRecord> { it.completedAt ?: it.exportedAt }.thenBy { it.runId })
             .take(limit.coerceIn(1, 500))
     }
+
+    override fun upsertAll(records: List<BotRunPerformanceSummaryRecord>): Int {
+        records.forEach { record -> botPerformanceSummaries[record.runId to record.botId] = record }
+        return records.size
+    }
+
+    override fun list(runId: String, botId: String, limit: Int): List<BotRunPerformanceSummaryRecord> {
+        return botPerformanceSummaries.values
+            .asSequence()
+            .filter { runId.isBlank() || it.runId == runId }
+            .filter { botId.isBlank() || it.botId == botId }
+            .sortedWith(
+                compareByDescending<BotRunPerformanceSummaryRecord> { it.completedAt ?: it.exportedAt }
+                    .thenBy { it.runId }
+                    .thenBy { it.botId }
+            )
+            .take(limit.coerceIn(1, 500))
+            .toList()
+    }
 }
 
 data class PostgresAnalyticsSqlNames(
@@ -123,6 +154,7 @@ data class PostgresAnalyticsSqlNames(
 ) {
     val schemaName = schemaOrDefault(schema)
     val simulationRunExports = qualify("simulation_run_exports")
+    val runBotPerformanceSummaries = qualify("run_bot_performance_summaries")
 
     private fun schemaOrDefault(schema: String): String {
         val candidate = schema.trim().ifBlank { "analytics" }
@@ -141,13 +173,17 @@ class PostgresSimulationRunExportStore(
     private val dataSource: DataSource,
     private val names: PostgresAnalyticsSqlNames = PostgresAnalyticsSqlNames(),
     private val bootstrapMode: PostgresBootstrapMode = PostgresBootstrapMode.fromEnv()
-) : SimulationRunExportStore {
+) : SimulationRunExportStore, BotRunPerformanceSummaryStore {
     init {
         connection().use { conn ->
             if (bootstrapMode == PostgresBootstrapMode.Validate) {
                 PostgresSchemaValidator.validate(
                     conn,
                     PostgresSchemaRequirements.analyticsRunExports(names.simulationRunExports)
+                )
+                PostgresSchemaValidator.validate(
+                    conn,
+                    PostgresSchemaRequirements.analyticsRunBotPerformanceSummaries(names.runBotPerformanceSummaries)
                 )
                 return@use
             }
@@ -187,6 +223,36 @@ class PostgresSimulationRunExportStore(
                 )
                 stmt.execute(
                     "CREATE INDEX IF NOT EXISTS idx_analytics_run_exports_scenario ON ${names.simulationRunExports}(scenario_id, completed_at DESC)"
+                )
+                stmt.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ${names.runBotPerformanceSummaries} (
+                      run_id TEXT NOT NULL,
+                      bot_id TEXT NOT NULL,
+                      scenario_id TEXT NOT NULL DEFAULT '',
+                      profile TEXT NOT NULL DEFAULT '',
+                      source TEXT NOT NULL DEFAULT '',
+                      completed_at TIMESTAMPTZ,
+                      exported_at TIMESTAMPTZ NOT NULL,
+                      projected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      final_equity DOUBLE PRECISION,
+                      realized_pnl DOUBLE PRECISION,
+                      max_drawdown DOUBLE PRECISION,
+                      fail_count BIGINT NOT NULL DEFAULT 0,
+                      command_count BIGINT NOT NULL DEFAULT 0,
+                      settlement_score_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      source_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+                      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                      PRIMARY KEY (run_id, bot_id)
+                    )
+                    """.trimIndent()
+                )
+                stmt.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_analytics_bot_perf_recent ON ${names.runBotPerformanceSummaries}(completed_at DESC, exported_at DESC, bot_id)"
+                )
+                stmt.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_analytics_bot_perf_bot_recent ON ${names.runBotPerformanceSummaries}(bot_id, completed_at DESC, exported_at DESC)"
                 )
             }
         }
@@ -274,6 +340,73 @@ class PostgresSimulationRunExportStore(
         }
     }
 
+    override fun upsertAll(records: List<BotRunPerformanceSummaryRecord>): Int {
+        if (records.isEmpty()) return 0
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                INSERT INTO ${names.runBotPerformanceSummaries}(
+                  run_id, bot_id, scenario_id, profile, source, completed_at, exported_at, projected_at,
+                  final_equity, realized_pnl, max_drawdown, fail_count, command_count,
+                  settlement_score_summary, source_summary, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, now())
+                ON CONFLICT (run_id, bot_id) DO UPDATE SET
+                  scenario_id = EXCLUDED.scenario_id,
+                  profile = EXCLUDED.profile,
+                  source = EXCLUDED.source,
+                  completed_at = EXCLUDED.completed_at,
+                  exported_at = EXCLUDED.exported_at,
+                  projected_at = EXCLUDED.projected_at,
+                  final_equity = EXCLUDED.final_equity,
+                  realized_pnl = EXCLUDED.realized_pnl,
+                  max_drawdown = EXCLUDED.max_drawdown,
+                  fail_count = EXCLUDED.fail_count,
+                  command_count = EXCLUDED.command_count,
+                  settlement_score_summary = EXCLUDED.settlement_score_summary,
+                  source_summary = EXCLUDED.source_summary,
+                  updated_at = now()
+                """.trimIndent()
+            ).use { ps ->
+                records.forEach { record ->
+                    ps.bind(record)
+                    ps.addBatch()
+                }
+                return ps.executeBatch().size
+            }
+        }
+    }
+
+    override fun list(runId: String, botId: String, limit: Int): List<BotRunPerformanceSummaryRecord> {
+        val filters = mutableListOf<String>()
+        if (runId.isNotBlank()) filters.add("run_id = ?")
+        if (botId.isNotBlank()) filters.add("bot_id = ?")
+        val where = if (filters.isEmpty()) "" else "WHERE ${filters.joinToString(" AND ")}"
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT run_id, bot_id, scenario_id, profile, source, completed_at, exported_at, projected_at,
+                       final_equity, realized_pnl, max_drawdown, fail_count, command_count,
+                       settlement_score_summary::text, source_summary::text
+                FROM ${names.runBotPerformanceSummaries}
+                $where
+                ORDER BY COALESCE(completed_at, exported_at) DESC, run_id ASC, bot_id ASC
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                var index = 1
+                if (runId.isNotBlank()) ps.setString(index++, runId)
+                if (botId.isNotBlank()) ps.setString(index++, botId)
+                ps.setInt(index, limit.coerceIn(1, 500))
+                ps.executeQuery().use { rs ->
+                    val records = mutableListOf<BotRunPerformanceSummaryRecord>()
+                    while (rs.next()) records.add(rs.toBotPerformanceSummaryRecord())
+                    return records
+                }
+            }
+        }
+    }
+
     private fun connection(): Connection = dataSource.connection
 }
 
@@ -305,6 +438,24 @@ private fun java.sql.PreparedStatement.setNullableDouble(index: Int, value: Doub
     if (value == null) setNull(index, java.sql.Types.DOUBLE) else setDouble(index, value)
 }
 
+private fun java.sql.PreparedStatement.bind(record: BotRunPerformanceSummaryRecord) {
+    setString(1, record.runId)
+    setString(2, record.botId)
+    setString(3, record.scenarioId)
+    setString(4, record.profile)
+    setString(5, record.source)
+    setTimestamp(6, record.completedAt?.let(Timestamp::from))
+    setTimestamp(7, Timestamp.from(record.exportedAt))
+    setTimestamp(8, Timestamp.from(record.projectedAt))
+    setNullableDouble(9, record.finalEquity)
+    setNullableDouble(10, record.realizedPnl)
+    setNullableDouble(11, record.maxDrawdown)
+    setLong(12, record.failCount)
+    setLong(13, record.commandCount)
+    setString(14, record.settlementScoreSummaryJson)
+    setString(15, record.sourceSummaryJson)
+}
+
 private fun ResultSet.toRecord(): SimulationRunExportRecord {
     return SimulationRunExportRecord(
         runId = getString(1),
@@ -334,4 +485,24 @@ private fun ResultSet.toRecord(): SimulationRunExportRecord {
 private fun ResultSet.nullableDouble(index: Int): Double? {
     val value = getDouble(index)
     return if (wasNull()) null else value
+}
+
+private fun ResultSet.toBotPerformanceSummaryRecord(): BotRunPerformanceSummaryRecord {
+    return BotRunPerformanceSummaryRecord(
+        runId = getString(1),
+        botId = getString(2),
+        scenarioId = getString(3),
+        profile = getString(4),
+        source = getString(5),
+        completedAt = getTimestamp(6)?.toInstant(),
+        exportedAt = getTimestamp(7).toInstant(),
+        projectedAt = getTimestamp(8).toInstant(),
+        finalEquity = nullableDouble(9),
+        realizedPnl = nullableDouble(10),
+        maxDrawdown = nullableDouble(11),
+        failCount = getLong(12),
+        commandCount = getLong(13),
+        settlementScoreSummaryJson = getString(14),
+        sourceSummaryJson = getString(15)
+    )
 }

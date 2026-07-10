@@ -229,13 +229,18 @@ function compactSummary(report, reportPath) {
         ? report.botResults.map((bot) => ({
           botId: bot.botId,
           role: bot.role,
+          finalEquity: nullableNumber(bot.finalEquity ?? bot.score),
+          realizedPnl: nullableNumber(bot.realizedPnl),
+          maxDrawdown: nullableNumber(bot.maxDrawdown),
           ticksRun: numberOrZero(bot.ticksRun),
           venueCommands: numberOrZero(bot.venueCommands),
           failedTicks: numberOrZero(bot.failedTicks),
           freezeCount: numberOrZero(bot.freezeCount),
           disqualified: Boolean(bot.disqualified),
+          tradingMetrics: compactTradingMetrics(bot.tradingMetrics),
         }))
         : [],
+      settlementScore: report.settlementScore ?? report.settlementScoreSummary ?? null,
       enforcementEvents: Array.isArray(report.enforcementEvents) ? report.enforcementEvents.length : 0,
     };
   }
@@ -259,6 +264,15 @@ function compactSummary(report, reportPath) {
 
 function isArenaLocalTickReport(report) {
   return report?.schemaVersion === "reef.arena.localTickRun.v0";
+}
+
+function compactTradingMetrics(metrics) {
+  if (!metrics || typeof metrics !== "object") return undefined;
+  return {
+    schemaVersion: metrics.schemaVersion ?? "",
+    commands: metrics.commands ?? {},
+    pnl: metrics.pnl ?? {},
+  };
 }
 
 function compactTraceChecks(traceChecks) {
