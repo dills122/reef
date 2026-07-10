@@ -87,7 +87,7 @@ async function githubOidcTokenForProvisioning() {
       "GitHub OIDC token is required for real OpenBao provisioning (set GITHUB_OIDC_TOKEN locally or enable id-token: write in GitHub Actions)",
     );
   }
-  const audience = encodeURIComponent(env("BOT_SUBMISSION_OPENBAO_OIDC_AUDIENCE", "reef-openbao-provisioning"));
+  const audience = encodeURIComponent(env("BOT_SUBMISSION_OPENBAO_OIDC_AUDIENCE", "reef-bot-submission-ci"));
   const separator = requestUrl.includes("?") ? "&" : "?";
   const response = await fetch(`${requestUrl}${separator}audience=${audience}`, {
     headers: {

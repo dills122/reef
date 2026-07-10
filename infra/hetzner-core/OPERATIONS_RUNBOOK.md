@@ -417,6 +417,19 @@ ADMIN_GITHUB_USER_ID=<numeric-github-user-id> make hetzner-core ARGS=admin-role-
 creates `arena-operator` with `arena.admin`, assigns it to
 `user-gh-<numeric-id>`, then disables the route again.
 
+Grant the bot-submission CI service actor before enabling the real hosted
+OpenBao provisioning workflow:
+
+```bash
+ADMIN_ACTOR_ID=bot-submission-ci make hetzner-core ARGS=admin-actor-role-grant
+```
+
+`admin-actor-role-grant` uses the same temporary legacy-route window as
+`admin-role-grant`, creates or updates the target role, assigns it to the
+service actor, then disables the legacy route again. The default actor is
+`bot-submission-ci`, default role is `arena-operator`, and default permission is
+`arena.admin`.
+
 Verify:
 
 ```bash

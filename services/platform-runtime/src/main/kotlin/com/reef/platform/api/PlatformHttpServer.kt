@@ -14,6 +14,7 @@ import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionComm
 import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
 import com.reef.platform.application.admin.ArenaRunRegistrationCommand
 import com.reef.platform.application.admin.ArenaRunStatusCommand
+import com.reef.platform.application.admin.AuthorizationException
 import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
 import com.reef.platform.application.admin.PostgresAdminAuthStore
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
@@ -1609,6 +1610,9 @@ class PlatformHttpServer(
                     try {
                         val serviceToken = auth.authenticateServiceToken(token, family)
                         return adminPrincipalForActor(exchange, serviceToken.subjectActorId)
+                    } catch (_: AuthorizationException) {
+                        // Unknown DB-issued service tokens may still be valid
+                        // static gateway fallback tokens configured in env.
                     } catch (_: IllegalArgumentException) {
                         // Try the next permitted service-token family for this route.
                     }

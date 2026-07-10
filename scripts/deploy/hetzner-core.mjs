@@ -237,6 +237,8 @@ Commands:
              disable hosted GitHub OAuth config and restart runtime
   admin-role-grant
              one-time grant arena.admin to ADMIN_GITHUB_USER_ID or gh user
+  admin-actor-role-grant
+             one-time grant ADMIN_ACTOR_ID (default bot-submission-ci) arena.admin
   admin-auth-smoke
              verify hosted admin shell, OAuth start, Caddy fallback, and
              legacy mutation-route cleanup
@@ -450,6 +452,36 @@ function grantAdminRole() {
   ]);
   configureAdminAuth(true, { legacyMutationRoutesEnabled: false });
   console.log(`granted arena.admin to user-gh-${userId}`);
+}
+
+function grantAdminActorRole() {
+  const actorId = env("ADMIN_ACTOR_ID", "bot-submission-ci").trim();
+  const roleId = env("ADMIN_ROLE_ID", "arena-operator").trim();
+  const permissions = env("ADMIN_PERMISSION_CSV", "arena.admin").trim();
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(actorId)) {
+    console.error(`Invalid ADMIN_ACTOR_ID: ${actorId}`);
+    process.exit(1);
+  }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(roleId)) {
+    console.error(`Invalid ADMIN_ROLE_ID: ${roleId}`);
+    process.exit(1);
+  }
+  if (permissions === "") {
+    console.error("ADMIN_PERMISSION_CSV must not be blank");
+    process.exit(1);
+  }
+
+  configureAdminAuth(true, { legacyMutationRoutesEnabled: true });
+  run("ssh", [
+    target,
+    [
+      "set -euo pipefail",
+      `curl -fsS -X POST http://127.0.0.1:8080/auth/roles -H 'X-Reef-Internal-Route: true' -H 'content-type: application/json' -d '${JSON.stringify({ roleId, permissions })}'`,
+      `curl -fsS -X POST http://127.0.0.1:8080/auth/actor-roles -H 'X-Reef-Internal-Route: true' -H 'content-type: application/json' -d '${JSON.stringify({ actorId, roleId })}'`,
+    ].join(" && "),
+  ]);
+  configureAdminAuth(true, { legacyMutationRoutesEnabled: false });
+  console.log(`granted ${permissions} to ${actorId} via role ${roleId}`);
 }
 
 function botConfigUpgrade() {
@@ -931,6 +963,9 @@ switch (command) {
     break;
   case "admin-role-grant":
     grantAdminRole();
+    break;
+  case "admin-actor-role-grant":
+    grantAdminActorRole();
     break;
   case "admin-auth-smoke":
     adminAuthSmoke();
