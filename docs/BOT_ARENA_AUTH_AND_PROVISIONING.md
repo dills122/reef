@@ -237,6 +237,7 @@ server-side service token. Scoped service token families are route-specific:
 /admin/v1/arena/bots                    -> ci, admin
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
 /admin/v1/arena/bots/config             -> admin
+/admin/v1/arena/bot-versions            -> ci, admin
 GET /admin/v1/arena/runs                -> ci, admin
 GET /admin/v1/arena/run-bot-results     -> ci, admin
 GET /admin/v1/arena/run-enforcement-events -> ci, admin
@@ -465,6 +466,14 @@ action. It must never include token values, GitHub OIDC tokens, OpenBao tokens,
 or bot secret data. The slice path is an identifier, not a public URL. Normal
 participants use the Reef Admin secret/config surface; direct OpenBao access is
 reserved for `secret-admin`/operator workflows over a private SSH tunnel.
+
+After merge, `.github/workflows/bot-registry-sync.yml` syncs changed
+`bots/*/bot.json` manifests into the hosted arena registry. It registers the bot
+metadata through `/admin/v1/arena/bots`, builds the hosted artifact to derive the
+source/artifact hashes, then registers the merged version through
+`/admin/v1/arena/bot-versions`. This is deliberately post-merge: pre-merge CI
+can provision the OpenBao slice and block review, while the durable registry only
+records code that actually landed on `master`/`main`.
 
 Required before run:
 

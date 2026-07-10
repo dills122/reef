@@ -7,6 +7,8 @@ Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or 
 ## Migrated Or Gateway-Backed
 
 - `.github/workflows/bot-submission.yml`: bot-submission CI uses `/admin/v1/arena/bots/openbao-provision`.
+- `.github/workflows/bot-registry-sync.yml`: post-merge bot registry sync uses `/admin/v1/arena/bots` and `/admin/v1/arena/bot-versions`.
+- `scripts/dev/bot-submission-register-merged.mjs`: post-merge bot registry sync client for `/admin/v1/arena/bots` and `/admin/v1/arena/bot-versions`.
 - `scripts/dev/bot-submission-provision-openbao.mjs`: uses `/admin/v1/arena/bots/openbao-provision`.
 - `scripts/dev/bot-submission-registry-diff.mjs`: uses `/admin/v1/arena/bots`.
 - `scripts/dev/export-simulation-run.mjs`: posts analytics exports to `/admin/v1/analytics/run-exports`.

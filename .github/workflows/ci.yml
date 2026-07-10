@@ -134,6 +134,7 @@ jobs:
             scripts/dev/command-log-archive.test.mjs \
             scripts/dev/command-log-archive-partitions.test.mjs \
             scripts/dev/command-log-prune.test.mjs \
+            scripts/dev/bot-submission-register-merged.test.mjs \
             scripts/dev/export-simulation-run.test.mjs \
             scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt
       - name: Add coverage summary
