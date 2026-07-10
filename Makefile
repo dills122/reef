@@ -88,6 +88,7 @@ test-bot-sdk:
 	$(JS_RUNTIME) scripts/dev/bot-sdk-preflight.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-runtime-config.test.mjs
 	$(JS_RUNTIME) scripts/dev/openbao-runtime-config.test.mjs
+	$(JS_RUNTIME) scripts/dev/bot-submission-provision-openbao.test.mjs
 	$(JS_RUNTIME) scripts/dev/bot-sdk-test-bot.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-ingest-bot-run-result.test.mjs
 	$(JS_RUNTIME) scripts/dev/arena-persist-report-local.test.mjs
@@ -101,6 +102,7 @@ test-bot-sdk:
 	node --check scripts/dev/bot-sdk-hosted-run.mjs
 	node --check scripts/dev/bot-sdk-build-hosted-artifact.mjs
 	node --check scripts/dev/bot-sdk-test-bot.mjs
+	node --check scripts/dev/bot-submission-provision-openbao.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-run.mjs
 	node --check scripts/dev/bot-sdk-hosted-worker-child.mjs
 	node --check scripts/dev/bot-sdk-hosted-ses-container-smoke.mjs

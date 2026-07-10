@@ -22,15 +22,10 @@ name: Bot Submission
 # all; the Kotlin OpenBao client code runs only on the always-on server.
 #
 # The admin API is loopback-only by default (SSH-tunnel access per
-# infra/hetzner-core/server/README.md). Reaching it from GitHub Actions
-# requires exposing a narrowly-scoped route through the existing Caddy reverse
-# proxy (bearer-token-gated, e.g. just
-# /admin/v1/arena/bots/openbao-provision and the registry read route -
-# not the full admin surface) rather than opening loopback broadly. That Caddy
-# route plus the server-side OpenBao client (a new auth/jwt backend alongside
-# the existing AppRole backend - see docs/BOT_ARENA_PLAN.md) are still
-# outstanding; this workflow calls a dry-run stub
-# (scripts/dev/bot-submission-provision-openbao.mjs) until they exist.
+# infra/hetzner-core/server/README.md). GitHub Actions reaches only the
+# narrowly-scoped Caddy gateway routes for registry lookup and
+# /admin/v1/arena/bots/openbao-provision, using ARENA_ADMIN_API_TOKEN plus
+# GitHub Actions OIDC. The script never talks to OpenBao directly.
 
 on:
   pull_request:
@@ -40,7 +35,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # reserved for the future GitHub OIDC -> OpenBao JWT auth exchange
+  id-token: write
 
 jobs:
   detect-flow:
@@ -126,9 +121,9 @@ jobs:
         id: registry-diff
         if: needs.detect-flow.outputs.flow != 'remove'
         run: node scripts/dev/bot-submission-registry-diff.mjs "${{ needs.detect-flow.outputs.bot-name }}"
-      - name: OpenBao provisioning (dry-run stub - see script header)
+      - name: OpenBao provisioning
         env:
-          BOT_SUBMISSION_OPENBAO_DRY_RUN: '1'
+          BOT_SUBMISSION_OPENBAO_MODE: real
         run: |
           flow="${{ needs.detect-flow.outputs.flow }}"
           if [ "$flow" = "remove" ]; then
