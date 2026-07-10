@@ -762,6 +762,30 @@ object PostgresSchemaRequirements {
             )
         )
     }
+
+    fun analyticsRunBotPerformanceSummaries(runBotPerformanceSummaries: String): PostgresSchemaRequirement {
+        val table = PostgresSchemaObject.parse(runBotPerformanceSummaries)
+        return PostgresSchemaRequirement(
+            tables = listOf(table),
+            columns = listOf(
+                PostgresSchemaColumn(table, "run_id", "text"),
+                PostgresSchemaColumn(table, "bot_id", "text"),
+                PostgresSchemaColumn(table, "scenario_id", "text"),
+                PostgresSchemaColumn(table, "profile", "text"),
+                PostgresSchemaColumn(table, "source", "text"),
+                PostgresSchemaColumn(table, "completed_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "exported_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "projected_at", "timestamp with time zone"),
+                PostgresSchemaColumn(table, "final_equity", "double precision"),
+                PostgresSchemaColumn(table, "realized_pnl", "double precision"),
+                PostgresSchemaColumn(table, "max_drawdown", "double precision"),
+                PostgresSchemaColumn(table, "fail_count", "bigint"),
+                PostgresSchemaColumn(table, "command_count", "bigint"),
+                PostgresSchemaColumn(table, "settlement_score_summary", "jsonb"),
+                PostgresSchemaColumn(table, "source_summary", "jsonb")
+            )
+        )
+    }
 }
 
 object PostgresSchemaValidator {

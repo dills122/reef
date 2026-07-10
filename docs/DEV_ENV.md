@@ -551,8 +551,16 @@ make dev-export-simulation-run \
 The command is dry-run by default. Add
 `ARGS="--post --api-url=http://127.0.0.1:8080"` for tunnel/local posting. When
 posting through public Caddy, also pass `--token "$ANALYTICS_EXPORT_API_TOKEN"`.
-The public route only accepts `POST /admin/v1/analytics/run-exports`;
-reads stay tunnel-only.
+The run-export public route only accepts `POST /admin/v1/analytics/run-exports`;
+raw export reads stay tunnel-only.
+
+When an arena export summary includes `botResults`, ingestion also rebuilds
+`analytics.run_bot_performance_summaries`. Query recent rows with
+`GET /admin/v1/analytics/run-bot-summaries?runId=<run>` (or the internal
+loopback path). These rows are reporting projections only: source run reports,
+arena result rows, settlement score/proof data, and canonical venue facts remain
+the authoritative audit sources. Freshness is the most recent accepted export
+for that run, and replaying an export upserts by `(run_id, bot_id)`.
 
 The worker stats endpoint includes global counters, per-partition counters (`partitionMetrics`), and durable-log consumer snapshots (`consumerMetrics`). JetStream snapshots include pending, ack-pending, redelivery count, ack-floor sequence, delivered sequence, and stream lag. Redpanda snapshots report committed offset, end offset, and lag for the assigned partition. Local in-flight age is reported for messages fetched by a worker but not yet terminally handled.
 

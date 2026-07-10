@@ -24,6 +24,7 @@ These versioned admin/data routes are the externally reachable shape where expli
 | `/admin/v1/arena/bots` | Arena bot registry operations |
 | `/admin/v1/arena/bots/openbao-provision` | Narrow OpenBao bot-secret provisioning operation |
 | `/admin/v1/analytics/run-exports` | Simulation/arena run export ingestion and reads |
+| `/admin/v1/analytics/run-bot-summaries` | Recent bot/run analytics summary reads |
 | `/admin/v1/risk/account-controls` | Account/bot risk controls |
 | `/admin/v1/risk/circuit-breakers` | Command circuit breakers |
 | `/admin/v1/risk/price-collars` | Instrument price collars |
@@ -46,6 +47,7 @@ These versioned admin/data routes are the externally reachable shape where expli
 | `/internal/admin/arena/leaderboard` | Read arena leaderboard entries |
 | `/internal/admin/arena/bots/openbao-provision` | Provision arena bot secret slice through OpenBao |
 | `/internal/admin/analytics/run-exports` | Persist/read run export records |
+| `/internal/admin/analytics/run-bot-summaries` | Read rebuilt bot/run analytics summary rows |
 | `/internal/admin/circuit-breakers` | Manage command circuit breakers |
 | `/internal/admin/price-collars` | Manage instrument price collars |
 | `/internal/admin/settlement/facts` | Append scenario settlement fact bundle for smoke/evidence setup |

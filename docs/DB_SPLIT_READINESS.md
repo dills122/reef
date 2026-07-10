@@ -14,7 +14,7 @@ This document defines constraints for the local Postgres model so scoped DB extr
 - `arena` (bot registry, qualification, run records/results, enforcement events)
 - `stock_data` (per-game-seed stock snapshot facts)
 - `orchestration` (scheduler/job-runner state — live, not planned)
-- `analytics` (transformed query-optimized projections — `analytics.simulation_run_exports` is live; daily-fact/reporting tables remain planned)
+- `analytics` (transformed query-optimized projections — `analytics.simulation_run_exports` and `analytics.run_bot_performance_summaries` are live; daily-fact/reporting tables remain planned)
 
 See [`docs/DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md) for the full table-level breakdown of each schema.
 

@@ -132,9 +132,13 @@ destroyed.
 The first analytics API slice now exists inside `platform-runtime`: public
 ingestion through the versioned admin gateway at
 `/admin/v1/analytics/run-exports`, with internal loopback/migration access still
-available under `/internal/admin/analytics/run-exports` for local tooling. A
-dedicated analytics microservice is still a future split if this surface grows
-beyond backbone admin use.
+available under `/internal/admin/analytics/run-exports` for local tooling.
+Export ingestion also rebuilds `analytics.run_bot_performance_summaries`, queried
+through `/admin/v1/analytics/run-bot-summaries` or its internal loopback path.
+Those rows summarize bot/run performance from export `botResults` and optional
+settlement score participants; they are non-authoritative analytics state with
+freshness equal to the latest ingested export. A dedicated analytics microservice
+is still a future split if this surface grows beyond backbone admin use.
 
 ## Admin API
 
@@ -155,9 +159,9 @@ Default exposure:
 ```
 
 Optional public Caddy exposure is intentionally narrow. It can forward only
-bot-submission CI routes and `POST /admin/v1/analytics/run-exports`, each behind
-bearer tokens from `/opt/reef/secrets/caddy.env`. Analytics reads remain
-tunnel-only.
+bot-submission CI routes, `POST /admin/v1/analytics/run-exports`, and
+`GET /admin/v1/analytics/run-bot-summaries`, each behind bearer tokens from
+`/opt/reef/secrets/caddy.env`. Raw export reads remain tunnel-only.
 
 Operator access normally uses SSH tunneling:
 

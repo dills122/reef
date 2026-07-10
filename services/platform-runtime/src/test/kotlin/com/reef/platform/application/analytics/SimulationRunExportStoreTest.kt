@@ -132,10 +132,85 @@ class SimulationRunExportStoreTest {
     }
 
     @Test
+    fun ingestProjectsBotPerformanceSummariesIdempotently() {
+        val fixedNow = Instant.parse("2026-07-07T12:00:00Z")
+        val store = InMemorySimulationRunExportStore()
+        val service = SimulationRunExportService(store) { fixedNow }
+
+        service.ingest(
+            SimulationRunExportCommand(
+                runId = "arena-run-1",
+                scenarioId = "equity-sprint",
+                source = "local",
+                profile = "5m",
+                completedAt = Instant.parse("2026-07-07T11:59:00Z"),
+                exportedAt = fixedNow,
+                summaryJson = """
+                    {
+                      "botResults":[
+                        {
+                          "botId":"bot-a",
+                          "finalEquity":1002500,
+                          "realizedPnl":2500,
+                          "maxDrawdown":125,
+                          "tradingMetrics":{
+                            "commands":{"submitted":12,"failed":1,"rejected":2,"timedOut":3}
+                          }
+                        }
+                      ],
+                      "settlementScore":{
+                        "participants":[{"participantId":"bot-a","scorePenaltyPoints":50,"agedFailCount":1}]
+                      }
+                    }
+                """.trimIndent()
+            )
+        )
+        service.ingest(
+            SimulationRunExportCommand(
+                runId = "arena-run-1",
+                scenarioId = "equity-sprint",
+                source = "local",
+                profile = "5m",
+                completedAt = Instant.parse("2026-07-07T11:59:00Z"),
+                exportedAt = fixedNow,
+                summaryJson = """
+                    {
+                      "botResults":[
+                        {
+                          "botId":"bot-a",
+                          "finalEquity":1003000,
+                          "realizedPnl":3000,
+                          "maxDrawdown":100,
+                          "tradingMetrics":{
+                            "commands":{"submitted":14,"failed":0,"rejected":1,"timedOut":0}
+                          }
+                        }
+                      ],
+                      "settlementScore":{
+                        "participants":[{"participantId":"bot-a","scorePenaltyPoints":25,"agedFailCount":0}]
+                      }
+                    }
+                """.trimIndent()
+            )
+        )
+
+        val projected = service.listBotPerformanceSummaries(runId = "arena-run-1")
+        assertEquals(1, projected.size)
+        assertEquals("bot-a", projected.single().botId)
+        assertEquals(1003000.0, projected.single().finalEquity)
+        assertEquals(3000.0, projected.single().realizedPnl)
+        assertEquals(100.0, projected.single().maxDrawdown)
+        assertEquals(1L, projected.single().failCount)
+        assertEquals(14L, projected.single().commandCount)
+        assertTrue(projected.single().settlementScoreSummaryJson.contains("\"scorePenaltyPoints\":25"))
+    }
+
+    @Test
     fun analyticsSqlNamesDefaultsToAnalyticsSchema() {
         val names = PostgresAnalyticsSqlNames()
         assertEquals("analytics", names.schemaName)
         assertEquals("analytics.simulation_run_exports", names.simulationRunExports)
+        assertEquals("analytics.run_bot_performance_summaries", names.runBotPerformanceSummaries)
     }
 
     @Test

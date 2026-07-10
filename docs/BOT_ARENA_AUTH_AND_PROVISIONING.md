@@ -237,6 +237,7 @@ server-side service token. Scoped service token families are route-specific:
 /admin/v1/arena/bots                    -> ci, admin
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
 /admin/v1/analytics/run-exports         -> sim, admin
+/admin/v1/analytics/run-bot-summaries   -> sim, admin
 /admin/v1/risk/account-controls         -> admin
 /admin/v1/risk/circuit-breakers         -> admin
 /admin/v1/risk/price-collars            -> admin

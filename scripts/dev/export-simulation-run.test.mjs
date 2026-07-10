@@ -142,13 +142,23 @@ test("extracts counts, latency, and summary from arena local tick report", async
         {
           botId: "builtin-mm-simple",
           role: "market-maker",
+          finalEquity: 1000100,
+          realizedPnl: 100,
+          maxDrawdown: 25,
           ticksRun: 2,
           venueCommands: 4,
           failedTicks: 0,
           freezeCount: 0,
           disqualified: false,
+          tradingMetrics: {
+            commands: { submitted: 4, failed: 0 },
+            pnl: { realized: 100 },
+          },
         },
       ],
+      settlementScore: {
+        participants: [{ participantId: "builtin-mm-simple", scorePenaltyPoints: 0 }],
+      },
       enforcementEvents: [],
       sessionReports: [
         {
@@ -184,6 +194,9 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.commandStatusSummary.byRoute["/api/v1/orders/cancel"], 2);
   assert.equal(payload.summary.healthSummary.status, "pass");
   assert.equal(payload.summary.botResults[0].botId, "builtin-mm-simple");
+  assert.equal(payload.summary.botResults[0].finalEquity, 1000100);
+  assert.equal(payload.summary.botResults[0].tradingMetrics.commands.submitted, 4);
+  assert.equal(payload.summary.settlementScore.participants[0].participantId, "builtin-mm-simple");
 });
 
 test("parses cli flags", () => {

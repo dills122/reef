@@ -689,6 +689,18 @@ class PostgresSchemaRequirementsTest {
     }
 
     @Test
+    fun analyticsRunBotPerformanceRequirementsCoverSummaryTable() {
+        val requirements = PostgresSchemaRequirements.analyticsRunBotPerformanceSummaries("analytics.run_bot_performance_summaries")
+
+        assertEquals(setOf("analytics.run_bot_performance_summaries"), requirements.tables.map { it.qualifiedName }.toSet())
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.run_bot_performance_summaries.run_id" && it.expectedDataType == "text" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.run_bot_performance_summaries.bot_id" && it.expectedDataType == "text" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.run_bot_performance_summaries.final_equity" && it.expectedDataType == "double precision" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "analytics.run_bot_performance_summaries.settlement_score_summary" && it.expectedDataType == "jsonb" })
+        assertEquals(15, requirements.columns.size)
+    }
+
+    @Test
     fun commandLogRequirementsCoverAppendOnlyCommandTable() {
         val requirements = PostgresSchemaRequirements.commandLog("command_log.commands")
 

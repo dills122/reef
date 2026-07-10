@@ -249,6 +249,8 @@ It owns:
 
 Analytics can lag and should be rebuildable. It must not define matching correctness, account correctness, or settlement correctness.
 
+The first bot/run analytics projection is `analytics.run_bot_performance_summaries`, exposed for admin reads through `/admin/v1/analytics/run-bot-summaries` and `/internal/admin/analytics/run-bot-summaries`. It is rebuilt during simulation-run export ingestion from `analytics.simulation_run_exports.summary.botResults` plus matching `settlementScore.participants` entries when present. Rows are keyed by `(run_id, bot_id)` and contain final equity, realized PnL, max drawdown, fail counts, command counts, and the raw settlement score participant summary. This is a query-optimized, non-authoritative projection: source reports, settlement facts, arena run results, and canonical venue/settlement facts remain the audit sources. Freshness is "last export ingested"; replaying the same export idempotently upserts the same run/bot row.
+
 ## Projection Families
 
 Projection is a pattern, not one database.
