@@ -458,6 +458,12 @@ Required before merge:
 - configured bot ownership limits pass
 - OpenBao slice exists or has been provisioned
 
+The bot-submission workflow posts or updates a PR comment after the hosted
+OpenBao step. That comment includes only non-secret metadata: bot ID, submitter
+identity, provisioning flow, the OpenBao slice path, and the next user/operator
+action. It must never include token values, GitHub OIDC tokens, OpenBao tokens,
+or bot secret data.
+
 Required before run:
 
 - bot version is accepted

@@ -105,6 +105,10 @@ jobs:
   registry-diff-and-provision:
     needs: [detect-flow, validate-manifest, scan-and-sandbox-test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
     # `always()` + explicit check lets bots/remove skip the 1-3 gate (no bot
     # code to scan/test) while still requiring validate/scan to have passed
     # for add/update flows.
@@ -127,6 +131,8 @@ jobs:
         if: needs.detect-flow.outputs.flow != 'remove'
         run: node scripts/dev/bot-submission-registry-diff.mjs "${{ needs.detect-flow.outputs.bot-name }}"
       - name: OpenBao provisioning
+        id: openbao-provision
+        continue-on-error: true
         env:
           BOT_SUBMISSION_OPENBAO_MODE: real
         run: |
@@ -136,10 +142,46 @@ jobs:
           else
             provision_flow="${{ steps.registry-diff.outputs.flow }}"
           fi
-          node scripts/dev/bot-submission-provision-openbao.mjs \
+          slice_path="secret/bots/${{ github.actor }}/${{ needs.detect-flow.outputs.bot-name }}"
+          echo "flow=$provision_flow" >> "$GITHUB_OUTPUT"
+          echo "slice-path=$slice_path" >> "$GITHUB_OUTPUT"
+          set +e
+          output=$(node scripts/dev/bot-submission-provision-openbao.mjs \
             "${{ needs.detect-flow.outputs.bot-name }}" \
             "$provision_flow" \
-            "${{ github.actor }}"
+            "${{ github.actor }}" 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            result="success"
+          else
+            result="failure"
+          fi
+          message=$(printf '%s\n' "$output" | tail -n 1)
+          {
+            echo "result=$result"
+            echo "exit-code=$status"
+            echo "message<<EOF"
+            printf '%s\n' "$message"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Comment OpenBao provisioning result
+        if: always() && steps.openbao-provision.outputs.result != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BOT_ID: ${{ needs.detect-flow.outputs.bot-name }}
+          SUBMITTER_IDENTITY: ${{ github.actor }}
+          PROVISION_FLOW: ${{ steps.openbao-provision.outputs.flow }}
+          PROVISION_RESULT: ${{ steps.openbao-provision.outputs.result }}
+          PROVISION_MESSAGE: ${{ steps.openbao-provision.outputs.message }}
+          OPENBAO_SLICE_PATH: ${{ steps.openbao-provision.outputs['slice-path'] }}
+        run: node scripts/dev/bot-submission-pr-comment.mjs
+      - name: Fail on OpenBao provisioning failure
+        if: steps.openbao-provision.outputs['exit-code'] != '0'
+        run: exit 1
 
   # Off-convention PRs skip the pipeline above entirely (see detect-flow).
   # This job catches the case that would otherwise slip through silently:
