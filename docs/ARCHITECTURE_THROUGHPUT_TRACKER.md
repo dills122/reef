@@ -4,6 +4,8 @@
 
 Track architecture work needed to move beyond accepted-request intake toward sustained `7500` completed commands per second per runtime + engine instance, with `10000` completed commands per second as the preferred target, while preserving command capture, auditability, deterministic simulation, and zero silent loss.
 
+Status note (2026-07-09): this tracker is evidence and workstream history. The single active execution ladder lives in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder). Where older bullets below say "next" for JetStream/generic stream workers, treat them as historical unless repeated in `WORK_PLAN.md`, `CURRENT_STATUS.md`, or a later decision.
+
 Primary plan:
 - [`docs/ARCHITECTURE_THROUGHPUT_PLAN.md`](./ARCHITECTURE_THROUGHPUT_PLAN.md)
 - [`docs/STREAM_ACK_ARCHITECTURE_PLAN.md`](./STREAM_ACK_ARCHITECTURE_PLAN.md)
@@ -12,24 +14,24 @@ Primary plan:
 - [`docs/DIGITALOCEAN_STRESS_TEST_PLAN.md`](./DIGITALOCEAN_STRESS_TEST_PLAN.md)
 
 Architecture checkpoint:
-- D-037 reframes stream-ack as the high-throughput path for a deterministic simulated market venue.
-- the main success metric is `completed/sec`: worker processed the command, canonical command result and venue events committed, and JetStream message acked.
+- D-041 and D-043 supersede the older generic JetStream-worker ladder for the active venue-core path: Kafka-compatible durable command ingress, matching-engine direct partition consumption, durable `VenueEventBatch` publication, then asynchronous Postgres materialization.
+- the main success metric is materialized completed throughput: accepted commands are direct-acked or offset-committed only after durable event-batch publication, materialized into canonical Postgres rows, and reconciled with zero accepted/materialized gap.
 - `accepted/sec` is durable ingress capacity, `projected/sec` is read-model catch-up, and `visible/sec` is UI/control-room freshness.
-- the next large architectural work is role split, canonical append store, async projections, engine shards, then DigitalOcean benchmark harness.
-- engine sharding should not precede canonical append/projection separation unless evidence shows the engine is the current bottleneck.
+- role split, canonical append/materialization, async projections, direct engine consumption, crash gates, and the first DigitalOcean materializer harness are now implemented enough to be measured.
+- engine sharding and snapshot/replay recovery should not precede longer direct-materializer soak evidence unless evidence shows the engine is again the bottleneck.
 
-Current measured reference:
+Historical local measured reference from the older capacity-baseline path:
 - best local ceiling probe: `2961.43 rps` total, `2919.27 rps` accepted, `98.58%` success
 - profile: `capacity-baseline`, target `6500`, workers `768`, gRPC runtime-engine, runtime threads `64`, DB pool max `48`
 - capacity model: all targets in this tracker are per runtime + engine instance unless explicitly labeled cluster-wide
 
-Current loaded-stack reference from the Bot Arena planning branch:
+Historical loaded-stack reference from the Bot Arena planning branch:
 - best current-stack ceiling probe on 2026-07-01: `2096.39 rps` total, `2070.02 rps` accepted, `98.74%` success
 - profile: `capacity-baseline`, target `3000`, workers `384`, API v1 command path, non-clean local Postgres data volume
 - larger target probes (`4000/448`, `5000/512`, `6500/768`) reduced accepted throughput and increased tail latency
 - use this as a conservative loaded-instance planning cap until clean-stack and diagnostic runs are repeated
 
-Clean-DB retest reference from the Bot Arena planning branch:
+Historical clean-DB retest reference from the Bot Arena planning branch:
 - pre-reset database dump: `/tmp/reef-loaded-before-clean-reset-20260701.dump` (`345MB` compressed, source DB `8431MB`)
 - clean database before sweep: `8359kB`, zero live rows in hot runtime/boundary tables
 - best clean ceiling probe on 2026-07-01: `2067.95 rps` total, `2042.40 rps` accepted, `98.76%` success
@@ -61,8 +63,8 @@ Current captured-ack scaling reference from the Bot Arena planning branch:
 
 Current architecture direction:
 - Postgres `captured-ack` remains a correctness baseline and local fallback, but it is not the final high-throughput design for the bot-arena target.
-- The next major throughput track is `stream-ack`: durable JetStream publish ack before `202`, deterministic partition routing by run/session/instrument, partition workers that commit canonical Postgres results/events before JetStream ack, and downstream projection workers with watermarks.
-- The next stream-ack target is not more command-log tuning. The phase order is role split and explicit partition ownership, canonical append store, async projections, engine shards, then a DigitalOcean benchmark harness.
+- Generic JetStream `stream-ack` workers remain fallback/comparison and historical baseline. The active throughput track is Redpanda/Kafka-compatible direct-stream plus venue-event materializer, with JetStream retained for comparison.
+- The current direct-materializer ladder is: local crash/replay gate, short DigitalOcean `10k / 60s / 3 samples`, then `10k / 5m / 2 samples`, then `10k / 15m / 1 sample`.
 - Near-term benchmarks must report attempted/sec, accepted/sec, completed/sec, projected/sec where applicable, backlog/lag, DB flush p95/p99, and replay/checksum evidence before claiming progress toward `7500-10000` completed/sec.
 
 Latest accounting smoke:

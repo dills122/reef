@@ -4,7 +4,9 @@
 
 Use a single DigitalOcean Droplet to run the deploy-shaped stream-ack stack on hardware closer to the target environment than Docker Desktop. This test is for capacity discovery and bottleneck identification, not for declaring the architecture finished.
 
-The local result justifies the move:
+Status note (2026-07-09): the active remote promotion path is the Redpanda/Kafka-compatible direct-stream plus venue-event-materializer gate described in [Current Direct Materializer Promotion Gate](#current-direct-materializer-promotion-gate). The older JetStream worker sections remain historical comparison material and should not be treated as the active execution ladder.
+
+Historical JetStream worker result that justified the first DO move:
 
 - API returns `202` only after JetStream durable publish acknowledgement.
 - API, workers, projectors, NATS, matching engine, boundary DB, runtime DB, and projection DB run as separate containers.
@@ -31,7 +33,9 @@ The local result justifies the move:
 - No public internet product exposure beyond SSH and the benchmark API port needed for controlled tests.
 - No final `7500-10000 completed/sec` claim unless completed/projected throughput and replay evidence support it.
 
-## First Test Shape
+## Historical First Test Shape
+
+This was the first generic JetStream worker shape. It is kept for comparison and cost/context only; it is not the active direct-materializer promotion shape.
 
 Start with one CPU-Optimized Droplet and the same Docker Compose role split used locally:
 
@@ -106,6 +110,8 @@ Postgres activity waits, `pg_stat_io`, Kafka producer queue/request latency,
 materializer batch size/fetch rate, checkpoint/autovacuum pressure, and
 container restart counts.
 
+Contradiction flag: any section below that names `2000 -> 5000 -> 7500` as the "next" ladder applies to the older generic JetStream stream-worker path. For the active direct-materializer path, use the `10k short -> 10k 5m -> 10k 15m` ladder above unless a later decision supersedes it.
+
 ## Backpressure Policy Modes
 
 Stream-ack drain backpressure has two explicit policies:
@@ -127,7 +133,9 @@ Use these defaults for the first implementation unless a later decision explicit
 - API exposure: do not open the API publicly by default. Run stress commands over SSH on the Droplet, and restrict the firewall to SSH from configured CIDRs.
 - Cleanup: destroy is the normal end state for `run-destroy` and `fetch-destroy`.
 
-## Benchmark Sequence
+## Historical Generic Stream-Worker Benchmark Sequence
+
+This sequence applies to the older generic stream-worker path. For the active direct-materializer path, use `make do-materializer-10k-gate` after the local materializer smoke/replay/crash gates pass.
 
 Do not start this sequence until the local admission gates in [`COMMAND_INTAKE_PROCESS.md`](./COMMAND_INTAKE_PROCESS.md) pass for the active profile.
 
@@ -143,7 +151,7 @@ Do not start this sequence until the local admission gates in [`COMMAND_INTAKE_P
 10. Fetch stress reports, telemetry, logs, and selected DB/NATS diagnostics.
 11. Destroy the Droplet unless we are actively iterating.
 
-For the Redpanda direct no-DB materializer track, run `make dev-validate-stream-profile PROFILE=materializer-soak` (or `bun scripts/dev/reef-dev.mjs stream validate materializer-soak`) before starting the stack, then run `make dev-smoke-venue-event-materializer` before any measured soak. The smoke must prove durable command append, direct matching consume/ack, event-batch publish, canonical materialization, projection idempotency, and order read-model reconstruction from the event-batch payload. The first measured retry should be the previously failed short materializer stress shape with strict zero-gap direct/materializer guardrails before any 10k+ long soak.
+For the Redpanda direct materializer track, run `make dev-validate-stream-profile PROFILE=materializer-soak` (or `bun scripts/dev/reef-dev.mjs stream validate materializer-soak`) before starting the stack, then run `make dev-smoke-venue-event-materializer` and the crash/replay gate before any measured soak. The smoke must prove durable command append, direct matching consume/ack, event-batch publish, canonical materialization, projection idempotency, and order read-model reconstruction from the event-batch payload. The named remote gate is now `make do-materializer-10k-gate`; its short tier has already produced passing c-16 evidence, so the next promotion work is longer `soak-5m` evidence, not another first short-shape retry unless code changed.
 
 ## Pre-DO Admission Gates
 
@@ -273,6 +281,10 @@ Required promotion rules:
 
 ## Success Criteria
 
+For the active direct-materializer ladder, success criteria are the `10k` gate requirements listed in [Current Direct Materializer Promotion Gate](#current-direct-materializer-promotion-gate).
+
+For the historical generic stream-worker ladder:
+
 Minimum for each promotion tier:
 
 - The tier holds its target completed throughput for at least `5m`.
@@ -298,6 +310,8 @@ Healthy promotion target:
 - projection lag visible and bounded, not silent
 
 ## Next Ablation Sequence
+
+This sequence belongs to the historical generic JetStream worker path. Do not use it to supersede the active direct-materializer ladder without a new decision or an explicit `WORK_PLAN.md` update.
 
 Run these before another broad high-rate soak:
 

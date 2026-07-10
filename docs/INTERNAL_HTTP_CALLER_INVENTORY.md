@@ -12,7 +12,7 @@ Raw `/internal/*` HTTP routes are local/migration adapters, not product APIs or 
 - `scripts/dev/export-simulation-run.mjs`: posts analytics exports to `/admin/v1/analytics/run-exports`.
 - `scripts/dev/admin.mjs`: account-risk, circuit-breaker, and price-collar writes use runtime gateway routes under `/admin/v1/risk/...`.
 - `scripts/dev/seed-p2-settlement-facts.mjs`: uses `/admin/v1/settlement/facts` when `ADMIN_API_TOKEN` or `--admin-gateway` is present; otherwise posts `/internal/admin/settlement/facts` and falls back to Docker container loopback when host-to-container traffic fails the local-only guard.
-- `infra/hetzner-core/server/Caddyfile`: exposes only `/admin/v1/arena/...` and `/admin/v1/analytics/...`; raw `/internal/*` and `/admin/v1/risk/...` are not proxied.
+- `infra/hetzner-core/server/Caddyfile`: proxies `/admin/v1/*` through the runtime admin gateway; raw `/internal/*` is not proxied.
 
 ## Local-Only Callers
 
@@ -38,6 +38,5 @@ These callers still use raw `/internal/*` for local workflows. Do not reuse them
 ## Next Moves
 
 - Decide whether to expose `/admin/v1/risk/...` through hosted Caddy if protective controls become a remote website/operator workflow; the runtime gateway routes already exist for local/admin CLI use.
-- Decide whether to expose `/admin/v1/settlement/...` through hosted Caddy before remote operator settlement workflows use it; the runtime gateway routes already exist for local/admin-token use.
 - Move arena run/result local helpers to `/admin/v1` when leaderboard ingestion becomes a hosted admin path.
 - Keep diagnostic reads (`/internal/commands/*`, `/internal/stream-ack/*`, `/internal/perf/*`, projector/materializer stats) loopback-only unless an explicit operator observability gateway is designed.

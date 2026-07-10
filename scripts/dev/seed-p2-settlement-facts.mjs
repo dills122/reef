@@ -10,9 +10,11 @@ loadDotEnv();
 const args = parseArgs(process.argv.slice(2));
 const { runtimeUrl: defaultRuntimeUrl } = deriveDevUrls();
 const runtimeUrl = (args.runtimeUrl ?? defaultRuntimeUrl).replace(/\/$/, "");
+const adminApiToken = args.token ?? process.env.ADMIN_API_TOKEN ?? "";
+const actorId = args.actorId ?? process.env.ADMIN_ACTOR_ID ?? "settlement-seeder";
 const scenarioRunId = args.scenarioRunId ?? process.env.SCENARIO_RUN_ID ?? "p2-settlement-live";
 const facts = p2SettlementFacts(scenarioRunId);
-const useAdminGateway = args.adminGateway || (process.env.ADMIN_API_TOKEN ?? "").trim() !== "";
+const useAdminGateway = args.adminGateway || adminApiToken.trim() !== "";
 const settlementFactsPath = useAdminGateway
   ? "/admin/v1/settlement/facts"
   : "/internal/admin/settlement/facts";
@@ -32,6 +34,7 @@ console.log(
       status: "ok",
       runtimeUrl,
       settlementFactsPath,
+      actorId,
       scenarioRunId,
       postedStatus: posted.status ?? "ok",
       obligationCount: fetched.obligations.length,
@@ -51,6 +54,10 @@ function parseArgs(argv) {
       out.dryRun = true;
       continue;
     }
+    if (arg === "--admin-gateway") {
+      out.adminGateway = true;
+      continue;
+    }
     const match = arg.match(/^--([^=]+)=(.*)$/);
     if (!match) {
       throw new Error(`unknown argument: ${arg}`);
@@ -65,10 +72,10 @@ function toCamel(value) {
 }
 
 function requestHeaders(path) {
-  const token = process.env.ADMIN_API_TOKEN ?? "";
   return {
     "content-type": "application/json",
-    ...(path.startsWith("/admin/v1/") && token.trim() !== "" ? { Authorization: `Bearer ${token}` } : {}),
+    "X-Reef-Actor-Id": actorId,
+    ...(path.startsWith("/admin/v1/") && adminApiToken.trim() !== "" ? { Authorization: `Bearer ${adminApiToken}` } : {}),
     ...(path.startsWith("/internal/") ? { "X-Reef-Internal-Route": "true" } : {}),
   };
 }

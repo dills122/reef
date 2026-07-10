@@ -66,7 +66,7 @@ Current decision anchors:
 
 ## Current Forward Path
 
-Work should follow this order unless a new decision supersedes it. The active checkpoint is durable direct path hardening: local API marker, engine, materializer, projector, replay proof, and short remote `10k` materializer evidence exist; longer remote soak evidence still gates promotion.
+This is a short summary of the single active execution ladder in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder), not a second planning source. Work should follow that ladder unless a new decision supersedes it. The active checkpoint is durable direct path hardening: local API marker, engine, materializer, projector, replay proof, and short remote `10k` materializer evidence exist; longer remote soak evidence still gates promotion.
 
 1. Keep the current durable-acceptance contracts stable while promoting the D-041 Redpanda/Kafka-compatible hot-ingress path from local proof to longer remote evidence.
 2. Complete the API/control-plane hardening backlog in [`API_SURFACE_POLICY.md`](./API_SURFACE_POLICY.md#api-and-control-plane-hardening-backlog): remaining account/object authorization, `/internal/*` caller migration from [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md), internal gRPC service identity, richer readiness, deterministic stream lane keys, and fail-closed non-local profiles.

@@ -453,6 +453,7 @@ class PlatformHttpServer(
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
             analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
             recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
+            appendSettlementFactsJson = { body -> appendSettlementFactsResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
