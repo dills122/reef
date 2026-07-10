@@ -57,6 +57,7 @@ ${statusPrefix(result)} ${statusLine}
 - Submitter identity: \`${submitterIdentity}\`
 - Flow: \`${flow}\` - ${actionLine}
 - Secret slice: \`${slicePath}\`
+- Access model: Reef Admin is the participant-facing secret/config surface; direct OpenBao access is operator-only over a private SSH tunnel.
 - Actions run: ${runUrl}
 
 ${nextSteps}
@@ -86,9 +87,18 @@ function nextStepsFor(value, status) {
     return "Next step: reviewers can confirm the bot removal. The OpenBao slice has been revoked/deleted by the hosted provisioning gate.";
   }
   if (value === "update") {
-    return "Next step: reviewers can continue the bot update review. Existing bot secrets stay in the same slice; do not commit replacements in this PR.";
+    return [
+      "Next step: reviewers can continue the bot update review.",
+      "Existing bot secrets stay in the same slice; do not commit replacements in this PR.",
+      "If config changes are needed before the Admin secret UI is available,",
+      "a `secret-admin`/operator should update the slice through the private OpenBao operator path.",
+    ].join(" ");
   }
-  return "Next step: reviewers can continue the new bot review. If the bot needs private config, the submitter or a `secret-admin` should add it through the Reef admin/secret workflow for this slice after review approval.";
+  return [
+    "Next step: reviewers can continue the new bot review.",
+    "If the bot needs private config, the submitter should use the Reef Admin secret/config workflow once available;",
+    "until then, a `secret-admin`/operator should add it through the private OpenBao operator path after review approval.",
+  ].join(" ");
 }
 
 function statusPrefix(value) {
