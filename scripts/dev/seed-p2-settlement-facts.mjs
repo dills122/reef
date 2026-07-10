@@ -6,6 +6,8 @@ loadDotEnv();
 const args = parseArgs(process.argv.slice(2));
 const { runtimeUrl: defaultRuntimeUrl } = deriveDevUrls();
 const runtimeUrl = (args.runtimeUrl ?? defaultRuntimeUrl).replace(/\/$/, "");
+const adminApiToken = args.token ?? process.env.ADMIN_API_TOKEN ?? "";
+const actorId = args.actorId ?? process.env.ADMIN_ACTOR_ID ?? "settlement-seeder";
 const scenarioRunId = args.scenarioRunId ?? process.env.SCENARIO_RUN_ID ?? "p2-settlement-live";
 const facts = p2SettlementFacts(scenarioRunId);
 
@@ -14,7 +16,7 @@ if (args.dryRun) {
   process.exit(0);
 }
 
-const posted = await postJson(`${runtimeUrl}/internal/admin/settlement/facts`, facts);
+const posted = await postJson(`${runtimeUrl}/admin/v1/settlement/facts`, facts);
 const fetched = await fetchJson(`${runtimeUrl}/api/v1/settlement/facts/${encodeURIComponent(scenarioRunId)}`);
 validateReadback(fetched, scenarioRunId);
 
@@ -23,6 +25,7 @@ console.log(
     {
       status: "ok",
       runtimeUrl,
+      actorId,
       scenarioRunId,
       postedStatus: posted.status ?? "ok",
       obligationCount: fetched.obligations.length,
@@ -58,7 +61,11 @@ function toCamel(value) {
 async function postJson(url, body) {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "X-Reef-Actor-Id": actorId,
+      ...(adminApiToken ? { authorization: `Bearer ${adminApiToken}` } : {}),
+    },
     body: JSON.stringify(body),
   });
   const text = await response.text();
