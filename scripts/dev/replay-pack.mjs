@@ -53,6 +53,9 @@ const report = JSON.parse(readFileSync(reportOut, "utf8"));
 const check = evaluateReportDrift(report, baseline, { baselinePath, reportPath: reportOut });
 writeFileSync(checkOut, JSON.stringify(check, null, 2));
 
+for (const warning of check.warnings ?? []) {
+  console.warn(`replay pack drift warning: ${warning}`);
+}
 if (!check.pass) {
   console.error("replay pack drift check failed");
   for (const failure of check.failures) {

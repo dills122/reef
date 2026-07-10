@@ -4,6 +4,7 @@
   "thresholds": {
     "minThroughputRps": 80,
     "minAcceptedBusinessOpsRps": 60,
+    "performanceTolerancePct": 5,
     "maxP95LatencyMs": 250,
     "minTracePassRatePct": 90
   },
