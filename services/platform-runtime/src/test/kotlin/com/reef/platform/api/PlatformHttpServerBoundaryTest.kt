@@ -137,6 +137,14 @@ class PlatformHttpServerBoundaryTest {
             ),
             adminGatewayRouteFor("/admin/v1/arena/bot-versions/transition")
         )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/settlement/facts",
+                "admin",
+                setOf(AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/settlement/facts")
+        )
     }
 
     @Test
@@ -2414,6 +2422,41 @@ class PlatformHttpServerBoundaryTest {
             assertContains(fetched.body, "\"postTradePolicyVersion\":2")
             assertContains(fetched.body, "\"reason\":\"CASH_LEG_FAILED\"")
             assertContains(fetched.body, "\"repairAction\":\"POST_CASH_LEG_REPAIR\"")
+            assertContains(fetched.body, "\"settlementState\":\"RESOLVED\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewaySettlementFactsEndpointAppendsAndReadsP2FactsByScenarioRunId() {
+        val auth = testAdminAuth()
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Admin,
+            subjectActorId = "settlement-seeder",
+            ttl = null
+        )
+        val settlementStore = InMemorySettlementFactStore()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            settlementFactStore = settlementStore
+        )
+        try {
+            val posted = post(
+                server.address.port,
+                "/admin/v1/settlement/facts",
+                mapOf("Authorization" to "Bearer ${serviceToken.token}"),
+                p2SettlementFactsBody("p2-run-admin-gateway")
+            )
+            val fetched = get(server.address.port, "/api/v1/settlement/facts/p2-run-admin-gateway")
+
+            assertEquals(200, posted.status)
+            assertContains(posted.body, "\"status\":\"ok\"")
+            assertEquals(200, fetched.status)
+            assertContains(fetched.body, "\"scenarioRunId\":\"p2-run-admin-gateway\"")
+            assertContains(fetched.body, "\"settlementObligationId\":\"obl-1\"")
             assertContains(fetched.body, "\"settlementState\":\"RESOLVED\"")
         } finally {
             server.stop(0)

@@ -144,6 +144,11 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         "analytics",
         setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
     )
+    "/admin/v1/settlement/facts" -> AdminGatewayRoute(
+        "/internal/admin/settlement/facts",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
     // GET reads the boundary's read-only mirror; POST writes through the admin
     // mutation path. Same public path, two different internal targets.
     "/admin/v1/risk/account-controls" -> AdminGatewayRoute(
@@ -423,6 +428,7 @@ class PlatformHttpServer(
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
             analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
             recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
+            appendSettlementFactsJson = { body -> appendSettlementFactsResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -568,6 +574,7 @@ class PlatformHttpServer(
             "/admin/v1/arena/bots/openbao-provision",
             "/admin/v1/arena/bot-versions/transition",
             "/admin/v1/analytics/run-exports",
+            "/admin/v1/settlement/facts",
             "/admin/v1/risk/account-controls",
             "/admin/v1/risk/circuit-breakers",
             "/admin/v1/risk/price-collars"
