@@ -31,7 +31,7 @@
 	let configDraftByBotId = $state<Record<string, string>>({});
 	let configErrorByBotId = $state<Record<string, string>>({});
 	let configBusyByBotId = $state<Record<string, boolean>>({});
-	let expandedConfigBotId = $state('');
+	let selectedConfigBotId = $state('');
 	let loading = $state(true);
 	let error = $state('');
 	let riskError = $state('');
@@ -80,17 +80,27 @@
 		}
 	}
 
-	async function toggleBotConfig(botId: string) {
-		if (expandedConfigBotId === botId) {
-			expandedConfigBotId = '';
-			return;
-		}
-		expandedConfigBotId = botId;
+	async function openBotConfig(botId: string) {
+		selectedConfigBotId = botId;
 		if (!configDraftByBotId[botId]) {
 			configDraftByBotId = { ...configDraftByBotId, [botId]: '{\n}' };
 		}
 		if (!configByBotId[botId]) {
 			await loadBotConfig(botId);
+		}
+	}
+
+	function closeBotConfig() {
+		selectedConfigBotId = '';
+	}
+
+	function updateConfigDraft(botId: string, value: string) {
+		configDraftByBotId = { ...configDraftByBotId, [botId]: value };
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && selectedConfigBotId) {
+			closeBotConfig();
 		}
 	}
 
@@ -202,6 +212,8 @@
 	<title>Admin — Bot Arena</title>
 </svelte:head>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <h1 class="mb-6 text-3xl font-normal tracking-[-0.03em] lowercase">admin</h1>
 
 {#if loading}
@@ -269,68 +281,12 @@
 									<Button
 										variant="secondary"
 										class="min-h-8 px-2.5 py-1.5 text-xs"
-										onclick={() => toggleBotConfig(bot.botId)}
+										onclick={() => openBotConfig(bot.botId)}
 									>
-										config
+										configure
 									</Button>
 								</div>
 							</div>
-
-							{#if expandedConfigBotId === bot.botId}
-								<div class="mt-4 border-t border-rule pt-4">
-									<div class="grid gap-3 lg:grid-cols-[1fr_1.2fr]">
-										<div class="min-w-0 text-sm">
-											<p class="truncate text-ink">{configStatus?.secretPath ?? 'secret path unavailable'}</p>
-											<p class="mt-1 text-xs text-muted">
-												{configStatus?.hasConfig ? 'configured' : 'empty'} · values hidden · save replaces blob
-											</p>
-											{#if configStatus?.keys?.length}
-												<div class="mt-3 flex flex-wrap gap-1.5">
-													{#each configStatus.keys as key}
-														<span class="max-w-full truncate border border-rule px-2 py-0.5 text-xs text-muted">{key}</span>
-													{/each}
-												</div>
-											{/if}
-											{#if configErrorByBotId[bot.botId]}
-												<p class="mt-3 text-xs text-destructive">{configErrorByBotId[bot.botId]}</p>
-											{/if}
-										</div>
-										<div class="min-w-0">
-											<textarea
-												class="min-h-40 w-full resize-y border border-rule bg-bg p-3 text-sm leading-relaxed text-ink outline-none focus:border-accent-hover"
-												spellcheck="false"
-												disabled={configBusy}
-												bind:value={configDraftByBotId[bot.botId]}
-											></textarea>
-											<div class="mt-3 flex flex-wrap justify-end gap-2">
-												<Button
-													variant="secondary"
-													class="min-h-8 px-2.5 py-1.5 text-xs"
-													disabled={configBusy}
-													onclick={() => loadBotConfig(bot.botId)}
-												>
-													refresh
-												</Button>
-												<Button
-													variant="secondary"
-													class="min-h-8 border-destructive px-2.5 py-1.5 text-xs text-destructive"
-													disabled={configBusy}
-													onclick={() => clearBotConfig(bot.botId)}
-												>
-													clear
-												</Button>
-												<Button
-													class="min-h-8 px-2.5 py-1.5 text-xs"
-													disabled={configBusy}
-													onclick={() => saveBotConfig(bot.botId)}
-												>
-													save
-												</Button>
-											</div>
-										</div>
-									</div>
-								</div>
-							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -392,4 +348,143 @@
 			{/if}
 		</Card>
 	</div>
+{/if}
+
+{#if selectedConfigBotId}
+	{@const selectedBot = bots.find((bot) => bot.botId === selectedConfigBotId)}
+	{#if selectedBot}
+		{@const selectedOwner = selectedBot.owners?.[0]}
+		{@const selectedState = botState(selectedBot.botId)}
+		{@const selectedStatus = configByBotId[selectedBot.botId]}
+		{@const selectedBusy = configBusyByBotId[selectedBot.botId]}
+		{@const selectedError = configErrorByBotId[selectedBot.botId]}
+		<div class="fixed inset-0 z-50">
+			<button
+				class="absolute inset-0 h-full w-full cursor-default bg-black/70"
+				type="button"
+				aria-label="Close config editor"
+				onclick={closeBotConfig}
+			></button>
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+				<div
+					class="pointer-events-auto grid max-h-[calc(100vh-2rem)] w-full max-w-6xl overflow-y-auto border border-rule-strong bg-bg shadow-2xl md:grid-cols-[360px_1fr] md:overflow-hidden"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="bot-config-title"
+				>
+				<aside class="min-h-0 border-b border-rule bg-[#0d1422] p-5 md:overflow-y-auto md:border-b-0 md:border-r">
+					<div class="flex items-start justify-between gap-4">
+						<div class="min-w-0">
+							<p class="text-xs text-muted">bot config</p>
+							<h2 id="bot-config-title" class="mt-2 break-words text-2xl font-bold text-ink">
+								{selectedBot.metadata.name}
+							</h2>
+						</div>
+						<button
+							class="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-rule-strong text-lg leading-none text-muted transition-colors hover:border-accent-hover hover:text-ink"
+							type="button"
+							aria-label="Close config editor"
+							onclick={closeBotConfig}
+						>
+							×
+						</button>
+					</div>
+
+					<div class="mt-5 flex flex-wrap gap-2">
+						<span class={cn('rounded-full border px-2 py-0.5 text-xs leading-tight', stateClass(selectedState))}
+							>{selectedState}</span
+						>
+						<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
+							{selectedBusy && !selectedStatus ? 'loading' : selectedStatus?.hasConfig ? 'configured' : 'empty'}
+						</span>
+					</div>
+
+					<dl class="mt-6 space-y-4 text-sm">
+						<div>
+							<dt class="text-xs text-muted">bot id</dt>
+							<dd class="mt-1 break-all text-ink">{selectedBot.botId}</dd>
+						</div>
+						<div>
+							<dt class="text-xs text-muted">source</dt>
+							<dd class="mt-1 break-all text-ink">{selectedBot.fileName}</dd>
+						</div>
+						<div>
+							<dt class="text-xs text-muted">owner</dt>
+							<dd class="mt-1 text-ink">{selectedOwner?.githubLogin ?? selectedBot.metadata.publisher}</dd>
+							{#if selectedBot.metadata.email}
+								<dd class="mt-1 break-all text-muted">{selectedBot.metadata.email}</dd>
+							{/if}
+						</div>
+						<div>
+							<dt class="text-xs text-muted">secret path</dt>
+							<dd class="mt-1 break-all text-ink">{selectedStatus?.secretPath ?? 'unavailable'}</dd>
+						</div>
+					</dl>
+
+					{#if selectedStatus?.keys?.length}
+						<div class="mt-6">
+							<p class="text-xs text-muted">stored keys</p>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								{#each selectedStatus.keys as key}
+									<span class="max-w-full truncate border border-rule px-2 py-0.5 text-xs text-muted">{key}</span>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					{#if selectedError}
+						<div class="mt-6 border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive">
+							{selectedError}
+						</div>
+					{/if}
+				</aside>
+
+				<div class="flex min-h-0 flex-col p-5">
+					<div class="flex flex-col gap-4 border-b border-rule pb-4 sm:flex-row sm:items-start sm:justify-between">
+						<div class="min-w-0 flex-1">
+							<h3 class="text-xl font-normal text-ink">json</h3>
+							<p class="mt-1 max-w-[58ch] text-sm text-muted">
+								values are hidden after save; saving replaces the stored object.
+							</p>
+						</div>
+						<div class="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+							<Button
+								variant="secondary"
+								class="min-h-9 px-3 py-2 text-xs"
+								disabled={selectedBusy}
+								onclick={() => loadBotConfig(selectedBot.botId)}
+							>
+								refresh
+							</Button>
+							<Button
+								variant="secondary"
+								class="min-h-9 border-destructive px-3 py-2 text-xs text-destructive"
+								disabled={selectedBusy}
+								onclick={() => clearBotConfig(selectedBot.botId)}
+							>
+								clear
+							</Button>
+							<Button
+								class="min-h-9 px-3 py-2 text-xs"
+								disabled={selectedBusy}
+								onclick={() => saveBotConfig(selectedBot.botId)}
+							>
+								{selectedBusy ? 'saving' : 'save'}
+							</Button>
+						</div>
+					</div>
+
+					<textarea
+						class="mt-4 min-h-[420px] flex-1 resize-none border border-rule bg-[#070b13] p-4 text-sm leading-relaxed text-ink outline-none focus:border-accent-hover"
+						spellcheck="false"
+						disabled={selectedBusy}
+						value={configDraftByBotId[selectedBot.botId] ?? '{\n}'}
+						oninput={(event) =>
+							updateConfigDraft(selectedBot.botId, (event.currentTarget as HTMLTextAreaElement).value)}
+					></textarea>
+				</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 {/if}
