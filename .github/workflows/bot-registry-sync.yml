@@ -1,0 +1,85 @@
+name: Bot Registry Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: 'Optional bot manifest path to sync, e.g. bots/dsteele-smoke-bot/bot.json. Empty syncs all bot manifests.'
+        required: false
+        default: ''
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'bots/**'
+      - 'scripts/dev/bot-submission-register-merged.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  sync-merged-bots:
+    runs-on: ubuntu-latest
+    env:
+      ARENA_ADMIN_API_URL: ${{ secrets.ARENA_ADMIN_API_URL }}
+      ARENA_ADMIN_API_TOKEN: ${{ secrets.ARENA_ADMIN_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.38'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Detect merged bot manifests
+        id: manifests
+        run: |
+          requested="${{ inputs.manifest_path || '' }}"
+          if [ -n "$requested" ]; then
+            changed="$requested"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            changed="$(git ls-files 'bots/*/bot.json')"
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              changed="$(git ls-files 'bots/*/bot.json')"
+            else
+              changed="$(git diff --name-only "$before" "$after" -- 'bots/*/bot.json')"
+            fi
+          fi
+          if [ -z "$changed" ]; then
+            echo "No bot manifests to sync."
+          fi
+          if [ -n "$requested" ] && [ ! -f "$requested" ]; then
+            echo "Requested manifest does not exist: $requested" >&2
+            exit 1
+          fi
+          if [ -z "$requested" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            changed="$(git ls-files 'bots/*/bot.json')"
+          fi
+
+          manifests=""
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            [ -f "$path" ] || continue
+            manifests="${manifests}${path}"$'\n'
+          done <<EOF
+          $changed
+          EOF
+
+          {
+            echo "paths<<EOF"
+            printf '%s' "$manifests"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Register merged bot metadata
+        if: steps.manifests.outputs.paths != ''
+        run: |
+          printf '%s' "${{ steps.manifests.outputs.paths }}" \
+            | xargs node scripts/dev/bot-submission-register-merged.mjs

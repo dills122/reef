@@ -146,6 +146,11 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         "admin",
         setOf(AdminServiceTokenFamily.Admin)
     )
+    "/admin/v1/arena/bot-versions" -> AdminGatewayRoute(
+        "/internal/admin/arena/bot-versions",
+        "arena",
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+    )
     "/admin/v1/arena/bot-versions/transition" -> AdminGatewayRoute(
         "/internal/admin/arena/bot-versions/transition",
         "arena",

@@ -133,6 +133,14 @@ class PlatformHttpServerBoundaryTest {
         )
         assertEquals(
             AdminGatewayRoute(
+                "/internal/admin/arena/bot-versions",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/bot-versions")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/arena/bot-versions/transition",
                 "arena",
                 setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
