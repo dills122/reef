@@ -22,6 +22,20 @@ const provider = createOpenBaoRuntimeSecretProvider({
     if (url === "http://openbao.test/v1/secret/data/bots/local/working-bot") {
       return jsonResponse(200, { data: { data: { instrumentId: "AAPL", orderSize: 3, spread: 0.25, enabled: true } } });
     }
+    if (url === "http://openbao.test/v1/secret/data/bots/local/blob-bot") {
+      return jsonResponse(200, {
+        data: {
+          data: {
+            config_schema: "reef.bot-config.v1",
+            config_json: JSON.stringify({
+              instrumentId: "MSFT",
+              orderSize: 7,
+              nested: { ignoredByRuntimeDescriptors: true },
+            }),
+          },
+        },
+      });
+    }
     if (url === "http://openbao.test/v1/secret/data/bots/local/type-mismatch") {
       return jsonResponse(200, { data: { data: { orderSize: "three" } } });
     }
@@ -99,6 +113,30 @@ assert.deepEqual(resolved.values, {
   instrumentId: "AAPL",
   orderSize: 3,
   spread: 0.25,
+});
+
+const blobResolved = await resolveBotRuntimeConfigV1(
+  [
+    {
+      key: "instrumentId",
+      provider: "OpenBao",
+      secretPath: "secret/bots/local/blob-bot",
+      required: true,
+      valueType: "string",
+    },
+    {
+      key: "orderSize",
+      provider: "OpenBao",
+      secretPath: "secret/bots/local/blob-bot",
+      required: true,
+      valueType: "number",
+    },
+  ],
+  provider,
+);
+assert.deepEqual(blobResolved.values, {
+  instrumentId: "MSFT",
+  orderSize: 7,
 });
 
 const report = runtimeConfigPreflightReport(provider, descriptors, resolved.values);

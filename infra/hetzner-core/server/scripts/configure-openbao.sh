@@ -116,6 +116,16 @@ path "secret/data/services/platform-runtime/*" {
 }
 POLICY
 
+cat <<'POLICY' | bao policy write reef-platform-admin-bot-config -
+path "secret/data/bots/*" {
+  capabilities = ["create", "update", "read"]
+}
+
+path "secret/metadata/bots/*" {
+  capabilities = ["list", "read", "delete"]
+}
+POLICY
+
 cat <<'POLICY' | bao policy write reef-simulator -
 path "secret/data/bots/*" {
   capabilities = ["read"]
@@ -134,6 +144,13 @@ bao write auth/approle/role/reef-platform-runtime \
   token_policies="reef-platform-runtime" \
   token_ttl="1h" \
   token_max_ttl="4h" \
+  secret_id_ttl="0" \
+  secret_id_num_uses="0"
+
+bao write auth/approle/role/reef-platform-admin-bot-config \
+  token_policies="reef-platform-admin-bot-config" \
+  token_ttl="30m" \
+  token_max_ttl="2h" \
   secret_id_ttl="0" \
   secret_id_num_uses="0"
 

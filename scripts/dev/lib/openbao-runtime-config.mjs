@@ -49,6 +49,16 @@ export function openBaoKvV2DataPath(path) {
 
 function normalizeOpenBaoSecret(payload) {
   const data = payload?.data?.data;
+  if (data !== null && typeof data === "object" && !Array.isArray(data) && typeof data.config_json === "string") {
+    try {
+      const parsed = JSON.parse(data.config_json);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return Object.freeze(Object.fromEntries(Object.entries(parsed).filter((entry) => isRuntimeConfigValue(entry[1]))));
+      }
+    } catch {
+      return undefined;
+    }
+  }
   if (isRuntimeConfigValue(data)) {
     return data;
   }

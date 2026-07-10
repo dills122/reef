@@ -130,6 +130,8 @@ fi
 
 PLATFORM_BAO_ROLE_ID="$(existing_env_value "$SECRETS/platform-runtime.env" BAO_ROLE_ID)"
 PLATFORM_BAO_SECRET_ID="$(existing_env_value "$SECRETS/platform-runtime.env" BAO_SECRET_ID)"
+PLATFORM_BAO_BOT_CONFIG_ROLE_ID="$(existing_env_value "$SECRETS/platform-runtime.env" BAO_BOT_CONFIG_ROLE_ID)"
+PLATFORM_BAO_BOT_CONFIG_SECRET_ID="$(existing_env_value "$SECRETS/platform-runtime.env" BAO_BOT_CONFIG_SECRET_ID)"
 SIMULATOR_BAO_ROLE_ID="$(existing_env_value "$SECRETS/simulator.env" BAO_ROLE_ID)"
 SIMULATOR_BAO_SECRET_ID="$(existing_env_value "$SECRETS/simulator.env" BAO_SECRET_ID)"
 SIMULATOR_API_TOKEN="$(existing_env_value "$SECRETS/simulator.env" REEF_API_BEARER_TOKEN)"
@@ -196,6 +198,8 @@ ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
 append_env_if_set "$SECRETS/platform-runtime.env" BAO_ROLE_ID "$PLATFORM_BAO_ROLE_ID"
 append_env_if_set "$SECRETS/platform-runtime.env" BAO_SECRET_ID "$PLATFORM_BAO_SECRET_ID"
+append_env_if_set "$SECRETS/platform-runtime.env" BAO_BOT_CONFIG_ROLE_ID "$PLATFORM_BAO_BOT_CONFIG_ROLE_ID"
+append_env_if_set "$SECRETS/platform-runtime.env" BAO_BOT_CONFIG_SECRET_ID "$PLATFORM_BAO_BOT_CONFIG_SECRET_ID"
 chmod 600 "$SECRETS/platform-runtime.env"
 
 cat > "$SECRETS/matching-engine.env" <<EOF
