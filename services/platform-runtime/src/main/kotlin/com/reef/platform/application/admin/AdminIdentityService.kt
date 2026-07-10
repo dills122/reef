@@ -22,6 +22,15 @@ data class AdminBotOwnershipCommand(
     val ownershipState: AdminBotOwnershipState = AdminBotOwnershipState.Owner
 )
 
+data class AdminBotOwnerMetadata(
+    val reefUserId: String,
+    val githubLogin: String,
+    val displayName: String,
+    val trustState: AdminTrustState,
+    val ownershipState: AdminBotOwnershipState,
+    val assignedAt: Instant
+)
+
 class AdminIdentityService(
     private val store: AdminIdentityStore,
     private val now: () -> Instant = { Instant.now() },
@@ -156,6 +165,25 @@ class AdminIdentityService(
     fun rolesForUser(reefUserId: String): List<AdminUserRole> = store.rolesForUser(reefUserId)
 
     fun botLimit(reefUserId: String): AdminUserBotLimit? = store.userBotLimit(reefUserId)
+
+    fun user(reefUserId: String): AdminUser? = store.userByReefUserId(reefUserId)
+
+    fun botOwnerMetadata(botId: String): List<AdminBotOwnerMetadata> {
+        return store.botOwnerships(botId)
+            .filter { it.ownershipState != AdminBotOwnershipState.Revoked }
+            .mapNotNull { ownership ->
+                store.userByReefUserId(ownership.reefUserId)?.let { user ->
+                    AdminBotOwnerMetadata(
+                        reefUserId = user.reefUserId,
+                        githubLogin = user.githubLogin,
+                        displayName = user.displayName,
+                        trustState = user.trustState,
+                        ownershipState = ownership.ownershipState,
+                        assignedAt = ownership.assignedAt
+                    )
+                }
+            }
+    }
 
     private fun seedBaselineRoles() {
         val createdAt = now()

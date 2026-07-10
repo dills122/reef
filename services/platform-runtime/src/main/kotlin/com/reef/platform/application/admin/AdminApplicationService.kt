@@ -433,6 +433,11 @@ class AdminApplicationService(
         return arenaStore().runRecord(runId)
     }
 
+    fun arenaRuns(actor: AdminActor, limit: Int): List<ArenaRunRecord> {
+        requirePermission(actor, Permission.ARENA_ADMIN)
+        return arenaStore().runs(limit)
+    }
+
     fun arenaRunBotResults(actor: AdminActor, runId: String): List<ArenaRunBotResult> {
         requirePermission(actor, Permission.ARENA_ADMIN)
         return arenaControlPlane().runBotResults(runId)

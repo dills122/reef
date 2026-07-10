@@ -3,9 +3,11 @@ package com.reef.platform.api
 import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminAuthService
 import com.reef.platform.application.admin.AdminApplicationService
+import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
+import com.reef.platform.application.admin.AdminTrustState
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.admin.InMemoryAdminAuthStore
 import com.reef.platform.application.admin.InMemoryAdminIdentityStore
@@ -199,6 +201,11 @@ class PlatformHttpServerBoundaryTest {
     fun adminGatewayAcceptsSessionCookieAndServiceToken() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
+        auth.identityService.assignBotOwnership(
+            "admin-cli",
+            AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = "bot-1")
+        )
         val session = auth.authService.createSession(user.reefUserId)
         val serviceToken = auth.authService.issueServiceToken(
             tokenFamily = AdminServiceTokenFamily.Admin,
@@ -349,6 +356,11 @@ class PlatformHttpServerBoundaryTest {
                 createdAt = now.plusSeconds(1)
             )
         )
+        auth.identityService.updateTrustState("admin-cli", user.reefUserId, AdminTrustState.Trusted)
+        auth.identityService.assignBotOwnership(
+            "admin-cli",
+            AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = "bot-1")
+        )
         val server = testServerWithGateway(
             gateway = StaticAcceptedEngineGateway(),
             runtimePersistence = persistence,
@@ -368,6 +380,97 @@ class PlatformHttpServerBoundaryTest {
             assertContains(response.body, "\"bots\":[")
             assertContains(response.body, "\"botId\":\"bot-1\"")
             assertContains(response.body, "\"botId\":\"bot-2\"")
+            assertContains(response.body, "\"owners\":[")
+            assertContains(response.body, "\"githubLogin\":\"octo\"")
+            assertContains(response.body, "\"trustState\":\"trusted\"")
+            assertContains(response.body, "\"ownershipState\":\"owner\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayArenaRunsReadReturnsRecentRunsResultsAndLeaderboard() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
+        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val now = java.time.Instant.parse("2026-07-05T12:00:00Z")
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com"),
+                createdAt = now
+            )
+        )
+        arenaStore.saveRunRecord(
+            ArenaRunRecord(
+                runId = "run-1",
+                modeId = "hosted-sim",
+                scenarioId = "scenario-1",
+                seed = 42,
+                policyVersion = "policy-v1",
+                botVersions = listOf(ArenaRunBotVersionRef("bot-1", "v1")),
+                status = ArenaRunStatus.Completed,
+                createdAt = now
+            )
+        )
+        arenaStore.saveRunBotResult(
+            ArenaRunBotResult(
+                runId = "run-1",
+                botId = "bot-1",
+                versionId = "v1",
+                scoringPolicyVersion = "score-v2",
+                finalEquity = 1030000,
+                realizedPnl = 30000,
+                maxDrawdown = 900,
+                actionsProposed = 13,
+                orderActionsProposed = 9,
+                dataCalls = 21,
+                signalsGenerated = 5,
+                disqualified = false,
+                createdAt = now
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            val runs = get(server.address.port, "/admin/v1/arena/runs", headers = headers)
+            val results = get(server.address.port, "/admin/v1/arena/run-bot-results?runId=run-1", headers = headers)
+            val enforcementEvents = get(
+                server.address.port,
+                "/admin/v1/arena/run-enforcement-events?runId=run-1",
+                headers = headers
+            )
+            val leaderboard = get(
+                server.address.port,
+                "/admin/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
+                headers = headers
+            )
+
+            assertEquals(200, runs.status)
+            assertContains(runs.body, "\"runs\":[")
+            assertContains(runs.body, "\"runId\":\"run-1\"")
+            assertContains(runs.body, "\"status\":\"Completed\"")
+            assertEquals(200, results.status)
+            assertContains(results.body, "\"results\":[")
+            assertContains(results.body, "\"scoringPolicyVersion\":\"score-v2\"")
+            assertEquals(200, enforcementEvents.status)
+            assertContains(enforcementEvents.body, "\"events\":[]")
+            assertEquals(200, leaderboard.status)
+            assertContains(leaderboard.body, "\"entries\":[")
+            assertContains(leaderboard.body, "\"botName\":\"Bot 1\"")
         } finally {
             server.stop(0)
         }
