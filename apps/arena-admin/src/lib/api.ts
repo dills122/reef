@@ -93,13 +93,29 @@ export type AccountRiskControl = {
 	updatedAt?: string;
 };
 
+export type BotConfigStatus = {
+	botId: string;
+	ownerIdentity: string;
+	secretPath: string;
+	hasConfig: boolean;
+	keys: string[];
+	updatedAt?: string;
+	updatedBy?: string;
+	version?: number | null;
+};
+
 type ErrorBody = {
 	error?: string;
 };
 
-async function fetchAdminJson<T>(path: string): Promise<T> {
+async function fetchAdminJson<T>(path: string, init: RequestInit = {}): Promise<T> {
 	const res = await fetch(`${PUBLIC_ARENA_API_BASE_URL}${path}`, {
-		credentials: 'include'
+		...init,
+		credentials: 'include',
+		headers: {
+			...(init.body ? { 'content-type': 'application/json' } : {}),
+			...(init.headers ?? {})
+		}
 	});
 	if (!res.ok) {
 		let message = `${res.status} ${res.statusText}`.trim();
@@ -191,4 +207,23 @@ export async function fetchAdminRiskControls(): Promise<AccountRiskControl[]> {
 		'/admin/v1/risk/account-controls'
 	);
 	return body.controls ?? [];
+}
+
+export async function fetchBotConfigStatus(botId: string): Promise<BotConfigStatus> {
+	const params = new URLSearchParams({ botId });
+	return await fetchAdminJson<BotConfigStatus>(`/admin/v1/arena/bots/config?${params}`);
+}
+
+export async function replaceBotConfig(botId: string, config: unknown): Promise<BotConfigStatus> {
+	return await fetchAdminJson<BotConfigStatus>('/admin/v1/arena/bots/config', {
+		method: 'PUT',
+		body: JSON.stringify({ botId, config })
+	});
+}
+
+export async function deleteBotConfig(botId: string): Promise<BotConfigStatus> {
+	const params = new URLSearchParams({ botId });
+	return await fetchAdminJson<BotConfigStatus>(`/admin/v1/arena/bots/config?${params}`, {
+		method: 'DELETE'
+	});
 }

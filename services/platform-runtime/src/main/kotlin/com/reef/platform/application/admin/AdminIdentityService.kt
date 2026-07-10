@@ -185,6 +185,10 @@ class AdminIdentityService(
             }
     }
 
+    fun recordControlPlaneAudit(actorId: String, eventType: String, targetType: String, targetId: String, detail: String) {
+        audit(actorId, eventType, targetType, targetId, detail)
+    }
+
     private fun seedBaselineRoles() {
         val createdAt = now()
         BaselineRoles.forEach { (roleId, description) ->

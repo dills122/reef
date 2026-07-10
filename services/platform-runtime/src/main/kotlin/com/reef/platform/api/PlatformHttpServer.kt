@@ -36,6 +36,8 @@ import com.reef.platform.application.arena.ArenaRunBotVersionRef
 import com.reef.platform.application.arena.ArenaRunRecord
 import com.reef.platform.application.arena.ArenaRunStatus
 import com.reef.platform.application.arena.ArenaRuntimeConfigDescriptor
+import com.reef.platform.application.arena.OpenBaoBotConfigService
+import com.reef.platform.application.arena.OpenBaoBotConfigServiceConfig
 import com.reef.platform.application.arena.OpenBaoClientException
 import com.reef.platform.application.arena.OpenBaoProvisioningConfig
 import com.reef.platform.application.arena.OpenBaoProvisioningService
@@ -138,6 +140,11 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "arena",
             setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
         )
+    "/admin/v1/arena/bots/config" -> AdminGatewayRoute(
+        "/internal/admin/arena/bots/config",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
     "/admin/v1/arena/bot-versions/transition" -> AdminGatewayRoute(
         "/internal/admin/arena/bot-versions/transition",
         "arena",
@@ -259,6 +266,8 @@ private data class AdminRequestPrincipal(
 )
 
 private val adminRequestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
+
+private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
 
 private enum class InternalHttpExposureMode {
     Disabled,
@@ -496,6 +505,7 @@ class PlatformHttpServer(
             recordArenaRunEnforcementEventJson = { body -> recordArenaRunEnforcementEventResponse(body) },
             arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
+            arenaBotOpenBaoConfigJson = { method, query, body -> arenaBotOpenBaoConfigResponse(method, query, body) },
             analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
             recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
             analyticsRunBotSummariesJson = { query -> analyticsRunBotSummariesResponse(query) },
@@ -643,6 +653,7 @@ class PlatformHttpServer(
         for (path in listOf(
             "/admin/v1/arena/bots",
             "/admin/v1/arena/bots/openbao-provision",
+            "/admin/v1/arena/bots/config",
             "/admin/v1/arena/bot-versions/transition",
             "/admin/v1/arena/runs",
             "/admin/v1/arena/run-bot-results",
@@ -1543,7 +1554,7 @@ class PlatformHttpServer(
             return
         }
         val principal = authorizeAdminGateway(exchange, route) ?: return
-        val body = if (exchange.requestMethod == "POST") {
+        val body = if (exchange.requestMethod in setOf("POST", "PUT", "PATCH")) {
             readRequestBody(exchange) ?: return
         } else {
             ""
@@ -3529,6 +3540,155 @@ class PlatformHttpServer(
         }
     }
 
+    private fun arenaBotOpenBaoConfigResponse(method: String, query: String?, body: String): PlatformHotPathResponse {
+        val service = arenaAdminService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
+        return when (method) {
+            "GET" -> arenaBotOpenBaoConfigStatusResponse(service, query)
+            "PUT" -> arenaBotOpenBaoConfigReplaceResponse(service, body)
+            "DELETE" -> arenaBotOpenBaoConfigDeleteResponse(service, query)
+            else -> methodNotAllowedResponse()
+        }
+    }
+
+    private fun arenaBotOpenBaoConfigStatusResponse(
+        service: AdminApplicationService,
+        query: String?
+    ): PlatformHotPathResponse {
+        val botId = queryValue(query, "botId")
+        if (botId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
+        }
+        return try {
+            val bot = service.arenaBot(arenaAdminActor(query), botId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
+            val ownerIdentity = openBaoOwnerIdentity(bot)
+                ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
+            if (!canManageBotOpenBaoConfig(bot.botId)) {
+                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
+            }
+            val snapshot = openBaoBotConfigService().status(ownerIdentity, bot.botId)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to snapshot.botId,
+                    "ownerIdentity" to snapshot.ownerIdentity,
+                    "secretPath" to snapshot.secretPath,
+                    "hasConfig" to snapshot.hasConfig,
+                    "keys" to snapshot.keys,
+                    "updatedAt" to snapshot.updatedAt,
+                    "updatedBy" to snapshot.updatedBy,
+                    "version" to snapshot.version
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
+        } catch (ex: OpenBaoClientException) {
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config lookup failed")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config lookup failed")))
+        }
+    }
+
+    private fun arenaBotOpenBaoConfigReplaceResponse(
+        service: AdminApplicationService,
+        body: String
+    ): PlatformHotPathResponse {
+        val json = try {
+            JsonCodec.parseObject(body)
+        } catch (ex: IllegalArgumentException) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid json payload"))
+        }
+        val botId = json.string("botId")
+        val configJson = json.raw("config")
+        if (botId.isBlank() || configJson.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and config are required"))
+        }
+        return try {
+            val bot = service.arenaBot(arenaAdminActor(json), botId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
+            val ownerIdentity = openBaoOwnerIdentity(bot)
+                ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
+            if (!canManageBotOpenBaoConfig(bot.botId)) {
+                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
+            }
+            val actor = currentAdminPrincipal().actorId
+            val result = openBaoBotConfigService().replaceConfig(ownerIdentity, bot.botId, configJson, actor)
+            recordAdminControlPlaneAudit(
+                actor,
+                "AdminArenaBotConfigReplaced",
+                "arena-bot",
+                result.botId,
+                "secretPath=${result.secretPath},keyCount=${result.keys.size}"
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to result.botId,
+                    "ownerIdentity" to result.ownerIdentity,
+                    "secretPath" to result.secretPath,
+                    "hasConfig" to true,
+                    "keys" to result.keys,
+                    "updatedAt" to result.updatedAt
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config")))
+        } catch (ex: OpenBaoClientException) {
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config write failed")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config write failed")))
+        }
+    }
+
+    private fun arenaBotOpenBaoConfigDeleteResponse(
+        service: AdminApplicationService,
+        query: String?
+    ): PlatformHotPathResponse {
+        val botId = queryValue(query, "botId")
+        if (botId.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
+        }
+        return try {
+            val bot = service.arenaBot(arenaAdminActor(query), botId)
+                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
+            val ownerIdentity = openBaoOwnerIdentity(bot)
+                ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
+            if (!canManageBotOpenBaoConfig(bot.botId)) {
+                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
+            }
+            openBaoBotConfigService().deleteConfig(ownerIdentity, bot.botId)
+            val actor = currentAdminPrincipal().actorId
+            val secretPath = "secret/bots/$ownerIdentity/${bot.botId}"
+            recordAdminControlPlaneAudit(
+                actor,
+                "AdminArenaBotConfigDeleted",
+                "arena-bot",
+                bot.botId,
+                "secretPath=$secretPath"
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to bot.botId,
+                    "ownerIdentity" to ownerIdentity,
+                    "secretPath" to secretPath,
+                    "hasConfig" to false,
+                    "keys" to emptyList<String>()
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
+        } catch (ex: OpenBaoClientException) {
+            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config delete failed")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config delete failed")))
+        }
+    }
+
     private fun arenaBotResponse(query: String?): PlatformHotPathResponse {
         val service = arenaAdminService
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
@@ -5389,6 +5549,60 @@ class PlatformHttpServer(
 
     private fun arenaAdminActor(query: String?): AdminActor {
         return arenaAdminActor()
+    }
+
+    private fun openBaoBotConfigService(): OpenBaoBotConfigService {
+        val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
+            .ifBlank { throw IllegalArgumentException("BAO_ADDR is not configured") }
+        val roleId = RuntimeEnv.string("BAO_BOT_CONFIG_ROLE_ID", "")
+            .ifBlank { throw IllegalArgumentException("BAO_BOT_CONFIG_ROLE_ID is not configured") }
+        val secretId = RuntimeEnv.string("BAO_BOT_CONFIG_SECRET_ID", "")
+            .ifBlank { throw IllegalArgumentException("BAO_BOT_CONFIG_SECRET_ID is not configured") }
+        return OpenBaoBotConfigService(
+            OpenBaoBotConfigServiceConfig(
+                baoAddr = baoAddr,
+                roleId = roleId,
+                secretId = secretId
+            )
+        )
+    }
+
+    private fun openBaoOwnerIdentity(bot: ArenaBot): String? {
+        val owner = adminIdentityService?.botOwnerMetadata(bot.botId)
+            .orEmpty()
+            .firstOrNull()
+            ?.githubLogin
+        return owner?.ifBlank { null } ?: bot.metadata.publisher.takeIf { it.isNotBlank() }
+    }
+
+    private fun canManageBotOpenBaoConfig(botId: String): Boolean {
+        val identityService = adminIdentityService ?: return true
+        val actorId = currentAdminPrincipal().actorId
+        if (!actorId.startsWith("user-gh-")) return true
+        val roles = identityService.rolesForUser(actorId).map { it.roleId }.toSet()
+        if (roles.any { it in adminBotConfigPrivilegedRoles }) return true
+        val user = identityService.user(actorId) ?: return false
+        if (user.trustState.dbValue == "banned") return false
+        return identityService.botOwnerMetadata(botId).any { owner ->
+            owner.reefUserId == actorId && owner.ownershipState.dbValue in setOf("owner", "maintainer")
+        }
+    }
+
+    private fun recordAdminControlPlaneAudit(
+        actorId: String,
+        eventType: String,
+        targetType: String,
+        targetId: String,
+        detail: String
+    ) {
+        val identityService = adminIdentityService ?: return
+        try {
+            identityService.recordControlPlaneAudit(actorId, eventType, targetType, targetId, detail)
+        } catch (ex: Exception) {
+            System.err.println(
+                "admin_control_plane_audit_failed eventType=$eventType targetId=$targetId message=${JsonFields.escape(ex.message ?: "unknown")}"
+            )
+        }
     }
 
     private fun arenaBotJson(bot: ArenaBot): Map<String, Any?> {

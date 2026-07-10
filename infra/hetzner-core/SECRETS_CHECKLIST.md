@@ -79,6 +79,7 @@ on the Hetzner host.
 | `/opt/reef/secrets/simulator.env` | Simulator API bearer token, client id prefix, optional Bao AppRole credentials | Hosted smoke/soak simulator |
 | `/opt/reef/secrets/caddy.env` | `ARENA_ADMIN_API_TOKEN`, `ANALYTICS_EXPORT_API_TOKEN` | Caddy public admin gateway and platform runtime route checks |
 | `/opt/reef/secrets/backup.env` | `AGE_RECIPIENT` and optional R2 settings | Host backup job |
+| `/opt/reef/secrets/platform-runtime.env` | `BAO_BOT_CONFIG_ROLE_ID`, `BAO_BOT_CONFIG_SECRET_ID` | Dedicated OpenBao AppRole used by the Admin API for participant bot config writes |
 
 Do not replace generated simulator/static API tokens with hand-written values.
 The generator maps `sim-client-*` identities into `EXTERNAL_API_TOKENS` and
@@ -108,6 +109,18 @@ server.
 | `BOT_SUBMISSION_OPENBAO_MODE` | Enables real OpenBao provisioning in CI | Set to `real` only for the hosted provisioning workflow. |
 | `ACTIONS_ID_TOKEN_REQUEST_URL` | GitHub OIDC URL | Supplied by GitHub Actions when workflow grants `id-token: write`. |
 | `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | GitHub OIDC request token | Supplied by GitHub Actions when workflow grants `id-token: write`. |
+
+After `BAO_TOKEN="..." ./scripts/configure-openbao.sh`, generate the Admin API
+bot-config AppRole with:
+
+```bash
+BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config
+```
+
+Append the printed `BAO_ROLE_ID` and `BAO_SECRET_ID` as
+`BAO_BOT_CONFIG_ROLE_ID` and `BAO_BOT_CONFIG_SECRET_ID` in
+`/opt/reef/secrets/platform-runtime.env`, then redeploy or restart
+`platform-runtime`.
 
 ## Current Gaps
 

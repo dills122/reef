@@ -236,6 +236,7 @@ server-side service token. Scoped service token families are route-specific:
 ```text
 /admin/v1/arena/bots                    -> ci, admin
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
+/admin/v1/arena/bots/config             -> admin
 GET /admin/v1/arena/runs                -> ci, admin
 GET /admin/v1/arena/run-bot-results     -> ci, admin
 GET /admin/v1/arena/run-enforcement-events -> ci, admin
@@ -293,6 +294,66 @@ When the Admin DB auth layer is configured, authenticated session and service
 tokens bind the internal admin actor id from the trusted token record instead of
 from caller-controlled headers. The static fallback preserves the older header
 behavior for legacy scripts until those callers move to service tokens.
+
+## Participant Bot Config
+
+Accepted bots use a bot-scoped OpenBao slice:
+
+```text
+secret/bots/<submitter-identity>/<bot-id>
+```
+
+Participants manage that slice through the Admin app's bot config panel. The
+browser talks only to `/admin/v1/arena/bots/config`; it never receives an
+OpenBao token and the API never returns secret values.
+
+Supported operations:
+
+```text
+GET    /admin/v1/arena/bots/config?botId=<bot-id>
+PUT    /admin/v1/arena/bots/config
+DELETE /admin/v1/arena/bots/config?botId=<bot-id>
+```
+
+The `PUT` body is:
+
+```json
+{
+  "botId": "sample-bot",
+  "config": {
+    "apiKey": "stored-in-openbao",
+    "riskLimit": 1000
+  }
+}
+```
+
+The Admin API validates that `config` is a JSON object, caps the serialized
+payload at 65 KiB, allows at most 128 top-level keys, and requires each
+top-level key to match `[A-Za-z0-9_.-]{1,64}`. Values may be arbitrary JSON so
+bot authors are not forced into a fixed schema. Runtime descriptor preflight
+still resolves only scalar string/number/boolean keys.
+
+OpenBao stores the object as one opaque `config_json` string field plus metadata
+(`config_schema`, `config_sha256`, `updated_at`, `updated_by`). This keeps the
+participant-facing blob flexible and avoids returning or audit-recording secret
+values through Reef. Reef Admin audit records for replace/delete include only
+the bot id, OpenBao path, and key count/path metadata.
+
+Authorization:
+
+- the bot owner or maintainer can manage that bot's config unless banned
+- `operator`, `secret-admin`, and `platform-admin` can manage any bot config
+- `/admin/v1/arena/bots/config` accepts only admin-family service tokens on the
+  service-token path
+
+OpenBao access uses the dedicated `reef-platform-admin-bot-config` AppRole from
+`infra/hetzner-core/server/scripts/configure-openbao.sh`. The runtime must have
+these env vars in `/opt/reef/secrets/platform-runtime.env`:
+
+```text
+BAO_BOT_CONFIG_ROLE_ID=...
+BAO_BOT_CONFIG_SECRET_ID=...
+```
 
 ## Bot Submission Flow
 

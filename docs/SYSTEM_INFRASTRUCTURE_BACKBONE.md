@@ -192,6 +192,7 @@ Auth backends:
 | Auth backend | Consumer | Purpose |
 |---|---|---|
 | `approle/` | `reef-platform-runtime` | Runtime reads for bot/service secrets. |
+| `approle/` | `reef-platform-admin-bot-config` | Admin API writes and metadata reads for participant bot config. |
 | `approle/` | `reef-simulator` | Simulator reads for bot/service secrets when needed. |
 | `jwt/` | GitHub Actions bot-submission CI | Narrow create/update/delete access under bot secret paths. |
 
@@ -208,6 +209,15 @@ Bot secret slice convention:
 
 ```text
 secret/bots/<submitter-identity>/<bot-id>
+```
+
+Participant bot config is managed through the Admin app and
+`/admin/v1/arena/bots/config`, not through direct participant OpenBao login. The
+runtime needs `BAO_BOT_CONFIG_ROLE_ID` and `BAO_BOT_CONFIG_SECRET_ID` in
+`/opt/reef/secrets/platform-runtime.env`; generate them with:
+
+```bash
+BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config
 ```
 
 OpenBao initialization and unseal remain manual. Unseal keys and root/admin
@@ -234,13 +244,17 @@ Current Caddy route intent:
 ```text
 /admin/v1/arena/bots
 /admin/v1/arena/bots/openbao-provision
+/admin/v1/arena/bots/config
 ```
 
-These are bearer-token gated with `ARENA_ADMIN_API_TOKEN` and reverse-proxy to
-`platform-runtime:8080`. All other requests return `404`.
+These are admin-gateway authenticated and reverse-proxy to
+`platform-runtime:8080`. Bot-submission routes accept CI/admin token families;
+bot config accepts only browser sessions or admin-family service tokens. All
+other requests return `404`.
 
-This route exists for bot-submission CI. Normal operators should still prefer
-SSH tunnels.
+These routes exist for bot-submission CI and the hosted Admin app. Normal
+operators should still prefer SSH tunnels for direct OpenBao or raw internal
+maintenance.
 
 ## Database Split
 
