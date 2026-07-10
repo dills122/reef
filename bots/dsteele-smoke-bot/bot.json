@@ -1,0 +1,14 @@
+{
+  "botId": "dsteele-smoke-bot",
+  "fileName": "index.ts",
+  "metadata": {
+    "name": "dsteele-smoke-bot",
+    "publisher": "dills122",
+    "email": "15662762+dills122@users.noreply.github.com",
+    "version": "1.0.0",
+    "sdkVersion": "1.5.0",
+    "botApiVersion": "v1",
+    "description": "Conservative smoke-test market maker for the hosted bot submission flow.",
+    "tags": ["smoke", "market-maker", "hosted-ci"]
+  }
+}
