@@ -462,6 +462,7 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   arena_report="$artifact_dir/arena-local-tick-run.json"
+  arena_persisted_report="$artifact_dir/arena-local-tick-run.persisted.json"
   arena_export="$artifact_dir/arena-export.json"
   arena_command_timeout_ms="${REEF_BENCHMARK_ARENA_COMMAND_TIMEOUT_MS:-3000}"
   arena_timeout_seconds="${REEF_BENCHMARK_ARENA_TIMEOUT_SECONDS:-$((REEF_BENCHMARK_ARENA_DURATION_SECONDS + 900))}"
@@ -487,7 +488,6 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --venue-url=http://127.0.0.1:8080 \
     --arena-admin-url=http://127.0.0.1:8080 \
     --seed-reference \
-    --persist-results \
     --duration-seconds="$REEF_BENCHMARK_ARENA_DURATION_SECONDS" \
     --tick-interval-ms="$REEF_BENCHMARK_ARENA_TICK_INTERVAL_MS" \
     --warmup-seconds="$REEF_BENCHMARK_ARENA_WARMUP_SECONDS" \
@@ -498,8 +498,11 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
     --projection-drain-timeout-ms=30000 \
     --require-projection-drain \
     --out="$arena_report"
+  run_stage arena-persist-report-local node scripts/dev/arena-persist-report-local.mjs \
+    --report="$arena_report" \
+    --out="$arena_persisted_report"
   run_stage arena-export node scripts/dev/export-simulation-run.mjs \
-    --report "$arena_report" \
+    --report "$arena_persisted_report" \
     --artifact-root "$artifact_dir" \
     --run-kind arena-do \
     --source digitalocean \
