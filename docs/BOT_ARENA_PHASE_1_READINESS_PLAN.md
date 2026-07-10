@@ -11,6 +11,8 @@ This is not the public-submission or hosted-tournament milestone. Phase 1 is the
 operator-controlled/local proof that the arena model works before exposing it to
 external bot authors.
 
+Status note (2026-07-09): this file is now partly historical. The local Phase 1 positive and negative persisted gates, static operator report rendering, leaderboard readback, and shared-time multi-instrument local proof have landed. Current Bot Arena execution order lives in [`WORK_PLAN.md`](./WORK_PLAN.md#active-execution-ladder) and [`BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md`](./BOT_ARENA_DO_SIMULATION_SOAK_CHECKLIST.md). Do not treat the "Build Soon" sections below as a second active ladder when they describe shipped local pieces.
+
 ## Current Foundations
 
 Reef already has the main pieces Phase 1 should compose:
@@ -27,6 +29,12 @@ Reef already has the main pieces Phase 1 should compose:
   own-order reads, and data availability reporting.
 - Local smoke targets for bot SDK live runs, hosted SES/container execution,
   arena bot-version risk, and arena run-result ingestion.
+- Local positive and negative persisted arena gates:
+  `make dev-smoke-bot-arena-local-persist` and
+  `make dev-smoke-bot-arena-local-negative`.
+- Static report rendering and report-index comparison:
+  `make dev-render-bot-arena-report` and
+  `make dev-render-bot-arena-report-index`.
 
 ## Phase 1 Goal
 
@@ -43,12 +51,13 @@ Ship one local arena run path that can:
 8. Persist run results and expose a deterministic leaderboard.
 9. Produce a JSON report that can be used as the first arena regression artifact.
 
-## Build Soon
+Current status: the local arena run path, persisted positive/negative gates, enforcement-event persistence, leaderboard readback, and static report rendering exist. Remaining local hardening is paced shared-time `3-5m` proof with stronger fill/cancel/open-order pressure, then the hosted/backbone gate.
+
+## Historical Build Plan
 
 ### 1. Local Arena Orchestrator
 
-Add the first arena orchestration path around the existing Bot SDK and simulator
-pieces.
+Implemented as the local arena runner path; keep details below as design context for future hosted/scheduled reuse.
 
 Candidate home:
 
@@ -407,6 +416,8 @@ The gate should prove:
 - rejected/disqualified bots are represented explicitly
 
 ### 7. Local Arena Smoke Gate
+
+Status: landed. Keep the command names below as the local regression surface.
 
 Add:
 
