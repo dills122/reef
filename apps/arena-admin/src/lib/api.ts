@@ -10,7 +10,10 @@ export type LeaderboardEntry = {
 };
 
 export type SessionUser = {
+	reefUserId: string;
 	githubLogin: string;
+	displayName?: string;
+	trustState?: string;
 	roles: string[];
 };
 
@@ -138,7 +141,14 @@ export async function fetchSession(): Promise<SessionUser | null> {
 			credentials: 'include'
 		});
 		if (!res.ok) return null;
-		return (await res.json()) as SessionUser;
+		const body = (await res.json()) as Partial<SessionUser>;
+		return {
+			reefUserId: body.reefUserId ?? '',
+			githubLogin: body.githubLogin || body.reefUserId || 'admin',
+			displayName: body.displayName ?? '',
+			trustState: body.trustState ?? '',
+			roles: Array.isArray(body.roles) ? body.roles : []
+		};
 	} catch {
 		return null;
 	}

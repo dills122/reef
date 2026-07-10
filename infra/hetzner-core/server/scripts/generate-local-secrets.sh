@@ -123,6 +123,11 @@ fi
 # shellcheck disable=SC1091
 source "$SECRETS/caddy.env"
 
+if [[ -f "$SECRETS/admin-auth.env" ]]; then
+  # shellcheck disable=SC1091
+  source "$SECRETS/admin-auth.env"
+fi
+
 PLATFORM_BAO_ROLE_ID="$(existing_env_value "$SECRETS/platform-runtime.env" BAO_ROLE_ID)"
 PLATFORM_BAO_SECRET_ID="$(existing_env_value "$SECRETS/platform-runtime.env" BAO_SECRET_ID)"
 SIMULATOR_BAO_ROLE_ID="$(existing_env_value "$SECRETS/simulator.env" BAO_ROLE_ID)"
@@ -147,6 +152,7 @@ EXTERNAL_API_DEPLOYMENT_PROFILE=production
 ENGINE_DEPLOYMENT_PROFILE=hosted-single-host
 PLATFORM_ARENA_ADMIN_ENABLED=1
 PLATFORM_ADMIN_AUTH_ENABLED=${PLATFORM_ADMIN_AUTH_ENABLED:-false}
+PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED=${PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED:-false}
 ADMIN_SESSION_COOKIE_NAME=${ADMIN_SESSION_COOKIE_NAME:-reef_admin_session}
 ADMIN_SESSION_COOKIE_SECURE=${ADMIN_SESSION_COOKIE_SECURE:-true}
 PLATFORM_INTERNAL_HTTP_MODE=disabled

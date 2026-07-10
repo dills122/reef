@@ -47,12 +47,17 @@ if (!process.env.HCLOUD_TOKEN && process.env.HETZNER_TOKEN) {
   process.env.HCLOUD_TOKEN = process.env.HETZNER_TOKEN;
 }
 
+if (!process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_TOKEN) {
+  process.env.CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_TOKEN;
+}
+
 const args = process.argv.slice(2);
 if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
   console.log(`Usage: scripts/deploy/hetzner-core-tofu.mjs <tofu args...>
 
 Loads .env from the repository root and infra/hetzner-core/tofu, then maps
-HETZNER_TOKEN to HCLOUD_TOKEN for the Hetzner provider.
+HETZNER_TOKEN to HCLOUD_TOKEN for the Hetzner provider and CLOUDFLARE_TOKEN to
+CLOUDFLARE_API_TOKEN for optional Cloudflare DNS.
 
 Examples:
   make hetzner-core-tofu ARGS=init
@@ -76,4 +81,3 @@ if (result.error) {
 }
 
 process.exit(result.status ?? 1);
-

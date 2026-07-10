@@ -61,7 +61,7 @@
 	# SameSite=Lax admin session cookie stays first-party.
 	handle {
 		root * /srv/arena-admin
-		try_files {path} /index.html
+		try_files {path} {path}/index.html {path}.html /index.html
 		file_server
 	}
 }

@@ -113,8 +113,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./secrets/platform-runtime.env
-    environment:
-      PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED: "true"
     ports:
       - "127.0.0.1:${REEF_BACKBONE_PLATFORM_HOST_PORT:-8080}:8080"
     expose:

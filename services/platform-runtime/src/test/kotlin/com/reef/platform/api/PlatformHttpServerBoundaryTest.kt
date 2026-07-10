@@ -192,6 +192,10 @@ class PlatformHttpServerBoundaryTest {
             )
             assertEquals(200, session.status)
             assertContains(session.body, "\"reefUserId\":\"user-gh-12345\"")
+            assertContains(session.body, "\"githubLogin\":\"octo\"")
+            assertContains(session.body, "\"displayName\":\"Octo User\"")
+            assertContains(session.body, "\"trustState\":\"new\"")
+            assertContains(session.body, "\"roles\":[\"participant\"]")
         } finally {
             server.stop(0)
         }
