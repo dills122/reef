@@ -43,6 +43,12 @@ func TestScenarioSmokeDryRunPrintsExecutableRequests(t *testing.T) {
 	if first.Headers["Idempotency-Key"] != first.Payload["commandId"] {
 		t.Fatalf("idempotency header mismatch: %+v", first.Headers)
 	}
+	if first.Headers["X-Participant-Id"] != first.Payload["participantId"] {
+		t.Fatalf("participant header mismatch: %+v", first.Headers)
+	}
+	if first.Headers["X-Reef-Actor-Id"] != first.Payload["actorId"] {
+		t.Fatalf("actor header mismatch: %+v", first.Headers)
+	}
 }
 
 func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
@@ -77,6 +83,18 @@ func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/commands/"):
+			if r.Header.Get("X-Client-Id") == "" {
+				http.Error(w, "missing X-Client-Id", http.StatusUnauthorized)
+				return
+			}
+			if r.Header.Get("X-Participant-Id") == "" {
+				http.Error(w, "missing X-Participant-Id", http.StatusForbidden)
+				return
+			}
+			if r.Header.Get("X-Reef-Actor-Id") == "" {
+				http.Error(w, "missing X-Reef-Actor-Id", http.StatusForbidden)
+				return
+			}
 			commandID := strings.TrimPrefix(r.URL.Path, "/api/v1/commands/")
 			if !statusCommands[commandID] {
 				http.NotFound(w, r)
@@ -125,6 +143,8 @@ func TestScenarioSmokeLivePostsSeedAndExecutableRequests(t *testing.T) {
 func TestScenarioSmokeLiveAssertionsCheckCommandAndOwnOrderState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -256,6 +276,8 @@ func TestScenarioSmokeLiveAssertionsFailOnReadSurfaceSourceMismatch(t *testing.T
 func TestScenarioSmokeLiveAssertionsFailOnPublicTradeIdentityLeak(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -339,6 +361,8 @@ func TestScenarioSmokeLiveAssertionsFailOnOwnFillCounterpartyLeak(t *testing.T) 
 func TestScenarioSmokeLiveAssertionsFailOnPublicHiddenDepth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -400,6 +424,8 @@ func TestScenarioSmokeLiveAssertionsAttachReplayChecksumEvidence(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -514,6 +540,8 @@ func TestScenarioSmokeLiveAssertionsFailOnReplayChecksumEvidence(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -602,6 +630,8 @@ func TestScenarioSmokeLiveAssertionsCanRequireReplayChecksumEvidence(t *testing.
 func TestScenarioSmokeLiveAssertionsFailOnMissingOwnOrderState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -820,6 +850,45 @@ func TestScenarioSmokeLiveFailsWhenCommandStatusMissing(t *testing.T) {
 	}
 }
 
+func TestScenarioSmokeLiveAssertionsFailFastWhenCommandStatusLookupUnavailable(t *testing.T) {
+	posts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok","dependencies":{"commandStatusLookup":false}}`))
+		case r.Method == http.MethodPost:
+			posts++
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"status":"accepted"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"--scenario", filepath.Join(scenarioDefinitionsRoot(t), "P1_GOLDEN_HIDDEN_CROSS_T1.yaml"),
+		"--base-url", server.URL,
+		"--live",
+		"--assertions",
+	}, &stdout, server.Client())
+	if err == nil {
+		t.Fatal("expected command status readiness failure")
+	}
+	var report smokeReport
+	if unmarshalErr := json.Unmarshal(stdout.Bytes(), &report); unmarshalErr != nil {
+		t.Fatalf("report json did not unmarshal: %v\n%s", unmarshalErr, stdout.String())
+	}
+	if posts != 0 {
+		t.Fatalf("expected fail-fast before posts, got %d posts", posts)
+	}
+	if len(report.Errors) != 1 || !strings.Contains(report.Errors[0], "commandStatusLookup=false") {
+		t.Fatalf("expected command status lookup error, got %+v", report.Errors)
+	}
+}
+
 func TestScenarioSmokeWritesReportOut(t *testing.T) {
 	reportPath := filepath.Join(t.TempDir(), "p1-smoke.json")
 	var stdout bytes.Buffer
@@ -984,7 +1053,16 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 		availabilityJSON = p1DataAvailabilityJSON()
 	}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet &&
+			r.URL.Path != "/readyz" &&
+			!strings.HasPrefix(r.URL.Path, "/api/v1/commands/") &&
+			r.Header.Get("X-Client-Id") == "" {
+			http.Error(w, "missing X-Client-Id", http.StatusUnauthorized)
+			return
+		}
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -994,6 +1072,10 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 			_, _ = w.Write([]byte(`{"commandId":"` + commandID + `","status":"COMPLETED","resultStatus":"accepted","source":"canonical_outcome"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/history":
 			participantID := r.URL.Query().Get("participantId")
+			if r.Header.Get("X-Participant-Id") != participantID {
+				http.Error(w, "missing participant scope", http.StatusForbidden)
+				return
+			}
 			orderID := map[string]string{
 				"HIDDEN_SELLER_A": "p1_golden_hidden_cross_t1-ord-001",
 				"VISIBLE_BUYER_B": "p1_golden_hidden_cross_t1-ord-002",
@@ -1007,6 +1089,10 @@ func p1AssertionServer(t *testing.T, options p1AssertionServerOptions) *httptest
 			_, _ = w.Write([]byte(p1OwnOrderHistoryJSONWithFilled(orderID, options.filledQuantityByOrderID[orderID])))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders/fills":
 			participantID := r.URL.Query().Get("participantId")
+			if r.Header.Get("X-Participant-Id") != participantID {
+				http.Error(w, "missing participant scope", http.StatusForbidden)
+				return
+			}
 			responseJSON := p1OwnFillsJSON(participantID)
 			if options.ownFillsJSONByParticipant != nil && options.ownFillsJSONByParticipant[participantID] != "" {
 				responseJSON = options.ownFillsJSONByParticipant[participantID]
@@ -1032,6 +1118,8 @@ func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/readyz":
+			writeReadyzOK(w)
 		case r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"status":"accepted"}`))
@@ -1046,6 +1134,11 @@ func p2SettlementServer(t *testing.T, settlementFacts string) *httptest.Server {
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+func writeReadyzOK(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"ok","dependencies":{"commandStatusLookup":true}}`))
 }
 
 func hasAssertion(report smokeReport, assertionID string, status string) bool {

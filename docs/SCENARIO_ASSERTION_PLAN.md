@@ -143,6 +143,8 @@ Required field meaning:
 6. Add P2 obligation, `CASH_LEG_FAILED`, repair, and resolved-state assertions. Current implementation checks one obligation with `tradeId`, one `CASH_LEG_FAILED` break, one `POST_CASH_LEG_REPAIR`, final settlement/exception `RESOLVED`, no resolution without repair linkage, and causation fields on every settlement fact.
 7. Promote passing reports into the active evidence docs.
 
+Current local gate note: the P1 assertion harness carries client, participant, and actor identity headers across command status and read assertions, preflights `/readyz` before `--assertions`, accepts provider-neutral `sync-result` command-capture status, and polls projection-backed own-order reads until lifecycle state settles. On 2026-07-10, P1 passed locally on a clean rebuilt `sync-result` stack started with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and `MARKET_DATA_PROJECTOR_ENABLED=true`; report: `/tmp/reef-p1-live-assertion-ready-20260710.json`. P2 also passed locally after seeding facts with `node scripts/dev/seed-p2-settlement-facts.mjs --scenario-run-id=p2-settlement-local-ready-20260710-node`; report: `/tmp/reef-p2-live-assertion-ready-20260710.json`.
+
 ## Non-Goals
 
 - no new scenario command path separate from public APIs

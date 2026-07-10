@@ -253,7 +253,7 @@ fun VenueEventBatchCommandReference.toStatusView(): CommandStatusView {
     )
 }
 
-private fun commandStatusParticipantId(payloadJson: String): String {
+internal fun commandStatusParticipantId(payloadJson: String): String {
     val root = JsonCodec.parseObjectOrEmpty(payloadJson)
     return root.string("participantId")
         .ifBlank { root.obj("acceptedOrder").string("participantId") }

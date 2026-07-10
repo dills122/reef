@@ -144,11 +144,6 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         "analytics",
         setOf(AdminServiceTokenFamily.Sim, AdminServiceTokenFamily.Admin)
     )
-    "/admin/v1/settlement/facts" -> AdminGatewayRoute(
-        "/internal/admin/settlement/facts",
-        "admin",
-        setOf(AdminServiceTokenFamily.Admin)
-    )
     // GET reads the boundary's read-only mirror; POST writes through the admin
     // mutation path. Same public path, two different internal targets.
     "/admin/v1/risk/account-controls" -> AdminGatewayRoute(
@@ -163,6 +158,36 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     )
     "/admin/v1/risk/price-collars" -> AdminGatewayRoute(
         if (method == "GET") "/internal/boundary/price-collars" else "/internal/admin/price-collars",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/settlement/facts" -> AdminGatewayRoute(
+        "/internal/admin/settlement/facts",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/settlement/repairs/cash" -> AdminGatewayRoute(
+        "/internal/admin/settlement/repairs/cash",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/settlement/repairs/security" -> AdminGatewayRoute(
+        "/internal/admin/settlement/repairs/security",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/settlement/force-settle" -> AdminGatewayRoute(
+        "/internal/admin/settlement/force-settle",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/settlement/reverse-ledger-entry" -> AdminGatewayRoute(
+        "/internal/admin/settlement/reverse-ledger-entry",
+        "admin",
+        setOf(AdminServiceTokenFamily.Admin)
+    )
+    "/admin/v1/settlement/obligations/materialize" -> AdminGatewayRoute(
+        "/internal/admin/settlement/obligations/materialize",
         "admin",
         setOf(AdminServiceTokenFamily.Admin)
     )
@@ -574,10 +599,15 @@ class PlatformHttpServer(
             "/admin/v1/arena/bots/openbao-provision",
             "/admin/v1/arena/bot-versions/transition",
             "/admin/v1/analytics/run-exports",
-            "/admin/v1/settlement/facts",
             "/admin/v1/risk/account-controls",
             "/admin/v1/risk/circuit-breakers",
-            "/admin/v1/risk/price-collars"
+            "/admin/v1/risk/price-collars",
+            "/admin/v1/settlement/facts",
+            "/admin/v1/settlement/repairs/cash",
+            "/admin/v1/settlement/repairs/security",
+            "/admin/v1/settlement/force-settle",
+            "/admin/v1/settlement/reverse-ledger-entry",
+            "/admin/v1/settlement/obligations/materialize"
         )) {
             server.createContext(path) { exchange ->
                 handleAdminGatewayRoute(exchange)
@@ -1454,13 +1484,33 @@ class PlatformHttpServer(
             ""
         }
         withAdminRequestPrincipal(principal) {
-            val response = diagnosticRoutes.handle(
-                method = exchange.requestMethod,
-                path = route.internalPath,
-                query = exchange.requestURI.query,
-                body = body
-            ) ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
+            val response = settlementAdminGatewayResponse(exchange.requestMethod, route.internalPath, body)
+                ?: diagnosticRoutes.handle(
+                    method = exchange.requestMethod,
+                    path = route.internalPath,
+                    query = exchange.requestURI.query,
+                    body = body
+                )
+                ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
             writeHotPathResponse(exchange, response)
+        }
+    }
+
+    private fun settlementAdminGatewayResponse(
+        method: String,
+        path: String,
+        body: String
+    ): PlatformHotPathResponse? {
+        if (!path.startsWith("/internal/admin/settlement/")) return null
+        if (method != "POST") return methodNotAllowedResponse()
+        return when (path) {
+            "/internal/admin/settlement/facts" -> appendSettlementFactsResponse(body)
+            "/internal/admin/settlement/repairs/cash" -> postCashSettlementRepairResponse(body)
+            "/internal/admin/settlement/repairs/security" -> postSecuritySettlementRepairResponse(body)
+            "/internal/admin/settlement/force-settle" -> forceSettleResponse(body)
+            "/internal/admin/settlement/reverse-ledger-entry" -> reverseSettlementLedgerEntryResponse(body)
+            "/internal/admin/settlement/obligations/materialize" -> materializeSettlementObligationsResponse(body)
+            else -> null
         }
     }
 

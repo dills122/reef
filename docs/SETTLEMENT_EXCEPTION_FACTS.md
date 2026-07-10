@@ -111,12 +111,13 @@ Required fields:
 P2 uses one narrow assertion source before it can be locked:
 
 - `GET /api/v1/settlement/facts/{scenarioRunId}` returns obligation, break, repair, and resolution facts for the run
+- `POST /admin/v1/settlement/facts` appends the same fact bundle through the authenticated admin gateway
 - `POST /internal/admin/settlement/facts` appends the same fact bundle for local/smoke seeding and evidence setup
 - `scenario-smoke --settlement-facts-report` remains an artifact fallback for offline test evidence
 
 The assertion source must return obligation, break, repair, and resolution facts by `scenarioRunId` and must expose enough ordering data to prove causation.
 
-Historical note: the assertion surface above was the complete P2-era API surface. It is no longer the complete settlement API surface. Real ledger mutation has since shipped, and the runtime now also exposes `GET /api/v1/settlement/obligations/{scenarioRunId}` (obligation state projected from facts) and `GET /api/v1/settlement/ledger/{scenarioRunId}` (replayable participant/account/asset balances plus per-settlement ledger proof totals), alongside `POST /internal/admin/settlement/obligations/materialize`, `POST /internal/admin/settlement/repairs/cash`, and `POST /internal/admin/settlement/repairs/security`. See [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md#obligation-materialization) for the current, complete API surface and route list.
+Historical note: the assertion surface above was the complete P2-era API surface. It is no longer the complete settlement API surface. Real ledger mutation has since shipped, and the runtime now also exposes `GET /api/v1/settlement/obligations/{scenarioRunId}` (obligation state projected from facts) and `GET /api/v1/settlement/ledger/{scenarioRunId}` (replayable participant/account/asset balances plus per-settlement ledger proof totals), alongside authenticated `/admin/v1/settlement/...` mutation routes for materialization and operator repair actions. See [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md#obligation-materialization) for the current, complete API surface and route list.
 
 ## First Implementation Tasks
 

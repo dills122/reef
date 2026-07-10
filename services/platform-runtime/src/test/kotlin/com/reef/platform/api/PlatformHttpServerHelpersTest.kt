@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class PlatformHttpServerHelpersTest {
     @Test
@@ -96,7 +97,7 @@ class PlatformHttpServerHelpersTest {
         assertEquals(0.95, deps.streamCommandMaxStorageUtilization)
         assertEquals(100L, deps.streamCommandBackpressureSampleMs)
         assertEquals(CommandProcessingMode.SyncResult, deps.commandProcessingMode)
-        assertEquals(null, deps.commandStatusLookup)
+        assertTrue(deps.commandStatusLookup === deps.commandCaptureStore)
         assertEquals(null, deps.capturedCommandQueue)
     }
 }

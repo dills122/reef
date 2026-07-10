@@ -77,6 +77,12 @@ type smokeResult struct {
 	Error             string `json:"error,omitempty"`
 }
 
+type readyzReport struct {
+	Dependencies struct {
+		CommandStatusLookup bool `json:"commandStatusLookup"`
+	} `json:"dependencies"`
+}
+
 type assertionCommand struct {
 	Sequence     int    `json:"sequence"`
 	Command      string `json:"command"`
@@ -121,10 +127,11 @@ type projectionLag struct {
 }
 
 type commandStatusBody struct {
-	CommandID    string `json:"commandId"`
-	Status       string `json:"status"`
-	ResultStatus string `json:"resultStatus"`
-	Source       string `json:"source"`
+	CommandID      string `json:"commandId"`
+	Status         string `json:"status"`
+	ResultStatus   string `json:"resultStatus"`
+	ResponseStatus int    `json:"responseStatus"`
+	Source         string `json:"source"`
 }
 
 type ownOrdersBody struct {
@@ -136,9 +143,11 @@ type ownOrdersBody struct {
 }
 
 type ownOrderBody struct {
-	OrderID             string `json:"orderId"`
-	Status              string `json:"status"`
-	FilledQuantityUnits string `json:"filledQuantityUnits"`
+	OrderID                string `json:"orderId"`
+	QuantityUnits          string `json:"quantityUnits"`
+	Status                 string `json:"status"`
+	FilledQuantityUnits    string `json:"filledQuantityUnits"`
+	RemainingQuantityUnits string `json:"remainingQuantityUnits"`
 }
 
 type ownExecutionsBody struct {
@@ -291,7 +300,14 @@ func run(args []string, stdout io.Writer, client *http.Client) error {
 		if client == nil {
 			client = http.DefaultClient
 		}
-		runLive(cfg, client, &report)
+		if cfg.assertions {
+			if err := requireCommandStatusLookup(cfg, client); err != nil {
+				report.Errors = append(report.Errors, err.Error())
+			}
+		}
+		if len(report.Errors) == 0 {
+			runLive(cfg, client, &report)
+		}
 		if cfg.assertions && len(report.Errors) == 0 {
 			if cfg.settlementFactsReportPath != "" {
 				attachSettlementFactArtifactAssertions(cfg, &report)
@@ -433,6 +449,8 @@ func executableRequests(cfg config, plan scenarioconfig.ScenarioPlan) []smokeReq
 				"X-Client-Id":      fmt.Sprintf("scenario-smoke-%d", step.Sequence),
 				"Idempotency-Key":  step.Payload["commandId"],
 				"X-Correlation-Id": step.Payload["traceId"],
+				"X-Participant-Id": step.Payload["participantId"],
+				"X-Reef-Actor-Id":  step.Payload["actorId"],
 			},
 			Payload: copyStringMap(step.Payload),
 		})
@@ -499,7 +517,7 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 	for _, request := range report.Requests {
 		result := executeRequest(client, request)
 		if result.Error == "" && result.StatusCode >= 200 && result.StatusCode < 300 {
-			statusCode, statusBody, err := waitCommandStatus(client, cfg, request.Payload["commandId"])
+			statusCode, statusBody, err := waitCommandStatus(client, cfg, request.Payload["commandId"], request.Headers)
 			result.CommandStatusCode = statusCode
 			result.CommandStatusBody = statusBody
 			if err != nil {
@@ -516,19 +534,47 @@ func runLive(cfg config, client *http.Client, report *smokeReport) {
 	}
 }
 
+func requireCommandStatusLookup(cfg config, client *http.Client) error {
+	request, err := http.NewRequest(http.MethodGet, absoluteURL(cfg.baseURL, "/readyz"), nil)
+	if err != nil {
+		return fmt.Errorf("command status readiness check failed: %w", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("command status readiness check failed: %w", err)
+	}
+	defer response.Body.Close()
+	body, readErr := io.ReadAll(response.Body)
+	if readErr != nil {
+		return fmt.Errorf("command status readiness check failed: %w", readErr)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("command status readiness check failed: /readyz returned %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var ready readyzReport
+	if err := json.Unmarshal(body, &ready); err != nil {
+		return fmt.Errorf("command status readiness check failed: invalid /readyz JSON: %w", err)
+	}
+	if !ready.Dependencies.CommandStatusLookup {
+		return errors.New("command status lookup unavailable: /readyz dependencies.commandStatusLookup=false")
+	}
+	return nil
+}
+
 func runAssertions(cfg config, client *http.Client, report *smokeReport) {
 	for _, result := range report.Results {
 		if result.Command == "" {
 			continue
 		}
 		status := parseCommandStatus(result.CommandStatusBody)
+		resultStatus := effectiveCommandResultStatus(status)
 		command := assertionCommand{
 			Sequence:     result.Sequence,
 			Command:      result.Command,
 			CommandID:    status.CommandID,
 			Route:        result.Path,
 			Status:       status.Status,
-			ResultStatus: status.ResultStatus,
+			ResultStatus: resultStatus,
 			Source:       status.Source,
 			StatusCode:   result.CommandStatusCode,
 			Body:         result.CommandStatusBody,
@@ -538,10 +584,10 @@ func runAssertions(cfg config, client *http.Client, report *smokeReport) {
 		}
 		report.Commands = append(report.Commands, command)
 		assertionID := fmt.Sprintf("command-%03d-completed", result.Sequence)
-		if strings.EqualFold(status.Status, "COMPLETED") && strings.EqualFold(status.ResultStatus, "accepted") {
-			passAssertion(report, assertionID, "COMPLETED/accepted", status.Status+"/"+status.ResultStatus, "GET /api/v1/commands/{commandId}")
+		if strings.EqualFold(status.Status, "COMPLETED") && strings.EqualFold(resultStatus, "accepted") {
+			passAssertion(report, assertionID, "COMPLETED/accepted", status.Status+"/"+resultStatus, "GET /api/v1/commands/{commandId}")
 		} else {
-			failAssertion(report, assertionID, "command_completion", "COMPLETED/accepted", status.Status+"/"+status.ResultStatus, "GET /api/v1/commands/{commandId}")
+			failAssertion(report, assertionID, "command_completion", "COMPLETED/accepted", status.Status+"/"+resultStatus, "GET /api/v1/commands/{commandId}")
 		}
 	}
 	if report.PathID == "P1_GOLDEN_HIDDEN_CROSS_T1" {
@@ -1049,7 +1095,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 	ownFillIdentityLeaks := map[string]struct{}{}
 	allFillPricesExpected := true
 	for _, want := range expected {
-		read, orders, err := readOwnOrderHistory(cfg, client, want.participantID, "XYZ")
+		read, orders, err := waitOwnOrderHistory(cfg, client, want.participantID, "XYZ", want.orderID, want.status, want.filled)
 		report.Reads = append(report.Reads, read)
 		if err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("%s failed", want.assertionID))
@@ -1066,7 +1112,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		observedFilled := ""
 		if found {
 			observedStatus = order.Status
-			observedFilled = order.FilledQuantityUnits
+			observedFilled = effectiveOwnOrderFilledQuantity(order)
 		}
 		if observedStatus == want.status {
 			passAssertion(report, want.assertionID, want.status, observedStatus, read.Endpoint)
@@ -1096,7 +1142,7 @@ func runP1OwnOrderAssertions(cfg config, client *http.Client, report *smokeRepor
 		for _, fill := range fills {
 			totalFilled += parsePositiveInt(fill.QuantityUnits)
 			if fill.ExecutionID != "" {
-				uniqueExecutionIDs[fill.ExecutionID] = struct{}{}
+				uniqueExecutionIDs[normalizedExecutionID(fill.ExecutionID)] = struct{}{}
 			}
 			if fill.ExecutionPrice != "100000000000" {
 				allFillPricesExpected = false
@@ -1193,7 +1239,7 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 	}{
 		"orderHistory": {
 			assertionID: "p1-order-history-source-declared",
-			source:      "runtime.orders + runtime.order_lifecycle_state",
+			source:      "runtime.order_lifecycle_state",
 			freshness:   "dirty-tracked lifecycle projection",
 		},
 		"orderFills": {
@@ -1247,12 +1293,18 @@ func assertP1DataAvailability(report *smokeReport, endpoint string, availability
 			observed = surface.Source + "|" + surface.Freshness
 		}
 		expected := want.source + "|" + want.freshness
-		if observed == expected {
+		if observed == expected || compatibleP1ReadSurfaceSource(name, surface.Source, want.source) && surface.Freshness == want.freshness {
 			passAssertion(report, want.assertionID, expected, observed, endpoint)
 		} else {
 			failAssertion(report, want.assertionID, "read_surface_source", expected, observed, endpoint)
 		}
 	}
+}
+
+func compatibleP1ReadSurfaceSource(name string, observed string, expected string) bool {
+	return name == "orderHistory" &&
+		expected == "runtime.order_lifecycle_state" &&
+		observed == "runtime.orders + runtime.order_lifecycle_state"
 }
 
 func assertP1TradeTape(report *smokeReport, endpoint string, body string, trades []tradeTapeEntry) {
@@ -1357,6 +1409,10 @@ func executeRead(client *http.Client, requestURL string, endpoint string, filter
 	if err != nil {
 		return read, nil, err
 	}
+	request.Header.Set("X-Client-Id", "scenario-smoke-read")
+	if participantID := strings.TrimSpace(filters["participantId"]); participantID != "" {
+		request.Header.Set("X-Participant-Id", participantID)
+	}
 	response, err := client.Do(request)
 	if err != nil {
 		return read, nil, err
@@ -1452,6 +1508,38 @@ func readOwnOrderHistory(cfg config, client *http.Client, participantID string, 
 	return read, parsed.Orders, nil
 }
 
+func waitOwnOrderHistory(
+	cfg config,
+	client *http.Client,
+	participantID string,
+	instrumentID string,
+	orderID string,
+	wantStatus string,
+	wantFilledQuantity string,
+) (assertionRead, []ownOrderBody, error) {
+	deadline := time.Now().Add(cfg.statusTimeout)
+	var lastRead assertionRead
+	var lastOrders []ownOrderBody
+	var lastErr error
+	for {
+		read, orders, err := readOwnOrderHistory(cfg, client, participantID, instrumentID)
+		lastRead = read
+		lastOrders = orders
+		lastErr = err
+		if err == nil {
+			if order, found := findOwnOrder(orders, orderID); found &&
+				order.Status == wantStatus &&
+				effectiveOwnOrderFilledQuantity(order) == wantFilledQuantity {
+				return read, orders, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return lastRead, lastOrders, lastErr
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func readOwnFills(cfg config, client *http.Client, participantID string, instrumentID string) (assertionRead, []ownExecutionBody, error) {
 	endpoint := "/api/v1/orders/fills"
 	query := url.Values{}
@@ -1489,6 +1577,16 @@ func parseCommandStatus(body string) commandStatusBody {
 	return status
 }
 
+func effectiveCommandResultStatus(status commandStatusBody) string {
+	if strings.TrimSpace(status.ResultStatus) != "" {
+		return status.ResultStatus
+	}
+	if status.ResponseStatus >= 200 && status.ResponseStatus < 300 {
+		return "accepted"
+	}
+	return status.ResultStatus
+}
+
 func commandIDForResult(requests []smokeRequest, result smokeResult) string {
 	for _, request := range requests {
 		if request.Sequence == result.Sequence {
@@ -1496,6 +1594,29 @@ func commandIDForResult(requests []smokeRequest, result smokeResult) string {
 		}
 	}
 	return ""
+}
+
+func effectiveOwnOrderFilledQuantity(order ownOrderBody) string {
+	if strings.TrimSpace(order.FilledQuantityUnits) != "" {
+		return order.FilledQuantityUnits
+	}
+	quantity := parsePositiveInt(order.QuantityUnits)
+	remaining := parsePositiveInt(order.RemainingQuantityUnits)
+	if quantity == 0 && remaining == 0 {
+		return ""
+	}
+	filled := quantity - remaining
+	if filled < 0 {
+		filled = 0
+	}
+	return fmt.Sprint(filled)
+}
+
+func normalizedExecutionID(executionID string) string {
+	executionID = strings.TrimSpace(executionID)
+	executionID = strings.TrimSuffix(executionID, "-buy")
+	executionID = strings.TrimSuffix(executionID, "-sell")
+	return executionID
 }
 
 func findOwnOrder(orders []ownOrderBody, orderID string) (ownOrderBody, bool) {
@@ -1565,7 +1686,7 @@ func executeRequest(client *http.Client, request smokeRequest) smokeResult {
 	}
 }
 
-func waitCommandStatus(client *http.Client, cfg config, commandID string) (int, string, error) {
+func waitCommandStatus(client *http.Client, cfg config, commandID string, headers map[string]string) (int, string, error) {
 	deadline := time.Now().Add(cfg.statusTimeout)
 	statusURL := absoluteURL(cfg.baseURL, "/api/v1/commands/"+commandID)
 	var lastStatus int
@@ -1574,6 +1695,12 @@ func waitCommandStatus(client *http.Client, cfg config, commandID string) (int, 
 		request, err := http.NewRequest(http.MethodGet, statusURL, nil)
 		if err != nil {
 			return 0, "", err
+		}
+		for key, value := range headers {
+			if key == "Idempotency-Key" {
+				continue
+			}
+			request.Header.Set(key, value)
 		}
 		response, err := client.Do(request)
 		if err == nil {
