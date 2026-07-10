@@ -77,6 +77,20 @@ function runWithInput(command, args, input, options = {}) {
   }
 }
 
+function captureWithInput(command, args, input, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd || repoRoot,
+    input,
+    encoding: "utf8",
+    env: options.env || process.env,
+  });
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr || "");
+    process.exit(result.status ?? 1);
+  }
+  return (result.stdout || "").trim();
+}
+
 function capture(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || repoRoot,
@@ -129,6 +143,37 @@ function commandOrFallback(command, fallbackPath) {
     return fallbackPath;
   }
   return command;
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function githubRepositoryFullName() {
+  const configured = env("REEF_GITHUB_REPOSITORY").trim();
+  if (configured !== "") return configured;
+
+  const origin = captureOptional("git", ["remote", "get-url", "origin"]).stdout;
+  const match = origin.match(/github\.com[:/](.+?)(?:\.git)?$/);
+  if (match?.[1]) return match[1];
+
+  return "dills122/reef";
+}
+
+function resolveUserPath(path) {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return resolve(homedir(), path.slice(2));
+  return resolve(path);
+}
+
+function openBaoTokenForBootstrap() {
+  const token = env("BAO_TOKEN").trim();
+  if (token !== "") return token;
+
+  const initJsonPath = env("REEF_OPENBAO_INIT_JSON").trim();
+  if (initJsonPath === "") return "";
+  const parsed = JSON.parse(readFileSync(resolveUserPath(initJsonPath), "utf8"));
+  return String(parsed.root_token || "").trim();
 }
 
 function sha256(path) {
@@ -195,6 +240,11 @@ Commands:
   admin-auth-smoke
              verify hosted admin shell, OAuth start, Caddy fallback, and
              legacy mutation-route cleanup
+  bot-config-upgrade
+             one-time post-merge setup for Admin-managed OpenBao bot config:
+             sync server/admin assets, configure the dedicated OpenBao AppRole
+             when BAO_TOKEN is provided, persist AppRole credentials, restart
+             platform-runtime, and print any remaining manual steps
   verify     run host-side runtime verification checks
   soak       run host-side simulator soak; pass RATE/DURATION/WORKERS via env
   status     show docker compose service status
@@ -204,6 +254,7 @@ Environment:
   REEF_HETZNER_HOST       server IPv4 or DNS name; defaults to tofu output core_ipv4
   REEF_HETZNER_OPS_USER   SSH user; default ops
   REEF_HETZNER_DEPLOY_DIR server deploy directory; default /opt/reef
+  REEF_OPENBAO_INIT_JSON  optional local OpenBao init JSON used by bot-config-upgrade when BAO_TOKEN is not set
   REEF_BACKUP_AGE_IDENTITY_PATH local age identity path; default ~/Documents/reef-backups-age-identity.txt
   REEF_BACKUP_ARCHIVE_DIR local encrypted archive copy dir; default ~/Documents
   PUBLIC_INGRESS_EXPECTED set to 1 when ops-check should expect 80/443 open
@@ -399,6 +450,121 @@ function grantAdminRole() {
   ]);
   configureAdminAuth(true, { legacyMutationRoutesEnabled: false });
   console.log(`granted arena.admin to user-gh-${userId}`);
+}
+
+function botConfigUpgrade() {
+  console.log("Syncing server bundle and arena-admin assets...");
+  syncServerBundle();
+  buildAndSyncArenaAdmin();
+
+  run("ssh", [
+    target,
+    [
+      "set -euo pipefail",
+      `cd ${shellQuote(deployDir)}`,
+      "chmod +x ./scripts/*.sh",
+      "./scripts/generate-local-secrets.sh",
+      "docker compose pull --ignore-pull-failures platform-runtime || true",
+    ].join(" && "),
+  ]);
+
+  const baoToken = openBaoTokenForBootstrap();
+  if (baoToken === "") {
+    console.log("");
+    console.log("Host assets are synced and platform-runtime secrets were regenerated/preserved.");
+    console.log("BAO_TOKEN/REEF_OPENBAO_INIT_JSON was not provided, so OpenBao AppRole setup was not automated.");
+    printBotConfigManualSteps();
+    return;
+  }
+
+  const githubRepository = githubRepositoryFullName();
+  console.log(`Using REEF_GITHUB_REPOSITORY=${githubRepository}`);
+  console.log("Configuring OpenBao policy/AppRole and generating dedicated bot-config credentials...");
+  runWithInput(
+    "ssh",
+    [target, "bash -s"],
+    [
+      "set -euo pipefail",
+      `cd ${shellQuote(deployDir)}`,
+      "chmod +x ./scripts/*.sh",
+      `export REEF_GITHUB_REPOSITORY=${shellQuote(githubRepository)}`,
+      `export BAO_TOKEN=${shellQuote(baoToken)}`,
+      "./scripts/configure-openbao.sh >/tmp/reef-openbao-configure.log",
+    ].join("\n"),
+    ""
+  );
+
+  const approleOutput = captureWithInput(
+    "ssh",
+    [target, "bash -s"],
+    [
+      "set -euo pipefail",
+      `cd ${shellQuote(deployDir)}`,
+      `export BAO_TOKEN=${shellQuote(baoToken)}`,
+      "./scripts/print-openbao-approle.sh reef-platform-admin-bot-config",
+    ].join("\n")
+  );
+  run("ssh", [target, "rm -f /tmp/reef-openbao-configure.log"]);
+
+  const roleId = approleOutput.match(/^BAO_ROLE_ID=(.+)$/m)?.[1]?.trim() || "";
+  const secretId = approleOutput.match(/^BAO_SECRET_ID=(.+)$/m)?.[1]?.trim() || "";
+  if (!roleId || !secretId) {
+    console.error("Could not parse BAO_ROLE_ID/BAO_SECRET_ID from print-openbao-approle.sh output.");
+    console.error("Output keys seen:");
+    for (const line of approleOutput.split(/\r?\n/)) {
+      const key = line.split("=")[0];
+      if (key) console.error(`- ${key}`);
+    }
+    process.exit(1);
+  }
+
+  console.log("Persisting bot-config AppRole env vars and restarting platform-runtime...");
+  runWithInput(
+    "ssh",
+    [target, "bash -s"],
+    [
+      "set -euo pipefail",
+      `cd ${shellQuote(deployDir)}`,
+      "test -f secrets/platform-runtime.env",
+      "tmp=\"$(mktemp)\"",
+      "grep -v '^BAO_BOT_CONFIG_\\(ROLE_ID\\|SECRET_ID\\)=' secrets/platform-runtime.env > \"$tmp\" || true",
+      `printf '%s\\n' ${shellQuote(`BAO_BOT_CONFIG_ROLE_ID=${roleId}`)} ${shellQuote(`BAO_BOT_CONFIG_SECRET_ID=${secretId}`)} >> "$tmp"`,
+      "install -m 600 \"$tmp\" secrets/platform-runtime.env",
+      "rm -f \"$tmp\"",
+      "docker compose up -d --force-recreate platform-runtime",
+      "for i in $(seq 1 45); do curl -fsS http://127.0.0.1:8080/health >/dev/null && break; sleep 2; done",
+      "curl -fsS http://127.0.0.1:8080/health >/dev/null",
+      "docker compose exec -T platform-runtime env | grep '^BAO_BOT_CONFIG_ROLE_ID=' >/dev/null",
+    ].join("\n"),
+    ""
+  );
+
+  console.log("Admin OpenBao bot-config runtime wiring is installed.");
+  console.log("");
+  console.log("Remaining manual/verification steps:");
+  console.log("- Keep the OpenBao root/admin token in the offline vault; do not leave it on the host.");
+  console.log("- If public ingress is enabled, run: PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check");
+  console.log("- In Reef Admin, open a registered bot row, click config, save a JSON object, refresh, then run the bot preflight/run path.");
+  console.log("- Confirm post-merge bot registry import/registration for newly accepted bots; this helper does not create registry records.");
+}
+
+function printBotConfigManualSteps() {
+  console.log("");
+  console.log("To finish the OpenBao bot-config setup, rerun with BAO_TOKEN or REEF_OPENBAO_INIT_JSON:");
+  console.log("");
+  console.log("  BAO_TOKEN=\"...\" make hetzner-core ARGS=bot-config-upgrade");
+  console.log("  REEF_OPENBAO_INIT_JSON=/path/to/openbao-init.json make hetzner-core ARGS=bot-config-upgrade");
+  console.log("");
+  console.log("Or run these on the host manually:");
+  console.log("");
+  console.log("  cd /opt/reef");
+  console.log("  REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN=\"...\" ./scripts/configure-openbao.sh");
+  console.log("  BAO_TOKEN=\"...\" ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config");
+  console.log("");
+  console.log("Then append the printed values as BAO_BOT_CONFIG_ROLE_ID and");
+  console.log("BAO_BOT_CONFIG_SECRET_ID in /opt/reef/secrets/platform-runtime.env and restart:");
+  console.log("");
+  console.log("  docker compose up -d --force-recreate platform-runtime");
 }
 
 function syncServiceContext(name, path) {
@@ -768,6 +934,9 @@ switch (command) {
     break;
   case "admin-auth-smoke":
     adminAuthSmoke();
+    break;
+  case "bot-config-upgrade":
+    botConfigUpgrade();
     break;
   case "verify":
     run("ssh", [target, `cd ${deployDir} && ./scripts/verify-runtime.sh`]);

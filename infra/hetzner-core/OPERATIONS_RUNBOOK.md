@@ -79,6 +79,23 @@ make hetzner-core ARGS=ops-check
 PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check
 ```
 
+Post-merge Admin bot-config/OpenBao setup:
+
+```bash
+BAO_TOKEN="..." make hetzner-core ARGS=bot-config-upgrade
+# or, without exporting the token:
+REEF_OPENBAO_INIT_JSON=~/Documents/reef-openbao-init-167.233.82.255.json make hetzner-core ARGS=bot-config-upgrade
+```
+
+This one-time helper syncs server files, rebuilds/syncs the Admin UI, updates
+the OpenBao `reef-platform-admin-bot-config` policy/AppRole, writes
+`BAO_BOT_CONFIG_ROLE_ID` and `BAO_BOT_CONFIG_SECRET_ID` into
+`/opt/reef/secrets/platform-runtime.env`, and restarts `platform-runtime`.
+It binds the GitHub Actions OIDC role to `REEF_GITHUB_REPOSITORY`, deriving it
+from the local `origin` remote when the variable is not set. If `BAO_TOKEN` and
+`REEF_OPENBAO_INIT_JSON` are both omitted, it still syncs deploy assets and
+prints the remaining manual OpenBao steps.
+
 Public ingress:
 
 ```bash
@@ -187,15 +204,26 @@ Use this order for a clean rebuild or new permanent host.
    ```bash
    ssh "ops@$IP"
    cd /opt/reef
-   BAO_TOKEN="..." ./scripts/configure-openbao.sh
+   REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN="..." ./scripts/configure-openbao.sh
    BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-runtime
+   BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config
    ```
 
-   Append the printed runtime AppRole values to
+   Append the printed runtime AppRole values as `BAO_ROLE_ID` /
+   `BAO_SECRET_ID`, and the printed Admin bot-config values as
+   `BAO_BOT_CONFIG_ROLE_ID` / `BAO_BOT_CONFIG_SECRET_ID`, to
    `/opt/reef/secrets/platform-runtime.env`, then restart:
 
    ```bash
    docker compose up -d --force-recreate platform-runtime
+   ```
+
+   For post-merge upgrades on an already initialized host, prefer the scripted
+   form from the command catalog:
+
+   ```bash
+   BAO_TOKEN="..." make hetzner-core ARGS=bot-config-upgrade
+   REEF_OPENBAO_INIT_JSON=~/Documents/reef-openbao-init-167.233.82.255.json make hetzner-core ARGS=bot-config-upgrade
    ```
 
 7. Enable public Caddy after DNS and firewall are intentional:
