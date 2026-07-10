@@ -55,6 +55,10 @@ class InMemoryArenaBotRegistryStore : ArenaBotRegistryStore {
 
     override fun runRecord(runId: String): ArenaRunRecord? = runs[runId]
 
+    override fun runs(limit: Int): List<ArenaRunRecord> {
+        return runs.values.sortedByDescending { it.createdAt }.take(limit.coerceIn(1, 500))
+    }
+
     override fun saveRunBotResult(result: ArenaRunBotResult) {
         val results = runBotResults.getOrPut(result.runId) { mutableListOf() }
         results.removeIf {

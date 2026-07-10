@@ -188,6 +188,10 @@ When public Caddy is enabled, only narrow bearer-token admin gateway routes are 
 
 - `GET|POST /admin/v1/arena/bots`
 - `POST /admin/v1/arena/bots/openbao-provision`
+- `GET /admin/v1/arena/runs`
+- `GET /admin/v1/arena/run-bot-results`
+- `GET /admin/v1/arena/run-enforcement-events`
+- `GET /admin/v1/arena/leaderboard`
 - `POST /admin/v1/analytics/run-exports`
 
 The analytics export route uses `ANALYTICS_EXPORT_API_TOKEN` from

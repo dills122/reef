@@ -188,6 +188,7 @@ interface ArenaBotRegistryStore {
     fun operatorDecisions(botId: String, versionId: String): List<ArenaOperatorDecision>
     fun saveRunRecord(runRecord: ArenaRunRecord)
     fun runRecord(runId: String): ArenaRunRecord?
+    fun runs(limit: Int = 50): List<ArenaRunRecord>
     fun saveRunBotResult(result: ArenaRunBotResult)
     fun runBotResults(runId: String): List<ArenaRunBotResult>
     fun saveRunEnforcementEvent(event: ArenaRunEnforcementEvent)

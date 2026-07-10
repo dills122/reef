@@ -139,6 +139,42 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         "arena",
         setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
     )
+    "/admin/v1/arena/runs" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/arena/runs",
+            "arena",
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        )
+    } else {
+        null
+    }
+    "/admin/v1/arena/run-bot-results" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/arena/run-bot-results",
+            "arena",
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        )
+    } else {
+        null
+    }
+    "/admin/v1/arena/run-enforcement-events" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/arena/run-enforcement-events",
+            "arena",
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        )
+    } else {
+        null
+    }
+    "/admin/v1/arena/leaderboard" -> if (method == "GET") {
+        AdminGatewayRoute(
+            "/internal/admin/arena/leaderboard",
+            "arena",
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        )
+    } else {
+        null
+    }
     "/admin/v1/analytics/run-exports" -> AdminGatewayRoute(
         "/internal/admin/analytics/run-exports",
         "analytics",
@@ -573,6 +609,10 @@ class PlatformHttpServer(
             "/admin/v1/arena/bots",
             "/admin/v1/arena/bots/openbao-provision",
             "/admin/v1/arena/bot-versions/transition",
+            "/admin/v1/arena/runs",
+            "/admin/v1/arena/run-bot-results",
+            "/admin/v1/arena/run-enforcement-events",
+            "/admin/v1/arena/leaderboard",
             "/admin/v1/analytics/run-exports",
             "/admin/v1/settlement/facts",
             "/admin/v1/risk/account-controls",
@@ -3523,7 +3563,7 @@ class PlatformHttpServer(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
         val runId = queryValue(query, "runId")
         if (runId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
+            return arenaRunsListResponse(service, query)
         }
         return try {
             val run = service.arenaRun(arenaAdminActor(query), runId)
@@ -3531,6 +3571,20 @@ class PlatformHttpServer(
             PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
         } catch (ex: Exception) {
             PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run lookup failed")))
+        }
+    }
+
+    // runId omitted -> recent run listing, most-recently-created first.
+    private fun arenaRunsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
+        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        return try {
+            val runs = service.arenaRuns(arenaAdminActor(query), limit)
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject("status" to "ok", "runs" to runs.map { arenaRunJson(it) })
+            )
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena runs query failed")))
         }
     }
 
@@ -5072,6 +5126,16 @@ class PlatformHttpServer(
                 "description" to bot.metadata.description,
                 "version" to bot.metadata.version
             ),
+            "owners" to adminIdentityService?.botOwnerMetadata(bot.botId).orEmpty().map { owner ->
+                mapOf(
+                    "reefUserId" to owner.reefUserId,
+                    "githubLogin" to owner.githubLogin,
+                    "displayName" to owner.displayName,
+                    "trustState" to owner.trustState.dbValue,
+                    "ownershipState" to owner.ownershipState.dbValue,
+                    "assignedAt" to owner.assignedAt.toString()
+                )
+            },
             "createdAt" to bot.createdAt.toString()
         )
     }

@@ -236,6 +236,10 @@ server-side service token. Scoped service token families are route-specific:
 ```text
 /admin/v1/arena/bots                    -> ci, admin
 /admin/v1/arena/bots/openbao-provision  -> ci, admin
+GET /admin/v1/arena/runs                -> ci, admin
+GET /admin/v1/arena/run-bot-results     -> ci, admin
+GET /admin/v1/arena/run-enforcement-events -> ci, admin
+GET /admin/v1/arena/leaderboard         -> ci, admin
 /admin/v1/analytics/run-exports         -> sim, admin
 /admin/v1/risk/account-controls         -> admin
 /admin/v1/risk/circuit-breakers         -> admin
@@ -452,6 +456,36 @@ and relevant object ids. Audit records must not contain secret values.
   `role-assign`/`role-upsert`. Needs a real design decision (see the arena
   admin UI plan, D-052) before the admin app's data panels can be wired to
   live routes.
+- Run the hosted/local arena-admin auth configuration test now that the admin
+  panels read live `/admin/v1` data. Current local stack returns
+  `{"error":"admin auth is not configured"}` from `/admin/auth/session`, so a
+  signed-in browser test is blocked until `platform-api` runs with:
+
+  ```text
+  PLATFORM_ADMIN_AUTH_ENABLED=true
+  ADMIN_SESSION_COOKIE_SECURE=false
+  GITHUB_OAUTH_CLIENT_ID=<local GitHub OAuth app client id>
+  GITHUB_OAUTH_CLIENT_SECRET=<local GitHub OAuth app secret>
+  GITHUB_OAUTH_REDIRECT_URI=http://localhost:8080/admin/auth/github/callback
+  ```
+
+  Test flow:
+
+  ```text
+  1. Restart platform-api with the auth environment above and Admin DB access.
+  2. Open http://127.0.0.1:5173/admin.
+  3. Complete GitHub OAuth login.
+  4. Grant or seed arena.admin in runtime role bindings for the logged-in Reef user.
+  5. Confirm the admin page shows live bots/runs instead of the sign-in or error state.
+  6. Seed admin.user_bot_ownerships for at least one bot and confirm owner/trust metadata renders.
+  7. Seed a freeze enforcement event and confirm the bot state renders as frozen.
+  ```
+
+  The expected final evidence is a browser pass with no console errors plus
+  successful GETs for `/admin/v1/arena/bots`, `/admin/v1/arena/runs`,
+  `/admin/v1/arena/run-bot-results`,
+  `/admin/v1/arena/run-enforcement-events`, and
+  `/admin/v1/arena/leaderboard` using the GitHub session cookie.
 - Add Admin API authorization middleware that binds actor identity from the
   authenticated principal, not caller-controlled headers.
 - Move CI-to-Admin API auth from scoped bearer token to GitHub Actions OIDC.

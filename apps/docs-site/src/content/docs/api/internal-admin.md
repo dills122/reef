@@ -23,6 +23,10 @@ These versioned admin/data routes are the externally reachable shape where expli
 |---|---|
 | `/admin/v1/arena/bots` | Arena bot registry operations |
 | `/admin/v1/arena/bots/openbao-provision` | Narrow OpenBao bot-secret provisioning operation |
+| `GET /admin/v1/arena/runs` | Recent arena run reads |
+| `GET /admin/v1/arena/run-bot-results` | Per-run arena result reads |
+| `GET /admin/v1/arena/run-enforcement-events` | Per-run arena enforcement reads |
+| `/admin/v1/arena/leaderboard` | Authenticated arena leaderboard reads for operators |
 | `/admin/v1/analytics/run-exports` | Simulation/arena run export ingestion and reads |
 | `/admin/v1/risk/account-controls` | Account/bot risk controls |
 | `/admin/v1/risk/circuit-breakers` | Command circuit breakers |

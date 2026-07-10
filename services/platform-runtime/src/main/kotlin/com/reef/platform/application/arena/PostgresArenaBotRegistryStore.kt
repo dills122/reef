@@ -261,6 +261,26 @@ class PostgresArenaBotRegistryStore(
         return queryBot("file_name = ?", fileName)
     }
 
+    override fun runs(limit: Int): List<ArenaRunRecord> {
+        connection().use { conn ->
+            conn.prepareStatement(
+                """
+                SELECT run_id, mode_id, scenario_id, seed, policy_version, status, created_at, completed_at
+                FROM ${names.runRecords}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, limit.coerceIn(1, 500))
+                ps.executeQuery().use { rs ->
+                    val result = mutableListOf<ArenaRunRecord>()
+                    while (rs.next()) result.add(rs.toRunRecord(loadRunBotVersions(conn, rs.getString("run_id"))))
+                    return result
+                }
+            }
+        }
+    }
+
     override fun saveVersion(version: ArenaBotVersion) {
         connection().use { conn ->
             conn.prepareStatement(
