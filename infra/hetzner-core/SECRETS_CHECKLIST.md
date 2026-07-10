@@ -110,8 +110,9 @@ server.
 | `ACTIONS_ID_TOKEN_REQUEST_URL` | GitHub OIDC URL | Supplied by GitHub Actions when workflow grants `id-token: write`. |
 | `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | GitHub OIDC request token | Supplied by GitHub Actions when workflow grants `id-token: write`. |
 
-After `BAO_TOKEN="..." ./scripts/configure-openbao.sh`, generate the Admin API
-bot-config AppRole with:
+After
+`REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN="..." ./scripts/configure-openbao.sh`,
+generate the Admin API bot-config AppRole with:
 
 ```bash
 BAO_TOKEN="..." ./scripts/print-openbao-approle.sh reef-platform-admin-bot-config
@@ -121,6 +122,21 @@ Append the printed `BAO_ROLE_ID` and `BAO_SECRET_ID` as
 `BAO_BOT_CONFIG_ROLE_ID` and `BAO_BOT_CONFIG_SECRET_ID` in
 `/opt/reef/secrets/platform-runtime.env`, then redeploy or restart
 `platform-runtime`.
+
+Preferred one-time hosted upgrade command:
+
+```bash
+BAO_TOKEN="..." make hetzner-core ARGS=bot-config-upgrade
+# or, without exporting the token:
+REEF_OPENBAO_INIT_JSON=~/Documents/reef-openbao-init-167.233.82.255.json make hetzner-core ARGS=bot-config-upgrade
+```
+
+It performs the OpenBao policy/AppRole update, writes the two
+`BAO_BOT_CONFIG_*` values without printing them, restarts `platform-runtime`,
+and prints anything still requiring a human check. The helper derives
+`REEF_GITHUB_REPOSITORY` from the local `origin` remote unless it is set
+explicitly, and can read `root_token` from `REEF_OPENBAO_INIT_JSON` when
+`BAO_TOKEN` is not set.
 
 ## Current Gaps
 
