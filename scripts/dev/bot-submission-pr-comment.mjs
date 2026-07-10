@@ -22,13 +22,21 @@ if (env("BOT_SUBMISSION_PR_COMMENT_DRY_RUN", "") === "1") {
   process.exit(0);
 }
 
-const existing = await findExistingComment();
-if (existing) {
-  await githubRequest("PATCH", `/repos/${repo}/issues/comments/${existing.id}`, { body });
-  console.log(`bot-submission-pr-comment: updated PR #${prNumber} OpenBao comment`);
-} else {
-  await githubRequest("POST", `/repos/${repo}/issues/${prNumber}/comments`, { body });
-  console.log(`bot-submission-pr-comment: created PR #${prNumber} OpenBao comment`);
+try {
+  const existing = await findExistingComment();
+  if (existing) {
+    await githubRequest("PATCH", `/repos/${repo}/issues/comments/${existing.id}`, { body });
+    console.log(`bot-submission-pr-comment: updated PR #${prNumber} OpenBao comment`);
+  } else {
+    await githubRequest("POST", `/repos/${repo}/issues/${prNumber}/comments`, { body });
+    console.log(`bot-submission-pr-comment: created PR #${prNumber} OpenBao comment`);
+  }
+} catch (error) {
+  await writeStepSummary(body);
+  console.warn(`bot-submission-pr-comment: PR comment unavailable, wrote step summary: ${error.message}`);
+  if (env("BOT_SUBMISSION_PR_COMMENT_REQUIRED", "") === "1") {
+    throw error;
+  }
 }
 
 function buildCommentBody() {
@@ -124,4 +132,13 @@ function sanitizeMessage(value) {
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]")
     .replace(/token[=:]\s*[A-Za-z0-9._~+/=-]+/gi, "token=[redacted]")
     .slice(0, 500);
+}
+
+async function writeStepSummary(summaryBody) {
+  const summaryPath = env("GITHUB_STEP_SUMMARY", "");
+  if (!summaryPath) {
+    return;
+  }
+  const { appendFile } = await import("node:fs/promises");
+  await appendFile(summaryPath, `${summaryBody}\n`);
 }
