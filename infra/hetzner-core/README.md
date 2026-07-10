@@ -290,6 +290,24 @@ Install daily systemd backup timer:
 make hetzner-core ARGS=backup-timer
 ```
 
+For the normal hosted path, automate the local age identity, server
+`backup.env`, first encrypted backup, local archive copy, and timer install:
+
+```bash
+make hetzner-core ARGS=backup-bootstrap
+```
+
+Defaults:
+
+```text
+REEF_BACKUP_AGE_IDENTITY_PATH=~/Documents/reef-backups-age-identity.txt
+REEF_BACKUP_ARCHIVE_DIR=~/Documents
+```
+
+Set `R2_ENDPOINT`, `R2_BUCKET`, `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, and optionally `AWS_DEFAULT_REGION` in the local
+environment before running `backup-bootstrap` when R2 upload should be enabled.
+
 Run non-destructive restore-list check against latest local encrypted archive:
 
 ```bash
@@ -312,6 +330,16 @@ The hosted runtime uses `EXTERNAL_API_AUTH_MODE=static-token`. The secret
 generator creates a simulator bearer token, maps `sim-client-*` entries into
 `EXTERNAL_API_TOKENS`, and writes the matching `REEF_API_BEARER_TOKEN` into
 `secrets/simulator.env`; do not replace those with hardcoded values.
+
+Run the default hosted smoke gate:
+
+```bash
+make hetzner-core ARGS=hosted-smoke
+```
+
+The gate fails if `systemFailureCount` is nonzero, valid-intent success is below
+`100`, or any trace check fails. Override `RATE`, `DURATION`, `WORKERS`, or
+`TRACE_CHECK_LIMIT` only when intentionally changing the gate.
 
 For stream-ack submit-spread probes, target the stream-ack API container and
 generate the same 64-instrument submit-only session shape used locally:
