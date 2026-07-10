@@ -288,7 +288,10 @@ the GitHub `ARENA_ADMIN_API_URL` secret, not changing code.
 by GitHub Actions when the workflow grants `id-token: write`. Local developer
 checks should leave `BOT_SUBMISSION_OPENBAO_MODE` unset or set it to `dry-run`;
 real local calls must explicitly set `BOT_SUBMISSION_OPENBAO_MODE=real` and may
-provide `GITHUB_OIDC_TOKEN` when not running inside GitHub Actions.
+provide `GITHUB_OIDC_TOKEN` when not running inside GitHub Actions. The default
+GitHub OIDC audience requested by the provisioner is `reef-bot-submission-ci`,
+matching the OpenBao `auth/jwt/role/reef-bot-submission-ci` bound audience seeded
+by `infra/hetzner-core/server/scripts/configure-openbao.sh`.
 
 When the Admin DB auth layer is configured, authenticated session and service
 tokens bind the internal admin actor id from the trusted token record instead of

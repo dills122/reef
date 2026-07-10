@@ -138,6 +138,12 @@ and prints anything still requiring a human check. The helper derives
 explicitly, and can read `root_token` from `REEF_OPENBAO_INIT_JSON` when
 `BAO_TOKEN` is not set.
 
+The provisioner requests GitHub OIDC audience `reef-bot-submission-ci` by
+default. Keep that aligned with OpenBao role
+`auth/jwt/role/reef-bot-submission-ci` and override
+`BOT_SUBMISSION_OPENBAO_OIDC_AUDIENCE` only if the role's `bound_audiences`
+changes.
+
 The bot-submission workflow authenticates as service actor `bot-submission-ci`
 through `ARENA_ADMIN_API_TOKEN`. That actor must have `arena.admin` in runtime
 role bindings before registry diff and OpenBao provisioning can pass:

@@ -37,6 +37,34 @@ try {
   await successServer.close();
 }
 
+const oidcRequests = [];
+const oidcServer = await fakeOidcApi((req, res) => {
+  oidcRequests.push(req.url);
+  assert.equal(req.headers.authorization, "Bearer github-actions-request-token");
+  const requestedAudience = new URL(req.url, oidcServer.url).searchParams.get("audience");
+  assert.equal(requestedAudience, "reef-bot-submission-ci");
+  json(res, 200, { value: "github-oidc-token-from-actions" });
+});
+const oidcAdminServer = await fakeAdminApi((_req, body, res) => {
+  assert.equal(JSON.parse(body).githubOidcToken, "github-oidc-token-from-actions");
+  json(res, 200, { status: "ok", botId: "bot-1", flow: "add" });
+});
+try {
+  const real = await runProvisioner(["bot-1", "add", "octocat"], {
+    BOT_SUBMISSION_OPENBAO_MODE: "real",
+    ARENA_ADMIN_API_URL: oidcAdminServer.url,
+    ARENA_ADMIN_API_TOKEN: "scoped-admin-token",
+    GITHUB_OIDC_TOKEN: "",
+    ACTIONS_ID_TOKEN_REQUEST_URL: `${oidcServer.url}/oidc/token`,
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "github-actions-request-token",
+  });
+  assert.equal(real.status, 0, real.stderr);
+  assert.equal(oidcRequests.length, 1);
+} finally {
+  await oidcAdminServer.close();
+  await oidcServer.close();
+}
+
 const userFailureServer = await fakeAdminApi((_req, _body, res) => {
   json(res, 400, { error: "bot ownership limit exceeded" });
 });
@@ -127,6 +155,10 @@ function fakeAdminApi(handler) {
       });
     });
   });
+}
+
+function fakeOidcApi(handler) {
+  return fakeAdminApi((req, _body, res) => handler(req, res));
 }
 
 function json(res, status, payload) {
