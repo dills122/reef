@@ -21,6 +21,17 @@ The current system focuses on:
 - async projections and rebuildable read models outside canonical write facts
 - local-first Docker workflows for development, smoke, stress, and diagnostics
 
+## Live Sites
+
+| Site | URL | Purpose |
+| --- | --- | --- |
+| Admin / Bot Arena | <https://reef-arena-admin.shrimpworks.dev/> | Hosted backbone surface for admin workflows, bot submission/provisioning paths, and simulator-facing integration checks. This is backed by the permanent Hetzner stack and should be treated as an operational environment. |
+| Docs / Project Site | <https://dills122.github.io/reef/> | Public project documentation site for Reef architecture, development context, and project-facing reference material. This is the GitHub Pages documentation surface. |
+
+Operational details for the hosted backbone live under
+[`infra/hetzner-core/`](./infra/hetzner-core/), especially the current state,
+runbook, and secrets checklist.
+
 ## System Shape
 
 ```text

@@ -8,7 +8,15 @@ locals {
   ssh_public_key = regex("^[^[:space:]]+[[:space:]]+[^[:space:]]+", trimspace(file(pathexpand(var.ssh_public_key_path))))
   resource_name  = "${var.project}-${var.environment}"
 
-  public_web_cidrs = var.enable_public_web ? ["0.0.0.0/0", "::/0"] : []
+  public_web_cidrs      = var.enable_public_web ? ["0.0.0.0/0", "::/0"] : []
+  manage_cloudflare_dns = var.cloudflare_zone_id != "" && var.api_domain != ""
+  cloudflare_record_ttl = var.cloudflare_dns_proxied ? 1 : var.cloudflare_dns_ttl
+  manage_r2_backups     = var.cloudflare_account_id != "" && var.r2_backup_bucket != ""
+  r2_endpoint_prefix = {
+    default = ""
+    eu      = "eu."
+    fedramp = "fedramp."
+  }
 }
 
 resource "hcloud_ssh_key" "admin" {
@@ -88,6 +96,7 @@ resource "hcloud_server" "core" {
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     ops_user       = var.ops_user
     ssh_public_key = local.ssh_public_key
+    admin_cidrs    = var.admin_cidrs
   })
 
   lifecycle {
@@ -103,4 +112,26 @@ resource "hcloud_server_network" "core" {
   depends_on = [
     hcloud_network_subnet.main,
   ]
+}
+
+resource "cloudflare_dns_record" "api" {
+  count = local.manage_cloudflare_dns ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  name    = var.api_domain
+  type    = "A"
+  content = hcloud_server.core.ipv4_address
+  ttl     = local.cloudflare_record_ttl
+  proxied = var.cloudflare_dns_proxied
+  comment = "${var.project} ${var.environment} Hetzner backbone API/admin"
+}
+
+resource "cloudflare_r2_bucket" "backups" {
+  count = local.manage_r2_backups ? 1 : 0
+
+  account_id    = var.cloudflare_account_id
+  name          = var.r2_backup_bucket
+  location      = var.r2_backup_bucket_location == "" ? null : var.r2_backup_bucket_location
+  jurisdiction  = var.r2_backup_bucket_jurisdiction
+  storage_class = var.r2_backup_bucket_storage_class
 }

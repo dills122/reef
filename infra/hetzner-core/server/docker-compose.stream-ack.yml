@@ -1,5 +1,18 @@
+x-service-hardening: &service-hardening
+  init: true
+  pids_limit: 512
+  security_opt:
+    - no-new-privileges:true
+
+x-app-hardening: &app-hardening
+  <<: *service-hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+
 services:
   nats:
+    <<: *service-hardening
     image: nats:2.10-alpine
     restart: unless-stopped
     command:
@@ -20,10 +33,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    security_opt:
-      - no-new-privileges:true
 
   nats-box:
+    <<: *app-hardening
     image: natsio/nats-box:0.18.0
     profiles:
       - manual
@@ -31,6 +43,7 @@ services:
       - internal
 
   platform-api:
+    <<: *app-hardening
     image: ${REEF_PLATFORM_RUNTIME_IMAGE:-dills122/reef-platform-runtime:latest}
     restart: unless-stopped
     env_file:
@@ -90,8 +103,6 @@ services:
         condition: service_healthy
       matching-engine:
         condition: service_started
-    security_opt:
-      - no-new-privileges:true
 
   platform-worker-0:
     extends:

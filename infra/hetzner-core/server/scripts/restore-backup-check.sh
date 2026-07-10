@@ -5,7 +5,7 @@ BASE="${REEF_DEPLOY_DIR:-/opt/reef}"
 ARCHIVE="${1:-}"
 
 if [[ -z "$ARCHIVE" ]]; then
-  ARCHIVE="$(find "$BASE/backups" -name 'reef-db-*.tar.age' -type f | sort | tail -1)"
+  ARCHIVE="$(find "$BASE/backups" \( -name 'reef-db-*.tar.age' -o -name 'reef-db-*.tar.gz.age' \) -type f | sort | tail -1)"
 fi
 if [[ -z "$ARCHIVE" || ! -f "$ARCHIVE" ]]; then
   echo "missing encrypted backup archive" >&2
@@ -26,8 +26,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-age -d -i "$AGE_IDENTITY_FILE" -o "$workdir/reef-db.tar" "$ARCHIVE"
-tar -C "$workdir" -xf "$workdir/reef-db.tar"
+if [[ "$ARCHIVE" == *.tar.gz.age ]]; then
+  age -d -i "$AGE_IDENTITY_FILE" -o "$workdir/reef-db.tar.gz" "$ARCHIVE"
+  tar -C "$workdir" -xzf "$workdir/reef-db.tar.gz"
+else
+  age -d -i "$AGE_IDENTITY_FILE" -o "$workdir/reef-db.tar" "$ARCHIVE"
+  tar -C "$workdir" -xf "$workdir/reef-db.tar"
+fi
 
 for dump in openbao reef admin analytics; do
   file="$workdir/$dump.dump"

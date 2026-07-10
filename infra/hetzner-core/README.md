@@ -7,6 +7,17 @@ OpenTofu owns durable cloud resources only. Secrets, OpenBao root material, R2
 credentials, AppRole credentials, and local environment files stay outside
 OpenTofu state and outside git.
 
+Operator references:
+
+- [`CURRENT_STATE.md`](./CURRENT_STATE.md) records the current live backbone
+  state, DNS, hardening, backup, and smoke evidence.
+- [`SECRETS_CHECKLIST.md`](./SECRETS_CHECKLIST.md) records external tokens,
+  host-generated secrets, offline recovery material, and integration secrets.
+- [`OPERATIONS_RUNBOOK.md`](./OPERATIONS_RUNBOOK.md) is the step-by-step
+  setup, monitoring, verification, and recovery runbook.
+- [`BRINGUP_NOTES.md`](./BRINGUP_NOTES.md) records first bring-up issues and
+  the repo changes that now cover them.
+
 ## Shape
 
 - Hetzner CX33 by default
@@ -128,11 +139,11 @@ For local development only, `make backbone-local-up-infra` and
 one-shot local root token and unseal key are saved to ignored files under
 `infra/hetzner-core/server/secrets/`, then the normal Reef OpenBao bootstrap
 runs to configure the `secret/` KV v2 mount, runtime AppRole policies, and
-GitHub Actions JWT provisioning policy. It also enables API-managed file audit
-logging when the OpenBao image supports it; OpenBao 2.5 requires declarative
-audit devices and the local helper reports that as a non-fatal skip. Run
-`make backbone-local-init-openbao` directly if the Bao container was started
-separately or restarted sealed.
+GitHub Actions JWT provisioning policy. OpenBao 2.5 audit logging is configured
+declaratively in `server/openbao/config/openbao.hcl`; the bootstrap script keeps
+the older API-managed audit attempt as a compatibility fallback and reports the
+expected 2.5 skip as non-fatal. Run `make backbone-local-init-openbao` directly
+if the Bao container was started separately or restarted sealed.
 
 Hosted OpenBao must still use the manual threshold init flow below. Do not use
 the local single-key init script for hosted deployments.
@@ -165,6 +176,20 @@ Verify the running stack after deployment:
 make hetzner-core ARGS=verify
 ```
 
+Run the quick operator check for DNS, public exposure, container status,
+platform health, OpenBao seal state, backup timer state, and encrypted backup
+presence:
+
+```bash
+make hetzner-core ARGS=ops-check
+```
+
+When public ingress is enabled, expect 80/443 to be open:
+
+```bash
+PUBLIC_INGRESS_EXPECTED=1 make hetzner-core ARGS=ops-check
+```
+
 Start the JetStream-backed stream-ack profile used by the local and
 DigitalOcean throughput work:
 
@@ -180,9 +205,10 @@ ssh -L 8080:127.0.0.1:8080 "ops@$IP"
 curl http://127.0.0.1:8080/health
 ```
 
-If a public API is intentionally needed later, set `enable_public_web = true`,
-set `api_domain`, open the matching host UFW ports, and run Compose with the
-`public` profile so Caddy starts.
+For public API/admin ingress, set `api_domain` and `cloudflare_zone_id` so
+OpenTofu manages the Cloudflare `A` record for the server IPv4 address. Keep
+`enable_public_web = false` only for internal-only deployments or before the
+host is ready to expose Caddy; DNS can be provisioned ahead of public ingress.
 
 Current development domain target:
 
@@ -191,8 +217,40 @@ api_domain = "reef-arena-admin.shrimpworks.dev"
 ARENA_ADMIN_API_URL=https://reef-arena-admin.shrimpworks.dev
 ```
 
+Cloudflare DNS management requires `CLOUDFLARE_API_TOKEN` in the repository
+root `.env` or `infra/hetzner-core/tofu/.env`. `CLOUDFLARE_TOKEN` is also
+accepted by the wrapper and mapped to `CLOUDFLARE_API_TOKEN`.
+
+Cloudflare token permissions:
+
+| Use | Scope | Required permissions |
+| --- | --- | --- |
+| DNS record only | Zone `shrimpworks.dev` | `Zone:Zone:Read`, `Zone:DNS:Write` |
+| DNS plus OpenTofu-managed R2 bucket | Zone `shrimpworks.dev` and account `21f7217c1f4e4a4da99f20b12c85a463` | DNS permissions plus account-level `Workers R2 Storage Write` |
+| Host backup object upload | Bucket `reef-backups` | Separate R2 S3 access key with `Object Read & Write`; store as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` |
+
+Keep the OpenTofu Cloudflare token separate from the R2 object upload key. The
+Tofu token manages Cloudflare infrastructure; the backup key only writes
+encrypted backup objects into `reef-backups`.
+
+When ready to expose the public API, set `enable_public_web = true` and apply
+OpenTofu so the Hetzner firewall opens 80/443. Then start or stop the host-side
+Caddy ingress with:
+
+```bash
+make hetzner-core ARGS=public-up
+make hetzner-core ARGS=public-down
+```
+
+`public-up` syncs the server bundle and admin static app, sets `API_DOMAIN`,
+opens host UFW 80/443, and starts the Compose `public` profile. It force
+recreates Caddy after syncing so the container remounts the current
+bind-mounted `Caddyfile`; a plain reload can keep seeing the old file inode
+after `rsync`. `public-down` stops/removes the Caddy container and closes host
+UFW 80/443.
+
 Treat `shrimpworks.dev` as a configurable development zone. If the public
-control-plane domain changes, update Cloudflare DNS, `api_domain`/Caddy
+control-plane domain changes, update the OpenTofu `api_domain`, Caddy
 `API_DOMAIN`, and the GitHub `ARENA_ADMIN_API_URL` secret together. Do not
 hardcode this host in scripts.
 
@@ -228,15 +286,44 @@ BAO_TOKEN="..." /opt/reef/scripts/print-openbao-approle.sh reef-platform-runtime
 
 Append the printed `BAO_ROLE_ID` and `BAO_SECRET_ID` to
 `/opt/reef/secrets/platform-runtime.env`, then restart the platform runtime.
-Generate simulator AppRole credentials only when needed:
+Future deploys preserve existing platform-runtime and simulator AppRole env
+entries when regenerating local service secret files. Generate simulator
+AppRole credentials only when needed:
 
 ```bash
 BAO_TOKEN="..." /opt/reef/scripts/print-openbao-approle.sh reef-simulator
 ```
 
+### OpenBao Unseal After Restart
+
+Hosted OpenBao uses Shamir unseal keys. After a host reboot, Docker restart, or
+OpenBao container recreation, check seal state:
+
+```bash
+ssh "ops@$IP"
+cd /opt/reef
+curl -fsS http://127.0.0.1:8200/v1/sys/seal-status | jq '{initialized,sealed}'
+```
+
+If `sealed` is `true`, retrieve any three unseal keys from the offline vault and
+run:
+
+```bash
+docker compose exec openbao bao operator unseal
+docker compose exec openbao bao operator unseal
+docker compose exec openbao bao operator unseal
+curl -fsS http://127.0.0.1:8200/v1/sys/seal-status | jq '{initialized,sealed}'
+```
+
+Do not keep root tokens or unseal keys on the host. Use the root/admin token
+only for deliberate OpenBao administration, then return it to the offline vault.
+
 ## Backup
 
-Create `/opt/reef/secrets/backup.env` on the server:
+Create `/opt/reef/secrets/backup.env` on the server. `AGE_RECIPIENT` is
+required. R2 settings are optional but strongly recommended for off-host
+scheduled backups; when they are omitted, the script still writes an encrypted
+archive under `/opt/reef/backups`.
 
 ```bash
 R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
@@ -261,14 +348,50 @@ Install daily systemd backup timer:
 make hetzner-core ARGS=backup-timer
 ```
 
+For the normal hosted path, automate the local age identity, server
+`backup.env`, first encrypted backup, local archive copy, and timer install:
+
+```bash
+make hetzner-core ARGS=backup-bootstrap
+```
+
+Defaults:
+
+```text
+REEF_BACKUP_AGE_IDENTITY_PATH=~/Documents/reef-backups-age-identity.txt
+REEF_BACKUP_ARCHIVE_DIR=~/Documents
+```
+
+Set `R2_ENDPOINT`, `R2_BUCKET`, `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, and optionally `AWS_DEFAULT_REGION` in the local
+environment before running `backup-bootstrap` when R2 upload should be enabled.
+When `r2_backup_bucket` and `cloudflare_account_id` are configured in
+OpenTofu, `backup-bootstrap` can derive `R2_ENDPOINT` and `R2_BUCKET` from
+Tofu outputs; the R2 access key id and secret still stay in operator secrets,
+not Tofu state.
+
+R2 storage must stay under the `10 GB` free-tier target. `backup-dbs.sh`
+defaults to `R2_MAX_BYTES=8589934592` (`8 GiB`) and `R2_MAX_BACKUPS=7` for the
+remote `db/reef-db-*.tar.gz.age` backup objects. Before upload it lists existing
+R2 backup objects, deletes oldest matching backups until the incoming archive
+fits both limits, and refuses upload if it cannot verify the remote usage
+budget.
+
+Backups are compressed before they touch R2: each database is dumped with
+PostgreSQL custom-format compression, the dump set is packed as
+`reef-db-<timestamp>.tar.gz`, and only then age-encrypted to
+`reef-db-<timestamp>.tar.gz.age`.
+
 Run non-destructive restore-list check against latest local encrypted archive:
 
 ```bash
-/opt/reef/scripts/restore-backup-check.sh
+make hetzner-core ARGS=backup-restore-check
 ```
 
-Do not treat backups as reliable until this check passes with the real private
-age identity.
+This copies only the encrypted archive from the host, decrypts locally with the
+operator-held age identity, and runs `pg_restore --list` for each dump. It
+requires local `age` and `pg_restore` binaries. Do not treat backups as reliable
+until this check passes with the real private age identity.
 
 ## Soak Runs
 
@@ -277,6 +400,53 @@ network:
 
 ```bash
 RATE=10000 DURATION=3m WORKERS=384 make hetzner-core ARGS=soak
+```
+
+The hosted runtime uses `EXTERNAL_API_AUTH_MODE=static-token`. The secret
+generator creates a simulator bearer token, maps `sim-client-*` entries into
+`EXTERNAL_API_TOKENS`, and writes the matching `REEF_API_BEARER_TOKEN` into
+`secrets/simulator.env`; do not replace those with hardcoded values.
+
+Run the default hosted smoke gate:
+
+```bash
+make hetzner-core ARGS=hosted-smoke
+```
+
+The hosted smoke temporarily enables the tunnel-only legacy setup route needed
+for simulator reference-data seeding, waits for runtime health, runs the gate,
+and disables that route again before returning.
+
+The gate fails if `systemFailureCount` is nonzero, valid-intent success is below
+`100`, or any trace check fails. Override `RATE`, `DURATION`, `WORKERS`, or
+`TRACE_CHECK_LIMIT` only when intentionally changing the gate.
+
+## Hosted Admin Auth
+
+After creating the GitHub OAuth app and setting local
+`GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and
+`GITHUB_OAUTH_REDIRECT_URI`, persist the hosted admin auth config with:
+
+```bash
+make hetzner-core ARGS=admin-auth-up
+```
+
+To grant the first hosted admin user, use the authenticated GitHub CLI user or
+set `ADMIN_GITHUB_USER_ID` explicitly, then run:
+
+```bash
+make hetzner-core ARGS=admin-role-grant
+```
+
+`admin-role-grant` temporarily enables the tunnel-only legacy mutation route,
+grants `arena.admin` to `user-gh-<numeric-id>`, then disables the route again.
+Verify it stays disabled with a host-local POST to `/auth/roles` returning
+`403`.
+
+Run the hosted auth smoke after public ingress, Caddy, or admin auth changes:
+
+```bash
+make hetzner-core ARGS=admin-auth-smoke
 ```
 
 For stream-ack submit-spread probes, target the stream-ack API container and

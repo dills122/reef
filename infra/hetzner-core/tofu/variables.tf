@@ -56,6 +56,54 @@ variable "api_domain" {
   default     = ""
 }
 
+variable "cloudflare_zone_id" {
+  description = "Cloudflare zone ID used to manage the API DNS record. Leave empty to disable Cloudflare DNS."
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare account ID used to manage account-scoped resources such as R2 buckets. Leave empty to disable R2 bucket management."
+  type        = string
+  default     = ""
+}
+
+variable "cloudflare_dns_proxied" {
+  description = "Proxy the API DNS record through Cloudflare. Keep false until origin TLS and public ingress are verified."
+  type        = bool
+  default     = false
+}
+
+variable "cloudflare_dns_ttl" {
+  description = "TTL for non-proxied Cloudflare DNS records. Cloudflare uses automatic TTL when proxied."
+  type        = number
+  default     = 300
+}
+
+variable "r2_backup_bucket" {
+  description = "Cloudflare R2 bucket name for encrypted backbone backups. Leave empty to disable R2 bucket management."
+  type        = string
+  default     = ""
+}
+
+variable "r2_backup_bucket_location" {
+  description = "Optional Cloudflare R2 bucket location hint. Empty leaves Cloudflare default placement."
+  type        = string
+  default     = ""
+}
+
+variable "r2_backup_bucket_jurisdiction" {
+  description = "Cloudflare R2 bucket jurisdiction."
+  type        = string
+  default     = "default"
+}
+
+variable "r2_backup_bucket_storage_class" {
+  description = "Cloudflare R2 storage class for newly uploaded backup objects."
+  type        = string
+  default     = "Standard"
+}
+
 variable "enable_public_web" {
   description = "Open public HTTP/HTTPS firewall rules. Keep false for internal-only deployments."
   type        = bool

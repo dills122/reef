@@ -8,3 +8,11 @@ listener "tcp" {
 }
 
 storage "postgresql" {}
+
+audit "file" "file" {
+  description = "Reef OpenBao audit log"
+
+  options {
+    file_path = "/bao/logs/audit.log"
+  }
+}

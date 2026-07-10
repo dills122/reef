@@ -28,6 +28,7 @@ COMPOSE_STREAM_ACK="${COMPOSE_STREAM_ACK:-0}"
 DIRECT_DOCKER_RUN="${DIRECT_DOCKER_RUN:-0}"
 SIMULATOR_IMAGE="${SIMULATOR_IMAGE:-${REEF_SIMULATOR_IMAGE:-reef-simulator:local}}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-reef_internal}"
+RUN_USER="$(id -u):$(id -g)"
 
 compose=(docker compose)
 if [[ "$COMPOSE_STREAM_ACK" == "1" ]]; then
@@ -160,12 +161,14 @@ fi
 
 if [[ "$DIRECT_DOCKER_RUN" == "1" ]]; then
   docker run --rm \
+    --user "$RUN_USER" \
     --network "$DOCKER_NETWORK" \
     -v "$BASE/reports:/reports" \
     "$SIMULATOR_IMAGE" \
     "${simulator_args[@]}" > "$stdout"
 else
   "${compose[@]}" --profile manual run --rm \
+    --user "$RUN_USER" \
     -v "$BASE/reports:/reports" \
     simulator \
     "${simulator_args[@]}" > "$stdout"

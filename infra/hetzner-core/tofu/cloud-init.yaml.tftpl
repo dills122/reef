@@ -30,6 +30,20 @@ packages:
   - sysstat
   - iotop
 
+write_files:
+  - path: /etc/docker/daemon.json
+    owner: root:root
+    permissions: '0644'
+    content: |
+      {
+        "live-restore": true,
+        "log-driver": "local",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "5"
+        }
+      }
+
 runcmd:
   - systemctl enable --now docker
   - usermod -aG docker ${ops_user}
@@ -43,9 +57,14 @@ runcmd:
   - mkdir -p /opt/reef/postgres/init
   - mkdir -p /opt/reef/scripts
   - mkdir -p /opt/reef/secrets
+  - mkdir -p /opt/reef-build/services
   - chmod 700 /opt/reef/secrets
   - chown -R ${ops_user}:${ops_user} /opt/reef
+  - chown -R ${ops_user}:${ops_user} /opt/reef-build
+  - chmod 770 /opt/reef/openbao/logs
   - ufw default deny incoming
   - ufw default allow outgoing
-  - ufw allow 22/tcp
+%{ for cidr in admin_cidrs ~}
+  - ufw allow from ${cidr} to any port 22 proto tcp
+%{ endfor ~}
   - ufw --force enable

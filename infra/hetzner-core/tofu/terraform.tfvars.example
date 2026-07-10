@@ -4,7 +4,18 @@ location    = "nbg1"
 server_type = "cx33"
 
 enable_public_web = false
-# api_domain = "api.example.com"
+api_domain        = "reef-arena-admin.shrimpworks.dev"
+
+# Set this when DNS should be managed by OpenTofu. Requires CLOUDFLARE_API_TOKEN.
+# cloudflare_zone_id     = "YOUR.CLOUDFLARE.ZONE.ID"
+# cloudflare_account_id  = "YOUR.CLOUDFLARE.ACCOUNT.ID"
+# cloudflare_dns_proxied = false
+
+# Set these when encrypted backups should upload to Cloudflare R2.
+# r2_backup_bucket               = "reef-backups"
+# r2_backup_bucket_location      = ""
+# r2_backup_bucket_jurisdiction  = "default"
+# r2_backup_bucket_storage_class = "Standard"
 
 admin_cidrs = [
   "YOUR.PUBLIC.IP.ADDRESS/32",

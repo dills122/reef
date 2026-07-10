@@ -4,7 +4,9 @@
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
+		Permissions-Policy "interest-cohort=(), geolocation=(), microphone=(), camera=()"
 		-Server
 	}
 
@@ -59,7 +61,7 @@
 	# SameSite=Lax admin session cookie stays first-party.
 	handle {
 		root * /srv/arena-admin
-		try_files {path} /index.html
+		try_files {path} {path}/index.html {path}.html /index.html
 		file_server
 	}
 }

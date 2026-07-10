@@ -1341,12 +1341,26 @@ class PlatformHttpServer(
             }
             try {
                 val session = auth.authenticateSession(token)
+                val user = adminIdentityService?.user(session.reefUserId)
+                val identityRoles = adminIdentityService
+                    ?.rolesForUser(session.reefUserId)
+                    ?.map { it.roleId }
+                    .orEmpty()
+                val runtimeRoles = arenaAdminService
+                    ?.listActorRoles(session.reefUserId)
+                    ?.map { it.roleId }
+                    .orEmpty()
+                val roles = (identityRoles + runtimeRoles).distinct().sorted()
                 writeJson(
                     exchange,
                     200,
                     JsonCodec.writeObject(
                         "status" to "ok",
                         "reefUserId" to session.reefUserId,
+                        "githubLogin" to (user?.githubLogin ?: ""),
+                        "displayName" to (user?.displayName ?: ""),
+                        "trustState" to (user?.trustState?.dbValue ?: ""),
+                        "roles" to roles,
                         "authProvider" to session.authProvider.dbValue,
                         "expiresAt" to session.expiresAt.toString()
                     )

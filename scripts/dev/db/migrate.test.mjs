@@ -80,6 +80,7 @@ test("discovers deterministic domain migrations", async () => {
   assert.ok(migrations.some((migration) => migration.id === "command_log/0014_integrity_audit_views.sql"));
   assert.ok(migrations.some((migration) => migration.id === "command_log/0015_command_results_archive.sql"));
   assert.ok(migrations.some((migration) => migration.id === "settlement/0001_p2_exception_facts.sql"));
+  assert.ok(migrations.some((migration) => migration.id === "settlement/0006_allocation_confirmation_affirmation_facts.sql"));
   assert.ok(migrations.some((migration) => migration.id === "arena/0001_arena_registry.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0001_simulation_run_exports.sql"));
   assert.ok(migrations.some((migration) => migration.id === "analytics/0002_run_bot_performance_summaries.sql"));
