@@ -37,7 +37,12 @@ const build = spawnSync(
   { cwd: repoRoot, encoding: "utf8" },
 );
 
-if (build.status !== 0) {
+if (build.error || build.status !== 0) {
+  const buildMessage =
+    build.error?.message ||
+    build.stderr?.trim() ||
+    build.stdout?.trim() ||
+    "Hosted artifact build failed.";
   const report = {
     approvalStatus: "do_not_merge",
     phase: "artifact_build",
@@ -46,7 +51,7 @@ if (build.status !== 0) {
     issues: [
       {
         code: "hosted_artifact_build_failed",
-        message: build.stderr.trim() || build.stdout.trim() || "Hosted artifact build failed.",
+        message: buildMessage,
       },
     ],
   };

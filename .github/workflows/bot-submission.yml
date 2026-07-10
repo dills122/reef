@@ -86,12 +86,17 @@ jobs:
     if: needs.detect-flow.outputs.flow != 'remove' && needs.detect-flow.outputs.flow != 'skip'
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.38'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
       - name: Security scan + sandboxed test run
         run: |
-          node scripts/dev/bot-sdk-test-bot.mjs \
+          bun scripts/dev/bot-sdk-test-bot.mjs \
             "bots/${{ needs.detect-flow.outputs.bot-name }}/index.ts"
 
   # Stage 4: registry diff (add vs update, by registry state not branch name)
