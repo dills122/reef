@@ -8,6 +8,8 @@ Historical note: this document describes the original P2-only minimal slice (`tr
 
 This document supports `P2_SETTLEMENT_BREAK_REPAIR` only. It is intentionally smaller than the full settlement domain in [`DATA_DOMAIN_SCHEMA_BLUEPRINT.md`](./DATA_DOMAIN_SCHEMA_BLUEPRINT.md).
 
+Current status note: the original exception slice remains available, and the instant-post-trade materializer now also emits a minimal happy-path chain for settled trades: `SettlementAllocationProposed`, `SettlementConfirmationGenerated`, and `SettlementAffirmationAccepted` before settlement instruction/attempt/finality. These facts are append-only, reference the settlement obligation and canonical trade/order facts, and are visible through settlement fact/proof reads. Clearing, novation, and netting remain deferred.
+
 ## Scope
 
 The first slice proves:
@@ -16,7 +18,7 @@ The first slice proves:
 trade -> obligation -> cash-leg break -> repair -> resolved
 ```
 
-It did not implement allocation, confirmation, clearing, netting, account-ledger mutation, buying-power enforcement, exception UI, or broad settlement analytics. Account-ledger mutation is no longer accurate as a current limitation — see the historical note above and [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md) for what has since shipped. Allocation, confirmation, clearing, netting, buying-power enforcement, exception UI, and broad settlement analytics remain not implemented.
+It did not implement allocation, confirmation, clearing, netting, account-ledger mutation, buying-power enforcement, exception UI, or broad settlement analytics. Account-ledger mutation is no longer accurate as a current limitation — see the historical note above and [`SETTLEMENT_CLEARING_STRATEGY.md`](./SETTLEMENT_CLEARING_STRATEGY.md) for what has since shipped. Allocation/confirmation/affirmation now exist only as a minimal auto fact chain for instant-post-trade settled obligations. Full allocation instructions, confirmation matching/mismatch handling, clearing, netting, buying-power enforcement, exception UI, and broad settlement analytics remain not implemented.
 
 ## Storage Target
 
@@ -25,6 +27,59 @@ Use the `settlement` schema as the target domain boundary. If implementation sta
 Facts are append-only. Derived current state is a projection.
 
 ## Required Facts
+
+### Minimal Instant-Post-Trade Chain Facts
+
+These facts are implemented for the narrow settled happy path only:
+
+#### `SettlementAllocationProposed`
+
+Required fields:
+
+- `settlementAllocationId`
+- `settlementObligationId`
+- `scenarioRunId`
+- `correlationId`
+- `causationId`
+- `tradeId`
+- `buyOrderId`
+- `sellOrderId`
+- `buyerAccountId`
+- `sellerAccountId`
+- `quantity`
+- `state = ALLOCATION_PROPOSED`
+- `occurredAt`
+
+#### `SettlementConfirmationGenerated`
+
+Required fields:
+
+- `settlementConfirmationId`
+- `settlementAllocationId`
+- `settlementObligationId`
+- `scenarioRunId`
+- `correlationId`
+- `causationId`
+- `tradeId`
+- `state = CONFIRMATION_GENERATED`
+- `occurredAt`
+
+#### `SettlementAffirmationAccepted`
+
+Required fields:
+
+- `settlementAffirmationId`
+- `settlementConfirmationId`
+- `settlementAllocationId`
+- `settlementObligationId`
+- `scenarioRunId`
+- `correlationId`
+- `causationId`
+- `tradeId`
+- `actorType = SYSTEM`
+- `actorId`
+- `state = AFFIRMATION_ACCEPTED`
+- `occurredAt`
 
 ### `SettlementObligationCreated`
 
@@ -98,6 +153,9 @@ Required fields:
 ## State Rules
 
 - `SettlementBreakOpened` must reference an existing obligation.
+- `SettlementAllocationProposed` must reference an existing obligation and canonical trade/order facts.
+- `SettlementConfirmationGenerated` must reference an existing allocation and obligation.
+- `SettlementAffirmationAccepted` must reference an existing confirmation, allocation, and obligation.
 - `SettlementRepairPosted` must reference an existing break.
 - `SettlementResolved` must reference an existing repair.
 - no direct `CASH_LEG_FAILED -> RESOLVED` transition is allowed without repair

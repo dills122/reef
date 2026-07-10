@@ -47,8 +47,11 @@ import com.reef.platform.application.settlement.PostgresSettlementSqlNames
 import com.reef.platform.application.settlement.PostTradeProfileResolver
 import com.reef.platform.application.settlement.SettlementBreakOpenedReason
 import com.reef.platform.application.settlement.SettlementBreakOpenedReasonSecurity
+import com.reef.platform.application.settlement.SettlementAffirmationAcceptedFact
+import com.reef.platform.application.settlement.SettlementAllocationProposedFact
 import com.reef.platform.application.settlement.SettlementAttemptStartedFact
 import com.reef.platform.application.settlement.SettlementBreakOpenedFact
+import com.reef.platform.application.settlement.SettlementConfirmationGeneratedFact
 import com.reef.platform.application.settlement.SettlementFactBundle
 import com.reef.platform.application.settlement.SettlementFactStore
 import com.reef.platform.application.settlement.SettlementInstructionCreatedFact
@@ -4044,6 +4047,9 @@ class PlatformHttpServer(
                     "facts" to settlementFactBundleJson(auditFacts),
                     "materialization" to mapOf(
                         "scenarioRunId" to result.scenarioRunId,
+                        "materializedAllocations" to result.materializedAllocations,
+                        "materializedConfirmations" to result.materializedConfirmations,
+                        "materializedAffirmations" to result.materializedAffirmations,
                         "materializedAttempts" to result.materializedAttempts,
                         "materializedLedgerEntries" to result.materializedLedgerEntries,
                         "materializedSettlements" to result.materializedSettlements,
@@ -4199,6 +4205,9 @@ class PlatformHttpServer(
                     "scenarioRunId" to result.scenarioRunId,
                     "scannedTrades" to result.scannedTrades,
                     "materializedObligations" to result.materializedObligations,
+                    "materializedAllocations" to result.materializedAllocations,
+                    "materializedConfirmations" to result.materializedConfirmations,
+                    "materializedAffirmations" to result.materializedAffirmations,
                     "materializedInstructions" to result.materializedInstructions,
                     "materializedAttempts" to result.materializedAttempts,
                     "materializedLegOutcomes" to result.materializedLegOutcomes,
@@ -4344,6 +4353,15 @@ class PlatformHttpServer(
             obligations = json.objectDocuments("obligations").map {
                 obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
+            allocations = json.objectDocuments("allocations").map {
+                allocationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            confirmations = json.objectDocuments("confirmations").map {
+                confirmationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
+            affirmations = json.objectDocuments("affirmations").map {
+                affirmationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
+            },
             instructions = json.objectDocuments("instructions").map {
                 instructionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
             },
@@ -4417,6 +4435,76 @@ class PlatformHttpServer(
             cashAmount = json.string("cashAmount"),
             currency = json.string("currency"),
             state = json.string("state").ifBlank { "OBLIGATION_CREATED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun allocationFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementAllocationProposedFact {
+        return SettlementAllocationProposedFact(
+            settlementAllocationId = json.string("settlementAllocationId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            tradeId = json.string("tradeId"),
+            buyOrderId = json.string("buyOrderId"),
+            sellOrderId = json.string("sellOrderId"),
+            buyerAccountId = json.string("buyerAccountId"),
+            sellerAccountId = json.string("sellerAccountId"),
+            quantity = json.string("quantity"),
+            state = json.string("state").ifBlank { "ALLOCATION_PROPOSED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun confirmationFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementConfirmationGeneratedFact {
+        return SettlementConfirmationGeneratedFact(
+            settlementConfirmationId = json.string("settlementConfirmationId"),
+            settlementAllocationId = json.string("settlementAllocationId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            tradeId = json.string("tradeId"),
+            state = json.string("state").ifBlank { "CONFIRMATION_GENERATED" },
+            occurredAt = requiredInstant(json, "occurredAt")
+        )
+    }
+
+    private fun affirmationFact(
+        json: JsonDocument,
+        scenarioRunId: String,
+        defaultPostTradeProfileId: String,
+        defaultPostTradePolicyVersion: Int
+    ): SettlementAffirmationAcceptedFact {
+        return SettlementAffirmationAcceptedFact(
+            settlementAffirmationId = json.string("settlementAffirmationId"),
+            settlementConfirmationId = json.string("settlementConfirmationId"),
+            settlementAllocationId = json.string("settlementAllocationId"),
+            settlementObligationId = json.string("settlementObligationId"),
+            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
+            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
+            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
+            correlationId = json.string("correlationId"),
+            causationId = json.string("causationId"),
+            tradeId = json.string("tradeId"),
+            actorType = json.string("actorType").ifBlank { "SYSTEM" },
+            actorId = json.string("actorId").ifBlank { "post-trade-auto-affirmer" },
+            state = json.string("state").ifBlank { "AFFIRMATION_ACCEPTED" },
             occurredAt = requiredInstant(json, "occurredAt")
         )
     }
@@ -4675,6 +4763,58 @@ class PlatformHttpServer(
                     "occurredAt" to it.occurredAt.toString()
                 )
             },
+            "allocations" to facts.allocations.map {
+                mapOf(
+                    "settlementAllocationId" to it.settlementAllocationId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "tradeId" to it.tradeId,
+                    "buyOrderId" to it.buyOrderId,
+                    "sellOrderId" to it.sellOrderId,
+                    "buyerAccountId" to it.buyerAccountId,
+                    "sellerAccountId" to it.sellerAccountId,
+                    "quantity" to it.quantity,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "confirmations" to facts.confirmations.map {
+                mapOf(
+                    "settlementConfirmationId" to it.settlementConfirmationId,
+                    "settlementAllocationId" to it.settlementAllocationId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "tradeId" to it.tradeId,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
+            "affirmations" to facts.affirmations.map {
+                mapOf(
+                    "settlementAffirmationId" to it.settlementAffirmationId,
+                    "settlementConfirmationId" to it.settlementConfirmationId,
+                    "settlementAllocationId" to it.settlementAllocationId,
+                    "settlementObligationId" to it.settlementObligationId,
+                    "scenarioRunId" to it.scenarioRunId,
+                    "postTradeProfileId" to it.postTradeProfileId,
+                    "postTradePolicyVersion" to it.postTradePolicyVersion,
+                    "correlationId" to it.correlationId,
+                    "causationId" to it.causationId,
+                    "tradeId" to it.tradeId,
+                    "actorType" to it.actorType,
+                    "actorId" to it.actorId,
+                    "state" to it.state,
+                    "occurredAt" to it.occurredAt.toString()
+                )
+            },
             "instructions" to facts.instructions.map {
                 mapOf(
                     "settlementInstructionId" to it.settlementInstructionId,
@@ -4881,6 +5021,9 @@ class PlatformHttpServer(
                 "checksum" to proof.checksum,
                 "factsCount" to proof.factsCount,
                 "obligationsCount" to proof.obligationsCount,
+                "allocationsCount" to proof.allocationsCount,
+                "confirmationsCount" to proof.confirmationsCount,
+                "affirmationsCount" to proof.affirmationsCount,
                 "instructionsCount" to proof.instructionsCount,
                 "attemptsCount" to proof.attemptsCount,
                 "legOutcomesCount" to proof.legOutcomesCount,
@@ -4916,6 +5059,9 @@ class PlatformHttpServer(
                         "quantity" to it.quantity,
                         "cashAmount" to it.cashAmount,
                         "currency" to it.currency,
+                        "settlementAllocationIds" to it.settlementAllocationIds,
+                        "settlementConfirmationIds" to it.settlementConfirmationIds,
+                        "settlementAffirmationIds" to it.settlementAffirmationIds,
                         "settlementInstructionIds" to it.settlementInstructionIds,
                         "settlementAttemptIds" to it.settlementAttemptIds,
                         "ledgerEntryIds" to it.ledgerEntryIds,

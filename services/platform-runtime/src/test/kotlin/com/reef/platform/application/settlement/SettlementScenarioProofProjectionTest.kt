@@ -14,13 +14,16 @@ class SettlementScenarioProofProjectionTest {
         assertEquals("CLEAN", proof.proofStatus)
         assertEquals("SHA-256", proof.checksumAlgorithm)
         assertEquals(64, proof.checksum.length)
-        assertEquals(15, proof.factsCount)
+        assertEquals(18, proof.factsCount)
         assertEquals(0, proof.operatorActionsCount)
         assertEquals(1, proof.profilePolicies.size)
         assertEquals("instant-post-trade-v1", proof.profilePolicies.single().postTradeProfileId)
         assertEquals(2, proof.profilePolicies.single().postTradePolicyVersion)
-        assertEquals(15, proof.profilePolicies.single().factCount)
+        assertEquals(18, proof.profilePolicies.single().factCount)
         assertEquals(2, proof.obligationsCount)
+        assertEquals(1, proof.allocationsCount)
+        assertEquals(1, proof.confirmationsCount)
+        assertEquals(1, proof.affirmationsCount)
         assertEquals(0, proof.causationGaps.size)
         assertEquals(2, proof.obligations.size)
         assertEquals(4, proof.balances.size)
@@ -29,6 +32,9 @@ class SettlementScenarioProofProjectionTest {
         assertTrue(proof.settlementProofs.single().securityBalanced)
 
         val settled = proof.obligations.first()
+        assertEquals(listOf("allocation-1"), settled.settlementAllocationIds)
+        assertEquals(listOf("confirmation-1"), settled.settlementConfirmationIds)
+        assertEquals(listOf("affirmation-1"), settled.settlementAffirmationIds)
         assertEquals(listOf("instruction-1"), settled.settlementInstructionIds)
         assertEquals(listOf("attempt-1"), settled.settlementAttemptIds)
         assertEquals(4, settled.ledgerEntryIds.size)
@@ -62,6 +68,9 @@ class SettlementScenarioProofProjectionTest {
                     obligation("obl-1", "trade-1", "buyer-1", "seller-1", "10", "500"),
                     obligation("obl-2", "trade-2", "buyer-1", "seller-1", "4", "200")
                 ),
+                allocations = listOf(allocation("allocation-1", "obl-1", "trade-1")),
+                confirmations = listOf(confirmation("confirmation-1", "allocation-1", "obl-1", "trade-1")),
+                affirmations = listOf(affirmation("affirmation-1", "confirmation-1", "allocation-1", "obl-1", "trade-1")),
                 instructions = listOf(instruction("instruction-1", "obl-1")),
                 attempts = listOf(attempt("attempt-1", "obl-1", "instruction-1")),
                 legOutcomes = listOf(
@@ -139,6 +148,67 @@ class SettlementScenarioProofProjectionTest {
                 postTradePolicyVersion = 2,
                 correlationId = "corr-1",
                 causationId = obligationId,
+                occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+            )
+        }
+
+        fun allocation(id: String, obligationId: String, tradeId: String): SettlementAllocationProposedFact {
+            return SettlementAllocationProposedFact(
+                settlementAllocationId = id,
+                settlementObligationId = obligationId,
+                scenarioRunId = "run-proof",
+                postTradeProfileId = "instant-post-trade-v1",
+                postTradePolicyVersion = 2,
+                correlationId = "corr-1",
+                causationId = obligationId,
+                tradeId = tradeId,
+                buyOrderId = "buy-order-1",
+                sellOrderId = "sell-order-1",
+                buyerAccountId = "account-buyer-1",
+                sellerAccountId = "account-seller-1",
+                quantity = "10",
+                occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+            )
+        }
+
+        fun confirmation(
+            id: String,
+            allocationId: String,
+            obligationId: String,
+            tradeId: String
+        ): SettlementConfirmationGeneratedFact {
+            return SettlementConfirmationGeneratedFact(
+                settlementConfirmationId = id,
+                settlementAllocationId = allocationId,
+                settlementObligationId = obligationId,
+                scenarioRunId = "run-proof",
+                postTradeProfileId = "instant-post-trade-v1",
+                postTradePolicyVersion = 2,
+                correlationId = "corr-1",
+                causationId = allocationId,
+                tradeId = tradeId,
+                occurredAt = Instant.parse("2026-01-01T00:00:02Z")
+            )
+        }
+
+        fun affirmation(
+            id: String,
+            confirmationId: String,
+            allocationId: String,
+            obligationId: String,
+            tradeId: String
+        ): SettlementAffirmationAcceptedFact {
+            return SettlementAffirmationAcceptedFact(
+                settlementAffirmationId = id,
+                settlementConfirmationId = confirmationId,
+                settlementAllocationId = allocationId,
+                settlementObligationId = obligationId,
+                scenarioRunId = "run-proof",
+                postTradeProfileId = "instant-post-trade-v1",
+                postTradePolicyVersion = 2,
+                correlationId = "corr-1",
+                causationId = confirmationId,
+                tradeId = tradeId,
                 occurredAt = Instant.parse("2026-01-01T00:00:02Z")
             )
         }

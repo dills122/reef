@@ -227,6 +227,9 @@ object PostgresSchemaRequirements {
     fun settlementFacts(
         resourcePositions: String,
         obligations: String,
+        allocations: String,
+        confirmations: String,
+        affirmations: String,
         instructions: String,
         attempts: String,
         legOutcomes: String,
@@ -239,6 +242,9 @@ object PostgresSchemaRequirements {
     ): PostgresSchemaRequirement {
         val resourcePositionTable = PostgresSchemaObject.parse(resourcePositions)
         val obligationTable = PostgresSchemaObject.parse(obligations)
+        val allocationTable = PostgresSchemaObject.parse(allocations)
+        val confirmationTable = PostgresSchemaObject.parse(confirmations)
+        val affirmationTable = PostgresSchemaObject.parse(affirmations)
         val instructionTable = PostgresSchemaObject.parse(instructions)
         val attemptTable = PostgresSchemaObject.parse(attempts)
         val legOutcomeTable = PostgresSchemaObject.parse(legOutcomes)
@@ -252,6 +258,9 @@ object PostgresSchemaRequirements {
             tables = listOf(
                 resourcePositionTable,
                 obligationTable,
+                allocationTable,
+                confirmationTable,
+                affirmationTable,
                 instructionTable,
                 attemptTable,
                 legOutcomeTable,
@@ -278,6 +287,28 @@ object PostgresSchemaRequirements {
                 PostgresSchemaColumn(obligationTable, "post_trade_policy_version", "integer"),
                 PostgresSchemaColumn(obligationTable, "trade_id", "text"),
                 PostgresSchemaColumn(obligationTable, "occurred_at", "timestamp with time zone"),
+                PostgresSchemaColumn(allocationTable, "settlement_allocation_id", "text"),
+                PostgresSchemaColumn(allocationTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(allocationTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(allocationTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(allocationTable, "trade_id", "text"),
+                PostgresSchemaColumn(allocationTable, "buy_order_id", "text"),
+                PostgresSchemaColumn(allocationTable, "sell_order_id", "text"),
+                PostgresSchemaColumn(allocationTable, "state", "text"),
+                PostgresSchemaColumn(confirmationTable, "settlement_confirmation_id", "text"),
+                PostgresSchemaColumn(confirmationTable, "settlement_allocation_id", "text"),
+                PostgresSchemaColumn(confirmationTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(confirmationTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(confirmationTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(confirmationTable, "state", "text"),
+                PostgresSchemaColumn(affirmationTable, "settlement_affirmation_id", "text"),
+                PostgresSchemaColumn(affirmationTable, "settlement_confirmation_id", "text"),
+                PostgresSchemaColumn(affirmationTable, "settlement_allocation_id", "text"),
+                PostgresSchemaColumn(affirmationTable, "settlement_obligation_id", "text"),
+                PostgresSchemaColumn(affirmationTable, "post_trade_profile_id", "text"),
+                PostgresSchemaColumn(affirmationTable, "post_trade_policy_version", "integer"),
+                PostgresSchemaColumn(affirmationTable, "actor_id", "text"),
+                PostgresSchemaColumn(affirmationTable, "state", "text"),
                 PostgresSchemaColumn(instructionTable, "settlement_instruction_id", "text"),
                 PostgresSchemaColumn(instructionTable, "settlement_obligation_id", "text"),
                 PostgresSchemaColumn(instructionTable, "post_trade_profile_id", "text"),

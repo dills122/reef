@@ -152,7 +152,7 @@ Explicitly out of scope for the first re-entry slice:
 - operator exception workbench UI — still not built
 - broad settlement analytics — still not built
 
-Those modules could start only after the P2-only facts proved causation through real canonical trade references. That happened: obligation materialization consumes canonical trades and orders, and `D-050` accepted real ledger mutation as shipped scope. Full allocation/confirmation/affirmation workflows, clearing/netting, buying-power/hold enforcement, an operator exception workbench UI, and broad settlement analytics remain future work unless separately planned.
+Those modules could start only after the P2-only facts proved causation through real canonical trade references. That happened: obligation materialization consumes canonical trades and orders, and `D-050` accepted real ledger mutation as shipped scope. Minimal auto allocation/confirmation/affirmation facts now exist for instant-post-trade settled obligations and are inspectable through settlement facts/proof. Full allocation/confirmation/affirmation workflows, clearing/netting, buying-power/hold enforcement, an operator exception workbench UI, and broad settlement analytics remain future work unless separately planned.
 
 ## Market Data / History API
 
@@ -211,7 +211,7 @@ lives in [`STOCK_DATA_SEEDING_PLAN.md`](./STOCK_DATA_SEEDING_PLAN.md).
 | `/orders`, `/trades`, `/events`, `/traces` legacy/internal surfaces | admin/test | runtime tables | direct runtime-table read | current local runtime state | varies by source | internal/admin | diagnostic |
 | venue-session-specific depth | bot/user | planned projected lifecycle facts with session key | not built | not available | not available | public market data | deferred |
 | account balances, holds, buying power | bot/user | settlement ledger projection (`/api/v1/settlement/ledger/{scenarioRunId}`) for scenario-scoped balances; broader per-account buying-power/hold enforcement remains planned | partially built | derived from durable ledger facts for scenario-scoped balances | none beyond settlement fact persistence completeness | participant/account scope | partial |
-| settlement obligations/breaks/repairs | user/admin | settlement facts/projections (`/api/v1/settlement/facts`, `/api/v1/settlement/obligations`) | built | derived from durable settlement facts | none beyond settlement fact persistence completeness | participant/admin | active |
+| settlement obligations/allocation/confirmation/affirmation/breaks/repairs | user/admin | settlement facts/projections (`/api/v1/settlement/facts`, `/api/v1/settlement/proof`, `/api/v1/settlement/obligations`) | partial | derived from durable settlement facts | none beyond settlement fact persistence completeness | participant/admin | active for obligation, minimal instant-post-trade allocation/confirmation/affirmation, and exception facts |
 
 Read source definitions:
 

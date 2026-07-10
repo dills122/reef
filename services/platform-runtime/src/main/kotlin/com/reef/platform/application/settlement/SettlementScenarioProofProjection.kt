@@ -10,6 +10,9 @@ data class SettlementScenarioProofView(
     val checksum: String,
     val factsCount: Int,
     val obligationsCount: Int,
+    val allocationsCount: Int,
+    val confirmationsCount: Int,
+    val affirmationsCount: Int,
     val instructionsCount: Int,
     val attemptsCount: Int,
     val legOutcomesCount: Int,
@@ -49,6 +52,9 @@ data class SettlementProofObligationView(
     val quantity: String,
     val cashAmount: String,
     val currency: String,
+    val settlementAllocationIds: List<String>,
+    val settlementConfirmationIds: List<String>,
+    val settlementAffirmationIds: List<String>,
     val settlementInstructionIds: List<String>,
     val settlementAttemptIds: List<String>,
     val ledgerEntryIds: List<String>,
@@ -78,6 +84,18 @@ object SettlementScenarioProofProjection {
                     quantity = obligation.quantity,
                     cashAmount = obligation.cashAmount,
                     currency = obligation.currency,
+                    settlementAllocationIds = facts.allocations
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementAllocationId }
+                        .map { it.settlementAllocationId },
+                    settlementConfirmationIds = facts.confirmations
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementConfirmationId }
+                        .map { it.settlementConfirmationId },
+                    settlementAffirmationIds = facts.affirmations
+                        .filter { it.settlementObligationId == obligation.settlementObligationId }
+                        .sortedBy { it.settlementAffirmationId }
+                        .map { it.settlementAffirmationId },
                     settlementInstructionIds = facts.instructions
                         .filter { it.settlementObligationId == obligation.settlementObligationId }
                         .sortedBy { it.settlementInstructionId }
@@ -115,9 +133,13 @@ object SettlementScenarioProofProjection {
             checksumAlgorithm = "SHA-256",
             checksum = sha256(checksumInput),
             factsCount = facts.resourcePositions.size + facts.obligations.size + facts.instructions.size +
+            facts.allocations.size + facts.confirmations.size + facts.affirmations.size +
             facts.attempts.size + facts.legOutcomes.size + facts.ledgerEntries.size + facts.settlements.size +
                 facts.breaks.size + facts.repairs.size + facts.resolutions.size + facts.operatorActions.size,
             obligationsCount = facts.obligations.size,
+            allocationsCount = facts.allocations.size,
+            confirmationsCount = facts.confirmations.size,
+            affirmationsCount = facts.affirmations.size,
             instructionsCount = facts.instructions.size,
             attemptsCount = facts.attempts.size,
             legOutcomesCount = facts.legOutcomes.size,
@@ -138,6 +160,8 @@ object SettlementScenarioProofProjection {
 
     private fun causationGaps(facts: SettlementFactBundle): List<SettlementProofGapView> {
         val obligationIds = facts.obligations.map { it.settlementObligationId }.toSet()
+        val allocationIds = facts.allocations.map { it.settlementAllocationId }.toSet()
+        val confirmationIds = facts.confirmations.map { it.settlementConfirmationId }.toSet()
         val instructionIds = facts.instructions.map { it.settlementInstructionId }.toSet()
         val attemptIds = facts.attempts.map { it.settlementAttemptId }.toSet()
         val breakIds = facts.breaks.map { it.settlementBreakId }.toSet()
@@ -151,6 +175,72 @@ object SettlementScenarioProofProjection {
                             it.settlementInstructionId,
                             "SettlementObligationCreated",
                             it.settlementObligationId
+                        )
+                    )
+                }
+            }
+            facts.allocations.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementAllocationProposed",
+                            it.settlementAllocationId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+            }
+            facts.confirmations.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementConfirmationGenerated",
+                            it.settlementConfirmationId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+                if (it.settlementAllocationId !in allocationIds) {
+                    add(
+                        gap(
+                            "SettlementConfirmationGenerated",
+                            it.settlementConfirmationId,
+                            "SettlementAllocationProposed",
+                            it.settlementAllocationId
+                        )
+                    )
+                }
+            }
+            facts.affirmations.forEach {
+                if (it.settlementObligationId !in obligationIds) {
+                    add(
+                        gap(
+                            "SettlementAffirmationAccepted",
+                            it.settlementAffirmationId,
+                            "SettlementObligationCreated",
+                            it.settlementObligationId
+                        )
+                    )
+                }
+                if (it.settlementAllocationId !in allocationIds) {
+                    add(
+                        gap(
+                            "SettlementAffirmationAccepted",
+                            it.settlementAffirmationId,
+                            "SettlementAllocationProposed",
+                            it.settlementAllocationId
+                        )
+                    )
+                }
+                if (it.settlementConfirmationId !in confirmationIds) {
+                    add(
+                        gap(
+                            "SettlementAffirmationAccepted",
+                            it.settlementAffirmationId,
+                            "SettlementConfirmationGenerated",
+                            it.settlementConfirmationId
                         )
                     )
                 }
@@ -405,6 +495,9 @@ object SettlementScenarioProofProjection {
                         it.quantity,
                         it.cashAmount,
                         it.currency,
+                        it.settlementAllocationIds.joinToString(","),
+                        it.settlementConfirmationIds.joinToString(","),
+                        it.settlementAffirmationIds.joinToString(","),
                         it.settlementInstructionIds.joinToString(","),
                         it.settlementAttemptIds.joinToString(","),
                         it.ledgerEntryIds.joinToString(","),
@@ -452,6 +545,9 @@ object SettlementScenarioProofProjection {
         return (
             facts.resourcePositions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.obligations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.allocations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.confirmations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
+                facts.affirmations.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.instructions.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.attempts.map { it.postTradeProfileId to it.postTradePolicyVersion } +
                 facts.legOutcomes.map { it.postTradeProfileId to it.postTradePolicyVersion } +
@@ -483,6 +579,9 @@ object SettlementScenarioProofProjection {
         return (
             facts.resourcePositions.map { it.occurredAt } +
                 facts.obligations.map { it.occurredAt } +
+                facts.allocations.map { it.occurredAt } +
+                facts.confirmations.map { it.occurredAt } +
+                facts.affirmations.map { it.occurredAt } +
                 facts.instructions.map { it.occurredAt } +
                 facts.attempts.map { it.occurredAt } +
                 facts.legOutcomes.map { it.occurredAt } +

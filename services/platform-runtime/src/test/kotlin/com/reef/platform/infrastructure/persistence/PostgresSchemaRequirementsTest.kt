@@ -604,6 +604,9 @@ class PostgresSchemaRequirementsTest {
         val requirements = PostgresSchemaRequirements.settlementFacts(
             resourcePositions = "settlement.resource_positions",
             obligations = "settlement.obligations",
+            allocations = "settlement.allocations",
+            confirmations = "settlement.confirmations",
+            affirmations = "settlement.affirmations",
             instructions = "settlement.instructions",
             attempts = "settlement.attempts",
             legOutcomes = "settlement.leg_outcomes",
@@ -619,6 +622,9 @@ class PostgresSchemaRequirementsTest {
             setOf(
                 "settlement.resource_positions",
                 "settlement.obligations",
+                "settlement.allocations",
+                "settlement.confirmations",
+                "settlement.affirmations",
                 "settlement.instructions",
                 "settlement.attempts",
                 "settlement.leg_outcomes",
@@ -635,6 +641,12 @@ class PostgresSchemaRequirementsTest {
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.resource_positions.quantity" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.trade_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.obligations.post_trade_profile_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.allocations.settlement_allocation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.allocations.buy_order_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.confirmations.settlement_confirmation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.confirmations.settlement_allocation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.affirmations.settlement_affirmation_id" })
+        assertTrue(requirements.columns.any { it.qualifiedName == "settlement.affirmations.settlement_confirmation_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.settlement_instruction_id" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.instructions.instruction_type" })
         assertTrue(requirements.columns.any { it.qualifiedName == "settlement.attempts.settlement_attempt_id" })
