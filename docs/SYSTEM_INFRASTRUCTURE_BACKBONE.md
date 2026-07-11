@@ -387,8 +387,10 @@ Correct flow:
 GitHub Actions
   -> build apps/arena-admin with same-origin API paths
   -> install deploy SSH key and pinned known_hosts
+  -> temporarily allow this runner's IPv4 /32 through the Hetzner SSH firewall
   -> run scripts/deploy/hetzner-core.mjs arena-admin
   -> rsync static files to /opt/reef/arena-admin
+  -> remove the temporary SSH firewall rule
 ```
 
 This first deployment slice is intentionally static-asset-only. It does not
@@ -402,11 +404,18 @@ Required GitHub secrets:
 - `REEF_HETZNER_HOST`
 - `REEF_HETZNER_SSH_PRIVATE_KEY`
 - `REEF_HETZNER_SSH_KNOWN_HOSTS`
+- `REEF_HETZNER_HCLOUD_TOKEN`
 
 Optional GitHub variables:
 
 - `REEF_HETZNER_OPS_USER` (default `ops`)
 - `REEF_HETZNER_DEPLOY_DIR` (default `/opt/reef`)
+- `REEF_HETZNER_FIREWALL_NAME` (default `reef-prod-core-fw`)
+
+`REEF_HETZNER_HCLOUD_TOKEN` is only used by this workflow to add and remove a
+temporary inbound SSH rule for the current GitHub-hosted runner IPv4 address.
+The normal firewall posture remains SSH restricted to `admin_cidrs` plus the
+short-lived deploy-runner `/32` while the workflow is active.
 
 ## Current Gaps
 
