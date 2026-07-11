@@ -23,6 +23,8 @@ The stress harness also writes canonical reports and uses
 `scripts/dev/lib/report-taxonomy.mjs` for normalized evidence. The control room
 should consume those same sources instead of creating a competing metrics
 model.
+Reports that include `stressRunMetadata.runProfile` are labeled with that
+profile in run history and evidence panels.
 
 ## Dashboard Tech Research
 

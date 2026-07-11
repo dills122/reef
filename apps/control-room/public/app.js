@@ -243,7 +243,7 @@ function renderRuns(runs) {
     row.className = `run-row ${run.runId === state.selectedRunId ? "active" : ""}`;
     row.innerHTML = `
       <strong>${escapeHtml(run.runId)}</strong>
-      <span class="muted">${escapeHtml(run.kind)} · ${escapeHtml(run.status)}</span>
+      <span class="muted">${escapeHtml(run.kind)} · ${escapeHtml(run.status)}${run.profile ? ` · ${escapeHtml(run.profile)}` : ""}</span>
       <span class="kv">
         <span>exit ${run.exitCode ?? ""}</span>
         <span>${fmt((run.evidence || []).length)} reports</span>
@@ -282,12 +282,12 @@ function renderEvidence(run) {
         <strong>${escapeHtml(latest.name)}</strong>
       </div>
       <div>
-        <span class="field-label">Accepted</span>
-        <strong>${fmt(latest.accepted)} / ${fmt(latest.attempted)}</strong>
+        <span class="field-label">Profile</span>
+        <strong>${escapeHtml(latest.runProfile || "unknown")}</strong>
       </div>
       <div>
-        <span class="field-label">${isMaterializerReport(latest) ? "Materialized Gap" : "Trace Checks"}</span>
-        <strong>${isMaterializerReport(latest) ? fmt(latest.acceptedToMaterialized) : `${fmt(latest.tracePass)} / ${fmt(latest.traceChecked)}`}</strong>
+        <span class="field-label">Accepted</span>
+        <strong>${fmt(latest.accepted)} / ${fmt(latest.attempted)}</strong>
       </div>
       <div>
         <span class="field-label">System Failures</span>
@@ -321,6 +321,7 @@ function renderEvidence(run) {
       </div>
       <div class="kv">
         <span>direct ack gap ${fmt(gaps.acceptedToDirectAcked)}</span>
+        <span>profile ${escapeHtml(row.stressRunMetadata?.runProfile || "unknown")}</span>
         <span>trace ${fmt(traces.pass)} / ${fmt(traces.checked)}</span>
         <span>projected ${fmt(ev.projected)}</span>
         <span>proj gap ${fmt(gaps.materializedToProjected)}</span>
@@ -577,6 +578,7 @@ function runDashboardMetrics(run) {
     directAcked: Number(ev.directAcked || 0),
     materialized: Number(ev.materialized || 0),
     projected: Number(ev.projected || 0),
+    runProfile: row.stressRunMetadata?.runProfile || "",
     acceptedToDirectAcked: Number(ev.gaps?.acceptedToDirectAcked || 0),
     acceptedToMaterialized: Number(ev.gaps?.acceptedToMaterialized || 0),
     successRatePct: Number(quality.endToEndSuccessRatePct || 0),

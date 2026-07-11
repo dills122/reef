@@ -386,6 +386,7 @@ function readRun(runId) {
     const record = JSON.parse(readFileSync(recordPath, "utf8"));
     return {
       ...record,
+      profile: record.profile || latestRunProfile(evidence),
       evidence,
       recentEvents: readRecentEvents(join(dir, "stdout.ndjson"), 200),
       artifacts,
@@ -396,6 +397,7 @@ function readRun(runId) {
       runId: safeRunId(runId),
       kind: "artifact",
       status: "observed",
+      profile: latestRunProfile(evidence),
       command: [],
       startedAt: firstModifiedAt(artifacts),
       completedAt: lastModifiedAt(artifacts),
@@ -414,6 +416,7 @@ function summarizeRun(run) {
     runId: run.runId,
     kind: run.kind,
     status: run.status,
+    profile: run.profile || latestRunProfile(run.evidence || []),
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     exitCode: run.exitCode,
@@ -436,6 +439,7 @@ function readEvidenceForRun(dir) {
           name: relative(dir, path),
           modifiedAt: statSync(path).mtime.toISOString(),
           evidence: canonicalEvidenceSummary(report),
+          stressRunMetadata: report.stressRunMetadata || null,
           latencyMs: report.latencyMs || {},
           quality: report.quality || {},
           traceChecks: report.traceChecks || {},
@@ -446,6 +450,14 @@ function readEvidenceForRun(dir) {
     }
   }
   return evidenceRows.sort((left, right) => String(left.modifiedAt).localeCompare(String(right.modifiedAt)));
+}
+
+function latestRunProfile(evidenceRows) {
+  return evidenceRows
+    .slice()
+    .reverse()
+    .map((row) => row.stressRunMetadata?.runProfile)
+    .find(Boolean) || "";
 }
 
 function findJsonReports(dir) {
