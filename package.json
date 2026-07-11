@@ -52,7 +52,8 @@
     "docs-site:build": "bun --cwd apps/docs-site run build",
     "arena-admin:dev": "bun --cwd apps/arena-admin run dev",
     "arena-admin:build": "bun --cwd apps/arena-admin run build",
-    "arena-admin:check": "bun --cwd apps/arena-admin run check"
+    "arena-admin:check": "bun --cwd apps/arena-admin run check",
+    "infra:test:deploy-receiver": "node scripts/dev/deploy-receiver.test.mjs"
   },
   "devDependencies": {
     "decimal.js": "10.6.0",

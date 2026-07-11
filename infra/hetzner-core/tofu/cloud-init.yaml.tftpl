@@ -51,6 +51,8 @@ runcmd:
   - systemctl enable --now unattended-upgrades
   - systemctl enable --now sysstat
   - mkdir -p /opt/reef/backups
+  - mkdir -p /opt/reef/arena-admin
+  - mkdir -p /opt/reef/arena-admin-releases
   - mkdir -p /opt/reef/caddy
   - mkdir -p /opt/reef/openbao/config
   - mkdir -p /opt/reef/openbao/logs

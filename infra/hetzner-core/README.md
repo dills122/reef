@@ -258,46 +258,53 @@ hardcode this host in scripts.
 
 `.github/workflows/admin-ui-deploy.yml` deploys only the static
 `apps/arena-admin` build to the backbone host. It runs on pushes to
-`master`/`main` that touch the admin app, the Hetzner deploy helper, or the
-workflow itself, and it can also be run manually with `workflow_dispatch`.
+`master`/`main` that touch the admin app or the workflow itself, and it can
+also be run manually with `workflow_dispatch`.
 
-The workflow calls the same operator command used locally:
+The workflow builds the SvelteKit static app with an empty
+`PUBLIC_ARENA_API_BASE_URL` so browser requests stay same-origin behind Caddy.
+It then requests a short-lived GitHub OIDC token for the `backbone-admin`
+environment and uploads a gzip-compressed tarball to:
 
-```bash
-bun scripts/deploy/hetzner-core.mjs arena-admin
+```text
+POST /admin/deploy/arena-admin
 ```
 
-That command builds the SvelteKit static app with an empty
-`PUBLIC_ARENA_API_BASE_URL` so browser requests stay same-origin behind Caddy,
-then rsyncs `apps/arena-admin/build/` to `/opt/reef/arena-admin/`. It does not
-restart `platform-runtime`, OpenBao, Postgres, or Caddy; API/runtime deploys
-remain manual until a separate promoted runtime deploy workflow exists.
+The `deploy-receiver` service validates the GitHub OIDC JWT claims, verifies
+the `sha256` artifact header against the uploaded bytes, extracts into
+`/opt/reef/arena-admin-releases`, copies assets into `/opt/reef/arena-admin`,
+and appends a deploy audit row to `arena-admin-releases/deploy-log.jsonl`.
+This deploy path does not require inbound SSH from GitHub runners, a GitHub
+SSH private key, or a Hetzner API token in GitHub.
 
-Because SSH is restricted by the Hetzner firewall `admin_cidrs`, the workflow
-does not require opening SSH globally. Instead it discovers the current
-GitHub-hosted runner IPv4 address, adds a temporary `/32` inbound SSH rule to
-the Hetzner firewall, waits for SSH reachability, deploys, and removes that
-same rule in an `always()` cleanup step.
-
-Required GitHub repository secrets:
-
-| Name | Purpose |
-| --- | --- |
-| `REEF_HETZNER_HOST` | Backbone server IPv4 or DNS name. |
-| `REEF_HETZNER_SSH_PRIVATE_KEY` | Private key for a deploy-capable SSH principal on the backbone host. Prefer a dedicated key scoped to the `ops` account. |
-| `REEF_HETZNER_SSH_KNOWN_HOSTS` | Pinned host key line(s), for example from `ssh-keyscan -H <host>` after verifying the fingerprint out of band. |
-| `REEF_HETZNER_HCLOUD_TOKEN` | Hetzner Cloud project API token used only to add/remove the temporary deploy-runner SSH firewall rule. Hetzner project tokens are not resource-scoped, so use a dedicated project token and keep it limited to this repository environment. |
+Required GitHub repository secrets: none for the admin UI deploy path.
 
 Optional GitHub repository/environment variables:
 
 | Name | Default | Purpose |
 | --- | --- | --- |
-| `REEF_HETZNER_OPS_USER` | `ops` | SSH user for the deploy command. |
-| `REEF_HETZNER_DEPLOY_DIR` | `/opt/reef` | Host deploy directory. |
-| `REEF_HETZNER_FIREWALL_NAME` | `reef-prod-core-fw` | Hetzner firewall name that guards SSH to the backbone host. |
+| `REEF_ADMIN_DEPLOY_URL` | `https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin` | OIDC deploy receiver URL. |
+| `REEF_ADMIN_DEPLOY_AUDIENCE` | `reef-backbone-admin-deploy` | OIDC audience that must match `DEPLOY_RECEIVER_EXPECTED_AUDIENCE`. |
 
 Use the GitHub Actions `backbone-admin` environment for deployment protection
-rules if you want human approval before publishing admin UI changes.
+rules if you want human approval before publishing admin UI changes. The
+receiver also expects the OIDC `environment` claim to be `backbone-admin`.
+
+The manual operator fallback remains:
+
+```bash
+bun scripts/deploy/hetzner-core.mjs arena-admin
+```
+
+That fallback still builds locally and rsyncs `apps/arena-admin/build/` over
+operator SSH.
+
+After changing the receiver or Caddy route, roll the host-side deploy receiver
+with:
+
+```bash
+make hetzner-core ARGS=deploy-receiver-up
+```
 
 When public Caddy is enabled, only narrow bearer-token admin gateway routes are exposed:
 

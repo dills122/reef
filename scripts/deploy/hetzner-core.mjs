@@ -249,6 +249,9 @@ Commands:
              and start the Compose public profile
   public-down
              stop Caddy public profile and close host UFW 80/443
+  deploy-receiver-up
+             sync server bundle, generate receiver env, and rebuild/restart
+             deploy-receiver plus Caddy public route
   admin-auth-up
              persist GitHub OAuth config to host secrets and restart runtime
   admin-auth-down
@@ -334,7 +337,7 @@ function publicUp() {
       "sudo ufw allow 80/tcp",
       "sudo ufw allow 443/tcp",
       "sudo ufw reload",
-      "docker compose --profile public up -d --force-recreate caddy",
+      "docker compose --profile public up -d --build --force-recreate caddy",
       "docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile",
     ].join(" && "),
   ]);
@@ -351,6 +354,19 @@ function publicDown() {
       "sudo ufw delete allow 80/tcp || true",
       "sudo ufw delete allow 443/tcp || true",
       "sudo ufw reload",
+    ].join(" && "),
+  ]);
+}
+
+function deployReceiverUp() {
+  syncServerBundle();
+  run("ssh", [
+    target,
+    [
+      "set -euo pipefail",
+      `cd ${deployDir}`,
+      "./scripts/generate-local-secrets.sh",
+      "docker compose --profile public up -d --build --force-recreate deploy-receiver caddy",
     ].join(" && "),
   ]);
 }
@@ -947,7 +963,7 @@ switch (command) {
     ]);
     break;
   case "restart":
-    run("ssh", [target, `${remoteCompose} pull --ignore-pull-failures && ${remoteCompose} up -d --remove-orphans`]);
+    run("ssh", [target, `${remoteCompose} pull --ignore-pull-failures && ${remoteCompose} up -d --build --remove-orphans`]);
     break;
   case "stream-ack":
     run("ssh", [target, `chmod +x ${deployDir}/scripts/*.sh && cd ${deployDir} && ./scripts/start-stream-ack.sh`]);
@@ -972,6 +988,9 @@ switch (command) {
     break;
   case "public-down":
     publicDown();
+    break;
+  case "deploy-receiver-up":
+    deployReceiverUp();
     break;
   case "admin-auth-up":
     configureAdminAuth(true);
@@ -1018,7 +1037,7 @@ switch (command) {
         "./scripts/apply-migrations.sh",
         "REEF_MIGRATION_DOMAINS='admin arena' REEF_APP_USER=admin_app REEF_POSTGRES_SERVICE=postgres-admin REEF_POSTGRES_DB=admin ./scripts/apply-migrations.sh",
         "REEF_MIGRATION_DOMAINS=analytics REEF_APP_USER=analytics_app REEF_POSTGRES_SERVICE=postgres-analytics REEF_POSTGRES_DB=analytics ./scripts/apply-migrations.sh",
-        "docker compose up -d --remove-orphans",
+        "docker compose up -d --build --remove-orphans",
         "./scripts/verify-runtime.sh",
       ].join(" && "),
     ]);

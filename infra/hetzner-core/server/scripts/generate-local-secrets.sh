@@ -6,6 +6,8 @@ SECRETS="$BASE/secrets"
 
 mkdir -p "$SECRETS"
 chmod 700 "$SECRETS"
+mkdir -p "$BASE/arena-admin" "$BASE/arena-admin-releases"
+chmod 750 "$BASE/arena-admin" "$BASE/arena-admin-releases"
 
 rand_hex() {
   openssl rand -hex 32
@@ -119,6 +121,20 @@ ANALYTICS_EXPORT_API_TOKEN=${ANALYTICS_EXPORT_API_TOKEN}
 EOF
   echo "Generated missing ANALYTICS_EXPORT_API_TOKEN - use this for run-plane export posts to /admin/v1/analytics/run-exports."
 fi
+
+cat > "$SECRETS/deploy-receiver.env" <<EOF
+DEPLOY_RECEIVER_PORT=8090
+DEPLOY_RECEIVER_PATH=/admin/deploy/arena-admin
+DEPLOY_RECEIVER_EXPECTED_AUDIENCE=reef-backbone-admin-deploy
+DEPLOY_RECEIVER_EXPECTED_REPOSITORY=dills122/reef
+DEPLOY_RECEIVER_EXPECTED_REF=refs/heads/master
+DEPLOY_RECEIVER_EXPECTED_ENVIRONMENT=backbone-admin
+DEPLOY_RECEIVER_EXPECTED_WORKFLOW=Admin UI Deploy
+DEPLOY_RECEIVER_LIVE_DIR=/srv/arena-admin
+DEPLOY_RECEIVER_RELEASES_DIR=/srv/arena-admin-releases
+DEPLOY_RECEIVER_MAX_BYTES=26214400
+EOF
+chmod 600 "$SECRETS/deploy-receiver.env"
 
 # shellcheck disable=SC1091
 source "$SECRETS/caddy.env"

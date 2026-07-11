@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: admin-ui-deploy
@@ -25,10 +26,8 @@ jobs:
       name: backbone-admin
       url: https://reef-arena-admin.shrimpworks.dev/
     env:
-      REEF_HETZNER_HOST: ${{ secrets.REEF_HETZNER_HOST }}
-      REEF_HETZNER_OPS_USER: ${{ vars.REEF_HETZNER_OPS_USER || 'ops' }}
-      REEF_HETZNER_DEPLOY_DIR: ${{ vars.REEF_HETZNER_DEPLOY_DIR || '/opt/reef' }}
-      REEF_HETZNER_FIREWALL_NAME: ${{ vars.REEF_HETZNER_FIREWALL_NAME || 'reef-prod-core-fw' }}
+      REEF_ADMIN_DEPLOY_URL: ${{ vars.REEF_ADMIN_DEPLOY_URL || 'https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin' }}
+      REEF_ADMIN_DEPLOY_AUDIENCE: ${{ vars.REEF_ADMIN_DEPLOY_AUDIENCE || 'reef-backbone-admin-deploy' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,97 +37,46 @@ jobs:
         with:
           bun-version: '1.1.38'
 
-      - name: Install SSH tooling
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends curl openssh-client rsync
-
-      - name: Install Hetzner Cloud CLI
-        env:
-          HCLOUD_VERSION: '1.66.0'
+      - name: Build admin UI static assets
         run: |
           set -euo pipefail
-          curl -fsSL "https://github.com/hetznercloud/cli/releases/download/v${HCLOUD_VERSION}/hcloud-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
-          tar -xzf /tmp/hcloud.tar.gz -C /tmp hcloud
-          sudo install -m 0755 /tmp/hcloud /usr/local/bin/hcloud
+          cd apps/arena-admin
+          bun install --frozen-lockfile
+          PUBLIC_ARENA_API_BASE_URL="" bun --bun run build
 
-      - name: Configure deploy SSH key
-        env:
-          DEPLOY_KEY: ${{ secrets.REEF_HETZNER_SSH_PRIVATE_KEY }}
-          KNOWN_HOSTS: ${{ secrets.REEF_HETZNER_SSH_KNOWN_HOSTS }}
+      - name: Package admin UI artifact
         run: |
           set -euo pipefail
-          test -n "$REEF_HETZNER_HOST"
-          test -n "$DEPLOY_KEY"
-          test -n "$KNOWN_HOSTS"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/reef-admin-ui-deploy
-          chmod 600 ~/.ssh/reef-admin-ui-deploy
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<EOF
-          Host $REEF_HETZNER_HOST
-            User $REEF_HETZNER_OPS_USER
-            IdentityFile ~/.ssh/reef-admin-ui-deploy
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-          EOF
-          chmod 600 ~/.ssh/config
+          artifact="$RUNNER_TEMP/arena-admin.tar.gz"
+          tar -czf "$artifact" -C apps/arena-admin/build .
+          sha="$(sha256sum "$artifact" | awk '{print $1}')"
+          echo "REEF_ADMIN_ARTIFACT=$artifact" >> "$GITHUB_ENV"
+          echo "REEF_ADMIN_ARTIFACT_SHA256=$sha" >> "$GITHUB_ENV"
 
-      - name: Open temporary SSH firewall access
-        env:
-          HCLOUD_TOKEN: ${{ secrets.REEF_HETZNER_HCLOUD_TOKEN }}
+      - name: Request deploy OIDC token
         run: |
           set -euo pipefail
-          test -n "$HCLOUD_TOKEN"
-          test -n "$REEF_HETZNER_FIREWALL_NAME"
-          runner_ip="$(curl -fsS --retry 3 https://api.ipify.org)"
-          case "$runner_ip" in
-            ""|*[!0-9.]*)
-              echo "::error::Could not determine a valid GitHub runner IPv4 address"
-              exit 1
-              ;;
-          esac
-          runner_cidr="${runner_ip}/32"
-          echo "::add-mask::$runner_ip"
-          echo "RUNNER_SSH_CIDR=$runner_cidr" >> "$GITHUB_ENV"
-          hcloud firewall delete-rule \
-            --direction in \
-            --protocol tcp \
-            --port 22 \
-            --source-ips "$runner_cidr" \
-            "$REEF_HETZNER_FIREWALL_NAME" >/dev/null 2>&1 || true
-          hcloud firewall add-rule \
-            --direction in \
-            --protocol tcp \
-            --port 22 \
-            --source-ips "$runner_cidr" \
-            --description "reef-admin-ui-deploy-${GITHUB_RUN_ID}" \
-            "$REEF_HETZNER_FIREWALL_NAME"
-          for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if ssh -o BatchMode=yes -o ConnectTimeout=5 "$REEF_HETZNER_HOST" "true"; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::SSH did not become reachable from the GitHub runner"
-          exit 1
+          token_json="$(
+            curl -fsS \
+              -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              -H "Accept: application/json; api-version=2.0" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${REEF_ADMIN_DEPLOY_AUDIENCE}"
+          )"
+          token="$(printf '%s' "$token_json" | node -e 'let input=""; process.stdin.on("data", c => input += c); process.stdin.on("end", () => process.stdout.write(JSON.parse(input).value));')"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "REEF_ADMIN_DEPLOY_TOKEN=$token" >> "$GITHUB_ENV"
 
-      - name: Deploy admin UI static assets
-        run: bun scripts/deploy/hetzner-core.mjs arena-admin
-
-      - name: Close temporary SSH firewall access
-        if: always()
-        env:
-          HCLOUD_TOKEN: ${{ secrets.REEF_HETZNER_HCLOUD_TOKEN }}
+      - name: Deploy admin UI artifact
         run: |
           set -euo pipefail
-          if [ -z "${RUNNER_SSH_CIDR:-}" ]; then
-            exit 0
-          fi
-          hcloud firewall delete-rule \
-            --direction in \
-            --protocol tcp \
-            --port 22 \
-            --source-ips "$RUNNER_SSH_CIDR" \
-            "$REEF_HETZNER_FIREWALL_NAME" || true
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $REEF_ADMIN_DEPLOY_TOKEN" \
+            -H "Content-Type: application/gzip" \
+            -H "X-Reef-Artifact-Sha256: $REEF_ADMIN_ARTIFACT_SHA256" \
+            -H "X-Reef-Git-Sha: $GITHUB_SHA" \
+            -H "X-Reef-Github-Run-Id: $GITHUB_RUN_ID" \
+            -H "X-Reef-Github-Run-Attempt: $GITHUB_RUN_ATTEMPT" \
+            --data-binary "@$REEF_ADMIN_ARTIFACT" \
+            "$REEF_ADMIN_DEPLOY_URL"
