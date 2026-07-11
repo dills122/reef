@@ -376,6 +376,38 @@ Why this matters:
 The server-side Admin API owns the OpenBao integration; CI only calls narrow
 HTTP routes with scoped credentials.
 
+## Admin UI Deploy Flow
+
+Admin UI static assets are auto-deployed by
+`.github/workflows/admin-ui-deploy.yml`.
+
+Correct flow:
+
+```text
+GitHub Actions
+  -> build apps/arena-admin with same-origin API paths
+  -> install deploy SSH key and pinned known_hosts
+  -> run scripts/deploy/hetzner-core.mjs arena-admin
+  -> rsync static files to /opt/reef/arena-admin
+```
+
+This first deployment slice is intentionally static-asset-only. It does not
+pull container images, restart `platform-runtime`, migrate databases, or touch
+OpenBao. API/runtime auto-deploy should be a later workflow with a separate
+promotion gate, health checks, rollback plan, and explicit runtime image
+strategy.
+
+Required GitHub secrets:
+
+- `REEF_HETZNER_HOST`
+- `REEF_HETZNER_SSH_PRIVATE_KEY`
+- `REEF_HETZNER_SSH_KNOWN_HOSTS`
+
+Optional GitHub variables:
+
+- `REEF_HETZNER_OPS_USER` (default `ops`)
+- `REEF_HETZNER_DEPLOY_DIR` (default `/opt/reef`)
+
 ## Current Gaps
 
 - Analytics API/microservice is not complete.

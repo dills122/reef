@@ -1,0 +1,69 @@
+name: Admin UI Deploy
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'apps/arena-admin/**'
+      - 'scripts/deploy/hetzner-core.mjs'
+      - '.github/workflows/admin-ui-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-ui-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-admin-ui:
+    runs-on: ubuntu-latest
+    environment:
+      name: backbone-admin
+      url: https://reef-arena-admin.shrimpworks.dev/
+    env:
+      REEF_HETZNER_HOST: ${{ secrets.REEF_HETZNER_HOST }}
+      REEF_HETZNER_OPS_USER: ${{ vars.REEF_HETZNER_OPS_USER || 'ops' }}
+      REEF_HETZNER_DEPLOY_DIR: ${{ vars.REEF_HETZNER_DEPLOY_DIR || '/opt/reef' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.38'
+
+      - name: Install SSH tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openssh-client rsync
+
+      - name: Configure deploy SSH key
+        env:
+          DEPLOY_KEY: ${{ secrets.REEF_HETZNER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.REEF_HETZNER_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$REEF_HETZNER_HOST"
+          test -n "$DEPLOY_KEY"
+          test -n "$KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/reef-admin-ui-deploy
+          chmod 600 ~/.ssh/reef-admin-ui-deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host $REEF_HETZNER_HOST
+            User $REEF_HETZNER_OPS_USER
+            IdentityFile ~/.ssh/reef-admin-ui-deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Deploy admin UI static assets
+        run: bun scripts/deploy/hetzner-core.mjs arena-admin
