@@ -32,6 +32,9 @@ const projectorUrls = csvEnv(
   localRoleUrls("REEF_PLATFORM_PROJECTOR", ["8084", "8085", "8088", "8089"]),
 );
 const materializerUrls = optionalCsvEnv("REEF_CONTROL_ROOM_MATERIALIZER_URLS");
+const profileName = normalizeProfileName(
+  process.env.REEF_CONTROL_ROOM_PROFILE || (materializerUrls.length > 0 ? "materializer-soak" : "stream-ack"),
+);
 
 mkdirSync(runRoot, { recursive: true });
 
@@ -62,6 +65,7 @@ async function routeApi(request, response, url) {
       workerUrls,
       projectorUrls,
       materializerUrls,
+      profile: profileConfig(),
       stateRoot,
       runRoot,
       mode: "monitor-only",
@@ -119,6 +123,7 @@ async function buildSnapshot(runId) {
     runId,
     runtimeUrl,
     engineUrl,
+    profile: snapshotProfile(containers),
     probes: byName,
     containers,
     currentRun: runId ? readRun(runId) : null,
@@ -239,6 +244,67 @@ function normalizeContainers(workers, materializers, projectors) {
       lag: sum(projectorRows, "lag"),
     },
   };
+}
+
+function profileConfig() {
+  const materializerProfile = isMaterializerProfile(profileName);
+  return {
+    name: profileName,
+    expectedRoles: {
+      workers: materializerProfile ? "stopped or disabled" : "enabled",
+      materializers: materializerProfile ? "online" : "not expected",
+      projectors: "running",
+    },
+  };
+}
+
+function snapshotProfile(containers) {
+  const config = profileConfig();
+  const warnings = [];
+  const workerOnline = numberOrZero(containers.workerTotals?.enabled);
+  const materializerConfigured = (containers.materializers || []).length;
+  const materializerOnline = numberOrZero(containers.materializerTotals?.enabled);
+  const projectorOnline = numberOrZero(containers.projectorTotals?.running);
+  if (isMaterializerProfile(profileName)) {
+    if (materializerConfigured === 0) {
+      warnings.push("materializer profile selected but REEF_CONTROL_ROOM_MATERIALIZER_URLS is empty");
+    } else if (materializerOnline === 0) {
+      warnings.push("materializer profile selected but no materializer endpoint is online");
+    }
+    if (workerOnline > 0) {
+      warnings.push("materializer profile selected but stream-ack workers are enabled");
+    }
+  } else if (workerUrls.length > 0 && workerOnline === 0) {
+    warnings.push("stream-ack profile selected but no worker endpoint is enabled");
+  }
+  if (projectorUrls.length > 0 && projectorOnline === 0) {
+    warnings.push("no projector endpoint is running");
+  }
+  return {
+    ...config,
+    warnings,
+    observedRoles: {
+      workers: workerOnline,
+      materializers: materializerOnline,
+      projectors: projectorOnline,
+    },
+  };
+}
+
+function normalizeProfileName(value) {
+  const name = String(value || "").trim();
+  if (!name) return "stream-ack";
+  if (["materializer", "materializer-soak", "direct-materializer", "venue-event-materializer"].includes(name)) {
+    return "materializer-soak";
+  }
+  if (["direct-nodb", "stream-direct-nodb"].includes(name)) {
+    return "direct-nodb";
+  }
+  return name;
+}
+
+function isMaterializerProfile(name) {
+  return name === "materializer-soak";
 }
 
 async function probeJson(name, url) {

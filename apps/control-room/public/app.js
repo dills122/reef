@@ -7,6 +7,7 @@ const state = {
   trend: [],
   source: null,
   userSelectedRun: false,
+  config: null,
 };
 
 const ids = {
@@ -22,6 +23,8 @@ const ids = {
   latencyTrend: document.querySelector("#latency-trend"),
   containerStatus: document.querySelector("#container-status"),
   runtimeUrl: document.querySelector("#runtime-url"),
+  profileName: document.querySelector("#profile-name"),
+  profileAlerts: document.querySelector("#profile-alerts"),
   lastProbe: document.querySelector("#last-probe"),
   probeError: document.querySelector("#probe-error"),
   runSort: document.querySelector("#run-sort"),
@@ -48,7 +51,9 @@ async function init() {
 
 async function loadConfig() {
   const config = await getJson("/api/config");
+  state.config = config;
   ids.runtimeUrl.textContent = config.runtimeUrl || "unknown";
+  ids.profileName.textContent = config.profile?.name || "unknown";
 }
 
 async function refreshAll(options = {}) {
@@ -137,20 +142,37 @@ function renderSnapshot(snapshot, selectedRun) {
   const metrics = snapshot.metrics || {};
   const selectedMetrics = runDashboardMetrics(selectedRun);
   if (selectedMetrics) {
-    setMetricLabels({
-      accepted: ["Attempted", "selected run"],
-      completed: ["Accepted", "selected run"],
-      gap: ["Success Rate", "end-to-end"],
-      "worker-lag": ["P95 Latency", "latest report"],
-      materialized: ["P99 Latency", "latest report"],
-      projected: ["System Failures", "latest report"],
-    });
-    setMetric("accepted", selectedMetrics.attempted);
-    setMetric("completed", selectedMetrics.accepted);
-    setMetric("gap", `${fmt(selectedMetrics.successRatePct)}%`);
-    setMetric("worker-lag", `${fmt(selectedMetrics.p95LatencyMs)}ms`);
-    setMetric("materialized", `${fmt(selectedMetrics.p99LatencyMs)}ms`);
-    setMetric("projected", selectedMetrics.systemFailures);
+    if (isMaterializerReport(selectedMetrics)) {
+      setMetricLabels({
+        accepted: ["Attempted", "selected run"],
+        completed: ["Accepted", "selected run"],
+        gap: ["Direct Acked", "durable broker"],
+        "worker-lag": ["Materialized", "canonical rows"],
+        materialized: ["Mat Gap", "accepted to materialized"],
+        projected: ["System Failures", "latest report"],
+      });
+      setMetric("accepted", selectedMetrics.attempted);
+      setMetric("completed", selectedMetrics.accepted);
+      setMetric("gap", selectedMetrics.directAcked);
+      setMetric("worker-lag", selectedMetrics.materialized);
+      setMetric("materialized", selectedMetrics.acceptedToMaterialized);
+      setMetric("projected", selectedMetrics.systemFailures);
+    } else {
+      setMetricLabels({
+        accepted: ["Attempted", "selected run"],
+        completed: ["Accepted", "selected run"],
+        gap: ["Success Rate", "end-to-end"],
+        "worker-lag": ["P95 Latency", "latest report"],
+        materialized: ["P99 Latency", "latest report"],
+        projected: ["System Failures", "latest report"],
+      });
+      setMetric("accepted", selectedMetrics.attempted);
+      setMetric("completed", selectedMetrics.accepted);
+      setMetric("gap", `${fmt(selectedMetrics.successRatePct)}%`);
+      setMetric("worker-lag", `${fmt(selectedMetrics.p95LatencyMs)}ms`);
+      setMetric("materialized", `${fmt(selectedMetrics.p99LatencyMs)}ms`);
+      setMetric("projected", selectedMetrics.systemFailures);
+    }
   } else if (state.selectedRunId) {
     const live = liveRuntimeMetrics(snapshot, metrics);
     setMetricLabels({
@@ -183,6 +205,7 @@ function renderSnapshot(snapshot, selectedRun) {
     setMetric("materialized", metrics.materialized);
     setMetric("projected", metrics.projected);
   }
+  renderProfileAlerts(snapshot.profile || state.config?.profile || {});
   renderContainers(snapshot.containers || {});
   const active = state.selectedRunId || "";
   const reportCount = selectedRun?.evidence?.length || 0;
@@ -263,8 +286,8 @@ function renderEvidence(run) {
         <strong>${fmt(latest.accepted)} / ${fmt(latest.attempted)}</strong>
       </div>
       <div>
-        <span class="field-label">Trace Checks</span>
-        <strong>${fmt(latest.tracePass)} / ${fmt(latest.traceChecked)}</strong>
+        <span class="field-label">${isMaterializerReport(latest) ? "Materialized Gap" : "Trace Checks"}</span>
+        <strong>${isMaterializerReport(latest) ? fmt(latest.acceptedToMaterialized) : `${fmt(latest.tracePass)} / ${fmt(latest.traceChecked)}`}</strong>
       </div>
       <div>
         <span class="field-label">System Failures</span>
@@ -292,19 +315,41 @@ function renderEvidence(run) {
         <span><b>${fmt(quality.totalFailures)}</b><small>rejects</small></span>
         <span><b>${fmt(quality.systemFailureCount)}</b><small>system fail</small></span>
         <span><b>${fmt(rates.acceptedPerSecond)}</b><small>accepted/s</small></span>
-        <span><b>${fmt(ev.p95LatencyMs)}ms</b><small>p95</small></span>
-        <span><b>${fmt(ev.p99LatencyMs)}ms</b><small>p99</small></span>
-        <span><b>${fmt(traces.pass)} / ${fmt(traces.checked)}</b><small>trace</small></span>
+        <span><b>${fmt(ev.directAcked)}</b><small>direct acked</small></span>
+        <span><b>${fmt(ev.materialized)}</b><small>materialized</small></span>
+        <span><b>${fmt(gaps.acceptedToMaterialized)}</b><small>mat gap</small></span>
       </div>
       <div class="kv">
-        <span>materialized ${fmt(ev.materialized)}</span>
+        <span>direct ack gap ${fmt(gaps.acceptedToDirectAcked)}</span>
+        <span>trace ${fmt(traces.pass)} / ${fmt(traces.checked)}</span>
         <span>projected ${fmt(ev.projected)}</span>
-        <span>mat gap ${fmt(gaps.acceptedToMaterialized)}</span>
         <span>proj gap ${fmt(gaps.materializedToProjected)}</span>
+        <span>p95 ${fmt(ev.p95LatencyMs)}ms</span>
+        <span>p99 ${fmt(ev.p99LatencyMs)}ms</span>
       </div>
     `;
     ids.evidence.append(el);
   }
+}
+
+function renderProfileAlerts(profile) {
+  if (!ids.profileAlerts) return;
+  const warnings = profile.warnings || [];
+  const expected = profile.expectedRoles || {};
+  const observed = profile.observedRoles || {};
+  const summary = [
+    `expected workers: ${expected.workers || "unknown"}`,
+    `materializers: ${expected.materializers || "unknown"}`,
+    `projectors: ${expected.projectors || "unknown"}`,
+    `observed ${fmt(observed.workers)} / ${fmt(observed.materializers)} / ${fmt(observed.projectors)}`,
+  ];
+  ids.profileAlerts.hidden = false;
+  ids.profileAlerts.className = `profile-alerts ${warnings.length ? "bad-row" : ""}`;
+  ids.profileAlerts.innerHTML = `
+    <strong>${escapeHtml(profile.name || state.config?.profile?.name || "unknown profile")}</strong>
+    <span>${escapeHtml(summary.join(" · "))}</span>
+    ${warnings.map((warning) => `<span class="profile-warning">${escapeHtml(warning)}</span>`).join("")}
+  `;
 }
 
 function renderContainers(containers) {
@@ -529,6 +574,11 @@ function runDashboardMetrics(run) {
     name: row.name,
     attempted: Number(ev.attempted || quality.totalRequests || 0),
     accepted: Number(ev.accepted || quality.totalSuccess || 0),
+    directAcked: Number(ev.directAcked || 0),
+    materialized: Number(ev.materialized || 0),
+    projected: Number(ev.projected || 0),
+    acceptedToDirectAcked: Number(ev.gaps?.acceptedToDirectAcked || 0),
+    acceptedToMaterialized: Number(ev.gaps?.acceptedToMaterialized || 0),
     successRatePct: Number(quality.endToEndSuccessRatePct || 0),
     p95LatencyMs: Number(ev.p95LatencyMs || row.latencyMs?.p95 || 0),
     p99LatencyMs: Number(ev.p99LatencyMs || row.latencyMs?.p99 || 0),
@@ -536,6 +586,10 @@ function runDashboardMetrics(run) {
     traceChecked: Number(trace.checked || 0),
     tracePass: Number(trace.pass || 0),
   };
+}
+
+function isMaterializerReport(metrics) {
+  return Number(metrics?.directAcked || 0) > 0 || Number(metrics?.materialized || 0) > 0;
 }
 
 function buildRunTrend(run) {

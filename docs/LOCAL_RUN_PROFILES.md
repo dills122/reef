@@ -35,6 +35,7 @@ ack failure.
 For materializer-backed runs, include materializer endpoints:
 
 ```bash
+REEF_CONTROL_ROOM_PROFILE=materializer-soak \
 REEF_CONTROL_ROOM_MATERIALIZER_URLS=http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093,http://127.0.0.1:8094 \
 make dev-control-room
 ```
@@ -201,6 +202,7 @@ editing Compose files or calling lower-level scripts directly.
 | `REEF_CONTROL_ROOM_PORT` | `3015` | Bind port. |
 | `REEF_CONTROL_ROOM_RUNTIME_URL` | derived local runtime URL | Platform API to probe. |
 | `REEF_CONTROL_ROOM_ENGINE_URL` | derived local engine URL | Matching engine URL shown in config. |
+| `REEF_CONTROL_ROOM_PROFILE` | `materializer-soak` when materializer URLs are set; otherwise `stream-ack` | Expected role profile for Control Room warnings. Supported current values are `stream-ack`, `materializer-soak`, and `direct-nodb`. |
 | `REEF_CONTROL_ROOM_STATE_DIR` | `/tmp/reef-control-room` | Run artifact root. |
 | `REEF_CONTROL_ROOM_WORKER_URLS` | worker ports `8082,8083,8086,8087` | Stream-ack worker diagnostics. |
 | `REEF_CONTROL_ROOM_PROJECTOR_URLS` | projector ports `8084,8085,8088,8089` | Projector diagnostics. |
