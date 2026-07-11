@@ -33,6 +33,7 @@ internal class PlatformDiagnosticRoutes(
     private val recordArenaRunEnforcementEventJson: (String) -> PlatformHotPathResponse,
     private val arenaLeaderboardJson: (String?) -> PlatformHotPathResponse,
     private val arenaBotOpenBaoProvisionJson: (String) -> PlatformHotPathResponse,
+    private val assignArenaBotOwnershipJson: (String) -> PlatformHotPathResponse,
     private val arenaBotOpenBaoConfigJson: (String, String?, String) -> PlatformHotPathResponse,
     private val analyticsRunExportsJson: (String?) -> PlatformHotPathResponse,
     private val recordAnalyticsRunExportJson: (String) -> PlatformHotPathResponse,
@@ -72,6 +73,7 @@ internal class PlatformDiagnosticRoutes(
         "/internal/admin/arena/run-enforcement-events",
         "/internal/admin/arena/leaderboard",
         "/internal/admin/arena/bots/openbao-provision",
+        "/internal/admin/arena/bots/ownership",
         "/internal/admin/arena/bots/config",
         "/internal/admin/analytics/run-exports",
         "/internal/admin/analytics/run-bot-summaries",
@@ -132,6 +134,7 @@ internal class PlatformDiagnosticRoutes(
             )
             "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardJson(query) }
             "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionJson(body) }
+            "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipJson(body) }
             "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigJson(method, query, body)
             "/internal/admin/analytics/run-exports" -> getOrPost(
                 method,
