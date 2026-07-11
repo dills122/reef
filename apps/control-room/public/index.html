@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reef Control Room</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Reef</p>
+        <h1>Control Room</h1>
+      </div>
+      <div class="status-strip">
+        <span id="runtime-status" class="pill">runtime unknown</span>
+        <span id="sample-time" class="muted">not sampled</span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="panel monitor-panel">
+        <div class="panel-title">
+          <h2>Connection</h2>
+          <div class="actions">
+            <button id="refresh-runs" type="button">Refresh Runs</button>
+            <button id="connect" type="button">Connect</button>
+            <button id="pause" type="button">Pause</button>
+          </div>
+        </div>
+        <div class="connection-grid">
+          <div>
+            <span class="field-label">Runtime</span>
+            <strong id="runtime-url">unknown</strong>
+          </div>
+          <div>
+            <span class="field-label">Monitor Mode</span>
+            <strong>read-only</strong>
+          </div>
+          <div>
+            <span class="field-label">Last Probe</span>
+            <strong id="last-probe">not connected</strong>
+          </div>
+          <div>
+            <span class="field-label">Probe Error</span>
+            <strong id="probe-error">none</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics-grid">
+        <article class="metric">
+          <span id="label-accepted">Attempted</span>
+          <strong id="metric-accepted">0</strong>
+          <small id="hint-accepted">selected run</small>
+        </article>
+        <article class="metric">
+          <span id="label-completed">Accepted</span>
+          <strong id="metric-completed">0</strong>
+          <small id="hint-completed">selected run</small>
+        </article>
+        <article class="metric">
+          <span id="label-gap">Success Rate</span>
+          <strong id="metric-gap">0</strong>
+          <small id="hint-gap">end-to-end</small>
+        </article>
+        <article class="metric">
+          <span id="label-worker-lag">P95 Latency</span>
+          <strong id="metric-worker-lag">0</strong>
+          <small id="hint-worker-lag">latest report</small>
+        </article>
+        <article class="metric">
+          <span id="label-materialized">P99 Latency</span>
+          <strong id="metric-materialized">0</strong>
+          <small id="hint-materialized">latest report</small>
+        </article>
+        <article class="metric">
+          <span id="label-projected">System Failures</span>
+          <strong id="metric-projected">0</strong>
+          <small id="hint-projected">latest report</small>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">
+          <h2>Container Roles</h2>
+          <span class="muted">workers / materializers / projectors</span>
+        </div>
+        <div id="container-status" class="container-grid"></div>
+      </section>
+
+      <section class="charts-grid">
+        <details class="panel chart-panel chart-details command-chart" open>
+          <summary class="panel-title">
+            <h2>Command Trend</h2>
+            <span id="active-run-label" class="muted">no active run</span>
+          </summary>
+          <svg id="trend" viewBox="0 0 900 220" role="img" aria-label="Live run command trend"></svg>
+        </details>
+        <details class="panel chart-panel chart-details" open>
+          <summary class="panel-title">
+            <h2>Throughput</h2>
+            <span class="muted">attempted/s / accepted/s</span>
+          </summary>
+          <svg id="throughput-trend" viewBox="0 0 900 220" role="img" aria-label="Run throughput trend"></svg>
+        </details>
+        <details class="panel chart-panel chart-details" open>
+          <summary class="panel-title">
+            <h2>Latency</h2>
+            <span class="muted">p95 / p99</span>
+          </summary>
+          <svg id="latency-trend" viewBox="0 0 900 220" role="img" aria-label="Run latency trend"></svg>
+        </details>
+      </section>
+
+      <section class="two-column">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Run History</h2>
+            <label class="run-sort-control" for="run-sort">
+              <span>Sort</span>
+              <select id="run-sort">
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="reports">Most reports</option>
+                <option value="failed">Failed first</option>
+                <option value="kind">Kind</option>
+                <option value="name">Name</option>
+              </select>
+            </label>
+          </div>
+          <div id="run-list" class="run-list"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Evidence</h2>
+          </div>
+          <div id="evidence" class="evidence"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">
+          <h2>Live Log</h2>
+          <span id="log-run" class="muted">select a run</span>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

@@ -2,6 +2,10 @@
 
 This runbook defines the Docker-first local workflow introduced by the dev-env sprint.
 
+Use [`LOCAL_RUN_PROFILES.md`](./LOCAL_RUN_PROFILES.md) before starting throughput
+or demo runs. It names the proper stream-ack, direct no-DB, and materializer
+flows, their expected containers, Control Room settings, and success criteria.
+
 ## Prerequisites
 
 Full prerequisite list (Docker, Bun, Go, Java) lives in [`ONBOARDING.md`](./ONBOARDING.md#1-prerequisites). For the Docker-first workflow on this page specifically, you need at minimum:

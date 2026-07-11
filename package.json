@@ -48,6 +48,8 @@
     "arena:smoke:run-results": "bun scripts/dev/arena-run-result-ingestion-smoke.mjs",
     "dev:admin": "bun scripts/dev/admin.mjs",
     "dev:sim": "bun scripts/dev/reef-dev.mjs sim run",
+    "control-room": "bun apps/control-room/server.mjs",
+    "control-room:check": "node --check apps/control-room/server.mjs && node --check apps/control-room/public/app.js",
     "docs-site:dev": "bun --cwd apps/docs-site run dev",
     "docs-site:build": "bun --cwd apps/docs-site run build",
     "arena-admin:dev": "bun --cwd apps/arena-admin run dev",
