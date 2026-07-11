@@ -273,6 +273,12 @@ then rsyncs `apps/arena-admin/build/` to `/opt/reef/arena-admin/`. It does not
 restart `platform-runtime`, OpenBao, Postgres, or Caddy; API/runtime deploys
 remain manual until a separate promoted runtime deploy workflow exists.
 
+Because SSH is restricted by the Hetzner firewall `admin_cidrs`, the workflow
+does not require opening SSH globally. Instead it discovers the current
+GitHub-hosted runner IPv4 address, adds a temporary `/32` inbound SSH rule to
+the Hetzner firewall, waits for SSH reachability, deploys, and removes that
+same rule in an `always()` cleanup step.
+
 Required GitHub repository secrets:
 
 | Name | Purpose |
@@ -280,6 +286,7 @@ Required GitHub repository secrets:
 | `REEF_HETZNER_HOST` | Backbone server IPv4 or DNS name. |
 | `REEF_HETZNER_SSH_PRIVATE_KEY` | Private key for a deploy-capable SSH principal on the backbone host. Prefer a dedicated key scoped to the `ops` account. |
 | `REEF_HETZNER_SSH_KNOWN_HOSTS` | Pinned host key line(s), for example from `ssh-keyscan -H <host>` after verifying the fingerprint out of band. |
+| `REEF_HETZNER_HCLOUD_TOKEN` | Hetzner Cloud project API token used only to add/remove the temporary deploy-runner SSH firewall rule. Hetzner project tokens are not resource-scoped, so use a dedicated project token and keep it limited to this repository environment. |
 
 Optional GitHub repository/environment variables:
 
@@ -287,6 +294,7 @@ Optional GitHub repository/environment variables:
 | --- | --- | --- |
 | `REEF_HETZNER_OPS_USER` | `ops` | SSH user for the deploy command. |
 | `REEF_HETZNER_DEPLOY_DIR` | `/opt/reef` | Host deploy directory. |
+| `REEF_HETZNER_FIREWALL_NAME` | `reef-prod-core-fw` | Hetzner firewall name that guards SSH to the backbone host. |
 
 Use the GitHub Actions `backbone-admin` environment for deployment protection
 rules if you want human approval before publishing admin UI changes.

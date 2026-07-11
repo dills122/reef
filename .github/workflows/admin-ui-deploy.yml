@@ -28,6 +28,7 @@ jobs:
       REEF_HETZNER_HOST: ${{ secrets.REEF_HETZNER_HOST }}
       REEF_HETZNER_OPS_USER: ${{ vars.REEF_HETZNER_OPS_USER || 'ops' }}
       REEF_HETZNER_DEPLOY_DIR: ${{ vars.REEF_HETZNER_DEPLOY_DIR || '/opt/reef' }}
+      REEF_HETZNER_FIREWALL_NAME: ${{ vars.REEF_HETZNER_FIREWALL_NAME || 'reef-prod-core-fw' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,7 +41,16 @@ jobs:
       - name: Install SSH tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openssh-client rsync
+          sudo apt-get install -y --no-install-recommends curl openssh-client rsync
+
+      - name: Install Hetzner Cloud CLI
+        env:
+          HCLOUD_VERSION: '1.66.0'
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/hetznercloud/cli/releases/download/v${HCLOUD_VERSION}/hcloud-linux-amd64.tar.gz" -o /tmp/hcloud.tar.gz
+          tar -xzf /tmp/hcloud.tar.gz -C /tmp hcloud
+          sudo install -m 0755 /tmp/hcloud /usr/local/bin/hcloud
 
       - name: Configure deploy SSH key
         env:
@@ -65,5 +75,60 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
+      - name: Open temporary SSH firewall access
+        env:
+          HCLOUD_TOKEN: ${{ secrets.REEF_HETZNER_HCLOUD_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$HCLOUD_TOKEN"
+          test -n "$REEF_HETZNER_FIREWALL_NAME"
+          runner_ip="$(curl -fsS --retry 3 https://api.ipify.org)"
+          case "$runner_ip" in
+            ""|*[!0-9.]*)
+              echo "::error::Could not determine a valid GitHub runner IPv4 address"
+              exit 1
+              ;;
+          esac
+          runner_cidr="${runner_ip}/32"
+          echo "::add-mask::$runner_ip"
+          echo "RUNNER_SSH_CIDR=$runner_cidr" >> "$GITHUB_ENV"
+          hcloud firewall delete-rule \
+            --direction in \
+            --protocol tcp \
+            --port 22 \
+            --source-ips "$runner_cidr" \
+            "$REEF_HETZNER_FIREWALL_NAME" >/dev/null 2>&1 || true
+          hcloud firewall add-rule \
+            --direction in \
+            --protocol tcp \
+            --port 22 \
+            --source-ips "$runner_cidr" \
+            --description "reef-admin-ui-deploy-${GITHUB_RUN_ID}" \
+            "$REEF_HETZNER_FIREWALL_NAME"
+          for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if ssh -o BatchMode=yes -o ConnectTimeout=5 "$REEF_HETZNER_HOST" "true"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::SSH did not become reachable from the GitHub runner"
+          exit 1
+
       - name: Deploy admin UI static assets
         run: bun scripts/deploy/hetzner-core.mjs arena-admin
+
+      - name: Close temporary SSH firewall access
+        if: always()
+        env:
+          HCLOUD_TOKEN: ${{ secrets.REEF_HETZNER_HCLOUD_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RUNNER_SSH_CIDR:-}" ]; then
+            exit 0
+          fi
+          hcloud firewall delete-rule \
+            --direction in \
+            --protocol tcp \
+            --port 22 \
+            --source-ips "$RUNNER_SSH_CIDR" \
+            "$REEF_HETZNER_FIREWALL_NAME" || true
