@@ -105,11 +105,20 @@ function capture(command, args, options = {}) {
 }
 
 function captureOptional(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: options.cwd || repoRoot,
-    encoding: "utf8",
-    env: process.env,
-  });
+  let result;
+  try {
+    result = spawnSync(command, args, {
+      cwd: options.cwd || repoRoot,
+      encoding: "utf8",
+      env: process.env,
+    });
+  } catch (err) {
+    return {
+      status: 1,
+      stdout: "",
+      stderr: err instanceof Error ? err.message : String(err),
+    };
+  }
   return {
     status: result.status ?? 1,
     stdout: (result.stdout || "").trim(),
