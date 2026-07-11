@@ -23,7 +23,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
-.PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin
+.PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-control-room
 .PHONY: dev-seed-p2-settlement-facts dev-sim dev-sim-batch
 .PHONY: dev-scenario-plan dev-scenario-smoke dev-scenario-golden-check dev-scenario-drift-check dev-replay
 .PHONY: dev-throughput-campaign dev-throughput-compare
@@ -114,6 +114,7 @@ test-bot-sdk:
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
 	node scripts/dev/report-taxonomy.test.mjs
 	node scripts/dev/stream-partition-spread.test.mjs
+	node scripts/dev/lib/stress-run-guard.test.mjs
 	node scripts/dev/lib/dev-profiles.test.mjs
 	node scripts/dev/do-benchmark-check.test.mjs
 	node scripts/dev/do-materializer-10k-gate.test.mjs
@@ -400,6 +401,10 @@ dev-admin:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	@if [ -z "$(CMD)" ]; then echo 'usage: make dev-admin CMD="instrument-upsert AAPL AAPL"'; exit 1; fi
 	$(JS_RUNTIME) scripts/dev/admin.mjs $(CMD)
+
+dev-control-room:
+	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
+	$(JS_RUNTIME) apps/control-room/server.mjs
 
 dev-seed-p2-settlement-facts:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)

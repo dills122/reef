@@ -14,6 +14,7 @@ import {
   summarizeDiagnosticsDelta,
 } from "./lib/db-diagnostics.mjs";
 import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
+import { validateStressRunShape } from "./lib/stress-run-guard.mjs";
 
 loadDotEnv();
 const execFileAsync = promisify(execFile);
@@ -108,6 +109,16 @@ const venueEventMaterializerUrls = parseCsvStrings(
     env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_URL", defaultVenueEventMaterializerUrls(runtimeUrl).join(",")),
   ),
 );
+
+validateStressRunShape({
+  profile,
+  sessionConfig,
+  captureStreamAckWorkerStats,
+  captureStreamAckProjectorStats,
+  captureStreamDirectStats,
+  captureVenueEventMaterializerStats,
+  allowMissingSessionConfig: env("DEV_STRESS_ALLOW_MISSING_SESSION_CONFIG", "0") === "1",
+});
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
