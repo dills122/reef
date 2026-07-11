@@ -29,6 +29,26 @@ const thresholdCheck = evaluateReportDrift(report, {
 });
 assert.equal(thresholdCheck.pass, true);
 
+const toleranceCheck = evaluateReportDrift(report, {
+  thresholds: {
+    minThroughputRps: 125,
+    minAcceptedBusinessOpsRps: 105,
+    performanceTolerancePct: 5,
+  },
+});
+assert.equal(toleranceCheck.pass, true);
+assert.deepEqual(toleranceCheck.failures, []);
+assert.ok(toleranceCheck.warnings.some((warning) => warning.includes("acceptedPerSecond")));
+
+const outsideToleranceCheck = evaluateReportDrift(report, {
+  thresholds: {
+    minAcceptedBusinessOpsRps: 110,
+    performanceTolerancePct: 5,
+  },
+});
+assert.equal(outsideToleranceCheck.pass, false);
+assert.ok(outsideToleranceCheck.failures.some((failure) => failure.includes("effective minimum")));
+
 const baseline = buildDriftBaseline(report, { name: "demo" });
 const stableCheck = evaluateReportDrift(report, baseline);
 assert.equal(stableCheck.pass, true);

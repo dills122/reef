@@ -38,6 +38,9 @@ if (outPath) {
   writeFileSync(outPath, JSON.stringify(check, null, 2));
 }
 
+for (const warning of check.warnings ?? []) {
+  console.warn(`scenario drift check warning: ${warning}`);
+}
 if (!check.pass) {
   console.error("scenario drift check failed");
   for (const failure of check.failures) {

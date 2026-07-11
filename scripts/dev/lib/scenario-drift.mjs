@@ -35,15 +35,27 @@ function compareStableFingerprint(report, baseline, context) {
 
 function evaluateThresholdBaseline(report, baseline, context) {
   const failures = [];
+  const warnings = [];
   const thresholds = baseline.thresholds ?? {};
   const throughput = canonicalThroughput(report);
+  const performanceTolerancePct = Number(thresholds.performanceTolerancePct ?? 0);
 
-  if (throughput.attemptedPerSecond < Number(thresholds.minThroughputRps ?? 0)) {
-    failures.push(`attemptedPerSecond ${throughput.attemptedPerSecond} < ${thresholds.minThroughputRps}`);
-  }
-  if (throughput.acceptedPerSecond < Number(thresholds.minAcceptedBusinessOpsRps ?? 0)) {
-    failures.push(`acceptedPerSecond ${throughput.acceptedPerSecond} < ${thresholds.minAcceptedBusinessOpsRps}`);
-  }
+  checkMinimumThreshold(
+    failures,
+    warnings,
+    "attemptedPerSecond",
+    throughput.attemptedPerSecond,
+    thresholds.minThroughputRps,
+    performanceTolerancePct,
+  );
+  checkMinimumThreshold(
+    failures,
+    warnings,
+    "acceptedPerSecond",
+    throughput.acceptedPerSecond,
+    thresholds.minAcceptedBusinessOpsRps,
+    performanceTolerancePct,
+  );
   if (Number(report.latencyMs?.p95 ?? 0) > Number(thresholds.maxP95LatencyMs ?? Number.POSITIVE_INFINITY)) {
     failures.push(`latencyMs.p95 ${report.latencyMs?.p95} > ${thresholds.maxP95LatencyMs}`);
   }
@@ -80,8 +92,28 @@ function evaluateThresholdBaseline(report, baseline, context) {
       p95LatencyMs: report.latencyMs?.p95,
       tracePassRatePct: tracePassRate,
     },
+    warnings,
     failures,
   };
+}
+
+function checkMinimumThreshold(failures, warnings, metric, actual, threshold, tolerancePct) {
+  if (threshold == null) return;
+  const expected = Number(threshold);
+  const effectiveMinimum = expected * (1 - Math.max(0, tolerancePct) / 100);
+  if (actual < effectiveMinimum) {
+    const suffix =
+      tolerancePct > 0 ? ` (effective minimum ${formatNumber(effectiveMinimum)} with ${tolerancePct}% tolerance)` : "";
+    failures.push(`${metric} ${actual} < ${threshold}${suffix}`);
+    return;
+  }
+  if (actual < expected) {
+    warnings.push(`${metric} ${actual} < ${threshold} but within ${tolerancePct}% tolerance`);
+  }
+}
+
+function formatNumber(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function collectDiffs(path, expected, actual, failures) {
