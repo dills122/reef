@@ -4,6 +4,7 @@ import com.reef.platform.application.OrderApplicationService
 import com.reef.platform.application.admin.AdminActor
 import com.reef.platform.application.admin.AdminApplicationService
 import com.reef.platform.application.admin.AdminAuthService
+import com.reef.platform.application.admin.AdminBotOwnershipCommand
 import com.reef.platform.application.admin.AdminGitHubOAuthClient
 import com.reef.platform.application.admin.AdminIdentityService
 import com.reef.platform.application.admin.AdminServiceTokenFamily
@@ -16,6 +17,7 @@ import com.reef.platform.application.admin.ArenaRunRegistrationCommand
 import com.reef.platform.application.admin.ArenaRunStatusCommand
 import com.reef.platform.application.admin.AuthorizationException
 import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
+import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.admin.PostgresAdminAuthStore
 import com.reef.platform.application.admin.PostgresAdminIdentityStore
 import com.reef.platform.application.analytics.BotRunPerformanceSummaryRecord
@@ -141,6 +143,11 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
             "arena",
             setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
         )
+    "/admin/v1/arena/bots/ownership" -> AdminGatewayRoute(
+        "/internal/admin/arena/bots/ownership",
+        "arena",
+        setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+    )
     "/admin/v1/arena/bots/config" -> AdminGatewayRoute(
         "/internal/admin/arena/bots/config",
         "admin",
@@ -511,6 +518,7 @@ class PlatformHttpServer(
             recordArenaRunEnforcementEventJson = { body -> recordArenaRunEnforcementEventResponse(body) },
             arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
             arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
+            assignArenaBotOwnershipJson = { body -> assignArenaBotOwnershipResponse(body) },
             arenaBotOpenBaoConfigJson = { method, query, body -> arenaBotOpenBaoConfigResponse(method, query, body) },
             analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
             recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
@@ -659,6 +667,7 @@ class PlatformHttpServer(
         for (path in listOf(
             "/admin/v1/arena/bots",
             "/admin/v1/arena/bots/openbao-provision",
+            "/admin/v1/arena/bots/ownership",
             "/admin/v1/arena/bots/config",
             "/admin/v1/arena/bot-versions",
             "/admin/v1/arena/bot-versions/transition",
@@ -3547,6 +3556,54 @@ class PlatformHttpServer(
             PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid submitterIdentity or botId")))
         } catch (ex: OpenBaoClientException) {
             PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao provisioning failed")))
+        }
+    }
+
+    private fun assignArenaBotOwnershipResponse(body: String): PlatformHotPathResponse {
+        val identity = adminIdentityService
+            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
+        val json = JsonCodec.parseObjectOrEmpty(body)
+        val botId = json.string("botId")
+        val githubLogin = json.string("githubLogin")
+        val displayName = json.string("displayName")
+        if (botId.isBlank() || githubLogin.isBlank()) {
+            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and githubLogin are required"))
+        }
+        return try {
+            val githubUserId = json.requiredLong("githubUserId")
+            val actor = currentAdminPrincipal().actorId
+            if (actor.startsWith("user-gh-")) {
+                val roles = identity.rolesForUser(actor).map { it.roleId }.toSet()
+                if (roles.none { it in adminBotConfigPrivilegedRoles }) {
+                    return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot ownership"))
+                }
+            }
+            val user = identity.ensureGitHubUser(
+                GitHubUserIdentity(
+                    githubUserId = githubUserId,
+                    githubLogin = githubLogin,
+                    displayName = displayName
+                ),
+                actorId = actor
+            )
+            val ownership = identity.assignBotOwnership(
+                actor,
+                AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = botId)
+            )
+            PlatformHotPathResponse(
+                200,
+                JsonCodec.writeObject(
+                    "status" to "ok",
+                    "botId" to ownership.botId,
+                    "reefUserId" to ownership.reefUserId,
+                    "githubLogin" to user.githubLogin,
+                    "ownershipState" to ownership.ownershipState.dbValue
+                )
+            )
+        } catch (ex: IllegalArgumentException) {
+            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot ownership request")))
+        } catch (ex: Exception) {
+            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot ownership assignment failed")))
         }
     }
 

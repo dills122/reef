@@ -23,6 +23,7 @@ if (!adminApiToken) {
   fail("ARENA_ADMIN_API_TOKEN is required for merged bot registry sync");
 }
 const actorId = env("ADMIN_ACTOR_ID", "bot-submission-ci");
+const githubApiUrl = env("GITHUB_API_URL", "https://api.github.com").replace(/\/+$/, "");
 
 for (const manifestPath of manifestPaths) {
   await syncManifest(manifestPath);
@@ -55,6 +56,7 @@ async function syncManifest(manifestPathArg) {
   } else {
     console.log(`bot-submission-register-merged: bot ${manifest.botId} already registered`);
   }
+  await syncBotOwnership(manifest);
 
   const existingVersion = await getOptional(
     `/admin/v1/arena/bot-versions?botId=${encodeURIComponent(manifest.botId)}&versionId=${encodeURIComponent(versionId)}`,
@@ -75,6 +77,35 @@ async function syncManifest(manifestPathArg) {
     dependencyManifestHash: dependencyManifestHash(artifact.approvedPackages ?? []),
   });
   console.log(`bot-submission-register-merged: registered version ${manifest.botId}/${versionId}`);
+}
+
+async function syncBotOwnership(manifest) {
+  const owner = await resolveGitHubIdentity(manifest.metadata.publisher);
+  await postJson("/admin/v1/arena/bots/ownership", {
+    botId: manifest.botId,
+    githubUserId: owner.id,
+    githubLogin: owner.login,
+    displayName: owner.name || owner.login,
+  });
+  console.log(`bot-submission-register-merged: assigned owner ${owner.login} to ${manifest.botId}`);
+}
+
+async function resolveGitHubIdentity(login) {
+  const response = await fetch(`${githubApiUrl}/users/${encodeURIComponent(login)}`, {
+    headers: githubHeaders(),
+  });
+  const parsed = await responsePayload(response);
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`GitHub user lookup failed for ${login} (${response.status}): ${JSON.stringify(parsed)}`);
+  }
+  if (!Number.isSafeInteger(parsed.id) || String(parsed.login || "").trim() === "") {
+    throw new Error(`GitHub user lookup returned an invalid identity for ${login}`);
+  }
+  return {
+    id: parsed.id,
+    login: parsed.login,
+    name: String(parsed.name || ""),
+  };
 }
 
 async function getOptional(path) {
@@ -99,6 +130,14 @@ function authHeaders() {
   return {
     authorization: `Bearer ${adminApiToken}`,
     "X-Reef-Actor-Id": actorId,
+  };
+}
+
+function githubHeaders() {
+  return {
+    accept: "application/vnd.github+json",
+    "user-agent": "reef-bot-registry-sync",
+    ...(env("GITHUB_TOKEN", "") ? { authorization: `Bearer ${env("GITHUB_TOKEN")}` } : {}),
   };
 }
 

@@ -437,6 +437,89 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun adminGatewayAssignsBotOwnershipFromGitHubIdentity() {
+        val auth = testAdminAuth()
+        val serviceToken = auth.authService.issueServiceToken(
+            tokenFamily = AdminServiceTokenFamily.Ci,
+            subjectActorId = "bot-registry-sync",
+            ttl = null
+        )
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = arenaStore
+            )
+        )
+        try {
+            val response = post(
+                server.address.port,
+                "/admin/v1/arena/bots/ownership",
+                headers = mapOf("Authorization" to "Bearer ${serviceToken.token}"),
+                body = """
+                    {
+                      "botId": "bot-1",
+                      "githubUserId": 12345,
+                      "githubLogin": "octo",
+                      "displayName": "Octo User"
+                    }
+                """.trimIndent()
+            )
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"botId\":\"bot-1\"")
+            assertContains(response.body, "\"reefUserId\":\"user-gh-12345\"")
+            assertContains(response.body, "\"githubLogin\":\"octo\"")
+            val ownership = auth.identityService.botOwnerMetadata("bot-1").single()
+            assertEquals("user-gh-12345", ownership.reefUserId)
+            assertEquals("owner", ownership.ownershipState.dbValue)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayRejectsParticipantBotOwnershipAssignment() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = InMemoryArenaBotRegistryStore()
+            )
+        )
+        try {
+            val response = post(
+                server.address.port,
+                "/admin/v1/arena/bots/ownership",
+                headers = mapOf("Cookie" to "reef_admin_session=${session.token}"),
+                body = """
+                    {
+                      "botId": "bot-1",
+                      "githubUserId": 12345,
+                      "githubLogin": "octo"
+                    }
+                """.trimIndent()
+            )
+
+            assertEquals(403, response.status)
+            assertContains(response.body, "not authorized for bot ownership")
+            assertTrue(auth.identityService.botOwnerMetadata("bot-1").isEmpty())
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun adminGatewayArenaRunsReadReturnsRecentRunsResultsAndLeaderboard() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))

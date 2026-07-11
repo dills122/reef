@@ -36,6 +36,11 @@ writeFileSync(
 
 const requests = [];
 const server = await fakeAdminApi(async (req, body, res) => {
+  if (req.method === "GET" && req.url === "/users/octocat") {
+    json(res, 200, { id: 583231, login: "octocat", name: "The Octocat" });
+    return;
+  }
+
   requests.push({ method: req.method, url: req.url, headers: req.headers, body });
   assert.equal(req.headers.authorization, "Bearer scoped-admin-token");
   assert.equal(req.headers["x-reef-actor-id"], "bot-submission-ci");
@@ -50,6 +55,15 @@ const server = await fakeAdminApi(async (req, body, res) => {
     assert.equal(parsed.fileName.endsWith("bots/sample-bot/index.ts"), true);
     assert.equal(parsed.name, "Sample Bot");
     assert.equal(parsed.version, "1.2.3");
+    json(res, 200, { status: "ok" });
+    return;
+  }
+  if (req.method === "POST" && req.url === "/admin/v1/arena/bots/ownership") {
+    const parsed = JSON.parse(body);
+    assert.equal(parsed.botId, "sample-bot");
+    assert.equal(parsed.githubUserId, 583231);
+    assert.equal(parsed.githubLogin, "octocat");
+    assert.equal(parsed.displayName, "The Octocat");
     json(res, 200, { status: "ok" });
     return;
   }
@@ -77,6 +91,7 @@ try {
   const result = await runRegister([manifestPath], {
     ARENA_ADMIN_API_URL: server.url,
     ARENA_ADMIN_API_TOKEN: "scoped-admin-token",
+    GITHUB_API_URL: server.url,
     BOT_SUBMISSION_REGISTER_SKIP_ARTIFACT_BUILD: "1",
   });
   assert.equal(result.status, 0, result.stderr);
@@ -87,6 +102,7 @@ try {
     [
       "GET /admin/v1/arena/bots?botId=sample-bot",
       "POST /admin/v1/arena/bots",
+      "POST /admin/v1/arena/bots/ownership",
       "GET /admin/v1/arena/bot-versions?botId=sample-bot&versionId=1.2.3",
       "POST /admin/v1/arena/bot-versions",
     ],
