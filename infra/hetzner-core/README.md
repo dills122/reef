@@ -258,7 +258,7 @@ hardcode this host in scripts.
 
 `.github/workflows/admin-ui-deploy.yml` deploys only the static
 `apps/arena-admin` build to the backbone host. It runs on pushes to
-`master`/`main` that touch the admin app or the workflow itself, and it can
+`master` that touch the admin app or the workflow itself, and it can
 also be run manually with `workflow_dispatch`.
 
 The workflow builds the SvelteKit static app with an empty
@@ -270,10 +270,12 @@ environment and uploads a gzip-compressed tarball to:
 POST /admin/deploy/arena-admin
 ```
 
-The `deploy-receiver` service validates the GitHub OIDC JWT claims, verifies
-the `sha256` artifact header against the uploaded bytes, extracts into
+The `deploy-receiver` service validates the GitHub OIDC JWT claims, rejects
+request headers that disagree with the verified commit/run claims, verifies the
+`sha256` artifact header against the uploaded bytes, extracts into
 `/opt/reef/arena-admin-releases`, copies assets into `/opt/reef/arena-admin`,
-and appends a deploy audit row to `arena-admin-releases/deploy-log.jsonl`.
+keeps the newest 10 release directories by default, and appends a deploy audit
+row to `arena-admin-releases/deploy-log.jsonl`.
 This deploy path does not require inbound SSH from GitHub runners, a GitHub
 SSH private key, or a Hetzner API token in GitHub.
 
