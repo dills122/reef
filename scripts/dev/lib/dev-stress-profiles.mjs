@@ -41,6 +41,7 @@ function stackProfileForStress(profile) {
 
 function applyRuntimeNoDbStressProfile() {
   setDefault("DEV_STRESS_MODE", "strict-lifecycle");
+  setDefault("DEV_STRESS_RUN_PROFILE", "runtime-nodb");
   setDefault("DEV_STRESS_PROFILE", "stream-submit");
   setDefault("DEV_STRESS_RATES", "1000,2500,5000,7500,10000");
   setDefault("DEV_STRESS_SWEEP_WORKERS", "256");
@@ -66,6 +67,7 @@ function applyRuntimeNoDbStressProfile() {
 
 function applyCapturedAckStressProfile() {
   setDefault("DEV_STRESS_MODE", "capacity-baseline");
+  setDefault("DEV_STRESS_RUN_PROFILE", "captured-ack");
   setDefault("DEV_STRESS_PROFILE", "capacity-heavy");
   setDefault("DEV_STRESS_RATES", "2500,3500");
   setDefault("DEV_STRESS_SWEEP_WORKERS", "128");
@@ -79,6 +81,7 @@ function applyCapturedAckStressProfile() {
 function applyStreamAckStressProfile() {
   setDefault("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
   setDefault("DEV_STRESS_MODE", "strict-lifecycle");
+  setDefault("DEV_STRESS_RUN_PROFILE", "stream-ack");
   setDefault("DEV_STRESS_PROFILE", "stream-submit");
   setDefault("DEV_STRESS_RATES", "1000,2500,5000");
   setDefault("DEV_STRESS_SWEEP_WORKERS", "256");
@@ -105,6 +108,7 @@ function applyStreamAckStressProfile() {
 
 function applyStreamDirectNoDbStressProfile() {
   setDefault("DEV_STRESS_MODE", "strict-lifecycle");
+  setDefault("DEV_STRESS_RUN_PROFILE", "direct-nodb");
   setDefault("DEV_STRESS_PROFILE", "stream-submit");
   setDefault("DEV_STRESS_RATES", "5000,10000,15000,20000");
   setDefault("DEV_STRESS_SWEEP_WORKERS", "256");

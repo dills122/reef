@@ -179,6 +179,7 @@ editing Compose files or calling lower-level scripts directly.
 | --- | --- | --- |
 | `DEV_STRESS_RATES` | all stress wrappers | Comma-separated target rates, for example `5000` or `5000,10000`. |
 | `DEV_STRESS_DURATION` | all stress wrappers | Step duration such as `60s`, `180s`, or `5m`. |
+| `DEV_STRESS_RUN_PROFILE` | stress wrappers | Evidence metadata profile, normally set by wrappers. Current values include `stream-ack`, `materializer-soak`, `direct-nodb`, `captured-ack`, and `runtime-nodb`. |
 | `DEV_STRESS_SWEEP_WORKERS` | all stress wrappers | Comma-separated load-tester client worker counts. |
 | `DEV_STRESS_RATE_SCHEDULE` | all stress wrappers | Use `precise` for capacity runs; default harness mode may drop scheduled work under pressure. |
 | `DEV_STRESS_RATE_QUEUE_DEPTH` | all stress wrappers | Load-generator queue capacity for high-rate precise schedules. |

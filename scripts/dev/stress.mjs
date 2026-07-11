@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -109,6 +110,7 @@ const venueEventMaterializerUrls = parseCsvStrings(
     env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_URL", defaultVenueEventMaterializerUrls(runtimeUrl).join(",")),
   ),
 );
+const stressRunProfile = env("DEV_STRESS_RUN_PROFILE", inferStressRunProfile());
 
 validateStressRunShape({
   profile,
@@ -119,6 +121,8 @@ validateStressRunShape({
   captureVenueEventMaterializerStats,
   allowMissingSessionConfig: env("DEV_STRESS_ALLOW_MISSING_SESSION_CONFIG", "0") === "1",
 });
+
+const stressRunMetadata = await buildStressRunMetadata();
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -487,7 +491,130 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterHotPath = await sampleHotPath(runtimeUrl);
       attachHotPathPhases({ reportOut, afterHotPath });
     }
+    attachStressRunMetadata({ reportOut, rate, workers, runId });
     attachDerivedStressMetrics({ reportOut, duration });
+  }
+}
+
+async function buildStressRunMetadata() {
+  return {
+    schemaVersion: 1,
+    capturedAt: new Date().toISOString(),
+    git: {
+      sha: await currentGitSha(),
+    },
+    runProfile: stressRunProfile,
+    expectedRoles: expectedRolesForRunProfile(stressRunProfile),
+    actionProfile: profile,
+    mode,
+    scenarioId,
+    runtimeUrl,
+    engineUrl,
+    commandTransport,
+    streamAddress: commandTransport === "stream" ? streamAddress : "",
+    sessionConfig: sessionConfig
+      ? {
+          path: resolve(sessionConfig),
+          sha256: sha256File(sessionConfig),
+        }
+      : null,
+    knobs: {
+      duration,
+      workers,
+      sweepWorkers,
+      rates,
+      repeatSamples,
+      rateSchedule,
+      rateQueueDepth,
+      minSuccessRatePct,
+    },
+    diagnostics: {
+      commandAccounting: captureCommandAccounting,
+      hotPath: captureHotPath,
+      dbDiagnostics: captureDbDiagnostics,
+      streamAckHealth: captureStreamAckHealth,
+      streamAckWorkers: captureStreamAckWorkerStats,
+      streamAckProjectors: captureStreamAckProjectorStats,
+      streamDirect: captureStreamDirectStats,
+      venueEventMaterializer: captureVenueEventMaterializerStats,
+    },
+    endpoints: {
+      streamAckWorkers: streamAckWorkerUrls,
+      streamAckProjectors: streamAckProjectorUrls,
+      streamDirect: streamDirectUrls,
+      venueEventMaterializers: venueEventMaterializerUrls,
+    },
+  };
+}
+
+function attachStressRunMetadata({ reportOut, rate, workers, runId }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    report.stressRunMetadata = {
+      ...stressRunMetadata,
+      step: {
+        runId,
+        rate,
+        workers: Number(workers),
+        reportOut: resolve(reportOut),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+  } catch (error) {
+    console.warn(`  stress metadata unavailable: ${error?.message ?? error}`);
+  }
+}
+
+async function currentGitSha() {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--short=12", "HEAD"]);
+    return stdout.trim();
+  } catch {
+    return "";
+  }
+}
+
+function sha256File(path) {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return "";
+  }
+}
+
+function inferStressRunProfile() {
+  if (captureVenueEventMaterializerStats) return "materializer-soak";
+  if (captureStreamDirectStats) return "direct-nodb";
+  if (captureStreamAckWorkerStats || captureStreamAckProjectorStats) return "stream-ack";
+  return "custom";
+}
+
+function expectedRolesForRunProfile(runProfile) {
+  switch (runProfile) {
+    case "materializer-soak":
+      return {
+        workers: "stopped or disabled",
+        materializers: "online",
+        projectors: "optional unless read-model freshness is being measured",
+      };
+    case "direct-nodb":
+      return {
+        workers: "stopped or disabled",
+        materializers: "not expected",
+        projectors: "not expected",
+      };
+    case "stream-ack":
+      return {
+        workers: "enabled",
+        materializers: "not expected",
+        projectors: "running when projection freshness is measured",
+      };
+    default:
+      return {
+        workers: "profile-specific",
+        materializers: "profile-specific",
+        projectors: "profile-specific",
+      };
   }
 }
 
