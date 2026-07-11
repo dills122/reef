@@ -149,6 +149,23 @@ services:
       - internal
     depends_on:
       - platform-runtime
+      - deploy-receiver
+
+  deploy-receiver:
+    <<: *app-hardening
+    build:
+      context: ./deploy-receiver
+    restart: unless-stopped
+    env_file:
+      - path: ./secrets/deploy-receiver.env
+        required: false
+    expose:
+      - "8090"
+    volumes:
+      - ./arena-admin:/srv/arena-admin
+      - ./arena-admin-releases:/srv/arena-admin-releases
+    networks:
+      - internal
 
   simulator:
     <<: *app-hardening

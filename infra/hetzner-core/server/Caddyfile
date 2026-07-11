@@ -48,6 +48,21 @@
 		reverse_proxy platform-runtime:8080
 	}
 
+	# GitHub Actions admin UI deploys. The receiver validates the GitHub OIDC
+	# JWT claims and artifact digest before writing static assets.
+	@admin_deploy {
+		method POST
+		path /admin/deploy/arena-admin
+	}
+
+	handle @admin_deploy {
+		request_body {
+			max_size 25MB
+		}
+
+		reverse_proxy deploy-receiver:8090
+	}
+
 	# Public venue-intake reads (trade tape, market data, arena leaderboard).
 	@venue_api {
 		path /api/v1/*

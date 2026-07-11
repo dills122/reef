@@ -133,8 +133,17 @@ Build/deploy fallback:
 ```bash
 make hetzner-core ARGS=build-local-images
 make hetzner-core ARGS=arena-admin
+make hetzner-core ARGS=deploy-receiver-up
 make hetzner-core ARGS=sync
 make hetzner-core ARGS=migrations
+```
+
+Admin UI auto-deploy uses the public OIDC deploy receiver, not SSH from GitHub
+runners. After receiver or Caddy changes, apply the host-side service update
+before expecting the workflow to pass:
+
+```bash
+make hetzner-core ARGS=deploy-receiver-up
 ```
 
 ## Bootstrap Order
@@ -272,6 +281,7 @@ as the minimum monitor set to run manually or wire into an external checker.
 | HTTP redirect | `curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" http://reef-arena-admin.shrimpworks.dev/` | `308 https://reef-arena-admin.shrimpworks.dev/` |
 | OAuth start | `curl -fsS -o /dev/null -w "%{http_code} %{redirect_url}\n" "https://reef-arena-admin.shrimpworks.dev/admin/auth/github/start?redirectPath=/admin"` | `302` to `github.com/login/oauth/authorize` |
 | Public admin gate | `curl -fsS -o /dev/null -w "%{http_code}\n" https://reef-arena-admin.shrimpworks.dev/admin/v1/arena/bots` | `401` without bearer token |
+| Admin deploy receiver gate | `curl -fsS -o /dev/null -w "%{http_code}\n" -X POST https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin` | `401` without GitHub OIDC bearer token |
 | Runtime private port | public TCP probe to `167.233.82.255:8080` | Closed |
 | OpenBao private port | public TCP probe to `167.233.82.255:8200` | Closed |
 | Legacy mutation route | host-local POST to `/auth/roles` with internal marker | `403` outside scripted temporary windows |

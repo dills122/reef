@@ -109,6 +109,12 @@ server.
 | `BOT_SUBMISSION_OPENBAO_MODE` | Enables real OpenBao provisioning in CI | Set to `real` only for the hosted provisioning workflow. |
 | `ACTIONS_ID_TOKEN_REQUEST_URL` | GitHub OIDC URL | Supplied by GitHub Actions when workflow grants `id-token: write`. |
 | `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | GitHub OIDC request token | Supplied by GitHub Actions when workflow grants `id-token: write`. |
+| `REEF_ADMIN_DEPLOY_URL` | Optional admin UI deploy receiver URL | GitHub Actions variable; defaults to `https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin`. |
+| `REEF_ADMIN_DEPLOY_AUDIENCE` | Optional admin UI deploy OIDC audience | GitHub Actions variable; defaults to `reef-backbone-admin-deploy`. Must match `/opt/reef/secrets/deploy-receiver.env`. |
+
+Admin UI auto-deploy does not require a GitHub SSH private key, Hetzner API
+token, or long-lived deploy bearer token. It uses GitHub OIDC and the
+host-side `deploy-receiver` service.
 
 After
 `REEF_GITHUB_REPOSITORY=dills122/reef BAO_TOKEN="..." ./scripts/configure-openbao.sh`,

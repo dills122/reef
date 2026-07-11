@@ -386,36 +386,44 @@ Correct flow:
 ```text
 GitHub Actions
   -> build apps/arena-admin with same-origin API paths
-  -> install deploy SSH key and pinned known_hosts
-  -> temporarily allow this runner's IPv4 /32 through the Hetzner SSH firewall
-  -> run scripts/deploy/hetzner-core.mjs arena-admin
-  -> rsync static files to /opt/reef/arena-admin
-  -> remove the temporary SSH firewall rule
+  -> request a GitHub OIDC token for the backbone-admin environment
+  -> upload a gzip tarball plus sha256 to /admin/deploy/arena-admin
+  -> deploy-receiver validates OIDC claims and artifact digest
+  -> deploy-receiver stages and installs static files under /opt/reef/arena-admin
 ```
 
 This first deployment slice is intentionally static-asset-only. It does not
 pull container images, restart `platform-runtime`, migrate databases, or touch
 OpenBao. API/runtime auto-deploy should be a later workflow with a separate
 promotion gate, health checks, rollback plan, and explicit runtime image
-strategy.
+strategy. It also does not require inbound SSH from GitHub-hosted runners,
+temporary SSH firewall rules, or a Hetzner API token in GitHub.
 
-Required GitHub secrets:
-
-- `REEF_HETZNER_HOST`
-- `REEF_HETZNER_SSH_PRIVATE_KEY`
-- `REEF_HETZNER_SSH_KNOWN_HOSTS`
-- `REEF_HETZNER_HCLOUD_TOKEN`
+Required GitHub secrets: none for this admin UI deploy path.
 
 Optional GitHub variables:
 
-- `REEF_HETZNER_OPS_USER` (default `ops`)
-- `REEF_HETZNER_DEPLOY_DIR` (default `/opt/reef`)
-- `REEF_HETZNER_FIREWALL_NAME` (default `reef-prod-core-fw`)
+- `REEF_ADMIN_DEPLOY_URL` (default `https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin`)
+- `REEF_ADMIN_DEPLOY_AUDIENCE` (default `reef-backbone-admin-deploy`)
 
-`REEF_HETZNER_HCLOUD_TOKEN` is only used by this workflow to add and remove a
-temporary inbound SSH rule for the current GitHub-hosted runner IPv4 address.
-The normal firewall posture remains SSH restricted to `admin_cidrs` plus the
-short-lived deploy-runner `/32` while the workflow is active.
+Host receiver configuration is generated in
+`/opt/reef/secrets/deploy-receiver.env`. The receiver expects:
+
+- issuer `https://token.actions.githubusercontent.com`
+- audience `reef-backbone-admin-deploy`
+- repository `dills122/reef`
+- ref `refs/heads/master`
+- environment `backbone-admin`
+- workflow `Admin UI Deploy`
+
+Deploy audit rows are appended to
+`/opt/reef/arena-admin-releases/deploy-log.jsonl`.
+
+Roll out receiver or Caddy route changes with:
+
+```bash
+make hetzner-core ARGS=deploy-receiver-up
+```
 
 ## Current Gaps
 
