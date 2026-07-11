@@ -111,6 +111,7 @@ server.
 | `ACTIONS_ID_TOKEN_REQUEST_TOKEN` | GitHub OIDC request token | Supplied by GitHub Actions when workflow grants `id-token: write`. |
 | `REEF_ADMIN_DEPLOY_URL` | Optional admin UI deploy receiver URL | GitHub Actions variable; defaults to `https://reef-arena-admin.shrimpworks.dev/admin/deploy/arena-admin`. |
 | `REEF_ADMIN_DEPLOY_AUDIENCE` | Optional admin UI deploy OIDC audience | GitHub Actions variable; defaults to `reef-backbone-admin-deploy`. Must match `/opt/reef/secrets/deploy-receiver.env`. |
+| `DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT` | Number of retained admin UI release directories | Host deploy receiver env; generated in `/opt/reef/secrets/deploy-receiver.env`, defaults to `10`. |
 
 Admin UI auto-deploy does not require a GitHub SSH private key, Hetzner API
 token, or long-lived deploy bearer token. It uses GitHub OIDC and the

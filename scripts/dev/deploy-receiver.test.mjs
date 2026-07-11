@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile, mkdir, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
   deployArchive,
+  deployMetadataFromClaims,
   installRelease,
   safeRelativePath,
   validateArchiveEntryNames,
@@ -63,6 +64,37 @@ assert.throws(() => safeRelativePath("/absolute"), /unsafe archive path/);
 assert.deepEqual(validateArchiveEntryNames("./index.html\n./_app/app.js\n"), ["index.html", "_app/app.js"]);
 assert.throws(() => validateArchiveEntryNames("./_app/app.js\n"), /missing index.html/);
 
+assert.deepEqual(
+  deployMetadataFromClaims({
+    sha: "B".repeat(40),
+    run_id: "123",
+    run_attempt: "2",
+    repository: "dills122/reef",
+    ref: "refs/heads/master",
+    workflow: "Admin UI Deploy",
+  }),
+  {
+    gitSha: "b".repeat(40),
+    runId: "123",
+    runAttempt: "2",
+    repository: "dills122/reef",
+    ref: "refs/heads/master",
+    workflow: "Admin UI Deploy",
+  },
+);
+assert.throws(
+  () =>
+    deployMetadataFromClaims({
+      sha: "not-a-sha",
+      run_id: "123",
+      run_attempt: "2",
+      repository: "dills122/reef",
+      ref: "refs/heads/master",
+      workflow: "Admin UI Deploy",
+    }),
+  /sha is missing or invalid/,
+);
+
 const root = await mkdtemp(join(tmpdir(), "reef-deploy-receiver-test-"));
 try {
   const release = join(root, "release");
@@ -93,6 +125,13 @@ try {
   await mkdir(join(source, "_app"), { recursive: true });
   await writeFile(join(source, "index.html"), "archive index\n");
   await writeFile(join(source, "_app", "bundle.js"), "archive bundle\n");
+  for (let i = 0; i < 3; i++) {
+    const oldRelease = join(releases, `old-release-${i}`);
+    await mkdir(oldRelease, { recursive: true });
+    await writeFile(join(oldRelease, "index.html"), `old ${i}\n`);
+    const timestamp = new Date(Date.UTC(2025, 0, i + 1));
+    await utimes(oldRelease, timestamp, timestamp);
+  }
   const tar = spawnSync("tar", ["-czf", archive, "-C", source, "."], { encoding: "utf8" });
   assert.equal(tar.status, 0, tar.stderr);
 
@@ -111,6 +150,7 @@ try {
     {
       liveDir: live,
       releasesDir: releases,
+      releaseRetentionCount: 2,
     },
   );
 
@@ -119,6 +159,13 @@ try {
   assert.equal(await readFile(join(live, "_app", "bundle.js"), "utf8"), "archive bundle\n");
   const log = await readFile(join(releases, "deploy-log.jsonl"), "utf8");
   assert.match(log, /"runId":"123"/);
+  const retainedReleases = (await readdir(releases, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .map((entry) => entry.name)
+    .sort();
+  assert.equal(retainedReleases.length, 2);
+  assert.ok(retainedReleases.includes(result.releaseId));
+  assert.ok(!retainedReleases.includes("old-release-0"));
 } finally {
   await rm(deployRoot, { recursive: true, force: true });
 }

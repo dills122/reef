@@ -23,6 +23,7 @@ const defaultConfig = {
   releasesDir: process.env.DEPLOY_RECEIVER_RELEASES_DIR || "/srv/arena-admin-releases",
   maxBytes: intEnv("DEPLOY_RECEIVER_MAX_BYTES", 25 * 1024 * 1024),
   clockSkewSeconds: intEnv("DEPLOY_RECEIVER_CLOCK_SKEW_SECONDS", 60),
+  releaseRetentionCount: intEnv("DEPLOY_RECEIVER_RELEASE_RETENTION_COUNT", 10),
 };
 
 const jwksCache = {
@@ -227,6 +228,34 @@ function timingSafeHexEqual(left, right) {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function requiredClaimString(payload, name, pattern) {
+  const value = payload[name];
+  if (typeof value !== "string" || !pattern.test(value)) {
+    throw new Error(`OIDC claim ${name} is missing or invalid`);
+  }
+  return value;
+}
+
+function deployMetadataFromClaims(claims) {
+  return {
+    gitSha: requiredClaimString(claims, "sha", /^[a-fA-F0-9]{40}$/).toLowerCase(),
+    runId: requiredClaimString(claims, "run_id", /^[0-9]+$/),
+    runAttempt: requiredClaimString(claims, "run_attempt", /^[0-9]+$/),
+    repository: claims.repository,
+    ref: claims.ref,
+    workflow: claims.workflow,
+  };
+}
+
+function assertOptionalHeaderMatches(value, expected, name, options = {}) {
+  if (!value) return;
+  const actual = options.caseInsensitive ? value.toLowerCase() : value;
+  const wanted = options.caseInsensitive ? expected.toLowerCase() : expected;
+  if (actual !== wanted) {
+    throw new Error(`${name} header does not match verified OIDC claim`);
+  }
+}
+
 async function deployArchive(archivePath, metadata, config = defaultConfig) {
   await mkdir(config.releasesDir, { recursive: true });
   await mkdir(config.liveDir, { recursive: true });
@@ -257,10 +286,28 @@ async function deployArchive(archivePath, metadata, config = defaultConfig) {
       releaseId,
       ...metadata,
     });
+    await pruneOldReleases(config.releasesDir, config.releaseRetentionCount ?? defaultConfig.releaseRetentionCount);
     return { releaseId };
   } catch (err) {
     await rm(staging, { recursive: true, force: true }).catch(() => {});
     throw err;
+  }
+}
+
+async function pruneOldReleases(releasesDir, keepCount) {
+  if (!Number.isFinite(keepCount) || keepCount <= 0) return;
+  const entries = await readdir(releasesDir, { withFileTypes: true });
+  const releases = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith(".") || entry.name.includes(".staging-")) continue;
+    const path = join(releasesDir, entry.name);
+    const details = await lstat(path);
+    releases.push({ path, mtimeMs: details.mtimeMs });
+  }
+  releases.sort((left, right) => right.mtimeMs - left.mtimeMs || left.path.localeCompare(right.path));
+  for (const release of releases.slice(keepCount)) {
+    await rm(release.path, { recursive: true, force: true });
   }
 }
 
@@ -349,14 +396,16 @@ async function handleDeploy(req, res, config = defaultConfig) {
   let archivePath = "";
   try {
     assertHexSha256(expectedSha);
-    if (!/^[a-fA-F0-9]{40}$/.test(gitSha)) throw new Error("invalid git sha header");
-    if (!/^[0-9]+$/.test(runId)) throw new Error("invalid run id header");
-    if (runAttempt && !/^[0-9]+$/.test(runAttempt)) throw new Error("invalid run attempt header");
 
     const claims = await verifyJwt(token, config);
+    const metadata = deployMetadataFromClaims(claims);
+    assertOptionalHeaderMatches(gitSha, metadata.gitSha, "git sha", { caseInsensitive: true });
+    assertOptionalHeaderMatches(runId, metadata.runId, "run id");
+    assertOptionalHeaderMatches(runAttempt, metadata.runAttempt, "run attempt");
+
     const tempDir = join(config.releasesDir, ".uploads");
     await mkdir(tempDir, { recursive: true });
-    archivePath = join(tempDir, `${gitSha}-${process.pid}-${Date.now()}.tar.gz`);
+    archivePath = join(tempDir, `${metadata.gitSha}-${process.pid}-${Date.now()}.tar.gz`);
     const upload = await readRequestToFile(req, archivePath, config.maxBytes);
     if (!timingSafeHexEqual(upload.sha256, expectedSha)) {
       throw new Error("artifact sha256 mismatch");
@@ -365,14 +414,9 @@ async function handleDeploy(req, res, config = defaultConfig) {
     const result = await deployArchive(
       archivePath,
       {
+        ...metadata,
         artifactSha256: upload.sha256,
         bytes: upload.bytes,
-        gitSha,
-        runId,
-        runAttempt,
-        repository: claims.repository,
-        ref: claims.ref,
-        workflow: claims.workflow,
       },
       config,
     );
@@ -408,7 +452,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 export {
   createDeployReceiver,
   deployArchive,
+  deployMetadataFromClaims,
   installRelease,
+  pruneOldReleases,
   parseJwt,
   safeRelativePath,
   validateArchiveEntryNames,
