@@ -214,6 +214,9 @@ function compactSummary(report, reportPath) {
       generatedAt: report.generatedAt ?? "",
       runId: report.runId ?? "",
       mode: report.mode ?? {},
+      policyEnvelopeHash: report.policyEnvelopeHash ?? "",
+      policyEnvelope: compactPolicyEnvelope(report.policyEnvelope),
+      actorProfiles: report.runPlan?.actorProfiles ?? {},
       runnerProfile: report.runnerProfile ?? {},
       status: report.status ?? "",
       totals: report.totals ?? {},
@@ -238,6 +241,9 @@ function compactSummary(report, reportPath) {
           freezeCount: numberOrZero(bot.freezeCount),
           disqualified: Boolean(bot.disqualified),
           tradingMetrics: compactTradingMetrics(bot.tradingMetrics),
+          conductMetrics: compactConductMetrics(bot.conductMetrics),
+          actorClass: bot.actorClass ?? "",
+          actorProfile: compactActorProfile(bot.actorProfile),
         }))
         : [],
       settlementScore: report.settlementScore ?? report.settlementScoreSummary ?? null,
@@ -272,6 +278,51 @@ function compactTradingMetrics(metrics) {
     schemaVersion: metrics.schemaVersion ?? "",
     commands: metrics.commands ?? {},
     pnl: metrics.pnl ?? {},
+  };
+}
+
+function compactPolicyEnvelope(envelope) {
+  if (!envelope || typeof envelope !== "object") return {};
+  return {
+    schemaVersion: envelope.schemaVersion ?? "",
+    modeId: envelope.modeId ?? "",
+    modeVersion: envelope.modeVersion ?? "",
+    scenarioId: envelope.scenarioId ?? "",
+    seed: nullableNumber(envelope.seed),
+    scoringPolicyVersion: envelope.scoringPolicyVersion ?? "",
+    economicPolicyVersion: envelope.economicPolicyVersion ?? "",
+    liquidityPolicyVersion: envelope.liquidityPolicyVersion ?? "",
+    backgroundFlowPolicyVersion: envelope.backgroundFlowPolicyVersion ?? "",
+    creditPolicyVersion: envelope.creditPolicyVersion ?? "",
+    interventionPolicyVersion: envelope.interventionPolicyVersion ?? "",
+    npcDifficultyBuckets: Array.isArray(envelope.npcDifficultyBuckets) ? envelope.npcDifficultyBuckets : [],
+  };
+}
+
+function compactActorProfile(profile) {
+  if (!profile || typeof profile !== "object") return undefined;
+  return {
+    profileId: profile.profileId ?? "",
+    profileVersion: profile.profileVersion ?? "",
+    actorClass: profile.actorClass ?? "",
+    difficultyBucket: profile.difficultyBucket ?? "",
+    scoreEffect: profile.scoreEffect ?? "",
+    profileHash: profile.profileHash ?? "",
+  };
+}
+
+function compactConductMetrics(metrics) {
+  if (!metrics || typeof metrics !== "object") return undefined;
+  return {
+    schemaVersion: metrics.schemaVersion ?? "",
+    status: metrics.status ?? "",
+    orderCommands: numberOrZero(metrics.orderCommands),
+    cancelReplaceRatio: nullableNumber(metrics.cancelReplaceRatio),
+    invalidIntentRate: nullableNumber(metrics.invalidIntentRate),
+    timeoutRate: nullableNumber(metrics.timeoutRate),
+    maxActionsPerTick: numberOrZero(metrics.maxActionsPerTick),
+    maxVenueCommandsPerTick: numberOrZero(metrics.maxVenueCommandsPerTick),
+    freezeCount: numberOrZero(metrics.freezeCount),
   };
 }
 

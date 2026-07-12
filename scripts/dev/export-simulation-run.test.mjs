@@ -99,7 +99,28 @@ test("extracts counts, latency, and summary from arena local tick report", async
       generatedAt: "2026-07-08T12:00:00Z",
       runId: "arena-run-1",
       status: "completed",
-      mode: { modeId: "equity-sprint", version: "v1" },
+      mode: { modeId: "equity-sprint", version: "v1", npcDifficultyBuckets: ["benign-noise"] },
+      policyEnvelopeHash: "sha256:abc123",
+      policyEnvelope: {
+        schemaVersion: "reef.arena.policyEnvelope.v1",
+        modeId: "equity-sprint",
+        modeVersion: "v1",
+        scenarioId: "arena-equity-sprint-v1",
+        seed: 170707,
+        scoringPolicyVersion: "score-v0",
+        economicPolicyVersion: "economic-v0",
+        liquidityPolicyVersion: "liquidity-v0",
+        backgroundFlowPolicyVersion: "background-flow-v0",
+        creditPolicyVersion: "credit-v0",
+        interventionPolicyVersion: "intervention-v0",
+        npcDifficultyBuckets: ["benign-noise"],
+      },
+      runPlan: {
+        actorProfiles: {
+          schemaVersion: "reef.arena.actorProfileSummary.v1",
+          byActorClass: { house_market_maker: 1 },
+        },
+      },
       runnerProfile: { compartment: "ses", submitMode: "live" },
       totals: {
         ticks: 4,
@@ -150,9 +171,29 @@ test("extracts counts, latency, and summary from arena local tick report", async
           failedTicks: 0,
           freezeCount: 0,
           disqualified: false,
+          actorClass: "house_market_maker",
+          actorProfile: {
+            profileId: "mm-tight-bluechip",
+            profileVersion: "v1",
+            actorClass: "house_market_maker",
+            difficultyBucket: "neutral-liquidity",
+            scoreEffect: "diagnostic-only",
+            profileHash: "sha256:mm",
+          },
           tradingMetrics: {
             commands: { submitted: 4, failed: 0 },
             pnl: { realized: 100 },
+          },
+          conductMetrics: {
+            schemaVersion: "reef.arena.conductMetrics.v0",
+            status: "reported",
+            orderCommands: 4,
+            cancelReplaceRatio: 0,
+            invalidIntentRate: 0,
+            timeoutRate: 0,
+            maxActionsPerTick: 2,
+            maxVenueCommandsPerTick: 2,
+            freezeCount: 0,
           },
         },
       ],
@@ -193,9 +234,14 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.commandAccounting.accountingGap, 0);
   assert.equal(payload.summary.commandStatusSummary.byRoute["/api/v1/orders/cancel"], 2);
   assert.equal(payload.summary.healthSummary.status, "pass");
+  assert.equal(payload.summary.policyEnvelopeHash, "sha256:abc123");
+  assert.equal(payload.summary.policyEnvelope.economicPolicyVersion, "economic-v0");
+  assert.equal(payload.summary.actorProfiles.byActorClass.house_market_maker, 1);
   assert.equal(payload.summary.botResults[0].botId, "builtin-mm-simple");
   assert.equal(payload.summary.botResults[0].finalEquity, 1000100);
   assert.equal(payload.summary.botResults[0].tradingMetrics.commands.submitted, 4);
+  assert.equal(payload.summary.botResults[0].actorProfile.profileId, "mm-tight-bluechip");
+  assert.equal(payload.summary.botResults[0].conductMetrics.maxVenueCommandsPerTick, 2);
   assert.equal(payload.summary.settlementScore.participants[0].participantId, "builtin-mm-simple");
 });
 
