@@ -6,7 +6,7 @@ const args = parseArgs(process.argv.slice(2));
 
 if (!args.summary || !args.botId || !args.versionId || !args.scoringPolicyVersion || args.finalEquity === undefined) {
   console.error(
-    "usage: node scripts/dev/arena-ingest-bot-run-result.mjs --summary=<summary.json> --bot-id=<botId> --version-id=<versionId> --scoring-policy-version=<version> --final-equity=<integer> [--realized-pnl=<integer>] [--max-drawdown=<integer>] [--runtime-url=http://127.0.0.1:8080] [--dry-run]",
+    "usage: node scripts/dev/arena-ingest-bot-run-result.mjs --summary=<summary.json> --bot-id=<botId> --version-id=<versionId> --scoring-policy-version=<version> --final-equity=<integer> [--realized-pnl=<integer>] [--max-drawdown=<integer>] [--runtime-url=http://127.0.0.1:8080] [--admin-api-token=<token>] [--dry-run]",
   );
   process.exit(2);
 }
@@ -35,7 +35,8 @@ if (args.dryRun) {
 }
 
 const runtimeUrl = (args.runtimeUrl ?? "http://127.0.0.1:8080").replace(/\/$/, "");
-const response = await postJson(`${runtimeUrl}/internal/admin/arena/run-bot-results`, payload);
+const adminApiToken = args.adminApiToken ?? process.env.ARENA_ADMIN_API_TOKEN ?? "";
+const response = await postArenaJson(runtimeUrl, "/admin/v1/arena/run-bot-results", "/internal/admin/arena/run-bot-results", payload);
 if (!response.ok) {
   console.error(response.text);
   process.exit(1);
@@ -86,11 +87,25 @@ function booleanArg(value) {
   return String(value).toLowerCase() === "true";
 }
 
-function postJson(url, payload) {
-  return requestJson(url, "POST", payload);
+async function postArenaJson(baseUrl, adminPath, internalPath, payload) {
+  const response = await requestJson(`${baseUrl}${adminPath}`, "POST", payload, false);
+  if (response.ok || !canFallbackToInternal(baseUrl, response)) {
+    return response;
+  }
+  return requestJson(`${baseUrl}${internalPath}`, "POST", payload, true);
 }
 
-function requestJson(url, method, payload = undefined) {
+function canFallbackToInternal(baseUrl, response) {
+  const host = new URL(baseUrl).hostname;
+  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+  if (!loopback) return false;
+  if (adminApiToken.trim() !== "") return false;
+  return response.status === 404 ||
+    response.status === 401 ||
+    (response.status === 503 && response.text.includes("ARENA_ADMIN_API_TOKEN"));
+}
+
+function requestJson(url, method, payload = undefined, internalRoute = false) {
   const parsed = new URL(url);
   const transport = parsed.protocol === "https:" ? https : http;
   const body = payload === undefined ? undefined : JSON.stringify(payload);
@@ -99,6 +114,8 @@ function requestJson(url, method, payload = undefined) {
       method,
       headers: {
         "content-type": "application/json",
+        ...(adminApiToken.trim() !== "" && !internalRoute ? { Authorization: `Bearer ${adminApiToken}` } : {}),
+        ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
         "X-Reef-Actor-Id": payload.actorId,
         "X-Correlation-Id": payload.correlationId,
         ...(body === undefined ? {} : { "content-length": Buffer.byteLength(body) }),

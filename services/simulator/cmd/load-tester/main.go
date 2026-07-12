@@ -855,10 +855,11 @@ func runWorker(
 				continue
 			}
 			payload := buildCommandPayload(cfg, sessionID, commandID, traceID, actorID, actorType, persona, strategyID, reqID)
+			participantID, accountID := orderIdentityForActor(cfg, actorID)
 			payload["orderId"] = orderID
 			payload["instrumentId"] = instrumentID
-			payload["participantId"] = cfg.ParticipantID
-			payload["accountId"] = cfg.AccountID
+			payload["participantId"] = participantID
+			payload["accountId"] = accountID
 			payload["side"] = chooseSideForConfig(rng, cfg)
 			payload["orderType"] = "LIMIT"
 			payload["quantityUnits"] = fmt.Sprintf("%d", profileQuantity(rng, cfg, profile))
@@ -1540,22 +1541,87 @@ func seedReferenceData(client *http.Client, cfg Config) error {
 			return err
 		}
 	}
-	if err := seedPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
-		"participantId": cfg.ParticipantID,
-		"name":          cfg.ParticipantName,
-	}, internalHeaders); err != nil {
-		return err
-	}
-	if err := seedPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
-		"accountId":     cfg.AccountID,
-		"participantId": cfg.ParticipantID,
-	}, internalHeaders); err != nil {
-		return err
+	for _, identity := range orderIdentities(cfg) {
+		if err := seedPOST(client, cfg.BaseURL+"/reference/participants", map[string]string{
+			"participantId": identity.ParticipantID,
+			"name":          identity.ParticipantName,
+		}, internalHeaders); err != nil {
+			return err
+		}
+		if err := seedPOST(client, cfg.BaseURL+"/reference/accounts", map[string]string{
+			"accountId":     identity.AccountID,
+			"participantId": identity.ParticipantID,
+		}, internalHeaders); err != nil {
+			return err
+		}
 	}
 	if err := seedOrderAuthorization(client, cfg, internalHeaders); err != nil {
 		return err
 	}
 	return nil
+}
+
+type orderIdentity struct {
+	ParticipantID   string
+	ParticipantName string
+	AccountID       string
+}
+
+func orderIdentities(cfg Config) []orderIdentity {
+	if !cfg.HasSessionConfig || len(cfg.SessionActors) == 0 {
+		return []orderIdentity{defaultOrderIdentity(cfg)}
+	}
+	seen := map[string]orderIdentity{}
+	for _, actor := range cfg.SessionActors {
+		actorID := strings.TrimSpace(actor.ActorID)
+		if actorID == "" {
+			continue
+		}
+		identity := sessionActorOrderIdentity(actorID)
+		seen[identity.ParticipantID] = identity
+	}
+	if len(seen) == 0 {
+		return []orderIdentity{defaultOrderIdentity(cfg)}
+	}
+	out := make([]orderIdentity, 0, len(seen))
+	for _, identity := range seen {
+		out = append(out, identity)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ParticipantID < out[j].ParticipantID
+	})
+	return out
+}
+
+func orderIdentityForActor(cfg Config, actorID string) (string, string) {
+	if cfg.HasSessionConfig {
+		normalizedActorID := strings.TrimSpace(actorID)
+		for _, actor := range cfg.SessionActors {
+			if strings.TrimSpace(actor.ActorID) == normalizedActorID && normalizedActorID != "" {
+				identity := sessionActorOrderIdentity(normalizedActorID)
+				return identity.ParticipantID, identity.AccountID
+			}
+		}
+	}
+	identity := defaultOrderIdentity(cfg)
+	return identity.ParticipantID, identity.AccountID
+}
+
+func defaultOrderIdentity(cfg Config) orderIdentity {
+	return orderIdentity{
+		ParticipantID:   cfg.ParticipantID,
+		ParticipantName: cfg.ParticipantName,
+		AccountID:       cfg.AccountID,
+	}
+}
+
+func sessionActorOrderIdentity(actorID string) orderIdentity {
+	normalizedActorID := strings.TrimSpace(actorID)
+	return orderIdentity{
+		ParticipantID:   normalizedActorID + "-participant",
+		ParticipantName: normalizedActorID,
+		AccountID:       normalizedActorID + "-account",
+	}
 }
 
 func seedOrderAuthorization(client *http.Client, cfg Config, internalHeaders map[string]string) error {

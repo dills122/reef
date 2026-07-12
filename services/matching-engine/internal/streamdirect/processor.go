@@ -252,6 +252,7 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 	ackable := make([]CommandDelivery, 0, len(deliveries))
 	outcomes := make([]CommandOutcomeFact, 0, len(deliveries))
 	firstSeq := uint64(0)
+	haveFirstSeq := false
 	lastSeq := uint64(0)
 	checksumInput := strings.Builder{}
 
@@ -312,8 +313,9 @@ func (p *Processor) buildBatch(deliveries []CommandDelivery, createdAt string) (
 			}
 		}
 
-		if firstSeq == 0 || fact.StreamSequence < firstSeq {
+		if !haveFirstSeq || fact.StreamSequence < firstSeq {
 			firstSeq = fact.StreamSequence
+			haveFirstSeq = true
 		}
 		if fact.StreamSequence > lastSeq {
 			lastSeq = fact.StreamSequence

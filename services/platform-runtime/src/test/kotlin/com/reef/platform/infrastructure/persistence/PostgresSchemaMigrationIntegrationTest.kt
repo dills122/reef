@@ -71,6 +71,7 @@ class PostgresSchemaMigrationIntegrationTest {
                   'runtime/0034_post_trade_profile_references.sql',
                   'runtime/0036_canonical_archive_tables.sql',
                   'runtime/0037_runtime_event_trade_archive_tables.sql',
+                  'runtime/0038_projection_dirty_lock_order.sql',
                   'auth/0002_live_auth_tables.sql',
                   'boundary/0002_live_boundary_tables.sql',
                   'boundary/0003_command_capture_live_shape.sql',
@@ -155,7 +156,8 @@ class PostgresSchemaMigrationIntegrationTest {
                     "runtime/0033_typed_canonical_time_facts.sql",
                     "runtime/0034_post_trade_profile_references.sql",
                     "runtime/0036_canonical_archive_tables.sql",
-                    "runtime/0037_runtime_event_trade_archive_tables.sql"
+                    "runtime/0037_runtime_event_trade_archive_tables.sql",
+                    "runtime/0038_projection_dirty_lock_order.sql"
                 ),
                 appliedMigrations
             )

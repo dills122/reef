@@ -510,6 +510,80 @@ class PlatformApiTest {
         assertContains(badInterval, "\"error\":\"unsupported interval\"")
     }
 
+    // Regression tests for PlatformHttpServer previously deriving HTTP
+    // status codes by string-matching an "error" substring in the response
+    // body (fragile: would silently misclassify a legitimate success
+    // response that happened to contain the same text). The *WithStatus
+    // variants expose the found/ok signal the API already computes
+    // internally, so the boundary layer no longer has to guess from body
+    // content. body must stay byte-identical to the non-status variant so
+    // the wire contract for existing API consumers is unchanged.
+    @Test
+    fun orderWithStatusReportsNotFoundAndMatchesOrderBody() {
+        val persistence = InMemoryRuntimePersistence()
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = persistence))
+
+        val missing = api.orderWithStatus("does-not-exist")
+        assertEquals(false, missing.found)
+        assertEquals(api.order("does-not-exist"), missing.body)
+        assertContains(missing.body, "\"error\":\"order not found\"")
+
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = "ord-status-1",
+                engineOrderId = "eng-ord-status-1",
+                instrumentId = "AAPL",
+                participantId = "participant-1",
+                accountId = "account-1",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "100",
+                limitPrice = "150000000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-07-12T00:00:00Z"
+            )
+        )
+        val found = api.orderWithStatus("ord-status-1")
+        assertEquals(true, found.found)
+        assertEquals(api.order("ord-status-1"), found.body)
+    }
+
+    @Test
+    fun marketDataSnapshotWithStatusReportsNotFound() {
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence()))
+
+        val missing = api.marketDataSnapshotWithStatus("AAPL")
+        assertEquals(false, missing.found)
+        assertEquals(api.marketDataSnapshot("AAPL"), missing.body)
+        assertContains(missing.body, "\"error\":\"market data snapshot not found\"")
+    }
+
+    @Test
+    fun marketDataDepthSnapshotWithStatusReportsNotFound() {
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence()))
+
+        val missing = api.marketDataDepthSnapshotWithStatus("AAPL")
+        assertEquals(false, missing.found)
+        assertEquals(api.marketDataDepthSnapshot("AAPL"), missing.body)
+        assertContains(missing.body, "\"error\":\"market data depth not found\"")
+    }
+
+    @Test
+    fun intradayBarsWithStatusReportsUnsupportedIntervalAsNotOk() {
+        val api = PlatformApi(OrderApplicationService(runtimePersistence = InMemoryRuntimePersistence()))
+
+        val badInterval = api.intradayBarsWithStatus("AAPL", interval = "3m", start = "2026-03-14T18:00:00Z", end = "2026-03-14T18:02:00Z")
+        assertEquals(false, badInterval.found)
+        assertEquals(
+            api.intradayBars("AAPL", interval = "3m", start = "2026-03-14T18:00:00Z", end = "2026-03-14T18:02:00Z"),
+            badInterval.body
+        )
+
+        val okInterval = api.intradayBarsWithStatus("AAPL", interval = "1m", start = "2026-03-14T18:00:00Z", end = "2026-03-14T18:02:00Z")
+        assertEquals(true, okInterval.found)
+    }
+
     @Test
     fun ownOrdersApiScopesToParticipantAndOpenStatusOnly() {
         val persistence = InMemoryRuntimePersistence()

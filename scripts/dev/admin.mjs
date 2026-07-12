@@ -172,7 +172,7 @@ switch (command) {
     }
     break;
   case "account-risk-list":
-    await get("/internal/boundary/account-risk/controls");
+    await get("/admin/v1/risk/account-controls");
     break;
   case "breaker-set":
     if (args.length < 3) {
@@ -189,7 +189,7 @@ switch (command) {
     });
     break;
   case "breaker-list":
-    await get("/internal/boundary/circuit-breakers");
+    await get("/admin/v1/risk/circuit-breakers");
     break;
   case "price-collar-set":
     if (args.length < 3) {
@@ -210,7 +210,7 @@ switch (command) {
     }
     break;
   case "price-collar-list":
-    await get("/internal/boundary/price-collars");
+    await get("/admin/v1/risk/price-collars");
     break;
   case "events": {
     const limit = args[0] ?? "20";

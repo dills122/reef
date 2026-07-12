@@ -54,6 +54,23 @@ Immediate implications:
 3. Track WAL/table bytes per command, `pg_stat_activity` waits, `pg_stat_io`, Kafka producer queue/request latency, materializer batch behavior, and restart counts during every promotion run.
 4. Use `make do-materializer-10k-gate` so SLO, repeat-sample, and partition-spread gates stay consistent.
 
+## DigitalOcean Materializer 10k Soak-5m Gate (July 12, 2026)
+
+The c-16 DigitalOcean `soak-5m` tier passed after adding application-level retry for retriable Kafka-compatible publish callback failures inside the existing publish-ack timeout. The retry does not change the durable acceptance contract: `202 Accepted` is still emitted only after the configured durable producer acknowledges the command.
+
+Evidence: `reports/do-benchmark/do-benchmark-20260712T143401Z/`.
+
+- sample 1: `3000001` attempted, `3000001` accepted, `3000001` direct-acked, `3000001` materialized, `9999.57` accepted/materialized rps, p95 `28.11ms`, p99 `58.38ms`, accepted/direct-acked/materialized gaps `0`.
+- sample 2: `2999950` attempted, `2999950` accepted, `2999950` direct-acked, `2999950` materialized, `9999.79` accepted/materialized rps, p95 `28.38ms`, p99 `56.05ms`, accepted/direct-acked/materialized gaps `0`.
+- averages: `100%` success, `9999.68` accepted/materialized rps, p95 `28.25ms`, p99 `57.21ms`, materializer lag `0`, stream-direct clean.
+
+Immediate implications:
+
+1. The direct-stream plus venue-event-materializer path is now the canonical `10k` venue-core baseline for accepted/direct-acked/materialized throughput.
+2. Do not use this run as projection or read API freshness evidence: `projected=0` was intentional for the materializer gate.
+3. The next performance risk is projection/read-model freshness and replay under the same durable venue-event load, not canonical materialization throughput.
+4. Keep `soak-15m` as aged-state confirmation before raising the venue-core target above `10k`, and track WAL/table bytes per command plus Kafka producer queue/request latency in every longer run.
+
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.
@@ -539,13 +556,22 @@ Baseline benchmarks (Apple M1 Max, `go test -benchmem`):
 
 - `BenchmarkSubmitOrderResting`: `1309 ns/op`, `592 B/op`, `14 allocs/op`
 - `BenchmarkSubmitOrderMatchAgainstResting`: `2703 ns/op`, `1524 B/op`, `32 allocs/op`
-- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op`
+- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op` — **stale, see the July 11, 2026 checkpoint below.** This number predates the July 4, 2026 Hot Book Sharding Checkpoint's price-level btree/FIFO book; it reflects the earlier slice-based book's O(n) reinsertion cost, not current behavior.
 
 Deferred high-impact candidates:
 
 1. Split `services/simulator/cmd/load-tester/main.go` (currently large/monolithic) into focused packages (`actions`, `state`, `reporting`, `io`) for maintainability and safer perf changes.
-2. Consider a purpose-built book structure (price levels / indexed queues) if we need to push beyond current TPS envelopes with lower GC/lock pressure.
-3. Add lightweight micro-benchmarks for matching-engine `SubmitOrder`, `ModifyOrder`, and insertion/match loops to quantify future gains and prevent regressions.
+2. ~~Consider a purpose-built book structure (price levels / indexed queues)...~~ Done: superseded by the July 4, 2026 Hot Book Sharding Checkpoint's price-level btree/FIFO book.
+3. ~~Add lightweight micro-benchmarks for matching-engine `SubmitOrder`, `ModifyOrder`, and insertion/match loops...~~ Done: see `services/matching-engine/internal/app/service_benchmark_test.go`.
+
+## HFT Audit Fixes (July 11, 2026)
+
+Targeted audit of `services/matching-engine` for correctness/scaling issues, with tests and before/after measurement for each fix.
+
+1. **`VenueEventBatch.FirstSequence` sentinel bug (fixed).** `streamdirect.buildBatch` used `firstSeq == 0` to mean "not yet set," but Kafka/Redpanda partition offsets legitimately start at `0`. A batch containing offset `0` followed by any higher offset silently overwrote the correct `FirstSequence=0` with the next delivery's sequence, corrupting the replay/gap-detection range for the first batch of every fresh partition. Fixed with an explicit `haveFirstSeq` flag in `services/matching-engine/internal/streamdirect/processor.go`. Regression tests: `TestProcessorBatchFirstSequenceHandlesOffsetZero`, `TestProcessorBatchFirstSequenceHandlesOutOfOrderZero`.
+2. **Self-trade-prevention double book-scan (investigated, not changed).** `applySelfTradePrevention`'s reachability pre-scan and `match()`'s own crossing walk both traverse the same crossing price levels for any order carrying `ParticipantID`/`AccountID`. For reject mode (the default `CancelNewest`), this is required, not a bug: `TestSubmitOrderRejectsSelfTradeReachableAfterOtherLiquidity` locks in that a reachable self-trade must reject the whole order with zero partial execution, which needs a lookahead before any fill commits. Only `CancelOldest` mode's half of the pre-scan is theoretically mergeable into `match()`'s single pass, and that benefit is narrow (non-default mode) relative to the correctness risk of entangling self-trade identity into the core match loop. Deferred.
+3. **Engine-wide `ordersMu` contention (fixed).** `Service.orders`/`ordersMu` was one global `sync.RWMutex` guarding order records for every instrument, undercutting the per-book sharding story from the Hot Book Sharding Checkpoint. A mutex profile of a new `BenchmarkSubmitOrderManyInstrumentsParallel` (64 instruments, 8 cores, book-level contention engineered away) showed `reserveOrder`'s write lock at ~65% of all measured mutex wait time. Replaced with a 64-way striped `orderIndex` (`services/matching-engine/internal/app/order_index.go`), keyed by an inline FNV-1a hash of order ID. Measured effect at 8 cores: `1457 ns/op → 544 ns/op` (2.7x), `reserveOrder`'s mutex-wait share `65% → 7.3%`. Regression/unit tests: `order_index_test.go` (including a `-race` concurrent stress test and a shard-spread guard against a hash regression that collapses back to one shard). `terminalOrderRetention.mu` was deliberately left untouched — the profile didn't implicate it, and it short-circuits entirely when the default retention limit (`0`, unbounded) is in effect.
+4. **`BenchmarkModifyOrder` 83x cliff (ghost finding, doc corrected).** The `109443 ns/op` number above predates the book redesign; current `ModifyOrder` measures `807-939 ns/op` across `200k`–`4.2M` iterations, in the same range as `SubmitOrderResting`. No code change; the stale baseline above is annotated rather than deleted, to keep the historical record intact.
 
 ## Cross-References
 

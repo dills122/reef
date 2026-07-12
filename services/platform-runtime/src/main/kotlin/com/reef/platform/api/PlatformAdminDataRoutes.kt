@@ -5,7 +5,19 @@ import java.nio.charset.StandardCharsets
 
 import com.reef.platform.infrastructure.diagnostics.HotPathMetrics
 
-internal class PlatformDiagnosticRoutes(
+/**
+ * Routes for the "admin/data" surface (see docs/steering/architecture.md):
+ * operator-approved administration plus intraday/historical data access. Spans
+ * health/readiness, risk guardrail admin, arena bot/run/analytics admin (via
+ * ArenaAdminGateway), settlement fact ingestion (via SettlementAdminGateway),
+ * and runtime diagnostics/stats — not a single bounded context, but one route
+ * table because they're all internal-only admin/data routes dispatched the
+ * same way. Was named PlatformDiagnosticRoutes despite carrying arena/
+ * analytics/settlement routes; renamed to match actual scope.
+ */
+internal class PlatformAdminDataRoutes(
+    private val arenaAdminGateway: ArenaAdminGateway,
+    private val settlementAdminGateway: SettlementAdminGateway,
     private val healthJson: () -> String,
     private val readinessJson: () -> String,
     private val abuseStatsJson: () -> String,
@@ -16,29 +28,6 @@ internal class PlatformDiagnosticRoutes(
     private val setAccountRiskControlJson: (String) -> PlatformHotPathResponse,
     private val setCommandCircuitBreakerJson: (String) -> PlatformHotPathResponse,
     private val setInstrumentPriceCollarJson: (String) -> PlatformHotPathResponse,
-    private val registerArenaBotJson: (String) -> PlatformHotPathResponse,
-    private val arenaBotJson: (String?) -> PlatformHotPathResponse,
-    private val registerArenaBotVersionJson: (String) -> PlatformHotPathResponse,
-    private val arenaBotVersionJson: (String?) -> PlatformHotPathResponse,
-    private val transitionArenaBotVersionJson: (String) -> PlatformHotPathResponse,
-    private val arenaQualificationReportsJson: (String?) -> PlatformHotPathResponse,
-    private val arenaOperatorDecisionsJson: (String?) -> PlatformHotPathResponse,
-    private val arenaRuntimeConfigDescriptorsJson: (String?) -> PlatformHotPathResponse,
-    private val arenaRunJson: (String?) -> PlatformHotPathResponse,
-    private val registerArenaRunJson: (String) -> PlatformHotPathResponse,
-    private val updateArenaRunStatusJson: (String) -> PlatformHotPathResponse,
-    private val arenaRunBotResultsJson: (String?) -> PlatformHotPathResponse,
-    private val recordArenaRunBotResultJson: (String) -> PlatformHotPathResponse,
-    private val arenaRunEnforcementEventsJson: (String?) -> PlatformHotPathResponse,
-    private val recordArenaRunEnforcementEventJson: (String) -> PlatformHotPathResponse,
-    private val arenaLeaderboardJson: (String?) -> PlatformHotPathResponse,
-    private val arenaBotOpenBaoProvisionJson: (String) -> PlatformHotPathResponse,
-    private val assignArenaBotOwnershipJson: (String) -> PlatformHotPathResponse,
-    private val arenaBotOpenBaoConfigJson: (String, String?, String) -> PlatformHotPathResponse,
-    private val analyticsRunExportsJson: (String?) -> PlatformHotPathResponse,
-    private val recordAnalyticsRunExportJson: (String) -> PlatformHotPathResponse,
-    private val analyticsRunBotSummariesJson: (String?) -> PlatformHotPathResponse,
-    private val appendSettlementFactsJson: (String) -> PlatformHotPathResponse,
     private val dbPoolStatsJson: () -> String,
     private val asyncCommandStatsJson: () -> String,
     private val commandAccountingJson: (String) -> String,
@@ -104,47 +93,67 @@ internal class PlatformDiagnosticRoutes(
             "/internal/admin/account-risk/controls" -> postOnly(method) { setAccountRiskControlJson(body) }
             "/internal/admin/circuit-breakers" -> postOnly(method) { setCommandCircuitBreakerJson(body) }
             "/internal/admin/price-collars" -> postOnly(method) { setInstrumentPriceCollarJson(body) }
-            "/internal/admin/arena/bots" -> getOrPost(method, { arenaBotJson(query) }, { registerArenaBotJson(body) })
+            "/internal/admin/arena/bots" -> getOrPost(
+                method,
+                { arenaAdminGateway.arenaBotResponse(query) },
+                { arenaAdminGateway.registerArenaBotResponse(body) }
+            )
             "/internal/admin/arena/bot-versions" -> getOrPost(
                 method,
-                { arenaBotVersionJson(query) },
-                { registerArenaBotVersionJson(body) }
+                { arenaAdminGateway.arenaBotVersionResponse(query) },
+                { arenaAdminGateway.registerArenaBotVersionResponse(body) }
             )
             "/internal/admin/arena/bot-versions/transition" -> postOnly(method) {
-                transitionArenaBotVersionJson(body)
+                arenaAdminGateway.transitionArenaBotVersionResponse(body)
             }
             "/internal/admin/arena/qualification-reports" -> getResponseOnly(method) {
-                arenaQualificationReportsJson(query)
+                arenaAdminGateway.arenaQualificationReportsResponse(query)
             }
-            "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) { arenaOperatorDecisionsJson(query) }
+            "/internal/admin/arena/operator-decisions" -> getResponseOnly(method) {
+                arenaAdminGateway.arenaOperatorDecisionsResponse(query)
+            }
             "/internal/admin/arena/runtime-config-descriptors" -> getResponseOnly(method) {
-                arenaRuntimeConfigDescriptorsJson(query)
+                arenaAdminGateway.arenaRuntimeConfigDescriptorsResponse(query)
             }
-            "/internal/admin/arena/runs" -> getOrPost(method, { arenaRunJson(query) }, { registerArenaRunJson(body) })
-            "/internal/admin/arena/runs/status" -> postOnly(method) { updateArenaRunStatusJson(body) }
+            "/internal/admin/arena/runs" -> getOrPost(
+                method,
+                { arenaAdminGateway.arenaRunResponse(query) },
+                { arenaAdminGateway.registerArenaRunResponse(body) }
+            )
+            "/internal/admin/arena/runs/status" -> postOnly(method) {
+                arenaAdminGateway.updateArenaRunStatusResponse(body)
+            }
             "/internal/admin/arena/run-bot-results" -> getOrPost(
                 method,
-                { arenaRunBotResultsJson(query) },
-                { recordArenaRunBotResultJson(body) }
+                { arenaAdminGateway.arenaRunBotResultsResponse(query) },
+                { arenaAdminGateway.recordArenaRunBotResultResponse(body) }
             )
             "/internal/admin/arena/run-enforcement-events" -> getOrPost(
                 method,
-                { arenaRunEnforcementEventsJson(query) },
-                { recordArenaRunEnforcementEventJson(body) }
+                { arenaAdminGateway.arenaRunEnforcementEventsResponse(query) },
+                { arenaAdminGateway.recordArenaRunEnforcementEventResponse(body) }
             )
-            "/internal/admin/arena/leaderboard" -> getResponseOnly(method) { arenaLeaderboardJson(query) }
-            "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) { arenaBotOpenBaoProvisionJson(body) }
-            "/internal/admin/arena/bots/ownership" -> postOnly(method) { assignArenaBotOwnershipJson(body) }
-            "/internal/admin/arena/bots/config" -> arenaBotOpenBaoConfigJson(method, query, body)
+            "/internal/admin/arena/leaderboard" -> getResponseOnly(method) {
+                arenaAdminGateway.arenaLeaderboardResponse(query)
+            }
+            "/internal/admin/arena/bots/openbao-provision" -> postOnly(method) {
+                arenaAdminGateway.arenaBotOpenBaoProvisionResponse(body)
+            }
+            "/internal/admin/arena/bots/ownership" -> postOnly(method) {
+                arenaAdminGateway.assignArenaBotOwnershipResponse(body)
+            }
+            "/internal/admin/arena/bots/config" -> arenaAdminGateway.arenaBotOpenBaoConfigResponse(method, query, body)
             "/internal/admin/analytics/run-exports" -> getOrPost(
                 method,
-                { analyticsRunExportsJson(query) },
-                { recordAnalyticsRunExportJson(body) }
+                { arenaAdminGateway.analyticsRunExportsResponse(query) },
+                { arenaAdminGateway.recordAnalyticsRunExportResponse(body) }
             )
             "/internal/admin/analytics/run-bot-summaries" -> getResponseOnly(method) {
-                analyticsRunBotSummariesJson(query)
+                arenaAdminGateway.analyticsRunBotSummariesResponse(query)
             }
-            "/internal/admin/settlement/facts" -> postOnly(method) { appendSettlementFactsJson(body) }
+            "/internal/admin/settlement/facts" -> postOnly(method) {
+                settlementAdminGateway.appendSettlementFactsResponse(body)
+            }
             "/internal/perf/hot-path" -> hotPathMetrics(method)
             "/internal/perf/db-pools" -> getOnly(method) { dbPoolStatsJson() }
             "/internal/commands/async/stats" -> getOnly(method) { asyncCommandStatsJson() }

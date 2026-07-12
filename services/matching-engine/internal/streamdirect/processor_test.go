@@ -250,6 +250,129 @@ func TestLocalAckFailureHookFailsOnceAfterEventPublish(t *testing.T) {
 	}
 }
 
+// TestProcessorBatchFirstSequenceHandlesOffsetZero covers a fresh
+// Kafka/Redpanda partition, whose first delivery legitimately carries
+// StreamSequence 0. buildBatch previously used 0 as an "unset" sentinel for
+// firstSeq, so a second delivery with a nonzero sequence in the same batch
+// clobbered the correct firstSeq=0 with its own (higher) sequence, corrupting
+// VenueEventBatch.FirstSequence and the replay/audit sequence-range contract.
+func TestProcessorBatchFirstSequenceHandlesOffsetZero(t *testing.T) {
+	first := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 0, map[string]string{
+		"commandId":     "cmd-offset-zero",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-offset-zero",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	second := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 1, map[string]string{
+		"commandId":     "cmd-offset-one",
+		"occurredAt":    "2026-07-04T00:00:01Z",
+		"orderId":       "ord-offset-one",
+		"instrumentId":  "STK001",
+		"participantId": "participant-2",
+		"accountId":     "account-2",
+		"actorId":       "actor-2",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	source := &fakeSource{deliveries: []CommandDelivery{first, second}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	processed, err := processor.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	if processed != 2 {
+		t.Fatalf("expected two processed deliveries, got %d", processed)
+	}
+	if len(publisher.batches) != 1 {
+		t.Fatalf("expected one published batch, got %d", len(publisher.batches))
+	}
+	batch := publisher.batches[0]
+	if batch.FirstSequence != 0 {
+		t.Fatalf("expected FirstSequence to stay 0 for a fresh-partition batch, got %d", batch.FirstSequence)
+	}
+	if batch.LastSequence != 1 {
+		t.Fatalf("expected LastSequence 1, got %d", batch.LastSequence)
+	}
+	if batch.BatchID != "engine-test-p0-0-1" {
+		t.Fatalf("unexpected batch id %q", batch.BatchID)
+	}
+}
+
+// TestProcessorBatchFirstSequenceHandlesOutOfOrderZero covers the same
+// sentinel bug when the offset-0 delivery is not first in fetch order: any
+// nonzero-then-zero delivery pair in one batch must still resolve
+// FirstSequence to the true minimum (0), not whichever delivery happened to
+// be processed first.
+func TestProcessorBatchFirstSequenceHandlesOutOfOrderZero(t *testing.T) {
+	nonzero := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 5, map[string]string{
+		"commandId":     "cmd-seq-five",
+		"occurredAt":    "2026-07-04T00:00:00Z",
+		"orderId":       "ord-seq-five",
+		"instrumentId":  "STK001",
+		"participantId": "participant-1",
+		"accountId":     "account-1",
+		"actorId":       "actor-1",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	zero := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 0, map[string]string{
+		"commandId":     "cmd-seq-zero",
+		"occurredAt":    "2026-07-04T00:00:01Z",
+		"orderId":       "ord-seq-zero",
+		"instrumentId":  "STK001",
+		"participantId": "participant-2",
+		"accountId":     "account-2",
+		"actorId":       "actor-2",
+		"side":          "BUY",
+		"orderType":     "LIMIT",
+		"quantityUnits": "100",
+		"limitPrice":    "100000000000",
+		"currency":      "USD",
+		"timeInForce":   "DAY",
+	})
+	source := &fakeSource{deliveries: []CommandDelivery{nonzero, zero}}
+	publisher := &fakePublisher{}
+	processor := NewProcessor(app.NewService(), source, publisher, ProcessorConfig{
+		ShardID:   "engine-test",
+		Partition: 0,
+		BatchSize: 10,
+	})
+
+	if _, err := processor.ProcessOnce(context.Background()); err != nil {
+		t.Fatalf("ProcessOnce returned error: %v", err)
+	}
+	batch := publisher.batches[0]
+	if batch.FirstSequence != 0 {
+		t.Fatalf("expected FirstSequence to be the true minimum (0), got %d", batch.FirstSequence)
+	}
+	if batch.LastSequence != 5 {
+		t.Fatalf("expected LastSequence 5, got %d", batch.LastSequence)
+	}
+}
+
 func TestProcessorProcessesModifyAndCancelCommands(t *testing.T) {
 	submit := newFakeDelivery("reef.cmd.v1.p00.session.STK001.SubmitOrder", 20, map[string]string{
 		"commandId":     "cmd-submit",

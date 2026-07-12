@@ -74,6 +74,101 @@ const materializerResult = spawnSync(process.execPath, ["scripts/dev/do-benchmar
 assert.equal(materializerResult.status, 0, materializerResult.stderr);
 assert.match(materializerResult.stdout, /rate=10000 attempted=1000 accepted=1000 directAcked=1000 materialized=1000/);
 
+const projectionArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-"));
+writeMaterializerProjectionReport(projectionArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionArtifactDir);
+const projectionResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_MIN_PROJECTED_RPS: "2400",
+    REEF_DO_MAX_PROJECTION_LAG: "0",
+    REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionResult.status, 0, projectionResult.stderr);
+assert.match(projectionResult.stdout, /projected=2500 lag=0/);
+
+const projectionDiagnosticsArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-diagnostics-"));
+writeMaterializerProjectionReport(projectionDiagnosticsArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionDiagnosticsArtifactDir);
+writeMaterializerDbDiagnostics(projectionDiagnosticsArtifactDir, { includeProjectionPostgres: true });
+const projectionDiagnosticsResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionDiagnosticsArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_REQUIRE_DB_DIAGNOSTICS: "1",
+    REEF_DO_REQUIRE_PG_STAT_IO: "1",
+    REEF_DO_MAX_PROJECTION_DB_DEADLOCKS: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionDiagnosticsResult.status, 0, projectionDiagnosticsResult.stderr);
+
+const projectionDeadlockArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-deadlock-"));
+writeMaterializerProjectionReport(projectionDeadlockArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionDeadlockArtifactDir);
+writeMaterializerDbDiagnostics(projectionDeadlockArtifactDir, {
+  includeProjectionPostgres: true,
+  projectionDeadlocks: 1,
+  projectionLogs: "ERROR: deadlock detected\n",
+});
+const projectionDeadlockResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionDeadlockArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_REQUIRE_DB_DIAGNOSTICS: "1",
+    REEF_DO_MAX_PROJECTION_DB_DEADLOCKS: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionDeadlockResult.status, 1);
+assert.match(projectionDeadlockResult.stderr, /projection-postgres deadlocks 1\.00 > required 0\.00/);
+assert.match(projectionDeadlockResult.stderr, /projection-postgres logs contain deadlock detected/);
+
+const projectionGapArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-gap-"));
+writeMaterializerProjectionReport(projectionGapArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2490,
+  projectedRps: 2395,
+  lag: 2,
+});
+writeTelemetry(projectionGapArtifactDir);
+const projectionGapResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionGapArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_MIN_PROJECTED_RPS: "2400",
+    REEF_DO_MAX_PROJECTION_LAG: "0",
+    REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionGapResult.status, 1);
+assert.match(projectionGapResult.stderr, /actual projected rps 2395\.00 < required 2400\.00/);
+assert.match(projectionGapResult.stderr, /actual projection lag 2\.00 > required 0\.00/);
+assert.match(projectionGapResult.stderr, /materialized\/projected gap 10\.00 > required 0\.00/);
+
 const arenaArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-"));
 writeArenaReport(arenaArtifactDir, { healthStatus: "warn" });
 const arenaResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaArtifactDir], {
@@ -363,24 +458,93 @@ function writeMaterializerReport(dir, name, rate, total, options = {}) {
   );
 }
 
-function writeMaterializerDbDiagnostics(dir) {
+function writeMaterializerProjectionReport(dir, name, rate, total, options) {
+  writeFileSync(
+    join(dir, name),
+    JSON.stringify(
+      {
+        config: { ratePerSecond: rate, workers: 256 },
+        totalRequests: total,
+        totalSuccess: total,
+        totalFailures: 0,
+        statusCodes: { 202: total },
+        throughputRps: rate,
+        acceptedBusinessOpsRps: rate,
+        latencyMs: { p95: 38.4, p99: 70.2 },
+        traceChecks: { checked: 0, pass: 0, fail: 0 },
+        unitMetrics: {
+          attemptedCommands: total,
+          acceptedCommands: total,
+          directAckedCommands: total,
+          durableCanonicalCompletedItems: total,
+          projectedWorkItems: options.projected,
+          projectionLagAfter: options.lag,
+          attemptedCommandsPerSecond: rate,
+          acceptedCommandsPerSecond: rate,
+          directAckedCommandsPerSecond: rate,
+          durableCanonicalCompletedPerSecond: rate,
+          projectedWorkItemsPerSecond: options.projectedRps,
+        },
+        streamDirect: {
+          delta: {
+            ackedDelta: total,
+            failedDelta: 0,
+            nackedDelta: 0,
+            termedDelta: 0,
+            unsupportedDelta: 0,
+            partitionDeltas: [
+              { partition: 0, ackedDelta: total / 4 },
+              { partition: 1, ackedDelta: total / 4 },
+              { partition: 2, ackedDelta: total / 4 },
+              { partition: 3, ackedDelta: total / 4 },
+            ],
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+        venueEventMaterializer: {
+          delta: {
+            materializedDelta: total,
+            failedDelta: 0,
+            ackFailedDelta: 0,
+            unsupportedDelta: 0,
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+        streamAckProjector: {
+          delta: {
+            projectedDelta: options.projected,
+            failedDelta: 0,
+            afterLag: options.lag,
+          },
+          after: {
+            enabled: true,
+            metrics: { failed: 0, lastError: "" },
+            watermarks: [],
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function writeMaterializerDbDiagnostics(dir, options = {}) {
+  const services = {
+    postgres: dbDiagnosticsServiceSummary({ walBytes: 2048 }),
+  };
+  if (options.includeProjectionPostgres) {
+    services["projection-postgres"] = dbDiagnosticsServiceSummary({
+      walBytes: 1024,
+      deadlocks: options.projectionDeadlocks ?? 0,
+    });
+  }
   writeFileSync(
     join(dir, "venue-event-materializer-stress-diagnostics-summary.json"),
     JSON.stringify(
       {
-        services: {
-          postgres: {
-            ok: true,
-            unitMetrics: {
-              walBytes: 2048,
-              walBytesPerAcceptedCommand: 2.048,
-            },
-            wal: {
-              walBytes: 2048,
-            },
-            topTablesByBytes: [{ table: "runtime.canonical_command_outcomes", totalBytesDelta: 1024 }],
-          },
-        },
+        services,
       },
       null,
       2,
@@ -388,6 +552,36 @@ function writeMaterializerDbDiagnostics(dir) {
   );
   const diagnosticsDir = join(dir, "venue-event-materializer-stress-diagnostics");
   mkdirSync(diagnosticsDir);
+  writeDbDiagnosticsFiles(diagnosticsDir);
+  if (options.includeProjectionPostgres) {
+    const postgresDir = join(diagnosticsDir, "postgres");
+    const projectionDir = join(diagnosticsDir, "projection-postgres");
+    mkdirSync(postgresDir);
+    mkdirSync(projectionDir);
+    writeDbDiagnosticsFiles(postgresDir);
+    writeDbDiagnosticsFiles(projectionDir);
+    writeFileSync(join(projectionDir, "postgres-logs.txt"), options.projectionLogs ?? "");
+  }
+}
+
+function dbDiagnosticsServiceSummary({ walBytes, deadlocks = 0 }) {
+  return {
+    ok: true,
+    unitMetrics: {
+      walBytes,
+      walBytesPerAcceptedCommand: walBytes / 1000,
+    },
+    wal: {
+      walBytes,
+    },
+    database: {
+      deadlocks,
+    },
+    topTablesByBytes: [{ table: "runtime.canonical_command_outcomes", totalBytesDelta: 1024 }],
+  };
+}
+
+function writeDbDiagnosticsFiles(diagnosticsDir) {
   for (const file of [
     "pre-db-diagnostics.json",
     "post-db-diagnostics.json",

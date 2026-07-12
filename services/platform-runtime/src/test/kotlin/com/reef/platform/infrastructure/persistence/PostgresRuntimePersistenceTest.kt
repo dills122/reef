@@ -254,4 +254,110 @@ class PostgresRuntimePersistenceTest {
         assertNotNull(state)
         assertEquals(orderId, state.orderId)
     }
+
+    // Regression test: marketDataDepthSnapshot() used to call
+    // rebuildOrderLifecycleState() unconditionally on every call, which does
+    // a full DELETE+INSERT over the entire runtime.order_lifecycle_state
+    // table (every order in the venue, not just the requested instrument).
+    // That full rebuild sets updated_at = now() on every row it touches.
+    // order_lifecycle_state is already kept current by the incremental
+    // dirty-tracking projector (runtime_project_order_lifecycle_state,
+    // migration 0020_order_lifecycle_incremental.sql), so an unrelated
+    // order's row must be left completely untouched by a depth read for a
+    // different instrument.
+    @Test
+    fun marketDataDepthSnapshotDoesNotRebuildUnrelatedOrderLifecycleState() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "runtime-persistence-test")
+        val persistence = PostgresRuntimePersistence(dataSource)
+
+        val suffix = UUID.randomUUID().toString()
+        val unrelatedOrderId = "ord-unrelated-$suffix"
+
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = unrelatedOrderId,
+                engineOrderId = "eng-$unrelatedOrderId",
+                instrumentId = "OTHER-$suffix",
+                participantId = "participant-$suffix",
+                accountId = "account-$suffix",
+                side = "BUY",
+                orderType = "LIMIT",
+                quantityUnits = "10",
+                limitPrice = "1000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-07-11T00:00:00Z"
+            )
+        )
+        persistence.rebuildOrderLifecycleState()
+        val before = persistence.orderLifecycleState(unrelatedOrderId)
+        assertNotNull(before, "expected unrelated order to be materialized before the depth read")
+
+        Thread.sleep(20)
+
+        persistence.marketDataDepthSnapshot("INSTR-does-not-exist-$suffix")
+
+        val after = persistence.orderLifecycleState(unrelatedOrderId)
+        assertNotNull(after)
+        assertEquals(
+            before.updatedAt,
+            after.updatedAt,
+            "marketDataDepthSnapshot must not rebuild/touch unrelated order_lifecycle_state rows"
+        )
+    }
+
+    // Same regression as above for refreshMarketDataSnapshots(), which also
+    // used to call rebuildOrderLifecycleState() unconditionally as its first
+    // step.
+    @Test
+    fun refreshMarketDataSnapshotsDoesNotRebuildUnrelatedOrderLifecycleState() {
+        val jdbcUrl = System.getenv("RUNTIME_POSTGRES_JDBC_URL_TEST") ?: return
+        val dbUser = System.getenv("RUNTIME_POSTGRES_USER_TEST") ?: return
+        val dbPassword = System.getenv("RUNTIME_POSTGRES_PASSWORD_TEST") ?: return
+
+        val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "runtime-persistence-test")
+        val persistence = PostgresRuntimePersistence(dataSource)
+
+        val suffix = UUID.randomUUID().toString()
+        val unrelatedOrderId = "ord-unrelated-refresh-$suffix"
+
+        persistence.saveAcceptedOrder(
+            PersistedOrder(
+                orderId = unrelatedOrderId,
+                engineOrderId = "eng-$unrelatedOrderId",
+                instrumentId = "OTHER-$suffix",
+                participantId = "participant-$suffix",
+                accountId = "account-$suffix",
+                side = "SELL",
+                orderType = "LIMIT",
+                quantityUnits = "10",
+                limitPrice = "1000000",
+                currency = "USD",
+                timeInForce = "DAY",
+                acceptedAt = "2026-07-11T00:00:00Z"
+            )
+        )
+        persistence.rebuildOrderLifecycleState()
+        val before = persistence.orderLifecycleState(unrelatedOrderId)
+        assertNotNull(before, "expected unrelated order to be materialized before refresh")
+
+        Thread.sleep(20)
+
+        persistence.refreshMarketDataSnapshots(
+            projectionName = "market-data-top-of-book-test-$suffix",
+            sourceProjectionName = "runtime-normalized-venue-outcomes"
+        )
+
+        val after = persistence.orderLifecycleState(unrelatedOrderId)
+        assertNotNull(after)
+        assertEquals(
+            before.updatedAt,
+            after.updatedAt,
+            "refreshMarketDataSnapshots must not rebuild/touch unrelated order_lifecycle_state rows"
+        )
+    }
 }

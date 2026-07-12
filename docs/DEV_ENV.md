@@ -526,12 +526,20 @@ curl -s http://127.0.0.1:8080/internal/boundary/price-collars
 
 Boundary rejection evidence is append-only in `boundary.boundary_rejections` when `EXTERNAL_API_BOUNDARY_REJECTION_LOG=postgres`. The default `auto` mode enables this log when any Postgres-backed boundary guardrail is enabled and otherwise stays no-op, so allow-all local runs do not require a boundary database.
 
-Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls:
+Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls.
+Use the same `ADMIN_API_TOKEN` value for `make dev-up` and the smoke command so the runtime and script agree on the admin-gateway bearer token:
 
 ```bash
 EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres \
 EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres \
 EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres \
+ADMIN_API_TOKEN=local-admin \
+make dev-up
+
+EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres \
+EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres \
+EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres \
+ADMIN_API_TOKEN=local-admin \
 make dev-smoke-protective-controls
 ```
 
@@ -682,7 +690,8 @@ Accepted-async no-DB isolation knobs:
 - `EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY=100000` sets per-lane queued command capacity.
 - `EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE=32` bounds concurrent engine submissions per accepted-async lane. Terminal persistence and status completion still follow lane intake order; raising it can inflate engine wait time by flooding the gRPC stream.
 - `EXTERNAL_API_ACCEPTED_ASYNC_ALLOW_OVERSIZED_WINDOW=false` keeps startup validation from accepting in-flight windows above `128` unless the run is an explicit stress test.
-- `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`.
+- `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS=0` keeps enqueue backpressure non-blocking; full lanes return `429 COMMAND_INTAKE_BACKPRESSURE`. Setting it above `0` makes enqueue block the calling HTTP application thread (via `runBlocking`) waiting for lane capacity, up to the configured timeout.
+- `EXTERNAL_API_ACCEPTED_ASYNC_OFFER_WAIT_MAX_CONCURRENCY=8` bounds how many HTTP application threads can be parked inside that `OFFER_TIMEOUT_MS` wait at once. Only relevant when `OFFER_TIMEOUT_MS > 0`. Without this cap, a lane-capacity backpressure spike could park the entire shared Netty application thread pool waiting for lane space, starving unrelated routes on the same server; callers past the limit fail fast as ordinary `429` backpressure instead of queueing for a wait slot.
 - `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS=100000` caps retained completed/failed command status records for the in-memory accepted-async isolation path. Set it to `0` only when intentionally measuring unlimited status/idempotency retention.
 - `EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_TTL_MS=900000` evicts retained terminal command statuses and idempotency reservations after the configured age; set it to `0` to rely only on the max-records cap.
 - JFR wrapper knobs: `DEV_JFR_ARTIFACT_DIR`, `DEV_JFR_CONTAINER_PATH`, `DEV_JFR_RECORDING_NAME`, `DEV_JFR_SETTINGS`, and `DEV_JFR_MAX_SIZE` control recording location and size.

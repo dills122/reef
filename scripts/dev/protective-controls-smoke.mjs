@@ -8,12 +8,15 @@ const runId = env("DEV_PROTECTIVE_CONTROLS_SMOKE_RUN_ID", "protective-controls-s
 const venueSessionId = env("DEV_PROTECTIVE_CONTROLS_SMOKE_VENUE_SESSION_ID", "protective-controls-session");
 const suffix = `${Date.now()}`;
 const clientId = "protective-controls-smoke-client";
+const adminApiToken = env("ADMIN_API_TOKEN", "");
 
-async function request(method, path, payload = undefined, headers = {}) {
+async function request(method, path, payload = undefined, headers = {}, internalRoute = false) {
   const response = await fetch(`${runtimeUrl}${path}`, {
     method,
     headers: {
       "content-type": "application/json",
+      ...(adminApiToken.trim() !== "" && !internalRoute && path.startsWith("/admin/v1/") ? { Authorization: `Bearer ${adminApiToken}` } : {}),
+      ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
       ...headers,
     },
     body: payload === undefined ? undefined : JSON.stringify(payload),
@@ -36,6 +39,33 @@ async function expectOk(method, path, payload = undefined, headers = {}) {
     throw new Error(`${method} ${path} failed (${response.status}): ${response.text}`);
   }
   return response;
+}
+
+async function expectGatewayOk(method, path, internalPath, payload = undefined) {
+  let response = await request(method, path, payload, adminHeaders(payload), false);
+  if (canFallbackToInternal(path, response)) {
+    response = await request(method, internalPath, payload, adminHeaders(payload), true);
+  }
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`${method} ${path} failed (${response.status}): ${response.text}`);
+  }
+  return response;
+}
+
+function adminHeaders(payload = undefined) {
+  return {
+    "X-Reef-Actor-Id": payload?.actorId ?? "protective-controls-smoke",
+    "X-Correlation-Id": payload?.correlationId ?? `protective-controls-smoke-${suffix}`,
+  };
+}
+
+function canFallbackToInternal(path, response) {
+  const host = new URL(runtimeUrl).hostname;
+  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+  if (!loopback || adminApiToken.trim() !== "" || !path.startsWith("/admin/v1/risk/")) return false;
+  return response.status === 404 ||
+    response.status === 401 ||
+    (response.status === 503 && response.text.includes("ADMIN_API_TOKEN"));
 }
 
 function isAccepted(response) {
@@ -103,7 +133,7 @@ async function seedReferenceData() {
 }
 
 async function setAccountRisk(scopeType, scopeId, decision, reason, limits = {}) {
-  return expectOk("POST", "/internal/admin/account-risk/controls", {
+  return expectGatewayOk("POST", "/admin/v1/risk/account-controls", "/internal/admin/account-risk/controls", {
     scopeType,
     scopeId,
     decision,
@@ -117,7 +147,7 @@ async function setAccountRisk(scopeType, scopeId, decision, reason, limits = {})
 }
 
 async function setBreaker(scopeType, scopeId, action, reason) {
-  return expectOk("POST", "/internal/admin/circuit-breakers", {
+  return expectGatewayOk("POST", "/admin/v1/risk/circuit-breakers", "/internal/admin/circuit-breakers", {
     scopeType,
     scopeId,
     action,
@@ -128,7 +158,7 @@ async function setBreaker(scopeType, scopeId, action, reason) {
 }
 
 async function setPriceCollar(instrumentId, minPrice, maxPrice, reason, currency = "USD") {
-  return expectOk("POST", "/internal/admin/price-collars", {
+  return expectGatewayOk("POST", "/admin/v1/risk/price-collars", "/internal/admin/price-collars", {
     instrumentId,
     minPrice,
     maxPrice,
@@ -143,11 +173,11 @@ console.log("waiting for platform-api health...");
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
 
 console.log("checking protective control admin endpoints...");
-const controls = await request("GET", "/internal/boundary/account-risk/controls");
+const controls = await expectGatewayOk("GET", "/admin/v1/risk/account-controls", "/internal/boundary/account-risk/controls");
 if (controls.status !== 200) {
   throw new Error(`account-risk controls endpoint unavailable (${controls.status}): ${controls.text}`);
 }
-const collars = await request("GET", "/internal/boundary/price-collars");
+const collars = await expectGatewayOk("GET", "/admin/v1/risk/price-collars", "/internal/boundary/price-collars");
 if (collars.status !== 200) {
   throw new Error(`price collars endpoint unavailable (${collars.status}): ${collars.text}`);
 }

@@ -1,4 +1,5 @@
 import { PUBLIC_ARENA_API_BASE_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 
 export type LeaderboardEntry = {
 	rank: number;
@@ -121,13 +122,13 @@ type ErrorBody = {
 
 function localDevFakeAdminEnabled(): boolean {
 	if (!import.meta.env.DEV) return false;
-	const value = (import.meta.env.PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN ?? '').trim().toLowerCase();
+	const value = (env.PUBLIC_ARENA_LOCAL_DEV_FAKE_ADMIN ?? '').trim().toLowerCase();
 	return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
 
 function localDevFixturesEnabled(): boolean {
 	if (!import.meta.env.DEV) return false;
-	const value = (import.meta.env.PUBLIC_ARENA_LOCAL_DEV_FIXTURES ?? '').trim().toLowerCase();
+	const value = (env.PUBLIC_ARENA_LOCAL_DEV_FIXTURES ?? '').trim().toLowerCase();
 	return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
 
