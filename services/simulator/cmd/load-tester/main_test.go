@@ -47,6 +47,61 @@ func TestChooseSessionActorWeighted(t *testing.T) {
 	}
 }
 
+func TestOrderIdentitiesUseSessionActors(t *testing.T) {
+	cfg := Config{
+		HasSessionConfig: true,
+		ParticipantID:    "default-participant",
+		ParticipantName:  "Default Participant",
+		AccountID:        "default-account",
+		SessionActors: []sessionconfig.Actor{
+			{ActorID: "retail-02", ActorType: "retail", Weight: 1},
+			{ActorID: "mm-01", ActorType: "market_maker", Weight: 1},
+		},
+	}
+
+	identities := orderIdentities(cfg)
+	if len(identities) != 2 {
+		t.Fatalf("expected one identity per session actor, got %+v", identities)
+	}
+	if identities[0].ParticipantID != "mm-01-participant" || identities[0].AccountID != "mm-01-account" {
+		t.Fatalf("expected sorted mm-01 identity first, got %+v", identities[0])
+	}
+	if identities[1].ParticipantID != "retail-02-participant" || identities[1].AccountID != "retail-02-account" {
+		t.Fatalf("expected retail-02 identity second, got %+v", identities[1])
+	}
+
+	participantID, accountID := orderIdentityForActor(cfg, "mm-01")
+	if participantID != "mm-01-participant" || accountID != "mm-01-account" {
+		t.Fatalf("unexpected order identity: participant=%s account=%s", participantID, accountID)
+	}
+
+	participantID, accountID = orderIdentityForActor(cfg, "unknown-actor")
+	if participantID != "default-participant" || accountID != "default-account" {
+		t.Fatalf("expected unknown actor to use default identity, got participant=%s account=%s", participantID, accountID)
+	}
+}
+
+func TestOrderIdentitiesFallbackToConfiguredDefault(t *testing.T) {
+	cfg := Config{
+		ParticipantID:   "participant-1",
+		ParticipantName: "Participant 1",
+		AccountID:       "account-1",
+	}
+
+	identities := orderIdentities(cfg)
+	if len(identities) != 1 {
+		t.Fatalf("expected single default identity, got %+v", identities)
+	}
+	if identities[0].ParticipantID != "participant-1" || identities[0].AccountID != "account-1" {
+		t.Fatalf("unexpected default identity: %+v", identities[0])
+	}
+
+	participantID, accountID := orderIdentityForActor(cfg, "bot-1")
+	if participantID != "participant-1" || accountID != "account-1" {
+		t.Fatalf("unexpected fallback identity: participant=%s account=%s", participantID, accountID)
+	}
+}
+
 func TestChooseSideForConfigRespectsBias(t *testing.T) {
 	cfg := Config{HasSessionConfig: true, SideBiasBuyPct: 100}
 	rng := rand.New(rand.NewSource(7))
