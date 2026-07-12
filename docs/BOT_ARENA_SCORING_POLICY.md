@@ -88,6 +88,9 @@ Initial recommendation:
 - use final equity as headline
 - use max drawdown and conduct penalties as tie-breakers or secondary columns
 - add risk-adjusted season boards after several runs prove metric stability
+- during calibration, expose `scoreBreakdown.shadowScore` with component details
+  for PnL, fill efficiency, inventory pressure, and conduct penalties while
+  leaving the public score unchanged
 
 Sharpe-like ratios are useful for longer windows, but noisy for short single
 runs. Treat them as season metrics or research metrics until run counts are
@@ -191,6 +194,23 @@ Initial shadow multipliers:
 
 The multiplier applies only to variable components such as equity,
 participation, risk, and conduct. It must not multiply the baseline score.
+
+Current report-only formula:
+
+- `formulaVersion`: `shadow-score-v1`
+- `equity`: capped zero-fee marked PnL from participant-scoped fills
+- `risk`: penalties for terminal inventory size, inventory exposure ratio,
+  terminal inventory concentration, excessive turnover, freezes, failed ticks,
+  and operational pauses
+- `marketInteraction`: bounded credit for completed commands, fills, fill
+  quantity, fill ratio, and completion rate
+- `conduct`: penalties for timeout rate, invalid intent rate, cancel/replace
+  pressure, and freezes
+- `difficulty`: small multiplier applied only after summing non-baseline
+  variable components
+
+`shadow-score-v1` remains report-only until enough live and replay artifacts
+show that the component weights rank strategies in a useful, stable way.
 
 Why partition plus small multiplier:
 

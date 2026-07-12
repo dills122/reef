@@ -173,6 +173,7 @@ test("extracts counts, latency, and summary from arena local tick report", async
           disqualified: false,
           scoreBreakdown: {
             schemaVersion: "reef.arena.scoreBreakdown.v1",
+            formulaVersion: "shadow-score-v1",
             scoringPolicyVersion: "score-v0",
             scoreEligible: false,
             actorClass: "house_market_maker",
@@ -188,13 +189,31 @@ test("extracts counts, latency, and summary from arena local tick report", async
               marketInteraction: 0,
               difficulty: 0,
             },
+            componentDetails: {
+              risk: {
+                inventoryExposurePenalty: 10,
+              },
+              marketInteraction: {
+                completionScore: 5000,
+              },
+            },
             diagnostics: {
               finalEquity: 1000100,
               totalPnl: 100,
+              grossSubmittedQuantity: 4,
+              grossSubmittedNotional: 400,
+              grossExecutedNotional: 200,
+              filledQuantity: 2,
+              fillRatio: 0.5,
+              completionRate: 1,
+              pnlPerExecutedNotionalBps: 5000,
+              inventoryExposureRatio: 0.25,
+              inventoryConcentration: 1,
               fillCount: 2,
               submittedCommands: 4,
               cancelReplaceRatio: 0,
               timeoutRate: 0,
+              variableScoreBeforeDifficulty: 0,
               difficultyMultiplier: 1,
               npcDifficultyBuckets: ["benign-noise"],
             },
@@ -271,8 +290,11 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.botResults[0].actorProfile.profileId, "mm-tight-bluechip");
   assert.equal(payload.summary.botResults[0].conductMetrics.maxVenueCommandsPerTick, 2);
   assert.equal(payload.summary.botResults[0].scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.formulaVersion, "shadow-score-v1");
   assert.equal(payload.summary.botResults[0].scoreBreakdown.scoreEffect, "diagnostic-only");
   assert.equal(payload.summary.botResults[0].scoreBreakdown.publicScore, null);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.componentDetails.marketInteraction.completionScore, 5000);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.fillRatio, 0.5);
   assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.difficultyMultiplier, 1);
   assert.equal(payload.summary.settlementScore.participants[0].participantId, "builtin-mm-simple");
 });

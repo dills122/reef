@@ -53,6 +53,7 @@ assert.equal(report.botResults[0].conductMetrics.status, "reported");
 assert.equal(report.scoringAssumptions.npcDifficultyMode, "leaderboard-partition-plus-shadow-multiplier");
 const marketMaker = report.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(marketMaker.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+assert.equal(marketMaker.scoreBreakdown.formulaVersion, "shadow-score-v1");
 assert.equal(marketMaker.scoreBreakdown.scoreEligible, false);
 assert.equal(marketMaker.scoreBreakdown.scoreEffect, "diagnostic-only");
 assert.equal(marketMaker.scoreBreakdown.publicScore, null);
@@ -66,6 +67,9 @@ assert.equal(competitor.scoreBreakdown.scoreEligible, true);
 assert.equal(competitor.scoreBreakdown.publicScore, competitor.score);
 assert.equal(Number.isFinite(competitor.scoreBreakdown.shadowScore), true);
 assert.equal(competitor.scoreBreakdown.components.baseline, 1_000_000);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.diagnostics.fillRatio), true);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.diagnostics.completionRate), true);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.componentDetails.marketInteraction.completionScore), true);
 assert.deepEqual(competitor.scoreBreakdown.diagnostics.npcDifficultyBuckets, ["benign-noise"]);
 
 const compactResult = spawnSync(
@@ -93,7 +97,10 @@ assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvel
 assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
 assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
 assert.equal(compactReport.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
-assert.equal(compactReport.botResults.find((entry) => entry.botId === "custom-technical-indicator").scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+const compactCompetitor = compactReport.botResults.find((entry) => entry.botId === "custom-technical-indicator");
+assert.equal(compactCompetitor.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+assert.equal(compactCompetitor.scoreBreakdown.formulaVersion, "shadow-score-v1");
+assert.equal(Number.isFinite(compactCompetitor.scoreBreakdown.diagnostics.completionRate), true);
 assert.equal(compactReport.sessionReports, undefined);
 assert.equal(compactReport.healthSamples, undefined);
 assert.equal(compactReport.omitted.sessionReports, 5);

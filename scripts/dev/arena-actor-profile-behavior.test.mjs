@@ -47,8 +47,11 @@ const competitors = report.botResults.filter((entry) => entry.actorClass === "co
 assert.equal(competitors.length, 11);
 for (const competitor of competitors) {
   assert.equal(competitor.scoreBreakdown.scoreEligible, true);
+  assert.equal(competitor.scoreBreakdown.formulaVersion, "shadow-score-v1");
   assert.equal(competitor.scoreBreakdown.publicScore, competitor.score);
   assert.equal(competitor.scoreBreakdown.diagnostics.difficultyMultiplier, 1.1);
+  assert.equal(Number.isFinite(competitor.scoreBreakdown.diagnostics.fillRatio), true);
+  assert.equal(Number.isFinite(competitor.scoreBreakdown.diagnostics.inventoryExposureRatio), true);
   assert.deepEqual(competitor.scoreBreakdown.diagnostics.npcDifficultyBuckets, ["benign-noise", "toxic-momentum"]);
 }
 

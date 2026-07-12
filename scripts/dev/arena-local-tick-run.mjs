@@ -14,6 +14,10 @@ import {
   marketPriceValue,
   priceFromExecutionPrice,
 } from "./lib/arena-execution-diagnostics.mjs";
+import {
+  attachScoreBreakdowns,
+  buildScoreContext,
+} from "./lib/arena-score-breakdown.mjs";
 
 loadDotEnv();
 
@@ -143,7 +147,7 @@ async function main() {
     const venueReadback = await collectVenueReadback(baseBotResults);
     const botResults = attachScoreBreakdowns(enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
       fallbackInstruments: mode.instruments ?? [],
-    }));
+    }), scoreContext());
     const completedAtIso = new Date().toISOString();
     const report = buildReport({
       botResults,
@@ -626,166 +630,16 @@ function scoringAssumptions() {
     tradingMetrics: {
       status: "command-mix plus execution diagnostics v0",
       source: "runner pre-submit venue commands, command status summaries, and participant-scoped order-fill readback",
-      fillsAndExecutions: "diagnostic inputs only; public score weighting is a follow-up scoring-policy slice",
+      fillsAndExecutions: "scoreBreakdown.shadowScore uses fill ratio, completion rate, and execution notional as report-only tuning inputs",
     },
   };
-}
-
-function attachScoreBreakdowns(botResults) {
-  const context = scoreContext();
-  return botResults.map((result) => ({
-    ...result,
-    scoreBreakdown: scoreBreakdown(result, context),
-  }));
 }
 
 function scoreContext() {
-  const buckets = npcDifficultyBuckets(selectedBots);
-  const multiplier = buckets.reduce((current, bucket) => Math.max(current, difficultyMultiplier(bucket)), 1);
-  return {
-    baseline: 1_000_000,
+  return buildScoreContext({
     scoringPolicyVersion: mode.scoringPolicyVersion,
-    npcDifficultyBuckets: buckets,
-    difficultyMultiplier: Number(multiplier.toFixed(4)),
-  };
-}
-
-function scoreBreakdown(result, context) {
-  const scoreEffect = result.actorProfile?.scoreEffect ?? "eligible-for-score";
-  const scoreEligible = result.scoreEligible === true && scoreEffect === "eligible-for-score";
-  if (!scoreEligible) {
-    return nonScoringBreakdown(result, context, scoreEffect);
-  }
-
-  const componentsBeforeDifficulty = {
-    baseline: context.baseline,
-    equity: equityComponent(result),
-    risk: riskComponent(result),
-    conduct: conductComponent(result),
-    marketInteraction: marketInteractionComponent(result),
-    difficulty: 0,
-  };
-  const variableBeforeDifficulty =
-    componentsBeforeDifficulty.equity +
-    componentsBeforeDifficulty.risk +
-    componentsBeforeDifficulty.conduct +
-    componentsBeforeDifficulty.marketInteraction;
-  componentsBeforeDifficulty.difficulty = Math.round(variableBeforeDifficulty * (context.difficultyMultiplier - 1));
-  const shadowScore = Math.max(0, Math.round(context.baseline + variableBeforeDifficulty + componentsBeforeDifficulty.difficulty));
-  return {
-    schemaVersion: "reef.arena.scoreBreakdown.v1",
-    scoringPolicyVersion: context.scoringPolicyVersion,
-    scoreEligible: true,
-    actorClass: result.actorClass,
-    scoreEffect,
-    publicScore: result.score,
-    shadowScore,
-    scoringMode: "shadow-report-only",
-    components: componentsBeforeDifficulty,
-    diagnostics: scoreDiagnostics(result, context),
-    notes: "shadowScore is report-only; public leaderboard still uses top-level score",
-  };
-}
-
-function nonScoringBreakdown(result, context, scoreEffect) {
-  return {
-    schemaVersion: "reef.arena.scoreBreakdown.v1",
-    scoringPolicyVersion: context.scoringPolicyVersion,
-    scoreEligible: false,
-    actorClass: result.actorClass,
-    scoreEffect,
-    publicScore: null,
-    shadowScore: null,
-    scoringMode: scoreEffect === "difficulty-bucket" ? "difficulty-context-only" : "diagnostic-only",
-    components: {
-      baseline: 0,
-      equity: 0,
-      risk: 0,
-      conduct: 0,
-      marketInteraction: 0,
-      difficulty: 0,
-    },
-    diagnostics: scoreDiagnostics(result, context),
-    notes: scoreEffect === "difficulty-bucket"
-      ? "NPC profile contributes difficulty context but is not ranked"
-      : "liquidity/house actor diagnostics do not create point gains or losses",
-  };
-}
-
-function equityComponent(result) {
-  const pnl = nullableNumber(result.tradingMetrics?.pnl?.total);
-  if (pnl === null) return 0;
-  return Math.round(clamp(pnl, -100_000, 100_000));
-}
-
-function riskComponent(result) {
-  const inventoryGross = nullableNumber(result.tradingMetrics?.inventory?.grossNotional) ?? 0;
-  const failedTicks = numberValue(result.failedTicks);
-  const freezeCount = numberValue(result.freezeCount);
-  const operationalPauseCount = numberValue(result.operationalPauseCount);
-  const inventoryPenalty = Math.min(25_000, Math.round(inventoryGross * 0.01));
-  return -Math.min(100_000, inventoryPenalty + failedTicks * 5_000 + freezeCount * 50_000 + operationalPauseCount * 1_000);
-}
-
-function conductComponent(result) {
-  const conduct = result.conductMetrics ?? {};
-  const timeoutPenalty = Math.round(numberValue(conduct.timeoutRate) * 50_000);
-  const invalidPenalty = Math.round(numberValue(conduct.invalidIntentRate) * 50_000);
-  const cancelPenalty = Math.max(0, Math.round((numberValue(conduct.cancelReplaceRatio) - 1) * 2_500));
-  const freezePenalty = numberValue(conduct.freezeCount) * 50_000;
-  return -Math.min(100_000, timeoutPenalty + invalidPenalty + cancelPenalty + freezePenalty);
-}
-
-function marketInteractionComponent(result) {
-  const commands = result.tradingMetrics?.commands ?? {};
-  const executions = result.tradingMetrics?.executions ?? {};
-  const submitted = numberValue(commands.submitted);
-  const completed = numberValue(commands.completed);
-  const fills = numberValue(executions.fillCount);
-  const fillQuantity = numberValue(executions.filledQuantity);
-  const commandScore = Math.min(10_000, completed * 25 + submitted * 5);
-  const fillScore = Math.min(25_000, fills * 50 + fillQuantity * 10);
-  return Math.round(commandScore + fillScore);
-}
-
-function scoreDiagnostics(result, context) {
-  return {
-    finalEquity: nullableNumber(result.tradingMetrics?.pnl?.finalEquityDiagnostic),
-    realizedPnl: nullableNumber(result.tradingMetrics?.pnl?.realized),
-    unrealizedPnl: nullableNumber(result.tradingMetrics?.pnl?.unrealized),
-    totalPnl: nullableNumber(result.tradingMetrics?.pnl?.total),
-    pnlAvailable: result.tradingMetrics?.pnl?.available === true,
-    markPriceSource: result.tradingMetrics?.pnl?.markPriceSource ?? result.tradingMetrics?.inventory?.markPriceSource ?? "",
-    grossNotional: nullableNumber(result.tradingMetrics?.orderFlow?.grossSubmittedNotional),
-    inventoryGrossNotional: nullableNumber(result.tradingMetrics?.inventory?.grossNotional),
-    fillCount: numberValue(result.tradingMetrics?.executions?.fillCount),
-    submittedCommands: numberValue(result.tradingMetrics?.commands?.submitted),
-    completedCommands: numberValue(result.tradingMetrics?.commands?.completed),
-    failedCommands: numberValue(result.tradingMetrics?.commands?.failed),
-    rejectedCommands: numberValue(result.tradingMetrics?.commands?.rejected),
-    timedOutCommands: numberValue(result.tradingMetrics?.commands?.timedOut),
-    cancelReplaceRatio: numberValue(result.conductMetrics?.cancelReplaceRatio),
-    invalidIntentRate: numberValue(result.conductMetrics?.invalidIntentRate),
-    timeoutRate: numberValue(result.conductMetrics?.timeoutRate),
-    maxActionsPerTick: numberValue(result.conductMetrics?.maxActionsPerTick),
-    maxVenueCommandsPerTick: numberValue(result.conductMetrics?.maxVenueCommandsPerTick),
-    freezeCount: numberValue(result.freezeCount),
-    operationalPauseCount: numberValue(result.operationalPauseCount),
-    npcDifficultyBuckets: context.npcDifficultyBuckets,
-    difficultyMultiplier: context.difficultyMultiplier,
-  };
-}
-
-function difficultyMultiplier(bucket) {
-  const multipliers = {
-    "benign-noise": 1,
-    "ranked-standard": 1,
-    "balanced-flow": 1.05,
-    "toxic-momentum": 1.1,
-    "stress-liquidity": 1.15,
-    "event-shock": 1.2,
-  };
-  return multipliers[bucket] ?? 1;
+    npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
+  });
 }
 
 function summarizeTradingMetrics(session, counters) {
@@ -2659,10 +2513,6 @@ function pct(count, total) {
 
 function ratio(count, total) {
   return total > 0 ? Number((count / total).toFixed(6)) : 0;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 function positiveNumber(value, fallback) {

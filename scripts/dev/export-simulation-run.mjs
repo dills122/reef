@@ -277,6 +277,7 @@ function compactScoreBreakdown(scoreBreakdown) {
   if (scoreBreakdown === undefined || scoreBreakdown === null) return {};
   return {
     schemaVersion: scoreBreakdown.schemaVersion ?? "",
+    formulaVersion: scoreBreakdown.formulaVersion ?? "",
     scoringPolicyVersion: scoreBreakdown.scoringPolicyVersion ?? "",
     scoreEligible: Boolean(scoreBreakdown.scoreEligible),
     actorClass: scoreBreakdown.actorClass ?? "",
@@ -285,13 +286,24 @@ function compactScoreBreakdown(scoreBreakdown) {
     shadowScore: nullableNumber(scoreBreakdown.shadowScore),
     scoringMode: scoreBreakdown.scoringMode ?? "",
     components: scoreBreakdown.components ?? {},
+    componentDetails: scoreBreakdown.componentDetails ?? {},
     diagnostics: {
       finalEquity: nullableNumber(scoreBreakdown.diagnostics?.finalEquity),
       totalPnl: nullableNumber(scoreBreakdown.diagnostics?.totalPnl),
+      grossSubmittedQuantity: nullableNumber(scoreBreakdown.diagnostics?.grossSubmittedQuantity),
+      grossSubmittedNotional: nullableNumber(scoreBreakdown.diagnostics?.grossSubmittedNotional),
+      grossExecutedNotional: nullableNumber(scoreBreakdown.diagnostics?.grossExecutedNotional),
+      filledQuantity: nullableNumber(scoreBreakdown.diagnostics?.filledQuantity),
+      fillRatio: nullableNumber(scoreBreakdown.diagnostics?.fillRatio),
+      completionRate: nullableNumber(scoreBreakdown.diagnostics?.completionRate),
+      pnlPerExecutedNotionalBps: nullableNumber(scoreBreakdown.diagnostics?.pnlPerExecutedNotionalBps),
+      inventoryExposureRatio: nullableNumber(scoreBreakdown.diagnostics?.inventoryExposureRatio),
+      inventoryConcentration: nullableNumber(scoreBreakdown.diagnostics?.inventoryConcentration),
       fillCount: numberOrZero(scoreBreakdown.diagnostics?.fillCount),
       submittedCommands: numberOrZero(scoreBreakdown.diagnostics?.submittedCommands),
       cancelReplaceRatio: nullableNumber(scoreBreakdown.diagnostics?.cancelReplaceRatio),
       timeoutRate: nullableNumber(scoreBreakdown.diagnostics?.timeoutRate),
+      variableScoreBeforeDifficulty: nullableNumber(scoreBreakdown.diagnostics?.variableScoreBeforeDifficulty),
       difficultyMultiplier: nullableNumber(scoreBreakdown.diagnostics?.difficultyMultiplier),
       npcDifficultyBuckets: Array.isArray(scoreBreakdown.diagnostics?.npcDifficultyBuckets)
         ? scoreBreakdown.diagnostics.npcDifficultyBuckets
