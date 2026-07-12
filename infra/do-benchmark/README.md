@@ -19,7 +19,9 @@ and starts a root local Compose benchmark profile on that host. The default
 profile is the historical `stream-ack` path; set
 `REEF_DO_BENCHMARK_PROFILE=materializer` to run the direct-stream plus
 venue-event-materializer path used by the current durable-canonical local
-stress gates. The target simulation run plane is still
+stress gates, or `REEF_DO_BENCHMARK_PROFILE=materializer-projection` to add
+the projection/read-model freshness workload and gates. The target simulation
+run plane is still
 `infra/simulation-runner/`, which should eventually own its own OpenTofu and
 server Compose bundle.
 
@@ -38,6 +40,7 @@ Benchmark profiles:
 |---|---:|---:|---:|---|
 | `stream-ack` | `2500,5000` | `256` | `30s` | API accepted rate, stream-ack worker completion, projector health, telemetry. |
 | `materializer` | `10000` | `384` | `60s` | API accepted rate, direct-stream ack gap `0`, durable canonical materialization gap `0`, telemetry. |
+| `materializer-projection` | `2500` | `256` | `60s` | Materializer gates plus projector throughput, materialized/projected gap `0`, projector lag `0`, and projector health. |
 
 Goal-driven sizing is opt-in. Without a goal or target, the table above remains
 the default. Use `plan-goal` before provisioning to see the resolved DO size,
@@ -125,6 +128,45 @@ Default pass gates:
 - direct-stream partition skew <= `4`
 - DB WAL/activity/settings/`pg_stat_io` diagnostics present
 - accepted/direct-acked/materialized gaps = `0`
+
+## Named Projection Freshness Gate
+
+Use this wrapper when local work should not run the heavier projection/read-model
+freshness load. It uses the same disposable DO harness but switches to the
+`materializer-projection` profile, enables venue-event-batch projection,
+order-lifecycle projection, and market-data projection, and gates the fetched
+reports on projection freshness. The wrapper pins four projector instances
+across the active direct-stream partitions `0-15` as `0-3`, `4-7`, `8-11`, and
+`12-15`; using the generic `0-63` projector defaults leaves only one projector
+owning live work in the current direct-materializer profile.
+
+```bash
+make do-projection-freshness-gate
+
+REEF_DO_CONFIRM_DESTROYABLE=1 \
+make do-projection-freshness-gate ARGS=run-destroy
+```
+
+Gate tiers:
+
+| Tier | Command | Duration | Samples | Use |
+|---|---|---:|---:|---|
+| `short` | `make do-projection-freshness-gate ARGS=run-destroy` | `60s` | `1` | Default remote freshness confirmation. |
+| `soak-5m` | `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=soak-5m make do-projection-freshness-gate ARGS=run-destroy` | `5m` | `1` | First longer remote freshness soak. |
+| `soak-15m` | `REEF_DO_PROJECTION_FRESHNESS_GATE_TIER=soak-15m make do-projection-freshness-gate ARGS=run-destroy` | `15m` | `1` | Only after `soak-5m` is clean. |
+
+Default pass gates:
+
+- attempted rps >= `2400`
+- accepted rps >= `2400`
+- projected work items/sec >= `2400`
+- direct-stream active partitions >= `16`
+- direct-stream partition skew <= `4`
+- DB WAL/activity/settings/`pg_stat_io` diagnostics present
+- accepted/direct-acked/materialized/projected gaps = `0`
+- projector failed delta = `0`
+- final projector lag = `0`
+- projection-postgres deadlocks = `0`
 
 Default report gates validate measured stress reports, expected rates, no unexpected `5xx`, no unallowed failures, profile-specific worker/direct/materializer health, and telemetry probes. Set `REEF_DO_MAX_P95_MS` or `REEF_DO_MAX_P99_MS` directly, or set `REEF_DO_TARGET_P95_MS` / `REEF_DO_TARGET_P99_MS` when using goal mode, to make tail-latency targets fail the report check. The check prints a normalized evidence summary for attempted, accepted, direct-acked, materialized, projected, lag, p95, and p99, and writes `do-benchmark-evidence-summary.json` into the fetched artifact directory. Embedded load-tester trace checks are diagnostic for submit-only stream-ack stress runs because not every accepted submit produces a projected runtime event; set `REEF_DO_REQUIRE_TRACE_CHECKS=1` when running a profile where every sampled command is expected to have trace events.
 

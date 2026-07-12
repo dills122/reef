@@ -111,7 +111,7 @@ Promotion ladder:
 1. `short`: `60s`, `3` samples. Required after code changes to the materializer path or gate scripts. Passed on 2026-07-08.
 2. `soak-5m`: `5m`, `2` samples. First longer remote soak. Passed on 2026-07-12.
 3. `soak-15m`: `15m`, `1` sample. Optional aged-state/longer-soak confirmation before raising the venue-core target above `10k`.
-4. `projection-read-freshness`: enable projection/read-model work under durable venue-event load and report projected throughput, lag/watermarks, read freshness, and replay idempotency separately from canonical materializer throughput. The 2026-07-12 materializer run intentionally had `projected=0` and is not a read-model freshness claim.
+4. `projection-read-freshness`: run `make do-projection-freshness-gate ARGS=run-destroy` to enable projection/read-model work under durable venue-event load and report projected throughput, lag/watermarks, read freshness, and replay idempotency separately from canonical materializer throughput. The wrapper must split projectors across the active direct-stream partitions `0-15`, not the generic `0-63` defaults. The short gate passed on 2026-07-12 with run `do-benchmark-20260712T172412Z`: `149,976` accepted/materialized/projected commands, projection lag `0`, materialized/projected gap `0`, and projection DB deadlocks `0`. The 2026-07-12 materializer run intentionally had `projected=0` and is not a read-model freshness claim.
 
 Longer soaks must compare clean, warm, and aged-state behavior before raising
 the target above `10k`. Watch WAL bytes/command, table bytes/command,
@@ -160,7 +160,7 @@ Do not start this sequence until the local admission gates in [`COMMAND_INTAKE_P
 10. Fetch stress reports, telemetry, logs, and selected DB/NATS diagnostics.
 11. Destroy the Droplet unless we are actively iterating.
 
-For the Redpanda direct materializer track, run `make dev-validate-stream-profile PROFILE=materializer-soak` (or `bun scripts/dev/reef-dev.mjs stream validate materializer-soak`) before starting the stack, then run `make dev-smoke-venue-event-materializer` and the crash/replay gate before any measured soak. The smoke must prove durable command append, direct matching consume/ack, event-batch publish, canonical materialization, projection idempotency, and order read-model reconstruction from the event-batch payload. The named remote gate is now `make do-materializer-10k-gate`; its short and `soak-5m` tiers have produced passing c-16 evidence, so the next promotion work is either `soak-15m` aged-state confirmation or the separate projection/read-model freshness gate.
+For the Redpanda direct materializer track, run `make dev-validate-stream-profile PROFILE=materializer-soak` (or `bun scripts/dev/reef-dev.mjs stream validate materializer-soak`) before starting the stack, then run `make dev-smoke-venue-event-materializer` and the crash/replay gate before any measured soak. The smoke must prove durable command append, direct matching consume/ack, event-batch publish, canonical materialization, projection idempotency, and order read-model reconstruction from the event-batch payload. The named remote canonical gate is `make do-materializer-10k-gate`; its short and `soak-5m` tiers have produced passing c-16 evidence. The named remote projection/read-model freshness gate is `make do-projection-freshness-gate`, which keeps the heavier projection load off local development machines.
 
 ## Pre-DO Admission Gates
 
