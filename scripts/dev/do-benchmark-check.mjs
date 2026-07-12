@@ -20,6 +20,7 @@ const maxP99Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P99_MS);
 const minProjectedRps = parseOptionalNumber(process.env.REEF_DO_MIN_PROJECTED_RPS);
 const maxProjectionLag = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_LAG);
 const maxMaterializedToProjectedGap = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP);
+const maxProjectionDbDeadlocks = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_DB_DEADLOCKS);
 const minStreamDirectActivePartitions = parseOptionalNumber(process.env.REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS);
 const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW);
 const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
@@ -425,8 +426,40 @@ function validateMaterializerDbDiagnostics(dir) {
   if (!Array.isArray(postgres?.topTablesByBytes) || postgres.topTablesByBytes.length === 0) {
     failures.push("materializer DB diagnostics summary missing topTablesByBytes");
   }
+  if (reportProfile === "materializer-projection") {
+    validateProjectionDbDiagnostics(summary.json, dir);
+  }
 
   const diagnosticsDir = join(dir, "venue-event-materializer-stress-diagnostics");
+  const postgresDiagnosticsDir = existsSync(join(diagnosticsDir, "postgres"))
+    ? join(diagnosticsDir, "postgres")
+    : diagnosticsDir;
+  validateRequiredDbDiagnosticsFiles(postgresDiagnosticsDir);
+}
+
+function validateProjectionDbDiagnostics(summary, dir) {
+  const projectionPostgres = summary?.services?.["projection-postgres"];
+  if (!projectionPostgres?.ok) {
+    failures.push("materializer DB diagnostics summary did not report services.projection-postgres.ok=true");
+    return;
+  }
+
+  const deadlocks = Number(projectionPostgres?.database?.deadlocks ?? 0);
+  if (maxProjectionDbDeadlocks !== undefined && deadlocks > maxProjectionDbDeadlocks) {
+    failures.push(
+      `projection-postgres deadlocks ${formatNumber(deadlocks)} > required ${formatNumber(maxProjectionDbDeadlocks)}`,
+    );
+  }
+
+  const diagnosticsDir = join(dir, "venue-event-materializer-stress-diagnostics", "projection-postgres");
+  validateRequiredDbDiagnosticsFiles(diagnosticsDir);
+  const logsPath = join(diagnosticsDir, "postgres-logs.txt");
+  if (existsSync(logsPath) && /deadlock detected/i.test(readFileSync(logsPath, "utf8"))) {
+    failures.push(`projection-postgres logs contain deadlock detected: ${logsPath}`);
+  }
+}
+
+function validateRequiredDbDiagnosticsFiles(diagnosticsDir) {
   const requiredFiles = [
     "pre-db-diagnostics.json",
     "post-db-diagnostics.json",
@@ -447,7 +480,7 @@ function validateMaterializerDbDiagnostics(dir) {
   for (const file of requiredFiles) {
     const path = join(diagnosticsDir, file);
     if (!existsSync(path)) {
-      failures.push(`missing materializer DB diagnostics artifact: ${path}`);
+      failures.push(`missing DB diagnostics artifact: ${path}`);
     }
   }
 }

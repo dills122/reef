@@ -52,6 +52,7 @@ test("discovers deterministic domain migrations", async () => {
       "runtime/0035_drop_batch_payload_gin_lookup_index.sql",
       "runtime/0036_canonical_archive_tables.sql",
       "runtime/0037_runtime_event_trade_archive_tables.sql",
+      "runtime/0038_projection_dirty_lock_order.sql",
     ],
   );
   assert.ok(migrations.some((migration) => migration.id === "admin/0002_post_trade_profiles.sql"));
@@ -232,6 +233,18 @@ test("runtime archive migrations create partitioned cold-history targets", async
   assert.match(marketHistoryMigration.sql, /PARTITION BY RANGE \(occurred_at_ts\)/);
   assert.match(marketHistoryMigration.sql, /PARTITION OF runtime\.runtime_events_archive DEFAULT/);
   assert.match(marketHistoryMigration.sql, /PRIMARY KEY \(occurred_at_ts, event_id\)/);
+});
+
+test("runtime projection lock-order migration hardens dirty queues", async () => {
+  const migrations = await discoverMigrations(migrationsRoot);
+  const migration = migrations.find(
+    (candidate) => candidate.id === "runtime/0038_projection_dirty_lock_order.sql",
+  );
+
+  assert.ok(migration);
+  assert.match(migration.sql, /FOR UPDATE SKIP LOCKED/);
+  assert.match(migration.sql, /ORDER BY instrument_id/);
+  assert.match(migration.sql, /DELETE FROM runtime\.market_data_snapshot_dirty dirty\s+USING selected_dirty/);
 });
 
 test("wraps migration SQL with checksum ledger insert", async () => {

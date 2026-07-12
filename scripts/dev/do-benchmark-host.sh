@@ -155,6 +155,7 @@ cmd_plan_goal() {
   printf '  min_projected_rps=%s\n' "${REEF_DO_MIN_PROJECTED_RPS:-none}"
   printf '  max_projection_lag=%s\n' "${REEF_DO_MAX_PROJECTION_LAG:-none}"
   printf '  max_materialized_to_projected_gap=%s\n' "${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-none}"
+  printf '  max_projection_db_deadlocks=%s\n' "${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-none}"
   printf '  stream_ack_projector_0_partitions=%s\n' "${STREAM_ACK_PROJECTOR_0_PARTITIONS:-none}"
   printf '  stream_ack_projector_1_partitions=%s\n' "${STREAM_ACK_PROJECTOR_1_PARTITIONS:-none}"
   printf '  stream_ack_projector_2_partitions=%s\n' "${STREAM_ACK_PROJECTOR_2_PARTITIONS:-none}"
@@ -206,6 +207,7 @@ cmd_run() {
   REEF_DO_MIN_PROJECTED_RPS="${REEF_DO_MIN_PROJECTED_RPS:-}" \
   REEF_DO_MAX_PROJECTION_LAG="${REEF_DO_MAX_PROJECTION_LAG:-}" \
   REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-}" \
+  REEF_DO_MAX_PROJECTION_DB_DEADLOCKS="${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
@@ -224,6 +226,7 @@ cmd_check() {
   REEF_DO_MIN_PROJECTED_RPS="${REEF_DO_MIN_PROJECTED_RPS:-}" \
   REEF_DO_MAX_PROJECTION_LAG="${REEF_DO_MAX_PROJECTION_LAG:-}" \
   REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-}" \
+  REEF_DO_MAX_PROJECTION_DB_DEADLOCKS="${REEF_DO_MAX_PROJECTION_DB_DEADLOCKS:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$report_dir"
@@ -486,7 +489,11 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFIL
   export MATCHING_ENGINE_EVENT_SUBJECT_PREFIX="$REEF_BENCHMARK_EVENT_SUBJECT_PREFIX"
   export VENUE_EVENT_MATERIALIZER_TOPIC="$REEF_BENCHMARK_EVENT_STREAM"
   export VENUE_EVENT_MATERIALIZER_GROUP_ID="$REEF_BENCHMARK_MATERIALIZER_GROUP"
-  export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
+  if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
+    export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres,projection-postgres}"
+  else
+    export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
+  fi
 
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
   if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then

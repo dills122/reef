@@ -166,6 +166,7 @@ Default pass gates:
 - accepted/direct-acked/materialized/projected gaps = `0`
 - projector failed delta = `0`
 - final projector lag = `0`
+- projection-postgres deadlocks = `0`
 
 Default report gates validate measured stress reports, expected rates, no unexpected `5xx`, no unallowed failures, profile-specific worker/direct/materializer health, and telemetry probes. Set `REEF_DO_MAX_P95_MS` or `REEF_DO_MAX_P99_MS` directly, or set `REEF_DO_TARGET_P95_MS` / `REEF_DO_TARGET_P99_MS` when using goal mode, to make tail-latency targets fail the report check. The check prints a normalized evidence summary for attempted, accepted, direct-acked, materialized, projected, lag, p95, and p99, and writes `do-benchmark-evidence-summary.json` into the fetched artifact directory. Embedded load-tester trace checks are diagnostic for submit-only stream-ack stress runs because not every accepted submit produces a projected runtime event; set `REEF_DO_REQUIRE_TRACE_CHECKS=1` when running a profile where every sampled command is expected to have trace events.
 
