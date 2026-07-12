@@ -1942,9 +1942,12 @@ async function requestAppProbe(probe) {
   return new Promise((resolve) => {
     const url = new URL(probe.url);
     const client = url.protocol === "https:" ? https : http;
+    const headers = url.pathname.startsWith("/internal/")
+      ? { "X-Reef-Internal-Route": "true" }
+      : {};
     const req = client.request(
       url,
-      { method: probe.method ?? "GET", timeout: Math.max(1, Number(probe.timeoutMs ?? 2000)) },
+      { method: probe.method ?? "GET", timeout: Math.max(1, Number(probe.timeoutMs ?? 2000)), headers },
       (response) => {
       const chunks = [];
       let bytes = 0;
