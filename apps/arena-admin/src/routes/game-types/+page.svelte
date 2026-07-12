@@ -38,7 +38,7 @@
 				<span class="shrink-0 text-muted transition-transform group-open:rotate-45">+</span>
 			</summary>
 
-			<div class="mt-4 grid max-w-[60ch] gap-3 border-t border-rule pt-4 text-sm sm:grid-cols-3">
+			<div class="mt-4 grid gap-3 border-t border-rule pt-4 text-sm sm:grid-cols-3">
 				<div>
 					<p class="text-xs tracking-[0.08em] text-muted uppercase">cadence</p>
 					<p class="mt-1 text-ink">{mode.cadence}</p>
@@ -53,7 +53,7 @@
 				</div>
 			</div>
 
-			<p class="mt-4 max-w-[60ch] text-sm text-muted">{mode.details}</p>
+			<p class="mt-4 text-sm text-muted">{mode.details}</p>
 		</details>
 	{/each}
 </div>
