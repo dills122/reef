@@ -54,10 +54,11 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
 
     const side = this.sideForTick(configuredSide);
     this.tickIndex += 1;
-    const referencePrice = side === "BUY"
+    const touchReferencePrice = side === "BUY"
       ? snapshot.value.askPrice ?? snapshot.value.midPrice
       : snapshot.value.bidPrice ?? snapshot.value.midPrice;
     const maxSpreadCrossBps = ctx.config.optionalNumber("actorProfile.maxSpreadCrossBps");
+    const referencePrice = maxSpreadCrossBps === undefined ? touchReferencePrice : snapshot.value.midPrice;
     const crossOffset = maxSpreadCrossBps === undefined
       ? configuredCrossOffset
       : Math.max(configuredCrossOffset, referencePrice * (Math.max(0, maxSpreadCrossBps) / 10_000) * aggression);

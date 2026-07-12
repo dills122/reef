@@ -286,10 +286,13 @@ behavior-backed groups are:
 Use `--environment=thin-wide-liquidity` when default house liquidity saturates
 NPC taker behavior. This environment keeps the same source mode but writes
 temporary overlays with wider, thinner market maker quotes
-(`mm-tight-bluechip.quoteSpreadBps=100`, `quoteSize=2`) plus relaxed spread
-health thresholds. The environment is recorded in the matrix manifest, applies
-to the baseline and every group entry, and group-specific knob overrides still
-win for the target profile being tested.
+(`mm-tight-bluechip.quoteSpreadBps=100`, `quoteSize=2`), sets
+`npc-bad-aggressive-retail.maxSpreadCrossBps=75` for aggression tests, and
+uses relaxed spread health thresholds. It also narrows `botRefs` to house
+market makers plus NPC flow so passive competitor quotes do not pin the
+top-of-book spread during NPC sensitivity checks. The environment is recorded
+in the matrix manifest, applies to the baseline and every group entry, and
+group-specific knob overrides still win for the target profile being tested.
 
 Example live slice:
 
@@ -305,25 +308,32 @@ bun scripts/dev/run-arena-actor-calibration-matrix.mjs \
   --group=npc-aggression
 ```
 
-Initial local live calibration notes from 15-second matched slices:
+Initial local live calibration notes:
 
 - `npc-bad-aggressive-retail.aggression` at `0.35`, `0.65`, and `0.95`
   produced the same default-mode result: average `10` submitted commands,
   `10` fills, `1.0` fill ratio, `$2400` executed notional, `-10` PnL bps,
-  and `-2.4` total PnL. A follow-up 10-second live slice under
-  `thin-wide-liquidity` still produced no movement: average `5` commands,
-  `5` fills, `1.0` fill ratio, about `$1199.76` executed notional, and
-  `-1.2` total PnL for every value. Do not use this knob for difficulty
-  scoring until the taker strategy can choose non-crossing or less-crossing
-  prices.
+  and `-2.4` total PnL. That default-mode result was saturated because the
+  taker referenced best ask/bid and then added a positive cross offset. Taker
+  actor-profile pricing now references the mid price so
+  `maxSpreadCrossBps * aggression` can determine whether IOC orders reach top
+  of book.
+- In a 10-second live slice under `thin-wide-liquidity` after the mid-reference
+  pricing change, `npc-bad-aggressive-retail.aggression` became measurable but
+  not monotonic in the single seed: `0.35` produced average `2` fills, `0.4`
+  fill ratio, and about `$478.74` executed notional; `0.65` produced no fills;
+  `0.95` produced average `4` fills, `0.8` fill ratio, and about `$955.41`
+  executed notional. Treat aggression as behavior-backed but not ready for
+  scoring weights until repeated across seeds and quote states.
 - `npc-bad-aggressive-retail.maxSpreadCrossBps` at `50`, `150`, and `250`
   also produced the same default-mode result: average `10` fills and `1.0`
-  fill ratio. Under `thin-wide-liquidity`, it still produced average `5`
-  fills, `1.0` fill ratio, about `$1199.76` executed notional, and about
-  `-10.002` PnL bps for every value. Current taker logic references best
-  ask/bid and then adds at least a positive cross offset, so these values
-  change limit-price distance beyond top of book, not whether the order crosses
-  resting liquidity.
+  fill ratio before the taker pricing change.
+- In the same 10-second `thin-wide-liquidity` slice after the mid-reference
+  pricing change, `maxSpreadCrossBps` became strongly behavior-backed: `50`
+  bps produced average `1` fill, `0.2` fill ratio, and about `$238.83`
+  executed notional; `150` and `250` bps both produced average `5` fills and
+  `1.0` fill ratio, with about `$1194` executed notional. This is a useful
+  first difficulty candidate, but repeat across seeds before promotion.
 - `npc-bad-aggressive-retail.orderRate` is behavior-backed: `low` produced
   average `3` submitted commands and fills, `medium` produced `5`, and `high`
   produced `10`, with executed notional scaling from about `$719` to `$1199`

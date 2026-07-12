@@ -126,7 +126,7 @@ await writeFile(reportPath, JSON.stringify({
   ],
 }));
 await writeFile(manifestPath, JSON.stringify({
-  entries: [{ status: "completed", reportPath: path.basename(reportPath) }],
+  entries: [{ status: "completed_with_warnings", reportPath: path.basename(reportPath) }],
 }));
 
 const options = parseArgs([

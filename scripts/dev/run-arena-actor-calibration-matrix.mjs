@@ -30,11 +30,28 @@ const CALIBRATION_ENVIRONMENTS = {
         maxMedianQuotedSpreadBps: 125,
         maxP95QuotedSpreadBps: 175,
       },
+      botRefs: [
+        "builtin-mm-lifecycle-safe",
+        "builtin-mm-msft-lifecycle",
+        "builtin-mm-nvda-lifecycle",
+        "builtin-mm-tsla-lifecycle",
+        "builtin-mm-amzn-lifecycle",
+        "builtin-mm-refreshing",
+        "builtin-npc-momentum",
+        "builtin-npc-taker-aapl",
+        "builtin-npc-taker-msft",
+        "builtin-npc-taker-nvda",
+        "builtin-npc-taker-tsla",
+        "builtin-npc-taker-amzn",
+      ],
     },
     actorProfileParamOverrides: {
       "mm-tight-bluechip": {
         quoteSpreadBps: 100,
         quoteSize: 2,
+      },
+      "npc-bad-aggressive-retail": {
+        maxSpreadCrossBps: 75,
       },
     },
   },
@@ -128,7 +145,7 @@ export function runActorCalibrationMatrix(options = {}) {
       error: result.error,
       summary: result.report === null ? null : reportSummary(result.report),
     });
-    if (result.status !== "completed" || result.exitCode !== 0) {
+    if (!isCompletedRunStatus(result.status) || result.exitCode !== 0) {
       break;
     }
   }
@@ -136,7 +153,7 @@ export function runActorCalibrationMatrix(options = {}) {
   const manifestPath = join(outDir, "manifest.json");
   const diagnosticsPath = join(outDir, "actor-diagnostics.json");
   const influenceSummaryPath = join(outDir, "actor-influence-summary.json");
-  const completedReports = reports.filter((entry) => entry.status === "completed" && entry.exitCode === 0);
+  const completedReports = reports.filter((entry) => isCompletedRunStatus(entry.status) && entry.exitCode === 0);
   const manifest = {
     schemaVersion: "reef.arena.actorCalibrationMatrix.v1",
     generatedAt: new Date().toISOString(),
@@ -310,8 +327,8 @@ export function actorCalibrationCliSummary(manifest) {
     submitMode: manifest.submitMode,
     environment: manifest.environment,
     entryCount: manifest.entries.length,
-    completedCount: manifest.entries.filter((entry) => entry.status === "completed").length,
-    failedEntries: manifest.entries.filter((entry) => entry.status !== "completed").map((entry) => ({
+    completedCount: manifest.entries.filter((entry) => isCompletedRunStatus(entry.status) && entry.exitCode === 0).length,
+    failedEntries: manifest.entries.filter((entry) => !isCompletedRunStatus(entry.status) || entry.exitCode !== 0).map((entry) => ({
       id: entry.id,
       status: entry.status,
       exitCode: entry.exitCode,
@@ -509,6 +526,10 @@ function reportSummary(report) {
     totalFills: report.executionSummary?.totalFills ?? null,
     flags: report.scoringCalibration?.dataQuality?.flags ?? [],
   };
+}
+
+function isCompletedRunStatus(status) {
+  return typeof status === "string" && status.startsWith("completed");
 }
 
 function profileIdForBot(bot, mode) {

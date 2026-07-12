@@ -146,7 +146,7 @@ function loadReports(options) {
     const manifest = readJson(manifestPath);
     const manifestDir = dirname(manifestPath);
     for (const entry of manifest.entries ?? []) {
-      if (entry.status === "completed" && entry.reportPath) paths.push(resolveMaybeRelative(entry.reportPath, manifestDir));
+      if (isCompletedRunStatus(entry.status) && entry.reportPath) paths.push(resolveMaybeRelative(entry.reportPath, manifestDir));
     }
   }
   for (const reportPath of options.reports ?? []) {
@@ -157,6 +157,10 @@ function loadReports(options) {
     throw new Error("provide --manifest=PATH or one or more --report=PATH arguments");
   }
   return uniquePaths.map((path) => readJson(resolve(path)));
+}
+
+function isCompletedRunStatus(status) {
+  return typeof status === "string" && status.startsWith("completed");
 }
 
 function resolveMaybeRelative(path, baseDir) {

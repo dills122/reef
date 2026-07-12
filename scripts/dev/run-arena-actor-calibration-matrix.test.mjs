@@ -56,6 +56,7 @@ const thinWideEnvironment = {
     healthTargets: {
       maxMedianQuotedSpreadBps: 125,
     },
+    botRefs: ["mm-a", "npc-a"],
   },
   actorProfileParamOverrides: {
     "mm-tight-bluechip": {
@@ -68,6 +69,7 @@ const configured = applyCalibrationEnvironment(mode, botCatalog, thinWideEnviron
 assert.equal(configured.mode.houseLiquidityDefaults.targetSpreadBps, 100);
 assert.equal(configured.mode.houseLiquidityDefaults.quoteSize, 2);
 assert.equal(configured.mode.healthTargets.maxMedianQuotedSpreadBps, 125);
+assert.deepEqual(configured.mode.botRefs, ["mm-a", "npc-a"]);
 assert.equal(mode.houseLiquidityDefaults, undefined);
 assert.deepEqual(configured.botCatalog.bots.find((entry) => entry.botId === "mm-a").actorProfileParams, {
   quoteSpreadBps: 100,
@@ -168,7 +170,8 @@ const summary = actorCalibrationCliSummary({
   },
   groups,
   entries: [
-    { id: "baseline", status: "completed" },
+    { id: "baseline", status: "completed", exitCode: 0 },
+    { id: "npc-aggression-0p65", status: "completed_with_warnings", exitCode: 0 },
     { id: "npc-aggression-0p35", status: "failed", exitCode: 1, error: "boom" },
   ],
   diagnosticsSummary: { caveats: ["low-run-count"] },
@@ -183,8 +186,8 @@ const summary = actorCalibrationCliSummary({
     }],
   },
 });
-assert.equal(summary.entryCount, 2);
-assert.equal(summary.completedCount, 1);
+assert.equal(summary.entryCount, 3);
+assert.equal(summary.completedCount, 2);
 assert.equal(summary.environment.id, "thin-wide-liquidity");
 assert.deepEqual(summary.diagnosticsCaveats, ["low-run-count"]);
 assert.equal(summary.failedEntries[0].id, "npc-aggression-0p35");
