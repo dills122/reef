@@ -16,6 +16,7 @@ import {
 } from "./lib/db-diagnostics.mjs";
 import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 import { validateStressRunShape } from "./lib/stress-run-guard.mjs";
+import { expectedRolesForRunProfile } from "./lib/run-profile-roles.mjs";
 
 loadDotEnv();
 const execFileAsync = promisify(execFile);
@@ -587,35 +588,6 @@ function inferStressRunProfile() {
   if (captureStreamDirectStats) return "direct-nodb";
   if (captureStreamAckWorkerStats || captureStreamAckProjectorStats) return "stream-ack";
   return "custom";
-}
-
-function expectedRolesForRunProfile(runProfile) {
-  switch (runProfile) {
-    case "materializer-soak":
-      return {
-        workers: "stopped or disabled",
-        materializers: "online",
-        projectors: "optional unless read-model freshness is being measured",
-      };
-    case "direct-nodb":
-      return {
-        workers: "stopped or disabled",
-        materializers: "not expected",
-        projectors: "not expected",
-      };
-    case "stream-ack":
-      return {
-        workers: "enabled",
-        materializers: "not expected",
-        projectors: "running when projection freshness is measured",
-      };
-    default:
-      return {
-        workers: "profile-specific",
-        materializers: "profile-specific",
-        projectors: "profile-specific",
-      };
-  }
 }
 
 async function sampleCommandAccounting(runtimeUrl, runId) {

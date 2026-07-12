@@ -12,6 +12,7 @@ import { dirname, extname, join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalEvidenceSummary } from "../../scripts/dev/lib/report-taxonomy.mjs";
 import { deriveDevUrls, loadDotEnv } from "../../scripts/dev/lib/dev-utils.mjs";
+import { expectedRolesForRunProfile } from "../../scripts/dev/lib/run-profile-roles.mjs";
 
 loadDotEnv();
 
@@ -247,10 +248,9 @@ function normalizeContainers(workers, materializers, projectors) {
 }
 
 function profileConfig() {
-  const expectedRoles = expectedProfileRoles(profileName);
   return {
     name: profileName,
-    expectedRoles,
+    expectedRoles: expectedRolesForRunProfile(profileName),
   };
 }
 
@@ -301,35 +301,6 @@ function normalizeProfileName(value) {
 
 function isMaterializerProfile(name) {
   return name === "materializer-soak";
-}
-
-function expectedProfileRoles(name) {
-  if (isMaterializerProfile(name)) {
-    return {
-      workers: "stopped or disabled",
-      materializers: "online",
-      projectors: "optional unless read-model freshness is being measured",
-    };
-  }
-  if (name === "direct-nodb") {
-    return {
-      workers: "not expected",
-      materializers: "not expected",
-      projectors: "not expected",
-    };
-  }
-  if (name === "stream-ack") {
-    return {
-      workers: "enabled",
-      materializers: "not expected",
-      projectors: "running",
-    };
-  }
-  return {
-    workers: "profile-specific",
-    materializers: "profile-specific",
-    projectors: "profile-specific",
-  };
 }
 
 async function probeJson(name, url) {
