@@ -119,6 +119,7 @@ test-bot-sdk:
 	node scripts/dev/do-benchmark-check.test.mjs
 	node scripts/dev/do-materializer-10k-gate.test.mjs
 	node scripts/dev/do-projection-freshness-gate.test.mjs
+	node scripts/dev/projection-replay-proof.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
 	node scripts/dev/scenario-golden.test.mjs
 
