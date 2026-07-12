@@ -23,6 +23,8 @@ The stress harness also writes canonical reports and uses
 `scripts/dev/lib/report-taxonomy.mjs` for normalized evidence. The control room
 should consume those same sources instead of creating a competing metrics
 model.
+Reports that include `stressRunMetadata.runProfile` are labeled with that
+profile in run history and evidence panels.
 
 ## Dashboard Tech Research
 
@@ -108,9 +110,16 @@ profile role. Set `REEF_CONTROL_ROOM_MATERIALIZER_URLS` when monitoring that
 path:
 
 ```bash
+REEF_CONTROL_ROOM_PROFILE=materializer-soak \
 REEF_CONTROL_ROOM_MATERIALIZER_URLS=http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093,http://127.0.0.1:8094 \
 make dev-control-room
 ```
+
+The profile is advisory and read-only. It controls expected-role warnings in
+the UI so a materializer run cannot quietly display zero materializers as if it
+were a valid topology. For `materializer-soak`, stopped stream workers are
+expected, materializers are required, and projectors are optional unless the run
+is explicitly measuring read-model freshness.
 
 If runtime health is online but internal diagnostic widgets show blocked
 probes, restart the platform profile with:

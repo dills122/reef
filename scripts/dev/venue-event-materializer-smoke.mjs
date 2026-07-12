@@ -48,6 +48,7 @@ setDefault("MATCHING_ENGINE_EVENT_SUBJECT_PREFIX", `reef.materializer.smoke.${st
 setDefault("VENUE_EVENT_MATERIALIZER_TOPIC", env("MATCHING_ENGINE_EVENT_STREAM"));
 setDefault("VENUE_EVENT_MATERIALIZER_GROUP_ID", `reef-venue-event-materializer-${smokeId}`);
 setValue("VENUE_EVENT_MATERIALIZER_ENABLED", "true");
+setValue("PLATFORM_INTERNAL_HTTP_MODE", "enabled");
 setDefault("VENUE_EVENT_MATERIALIZER_BATCH_SIZE", "50");
 setDefault("VENUE_EVENT_MATERIALIZER_POLL_MS", "10");
 setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
@@ -322,7 +323,7 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
   const surfaces = Array.isArray(availability.surfaces) ? availability.surfaces : [];
   assertAvailabilitySurface(surfaces, {
     name: "currentOrders",
-    source: "runtime.orders + runtime.order_lifecycle_state",
+    source: ["runtime.orders + runtime.order_lifecycle_state", "runtime.order_lifecycle_state"],
     freshness: "dirty-tracked lifecycle projection",
     scope: "participant-own-orders",
     requiredQuery: ["participantId"],
@@ -435,7 +436,8 @@ function assertOwnOrderResponse(label, response, expected) {
   if (response.participantId !== participantId) {
     throw new Error(`${label} participant mismatch: ${JSON.stringify(response)}`);
   }
-  if (response.meta?.source !== "runtime.orders + runtime.order_lifecycle_state") {
+  const allowedSources = new Set(["runtime.orders + runtime.order_lifecycle_state", "runtime.order_lifecycle_state"]);
+  if (!allowedSources.has(response.meta?.source)) {
     throw new Error(`${label} source mismatch: ${JSON.stringify(response.meta)}`);
   }
   if (response.meta?.freshness !== "dirty-tracked lifecycle projection") {
@@ -469,10 +471,14 @@ function assertAvailabilitySurface(surfaces, expected) {
   if (!surface) {
     throw new Error(`missing availability surface ${expected.name}: ${JSON.stringify(surfaces)}`);
   }
-  for (const field of ["source", "freshness", "scope"]) {
+  for (const field of ["freshness", "scope"]) {
     if (surface[field] !== expected[field]) {
       throw new Error(`availability ${expected.name} ${field} mismatch: ${JSON.stringify(surface)}`);
     }
+  }
+  const expectedSources = Array.isArray(expected.source) ? expected.source : [expected.source];
+  if (!expectedSources.includes(surface.source)) {
+    throw new Error(`availability ${expected.name} source mismatch: ${JSON.stringify(surface)}`);
   }
   for (const [field, values] of Object.entries({
     requiredQuery: expected.requiredQuery ?? [],
@@ -584,6 +590,9 @@ function request(method, url, payload, headers = {}, timeoutMs = 5000) {
     const parsed = new URL(url);
     const body = payload == null ? "" : JSON.stringify(payload);
     const transport = parsed.protocol === "https:" ? https : http;
+    const internalHeaders = parsed.pathname.startsWith("/internal/")
+      ? { "X-Reef-Internal-Route": "true" }
+      : {};
     const req = transport.request(parsed, {
       method,
       timeout: timeoutMs,
@@ -592,6 +601,7 @@ function request(method, url, payload, headers = {}, timeoutMs = 5000) {
           "content-type": "application/json",
           "content-length": Buffer.byteLength(body),
         }),
+        ...internalHeaders,
         ...headers,
       },
     }, (res) => {

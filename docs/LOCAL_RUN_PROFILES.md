@@ -9,7 +9,7 @@ monitor settings, and stress command before starting a run.
 | Goal | Proper entrypoint | Expected runtime roles | Materializer? | Primary evidence |
 | --- | --- | --- | --- | --- |
 | Local Control Room / stream-ack demo | `make dev-up-stream-ack` + `make dev-stress-stream-ack` | `platform-api`, 4 workers, 4 projectors, NATS JetStream | No | accepted/completed/projected, worker/projector lag |
-| Active durable materializer path | `make dev-smoke-venue-event-materializer`, then `make dev-stress-venue-event-materializer` | API, matching engine direct consumer, Redpanda, materializer(s), projectors for read models | Yes | accepted/direct-acked/materialized gap, materializer failures, projector lag |
+| Active durable materializer path | `make dev-smoke-venue-event-materializer`, then `make dev-stress-venue-event-materializer` | API, matching engine direct consumer, Redpanda, materializer(s); projectors only when read-model freshness is being measured | Yes | accepted/direct-acked/materialized gap, materializer failures, optional projector lag |
 | Front-door / direct-ingress ceiling | `make dev-stress-stream-direct-nodb` | API, matching engine direct consumer, broker | No canonical materializer by default | accepted/direct-acked throughput and ingress latency |
 | Legacy comparison | `make dev-stress-captured-ack` | API plus captured-ack async worker | No | command accounting gap and async queue health |
 
@@ -35,6 +35,7 @@ ack failure.
 For materializer-backed runs, include materializer endpoints:
 
 ```bash
+REEF_CONTROL_ROOM_PROFILE=materializer-soak \
 REEF_CONTROL_ROOM_MATERIALIZER_URLS=http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093,http://127.0.0.1:8094 \
 make dev-control-room
 ```
@@ -144,13 +145,16 @@ Expected materializer roles:
 - `platform-materializer` is running, with scaled materializers when the scaled
   profile is enabled.
 - Generic JetStream stream workers are stopped or disabled for this run shape.
+- Projectors are optional for materializer throughput. The smoke uses read-model
+  projectors to prove reconstruction; stress may stop projectors to isolate the
+  direct matching-to-materializer path.
 
 Interpretation:
 
 - `accepted/direct-acked` gap must be `0`.
 - `accepted/materialized` gap must be `0` after drain.
 - Materializer `failed` and `ackFailed` deltas must be `0`.
-- Projector lag should drain after materialization.
+- Projector lag only applies when the run intentionally keeps projectors online.
 - This is the path to use before promotion gates such as `make do-materializer-10k-gate`.
 
 ## Direct No-DB Ceiling Flow
@@ -178,6 +182,7 @@ editing Compose files or calling lower-level scripts directly.
 | --- | --- | --- |
 | `DEV_STRESS_RATES` | all stress wrappers | Comma-separated target rates, for example `5000` or `5000,10000`. |
 | `DEV_STRESS_DURATION` | all stress wrappers | Step duration such as `60s`, `180s`, or `5m`. |
+| `DEV_STRESS_RUN_PROFILE` | stress wrappers | Evidence metadata profile, normally set by wrappers. Current values include `stream-ack`, `materializer-soak`, `direct-nodb`, `captured-ack`, and `runtime-nodb`. |
 | `DEV_STRESS_SWEEP_WORKERS` | all stress wrappers | Comma-separated load-tester client worker counts. |
 | `DEV_STRESS_RATE_SCHEDULE` | all stress wrappers | Use `precise` for capacity runs; default harness mode may drop scheduled work under pressure. |
 | `DEV_STRESS_RATE_QUEUE_DEPTH` | all stress wrappers | Load-generator queue capacity for high-rate precise schedules. |
@@ -201,6 +206,7 @@ editing Compose files or calling lower-level scripts directly.
 | `REEF_CONTROL_ROOM_PORT` | `3015` | Bind port. |
 | `REEF_CONTROL_ROOM_RUNTIME_URL` | derived local runtime URL | Platform API to probe. |
 | `REEF_CONTROL_ROOM_ENGINE_URL` | derived local engine URL | Matching engine URL shown in config. |
+| `REEF_CONTROL_ROOM_PROFILE` | `materializer-soak` when materializer URLs are set; otherwise `stream-ack` | Expected role profile for Control Room warnings. Supported current values are `stream-ack`, `materializer-soak`, and `direct-nodb`. |
 | `REEF_CONTROL_ROOM_STATE_DIR` | `/tmp/reef-control-room` | Run artifact root. |
 | `REEF_CONTROL_ROOM_WORKER_URLS` | worker ports `8082,8083,8086,8087` | Stream-ack worker diagnostics. |
 | `REEF_CONTROL_ROOM_PROJECTOR_URLS` | projector ports `8084,8085,8088,8089` | Projector diagnostics. |

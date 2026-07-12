@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -15,6 +16,7 @@ import {
 } from "./lib/db-diagnostics.mjs";
 import { canonicalEvidenceSummary } from "./lib/report-taxonomy.mjs";
 import { validateStressRunShape } from "./lib/stress-run-guard.mjs";
+import { expectedRolesForRunProfile } from "./lib/run-profile-roles.mjs";
 
 loadDotEnv();
 const execFileAsync = promisify(execFile);
@@ -109,6 +111,7 @@ const venueEventMaterializerUrls = parseCsvStrings(
     env("DEV_STRESS_VENUE_EVENT_MATERIALIZER_URL", defaultVenueEventMaterializerUrls(runtimeUrl).join(",")),
   ),
 );
+const stressRunProfile = env("DEV_STRESS_RUN_PROFILE", inferStressRunProfile());
 
 validateStressRunShape({
   profile,
@@ -119,6 +122,8 @@ validateStressRunShape({
   captureVenueEventMaterializerStats,
   allowMissingSessionConfig: env("DEV_STRESS_ALLOW_MISSING_SESSION_CONFIG", "0") === "1",
 });
+
+const stressRunMetadata = await buildStressRunMetadata();
 
 const baseOut = out.replace(/\.json$/, "");
 const reportBaseName = basename(baseOut);
@@ -487,8 +492,102 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       const afterHotPath = await sampleHotPath(runtimeUrl);
       attachHotPathPhases({ reportOut, afterHotPath });
     }
+    attachStressRunMetadata({ reportOut, rate, workers, runId });
     attachDerivedStressMetrics({ reportOut, duration });
   }
+}
+
+async function buildStressRunMetadata() {
+  return {
+    schemaVersion: 1,
+    capturedAt: new Date().toISOString(),
+    git: {
+      sha: await currentGitSha(),
+    },
+    runProfile: stressRunProfile,
+    expectedRoles: expectedRolesForRunProfile(stressRunProfile),
+    actionProfile: profile,
+    mode,
+    scenarioId,
+    runtimeUrl,
+    engineUrl,
+    commandTransport,
+    streamAddress: commandTransport === "stream" ? streamAddress : "",
+    sessionConfig: sessionConfig
+      ? {
+          path: resolve(sessionConfig),
+          sha256: sha256File(sessionConfig),
+        }
+      : null,
+    knobs: {
+      duration,
+      workers,
+      sweepWorkers,
+      rates,
+      repeatSamples,
+      rateSchedule,
+      rateQueueDepth,
+      minSuccessRatePct,
+    },
+    diagnostics: {
+      commandAccounting: captureCommandAccounting,
+      hotPath: captureHotPath,
+      dbDiagnostics: captureDbDiagnostics,
+      streamAckHealth: captureStreamAckHealth,
+      streamAckWorkers: captureStreamAckWorkerStats,
+      streamAckProjectors: captureStreamAckProjectorStats,
+      streamDirect: captureStreamDirectStats,
+      venueEventMaterializer: captureVenueEventMaterializerStats,
+    },
+    endpoints: {
+      streamAckWorkers: streamAckWorkerUrls,
+      streamAckProjectors: streamAckProjectorUrls,
+      streamDirect: streamDirectUrls,
+      venueEventMaterializers: venueEventMaterializerUrls,
+    },
+  };
+}
+
+function attachStressRunMetadata({ reportOut, rate, workers, runId }) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    report.stressRunMetadata = {
+      ...stressRunMetadata,
+      step: {
+        runId,
+        rate,
+        workers: Number(workers),
+        reportOut: resolve(reportOut),
+      },
+    };
+    writeFileSync(reportOut, JSON.stringify(report, null, 2));
+  } catch (error) {
+    console.warn(`  stress metadata unavailable: ${error?.message ?? error}`);
+  }
+}
+
+async function currentGitSha() {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--short=12", "HEAD"]);
+    return stdout.trim();
+  } catch {
+    return "";
+  }
+}
+
+function sha256File(path) {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return "";
+  }
+}
+
+function inferStressRunProfile() {
+  if (captureVenueEventMaterializerStats) return "materializer-soak";
+  if (captureStreamDirectStats) return "direct-nodb";
+  if (captureStreamAckWorkerStats || captureStreamAckProjectorStats) return "stream-ack";
+  return "custom";
 }
 
 async function sampleCommandAccounting(runtimeUrl, runId) {
@@ -1815,9 +1914,12 @@ async function requestAppProbe(probe) {
   return new Promise((resolve) => {
     const url = new URL(probe.url);
     const client = url.protocol === "https:" ? https : http;
+    const headers = url.pathname.startsWith("/internal/")
+      ? { "X-Reef-Internal-Route": "true" }
+      : {};
     const req = client.request(
       url,
-      { method: probe.method ?? "GET", timeout: Math.max(1, Number(probe.timeoutMs ?? 2000)) },
+      { method: probe.method ?? "GET", timeout: Math.max(1, Number(probe.timeoutMs ?? 2000)), headers },
       (response) => {
       const chunks = [];
       let bytes = 0;

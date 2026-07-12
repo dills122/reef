@@ -58,6 +58,7 @@ setDefault("VENUE_EVENT_MATERIALIZER_FETCH_TIMEOUT_MS", "200");
 setDefault("DEV_COMPOSE_PROFILES", appendProfiles(env("DEV_COMPOSE_PROFILES"), ["redpanda", "venue-event-materializer", "venue-event-materializer-scaled"]));
 
 setDefault("DEV_STRESS_MODE", "strict-lifecycle");
+setDefault("DEV_STRESS_RUN_PROFILE", "materializer-soak");
 setDefault("DEV_STRESS_PROFILE", "capacity-heavy");
 setDefault("DEV_STRESS_RATES", "10000");
 setDefault("DEV_STRESS_SWEEP_WORKERS", "384");

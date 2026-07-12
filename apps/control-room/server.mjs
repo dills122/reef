@@ -12,6 +12,7 @@ import { dirname, extname, join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalEvidenceSummary } from "../../scripts/dev/lib/report-taxonomy.mjs";
 import { deriveDevUrls, loadDotEnv } from "../../scripts/dev/lib/dev-utils.mjs";
+import { expectedRolesForRunProfile } from "../../scripts/dev/lib/run-profile-roles.mjs";
 
 loadDotEnv();
 
@@ -32,6 +33,9 @@ const projectorUrls = csvEnv(
   localRoleUrls("REEF_PLATFORM_PROJECTOR", ["8084", "8085", "8088", "8089"]),
 );
 const materializerUrls = optionalCsvEnv("REEF_CONTROL_ROOM_MATERIALIZER_URLS");
+const profileName = normalizeProfileName(
+  process.env.REEF_CONTROL_ROOM_PROFILE || (materializerUrls.length > 0 ? "materializer-soak" : "stream-ack"),
+);
 
 mkdirSync(runRoot, { recursive: true });
 
@@ -62,6 +66,7 @@ async function routeApi(request, response, url) {
       workerUrls,
       projectorUrls,
       materializerUrls,
+      profile: profileConfig(),
       stateRoot,
       runRoot,
       mode: "monitor-only",
@@ -119,6 +124,7 @@ async function buildSnapshot(runId) {
     runId,
     runtimeUrl,
     engineUrl,
+    profile: snapshotProfile(containers),
     probes: byName,
     containers,
     currentRun: runId ? readRun(runId) : null,
@@ -241,6 +247,62 @@ function normalizeContainers(workers, materializers, projectors) {
   };
 }
 
+function profileConfig() {
+  return {
+    name: profileName,
+    expectedRoles: expectedRolesForRunProfile(profileName),
+  };
+}
+
+function snapshotProfile(containers) {
+  const config = profileConfig();
+  const warnings = [];
+  const workerOnline = numberOrZero(containers.workerTotals?.enabled);
+  const materializerConfigured = (containers.materializers || []).length;
+  const materializerOnline = numberOrZero(containers.materializerTotals?.enabled);
+  const projectorOnline = numberOrZero(containers.projectorTotals?.running);
+  if (isMaterializerProfile(profileName)) {
+    if (materializerConfigured === 0) {
+      warnings.push("materializer profile selected but REEF_CONTROL_ROOM_MATERIALIZER_URLS is empty");
+    } else if (materializerOnline === 0) {
+      warnings.push("materializer profile selected but no materializer endpoint is online");
+    }
+    if (workerOnline > 0) {
+      warnings.push("materializer profile selected but stream-ack workers are enabled");
+    }
+  } else if (profileName === "stream-ack" && workerUrls.length > 0 && workerOnline === 0) {
+    warnings.push("stream-ack profile selected but no worker endpoint is enabled");
+  }
+  if (profileName === "stream-ack" && projectorUrls.length > 0 && projectorOnline === 0) {
+    warnings.push("no projector endpoint is running");
+  }
+  return {
+    ...config,
+    warnings,
+    observedRoles: {
+      workers: workerOnline,
+      materializers: materializerOnline,
+      projectors: projectorOnline,
+    },
+  };
+}
+
+function normalizeProfileName(value) {
+  const name = String(value || "").trim();
+  if (!name) return "stream-ack";
+  if (["materializer", "materializer-soak", "direct-materializer", "venue-event-materializer"].includes(name)) {
+    return "materializer-soak";
+  }
+  if (["direct-nodb", "stream-direct-nodb"].includes(name)) {
+    return "direct-nodb";
+  }
+  return name;
+}
+
+function isMaterializerProfile(name) {
+  return name === "materializer-soak";
+}
+
 async function probeJson(name, url) {
   const started = Date.now();
   try {
@@ -320,6 +382,7 @@ function readRun(runId) {
     const record = JSON.parse(readFileSync(recordPath, "utf8"));
     return {
       ...record,
+      profile: record.profile || latestRunProfile(evidence),
       evidence,
       recentEvents: readRecentEvents(join(dir, "stdout.ndjson"), 200),
       artifacts,
@@ -330,6 +393,7 @@ function readRun(runId) {
       runId: safeRunId(runId),
       kind: "artifact",
       status: "observed",
+      profile: latestRunProfile(evidence),
       command: [],
       startedAt: firstModifiedAt(artifacts),
       completedAt: lastModifiedAt(artifacts),
@@ -348,6 +412,7 @@ function summarizeRun(run) {
     runId: run.runId,
     kind: run.kind,
     status: run.status,
+    profile: run.profile || latestRunProfile(run.evidence || []),
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     exitCode: run.exitCode,
@@ -370,6 +435,7 @@ function readEvidenceForRun(dir) {
           name: relative(dir, path),
           modifiedAt: statSync(path).mtime.toISOString(),
           evidence: canonicalEvidenceSummary(report),
+          stressRunMetadata: report.stressRunMetadata || null,
           latencyMs: report.latencyMs || {},
           quality: report.quality || {},
           traceChecks: report.traceChecks || {},
@@ -380,6 +446,14 @@ function readEvidenceForRun(dir) {
     }
   }
   return evidenceRows.sort((left, right) => String(left.modifiedAt).localeCompare(String(right.modifiedAt)));
+}
+
+function latestRunProfile(evidenceRows) {
+  return evidenceRows
+    .slice()
+    .reverse()
+    .map((row) => row.stressRunMetadata?.runProfile)
+    .find(Boolean) || "";
 }
 
 function findJsonReports(dir) {
