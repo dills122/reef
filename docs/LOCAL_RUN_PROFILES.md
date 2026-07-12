@@ -9,7 +9,7 @@ monitor settings, and stress command before starting a run.
 | Goal | Proper entrypoint | Expected runtime roles | Materializer? | Primary evidence |
 | --- | --- | --- | --- | --- |
 | Local Control Room / stream-ack demo | `make dev-up-stream-ack` + `make dev-stress-stream-ack` | `platform-api`, 4 workers, 4 projectors, NATS JetStream | No | accepted/completed/projected, worker/projector lag |
-| Active durable materializer path | `make dev-smoke-venue-event-materializer`, then `make dev-stress-venue-event-materializer` | API, matching engine direct consumer, Redpanda, materializer(s), projectors for read models | Yes | accepted/direct-acked/materialized gap, materializer failures, projector lag |
+| Active durable materializer path | `make dev-smoke-venue-event-materializer`, then `make dev-stress-venue-event-materializer` | API, matching engine direct consumer, Redpanda, materializer(s); projectors only when read-model freshness is being measured | Yes | accepted/direct-acked/materialized gap, materializer failures, optional projector lag |
 | Front-door / direct-ingress ceiling | `make dev-stress-stream-direct-nodb` | API, matching engine direct consumer, broker | No canonical materializer by default | accepted/direct-acked throughput and ingress latency |
 | Legacy comparison | `make dev-stress-captured-ack` | API plus captured-ack async worker | No | command accounting gap and async queue health |
 
@@ -145,13 +145,16 @@ Expected materializer roles:
 - `platform-materializer` is running, with scaled materializers when the scaled
   profile is enabled.
 - Generic JetStream stream workers are stopped or disabled for this run shape.
+- Projectors are optional for materializer throughput. The smoke uses read-model
+  projectors to prove reconstruction; stress may stop projectors to isolate the
+  direct matching-to-materializer path.
 
 Interpretation:
 
 - `accepted/direct-acked` gap must be `0`.
 - `accepted/materialized` gap must be `0` after drain.
 - Materializer `failed` and `ackFailed` deltas must be `0`.
-- Projector lag should drain after materialization.
+- Projector lag only applies when the run intentionally keeps projectors online.
 - This is the path to use before promotion gates such as `make do-materializer-10k-gate`.
 
 ## Direct No-DB Ceiling Flow

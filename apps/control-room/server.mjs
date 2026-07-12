@@ -247,14 +247,10 @@ function normalizeContainers(workers, materializers, projectors) {
 }
 
 function profileConfig() {
-  const materializerProfile = isMaterializerProfile(profileName);
+  const expectedRoles = expectedProfileRoles(profileName);
   return {
     name: profileName,
-    expectedRoles: {
-      workers: materializerProfile ? "stopped or disabled" : "enabled",
-      materializers: materializerProfile ? "online" : "not expected",
-      projectors: "running",
-    },
+    expectedRoles,
   };
 }
 
@@ -274,10 +270,10 @@ function snapshotProfile(containers) {
     if (workerOnline > 0) {
       warnings.push("materializer profile selected but stream-ack workers are enabled");
     }
-  } else if (workerUrls.length > 0 && workerOnline === 0) {
+  } else if (profileName === "stream-ack" && workerUrls.length > 0 && workerOnline === 0) {
     warnings.push("stream-ack profile selected but no worker endpoint is enabled");
   }
-  if (projectorUrls.length > 0 && projectorOnline === 0) {
+  if (profileName === "stream-ack" && projectorUrls.length > 0 && projectorOnline === 0) {
     warnings.push("no projector endpoint is running");
   }
   return {
@@ -305,6 +301,35 @@ function normalizeProfileName(value) {
 
 function isMaterializerProfile(name) {
   return name === "materializer-soak";
+}
+
+function expectedProfileRoles(name) {
+  if (isMaterializerProfile(name)) {
+    return {
+      workers: "stopped or disabled",
+      materializers: "online",
+      projectors: "optional unless read-model freshness is being measured",
+    };
+  }
+  if (name === "direct-nodb") {
+    return {
+      workers: "not expected",
+      materializers: "not expected",
+      projectors: "not expected",
+    };
+  }
+  if (name === "stream-ack") {
+    return {
+      workers: "enabled",
+      materializers: "not expected",
+      projectors: "running",
+    };
+  }
+  return {
+    workers: "profile-specific",
+    materializers: "profile-specific",
+    projectors: "profile-specific",
+  };
 }
 
 async function probeJson(name, url) {

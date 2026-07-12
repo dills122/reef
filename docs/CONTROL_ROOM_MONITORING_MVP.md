@@ -117,7 +117,9 @@ make dev-control-room
 
 The profile is advisory and read-only. It controls expected-role warnings in
 the UI so a materializer run cannot quietly display zero materializers as if it
-were a valid topology.
+were a valid topology. For `materializer-soak`, stopped stream workers are
+expected, materializers are required, and projectors are optional unless the run
+is explicitly measuring read-model freshness.
 
 If runtime health is online but internal diagnostic widgets show blocked
 probes, restart the platform profile with:
