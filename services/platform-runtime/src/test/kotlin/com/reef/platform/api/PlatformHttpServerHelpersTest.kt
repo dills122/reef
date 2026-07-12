@@ -77,6 +77,39 @@ class PlatformHttpServerHelpersTest {
         assertEquals(false, doc.boolean("missing"))
     }
 
+    // Regression tests for a gap where /api/v1/orders/current|history|fills
+    // and /api/v1/arena/leaderboard read routes passed a caller-supplied
+    // "limit" query param straight through to internal domain methods that
+    // treat limit=0 as "no LIMIT clause at all" (unbounded). An absent or
+    // explicit ?limit=0 used to mean unlimited results for those specific
+    // downstream signatures; boundedQueryLimit closes that at the boundary.
+    @Test
+    fun boundedQueryLimitUsesDefaultWhenParamIsAbsent() {
+        assertEquals(50, boundedQueryLimit("", defaultValue = 50))
+    }
+
+    @Test
+    fun boundedQueryLimitUsesDefaultWhenParamIsInvalid() {
+        assertEquals(50, boundedQueryLimit("not-a-number", defaultValue = 50))
+    }
+
+    @Test
+    fun boundedQueryLimitUsesDefaultWhenParamIsZeroOrNegative() {
+        assertEquals(50, boundedQueryLimit("0", defaultValue = 50))
+        assertEquals(50, boundedQueryLimit("-1", defaultValue = 50))
+    }
+
+    @Test
+    fun boundedQueryLimitPassesThroughValidPositiveValue() {
+        assertEquals(17, boundedQueryLimit("17", defaultValue = 50))
+    }
+
+    @Test
+    fun boundedQueryLimitClampsCallerSuppliedValueAboveMax() {
+        assertEquals(500, boundedQueryLimit("999999999", defaultValue = 50, max = 500))
+        assertEquals(10, boundedQueryLimit("999999999", defaultValue = 50, max = 10))
+    }
+
     @Test
     fun serverBoundaryDepsDerivesDefaultsFromMinimalConstructorArgs() {
         val deps = ServerBoundaryDeps(
