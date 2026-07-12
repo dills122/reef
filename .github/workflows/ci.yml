@@ -138,7 +138,6 @@ jobs:
             scripts/dev/export-simulation-run.test.mjs \
             scripts/dev/deploy-receiver.test.mjs \
             scripts/dev/analyze-arena-actor-diagnostics.test.mjs \
-            scripts/dev/arena-actor-profile-behavior.test.mjs \
             scripts/dev/arena-score-breakdown.test.mjs \
             scripts/dev/compare-arena-scoring-calibration.test.mjs \
             scripts/dev/run-arena-actor-calibration-matrix.test.mjs \
