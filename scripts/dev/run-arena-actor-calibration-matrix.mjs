@@ -10,6 +10,36 @@ import {
 const DEFAULT_MODE = "packages/scenario-definitions/arena/equity-multi-local.v1.json";
 const DEFAULT_OUT_DIR = "artifacts/arena-actor-calibration";
 
+const CALIBRATION_ENVIRONMENTS = {
+  default: {
+    id: "default",
+    description: "Use source mode and bot catalog without environment-level actor changes.",
+    modePatch: {},
+    actorProfileParamOverrides: {},
+  },
+  "thin-wide-liquidity": {
+    id: "thin-wide-liquidity",
+    description: "Thin, wide house liquidity for NPC taker sensitivity checks.",
+    modePatch: {
+      houseLiquidityDefaults: {
+        targetSpreadBps: 100,
+        quoteSize: 2,
+      },
+      healthTargets: {
+        minDepthPct: 70,
+        maxMedianQuotedSpreadBps: 125,
+        maxP95QuotedSpreadBps: 175,
+      },
+    },
+    actorProfileParamOverrides: {
+      "mm-tight-bluechip": {
+        quoteSpreadBps: 100,
+        quoteSize: 2,
+      },
+    },
+  },
+};
+
 const DEFAULT_GROUPS = [
   {
     id: "mm-quote-spread",
@@ -69,9 +99,11 @@ export function runActorCalibrationMatrix(options = {}) {
   const botCatalog = readJson(catalogPath);
   const actorProfileCatalogPath = resolve(mode.actorProfileCatalogPath ?? "packages/scenario-definitions/arena/actor-profiles.v1.json");
   const groups = selectedGroups(options.groups);
+  const environment = selectedEnvironment(options.environment);
+  const configured = applyCalibrationEnvironment(mode, botCatalog, environment);
   const entries = buildActorCalibrationEntries({
-    mode,
-    botCatalog,
+    mode: configured.mode,
+    botCatalog: configured.botCatalog,
     groups,
     includeBaseline: options.includeBaseline !== false,
     generatedDir,
@@ -115,6 +147,7 @@ export function runActorCalibrationMatrix(options = {}) {
     actorProfileCatalogPath,
     submitMode: options.submitMode ?? "dry-run",
     reportShape: "compact",
+    environment: environmentDescriptor(environment),
     groups: groups.map((group) => ({
       id: group.id,
       description: group.description,
@@ -194,21 +227,36 @@ export function buildActorCalibrationEntries({ mode, botCatalog, groups = DEFAUL
 }
 
 export function catalogWithActorOverride(botCatalog, mode, targetProfileId, knob, value) {
+  return catalogWithActorParamOverrides(botCatalog, mode, {
+    [targetProfileId]: { [knob]: value },
+  });
+}
+
+export function catalogWithActorParamOverrides(botCatalog, mode, overridesByProfileId = {}) {
   return {
     ...botCatalog,
-    catalogId: `${botCatalog.catalogId ?? "bot-catalog"}-actor-calibration`,
+    catalogId: actorCalibrationCatalogId(botCatalog.catalogId),
     bots: (botCatalog.bots ?? []).map((bot) => {
-      if (profileIdForBot(bot, mode) !== targetProfileId) {
+      const profileId = profileIdForBot(bot, mode);
+      const overrides = overridesByProfileId[profileId];
+      if (overrides === undefined) {
         return bot;
       }
       return {
         ...bot,
         actorProfileParams: {
           ...(bot.actorProfileParams ?? {}),
-          [knob]: value,
+          ...overrides,
         },
       };
     }),
+  };
+}
+
+export function applyCalibrationEnvironment(mode, botCatalog, environment = CALIBRATION_ENVIRONMENTS.default) {
+  return {
+    mode: deepMerge(mode, environment.modePatch ?? {}),
+    botCatalog: catalogWithActorParamOverrides(botCatalog, mode, environment.actorProfileParamOverrides ?? {}),
   };
 }
 
@@ -217,6 +265,7 @@ export function parseArgs(argv) {
   for (const arg of argv) {
     if (arg.startsWith("--out-dir=")) options.outDir = arg.slice("--out-dir=".length);
     else if (arg.startsWith("--mode=")) options.mode = arg.slice("--mode=".length);
+    else if (arg.startsWith("--environment=")) options.environment = arg.slice("--environment=".length);
     else if (arg.startsWith("--submit-mode=")) options.submitMode = arg.slice("--submit-mode=".length);
     else if (arg.startsWith("--compartment=")) options.compartment = arg.slice("--compartment=".length);
     else if (arg.startsWith("--duration-seconds=")) options.durationSeconds = positiveNumber(arg.slice("--duration-seconds=".length));
@@ -259,6 +308,7 @@ export function actorCalibrationCliSummary(manifest) {
     diagnosticsPath: manifest.diagnosticsPath,
     influenceSummaryPath: manifest.influenceSummaryPath,
     submitMode: manifest.submitMode,
+    environment: manifest.environment,
     entryCount: manifest.entries.length,
     completedCount: manifest.entries.filter((entry) => entry.status === "completed").length,
     failedEntries: manifest.entries.filter((entry) => entry.status !== "completed").map((entry) => ({
@@ -401,6 +451,28 @@ function selectedGroups(groupIds) {
   });
 }
 
+function selectedEnvironment(environmentId = "default") {
+  const environment = CALIBRATION_ENVIRONMENTS[environmentId];
+  if (environment === undefined) {
+    throw new Error(`unknown actor calibration environment ${environmentId}; known environments: ${Object.keys(CALIBRATION_ENVIRONMENTS).join(", ")}`);
+  }
+  return environment;
+}
+
+function actorCalibrationCatalogId(catalogId) {
+  const base = catalogId ?? "bot-catalog";
+  return base.endsWith("-actor-calibration") ? base : `${base}-actor-calibration`;
+}
+
+function environmentDescriptor(environment) {
+  return {
+    id: environment.id,
+    description: environment.description,
+    modePatch: environment.modePatch ?? {},
+    actorProfileParamOverrides: environment.actorProfileParamOverrides ?? {},
+  };
+}
+
 function runArenaEntry(entry, reportPath, options) {
   const args = buildArenaRunArgs(entry, reportPath, options);
   const spawned = spawnSync(options.runtime ?? "bun", args, {
@@ -453,6 +525,26 @@ function repoRoot() {
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
+}
+
+function deepMerge(base, overlay) {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(overlay ?? {})) {
+    if (isPlainObject(value) && isPlainObject(base?.[key])) {
+      merged[key] = deepMerge(base[key], value);
+    } else if (Array.isArray(value)) {
+      merged[key] = [...value];
+    } else if (isPlainObject(value)) {
+      merged[key] = deepMerge({}, value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function writeJson(path, value) {

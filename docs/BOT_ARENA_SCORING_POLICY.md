@@ -283,6 +283,14 @@ behavior-backed groups are:
 - `npc-spread-cross`
 - `npc-order-rate`
 
+Use `--environment=thin-wide-liquidity` when default house liquidity saturates
+NPC taker behavior. This environment keeps the same source mode but writes
+temporary overlays with wider, thinner market maker quotes
+(`mm-tight-bluechip.quoteSpreadBps=100`, `quoteSize=2`) plus relaxed spread
+health thresholds. The environment is recorded in the matrix manifest, applies
+to the baseline and every group entry, and group-specific knob overrides still
+win for the target profile being tested.
+
 Example live slice:
 
 ```sh
@@ -293,20 +301,29 @@ bun scripts/dev/run-arena-actor-calibration-matrix.mjs \
   --arena-admin-url=http://127.0.0.1:8080 \
   --seed-reference \
   --duration-seconds=30 \
+  --environment=thin-wide-liquidity \
   --group=npc-aggression
 ```
 
 Initial local live calibration notes from 15-second matched slices:
 
 - `npc-bad-aggressive-retail.aggression` at `0.35`, `0.65`, and `0.95`
-  produced the same result: average `10` submitted commands, `10` fills,
-  `1.0` fill ratio, `$2400` executed notional, `-10` PnL bps, and `-2.4`
-  total PnL. In the current mode this knob is saturated and should not drive
-  difficulty scoring until paired with wider markets or lower spread-cross
-  settings.
+  produced the same default-mode result: average `10` submitted commands,
+  `10` fills, `1.0` fill ratio, `$2400` executed notional, `-10` PnL bps,
+  and `-2.4` total PnL. A follow-up 10-second live slice under
+  `thin-wide-liquidity` still produced no movement: average `5` commands,
+  `5` fills, `1.0` fill ratio, about `$1199.76` executed notional, and
+  `-1.2` total PnL for every value. Do not use this knob for difficulty
+  scoring until the taker strategy can choose non-crossing or less-crossing
+  prices.
 - `npc-bad-aggressive-retail.maxSpreadCrossBps` at `50`, `150`, and `250`
-  also produced the same result: average `10` fills and `1.0` fill ratio. The
-  current venue conditions are already crossable at `50` bps.
+  also produced the same default-mode result: average `10` fills and `1.0`
+  fill ratio. Under `thin-wide-liquidity`, it still produced average `5`
+  fills, `1.0` fill ratio, about `$1199.76` executed notional, and about
+  `-10.002` PnL bps for every value. Current taker logic references best
+  ask/bid and then adds at least a positive cross offset, so these values
+  change limit-price distance beyond top of book, not whether the order crosses
+  resting liquidity.
 - `npc-bad-aggressive-retail.orderRate` is behavior-backed: `low` produced
   average `3` submitted commands and fills, `medium` produced `5`, and `high`
   produced `10`, with executed notional scaling from about `$719` to `$1199`

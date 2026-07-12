@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   actorCalibrationCliSummary,
+  applyCalibrationEnvironment,
   buildActorInfluenceSummary,
   buildActorCalibrationEntries,
   buildArenaRunArgs,
@@ -44,6 +45,41 @@ const overridden = catalogWithActorOverride(botCatalog, mode, "npc-bad-aggressiv
 assert.deepEqual(overridden.bots.find((entry) => entry.botId === "npc-a").actorProfileParams, { aggression: 0.35 });
 assert.equal(overridden.bots.find((entry) => entry.botId === "mm-a").actorProfileParams, undefined);
 
+const thinWideEnvironment = {
+  id: "thin-wide-liquidity",
+  description: "Thin, wide liquidity for test.",
+  modePatch: {
+    houseLiquidityDefaults: {
+      targetSpreadBps: 100,
+      quoteSize: 2,
+    },
+    healthTargets: {
+      maxMedianQuotedSpreadBps: 125,
+    },
+  },
+  actorProfileParamOverrides: {
+    "mm-tight-bluechip": {
+      quoteSpreadBps: 100,
+      quoteSize: 2,
+    },
+  },
+};
+const configured = applyCalibrationEnvironment(mode, botCatalog, thinWideEnvironment);
+assert.equal(configured.mode.houseLiquidityDefaults.targetSpreadBps, 100);
+assert.equal(configured.mode.houseLiquidityDefaults.quoteSize, 2);
+assert.equal(configured.mode.healthTargets.maxMedianQuotedSpreadBps, 125);
+assert.equal(mode.houseLiquidityDefaults, undefined);
+assert.deepEqual(configured.botCatalog.bots.find((entry) => entry.botId === "mm-a").actorProfileParams, {
+  quoteSpreadBps: 100,
+  quoteSize: 2,
+});
+const quoteSpreadOverride = catalogWithActorOverride(configured.botCatalog, configured.mode, "mm-tight-bluechip", "quoteSpreadBps", 10);
+assert.equal(quoteSpreadOverride.catalogId, "test-catalog-actor-calibration");
+assert.deepEqual(quoteSpreadOverride.bots.find((entry) => entry.botId === "mm-a").actorProfileParams, {
+  quoteSpreadBps: 10,
+  quoteSize: 2,
+});
+
 const groups = [
   {
     id: "npc-aggression",
@@ -66,6 +102,27 @@ assert.equal(generatedMode.modeId, "equity-test-actor-npc-aggression-0p35");
 assert.equal(generatedMode.scenarioId, "arena-equity-test-v1-actor-npc-aggression-0p35");
 assert.equal(generatedMode.catalogPath, entries[1].botCatalogPath);
 assert.deepEqual(generatedCatalog.bots.find((entry) => entry.botId === "npc-a").actorProfileParams, { aggression: 0.35 });
+
+const environmentEntries = buildActorCalibrationEntries({
+  mode: configured.mode,
+  botCatalog: configured.botCatalog,
+  groups,
+  includeBaseline: true,
+  generatedDir: path.join(dir, "environment-generated"),
+});
+const environmentBaselineCatalog = JSON.parse(await readFile(environmentEntries[0].botCatalogPath, "utf8"));
+const environmentGroupCatalog = JSON.parse(await readFile(environmentEntries[1].botCatalogPath, "utf8"));
+assert.deepEqual(environmentBaselineCatalog.bots.find((entry) => entry.botId === "mm-a").actorProfileParams, {
+  quoteSpreadBps: 100,
+  quoteSize: 2,
+});
+assert.deepEqual(environmentGroupCatalog.bots.find((entry) => entry.botId === "npc-a").actorProfileParams, {
+  aggression: 0.35,
+});
+assert.deepEqual(environmentGroupCatalog.bots.find((entry) => entry.botId === "mm-a").actorProfileParams, {
+  quoteSpreadBps: 100,
+  quoteSize: 2,
+});
 
 const args = buildArenaRunArgs(entries[1], "/tmp/report.json", {
   submitMode: "live",
@@ -92,10 +149,12 @@ const options = parseArgs([
   "--out-dir=/tmp/calibration",
   "--group=npc-aggression",
   "--group=mm-quote-size",
+  "--environment=thin-wide-liquidity",
   "--no-baseline",
 ]);
 assert.equal(options.outDir, "/tmp/calibration");
 assert.deepEqual(options.groups, ["npc-aggression", "mm-quote-size"]);
+assert.equal(options.environment, "thin-wide-liquidity");
 assert.equal(options.includeBaseline, false);
 
 const summary = actorCalibrationCliSummary({
@@ -103,6 +162,10 @@ const summary = actorCalibrationCliSummary({
   diagnosticsPath: "/tmp/calibration/actor-diagnostics.json",
   influenceSummaryPath: "/tmp/calibration/actor-influence-summary.json",
   submitMode: "dry-run",
+  environment: {
+    id: "thin-wide-liquidity",
+    description: "Thin, wide liquidity.",
+  },
   groups,
   entries: [
     { id: "baseline", status: "completed" },
@@ -122,6 +185,7 @@ const summary = actorCalibrationCliSummary({
 });
 assert.equal(summary.entryCount, 2);
 assert.equal(summary.completedCount, 1);
+assert.equal(summary.environment.id, "thin-wide-liquidity");
 assert.deepEqual(summary.diagnosticsCaveats, ["low-run-count"]);
 assert.equal(summary.failedEntries[0].id, "npc-aggression-0p35");
 assert.equal(summary.influenceSummaryPath, "/tmp/calibration/actor-influence-summary.json");
