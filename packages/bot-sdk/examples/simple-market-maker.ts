@@ -14,8 +14,6 @@ export default class SimpleMarketMaker extends ReefBotV1 {
 
   override async onTick(ctx: BotContextV1): Promise<BotActionV1[]> {
     const instrumentId = ctx.config.string("instrumentId");
-    const orderSize = ctx.config.number("orderSize");
-    const spread = ctx.config.number("spread");
     const snapshot = await ctx.marketData.snapshot(instrumentId);
 
     if (!snapshot.ok) {
@@ -23,6 +21,8 @@ export default class SimpleMarketMaker extends ReefBotV1 {
       return [ctx.actions.noop("snapshot unavailable")];
     }
 
+    const orderSize = profileOrderSize(ctx);
+    const spread = profileSpread(ctx, snapshot.value.midPrice);
     const bid = snapshot.value.midPrice - spread / 2;
     const ask = snapshot.value.midPrice + spread / 2;
 
@@ -41,4 +41,16 @@ export default class SimpleMarketMaker extends ReefBotV1 {
       }),
     ];
   }
+}
+
+function profileOrderSize(ctx: BotContextV1): number {
+  return Math.max(1, Math.floor(ctx.config.optionalNumber("actorProfile.quoteSize") ?? ctx.config.number("orderSize")));
+}
+
+function profileSpread(ctx: BotContextV1, midPrice: number): number {
+  const quoteSpreadBps = ctx.config.optionalNumber("actorProfile.quoteSpreadBps");
+  if (quoteSpreadBps !== undefined) {
+    return Math.max(0.01, midPrice * Math.max(0, quoteSpreadBps) / 10_000);
+  }
+  return ctx.config.number("spread");
 }

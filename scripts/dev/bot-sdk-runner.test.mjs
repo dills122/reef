@@ -11,6 +11,7 @@ const { createRecordingVenueTransportV1 } = await import(
 );
 
 await assertSimpleMarketMakerRun();
+await assertSimpleMarketMakerActorProfileRun();
 await assertLiveReadClientsRun();
 await assertLifecycleSafeMarketMakerRun();
 await assertRefreshingMarketMakerHealthyNoopRun();
@@ -42,6 +43,31 @@ async function assertSimpleMarketMakerRun() {
   assert.equal(report.ticks[2].venueCommands[1].body.limitPrice, "101250000000");
   assert.equal(report.finalOrders.length, 6);
   assert.equal(transport.requests.length, 6);
+}
+
+async function assertSimpleMarketMakerActorProfileRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/simple-market-maker.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      config: {
+        ...fixture.config,
+        "actorProfile.quoteSize": 7,
+        "actorProfile.quoteSpreadBps": 20,
+      },
+      ticks: fixture.ticks.slice(0, 1),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.ticks[0].venueCommands[0].body.quantityUnits, "7");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99900000000");
+  assert.equal(report.ticks[0].venueCommands[1].body.quantityUnits, "7");
+  assert.equal(report.ticks[0].venueCommands[1].body.limitPrice, "100100000000");
 }
 
 async function assertLiveReadClientsRun() {
