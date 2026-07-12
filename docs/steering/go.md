@@ -62,6 +62,8 @@ Guidance:
 
 Use `internal/` by default unless code must be imported externally.
 
+`cmd/*/main.go` entrypoints (including simulator tooling) are not exempt from this split: once a CLI main accumulates unrelated concerns (arg parsing, HTTP client logic, domain assertions, report formatting) in one `package main` file, break it into an `internal/` package per concern, matching the `domain/app/transport/storage` split above rather than growing indefinitely in one file.
+
 ## Modeling Guidance
 
 - use integers or fixed-point representations for money and quantity where precision matters
