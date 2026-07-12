@@ -17,7 +17,7 @@ const DEFAULT_GROUPS = [
     targetProfileId: "mm-tight-bluechip",
     knob: "quoteSpreadBps",
     values: [10, 20, 40],
-    metricsToWatch: ["medianQuotedSpreadBps", "p95QuotedSpreadBps", "fillCount", "totalPnl"],
+    metricsToWatch: ["providerMedianQuotedSpreadBps", "medianQuotedSpreadBps", "fillCount", "totalPnl", "adverseSelectionAvgMarkoutBps", "adverseSelectionAdverseFillPct"],
   },
   {
     id: "mm-quote-size",
@@ -103,6 +103,7 @@ export function runActorCalibrationMatrix(options = {}) {
 
   const manifestPath = join(outDir, "manifest.json");
   const diagnosticsPath = join(outDir, "actor-diagnostics.json");
+  const influenceSummaryPath = join(outDir, "actor-influence-summary.json");
   const completedReports = reports.filter((entry) => entry.status === "completed" && entry.exitCode === 0);
   const manifest = {
     schemaVersion: "reef.arena.actorCalibrationMatrix.v1",
@@ -124,6 +125,7 @@ export function runActorCalibrationMatrix(options = {}) {
     })),
     entries: reports,
     diagnosticsPath: completedReports.length === 0 ? "" : diagnosticsPath,
+    influenceSummaryPath: completedReports.length === 0 ? "" : influenceSummaryPath,
     manifestPath,
   };
   writeJson(manifestPath, manifest);
@@ -134,9 +136,27 @@ export function runActorCalibrationMatrix(options = {}) {
     });
     writeJson(diagnosticsPath, diagnostics);
     manifest.diagnosticsSummary = actorDiagnosticsCliSummary(diagnostics, diagnosticsPath);
+    const influenceSummary = buildActorInfluenceSummary(diagnostics, groups, {
+      diagnosticsPath,
+      manifestPath,
+    });
+    writeJson(influenceSummaryPath, influenceSummary);
+    manifest.influenceSummary = influenceSummary;
     writeJson(manifestPath, manifest);
   }
   return manifest;
+}
+
+export function buildActorInfluenceSummary(diagnostics, groups = DEFAULT_GROUPS, options = {}) {
+  return {
+    schemaVersion: "reef.arena.actorInfluenceSummary.v1",
+    generatedAt: new Date().toISOString(),
+    diagnosticsPath: options.diagnosticsPath ?? "",
+    manifestPath: options.manifestPath ?? "",
+    coverage: diagnostics.coverage ?? {},
+    groups: groups.map((group) => summarizeInfluenceGroup(diagnostics, group)),
+    caveats: diagnostics.caveats ?? [],
+  };
 }
 
 export function buildActorCalibrationEntries({ mode, botCatalog, groups = DEFAULT_GROUPS, includeBaseline = true, generatedDir }) {
@@ -237,6 +257,7 @@ export function actorCalibrationCliSummary(manifest) {
     schemaVersion: "reef.arena.actorCalibrationCliSummary.v1",
     manifestPath: manifest.manifestPath,
     diagnosticsPath: manifest.diagnosticsPath,
+    influenceSummaryPath: manifest.influenceSummaryPath,
     submitMode: manifest.submitMode,
     entryCount: manifest.entries.length,
     completedCount: manifest.entries.filter((entry) => entry.status === "completed").length,
@@ -253,7 +274,95 @@ export function actorCalibrationCliSummary(manifest) {
       values: group.values,
     })),
     diagnosticsCaveats: manifest.diagnosticsSummary?.caveats ?? [],
+    influence: (manifest.influenceSummary?.groups ?? []).map((group) => ({
+      groupId: group.groupId,
+      targetProfileId: group.targetProfileId,
+      knob: group.knob,
+      inferenceQuality: group.inferenceQuality,
+      strongestSignals: group.strongestSignals,
+      caveats: group.caveats,
+    })),
   };
+}
+
+function summarizeInfluenceGroup(diagnostics, group) {
+  const knobDiagnostics = (diagnostics.knobDiagnostics ?? []).find((entry) => entry.knob === group.knob);
+  const profileDiagnostics = knobDiagnostics?.byProfile?.find((entry) => entry.profileId === group.targetProfileId);
+  const rows = (group.values ?? []).map((value) => {
+    const row = profileDiagnostics?.values?.find((entry) => entry.value === String(value));
+    return {
+      value,
+      observationCount: row?.observationCount ?? 0,
+      metrics: metricAverages(row?.metrics ?? {}, group.metricsToWatch ?? []),
+    };
+  });
+  const metricEffects = metricEffectSummary(rows, group.metricsToWatch ?? []);
+  const caveats = influenceCaveats(group, rows, profileDiagnostics, metricEffects);
+  return {
+    groupId: group.id,
+    description: group.description,
+    targetProfileId: group.targetProfileId,
+    knob: group.knob,
+    values: group.values,
+    metricsToWatch: group.metricsToWatch,
+    inferenceQuality: profileDiagnostics?.inferenceQuality ?? "missing-profile-diagnostics",
+    rows,
+    metricEffects,
+    strongestSignals: metricEffects
+      .filter((entry) => entry.status === "measured" && entry.delta !== 0)
+      .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+      .slice(0, 5),
+    caveats,
+  };
+}
+
+function metricAverages(metricStats, metricsToWatch) {
+  return Object.fromEntries((metricsToWatch ?? []).map((metric) => [
+    metric,
+    metricStats[metric]?.avg ?? null,
+  ]));
+}
+
+function metricEffectSummary(rows, metricsToWatch) {
+  return (metricsToWatch ?? []).map((metric) => {
+    const measuredRows = rows.filter((row) => row.metrics[metric] !== null && row.metrics[metric] !== undefined);
+    if (measuredRows.length < 2) {
+      return {
+        metric,
+        status: "insufficient-measurements",
+        fromValue: measuredRows[0]?.value ?? null,
+        toValue: null,
+        fromAvg: measuredRows[0]?.metrics[metric] ?? null,
+        toAvg: null,
+        delta: null,
+        pctDelta: null,
+      };
+    }
+    const first = measuredRows[0];
+    const last = measuredRows[measuredRows.length - 1];
+    const fromAvg = first.metrics[metric];
+    const toAvg = last.metrics[metric];
+    return {
+      metric,
+      status: "measured",
+      fromValue: first.value,
+      toValue: last.value,
+      fromAvg,
+      toAvg,
+      delta: fixed(toAvg - fromAvg),
+      pctDelta: fromAvg === 0 ? null : fixed(((toAvg - fromAvg) / Math.abs(fromAvg)) * 100),
+    };
+  });
+}
+
+function influenceCaveats(group, rows, profileDiagnostics, metricEffects) {
+  const caveats = [];
+  if (profileDiagnostics === undefined) caveats.push("missing-profile-diagnostics");
+  if (rows.some((row) => row.observationCount === 0)) caveats.push("missing-configured-value-observations");
+  if (metricEffects.every((entry) => entry.status !== "measured" || entry.delta === 0)) caveats.push("no-measured-metric-movement");
+  if (profileDiagnostics?.inferenceQuality === "insufficient-variation") caveats.push("insufficient-profile-variation");
+  caveats.push("observational-summary; repeat across seeds before scoring policy changes");
+  return caveats;
 }
 
 function writeCalibrationEntry({ id, description, mode, botCatalog, generatedDir, groupId, targetProfileId, knob, value }) {
@@ -354,4 +463,8 @@ function writeJson(path, value) {
 function positiveNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function fixed(value) {
+  return Number(value.toFixed(6));
 }

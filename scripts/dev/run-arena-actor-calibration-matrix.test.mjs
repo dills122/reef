@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   actorCalibrationCliSummary,
+  buildActorInfluenceSummary,
   buildActorCalibrationEntries,
   buildArenaRunArgs,
   catalogWithActorOverride,
@@ -100,6 +101,7 @@ assert.equal(options.includeBaseline, false);
 const summary = actorCalibrationCliSummary({
   manifestPath: "/tmp/calibration/manifest.json",
   diagnosticsPath: "/tmp/calibration/actor-diagnostics.json",
+  influenceSummaryPath: "/tmp/calibration/actor-influence-summary.json",
   submitMode: "dry-run",
   groups,
   entries: [
@@ -107,10 +109,68 @@ const summary = actorCalibrationCliSummary({
     { id: "npc-aggression-0p35", status: "failed", exitCode: 1, error: "boom" },
   ],
   diagnosticsSummary: { caveats: ["low-run-count"] },
+  influenceSummary: {
+    groups: [{
+      groupId: "npc-aggression",
+      targetProfileId: "npc-bad-aggressive-retail",
+      knob: "aggression",
+      inferenceQuality: "directional-diagnostic-only",
+      strongestSignals: [{ metric: "fillCount", delta: 7 }],
+      caveats: ["observational-summary; repeat across seeds before scoring policy changes"],
+    }],
+  },
 });
 assert.equal(summary.entryCount, 2);
 assert.equal(summary.completedCount, 1);
 assert.deepEqual(summary.diagnosticsCaveats, ["low-run-count"]);
 assert.equal(summary.failedEntries[0].id, "npc-aggression-0p35");
+assert.equal(summary.influenceSummaryPath, "/tmp/calibration/actor-influence-summary.json");
+assert.equal(summary.influence[0].strongestSignals[0].metric, "fillCount");
+
+const influence = buildActorInfluenceSummary({
+  coverage: { reportCount: 3 },
+  caveats: ["diagnostics are observational"],
+  knobDiagnostics: [{
+    knob: "orderRate",
+    byProfile: [{
+      profileId: "npc-bad-aggressive-retail",
+      inferenceQuality: "directional-diagnostic-only",
+      values: [
+        {
+          value: "low",
+          observationCount: 5,
+          metrics: {
+            submittedCommands: { avg: 3 },
+            fillCount: { avg: 3 },
+          },
+        },
+        {
+          value: "high",
+          observationCount: 5,
+          metrics: {
+            submittedCommands: { avg: 10 },
+            fillCount: { avg: 10 },
+          },
+        },
+      ],
+    }],
+  }],
+}, [{
+  id: "npc-order-rate",
+  description: "NPC taker order-rate sensitivity.",
+  targetProfileId: "npc-bad-aggressive-retail",
+  knob: "orderRate",
+  values: ["low", "high"],
+  metricsToWatch: ["submittedCommands", "fillCount"],
+}], {
+  diagnosticsPath: "/tmp/calibration/actor-diagnostics.json",
+  manifestPath: "/tmp/calibration/manifest.json",
+});
+assert.equal(influence.schemaVersion, "reef.arena.actorInfluenceSummary.v1");
+assert.equal(influence.groups[0].rows[0].metrics.submittedCommands, 3);
+assert.equal(influence.groups[0].rows[1].metrics.fillCount, 10);
+assert.equal(influence.groups[0].metricEffects.find((entry) => entry.metric === "submittedCommands").delta, 7);
+assert.equal(influence.groups[0].metricEffects.find((entry) => entry.metric === "fillCount").pctDelta, 233.333333);
+assert.equal(influence.groups[0].strongestSignals[0].metric, "submittedCommands");
 
 console.log("arena actor calibration matrix checks passed");

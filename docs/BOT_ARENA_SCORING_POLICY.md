@@ -271,8 +271,11 @@ a single run.
 Use `scripts/dev/run-arena-actor-calibration-matrix.mjs` when a knob needs a
 matched run set. It generates temporary mode/catalog overlays, varies one
 actor-profile knob at a time, runs compact arena reports, and writes
-`actor-diagnostics.json` beside the matrix manifest. Initial behavior-backed
-groups are:
+`actor-diagnostics.json` plus `actor-influence-summary.json` beside the matrix
+manifest. The influence summary records one row per configured knob value plus
+metric deltas such as commands, fills, provider spread, PnL, and markout so the
+next tuning decision does not require manual `jq` extraction. Initial
+behavior-backed groups are:
 
 - `mm-quote-spread`
 - `mm-quote-size`
@@ -307,7 +310,8 @@ Initial local live calibration notes from 15-second matched slices:
 - `npc-bad-aggressive-retail.orderRate` is behavior-backed: `low` produced
   average `3` submitted commands and fills, `medium` produced `5`, and `high`
   produced `10`, with executed notional scaling from about `$719` to `$1199`
-  to `$2400`.
+  to `$2400`. The generated influence summary surfaces this automatically as a
+  `+7` fill-count delta and about `+233%` movement from `low` to `high`.
 - `mm-tight-bluechip.quoteSpreadBps` has useful liquidity signal: `10` bps
   produced market maker fills and positive average MM PnL, while `20` and `40`
   bps produced no MM fills in the slice. Quote-quality spread metrics are still
