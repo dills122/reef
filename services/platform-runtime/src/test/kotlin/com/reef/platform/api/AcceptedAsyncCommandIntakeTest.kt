@@ -17,6 +17,9 @@ import com.reef.platform.infrastructure.engine.EngineGateway
 import com.reef.platform.infrastructure.persistence.InMemoryRuntimePersistence
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -239,6 +242,113 @@ class AcceptedAsyncCommandIntakeTest {
             assertEquals(1L, intake.stats().retainedTerminalStatusRecords)
             assertEquals(1L, intake.stats().statusRecordsEvicted)
             assertEquals(100L, intake.stats().terminalStatusTtlMs)
+        } finally {
+            intake.stop()
+        }
+    }
+
+    @Test
+    fun offerTimeoutMsAcceptsImmediatelyWhenLaneHasCapacity() {
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 10,
+            inFlightPerLane = 1,
+            offerTimeoutMs = 2_000L,
+            offerWaitMaxConcurrency = 1
+        )
+
+        try {
+            val elapsedNanos = System.nanoTime()
+            val receipt = enqueue(intake, "cmd-offer-happy", "ord-offer-happy", "idem-offer-happy")
+            val elapsedMs = (System.nanoTime() - elapsedNanos) / 1_000_000
+            assertTrue(receipt.accepted, "expected accept when lane has free capacity")
+            assertTrue(elapsedMs < 500, "expected an immediate accept, took ${elapsedMs}ms")
+        } finally {
+            intake.stop()
+        }
+    }
+
+    // Regression test for a runBlocking thread-pool-exhaustion risk: with
+    // EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS > 0, offer() used to block
+    // the calling thread inside runBlocking with no limit on how many
+    // callers could do so concurrently. Since callers are HTTP application
+    // threads drawn from a small, shared, bounded pool, a lane-capacity
+    // backpressure spike could park the entire pool waiting for space,
+    // starving unrelated routes. offerWaitMaxConcurrency bounds concurrent
+    // waiters; callers past the limit must fail fast instead of queueing for
+    // a wait slot.
+    @Test
+    fun offerTimeoutMsBulkheadFailsFastPastMaxConcurrencyInsteadOfQueueing() {
+        val persistence = seededPersistence()
+        val gateway = ControlledAsyncSubmitGateway()
+        val intake = AcceptedAsyncCommandIntake(
+            api = PlatformApi(
+                OrderApplicationService(
+                    engineGateway = gateway,
+                    runtimePersistence = persistence
+                )
+            ),
+            laneCount = 1,
+            queueCapacityPerLane = 1,
+            inFlightPerLane = 1,
+            offerTimeoutMs = 2_000L,
+            offerWaitMaxConcurrency = 1
+        )
+        // Deliberately never call intake.start(): nothing drains the single
+        // lane slot, so every enqueue after the first must wait for space.
+
+        try {
+            val first = enqueue(intake, "cmd-bulkhead-fill", "ord-bulkhead-fill", "idem-bulkhead-fill")
+            assertTrue(first.accepted, "expected the first command to fill the single lane slot")
+
+            val pool = Executors.newFixedThreadPool(2)
+            val startLatch = CountDownLatch(2)
+            val elapsedMsByCaller = ConcurrentLinkedQueue<Long>()
+            val backpressuredByCaller = ConcurrentLinkedQueue<Boolean>()
+            try {
+                val futures = (0 until 2).map { i ->
+                    pool.submit {
+                        startLatch.countDown()
+                        startLatch.await()
+                        val startNanos = System.nanoTime()
+                        val receipt = enqueue(
+                            intake,
+                            "cmd-bulkhead-waiter-$i",
+                            "ord-bulkhead-waiter-$i",
+                            "idem-bulkhead-waiter-$i"
+                        )
+                        elapsedMsByCaller.add((System.nanoTime() - startNanos) / 1_000_000)
+                        backpressuredByCaller.add(receipt.backpressure)
+                    }
+                }
+                futures.forEach { it.get(5, TimeUnit.SECONDS) }
+            } finally {
+                pool.shutdown()
+            }
+
+            // Both waiters must ultimately observe backpressure: one because
+            // it acquired the single wait permit and then timed out with the
+            // lane still full, the other because the bulkhead had no permit
+            // free at all.
+            assertEquals(listOf(true, true), backpressuredByCaller.toList().sorted())
+
+            // The key regression signal: at least one of the two concurrent
+            // waiters must return fast (bulkhead-rejected), not both parked
+            // for the full offerTimeoutMs. Before the fix, both callers
+            // would have blocked the full ~2000ms concurrently.
+            val fastCallers = elapsedMsByCaller.count { it < 500 }
+            assertTrue(
+                fastCallers >= 1,
+                "expected at least one caller to fail fast via the bulkhead, elapsed=$elapsedMsByCaller"
+            )
         } finally {
             intake.stop()
         }
