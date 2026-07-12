@@ -606,6 +606,7 @@ function scoringAssumptions() {
     scoringPolicyVersion: mode.scoringPolicyVersion,
     npcDifficultyMode: "bucket-only",
     npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
+    economicPolicyLock: "run-scoped; final scoring must use the report policyEnvelopeHash",
     scoreBasis: "participation-and-policy-compliance",
     leaderboardScope: "score-eligible public competitor bots only",
     houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
@@ -734,6 +735,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
   const healthSummary = summarizeHealth(healthSamples, totals);
   const marketQualitySummary = summarizeMarketQuality(healthSamples);
   const status = reportStatus(enforcementEvents, healthSummary);
+  const envelope = policyEnvelope();
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
     generatedAt: new Date().toISOString(),
@@ -754,6 +756,8 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       actorProfileCatalogVersion: actorProfileCatalog.version,
       npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     },
+    policyEnvelope: envelope,
+    policyEnvelopeHash: `sha256:${stableHash(envelope)}`,
     runPlan,
     expectations: {
       freezeBots: config.expectFreezeBots,
@@ -806,6 +810,8 @@ function compactArenaReport(report) {
     completedAt: report.completedAt,
     runId: report.runId,
     mode: report.mode,
+    policyEnvelope: report.policyEnvelope,
+    policyEnvelopeHash: report.policyEnvelopeHash,
     runPlan: report.runPlan,
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
@@ -832,6 +838,40 @@ function compactArenaReport(report) {
       sessionReports: Array.isArray(report.sessionReports) ? report.sessionReports.length : 0,
       reason: "compact report shape omits high-volume per-tick detail",
     },
+  };
+}
+
+function policyEnvelope() {
+  return {
+    schemaVersion: "reef.arena.policyEnvelope.v1",
+    modeId: mode.modeId,
+    modeVersion: mode.version,
+    scenarioId: mode.scenarioId,
+    venueSessionId: mode.venueSessionId,
+    seed: Number(mode.seed ?? 0),
+    visibleDataPolicyVersion: mode.visibleDataPolicyVersion,
+    actionPolicyVersion: mode.actionPolicyVersion,
+    riskPolicyVersion: mode.riskPolicyVersion,
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    economicPolicyVersion: mode.economicPolicyVersion,
+    liquidityPolicyVersion: mode.liquidityPolicyVersion,
+    backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
+    creditPolicyVersion: mode.creditPolicyVersion,
+    interventionPolicyVersion: mode.interventionPolicyVersion,
+    actorProfileCatalog: {
+      catalogId: actorProfileCatalog.catalogId,
+      version: actorProfileCatalog.version,
+    },
+    actorProfiles: summarizeActorProfiles(selectedBots).profiles.map((profile) => ({
+      botId: profile.botId,
+      actorClass: profile.actorClass,
+      profileId: profile.profileId,
+      profileVersion: profile.profileVersion,
+      profileHash: profile.profileHash,
+      difficultyBucket: profile.difficultyBucket,
+      scoreEffect: profile.scoreEffect,
+    })),
+    npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
   };
 }
 

@@ -35,6 +35,10 @@ assert.equal(report.healthSamples.length, 2);
 assert.equal(report.mode.economicPolicyVersion, "economic-v0");
 assert.equal(report.mode.actorProfileCatalogVersion, "2026-07-12");
 assert.deepEqual(report.mode.npcDifficultyBuckets, ["benign-noise"]);
+assert.equal(report.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
+assert.equal(report.policyEnvelope.economicPolicyVersion, "economic-v0");
+assert.equal(report.policyEnvelope.actorProfiles.length, 5);
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.policyEnvelopeHash));
 assert.equal(report.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
 assert.deepEqual(report.runPlan.actorProfiles.byActorClass, {
   competitor: 1,
@@ -66,6 +70,8 @@ assert.equal(compactReport.schemaVersion, "reef.arena.localTickRun.v0");
 assert.equal(compactReport.reportShape, "compact");
 assert.equal(compactReport.status, "completed");
 assert.equal(compactReport.totals.ticks, 16);
+assert.equal(compactReport.policyEnvelopeHash, report.policyEnvelopeHash);
+assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
 assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
 assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
 assert.equal(compactReport.sessionReports, undefined);
