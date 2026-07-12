@@ -20,9 +20,10 @@ const modeId = env("DEV_ARENA_RUN_RESULT_SMOKE_MODE_ID", "hosted-sim-smoke");
 const scoringPolicyVersion = env("DEV_ARENA_RUN_RESULT_SMOKE_SCORING_POLICY_VERSION", "score-v1");
 const finalEquity = Number(env("DEV_ARENA_RUN_RESULT_SMOKE_FINAL_EQUITY", "1025000"));
 const replacementFinalEquity = finalEquity + 1500;
+const arenaAdminApiToken = env("ARENA_ADMIN_API_TOKEN", "");
 
-async function request(method, path, payload = undefined) {
-  const response = await requestJson(`${runtimeUrl}${path}`, method, payload);
+async function request(method, path, payload = undefined, internalRoute = false) {
+  const response = await requestJson(`${runtimeUrl}${path}`, method, payload, internalRoute);
   return { status: response.status, text: response.text, json: parseJson(response.text) };
 }
 
@@ -41,7 +42,10 @@ function assertArenaAdminConfigured(response, operation) {
 }
 
 async function expectOk(method, path, payload = undefined) {
-  const response = await request(method, path, payload);
+  let response = await request(method, path, payload);
+  if (canFallbackToInternal(path, response)) {
+    response = await request(method, internalArenaPath(path), payload, true);
+  }
   assertArenaAdminConfigured(response, `${method} ${path}`);
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`${method} ${path} failed (${response.status}): ${response.text}`);
@@ -50,7 +54,7 @@ async function expectOk(method, path, payload = undefined) {
 }
 
 async function transitionVersion(status, reason) {
-  await expectOk("POST", "/internal/admin/arena/bot-versions/transition", {
+  await expectOk("POST", "/admin/v1/arena/bot-versions/transition", {
     botId,
     versionId,
     status,
@@ -62,7 +66,7 @@ async function transitionVersion(status, reason) {
 
 await waitForHttp(`${runtimeUrl}/health`, waitTimeout);
 
-await expectOk("POST", "/internal/admin/arena/bots", {
+await expectOk("POST", "/admin/v1/arena/bots", {
   botId,
   fileName: `${botId}.ts`,
   name: "Arena Result Smoke Bot",
@@ -71,7 +75,7 @@ await expectOk("POST", "/internal/admin/arena/bots", {
   actorId,
   correlationId: `arena-result-smoke-${suffix}`,
 });
-await expectOk("POST", "/internal/admin/arena/bot-versions", {
+await expectOk("POST", "/admin/v1/arena/bot-versions", {
   botId,
   versionId,
   sourceHash: `sha256:source-${suffix}`,
@@ -86,7 +90,7 @@ await transitionVersion("submitted", "result ingestion smoke submitted");
 await transitionVersion("checks-passed", "result ingestion smoke checks passed");
 await transitionVersion("approved", "result ingestion smoke approved");
 
-await expectOk("POST", "/internal/admin/arena/runs", {
+await expectOk("POST", "/admin/v1/arena/runs", {
   runId,
   modeId,
   scenarioId: "hosted-summary-smoke",
@@ -96,13 +100,13 @@ await expectOk("POST", "/internal/admin/arena/runs", {
   actorId,
   correlationId: `arena-result-smoke-${suffix}`,
 });
-await expectOk("POST", "/internal/admin/arena/runs/status", {
+await expectOk("POST", "/admin/v1/arena/runs/status", {
   runId,
   status: "running",
   actorId,
   correlationId: `arena-result-smoke-${suffix}`,
 });
-await expectOk("POST", "/internal/admin/arena/runs/status", {
+await expectOk("POST", "/admin/v1/arena/runs/status", {
   runId,
   status: "completed",
   actorId,
@@ -156,7 +160,7 @@ if (retryIngest.status !== 0) {
 
 const rawResults = await expectOk(
   "GET",
-  `/internal/admin/arena/run-bot-results?runId=${encodeURIComponent(runId)}&actorId=${encodeURIComponent(actorId)}`,
+  `/admin/v1/arena/run-bot-results?runId=${encodeURIComponent(runId)}&actorId=${encodeURIComponent(actorId)}`,
 );
 const rawResult = rawResults.json.results?.find((candidate) => candidate.botId === botId && candidate.versionId === versionId);
 if (!rawResult) {
@@ -174,7 +178,7 @@ if (rawResult.realizedPnl !== 26500 || rawResult.maxDrawdown !== 750) {
 
 const leaderboard = await expectOk(
   "GET",
-  `/internal/admin/arena/leaderboard?modeId=${encodeURIComponent(modeId)}&scoringPolicyVersion=${encodeURIComponent(scoringPolicyVersion)}&limit=10&actorId=${encodeURIComponent(actorId)}`,
+  `/admin/v1/arena/leaderboard?modeId=${encodeURIComponent(modeId)}&scoringPolicyVersion=${encodeURIComponent(scoringPolicyVersion)}&limit=10&actorId=${encodeURIComponent(actorId)}`,
 );
 const entry = leaderboard.json.entries?.find((candidate) => candidate.runId === runId && candidate.botId === botId);
 if (!entry) {
@@ -187,7 +191,20 @@ if (entry.finalEquity !== replacementFinalEquity) {
 console.log("arena run result ingestion smoke passed");
 console.log(JSON.stringify({ botId, versionId, runId, modeId, scoringPolicyVersion, finalEquity: replacementFinalEquity }, null, 2));
 
-function requestJson(url, method, payload = undefined) {
+function canFallbackToInternal(path, response) {
+  const host = new URL(runtimeUrl).hostname;
+  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+  if (!loopback || arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
+  return response.status === 404 ||
+    response.status === 401 ||
+    (response.status === 503 && response.text.includes("ARENA_ADMIN_API_TOKEN"));
+}
+
+function internalArenaPath(path) {
+  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
+}
+
+function requestJson(url, method, payload = undefined, internalRoute = false) {
   const parsed = new URL(url);
   const transport = parsed.protocol === "https:" ? https : http;
   const body = payload === undefined ? undefined : JSON.stringify(payload);
@@ -196,6 +213,8 @@ function requestJson(url, method, payload = undefined) {
       method,
       headers: {
         "content-type": "application/json",
+        ...(arenaAdminApiToken.trim() !== "" && !internalRoute ? { Authorization: `Bearer ${arenaAdminApiToken}` } : {}),
+        ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
         "X-Reef-Actor-Id": actorId,
         "X-Correlation-Id": `arena-result-smoke-${suffix}`,
         ...(body === undefined ? {} : { "content-length": Buffer.byteLength(body) }),

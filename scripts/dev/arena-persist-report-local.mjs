@@ -8,6 +8,7 @@ const outPath = args.out ?? reportPath;
 const actorId = args.actorId ?? process.env.ADMIN_ACTOR_ID ?? "admin-cli";
 const service = args.service ?? "platform-api";
 const dryRun = args.dryRun === true || args["dry-run"] === true;
+const arenaAdminApiToken = args.adminApiToken ?? args["admin-api-token"] ?? process.env.ARENA_ADMIN_API_TOKEN ?? "";
 
 if (!reportPath) {
   console.error("usage: node scripts/dev/arena-persist-report-local.mjs --report=<arena-report.json> [--out=<updated-report.json>] [--dry-run]");
@@ -23,7 +24,7 @@ const operations = [];
 
 for (const result of report.botResults ?? []) {
   const bot = botById.get(result.botId) ?? {};
-  operations.push(request("POST", "/internal/admin/arena/bots", {
+  operations.push(request("POST", "/admin/v1/arena/bots", {
     botId: result.botId,
     fileName: bot.entryPath ?? `${result.botId}.ts`,
     name: result.botId,
@@ -32,7 +33,7 @@ for (const result of report.botResults ?? []) {
     actorId,
     correlationId,
   }, { allowAlreadyExists: true }));
-  operations.push(request("POST", "/internal/admin/arena/bot-versions", {
+  operations.push(request("POST", "/admin/v1/arena/bot-versions", {
     botId: result.botId,
     versionId: result.versionId,
     sourceHash: bot.artifact?.manifest?.sourceHash ?? `sha256:${result.botId}-source`,
@@ -48,7 +49,7 @@ for (const result of report.botResults ?? []) {
     ["checks-passed", "local arena report checks passed"],
     ["approved", "local arena report approved"],
   ]) {
-    operations.push(request("POST", "/internal/admin/arena/bot-versions/transition", {
+    operations.push(request("POST", "/admin/v1/arena/bot-versions/transition", {
       botId: result.botId,
       versionId: result.versionId,
       status,
@@ -59,7 +60,7 @@ for (const result of report.botResults ?? []) {
   }
 }
 
-operations.push(request("POST", "/internal/admin/arena/runs", {
+operations.push(request("POST", "/admin/v1/arena/runs", {
   runId: report.runId,
   modeId: mode.modeId,
   scenarioId: mode.scenarioId ?? `${mode.modeId}-scenario`,
@@ -71,7 +72,7 @@ operations.push(request("POST", "/internal/admin/arena/runs", {
 }, { allowAlreadyExists: true }));
 
 for (const [status, allowInvalidTransition] of [["running", true], ["completed", true]]) {
-  operations.push(request("POST", "/internal/admin/arena/runs/status", {
+  operations.push(request("POST", "/admin/v1/arena/runs/status", {
     runId: report.runId,
     status,
     actorId,
@@ -80,7 +81,7 @@ for (const [status, allowInvalidTransition] of [["running", true], ["completed",
 }
 
 for (const result of report.botResults ?? []) {
-  operations.push(request("POST", "/internal/admin/arena/run-bot-results", {
+  operations.push(request("POST", "/admin/v1/arena/run-bot-results", {
     runId: report.runId,
     botId: result.botId,
     versionId: result.versionId,
@@ -101,7 +102,7 @@ for (const result of report.botResults ?? []) {
 }
 
 for (const event of report.enforcementEvents ?? []) {
-  operations.push(request("POST", "/internal/admin/arena/run-enforcement-events", {
+  operations.push(request("POST", "/admin/v1/arena/run-enforcement-events", {
     runId: report.runId,
     botId: event.botId,
     versionId: event.versionId,
@@ -115,11 +116,11 @@ for (const event of report.enforcementEvents ?? []) {
   }, { allowAlreadyExists: true }));
 }
 
-const rawResults = request("GET", `/internal/admin/arena/run-bot-results?runId=${encodeURIComponent(report.runId)}&actorId=${encodeURIComponent(actorId)}`);
-const rawEnforcementEvents = request("GET", `/internal/admin/arena/run-enforcement-events?runId=${encodeURIComponent(report.runId)}&actorId=${encodeURIComponent(actorId)}`);
+const rawResults = request("GET", `/admin/v1/arena/run-bot-results?runId=${encodeURIComponent(report.runId)}&actorId=${encodeURIComponent(actorId)}`);
+const rawEnforcementEvents = request("GET", `/admin/v1/arena/run-enforcement-events?runId=${encodeURIComponent(report.runId)}&actorId=${encodeURIComponent(actorId)}`);
 const leaderboard = request(
   "GET",
-  `/internal/admin/arena/leaderboard?modeId=${encodeURIComponent(mode.modeId)}&scoringPolicyVersion=${encodeURIComponent(mode.scoringPolicyVersion)}&limit=50&actorId=${encodeURIComponent(actorId)}`,
+  `/admin/v1/arena/leaderboard?modeId=${encodeURIComponent(mode.modeId)}&scoringPolicyVersion=${encodeURIComponent(mode.scoringPolicyVersion)}&limit=50&actorId=${encodeURIComponent(actorId)}`,
 );
 const leaderboardEntry = leaderboard.body?.entries?.find((entry) => entry.runId === report.runId);
 const expectsLeaderboardEntry = (report.botResults ?? []).some((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified);
@@ -156,6 +157,29 @@ function request(method, path, payload, options = {}) {
     };
   }
 
+  let result = curlRequest(method, path, payload, false);
+  let responsePath = path;
+  let parsed = parseCurlResponse(result, method, path);
+  if (canFallbackToInternal(path, parsed.statusCode, parsed.text)) {
+    responsePath = internalArenaPath(path);
+    result = curlRequest(method, responsePath, payload, true);
+    parsed = parseCurlResponse(result, method, responsePath);
+  }
+  const { statusCode, text, body } = parsed;
+  if (statusCode >= 200 && statusCode < 300) {
+    return { path: responsePath, requestedPath: path, method, statusCode, ok: true, body };
+  }
+  const encoded = JSON.stringify(body);
+  if (options.allowAlreadyExists && encoded.includes("already exists")) {
+    return { path: responsePath, requestedPath: path, method, statusCode, ok: true, ignored: "already_exists", body };
+  }
+  if (options.allowInvalidTransition && (encoded.includes("invalid bot version transition") || encoded.includes("invalid arena run transition"))) {
+    return { path: responsePath, requestedPath: path, method, statusCode, ok: true, ignored: "invalid_transition", body };
+  }
+  throw new Error(`arena local persist ${method} ${path} failed (${statusCode}): ${text}`);
+}
+
+function curlRequest(method, path, payload, internalRoute) {
   const command = [
     "compose",
     "exec",
@@ -170,12 +194,15 @@ function request(method, path, payload, options = {}) {
     "-H",
     "Content-Type: application/json",
     "-H",
-    "X-Reef-Internal-Route: true",
-    "-H",
     `X-Reef-Actor-Id: ${actorId}`,
     "-H",
     `X-Correlation-Id: ${correlationId}`,
   ];
+  if (internalRoute) {
+    command.push("-H", "X-Reef-Internal-Route: true");
+  } else if (arenaAdminApiToken.trim() !== "") {
+    command.push("-H", `Authorization: Bearer ${arenaAdminApiToken}`);
+  }
   if (method === "POST") {
     command.push("--data-binary", "@-");
   }
@@ -185,6 +212,10 @@ function request(method, path, payload, options = {}) {
     encoding: "utf8",
     input: method === "POST" ? JSON.stringify(payload) : undefined,
   });
+  return result;
+}
+
+function parseCurlResponse(result, method, path) {
   if (result.status !== 0) {
     throw new Error(`docker compose exec curl failed for ${method} ${path}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
@@ -192,17 +223,18 @@ function request(method, path, payload, options = {}) {
   const statusCode = Number(lines.pop());
   const text = lines.join("\n");
   const body = safeJson(text);
-  if (statusCode >= 200 && statusCode < 300) {
-    return { path, method, statusCode, ok: true, body };
-  }
-  const encoded = JSON.stringify(body);
-  if (options.allowAlreadyExists && encoded.includes("already exists")) {
-    return { path, method, statusCode, ok: true, ignored: "already_exists", body };
-  }
-  if (options.allowInvalidTransition && (encoded.includes("invalid bot version transition") || encoded.includes("invalid arena run transition"))) {
-    return { path, method, statusCode, ok: true, ignored: "invalid_transition", body };
-  }
-  throw new Error(`arena local persist ${method} ${path} failed (${statusCode}): ${text}`);
+  return { statusCode, text, body };
+}
+
+function canFallbackToInternal(path, statusCode, text) {
+  if (arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
+  return statusCode === 404 ||
+    statusCode === 401 ||
+    (statusCode === 503 && text.includes("ARENA_ADMIN_API_TOKEN"));
+}
+
+function internalArenaPath(path) {
+  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
 }
 
 function dryRunBody(path, payload) {

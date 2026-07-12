@@ -149,6 +149,38 @@ class PlatformHttpServerBoundaryTest {
         )
         assertEquals(
             AdminGatewayRoute(
+                "/internal/admin/arena/runs",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/runs", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/arena/runs/status",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/runs/status", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/arena/run-bot-results",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/run-bot-results", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
+                "/internal/admin/arena/run-enforcement-events",
+                "arena",
+                setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+            ),
+            adminGatewayRouteFor("/admin/v1/arena/run-enforcement-events", "POST")
+        )
+        assertEquals(
+            AdminGatewayRoute(
                 "/internal/admin/arena/bots/config",
                 "admin",
                 setOf(AdminServiceTokenFamily.Admin)
@@ -809,6 +841,135 @@ class PlatformHttpServerBoundaryTest {
 
             assertEquals(200, response.status)
             assertContains(response.body, "\"botVersionStatus\":\"Banned\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun adminGatewayArenaRunResultWritesWorkThroughPublicGateway() {
+        val auth = testAdminAuth()
+        val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
+        val session = auth.authService.createSession(user.reefUserId)
+        val persistence = InMemoryRuntimePersistence()
+        persistence.saveRole(RoleDefinition(roleId = "arena-operator", permissions = listOf(Permission.ARENA_ADMIN)))
+        persistence.saveActorRoleBinding(ActorRoleBinding(actorId = user.reefUserId, roleId = "arena-operator"))
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        val controlPlane = ArenaControlPlaneService(arenaStore) { java.time.Instant.parse("2026-07-05T12:00:00Z") }
+        controlPlane.registerBot(
+            RegisterArenaBotCommand(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com")
+            )
+        )
+        controlPlane.registerVersion(
+            RegisterArenaBotVersionCommand(
+                botId = "bot-1",
+                versionId = "v1",
+                sourceHash = "sha256:source",
+                artifactHash = "sha256:artifact",
+                sdkVersion = "1.5.0",
+                apiVersion = "v1",
+                dependencyManifestHash = "sha256:deps"
+            )
+        )
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Submitted, user.reefUserId, "submitted", "corr")
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.ChecksPassed, user.reefUserId, "checks passed", "corr")
+        controlPlane.transitionVersion("bot-1", "v1", ArenaBotVersionStatus.Approved, user.reefUserId, "approved", "corr")
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            runtimePersistence = persistence,
+            adminAuthService = auth.authService,
+            adminIdentityService = auth.identityService,
+            adminGitHubOAuthClient = FakeAdminGitHubOAuthClient(),
+            arenaAdminService = AdminApplicationService(runtimePersistence = persistence, arenaRegistryStore = arenaStore)
+        )
+        try {
+            val headers = mapOf("Cookie" to "reef_admin_session=${session.token}")
+            val run = post(
+                server.address.port,
+                "/admin/v1/arena/runs",
+                headers = headers,
+                body = """
+                    {
+                      "runId":"run-1",
+                      "modeId":"hosted-sim",
+                      "scenarioId":"scenario-1",
+                      "seed":42,
+                      "policyVersion":"policy-v1",
+                      "botVersions":[{"botId":"bot-1","versionId":"v1"}]
+                    }
+                """.trimIndent()
+            )
+            val running = post(
+                server.address.port,
+                "/admin/v1/arena/runs/status",
+                headers = headers,
+                body = """{"runId":"run-1","status":"running"}"""
+            )
+            val completed = post(
+                server.address.port,
+                "/admin/v1/arena/runs/status",
+                headers = headers,
+                body = """{"runId":"run-1","status":"completed"}"""
+            )
+            val result = post(
+                server.address.port,
+                "/admin/v1/arena/run-bot-results",
+                headers = headers,
+                body = """
+                    {
+                      "runId":"run-1",
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "scoringPolicyVersion":"score-v2",
+                      "finalEquity":1030000,
+                      "realizedPnl":30000,
+                      "maxDrawdown":900,
+                      "actionsProposed":13,
+                      "orderActionsProposed":9,
+                      "dataCalls":21,
+                      "signalsGenerated":5,
+                      "disqualified":false
+                    }
+                """.trimIndent()
+            )
+            val enforcement = post(
+                server.address.port,
+                "/admin/v1/arena/run-enforcement-events",
+                headers = headers,
+                body = """
+                    {
+                      "runId":"run-1",
+                      "botId":"bot-1",
+                      "versionId":"v1",
+                      "decision":"warn",
+                      "reasonCode":"TEST_WARN",
+                      "reason":"test warning",
+                      "policyVersion":"policy-v1",
+                      "countersJson":"{}"
+                    }
+                """.trimIndent()
+            )
+            val readResults = get(
+                server.address.port,
+                "/admin/v1/arena/run-bot-results?runId=run-1",
+                headers = headers
+            )
+            val leaderboard = get(
+                server.address.port,
+                "/admin/v1/arena/leaderboard?modeId=hosted-sim&scoringPolicyVersion=score-v2",
+                headers = headers
+            )
+
+            assertEquals(200, run.status)
+            assertEquals(200, running.status)
+            assertEquals(200, completed.status)
+            assertEquals(200, result.status)
+            assertEquals(200, enforcement.status)
+            assertContains(readResults.body, "\"finalEquity\":1030000")
+            assertContains(leaderboard.body, "\"botId\":\"bot-1\"")
         } finally {
             server.stop(0)
         }

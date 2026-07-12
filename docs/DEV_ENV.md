@@ -526,12 +526,20 @@ curl -s http://127.0.0.1:8080/internal/boundary/price-collars
 
 Boundary rejection evidence is append-only in `boundary.boundary_rejections` when `EXTERNAL_API_BOUNDARY_REJECTION_LOG=postgres`. The default `auto` mode enables this log when any Postgres-backed boundary guardrail is enabled and otherwise stays no-op, so allow-all local runs do not require a boundary database.
 
-Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls:
+Run the local protective-controls smoke after starting a runtime configured with Postgres-backed controls.
+Use the same `ADMIN_API_TOKEN` value for `make dev-up` and the smoke command so the runtime and script agree on the admin-gateway bearer token:
 
 ```bash
 EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres \
 EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres \
 EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres \
+ADMIN_API_TOKEN=local-admin \
+make dev-up
+
+EXTERNAL_API_ACCOUNT_RISK_CHECK_MODE=postgres \
+EXTERNAL_API_COMMAND_CIRCUIT_BREAKER_MODE=postgres \
+EXTERNAL_API_INSTRUMENT_PRICE_COLLAR_MODE=postgres \
+ADMIN_API_TOKEN=local-admin \
 make dev-smoke-protective-controls
 ```
 

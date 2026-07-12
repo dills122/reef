@@ -163,7 +163,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
         "arena",
         setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
     )
-    "/admin/v1/arena/runs" -> if (method == "GET") {
+    "/admin/v1/arena/runs" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute(
             "/internal/admin/arena/runs",
             "arena",
@@ -172,7 +172,16 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     } else {
         null
     }
-    "/admin/v1/arena/run-bot-results" -> if (method == "GET") {
+    "/admin/v1/arena/runs/status" -> if (method == "POST") {
+        AdminGatewayRoute(
+            "/internal/admin/arena/runs/status",
+            "arena",
+            setOf(AdminServiceTokenFamily.Ci, AdminServiceTokenFamily.Admin)
+        )
+    } else {
+        null
+    }
+    "/admin/v1/arena/run-bot-results" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute(
             "/internal/admin/arena/run-bot-results",
             "arena",
@@ -181,7 +190,7 @@ internal fun adminGatewayRouteFor(path: String, method: String = "POST"): AdminG
     } else {
         null
     }
-    "/admin/v1/arena/run-enforcement-events" -> if (method == "GET") {
+    "/admin/v1/arena/run-enforcement-events" -> if (method in setOf("GET", "POST")) {
         AdminGatewayRoute(
             "/internal/admin/arena/run-enforcement-events",
             "arena",
@@ -677,6 +686,7 @@ class PlatformHttpServer(
             "/admin/v1/arena/bot-versions",
             "/admin/v1/arena/bot-versions/transition",
             "/admin/v1/arena/runs",
+            "/admin/v1/arena/runs/status",
             "/admin/v1/arena/run-bot-results",
             "/admin/v1/arena/run-enforcement-events",
             "/admin/v1/arena/leaderboard",
