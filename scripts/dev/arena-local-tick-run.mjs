@@ -1090,11 +1090,8 @@ function assertExpectedFreezeBots(report) {
   }
 }
 
-async function maybeCollectHealthSample(healthSamples, tickIndex, tickReports) {
-  if (tickIndex % runPlan.healthSampleEveryTicks !== 0) {
-    return;
-  }
-  const fallbackOccurredAt = new Date(Date.parse("2026-07-04T14:30:00.000Z") + tickIndex * runPlan.tickIntervalMs).toISOString();
+async function maybeCollectHealthSample(healthSamples, healthSampleIndex, tickReports, offsetMs = healthSampleIndex * runPlan.healthSampleIntervalMs) {
+  const fallbackOccurredAt = new Date(Date.parse("2026-07-04T14:30:00.000Z") + offsetMs).toISOString();
   const representativeTick = tickReports.find((tickReport) => tickReport.tick !== undefined)?.tick
     ?? tickReports.find((tickReport) => typeof tickReport.occurredAt === "string")
     ?? { occurredAt: fallbackOccurredAt };
@@ -1103,11 +1100,11 @@ async function maybeCollectHealthSample(healthSamples, tickIndex, tickReports) {
     : dryRunHealthSnapshots(representativeTick);
   healthSamples.push({
     sampleIndex: healthSamples.length,
-    tickIndex,
+    tickIndex: healthSampleIndex,
     botId: "",
     sampleScope: "arena_tick",
     occurredAt: representativeTick.occurredAt,
-    postWarmup: tickIndex >= runPlan.warmupTicks,
+    postWarmup: offsetMs >= runPlan.warmupSeconds * 1000,
     submittedCommands: tickReports.reduce((total, tickReport) => total + Number(tickReport.submission?.submitted ?? 0), 0),
     completedCommands: tickReports.reduce((total, tickReport) => total + Number(tickReport.submission?.completed ?? 0), 0),
     snapshots,
@@ -2133,6 +2130,7 @@ function summarizeActorProfiles(bots) {
     byActorClass: sortedRecord(byActorClass),
     byDifficultyBucket: sortedRecord(byDifficultyBucket),
     profiles,
+    npcDifficultyBuckets: npcDifficultyBuckets(bots),
   };
 }
 
