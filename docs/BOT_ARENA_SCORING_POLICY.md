@@ -245,6 +245,22 @@ pointers. Live runs can use the same script with `--submit-mode=live`,
 `--venue-url`, `--arena-admin-url`, `--seed-reference`, and projection-drain
 flags once the local stack is healthy.
 
+Use `scripts/dev/analyze-arena-actor-diagnostics.mjs` after a matrix run to
+record what each actor/persona knob appears to influence. It emits:
+
+- profile-level metrics grouped by `actorProfile.profileId`
+- knob-level metric groups for aggression, order rate, spread crossing,
+  cancel discipline, quote size, quote spread, inventory skew, panic threshold,
+  latency jitter, and risk discipline
+- instrumentation gaps such as `no-fills-observed`, `no-pnl-observed`, and
+  `no-pnl-per-executed-notional`
+- caveats when run count or parameter variation is too low for confident
+  tuning
+
+The actor diagnostics report is observational. Treat it as a map of which
+knobs are worth varying in matched scenario matrices, not as causal proof from
+a single run.
+
 Why partition plus small multiplier:
 
 - simple to audit
