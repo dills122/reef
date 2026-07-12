@@ -39,7 +39,7 @@ const KNOB_METRIC_MAP = {
   },
   quoteSpreadBps: {
     expectedEffect: "Lower spread should tighten venue quote quality but may increase fills and adverse-selection exposure.",
-    metrics: ["medianQuotedSpreadBps", "p95QuotedSpreadBps", "fillCount", "totalPnl"],
+    metrics: ["providerMedianQuotedSpreadBps", "providerP95QuotedSpreadBps", "medianQuotedSpreadBps", "p95QuotedSpreadBps", "fillCount", "totalPnl"],
   },
   riskDiscipline: {
     expectedEffect: "Lower discipline should increase rejects, freezes, operational pauses, and inventory/risk penalties.",
@@ -112,6 +112,7 @@ export function actorDiagnosticsCliSummary(report, outPath = "") {
       totalPnlAvg: profile.metrics?.totalPnl?.avg ?? null,
       marketInteractionScoreAvg: profile.metrics?.marketInteractionScore?.avg ?? null,
       medianQuotedSpreadBpsAvg: profile.metrics?.medianQuotedSpreadBps?.avg ?? null,
+      providerMedianQuotedSpreadBpsAvg: profile.metrics?.providerMedianQuotedSpreadBps?.avg ?? null,
       instrumentationGaps: profile.instrumentationGaps ?? [],
     })),
     knobs: (report.knobDiagnostics ?? []).map((knob) => ({
@@ -207,6 +208,8 @@ function observationFromBot(report, bot, catalogProfiles) {
     shadowScore: nullableNumber(bot.scoreBreakdown?.shadowScore),
     medianQuotedSpreadBps: nullableNumber(liquidity.quoteQuality?.medianQuotedSpreadBps),
     p95QuotedSpreadBps: nullableNumber(liquidity.quoteQuality?.p95QuotedSpreadBps),
+    providerMedianQuotedSpreadBps: nullableNumber(liquidity.providerQuoteQuality?.medianQuotedSpreadBps),
+    providerP95QuotedSpreadBps: nullableNumber(liquidity.providerQuoteQuality?.p95QuotedSpreadBps),
   };
   return {
     runId: report.runId ?? "",

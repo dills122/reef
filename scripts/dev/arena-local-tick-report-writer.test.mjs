@@ -80,6 +80,12 @@ assert.equal(marketMaker.liquidityDiagnostics.schemaVersion, "reef.arena.liquidi
 assert.equal(marketMaker.liquidityDiagnostics.scoreNeutral, true);
 assert.equal(marketMaker.liquidityDiagnostics.pointsEffect, 0);
 assert.deepEqual(marketMaker.liquidityDiagnostics.instruments, ["AAPL"]);
+assert.equal(marketMaker.liquidityDiagnostics.quoteQuality.attribution, "market-wide-proxy");
+assert.equal(marketMaker.liquidityDiagnostics.providerQuoteQuality.schemaVersion, "reef.arena.providerQuoteQuality.v1");
+assert.equal(marketMaker.liquidityDiagnostics.providerQuoteQuality.source, "unavailable");
+assert.equal(marketMaker.liquidityDiagnostics.attribution.schemaVersion, "reef.arena.liquidityProviderAttribution.v1");
+assert.equal(marketMaker.liquidityDiagnostics.attribution.source, "dry-run-trading-metrics");
+assert.equal(marketMaker.liquidityDiagnostics.attribution.pointsEffect, 0);
 assert.equal(marketMaker.liquidityDiagnostics.adverseSelection.available, false);
 const npc = report.botResults.find((entry) => entry.botId === "builtin-npc-momentum");
 assert.equal(npc.scoreBreakdown.scoreEligible, false);
@@ -127,6 +133,7 @@ assert.equal(compactReport.scoringCalibration.scoreDistribution.shadowScore.coun
 const compactMarketMaker = compactReport.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(compactMarketMaker.liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
 assert.equal(compactMarketMaker.liquidityDiagnostics.pointsEffect, 0);
+assert.equal(compactMarketMaker.liquidityDiagnostics.attribution.pointsEffect, 0);
 const compactCompetitor = compactReport.botResults.find((entry) => entry.botId === "custom-technical-indicator");
 assert.equal(compactCompetitor.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
 assert.equal(compactCompetitor.scoreBreakdown.formulaVersion, "shadow-score-v1");

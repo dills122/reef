@@ -176,7 +176,7 @@ try {
   assert.equal(report.runPlan.schedulingMode, "shared-arena-time");
   assert.equal(report.runPlan.totalTickCount, 24);
   assert.equal(report.commandWaitMode, "accepted");
-  assert.equal(report.scoringAssumptions.scoreBasis, "participation-and-policy-compliance");
+  assert.equal(report.scoringAssumptions.scoreBasis, "public score remains participation-and-policy-compliance; scoreBreakdown.shadowScore reports score-v0 tuning inputs");
   assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.displayName, "Blue Saber Trading");
   assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.tradingMetrics.schemaVersion, "reef.arena.tradingMetrics.v0");
   assert.equal(report.healthSamples.length, 3);
@@ -192,6 +192,14 @@ try {
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.cash, -100);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.inventoryValue, 100.5);
   assert.equal(simpleMarketMaker?.tradingMetrics.pnl.total, 0.5);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.source, "participant-scoped-readback-and-trading-metrics");
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.fillContribution.fillCount, 1);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.attribution.fillContribution.fillSharePct, 100);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.source, "participant-current-orders");
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.attribution, "provider-owned-current-orders");
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.currentOrderCount > 0, true);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.instruments.some((entry) => entry.instrumentId === "AAPL"), true);
+  assert.equal(report.liquiditySummary.providerDiagnostics.find((entry) => entry.botId === "builtin-mm-simple")?.attribution.fillContribution.fillCount, 1);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
   assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);

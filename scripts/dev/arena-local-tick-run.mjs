@@ -796,7 +796,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
   );
   const healthSummary = summarizeHealth(healthSamples, totals);
   const marketQualitySummary = summarizeMarketQuality(healthSamples);
-  const botResultsWithLiquidity = attachLiquidityDiagnostics(botResults, marketQualitySummary);
+  const botResultsWithLiquidity = attachLiquidityDiagnostics(botResults, marketQualitySummary, venueReadback);
   const liquiditySummary = summarizeLiquidityProviders(botResultsWithLiquidity, marketQualitySummary);
   const status = reportStatus(enforcementEvents, healthSummary);
   const envelope = policyEnvelope();
@@ -1337,17 +1337,18 @@ function summarizeMarketQuality(healthSamples) {
   };
 }
 
-function attachLiquidityDiagnostics(botResults, marketQualitySummary) {
+function attachLiquidityDiagnostics(botResults, marketQualitySummary, venueReadback) {
+  const context = liquidityAttributionContext(botResults, venueReadback);
   return botResults.map((result) => {
     if (result.actorClass !== "house_market_maker") return result;
     return {
       ...result,
-      liquidityDiagnostics: liquidityProviderDiagnostics(result, marketQualitySummary),
+      liquidityDiagnostics: liquidityProviderDiagnostics(result, marketQualitySummary, context),
     };
   });
 }
 
-function liquidityProviderDiagnostics(result, marketQualitySummary) {
+function liquidityProviderDiagnostics(result, marketQualitySummary, context) {
   const instruments = liquidityProviderInstruments(result);
   const quoteCoverage = instruments.map((instrumentId) => liquidityInstrumentCoverage(instrumentId, marketQualitySummary));
   const medianSpreadValues = quoteCoverage
@@ -1362,6 +1363,7 @@ function liquidityProviderDiagnostics(result, marketQualitySummary) {
   const fillCount = numberValue(result.tradingMetrics?.executions?.fillCount);
   const inventoryGrossNotional = numberValue(result.tradingMetrics?.inventory?.grossNotional);
   const grossExecutedNotional = numberValue(result.tradingMetrics?.executions?.grossNotional);
+  const providerQuoteQuality = providerCurrentQuoteQuality(result, context);
   const flags = [];
   if (instruments.length === 0) flags.push("no-liquidity-instruments");
   if (numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders) === 0) flags.push("no-quote-submissions");
@@ -1387,11 +1389,13 @@ function liquidityProviderDiagnostics(result, marketQualitySummary) {
     instruments,
     quoteCoverage,
     quoteQuality: {
+      attribution: "market-wide-proxy",
       avgTopOfBookPct,
       avgDepthPct,
       medianQuotedSpreadBps,
       p95QuotedSpreadBps,
     },
+    providerQuoteQuality,
     orderActivity: {
       submittedLimitOrders: numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders),
       modifyCommands: numberValue(result.tradingMetrics?.orderFlow?.modifyCommands),
@@ -1405,6 +1409,7 @@ function liquidityProviderDiagnostics(result, marketQualitySummary) {
       grossExecutedNotional,
       avgFillPrice: nullableNumber(result.tradingMetrics?.executions?.avgFillPrice),
     },
+    attribution: providerLiquidityAttribution(result, context),
     inventory: {
       netQuantityByInstrument: result.tradingMetrics?.inventory?.netQuantityByInstrument ?? {},
       grossNotional: nullableNumber(result.tradingMetrics?.inventory?.grossNotional),
@@ -1415,6 +1420,137 @@ function liquidityProviderDiagnostics(result, marketQualitySummary) {
       reason: "requires post-fill price path attribution window",
     },
   };
+}
+
+function liquidityAttributionContext(botResults, venueReadback) {
+  const providers = botResults.filter((result) => result.actorClass === "house_market_maker");
+  const totals = {
+    submittedLimitOrders: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.submittedLimitOrders)),
+    grossSubmittedQuantity: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.grossSubmittedQuantity)),
+    grossSubmittedNotional: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.grossSubmittedNotional)),
+    fillCount: sum(providers.map((provider) => provider.tradingMetrics?.executions?.fillCount)),
+    filledQuantity: sum(providers.map((provider) => provider.tradingMetrics?.executions?.filledQuantity)),
+    grossExecutedNotional: sum(providers.map((provider) => provider.tradingMetrics?.executions?.grossNotional)),
+  };
+  const readbackByBotId = new Map();
+  for (const entry of venueReadback?.ownOrders ?? []) {
+    readbackByBotId.set(entry.botId, entry);
+  }
+  const source = venueReadback?.skipped === true
+    ? "dry-run-trading-metrics"
+    : Array.isArray(venueReadback?.ownOrders)
+      ? "participant-scoped-readback-and-trading-metrics"
+      : "unavailable";
+  return {
+    schemaVersion: "reef.arena.liquidityAttributionContext.v1",
+    source,
+    providerCount: providers.length,
+    totals,
+    readbackByBotId,
+  };
+}
+
+function providerLiquidityAttribution(result, context) {
+  const submittedLimitOrders = numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders);
+  const grossSubmittedQuantity = numberValue(result.tradingMetrics?.orderFlow?.grossSubmittedQuantity);
+  const grossSubmittedNotional = numberValue(result.tradingMetrics?.orderFlow?.grossSubmittedNotional);
+  const fillCount = numberValue(result.tradingMetrics?.executions?.fillCount);
+  const filledQuantity = numberValue(result.tradingMetrics?.executions?.filledQuantity);
+  const grossExecutedNotional = numberValue(result.tradingMetrics?.executions?.grossNotional);
+  return {
+    schemaVersion: "reef.arena.liquidityProviderAttribution.v1",
+    source: context.source,
+    orderContribution: {
+      submittedLimitOrders,
+      submittedLimitOrderSharePct: pct(submittedLimitOrders, context.totals.submittedLimitOrders),
+      grossSubmittedQuantity,
+      grossSubmittedQuantitySharePct: pct(grossSubmittedQuantity, context.totals.grossSubmittedQuantity),
+      grossSubmittedNotional,
+      grossSubmittedNotionalSharePct: pct(grossSubmittedNotional, context.totals.grossSubmittedNotional),
+    },
+    fillContribution: {
+      fillCount,
+      fillSharePct: pct(fillCount, context.totals.fillCount),
+      filledQuantity,
+      filledQuantitySharePct: pct(filledQuantity, context.totals.filledQuantity),
+      grossExecutedNotional,
+      grossExecutedNotionalSharePct: pct(grossExecutedNotional, context.totals.grossExecutedNotional),
+    },
+    pointsEffect: 0,
+  };
+}
+
+function providerCurrentQuoteQuality(result, context) {
+  const readback = context.readbackByBotId.get(result.botId);
+  const currentOrders = readbackOrders(readback?.current);
+  const instruments = providerQuoteQualityByInstrument(currentOrders);
+  const spreadBps = instruments
+    .map((entry) => entry.quotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value))
+    .sort((left, right) => left - right);
+  return {
+    schemaVersion: "reef.arena.providerQuoteQuality.v1",
+    source: readback === undefined ? "unavailable" : "participant-current-orders",
+    attribution: readback === undefined ? "unavailable" : "provider-owned-current-orders",
+    currentOrderCount: currentOrders.length,
+    instrumentCount: instruments.length,
+    medianQuotedSpreadBps: percentile(spreadBps, 0.5),
+    p95QuotedSpreadBps: percentile(spreadBps, 0.95),
+    instruments,
+    limitations: [
+      "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+      "adverse selection requires post-fill price path attribution",
+    ],
+  };
+}
+
+function readbackOrders(response) {
+  const body = response?.body ?? {};
+  if (Array.isArray(body.orders)) return body.orders;
+  if (Array.isArray(body)) return body;
+  return [];
+}
+
+function providerQuoteQualityByInstrument(orders) {
+  const byInstrument = new Map();
+  for (const order of orders) {
+    const instrumentId = String(order.instrumentId ?? "");
+    if (instrumentId.length === 0) continue;
+    const side = String(order.side ?? "").toUpperCase();
+    const status = String(order.status ?? order.currentStatus ?? "").toUpperCase();
+    const remainingQuantity = numberValue(order.remainingQuantityUnits ?? order.remainingQuantity ?? order.quantityUnits ?? order.quantity);
+    if (!["OPEN", "PARTIALLY_FILLED", ""].includes(status) || remainingQuantity <= 0) continue;
+    const price = marketPriceValue(order.limitPrice ?? order.price);
+    if (price === null) continue;
+    const bucket = byInstrument.get(instrumentId) ?? { instrumentId, bidPrices: [], askPrices: [] };
+    if (side === "BUY") bucket.bidPrices.push(price);
+    if (side === "SELL") bucket.askPrices.push(price);
+    byInstrument.set(instrumentId, bucket);
+  }
+  return Array.from(byInstrument.values())
+    .sort((left, right) => left.instrumentId.localeCompare(right.instrumentId))
+    .map((bucket) => {
+      const bidPrice = bucket.bidPrices.length === 0 ? null : Math.max(...bucket.bidPrices);
+      const askPrice = bucket.askPrices.length === 0 ? null : Math.min(...bucket.askPrices);
+      const midPrice = bidPrice !== null && askPrice !== null ? (bidPrice + askPrice) / 2 : null;
+      const quotedSpread = bidPrice !== null && askPrice !== null ? askPrice - bidPrice : null;
+      const quotedSpreadBps = quotedSpread !== null && midPrice !== null && midPrice > 0
+        ? (quotedSpread / midPrice) * 10000
+        : null;
+      const flags = [];
+      if (bidPrice === null) flags.push("missing-bid");
+      if (askPrice === null) flags.push("missing-ask");
+      if (quotedSpread !== null && quotedSpread < 0) flags.push("crossed-provider-quotes");
+      return {
+        instrumentId: bucket.instrumentId,
+        status: flags.length === 0 ? "pass" : "warn",
+        flags,
+        bidPrice,
+        askPrice,
+        quotedSpread,
+        quotedSpreadBps,
+      };
+    });
 }
 
 function summarizeLiquidityProviders(botResults, marketQualitySummary) {
@@ -1485,7 +1621,9 @@ function summarizeLiquidityProviders(botResults, marketQualitySummary) {
       flags: provider.liquidityDiagnostics?.flags ?? [],
       instruments: provider.liquidityDiagnostics?.instruments ?? [],
       quoteQuality: provider.liquidityDiagnostics?.quoteQuality ?? {},
+      providerQuoteQuality: provider.liquidityDiagnostics?.providerQuoteQuality ?? {},
       fillParticipation: provider.liquidityDiagnostics?.fillParticipation ?? {},
+      attribution: provider.liquidityDiagnostics?.attribution ?? {},
       inventory: provider.liquidityDiagnostics?.inventory ?? {},
       pointsEffect: 0,
     })),
@@ -2715,7 +2853,7 @@ function midpoint(bid, ask) {
 }
 
 function pct(count, total) {
-  return total > 0 ? (count / total) * 100 : 0;
+  return total > 0 ? Number(((count / total) * 100).toFixed(6)) : 0;
 }
 
 function ratio(count, total) {

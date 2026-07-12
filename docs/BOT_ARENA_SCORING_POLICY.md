@@ -254,6 +254,9 @@ record what each actor/persona knob appears to influence. It emits:
   latency jitter, and risk discipline
 - per-profile knob groups so shared knob names such as `aggression` can be
   read for a specific persona without mixing NPC, MM, and competitor effects
+- provider-owned liquidity attribution fields, including submitted-order share,
+  fill share, and current provider quote spread when participant readback has
+  enough bid/ask order data
 - instrumentation gaps such as `no-fills-observed`, `no-pnl-observed`, and
   `no-pnl-per-executed-notional`
 - caveats when run count or parameter variation is too low for confident
@@ -306,7 +309,8 @@ Initial local live calibration notes from 15-second matched slices:
 - `mm-tight-bluechip.quoteSpreadBps` has useful liquidity signal: `10` bps
   produced market maker fills and positive average MM PnL, while `20` and `40`
   bps produced no MM fills in the slice. Quote-quality spread metrics are still
-  market-level, so per-provider quote attribution remains a follow-up.
+  split between market-wide coverage and provider-owned current-order spread
+  attribution.
 - `mm-tight-bluechip.quoteSize` is behavior-backed for displayed depth:
   average submitted quantity scaled roughly `23.3`, `46.7`, `116.7` for
   `5`, `10`, `25` quote size values. It did not produce fills in that slice.
