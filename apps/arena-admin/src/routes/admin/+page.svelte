@@ -534,9 +534,9 @@
 				aria-label="Close config editor"
 				onclick={closeBotConfig}
 			></button>
-			<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center p-3 sm:p-4">
 				<div
-					class="pointer-events-auto relative grid max-h-[calc(100vh-2rem)] w-full max-w-6xl overflow-y-auto border border-rule-strong bg-bg shadow-2xl md:grid-cols-[360px_1fr] md:overflow-hidden"
+					class="pointer-events-auto relative grid h-[min(760px,calc(100dvh-2rem))] w-full max-w-5xl overflow-hidden border border-rule-strong bg-bg shadow-2xl md:grid-cols-[320px_minmax(0,1fr)]"
 					role="dialog"
 					aria-modal="true"
 					aria-labelledby="bot-config-title"
@@ -549,67 +549,83 @@
 				>
 					×
 				</button>
-				<aside class="min-h-0 border-b border-rule bg-[#0d1422] p-5 md:overflow-y-auto md:border-b-0 md:border-r">
-					<div class="pr-12">
-						<div class="min-w-0">
-							<p class="text-xs text-muted">bot config</p>
-							<h2 id="bot-config-title" class="mt-2 break-words text-2xl font-bold text-ink">
-								{selectedBot.metadata.name}
-							</h2>
-						</div>
-					</div>
-
-					<div class="mt-5 flex flex-wrap gap-2">
-						<span class={cn('rounded-full border px-2 py-0.5 text-xs leading-tight', stateClass(selectedState))}
-							>{selectedState}</span
-						>
-						<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
-							{selectedBusy && !selectedStatus ? 'loading' : selectedStatus?.hasConfig ? 'configured' : 'empty'}
-						</span>
-					</div>
-
-					<dl class="mt-6 space-y-4 text-sm">
-						<div>
-							<dt class="text-xs text-muted">bot id</dt>
-							<dd class="mt-1 break-all text-ink">{selectedBot.botId}</dd>
-						</div>
-						<div>
-							<dt class="text-xs text-muted">source</dt>
-							<dd class="mt-1 break-all text-ink">{selectedBot.fileName}</dd>
-						</div>
-						<div>
-							<dt class="text-xs text-muted">owner</dt>
-							<dd class="mt-1 text-ink">{selectedOwner?.githubLogin ?? selectedBot.metadata.publisher}</dd>
-							{#if selectedBot.metadata.email}
-								<dd class="mt-1 break-all text-muted">{selectedBot.metadata.email}</dd>
-							{/if}
-						</div>
-						<div>
-							<dt class="text-xs text-muted">secret path</dt>
-							<dd class="mt-1 break-all text-ink">{selectedStatus?.secretPath ?? 'unavailable'}</dd>
-						</div>
-					</dl>
-
-					{#if selectedStatus?.keys?.length}
-						<div class="mt-6">
-							<p class="text-xs text-muted">stored keys</p>
-							<div class="mt-2 flex flex-wrap gap-1.5">
-								{#each selectedStatus.keys as key}
-									<span class="max-w-full truncate border border-rule px-2 py-0.5 text-xs text-muted">{key}</span>
-								{/each}
+				<aside class="flex min-h-0 flex-col overflow-y-auto border-b border-rule bg-[#0d1422] p-4 md:border-b-0 md:border-r md:p-5">
+					<div class="min-h-0 flex-1">
+						<div class="pr-12">
+							<div class="min-w-0">
+								<p class="text-xs text-muted">bot config</p>
+								<h2 id="bot-config-title" class="mt-2 break-words text-2xl font-bold text-ink">
+									{selectedBot.metadata.name}
+								</h2>
 							</div>
 						</div>
-					{/if}
 
-					{#if selectedError}
-						<div class="mt-6 border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive">
-							{selectedError}
+						<div class="mt-5 flex flex-wrap gap-2">
+							<span class={cn('rounded-full border px-2 py-0.5 text-xs leading-tight', stateClass(selectedState))}
+								>{selectedState}</span
+							>
+							<span class="rounded-full border border-rule-strong px-2 py-0.5 text-xs leading-tight text-muted">
+								{selectedBusy && !selectedStatus ? 'loading' : selectedStatus?.hasConfig ? 'configured' : 'empty'}
+							</span>
 						</div>
-					{/if}
+
+						<dl class="mt-6 space-y-4 text-sm">
+							<div>
+								<dt class="text-xs text-muted">bot id</dt>
+								<dd class="mt-1 break-all text-ink">{selectedBot.botId}</dd>
+							</div>
+							<div>
+								<dt class="text-xs text-muted">source</dt>
+								<dd class="mt-1 break-all text-ink">{selectedBot.fileName}</dd>
+							</div>
+							<div>
+								<dt class="text-xs text-muted">owner</dt>
+								<dd class="mt-1 text-ink">{selectedOwner?.githubLogin ?? selectedBot.metadata.publisher}</dd>
+								{#if selectedBot.metadata.email}
+									<dd class="mt-1 break-all text-muted">{selectedBot.metadata.email}</dd>
+								{/if}
+							</div>
+							<div>
+								<dt class="text-xs text-muted">secret path</dt>
+								<dd class="mt-1 break-all text-ink">{selectedStatus?.secretPath ?? 'unavailable'}</dd>
+							</div>
+						</dl>
+
+						{#if selectedStatus?.keys?.length}
+							<div class="mt-6">
+								<p class="text-xs text-muted">stored keys</p>
+								<div class="mt-2 flex flex-wrap gap-1.5">
+									{#each selectedStatus.keys as key}
+										<span class="max-w-full truncate border border-rule px-2 py-0.5 text-xs text-muted">{key}</span>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						{#if selectedError}
+							<div class="mt-6 border border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive">
+								{selectedError}
+							</div>
+						{/if}
+					</div>
+
+					<div class="mt-6 shrink-0">
+						<Button
+							variant="secondary"
+							class="min-h-9 px-3 py-2 text-xs"
+							disabled={selectedBusy}
+							onclick={() => {
+								loadBotConfig(selectedBot.botId);
+								loadConfigDescriptors(selectedBot.botId, true);
+							}}
+						>
+							refresh
+						</Button>
+					</div>
 				</aside>
 
-				<div class="flex min-h-0 flex-col p-5 pt-16 md:pt-5">
-					<div class="border-b border-rule pb-4">
+				<div class="flex min-h-0 flex-col overflow-hidden p-4 pt-14 md:p-5 md:pt-5">
+					<div class="shrink-0 border-b border-rule pb-4">
 						<div class="min-w-0 flex-1">
 							<h3 class="text-xl font-normal text-ink">json</h3>
 							<p class="mt-1 max-w-[58ch] text-sm text-muted">
@@ -618,7 +634,7 @@
 						</div>
 					</div>
 
-					<div class="min-h-0 flex-1 overflow-y-auto py-4">
+					<div class="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
 						<section class="border border-rule bg-[#090f1a] p-4" aria-labelledby="config-guidance-title">
 							<div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
 								<h4 id="config-guidance-title" class="text-sm font-bold text-ink">expected fields</h4>
@@ -685,7 +701,7 @@
 						</label>
 						<textarea
 							id="bot-config-json"
-							class="mt-2 min-h-[360px] w-full resize-y border border-rule bg-[#070b13] p-4 text-sm leading-relaxed text-ink outline-none focus:border-accent-hover"
+							class="mt-2 h-[clamp(180px,32dvh,280px)] max-h-[45dvh] min-h-[180px] w-full resize-y border border-rule bg-[#070b13] p-4 text-sm leading-relaxed text-ink outline-none focus:border-accent-hover"
 							spellcheck="false"
 							disabled={selectedBusy}
 							aria-describedby="bot-config-json-help"
@@ -698,30 +714,19 @@
 						</p>
 					</div>
 
-					<div class="border-t border-rule pt-4">
+					<div class="shrink-0 border-t border-rule bg-bg pt-4">
 						<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 							<p class="text-xs text-muted">
-								save replaces the whole object; clear deletes the OpenBao entry.
+								save replaces the whole object.
 							</p>
 							<div class="flex flex-wrap gap-2 sm:justify-end">
 								<Button
 									variant="secondary"
 									class="min-h-9 px-3 py-2 text-xs"
 									disabled={selectedBusy}
-									onclick={() => {
-										loadBotConfig(selectedBot.botId);
-										loadConfigDescriptors(selectedBot.botId, true);
-									}}
+									onclick={closeBotConfig}
 								>
-									refresh
-								</Button>
-								<Button
-									variant="secondary"
-									class="min-h-9 border-destructive px-3 py-2 text-xs text-destructive"
-									disabled={selectedBusy}
-									onclick={() => clearBotConfig(selectedBot.botId)}
-								>
-									clear
+									cancel
 								</Button>
 								<Button
 									class="min-h-9 px-3 py-2 text-xs"
