@@ -3,7 +3,7 @@ package com.reef.platform.api
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class PlatformDiagnosticRoutesTest {
+class PlatformAdminDataRoutesTest {
     @Test
     fun queryValueDecodesUrlEncodedKeysAndValues() {
         assertEquals("run 1+2", queryValue("runId=run+1%2B2", "runId"))

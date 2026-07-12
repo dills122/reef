@@ -495,8 +495,10 @@ class PlatformHttpServer(
             actorRoles = { actorId -> api.actorRoles(actorId) }
         )
     }
-    private val diagnosticRoutes: PlatformDiagnosticRoutes by lazy {
-        PlatformDiagnosticRoutes(
+    private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
+        PlatformAdminDataRoutes(
+            arenaAdminGateway = arenaAdminGateway,
+            settlementAdminGateway = settlementAdminGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
             abuseStatsJson = { abuseStatsJson(abuseProtectionHook.stats()) },
@@ -507,29 +509,6 @@ class PlatformHttpServer(
             setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
             setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
             setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
-            registerArenaBotJson = { body -> arenaAdminGateway.registerArenaBotResponse(body) },
-            arenaBotJson = { query -> arenaAdminGateway.arenaBotResponse(query) },
-            registerArenaBotVersionJson = { body -> arenaAdminGateway.registerArenaBotVersionResponse(body) },
-            arenaBotVersionJson = { query -> arenaAdminGateway.arenaBotVersionResponse(query) },
-            transitionArenaBotVersionJson = { body -> arenaAdminGateway.transitionArenaBotVersionResponse(body) },
-            arenaQualificationReportsJson = { query -> arenaAdminGateway.arenaQualificationReportsResponse(query) },
-            arenaOperatorDecisionsJson = { query -> arenaAdminGateway.arenaOperatorDecisionsResponse(query) },
-            arenaRuntimeConfigDescriptorsJson = { query -> arenaAdminGateway.arenaRuntimeConfigDescriptorsResponse(query) },
-            arenaRunJson = { query -> arenaAdminGateway.arenaRunResponse(query) },
-            registerArenaRunJson = { body -> arenaAdminGateway.registerArenaRunResponse(body) },
-            updateArenaRunStatusJson = { body -> arenaAdminGateway.updateArenaRunStatusResponse(body) },
-            arenaRunBotResultsJson = { query -> arenaAdminGateway.arenaRunBotResultsResponse(query) },
-            recordArenaRunBotResultJson = { body -> arenaAdminGateway.recordArenaRunBotResultResponse(body) },
-            arenaRunEnforcementEventsJson = { query -> arenaAdminGateway.arenaRunEnforcementEventsResponse(query) },
-            recordArenaRunEnforcementEventJson = { body -> arenaAdminGateway.recordArenaRunEnforcementEventResponse(body) },
-            arenaLeaderboardJson = { query -> arenaAdminGateway.arenaLeaderboardResponse(query) },
-            arenaBotOpenBaoProvisionJson = { body -> arenaAdminGateway.arenaBotOpenBaoProvisionResponse(body) },
-            assignArenaBotOwnershipJson = { body -> arenaAdminGateway.assignArenaBotOwnershipResponse(body) },
-            arenaBotOpenBaoConfigJson = { method, query, body -> arenaAdminGateway.arenaBotOpenBaoConfigResponse(method, query, body) },
-            analyticsRunExportsJson = { query -> arenaAdminGateway.analyticsRunExportsResponse(query) },
-            recordAnalyticsRunExportJson = { body -> arenaAdminGateway.recordAnalyticsRunExportResponse(body) },
-            analyticsRunBotSummariesJson = { query -> arenaAdminGateway.analyticsRunBotSummariesResponse(query) },
-            appendSettlementFactsJson = { body -> settlementAdminGateway.appendSettlementFactsResponse(body) },
             dbPoolStatsJson = { dbPoolStatsJson() },
             asyncCommandStatsJson = { asyncCommandStatsJson() },
             commandAccountingJson = { runId -> commandAccountingJson(runId) },
@@ -1267,7 +1246,7 @@ class PlatformHttpServer(
     }
 
     private fun registerDiagnosticRoutes(server: HttpServer) {
-        diagnosticRoutes.paths.forEach { path ->
+        adminDataRoutes.paths.forEach { path ->
             server.createContext(path) { exchange ->
                 if (exchange.requestURI.path.startsWith("/internal/") && !allowInternalHttpRoute(exchange)) {
                     return@createContext
@@ -1278,7 +1257,7 @@ class PlatformHttpServer(
                     ""
                 }
                 withAdminRequestPrincipal(exchange) {
-                    val response = diagnosticRoutes.handle(
+                    val response = adminDataRoutes.handle(
                         method = exchange.requestMethod,
                         path = exchange.requestURI.path,
                         query = exchange.requestURI.query,
@@ -1338,7 +1317,7 @@ class PlatformHttpServer(
         }
         withAdminRequestPrincipal(principal) {
             val response = settlementAdminGatewayResponse(exchange.requestMethod, route.internalPath, body)
-                ?: diagnosticRoutes.handle(
+                ?: adminDataRoutes.handle(
                     method = exchange.requestMethod,
                     path = route.internalPath,
                     query = exchange.requestURI.query,
@@ -1388,7 +1367,7 @@ class PlatformHttpServer(
             }
         }
         val diagnosticResponse = withAdminRequestPrincipal(adminPrincipal(request.headers)) {
-            diagnosticRoutes.handle(request.method, request.path, request.query, request.body)
+            adminDataRoutes.handle(request.method, request.path, request.query, request.body)
         }
         return diagnosticResponse ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
