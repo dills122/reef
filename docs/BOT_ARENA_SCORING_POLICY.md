@@ -257,6 +257,8 @@ record what each actor/persona knob appears to influence. It emits:
 - provider-owned liquidity attribution fields, including submitted-order share,
   fill share, and current provider quote spread when participant readback has
   enough bid/ask order data
+- provider adverse-selection markout when participant fills can be matched to a
+  post-fill health-sample mid inside the diagnostic window
 - instrumentation gaps such as `no-fills-observed`, `no-pnl-observed`, and
   `no-pnl-per-executed-notional`
 - caveats when run count or parameter variation is too low for confident
@@ -311,6 +313,12 @@ Initial local live calibration notes from 15-second matched slices:
   bps produced no MM fills in the slice. Quote-quality spread metrics are still
   split between market-wide coverage and provider-owned current-order spread
   attribution.
+- Adverse-selection diagnostics are signed from the provider's perspective:
+  negative markout means the post-fill mid moved against the provider, positive
+  markout means favorable post-fill movement. These diagnostics remain
+  score-neutral until the mark window and sampling cadence are calibrated.
+  In the first 15-second local slice with `mm-tight-bluechip.quoteSpreadBps=10`,
+  filled MM quotes showed about `+5` bps average markout and `0%` adverse fills.
 - `mm-tight-bluechip.quoteSize` is behavior-backed for displayed depth:
   average submitted quantity scaled roughly `23.3`, `46.7`, `116.7` for
   `5`, `10`, `25` quote size values. It did not produce fills in that slice.

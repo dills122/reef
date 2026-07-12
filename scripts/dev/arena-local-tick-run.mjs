@@ -1375,6 +1375,8 @@ function liquidityProviderDiagnostics(result, marketQualitySummary, context) {
   if (medianQuotedSpreadBps !== null && medianQuotedSpreadBps > Number(thresholds.maxMedianQuotedSpreadBps ?? 25)) flags.push("wide-median-spread");
   if (p95QuotedSpreadBps !== null && p95QuotedSpreadBps > Number(thresholds.maxP95QuotedSpreadBps ?? 50)) flags.push("wide-p95-spread");
   if (grossExecutedNotional > 0 && inventoryGrossNotional / grossExecutedNotional > 0.5) flags.push("inventory-pressure");
+  const adverseSelection = liquidityAdverseSelection(result);
+  if (numberValue(adverseSelection.adverseFillCount) > 0) flags.push("adverse-selection-observed");
 
   return {
     schemaVersion: "reef.arena.liquidityProviderDiagnostics.v1",
@@ -1415,10 +1417,20 @@ function liquidityProviderDiagnostics(result, marketQualitySummary, context) {
       grossNotional: nullableNumber(result.tradingMetrics?.inventory?.grossNotional),
       markPriceSource: result.tradingMetrics?.inventory?.markPriceSource ?? "",
     },
-    adverseSelection: {
-      available: false,
-      reason: "requires post-fill price path attribution window",
-    },
+    adverseSelection,
+  };
+}
+
+function liquidityAdverseSelection(result) {
+  const diagnostics = result.tradingMetrics?.adverseSelection;
+  if (diagnostics !== undefined && diagnostics !== null) {
+    return diagnostics;
+  }
+  return {
+    schemaVersion: "reef.arena.adverseSelectionDiagnostics.v1",
+    available: false,
+    source: "unavailable",
+    reason: "requires participant-scoped fills plus post-fill health sample mids",
   };
 }
 
@@ -1624,6 +1636,7 @@ function summarizeLiquidityProviders(botResults, marketQualitySummary) {
       providerQuoteQuality: provider.liquidityDiagnostics?.providerQuoteQuality ?? {},
       fillParticipation: provider.liquidityDiagnostics?.fillParticipation ?? {},
       attribution: provider.liquidityDiagnostics?.attribution ?? {},
+      adverseSelection: provider.liquidityDiagnostics?.adverseSelection ?? {},
       inventory: provider.liquidityDiagnostics?.inventory ?? {},
       pointsEffect: 0,
     })),

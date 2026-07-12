@@ -35,11 +35,11 @@ const KNOB_METRIC_MAP = {
   },
   quoteSize: {
     expectedEffect: "Higher quote size should increase displayed depth proxy, submitted quantity, and inventory/fill exposure.",
-    metrics: ["grossSubmittedQuantity", "grossSubmittedNotional", "fillCount", "inventoryGrossNotional"],
+    metrics: ["grossSubmittedQuantity", "grossSubmittedNotional", "fillCount", "inventoryGrossNotional", "adverseSelectionAvgMarkoutBps", "adverseSelectionAdverseFillPct"],
   },
   quoteSpreadBps: {
     expectedEffect: "Lower spread should tighten venue quote quality but may increase fills and adverse-selection exposure.",
-    metrics: ["providerMedianQuotedSpreadBps", "providerP95QuotedSpreadBps", "medianQuotedSpreadBps", "p95QuotedSpreadBps", "fillCount", "totalPnl"],
+    metrics: ["providerMedianQuotedSpreadBps", "providerP95QuotedSpreadBps", "medianQuotedSpreadBps", "p95QuotedSpreadBps", "fillCount", "totalPnl", "adverseSelectionAvgMarkoutBps", "adverseSelectionAdverseFillPct"],
   },
   riskDiscipline: {
     expectedEffect: "Lower discipline should increase rejects, freezes, operational pauses, and inventory/risk penalties.",
@@ -169,6 +169,7 @@ function observationFromBot(report, bot, catalogProfiles) {
   const scoreDiagnostics = bot.scoreBreakdown?.diagnostics ?? {};
   const components = bot.scoreBreakdown?.components ?? {};
   const liquidity = bot.liquidityDiagnostics ?? {};
+  const adverseSelection = liquidity.adverseSelection ?? {};
   const trading = bot.tradingMetrics ?? {};
   const commands = trading.commands ?? {};
   const orderFlow = trading.orderFlow ?? {};
@@ -210,6 +211,9 @@ function observationFromBot(report, bot, catalogProfiles) {
     p95QuotedSpreadBps: nullableNumber(liquidity.quoteQuality?.p95QuotedSpreadBps),
     providerMedianQuotedSpreadBps: nullableNumber(liquidity.providerQuoteQuality?.medianQuotedSpreadBps),
     providerP95QuotedSpreadBps: nullableNumber(liquidity.providerQuoteQuality?.p95QuotedSpreadBps),
+    adverseSelectionAvgMarkoutBps: nullableNumber(adverseSelection.avgMarkoutBps),
+    adverseSelectionAdverseFillPct: nullableNumber(adverseSelection.adverseFillPct),
+    adverseSelectionComparableFillCount: numberValue(adverseSelection.comparableFillCount),
   };
   return {
     runId: report.runId ?? "",

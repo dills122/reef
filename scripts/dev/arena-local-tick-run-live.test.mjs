@@ -107,7 +107,7 @@ const server = http.createServer(async (req, res) => {
         side: "BUY",
         quantityUnits: "1",
         executionPrice: "100000000000",
-        occurredAt: "2026-07-07T00:00:00.000Z",
+        occurredAt: "2026-07-04T14:30:00.000Z",
       }]
       : [];
     return json(res, 200, {
@@ -199,7 +199,12 @@ try {
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.attribution, "provider-owned-current-orders");
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.currentOrderCount > 0, true);
   assert.equal(simpleMarketMaker?.liquidityDiagnostics.providerQuoteQuality.instruments.some((entry) => entry.instrumentId === "AAPL"), true);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.adverseSelection.available, true);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.adverseSelection.avgMarkoutBps, 50);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.adverseSelection.favorableFillCount, 1);
+  assert.equal(simpleMarketMaker?.liquidityDiagnostics.adverseSelection.adverseFillCount, 0);
   assert.equal(report.liquiditySummary.providerDiagnostics.find((entry) => entry.botId === "builtin-mm-simple")?.attribution.fillContribution.fillCount, 1);
+  assert.equal(report.liquiditySummary.providerDiagnostics.find((entry) => entry.botId === "builtin-mm-simple")?.adverseSelection.avgMarkoutBps, 50);
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
   assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);

@@ -89,6 +89,7 @@ await writeFile(reportPath, JSON.stringify({
         flags: [],
         quoteQuality: { medianQuotedSpreadBps: 20, p95QuotedSpreadBps: 20 },
         providerQuoteQuality: { medianQuotedSpreadBps: 18, p95QuotedSpreadBps: 20 },
+        adverseSelection: { avgMarkoutBps: -12.5, adverseFillPct: 100, comparableFillCount: 1 },
       },
     },
     {
@@ -151,6 +152,7 @@ assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "aggress
 assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "aggression").byProfile.find((entry) => entry.profileId === "npc-toxic").values[0].value, "0.95");
 assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "quoteSpreadBps").values[0].metrics.medianQuotedSpreadBps.avg, 20);
 assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "quoteSpreadBps").values[0].metrics.providerMedianQuotedSpreadBps.avg, 18);
+assert.equal(diagnostics.knobDiagnostics.find((entry) => entry.knob === "quoteSpreadBps").values[0].metrics.adverseSelectionAvgMarkoutBps.avg, -12.5);
 assert.equal(diagnostics.caveats.includes("low-run-count"), true);
 
 const summary = actorDiagnosticsCliSummary(diagnostics, "/tmp/actor-diagnostics.json");
