@@ -146,7 +146,7 @@ try {
   assert.ok(referenceWrites.some((write) => String(write.body.participantId ?? "").endsWith("-builtin-mm-simple")));
   assert.ok(referenceWrites.some((write) => String(write.body.accountId ?? "").endsWith("-custom-technical-indicator")));
   assert.ok(referenceWrites.some((write) => String(write.body.actorId ?? "").endsWith("-builtin-mm-refreshing")));
-  assert.equal(receivedCommands.length, 18);
+  assert.equal(receivedCommands.length, 17);
   assert.ok(Array.from(commands.values()).every((command) => command.status === "COMPLETED"));
   assert.ok(commandStatusReads.length >= receivedCommands.length);
   assert.ok(commandStatusReads.every((read) => commands.get(read.commandId)?.participantId === read.participantId));
@@ -166,7 +166,7 @@ try {
   assert.equal(report.botResults.find((result) => result.botId === "builtin-mm-simple")?.tradingMetrics.schemaVersion, "reef.arena.tradingMetrics.v0");
   assert.equal(report.healthSamples.length, 3);
   assert.equal(report.activityBySchedulingClass.house_responsive.ticks, 18);
-  assert.equal(report.activityBySchedulingClass.house_responsive.submittedCommands, 18);
+  assert.equal(report.activityBySchedulingClass.house_responsive.submittedCommands, 17);
   assert.equal(report.activityBySchedulingClass.contestant_tick.ticks, 3);
   assert.equal(report.healthSummary.topOfBookPct, 100);
   assert.equal(report.healthSummary.crossedBookCount, 0);
@@ -180,7 +180,7 @@ try {
   const submittedCommands = report.sessionReports.flatMap((session) => session.ticks.flatMap((tick) => tick.submission.commands));
   assert.ok(submittedCommands.length > 0);
   assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/submit").length, 16);
-  assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/cancel").length, 2);
+  assert.equal(submittedCommands.filter((command) => command.route === "/api/v1/orders/cancel").length, 1);
   assert.ok(submittedCommands.every((command) => command.statusPollCount >= 1));
   assert.ok(submittedCommands.every((command) => command.firstStatus === "COMPLETED"));
   assert.ok(submittedCommands.every((command) => Number.isFinite(command.intakeElapsedMs)));

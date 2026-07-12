@@ -11,12 +11,15 @@ const actorId = env("ADMIN_ACTOR_ID", "admin-cli");
 const runId = env("DEV_ARENA_BOT_RISK_SMOKE_RUN_ID", `arena-risk-smoke-${suffix}`);
 const venueSessionId = env("DEV_ARENA_BOT_RISK_SMOKE_VENUE_SESSION_ID", `arena-risk-session-${suffix}`);
 const traderActorId = "arena-risk-smoke-user";
+const arenaAdminApiToken = env("ARENA_ADMIN_API_TOKEN", "");
 
-async function request(method, path, payload = undefined, headers = {}) {
+async function request(method, path, payload = undefined, headers = {}, internalRoute = false) {
   const response = await fetch(`${runtimeUrl}${path}`, {
     method,
     headers: {
       "content-type": "application/json",
+      ...(arenaAdminApiToken.trim() !== "" && !internalRoute && path.startsWith("/admin/v1/") ? { Authorization: `Bearer ${arenaAdminApiToken}` } : {}),
+      ...(internalRoute ? { "X-Reef-Internal-Route": "true" } : {}),
       "X-Reef-Actor-Id": actorId,
       "X-Correlation-Id": `arena-risk-smoke-${suffix}`,
       ...headers,
@@ -77,7 +80,7 @@ async function seedReferenceData() {
 }
 
 async function registerArenaBot() {
-  const bot = await request("POST", "/internal/admin/arena/bots", {
+  const bot = await arenaRequest("POST", "/admin/v1/arena/bots", {
     botId,
     fileName: `${botId}.ts`,
     name: "Arena Risk Smoke Bot",
@@ -91,7 +94,7 @@ async function registerArenaBot() {
     throw new Error(`arena bot registration failed (${bot.status}): ${bot.text}`);
   }
 
-  const version = await request("POST", "/internal/admin/arena/bot-versions", {
+  const version = await arenaRequest("POST", "/admin/v1/arena/bot-versions", {
     botId,
     versionId,
     sourceHash: `sha256:source-${suffix}`,
@@ -109,7 +112,7 @@ async function registerArenaBot() {
 }
 
 async function quarantineBotVersion() {
-  const response = await request("POST", "/internal/admin/arena/bot-versions/transition", {
+  const response = await arenaRequest("POST", "/admin/v1/arena/bot-versions/transition", {
     botId,
     versionId,
     status: "quarantined",
@@ -121,6 +124,27 @@ async function quarantineBotVersion() {
   if (response.status !== 200) {
     throw new Error(`arena bot version quarantine failed (${response.status}): ${response.text}`);
   }
+}
+
+async function arenaRequest(method, path, payload = undefined) {
+  let response = await request(method, path, payload);
+  if (canFallbackToInternal(path, response)) {
+    response = await request(method, internalArenaPath(path), payload, {}, true);
+  }
+  return response;
+}
+
+function canFallbackToInternal(path, response) {
+  const host = new URL(runtimeUrl).hostname;
+  const loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+  if (!loopback || arenaAdminApiToken.trim() !== "" || !path.startsWith("/admin/v1/arena/")) return false;
+  return response.status === 404 ||
+    response.status === 401 ||
+    (response.status === 503 && response.text.includes("ARENA_ADMIN_API_TOKEN"));
+}
+
+function internalArenaPath(path) {
+  return path.replace("/admin/v1/arena/", "/internal/admin/arena/");
 }
 
 async function submitBotOrder() {
