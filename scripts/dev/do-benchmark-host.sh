@@ -63,7 +63,7 @@ optional:
   REEF_DO_ALLOWED_SSH_CIDRS=203.0.113.10/32
   REEF_DO_REGION=sfo2
   REEF_DO_SIZE=c-8
-  REEF_DO_BENCHMARK_PROFILE=stream-ack|materializer|arena
+  REEF_DO_BENCHMARK_PROFILE=stream-ack|materializer|materializer-projection|arena
   REEF_DO_BENCHMARK_GOAL=fixed|latency-knee|sustain|ceiling
   REEF_DO_TARGET_ACCEPTED_RPS=10000
   REEF_DO_TARGET_P95_MS=100
@@ -152,6 +152,9 @@ cmd_plan_goal() {
   printf '  trace_check_limit=%s\n' "$trace_limit"
   printf '  min_attempted_rps=%s\n' "${REEF_DO_MIN_ATTEMPTED_RPS:-$min_rps}"
   printf '  min_accepted_rps=%s\n' "${REEF_DO_MIN_ACCEPTED_RPS:-$min_rps}"
+  printf '  min_projected_rps=%s\n' "${REEF_DO_MIN_PROJECTED_RPS:-none}"
+  printf '  max_projection_lag=%s\n' "${REEF_DO_MAX_PROJECTION_LAG:-none}"
+  printf '  max_materialized_to_projected_gap=%s\n' "${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-none}"
   printf '  max_p95_ms=%s\n' "${max_p95:-none}"
   printf '  max_p99_ms=%s\n' "${max_p99:-none}"
   printf '  min_stream_direct_active_partitions=%s\n' "${REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS:-none}"
@@ -196,6 +199,9 @@ cmd_run() {
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
   REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
+  REEF_DO_MIN_PROJECTED_RPS="${REEF_DO_MIN_PROJECTED_RPS:-}" \
+  REEF_DO_MAX_PROJECTION_LAG="${REEF_DO_MAX_PROJECTION_LAG:-}" \
+  REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$LOCAL_REPORT_ROOT/$run_id" || status=$?
@@ -211,6 +217,9 @@ cmd_check() {
   REEF_DO_REQUIRED_RATES="${REEF_DO_REQUIRED_RATES:-${REEF_DO_STRESS_RATES:-$(benchmark_default_rates "$profile")}}" \
   REEF_DO_MIN_ATTEMPTED_RPS="${REEF_DO_MIN_ATTEMPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
   REEF_DO_MIN_ACCEPTED_RPS="${REEF_DO_MIN_ACCEPTED_RPS:-$(benchmark_default_min_rps "$profile")}" \
+  REEF_DO_MIN_PROJECTED_RPS="${REEF_DO_MIN_PROJECTED_RPS:-}" \
+  REEF_DO_MAX_PROJECTION_LAG="${REEF_DO_MAX_PROJECTION_LAG:-}" \
+  REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP="${REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP:-}" \
   REEF_DO_MAX_P95_MS="${REEF_DO_MAX_P95_MS:-${REEF_DO_TARGET_P95_MS:-}}" \
   REEF_DO_MAX_P99_MS="${REEF_DO_MAX_P99_MS:-${REEF_DO_TARGET_P99_MS:-}}" \
     node scripts/dev/do-benchmark-check.mjs "$report_dir"
@@ -312,7 +321,16 @@ export PLATFORM_INTERNAL_HTTP_MODE=enabled
 if [ "$REEF_BENCHMARK_PROFILE" = "stream-ack" ]; then
   export STREAM_ACK_COMMAND_STREAM="${STREAM_ACK_COMMAND_STREAM:-REEF_COMMANDS}"
   make dev-up-stream-ack
-elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
+elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
+  if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
+    export STREAM_ACK_PROJECTOR_ENABLED=true
+    export STREAM_ACK_PROJECTION_SOURCE=venue-event-batch
+    export STREAM_ACK_PROJECTOR_INCLUDE_FILLS=true
+    export STREAM_ACK_PROJECTION_NAME="${STREAM_ACK_PROJECTION_NAME:-runtime-normalized-venue-outcomes}"
+    export ORDER_LIFECYCLE_PROJECTOR_ENABLED=true
+    export MARKET_DATA_PROJECTOR_ENABLED=true
+    export MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME="$STREAM_ACK_PROJECTION_NAME"
+  fi
   make dev-smoke-venue-event-materializer
 else
   echo "unsupported REEF_DO_BENCHMARK_PROFILE=$REEF_BENCHMARK_PROFILE" >&2
@@ -450,7 +468,7 @@ if [ "$REEF_BENCHMARK_PROFILE" = "stream-ack" ]; then
   run_stage make-dev-up-stream-ack make dev-up-stream-ack
   run_stage make-dev-smoke make dev-smoke
   run_stage make-dev-stress-stream-ack make dev-stress-stream-ack
-elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
+elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ] || [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
   export DEV_STRESS_REPORT_OUT="$artifact_dir/venue-event-materializer-stress.json"
   export MATCHING_ENGINE_EVENT_STREAM="$REEF_BENCHMARK_EVENT_STREAM"
   export MATCHING_ENGINE_EVENT_SUBJECT_PREFIX="$REEF_BENCHMARK_EVENT_SUBJECT_PREFIX"
@@ -459,6 +477,22 @@ elif [ "$REEF_BENCHMARK_PROFILE" = "materializer" ]; then
   export DEV_STRESS_DB_SERVICES="${DEV_STRESS_DB_SERVICES:-postgres}"
 
   run_stage make-dev-smoke-venue-event-materializer make dev-smoke-venue-event-materializer
+  if [ "$REEF_BENCHMARK_PROFILE" = "materializer-projection" ]; then
+    export STREAM_ACK_PROJECTOR_ENABLED=true
+    export STREAM_ACK_PROJECTION_SOURCE=venue-event-batch
+    export STREAM_ACK_PROJECTOR_INCLUDE_FILLS=true
+    export STREAM_ACK_PROJECTION_NAME="${STREAM_ACK_PROJECTION_NAME:-runtime-normalized-venue-outcomes}"
+    export ORDER_LIFECYCLE_PROJECTOR_ENABLED=true
+    export MARKET_DATA_PROJECTOR_ENABLED=true
+    export MARKET_DATA_PROJECTOR_SOURCE_PROJECTION_NAME="$STREAM_ACK_PROJECTION_NAME"
+    export DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR=1
+    export DEV_STRESS_FAIL_ON_STREAM_ACK_PROJECTOR_FAILURES=1
+    export DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_FAILED_DELTA=0
+    export DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_LAG="${DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_LAG:-0}"
+    export DEV_STRESS_MAX_STREAM_ACK_PROJECTION_GAP="${DEV_STRESS_MAX_STREAM_ACK_PROJECTION_GAP:-0}"
+    export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS:-60000}"
+    export DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS="${DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS:-1000}"
+  fi
   run_stage make-dev-stress-venue-event-materializer make dev-stress-venue-event-materializer
 elif [ "$REEF_BENCHMARK_PROFILE" = "arena" ]; then
   arena_report="$artifact_dir/arena-local-tick-run.json"
@@ -842,7 +876,7 @@ expand_path() {
 benchmark_profile() {
   local profile="${REEF_DO_BENCHMARK_PROFILE:-stream-ack}"
   case "$profile" in
-    stream-ack|materializer|arena) printf '%s' "$profile" ;;
+    stream-ack|materializer|materializer-projection|arena) printf '%s' "$profile" ;;
     *)
       echo "unsupported REEF_DO_BENCHMARK_PROFILE=$profile" >&2
       exit 2
@@ -897,6 +931,7 @@ benchmark_fixed_default_rates() {
   case "$1" in
     arena) printf '%s' "arena" ;;
     materializer) printf '%s' "10000" ;;
+    materializer-projection) printf '%s' "2500" ;;
     *) printf '%s' "2500,5000" ;;
   esac
 }
@@ -910,6 +945,7 @@ benchmark_default_workers() {
     case "$profile" in
       arena) printf '%s' "1" ;;
       materializer) printf '%s' "384" ;;
+      materializer-projection) printf '%s' "256" ;;
       *) printf '%s' "256" ;;
     esac
     return
@@ -927,6 +963,7 @@ benchmark_default_duration() {
   case "$1" in
     arena) printf '%s' "3m" ;;
     materializer) printf '%s' "60s" ;;
+    materializer-projection) printf '%s' "60s" ;;
     *) printf '%s' "30s" ;;
   esac
 }
@@ -935,6 +972,7 @@ benchmark_default_trace_limit() {
   case "$1" in
     arena) printf '%s' "0" ;;
     materializer) printf '%s' "0" ;;
+    materializer-projection) printf '%s' "0" ;;
     *) printf '%s' "200" ;;
   esac
 }
@@ -965,18 +1003,21 @@ benchmark_target_rps() {
       latency-knee)
         case "$profile" in
           materializer) target="5000" ;;
+          materializer-projection) target="2500" ;;
           *) target="2500" ;;
         esac
         ;;
       ceiling)
         case "$profile" in
           materializer) target="10000" ;;
+          materializer-projection) target="2500" ;;
           *) target="5000" ;;
         esac
         ;;
       sustain)
         case "$profile" in
           materializer) target="10000" ;;
+          materializer-projection) target="2500" ;;
           *) target="5000" ;;
         esac
         ;;

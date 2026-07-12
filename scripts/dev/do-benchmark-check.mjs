@@ -17,6 +17,9 @@ const minAcceptedRps = parseOptionalNumber(process.env.REEF_DO_MIN_ACCEPTED_RPS)
 const minWorkerCompletedRps = parseOptionalNumber(process.env.REEF_DO_MIN_WORKER_COMPLETED_RPS);
 const maxP95Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P95_MS);
 const maxP99Ms = parseOptionalNumber(process.env.REEF_DO_MAX_P99_MS);
+const minProjectedRps = parseOptionalNumber(process.env.REEF_DO_MIN_PROJECTED_RPS);
+const maxProjectionLag = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_PROJECTION_LAG);
+const maxMaterializedToProjectedGap = parseOptionalNonNegativeNumber(process.env.REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP);
 const minStreamDirectActivePartitions = parseOptionalNumber(process.env.REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS);
 const maxStreamDirectPartitionSkew = parseOptionalNumber(process.env.REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW);
 const requireDbDiagnostics = process.env.REEF_DO_REQUIRE_DB_DIAGNOSTICS === "1";
@@ -57,7 +60,7 @@ for (const rate of requiredRates) {
 }
 
 validateTelemetry(target);
-if (reportProfile === "materializer" && requireDbDiagnostics) {
+if ((reportProfile === "materializer" || reportProfile === "materializer-projection") && requireDbDiagnostics) {
   validateMaterializerDbDiagnostics(target);
 }
 
@@ -123,8 +126,11 @@ function validateReport(path, report) {
 
   if (reportProfile === "stream-ack") {
     validateStreamAckReport(label, report);
-  } else if (reportProfile === "materializer") {
+  } else if (reportProfile === "materializer" || reportProfile === "materializer-projection") {
     validateMaterializerReport(label, report);
+    if (reportProfile === "materializer-projection") {
+      validateMaterializerProjectionReport(label, report);
+    }
   } else {
     failures.push(`${label}: unsupported REEF_DO_REPORT_PROFILE=${reportProfile}`);
   }
@@ -198,6 +204,43 @@ function validateMaterializerReport(label, report) {
       failures.push(`${label}: durable-canonical accepted/materialized gap ${accepted - materialized} must be 0`);
     }
   }
+}
+
+function validateMaterializerProjectionReport(label, report) {
+  if (hasBlockedInternalProbe(report.streamAckProjector?.probes)) {
+    failures.push(`${label}: internal diagnostics were blocked by PLATFORM_INTERNAL_HTTP_MODE; set PLATFORM_INTERNAL_HTTP_MODE=enabled before starting the stack`);
+    return;
+  }
+
+  const projectorDelta = report.streamAckProjector?.delta;
+  if (!projectorDelta) {
+    failures.push(`${label}: missing streamAckProjector.delta`);
+    return;
+  }
+
+  checkZero(label, "streamAckProjector.delta.failedDelta", projectorDelta.failedDelta);
+  const projected = Number(projectorDelta.projectedDelta ?? 0);
+  if (projected <= 0) {
+    failures.push(`${label}: streamAckProjector.delta.projectedDelta must be > 0`);
+  }
+  const projectedRps = reportMetric(report, "projectedWorkItemsPerSecond");
+  if (minProjectedRps !== undefined && projectedRps < minProjectedRps) {
+    failures.push(`${label}: actual projected rps ${formatNumber(projectedRps)} < required ${formatNumber(minProjectedRps)}`);
+  }
+  const afterLag = Number(projectorDelta.afterLag ?? report.unitMetrics?.projectionLagAfter);
+  if (!Number.isFinite(afterLag)) {
+    failures.push(`${label}: streamAckProjector.delta.afterLag must be numeric`);
+  } else if (maxProjectionLag !== undefined && afterLag > maxProjectionLag) {
+    failures.push(`${label}: actual projection lag ${formatNumber(afterLag)} > required ${formatNumber(maxProjectionLag)}`);
+  }
+  const materialized = Number(report.venueEventMaterializer?.delta?.materializedDelta ?? 0);
+  const materializedToProjectedGap = Math.max(materialized - projected, 0);
+  if (maxMaterializedToProjectedGap !== undefined && materializedToProjectedGap > maxMaterializedToProjectedGap) {
+    failures.push(
+      `${label}: materialized/projected gap ${formatNumber(materializedToProjectedGap)} > required ${formatNumber(maxMaterializedToProjectedGap)}`,
+    );
+  }
+  checkProjectorHealth(label, report.streamAckProjector?.after);
 }
 
 function validateArenaArtifacts(jsonFiles) {
@@ -499,6 +542,12 @@ function parseOptionalNumber(raw) {
   if (raw === undefined || String(raw).trim() === "") return undefined;
   const numeric = Number(String(raw).trim());
   return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function parseOptionalNonNegativeNumber(raw) {
+  if (raw === undefined || String(raw).trim() === "") return undefined;
+  const numeric = Number(String(raw).trim());
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : undefined;
 }
 
 function formatNumber(value) {

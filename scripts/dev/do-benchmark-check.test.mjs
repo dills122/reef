@@ -74,6 +74,52 @@ const materializerResult = spawnSync(process.execPath, ["scripts/dev/do-benchmar
 assert.equal(materializerResult.status, 0, materializerResult.stderr);
 assert.match(materializerResult.stdout, /rate=10000 attempted=1000 accepted=1000 directAcked=1000 materialized=1000/);
 
+const projectionArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-"));
+writeMaterializerProjectionReport(projectionArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2500,
+  projectedRps: 2495,
+  lag: 0,
+});
+writeTelemetry(projectionArtifactDir);
+const projectionResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_MIN_PROJECTED_RPS: "2400",
+    REEF_DO_MAX_PROJECTION_LAG: "0",
+    REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionResult.status, 0, projectionResult.stderr);
+assert.match(projectionResult.stdout, /projected=2500 lag=0/);
+
+const projectionGapArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-projection-gap-"));
+writeMaterializerProjectionReport(projectionGapArtifactDir, "rate-2500.json", 2500, 2500, {
+  projected: 2490,
+  projectedRps: 2395,
+  lag: 2,
+});
+writeTelemetry(projectionGapArtifactDir);
+const projectionGapResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", projectionGapArtifactDir], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    REEF_DO_REPORT_PROFILE: "materializer-projection",
+    REEF_DO_REQUIRED_RATES: "2500",
+    REEF_DO_MIN_PROJECTED_RPS: "2400",
+    REEF_DO_MAX_PROJECTION_LAG: "0",
+    REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "0",
+  },
+  encoding: "utf8",
+});
+assert.equal(projectionGapResult.status, 1);
+assert.match(projectionGapResult.stderr, /actual projected rps 2395\.00 < required 2400\.00/);
+assert.match(projectionGapResult.stderr, /actual projection lag 2\.00 > required 0\.00/);
+assert.match(projectionGapResult.stderr, /materialized\/projected gap 10\.00 > required 0\.00/);
+
 const arenaArtifactDir = mkdtempSync(join(tmpdir(), "reef-do-benchmark-check-arena-"));
 writeArenaReport(arenaArtifactDir, { healthStatus: "warn" });
 const arenaResult = spawnSync(process.execPath, ["scripts/dev/do-benchmark-check.mjs", arenaArtifactDir], {
@@ -353,6 +399,78 @@ function writeMaterializerReport(dir, name, rate, total, options = {}) {
             failedDelta: 0,
             ackFailedDelta: 0,
             unsupportedDelta: 0,
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function writeMaterializerProjectionReport(dir, name, rate, total, options) {
+  writeFileSync(
+    join(dir, name),
+    JSON.stringify(
+      {
+        config: { ratePerSecond: rate, workers: 256 },
+        totalRequests: total,
+        totalSuccess: total,
+        totalFailures: 0,
+        statusCodes: { 202: total },
+        throughputRps: rate,
+        acceptedBusinessOpsRps: rate,
+        latencyMs: { p95: 38.4, p99: 70.2 },
+        traceChecks: { checked: 0, pass: 0, fail: 0 },
+        unitMetrics: {
+          attemptedCommands: total,
+          acceptedCommands: total,
+          directAckedCommands: total,
+          durableCanonicalCompletedItems: total,
+          projectedWorkItems: options.projected,
+          projectionLagAfter: options.lag,
+          attemptedCommandsPerSecond: rate,
+          acceptedCommandsPerSecond: rate,
+          directAckedCommandsPerSecond: rate,
+          durableCanonicalCompletedPerSecond: rate,
+          projectedWorkItemsPerSecond: options.projectedRps,
+        },
+        streamDirect: {
+          delta: {
+            ackedDelta: total,
+            failedDelta: 0,
+            nackedDelta: 0,
+            termedDelta: 0,
+            unsupportedDelta: 0,
+            partitionDeltas: [
+              { partition: 0, ackedDelta: total / 4 },
+              { partition: 1, ackedDelta: total / 4 },
+              { partition: 2, ackedDelta: total / 4 },
+              { partition: 3, ackedDelta: total / 4 },
+            ],
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+        venueEventMaterializer: {
+          delta: {
+            materializedDelta: total,
+            failedDelta: 0,
+            ackFailedDelta: 0,
+            unsupportedDelta: 0,
+          },
+          probes: { after: { ok: true, status: 200 } },
+        },
+        streamAckProjector: {
+          delta: {
+            projectedDelta: options.projected,
+            failedDelta: 0,
+            afterLag: options.lag,
+          },
+          after: {
+            enabled: true,
+            metrics: { failed: 0, lastError: "" },
+            watermarks: [],
           },
           probes: { after: { ok: true, status: 200 } },
         },

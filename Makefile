@@ -20,7 +20,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: dev-render-bot-arena-report dev-render-bot-arena-report-index
 .PHONY: dev-smoke-venue-event-materializer dev-smoke-venue-event-crash-gate dev-smoke-projection-proof
 .PHONY: dev-smoke-bot-sdk-live dev-smoke-bot-sdk-hosted-ses-container dev-venue-event-replay-check
-.PHONY: dev-read-surface-availability-check dev-gate-local-durable dev-gate-projection-freshness
+.PHONY: dev-read-surface-availability-check dev-gate-local-durable
 .PHONY: dev-stress dev-stress-runtime-nodb dev-stress-accepted-async-jfr dev-stress-captured-ack dev-stress-stream-ack dev-stress-stream-direct-nodb
 .PHONY: dev-stress-diagnostics dev-export-simulation-run dev-intake-bench
 .PHONY: dev-command-log-integrity-check dev-command-log-archive dev-command-log-archive-partitions dev-command-log-prune dev-command-log-pin dev-admin dev-control-room
@@ -30,7 +30,7 @@ SCENARIO_START ?= 2026-03-14T18:00:00Z
 .PHONY: kube-up kube-apply kube-reset kube-down kube-status kube-smoke kube-stream-ack-up kube-smoke-stream-ack kube-materializer-up
 .PHONY: kube-materializer-scale kube-autoscale-apply kube-smoke-venue-event-materializer kube-port-forward
 .PHONY: backbone-local-up backbone-local-up-infra backbone-local-init-openbao backbone-local-migrate backbone-local-verify backbone-local-status backbone-local-logs backbone-local-down
-.PHONY: do-benchmark do-materializer-10k-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
+.PHONY: do-benchmark do-materializer-10k-gate do-projection-freshness-gate simulation-run docs-site-dev docs-site-build hetzner-core hetzner-core-tofu
 
 test: test-go test-simulator test-platform-runtime test-bot-sdk
 
@@ -110,7 +110,6 @@ test-bot-sdk:
 	node --check scripts/dev/arena-persist-report-local.mjs
 	node --check scripts/dev/arena-render-report-index.mjs
 	node --check scripts/dev/arena-render-report.mjs
-	node --check scripts/dev/projection-freshness-gate.mjs
 	node --check scripts/dev/arena-run-result-ingestion-smoke.mjs
 	node --check scripts/dev/arena-bot-risk-smoke.mjs
 	node scripts/dev/report-taxonomy.test.mjs
@@ -119,6 +118,7 @@ test-bot-sdk:
 	node scripts/dev/lib/dev-profiles.test.mjs
 	node scripts/dev/do-benchmark-check.test.mjs
 	node scripts/dev/do-materializer-10k-gate.test.mjs
+	node scripts/dev/do-projection-freshness-gate.test.mjs
 	node scripts/dev/scenario-drift.test.mjs
 	node scripts/dev/scenario-golden.test.mjs
 
@@ -329,10 +329,6 @@ dev-gate-local-durable:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/local-durable-gate.mjs
 
-dev-gate-projection-freshness:
-	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
-	DEV_COMPOSE_PROFILES="$(DEV_COMPOSE_PROFILES)" $(JS_RUNTIME) scripts/dev/projection-freshness-gate.mjs
-
 dev-stress:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
 	$(JS_RUNTIME) scripts/dev/stress.mjs
@@ -460,6 +456,9 @@ do-benchmark:
 
 do-materializer-10k-gate:
 	./scripts/dev/do-materializer-10k-gate.sh $(or $(ARGS),plan)
+
+do-projection-freshness-gate:
+	./scripts/dev/do-projection-freshness-gate.sh $(or $(ARGS),plan)
 
 simulation-run:
 	@$(MAKE) check-js-runtime JS_RUNTIME=$(JS_RUNTIME)
