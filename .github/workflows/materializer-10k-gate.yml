@@ -1,0 +1,111 @@
+name: Materializer 10k Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: Gate command to run. Use plan for a safe configuration check.
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - run-destroy
+      tier:
+        description: Gate tier.
+        required: true
+        default: short
+        type: choice
+        options:
+          - short
+          - soak-5m
+          - soak-15m
+      image_mode:
+        description: Benchmark image mode.
+        required: true
+        default: source
+        type: choice
+        options:
+          - source
+          - dockerhub
+      export_to_r2:
+        description: Export compressed remote artifacts to R2 before fetch/destroy.
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: materializer-10k-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  materializer-10k-gate:
+    name: ${{ inputs.command }} ${{ inputs.tier }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      DO_TOKEN: ${{ secrets.DO_TOKEN }}
+      REEF_DO_CONFIRM_DESTROYABLE: ${{ inputs.command == 'run-destroy' && '1' || '0' }}
+      REEF_DO_MATERIALIZER_10K_GATE_TIER: ${{ inputs.tier }}
+      REEF_DO_IMAGE_MODE: ${{ inputs.image_mode }}
+      REEF_DO_EXPORT_TO_R2: ${{ inputs.export_to_r2 == 'true' && '1' || '0' }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: opentofu/setup-opentofu@v2.0.2
+      - name: Validate DigitalOcean token
+        if: ${{ inputs.command == 'run-destroy' }}
+        run: |
+          if [ -z "${DIGITALOCEAN_TOKEN}${DO_TOKEN}" ]; then
+            echo "DIGITALOCEAN_TOKEN or DO_TOKEN secret is required for run-destroy" >&2
+            exit 1
+          fi
+      - name: Validate R2 export secrets
+        if: ${{ inputs.command == 'run-destroy' && inputs.export_to_r2 == 'true' }}
+        run: |
+          if [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "R2_ENDPOINT, R2_BUCKET, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY secrets are required when export_to_r2 is true" >&2
+            exit 1
+          fi
+      - name: Create ephemeral benchmark SSH key
+        if: ${{ inputs.command == 'run-destroy' }}
+        run: |
+          install -m 700 -d ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
+      - name: Run materializer gate command
+        run: |
+          set -o pipefail
+          make do-materializer-10k-gate ARGS="${{ inputs.command }}" | tee materializer-10k-gate.log
+      - name: Add gate summary
+        if: always()
+        run: |
+          echo "## materializer 10k gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 120 materializer-10k-gate.log >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload gate log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: materializer-10k-gate-log
+          path: materializer-10k-gate.log
+      - name: Upload fetched benchmark artifacts
+        if: ${{ always() && inputs.command == 'run-destroy' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: materializer-10k-gate-artifacts
+          path: reports/do-benchmark
