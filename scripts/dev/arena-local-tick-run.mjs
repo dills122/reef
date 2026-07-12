@@ -590,6 +590,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       disqualified: freezeCount > 0,
       score,
       tradingMetrics: summarizeTradingMetrics(session, counters),
+      conductMetrics: summarizeConductMetrics(session, counters, { freezeCount, operationalPauseCount }),
     };
   });
 }
@@ -710,6 +711,49 @@ function summarizeTradingMetrics(session, counters) {
       available: false,
       reason: "quote uptime, spread contribution, depth, and impact attribution are follow-up scoring slices",
     },
+  };
+}
+
+function summarizeConductMetrics(session, counters, enforcement) {
+  let maxVenueCommandsPerTick = 0;
+  let submitCommands = 0;
+  let modifyCommands = 0;
+  let cancelCommands = 0;
+  let noopActions = 0;
+
+  for (const tick of session.ticks) {
+    maxVenueCommandsPerTick = Math.max(maxVenueCommandsPerTick, tick.venueCommands?.length ?? 0);
+    for (const action of tick.actions ?? []) {
+      if (action.type === "noop") {
+        noopActions += 1;
+      }
+    }
+    for (const command of tick.venueCommands ?? []) {
+      if (command.route === "/api/v1/orders/submit") submitCommands += 1;
+      if (command.route === "/api/v1/orders/modify") modifyCommands += 1;
+      if (command.route === "/api/v1/orders/cancel") cancelCommands += 1;
+    }
+  }
+
+  const orderCommands = submitCommands + modifyCommands + cancelCommands;
+  const cancelReplaceCommands = modifyCommands + cancelCommands;
+  return {
+    schemaVersion: "reef.arena.conductMetrics.v0",
+    policyVersion: mode.scoringPolicyVersion,
+    status: enforcement.freezeCount > 0 ? "disqualified" : "reported",
+    orderCommands,
+    submitCommands,
+    modifyCommands,
+    cancelCommands,
+    noopActions,
+    cancelReplaceRatio: ratio(cancelReplaceCommands, Math.max(1, submitCommands)),
+    invalidIntentRate: ratio(counters.rejectedCommands + counters.failedCommands, Math.max(1, counters.submittedCommands)),
+    timeoutRate: ratio(counters.timedOutCommands, Math.max(1, counters.submittedCommands)),
+    maxActionsPerTick: counters.maxActionsPerTick,
+    maxVenueCommandsPerTick,
+    freezeCount: enforcement.freezeCount,
+    operationalPauseCount: enforcement.operationalPauseCount,
+    notes: "report-only conduct inputs; scoring penalties are a later policy slice",
   };
 }
 
@@ -2360,6 +2404,10 @@ function midpoint(bid, ask) {
 
 function pct(count, total) {
   return total > 0 ? (count / total) * 100 : 0;
+}
+
+function ratio(count, total) {
+  return total > 0 ? Number((count / total).toFixed(6)) : 0;
 }
 
 function positiveNumber(value, fallback) {
