@@ -171,6 +171,34 @@ test("extracts counts, latency, and summary from arena local tick report", async
           failedTicks: 0,
           freezeCount: 0,
           disqualified: false,
+          scoreBreakdown: {
+            schemaVersion: "reef.arena.scoreBreakdown.v1",
+            scoringPolicyVersion: "score-v0",
+            scoreEligible: false,
+            actorClass: "house_market_maker",
+            scoreEffect: "diagnostic-only",
+            publicScore: null,
+            shadowScore: null,
+            scoringMode: "diagnostic-only",
+            components: {
+              baseline: 0,
+              equity: 0,
+              risk: 0,
+              conduct: 0,
+              marketInteraction: 0,
+              difficulty: 0,
+            },
+            diagnostics: {
+              finalEquity: 1000100,
+              totalPnl: 100,
+              fillCount: 2,
+              submittedCommands: 4,
+              cancelReplaceRatio: 0,
+              timeoutRate: 0,
+              difficultyMultiplier: 1,
+              npcDifficultyBuckets: ["benign-noise"],
+            },
+          },
           actorClass: "house_market_maker",
           actorProfile: {
             profileId: "mm-tight-bluechip",
@@ -242,6 +270,10 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.botResults[0].tradingMetrics.commands.submitted, 4);
   assert.equal(payload.summary.botResults[0].actorProfile.profileId, "mm-tight-bluechip");
   assert.equal(payload.summary.botResults[0].conductMetrics.maxVenueCommandsPerTick, 2);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.scoreEffect, "diagnostic-only");
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.publicScore, null);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.difficultyMultiplier, 1);
   assert.equal(payload.summary.settlementScore.participants[0].participantId, "builtin-mm-simple");
 });
 

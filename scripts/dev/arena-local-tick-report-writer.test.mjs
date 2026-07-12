@@ -50,7 +50,23 @@ assert.ok(report.runPlan.actorProfiles.profiles.every((entry) => /^sha256:[a-f0-
 assert.equal(report.botResults.find((entry) => entry.botId === "builtin-npc-momentum").actorProfile.profileId, "npc-noise-small-random");
 assert.equal(report.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
 assert.equal(report.botResults[0].conductMetrics.status, "reported");
-assert.equal(report.scoringAssumptions.npcDifficultyMode, "bucket-only");
+assert.equal(report.scoringAssumptions.npcDifficultyMode, "leaderboard-partition-plus-shadow-multiplier");
+const marketMaker = report.botResults.find((entry) => entry.botId === "builtin-mm-simple");
+assert.equal(marketMaker.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+assert.equal(marketMaker.scoreBreakdown.scoreEligible, false);
+assert.equal(marketMaker.scoreBreakdown.scoreEffect, "diagnostic-only");
+assert.equal(marketMaker.scoreBreakdown.publicScore, null);
+assert.equal(marketMaker.scoreBreakdown.shadowScore, null);
+const npc = report.botResults.find((entry) => entry.botId === "builtin-npc-momentum");
+assert.equal(npc.scoreBreakdown.scoreEligible, false);
+assert.equal(npc.scoreBreakdown.scoreEffect, "difficulty-bucket");
+assert.equal(npc.scoreBreakdown.scoringMode, "difficulty-context-only");
+const competitor = report.botResults.find((entry) => entry.botId === "custom-technical-indicator");
+assert.equal(competitor.scoreBreakdown.scoreEligible, true);
+assert.equal(competitor.scoreBreakdown.publicScore, competitor.score);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.shadowScore), true);
+assert.equal(competitor.scoreBreakdown.components.baseline, 1_000_000);
+assert.deepEqual(competitor.scoreBreakdown.diagnostics.npcDifficultyBuckets, ["benign-noise"]);
 
 const compactResult = spawnSync(
   "bun",
@@ -77,6 +93,7 @@ assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvel
 assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
 assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
 assert.equal(compactReport.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
+assert.equal(compactReport.botResults.find((entry) => entry.botId === "custom-technical-indicator").scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
 assert.equal(compactReport.sessionReports, undefined);
 assert.equal(compactReport.healthSamples, undefined);
 assert.equal(compactReport.omitted.sessionReports, 5);

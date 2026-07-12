@@ -159,7 +159,9 @@ Execution-quality challenge:
 
 NPC profiles affect scoring context because they define scenario difficulty.
 
-Initial recommendation: use difficulty buckets first, not numeric multipliers.
+Initial recommendation: use leaderboard partitions plus a small multiplier on
+non-baseline score components. Keep this multiplier in `shadowScore` until
+enough run artifacts prove the relative difficulty calibration is stable.
 
 Examples:
 
@@ -178,15 +180,25 @@ Leaderboards should compare only runs with the same:
 - visible-data policy version
 - seed set or season set
 
-Why buckets first:
+Initial shadow multipliers:
+
+- `benign-noise`: `1.00`
+- `ranked-standard`: `1.00`
+- `balanced-flow`: `1.05`
+- `toxic-momentum`: `1.10`
+- `stress-liquidity`: `1.15`
+- `event-shock`: `1.20`
+
+The multiplier applies only to variable components such as equity,
+participation, risk, and conduct. It must not multiply the baseline score.
+
+Why partition plus small multiplier:
 
 - simple to audit
 - hard to game
-- no false precision before calibration data exists
 - supports separate "easy", "standard", and "hard" boards
-
-Numeric multipliers can come later after enough runs prove that buckets have
-stable relative difficulty.
+- avoids mixing incomparable runs on public boards
+- still records a calibrated scoring candidate for later promotion
 
 ## Liquidity Provider Neutrality
 

@@ -240,6 +240,7 @@ function compactSummary(report, reportPath) {
           failedTicks: numberOrZero(bot.failedTicks),
           freezeCount: numberOrZero(bot.freezeCount),
           disqualified: Boolean(bot.disqualified),
+          scoreBreakdown: compactScoreBreakdown(bot.scoreBreakdown),
           tradingMetrics: compactTradingMetrics(bot.tradingMetrics),
           conductMetrics: compactConductMetrics(bot.conductMetrics),
           actorClass: bot.actorClass ?? "",
@@ -270,6 +271,33 @@ function compactSummary(report, reportPath) {
 
 function isArenaLocalTickReport(report) {
   return report?.schemaVersion === "reef.arena.localTickRun.v0";
+}
+
+function compactScoreBreakdown(scoreBreakdown) {
+  if (scoreBreakdown === undefined || scoreBreakdown === null) return {};
+  return {
+    schemaVersion: scoreBreakdown.schemaVersion ?? "",
+    scoringPolicyVersion: scoreBreakdown.scoringPolicyVersion ?? "",
+    scoreEligible: Boolean(scoreBreakdown.scoreEligible),
+    actorClass: scoreBreakdown.actorClass ?? "",
+    scoreEffect: scoreBreakdown.scoreEffect ?? "",
+    publicScore: nullableNumber(scoreBreakdown.publicScore),
+    shadowScore: nullableNumber(scoreBreakdown.shadowScore),
+    scoringMode: scoreBreakdown.scoringMode ?? "",
+    components: scoreBreakdown.components ?? {},
+    diagnostics: {
+      finalEquity: nullableNumber(scoreBreakdown.diagnostics?.finalEquity),
+      totalPnl: nullableNumber(scoreBreakdown.diagnostics?.totalPnl),
+      fillCount: numberOrZero(scoreBreakdown.diagnostics?.fillCount),
+      submittedCommands: numberOrZero(scoreBreakdown.diagnostics?.submittedCommands),
+      cancelReplaceRatio: nullableNumber(scoreBreakdown.diagnostics?.cancelReplaceRatio),
+      timeoutRate: nullableNumber(scoreBreakdown.diagnostics?.timeoutRate),
+      difficultyMultiplier: nullableNumber(scoreBreakdown.diagnostics?.difficultyMultiplier),
+      npcDifficultyBuckets: Array.isArray(scoreBreakdown.diagnostics?.npcDifficultyBuckets)
+        ? scoreBreakdown.diagnostics.npcDifficultyBuckets
+        : [],
+    },
+  };
 }
 
 function compactTradingMetrics(metrics) {
@@ -391,6 +419,7 @@ function firstNonBlank(...values) {
 }
 
 function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }

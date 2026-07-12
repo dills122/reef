@@ -33,11 +33,32 @@ assert.equal(aggressiveTakers.length, 5);
 for (const taker of aggressiveTakers) {
   assert.equal(taker.actorClass, "npc_flow");
   assert.equal(taker.actorProfile.scoreEffect, "difficulty-bucket");
+  assert.equal(taker.scoreBreakdown.scoreEligible, false);
+  assert.equal(taker.scoreBreakdown.scoringMode, "difficulty-context-only");
+  assert.equal(taker.scoreBreakdown.shadowScore, null);
   assert.equal(taker.actorProfile.params.maxSpreadCrossBps, 250);
   assert.equal(taker.venueCommands, 3);
   assert.equal(taker.tradingMetrics.orderFlow.submittedLimitOrders, 3);
   assert.equal(taker.tradingMetrics.orderFlow.bySide.BUY, 1);
   assert.equal(taker.tradingMetrics.orderFlow.bySide.SELL, 2);
+}
+
+const competitors = report.botResults.filter((entry) => entry.actorClass === "competitor");
+assert.equal(competitors.length, 11);
+for (const competitor of competitors) {
+  assert.equal(competitor.scoreBreakdown.scoreEligible, true);
+  assert.equal(competitor.scoreBreakdown.publicScore, competitor.score);
+  assert.equal(competitor.scoreBreakdown.diagnostics.difficultyMultiplier, 1.1);
+  assert.deepEqual(competitor.scoreBreakdown.diagnostics.npcDifficultyBuckets, ["benign-noise", "toxic-momentum"]);
+}
+
+const liquidityProviders = report.botResults.filter((entry) => entry.actorClass === "house_market_maker");
+assert.equal(liquidityProviders.length, 6);
+for (const provider of liquidityProviders) {
+  assert.equal(provider.scoreBreakdown.scoreEligible, false);
+  assert.equal(provider.scoreBreakdown.scoreEffect, "diagnostic-only");
+  assert.equal(provider.scoreBreakdown.publicScore, null);
+  assert.equal(provider.scoreBreakdown.shadowScore, null);
 }
 
 console.log("arena actor profile behavior checks passed");
