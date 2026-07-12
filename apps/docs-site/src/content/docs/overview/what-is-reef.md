@@ -31,7 +31,7 @@ The [Bot Arena](../../arena/overview/) turns the simulation layer into a game: u
 - **Kotlin** - platform runtime: API boundary, workflow orchestration, persistence, read models.
 - **Go** - matching engine plus simulator/load tooling.
 - **Postgres** - durable facts, projections, and audit-friendly storage.
-- **Kafka-compatible streams** - target durable command intake and event-batch backbone.
+- **Kafka-compatible streams (Redpanda locally/for gates)** - durable command intake and venue event-batch backbone for the promoted high-throughput path.
 - **Protobuf** - shared contracts between Kotlin and Go.
 - **Stock-data service** - seed-time external price snapshots that are persisted before replay.
 
