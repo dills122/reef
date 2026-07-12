@@ -276,6 +276,34 @@ diagnostics in public or operator reports:
 - adverse-selection loss
 - kill-switch activation
 
+Arena reports should expose liquidity diagnostics in two places:
+
+- `botResults[].liquidityDiagnostics` for each house market maker
+- `liquiditySummary` for scenario-level liquidity context
+
+Both surfaces must set `scoreNeutral: true` and `pointsEffect: 0`. They are
+inputs for interpreting scenario quality and score calibration, not direct
+score inputs.
+
+Initial liquidity diagnostics:
+
+- touched instruments and venue quote coverage
+- average top-of-book uptime and depth percentage
+- median and p95 quoted spread bps
+- submit/modify/cancel activity and cancel/replace pressure
+- fill participation and terminal inventory pressure
+- adverse-selection placeholder until post-fill price path attribution exists
+
+Useful liquidity flags:
+
+- `missing-liquidity-provider`
+- `no-active-liquidity-provider`
+- `no-liquidity-fills`
+- `low-quote-uptime`
+- `thin-depth`
+- `wide-median-spread`
+- `crossed-book`
+
 ## Ranked, Asymmetric, And Training Modes
 
 Ranked standard mode:

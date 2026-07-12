@@ -149,6 +149,26 @@ test("extracts counts, latency, and summary from arena local tick report", async
         status: "pass",
         topOfBookPct: 100,
       },
+      liquiditySummary: {
+        schemaVersion: "reef.arena.liquiditySummary.v1",
+        mode: "score-neutral-liquidity-context",
+        scoreNeutral: true,
+        pointsEffect: 0,
+        status: "pass",
+        flags: [],
+        totals: {
+          providerCount: 1,
+          activeProviderCount: 1,
+          fillCount: 2,
+        },
+        instruments: [{
+          instrumentId: "AAPL",
+          providerCount: 1,
+          providerIds: ["builtin-mm-simple"],
+          status: "pass",
+          flags: [],
+        }],
+      },
       scoringCalibration: {
         schemaVersion: "reef.arena.scoringCalibration.v1",
         formulaVersion: "shadow-score-v1",
@@ -253,6 +273,35 @@ test("extracts counts, latency, and summary from arena local tick report", async
               npcDifficultyBuckets: ["benign-noise"],
             },
           },
+          liquidityDiagnostics: {
+            schemaVersion: "reef.arena.liquidityProviderDiagnostics.v1",
+            mode: "score-neutral-liquidity-context",
+            scoreNeutral: true,
+            pointsEffect: 0,
+            status: "pass",
+            flags: [],
+            instruments: ["AAPL"],
+            quoteQuality: {
+              avgTopOfBookPct: 100,
+              avgDepthPct: 100,
+              medianQuotedSpreadBps: 20,
+            },
+            orderActivity: {
+              submittedLimitOrders: 2,
+              cancelCommands: 0,
+            },
+            fillParticipation: {
+              fillCount: 2,
+              filledQuantity: 4,
+            },
+            inventory: {
+              grossNotional: 100,
+            },
+            adverseSelection: {
+              available: false,
+              reason: "requires post-fill price path attribution window",
+            },
+          },
           actorClass: "house_market_maker",
           actorProfile: {
             profileId: "mm-tight-bluechip",
@@ -316,6 +365,9 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.commandAccounting.accountingGap, 0);
   assert.equal(payload.summary.commandStatusSummary.byRoute["/api/v1/orders/cancel"], 2);
   assert.equal(payload.summary.healthSummary.status, "pass");
+  assert.equal(payload.summary.liquiditySummary.schemaVersion, "reef.arena.liquiditySummary.v1");
+  assert.equal(payload.summary.liquiditySummary.pointsEffect, 0);
+  assert.equal(payload.summary.liquiditySummary.totals.providerCount, 1);
   assert.equal(payload.summary.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
   assert.equal(payload.summary.scoringCalibration.dataQuality.flags[0], "no-eligible-competitors");
   assert.equal(payload.summary.policyEnvelopeHash, "sha256:abc123");
@@ -333,6 +385,9 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.botResults[0].scoreBreakdown.componentDetails.marketInteraction.completionScore, 5000);
   assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.fillRatio, 0.5);
   assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.difficultyMultiplier, 1);
+  assert.equal(payload.summary.botResults[0].liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
+  assert.equal(payload.summary.botResults[0].liquidityDiagnostics.scoreNeutral, true);
+  assert.equal(payload.summary.botResults[0].liquidityDiagnostics.fillParticipation.fillCount, 2);
   assert.equal(payload.summary.settlementScore.participants[0].participantId, "builtin-mm-simple");
 });
 

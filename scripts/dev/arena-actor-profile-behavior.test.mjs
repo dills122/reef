@@ -61,11 +61,19 @@ for (const competitor of competitors) {
 
 const liquidityProviders = report.botResults.filter((entry) => entry.actorClass === "house_market_maker");
 assert.equal(liquidityProviders.length, 6);
+assert.equal(report.liquiditySummary.totals.providerCount, 6);
+assert.equal(report.liquiditySummary.totals.activeProviderCount, 6);
+assert.equal(report.liquiditySummary.scoreNeutral, true);
+assert.equal(report.liquiditySummary.pointsEffect, 0);
+assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "AAPL").providerCount, 2);
+assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "AMZN").providerCount, 1);
 for (const provider of liquidityProviders) {
   assert.equal(provider.scoreBreakdown.scoreEligible, false);
   assert.equal(provider.scoreBreakdown.scoreEffect, "diagnostic-only");
   assert.equal(provider.scoreBreakdown.publicScore, null);
   assert.equal(provider.scoreBreakdown.shadowScore, null);
+  assert.equal(provider.liquidityDiagnostics.scoreNeutral, true);
+  assert.equal(provider.liquidityDiagnostics.pointsEffect, 0);
 }
 
 console.log("arena actor profile behavior checks passed");

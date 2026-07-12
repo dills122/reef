@@ -796,6 +796,8 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
   );
   const healthSummary = summarizeHealth(healthSamples, totals);
   const marketQualitySummary = summarizeMarketQuality(healthSamples);
+  const botResultsWithLiquidity = attachLiquidityDiagnostics(botResults, marketQualitySummary);
+  const liquiditySummary = summarizeLiquidityProviders(botResultsWithLiquidity, marketQualitySummary);
   const status = reportStatus(enforcementEvents, healthSummary);
   const envelope = policyEnvelope();
   return {
@@ -843,16 +845,17 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
     marketQualitySummary,
+    liquiditySummary,
     executionSummary: venueReadback?.executionSummary,
-    scoringCalibration: summarizeScoreCalibration(botResults),
+    scoringCalibration: summarizeScoreCalibration(botResultsWithLiquidity),
     healthSamples,
     venueReadback,
     enforcementEvents,
-    botResults,
+    botResults: botResultsWithLiquidity,
     leaderboard: rankBotResults(
-      botResults.filter((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified),
+      botResultsWithLiquidity.filter((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified),
     ),
-    diagnosticLeaderboard: rankBotResults(botResults.filter((result) => result.scoreEligible)),
+    diagnosticLeaderboard: rankBotResults(botResultsWithLiquidity.filter((result) => result.scoreEligible)),
     sessionReports,
   };
 }
@@ -889,6 +892,7 @@ function compactArenaReport(report) {
     activityBySchedulingClass: report.activityBySchedulingClass,
     healthSummary: report.healthSummary,
     marketQualitySummary: report.marketQualitySummary,
+    liquiditySummary: report.liquiditySummary,
     executionSummary: report.executionSummary,
     scoringCalibration: report.scoringCalibration,
     venueReadback: compactVenueReadback(report.venueReadback),
@@ -1330,6 +1334,194 @@ function summarizeMarketQuality(healthSamples) {
       maxP95QuotedSpreadBps,
     },
     instruments,
+  };
+}
+
+function attachLiquidityDiagnostics(botResults, marketQualitySummary) {
+  return botResults.map((result) => {
+    if (result.actorClass !== "house_market_maker") return result;
+    return {
+      ...result,
+      liquidityDiagnostics: liquidityProviderDiagnostics(result, marketQualitySummary),
+    };
+  });
+}
+
+function liquidityProviderDiagnostics(result, marketQualitySummary) {
+  const instruments = liquidityProviderInstruments(result);
+  const quoteCoverage = instruments.map((instrumentId) => liquidityInstrumentCoverage(instrumentId, marketQualitySummary));
+  const medianSpreadValues = quoteCoverage
+    .map((entry) => entry.medianQuotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value));
+  const p95SpreadValues = quoteCoverage
+    .map((entry) => entry.p95QuotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value));
+  const avgTopOfBookPct = average(quoteCoverage.map((entry) => entry.topOfBookPct));
+  const avgDepthPct = average(quoteCoverage.map((entry) => entry.depthPct));
+  const thresholds = marketQualitySummary?.thresholds ?? {};
+  const fillCount = numberValue(result.tradingMetrics?.executions?.fillCount);
+  const inventoryGrossNotional = numberValue(result.tradingMetrics?.inventory?.grossNotional);
+  const grossExecutedNotional = numberValue(result.tradingMetrics?.executions?.grossNotional);
+  const flags = [];
+  if (instruments.length === 0) flags.push("no-liquidity-instruments");
+  if (numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders) === 0) flags.push("no-quote-submissions");
+  if (fillCount === 0) flags.push("no-liquidity-fills");
+  if (avgTopOfBookPct !== null && avgTopOfBookPct < Number(thresholds.minTopOfBookPct ?? 90)) flags.push("low-quote-uptime");
+  if (avgDepthPct !== null && avgDepthPct < Number(thresholds.minDepthPct ?? 90)) flags.push("thin-depth");
+  const medianQuotedSpreadBps = average(medianSpreadValues);
+  const p95QuotedSpreadBps = average(p95SpreadValues);
+  if (medianQuotedSpreadBps !== null && medianQuotedSpreadBps > Number(thresholds.maxMedianQuotedSpreadBps ?? 25)) flags.push("wide-median-spread");
+  if (p95QuotedSpreadBps !== null && p95QuotedSpreadBps > Number(thresholds.maxP95QuotedSpreadBps ?? 50)) flags.push("wide-p95-spread");
+  if (grossExecutedNotional > 0 && inventoryGrossNotional / grossExecutedNotional > 0.5) flags.push("inventory-pressure");
+
+  return {
+    schemaVersion: "reef.arena.liquidityProviderDiagnostics.v1",
+    mode: "score-neutral-liquidity-context",
+    scoreEffect: result.actorProfile?.scoreEffect ?? "diagnostic-only",
+    scoreNeutral: true,
+    pointsEffect: 0,
+    publicScore: null,
+    shadowScore: null,
+    status: flags.length === 0 ? "pass" : "warn",
+    flags,
+    instruments,
+    quoteCoverage,
+    quoteQuality: {
+      avgTopOfBookPct,
+      avgDepthPct,
+      medianQuotedSpreadBps,
+      p95QuotedSpreadBps,
+    },
+    orderActivity: {
+      submittedLimitOrders: numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders),
+      modifyCommands: numberValue(result.tradingMetrics?.orderFlow?.modifyCommands),
+      cancelCommands: numberValue(result.tradingMetrics?.orderFlow?.cancelCommands),
+      cancelReplaceRatio: numberValue(result.conductMetrics?.cancelReplaceRatio),
+      maxVenueCommandsPerTick: numberValue(result.conductMetrics?.maxVenueCommandsPerTick),
+    },
+    fillParticipation: {
+      fillCount,
+      filledQuantity: numberValue(result.tradingMetrics?.executions?.filledQuantity),
+      grossExecutedNotional,
+      avgFillPrice: nullableNumber(result.tradingMetrics?.executions?.avgFillPrice),
+    },
+    inventory: {
+      netQuantityByInstrument: result.tradingMetrics?.inventory?.netQuantityByInstrument ?? {},
+      grossNotional: nullableNumber(result.tradingMetrics?.inventory?.grossNotional),
+      markPriceSource: result.tradingMetrics?.inventory?.markPriceSource ?? "",
+    },
+    adverseSelection: {
+      available: false,
+      reason: "requires post-fill price path attribution window",
+    },
+  };
+}
+
+function summarizeLiquidityProviders(botResults, marketQualitySummary) {
+  const providers = botResults.filter((result) => result.actorClass === "house_market_maker");
+  const activeProviders = providers.filter((provider) =>
+    numberValue(provider.tradingMetrics?.orderFlow?.submittedLimitOrders) > 0 ||
+    numberValue(provider.tradingMetrics?.commands?.submitted) > 0
+  );
+  const primaryInstruments = liquidityPrimaryInstruments(marketQualitySummary);
+  const instrumentCoverage = primaryInstruments.map((instrumentId) => {
+    const providerIds = providers
+      .filter((provider) => liquidityProviderInstruments(provider).includes(instrumentId))
+      .map((provider) => provider.botId)
+      .sort();
+    const marketQuality = liquidityInstrumentCoverage(instrumentId, marketQualitySummary);
+    const flags = [];
+    if (providerIds.length === 0) flags.push("missing-liquidity-provider");
+    if (marketQuality.topOfBookPct < Number(marketQualitySummary?.thresholds?.minTopOfBookPct ?? 90)) flags.push("low-quote-uptime");
+    if (marketQuality.depthPct < Number(marketQualitySummary?.thresholds?.minDepthPct ?? 90)) flags.push("thin-depth");
+    if (
+      marketQuality.medianQuotedSpreadBps !== null &&
+      marketQuality.medianQuotedSpreadBps > Number(marketQualitySummary?.thresholds?.maxMedianQuotedSpreadBps ?? 25)
+    ) {
+      flags.push("wide-median-spread");
+    }
+    if (marketQuality.crossedBookCount > 0) flags.push("crossed-book");
+    return {
+      instrumentId,
+      providerCount: providerIds.length,
+      providerIds,
+      marketQuality,
+      status: flags.length === 0 ? "pass" : "warn",
+      flags,
+    };
+  });
+  const totals = {
+    providerCount: providers.length,
+    activeProviderCount: activeProviders.length,
+    submittedLimitOrders: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.submittedLimitOrders)),
+    modifyCommands: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.modifyCommands)),
+    cancelCommands: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.cancelCommands)),
+    fillCount: sum(providers.map((provider) => provider.tradingMetrics?.executions?.fillCount)),
+    filledQuantity: sum(providers.map((provider) => provider.tradingMetrics?.executions?.filledQuantity)),
+    grossExecutedNotional: Number(sum(providers.map((provider) => provider.tradingMetrics?.executions?.grossNotional)).toFixed(6)),
+    inventoryGrossNotional: Number(sum(providers.map((provider) => provider.tradingMetrics?.inventory?.grossNotional)).toFixed(6)),
+  };
+  const flags = [];
+  if (providers.length === 0) flags.push("missing-liquidity-provider");
+  if (providers.length > 0 && activeProviders.length === 0) flags.push("no-active-liquidity-provider");
+  if (totals.fillCount === 0) flags.push("no-liquidity-fills");
+  for (const coverage of instrumentCoverage) {
+    for (const flag of coverage.flags) {
+      flags.push(`${coverage.instrumentId}:${flag}`);
+    }
+  }
+  return {
+    schemaVersion: "reef.arena.liquiditySummary.v1",
+    mode: "score-neutral-liquidity-context",
+    scoreNeutral: true,
+    pointsEffect: 0,
+    status: flags.length === 0 ? "pass" : "warn",
+    flags,
+    totals,
+    instruments: instrumentCoverage,
+    providerDiagnostics: providers.map((provider) => ({
+      botId: provider.botId,
+      status: provider.liquidityDiagnostics?.status ?? "unknown",
+      flags: provider.liquidityDiagnostics?.flags ?? [],
+      instruments: provider.liquidityDiagnostics?.instruments ?? [],
+      quoteQuality: provider.liquidityDiagnostics?.quoteQuality ?? {},
+      fillParticipation: provider.liquidityDiagnostics?.fillParticipation ?? {},
+      inventory: provider.liquidityDiagnostics?.inventory ?? {},
+      pointsEffect: 0,
+    })),
+    notes: "Liquidity diagnostics are report-only and do not create point gains or losses for house actors.",
+  };
+}
+
+function liquidityProviderInstruments(result) {
+  const instruments = new Set([
+    ...Object.keys(result.tradingMetrics?.orderFlow?.byInstrument ?? {}),
+    ...Object.keys(result.tradingMetrics?.executions?.byInstrument ?? {}),
+    ...Object.keys(result.tradingMetrics?.inventory?.netQuantityByInstrument ?? {}),
+  ]);
+  return Array.from(instruments).filter((instrumentId) => instrumentId.length > 0 && instrumentId !== "unknown").sort();
+}
+
+function liquidityPrimaryInstruments(marketQualitySummary) {
+  const configured = mode.healthTargets?.primaryInstruments ?? mode.instruments ?? [];
+  const fromMarketQuality = (marketQualitySummary?.instruments ?? []).map((instrument) => instrument.instrumentId);
+  return Array.from(new Set([...configured, ...fromMarketQuality])).filter((instrumentId) => String(instrumentId).length > 0).sort();
+}
+
+function liquidityInstrumentCoverage(instrumentId, marketQualitySummary) {
+  const match = (marketQualitySummary?.instruments ?? []).find((instrument) => instrument.instrumentId === instrumentId);
+  return {
+    instrumentId,
+    status: match?.status ?? "unknown",
+    sampleCount: numberValue(match?.sampleCount),
+    topOfBookPct: nullableNumber(match?.topOfBookPct) ?? 0,
+    depthPct: nullableNumber(match?.depthPct) ?? 0,
+    medianQuotedSpreadBps: nullableNumber(match?.medianQuotedSpreadBps),
+    p95QuotedSpreadBps: nullableNumber(match?.p95QuotedSpreadBps),
+    crossedBookCount: numberValue(match?.crossedBookCount),
+    lockedBookCount: numberValue(match?.lockedBookCount),
+    emptyBookCount: numberValue(match?.emptyBookCount),
+    failures: match?.failures ?? [],
   };
 }
 
@@ -2500,7 +2692,19 @@ function percentile(sortedValues, pct) {
   return sortedValues[index];
 }
 
+function average(values) {
+  const numbers = values
+    .map((value) => nullableNumber(value))
+    .filter((value) => value !== null);
+  return numbers.length === 0 ? null : Number((sum(numbers) / numbers.length).toFixed(6));
+}
+
+function sum(values) {
+  return values.reduce((total, value) => total + numberValue(value), 0);
+}
+
 function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }

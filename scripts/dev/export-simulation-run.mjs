@@ -223,6 +223,7 @@ function compactSummary(report, reportPath) {
       commandAccounting: report.commandAccounting ?? {},
       commandStatusSummary: report.commandStatusSummary ?? {},
       healthSummary: report.healthSummary ?? {},
+      liquiditySummary: report.liquiditySummary ?? {},
       scoringCalibration: report.scoringCalibration ?? {},
       venueReadback: {
         mode: report.venueReadback?.mode ?? "",
@@ -242,6 +243,7 @@ function compactSummary(report, reportPath) {
           freezeCount: numberOrZero(bot.freezeCount),
           disqualified: Boolean(bot.disqualified),
           scoreBreakdown: compactScoreBreakdown(bot.scoreBreakdown),
+          liquidityDiagnostics: compactLiquidityDiagnostics(bot.liquidityDiagnostics),
           tradingMetrics: compactTradingMetrics(bot.tradingMetrics),
           conductMetrics: compactConductMetrics(bot.conductMetrics),
           actorClass: bot.actorClass ?? "",
@@ -310,6 +312,24 @@ function compactScoreBreakdown(scoreBreakdown) {
         ? scoreBreakdown.diagnostics.npcDifficultyBuckets
         : [],
     },
+  };
+}
+
+function compactLiquidityDiagnostics(diagnostics) {
+  if (diagnostics === undefined || diagnostics === null) return {};
+  return {
+    schemaVersion: diagnostics.schemaVersion ?? "",
+    mode: diagnostics.mode ?? "",
+    scoreNeutral: diagnostics.scoreNeutral === true,
+    pointsEffect: nullableNumber(diagnostics.pointsEffect),
+    status: diagnostics.status ?? "",
+    flags: Array.isArray(diagnostics.flags) ? diagnostics.flags : [],
+    instruments: Array.isArray(diagnostics.instruments) ? diagnostics.instruments : [],
+    quoteQuality: diagnostics.quoteQuality ?? {},
+    orderActivity: diagnostics.orderActivity ?? {},
+    fillParticipation: diagnostics.fillParticipation ?? {},
+    inventory: diagnostics.inventory ?? {},
+    adverseSelection: diagnostics.adverseSelection ?? {},
   };
 }
 
