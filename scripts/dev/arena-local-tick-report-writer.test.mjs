@@ -32,6 +32,19 @@ assert.equal(report.totals.ticks, 16);
 assert.equal(report.sessionReports.length, 5);
 assert.equal(report.sessionReports.flatMap((session) => session.ticks).length, report.totals.ticks);
 assert.equal(report.healthSamples.length, 2);
+assert.equal(report.mode.economicPolicyVersion, "economic-v0");
+assert.equal(report.mode.actorProfileCatalogVersion, "2026-07-12");
+assert.deepEqual(report.mode.npcDifficultyBuckets, ["benign-noise"]);
+assert.equal(report.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
+assert.deepEqual(report.runPlan.actorProfiles.byActorClass, {
+  competitor: 1,
+  house_market_maker: 3,
+  npc_flow: 1,
+});
+assert.equal(report.runPlan.actorProfiles.byDifficultyBucket["neutral-liquidity"], 3);
+assert.ok(report.runPlan.actorProfiles.profiles.every((entry) => /^sha256:[a-f0-9]{64}$/.test(entry.profileHash)));
+assert.equal(report.botResults.find((entry) => entry.botId === "builtin-npc-momentum").actorProfile.profileId, "npc-noise-small-random");
+assert.equal(report.scoringAssumptions.npcDifficultyMode, "bucket-only");
 
 const compactResult = spawnSync(
   "bun",
@@ -53,6 +66,8 @@ assert.equal(compactReport.schemaVersion, "reef.arena.localTickRun.v0");
 assert.equal(compactReport.reportShape, "compact");
 assert.equal(compactReport.status, "completed");
 assert.equal(compactReport.totals.ticks, 16);
+assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
+assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
 assert.equal(compactReport.sessionReports, undefined);
 assert.equal(compactReport.healthSamples, undefined);
 assert.equal(compactReport.omitted.sessionReports, 5);

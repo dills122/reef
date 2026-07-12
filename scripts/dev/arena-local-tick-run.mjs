@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -70,6 +71,8 @@ if (config.persistResults && config.arenaAdminUrl.length === 0) {
 const mode = readJson(config.mode);
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
+const actorProfileCatalog = readJson(mode.actorProfileCatalogPath ?? "packages/scenario-definitions/arena/actor-profiles.v1.json");
+const actorProfileIndex = indexActorProfiles(actorProfileCatalog);
 const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
@@ -79,7 +82,8 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
+  const actorProfile = resolveActorProfile(entry, actorProfileIndex);
+  return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile, actorProfile };
 });
 const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
 const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots);
@@ -274,6 +278,13 @@ function houseLiquidityConfig(bot) {
     ...(mode.houseLiquidityDefaults ?? {}),
     ...(bot.houseLiquidity ?? {}),
   };
+}
+
+function actorClassForBot(bot) {
+  if (bot.role === "market-maker") return "house_market_maker";
+  if (bot.role === "npc") return "npc_flow";
+  if (bot.role === "benchmark") return "benchmark";
+  return "competitor";
 }
 
 function ticksForSchedulingClass(schedulingClass, intervalMs = runPlan.tickIntervalMs) {
@@ -561,6 +572,8 @@ function scoreBots(sessionReports, enforcementEvents) {
       versionId: session.bot.versionId,
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
+      actorClass: actorClassForBot(session.bot),
+      actorProfile: session.bot.actorProfile,
       schedulingClass: botSchedulingClass(session.bot),
       riskProfile: session.bot.riskProfile === undefined ? undefined : session.bot.riskProfile,
       runtimeConfigPreflight: session.bot.runtimeConfigPreflight.report,
@@ -591,6 +604,8 @@ function scoringAssumptions() {
   return {
     schemaVersion: "reef.arena.scoringAssumptions.v0",
     scoringPolicyVersion: mode.scoringPolicyVersion,
+    npcDifficultyMode: "bucket-only",
+    npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     scoreBasis: "participation-and-policy-compliance",
     leaderboardScope: "score-eligible public competitor bots only",
     houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
@@ -731,6 +746,13 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       seed: mode.seed,
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
+      economicPolicyVersion: mode.economicPolicyVersion,
+      liquidityPolicyVersion: mode.liquidityPolicyVersion,
+      backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
+      creditPolicyVersion: mode.creditPolicyVersion,
+      interventionPolicyVersion: mode.interventionPolicyVersion,
+      actorProfileCatalogVersion: actorProfileCatalog.version,
+      npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     },
     runPlan,
     expectations: {
@@ -1924,7 +1946,117 @@ function buildRunPlan(modeConfig, runtimeConfig, fixture, botsOrCount) {
     healthSampleIntervalMs,
     healthSampleEveryTicks: Math.max(1, Math.ceil(healthSampleIntervalMs / tickIntervalMs)),
     healthInstruments: nonEmptyArray(modeConfig.healthTargets?.primaryInstruments, [modeConfig.instruments?.[0] ?? "AAPL"]),
+    actorProfiles: summarizeActorProfiles(selectedBotsForPlan),
   };
+}
+
+function indexActorProfiles(catalog) {
+  if (catalog.schemaVersion !== "reef.arena.actorProfiles.v1") {
+    throw new Error(`unsupported actor profile catalog schema ${catalog.schemaVersion}`);
+  }
+  if (!Array.isArray(catalog.profiles)) {
+    throw new Error("actor profile catalog profiles must be an array");
+  }
+  const profiles = new Map();
+  for (const profile of catalog.profiles) {
+    const profileId = requiredProfileString(profile.profileId, "profileId");
+    if (profiles.has(profileId)) {
+      throw new Error(`duplicate actor profile ${profileId}`);
+    }
+    if (!Array.isArray(profile.allowedParamKeys)) {
+      throw new Error(`actor profile ${profileId} allowedParamKeys must be an array`);
+    }
+    assertKnownProfileParams(profileId, profile.params ?? {}, profile.allowedParamKeys);
+    profiles.set(profileId, profile);
+  }
+  return profiles;
+}
+
+function resolveActorProfile(bot, profiles) {
+  const profileId = bot.actorProfileRef ?? mode.actorProfileDefaults?.[bot.role];
+  if (typeof profileId !== "string" || profileId.length === 0) {
+    throw new Error(`bot ${bot.botId} missing actorProfileRef and no default for role ${bot.role}`);
+  }
+  const profile = profiles.get(profileId);
+  if (profile === undefined) {
+    throw new Error(`bot ${bot.botId} references unknown actor profile ${profileId}`);
+  }
+  const actorClass = actorClassForBot(bot);
+  if (profile.actorClass !== actorClass) {
+    throw new Error(`bot ${bot.botId} role ${bot.role} maps to ${actorClass} but actor profile ${profileId} is ${profile.actorClass}`);
+  }
+  const overrides = bot.actorProfileParams ?? {};
+  assertKnownProfileParams(profileId, overrides, profile.allowedParamKeys);
+  const resolved = {
+    profileId,
+    profileVersion: requiredProfileString(profile.version, `${profileId}.version`),
+    actorClass,
+    difficultyBucket: requiredProfileString(profile.difficultyBucket, `${profileId}.difficultyBucket`),
+    scoreEffect: requiredProfileString(profile.scoreEffect, `${profileId}.scoreEffect`),
+    params: {
+      ...(profile.params ?? {}),
+      ...overrides,
+    },
+  };
+  return {
+    ...resolved,
+    profileHash: `sha256:${stableHash(resolved)}`,
+  };
+}
+
+function assertKnownProfileParams(profileId, params, allowedParamKeys) {
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    throw new Error(`actor profile ${profileId} params must be an object`);
+  }
+  const allowed = new Set(allowedParamKeys);
+  for (const key of Object.keys(params)) {
+    if (!allowed.has(key)) {
+      throw new Error(`actor profile ${profileId} has unknown param ${key}`);
+    }
+  }
+}
+
+function requiredProfileString(value, name) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`actor profile ${name} must be a non-empty string`);
+  }
+  return value;
+}
+
+function summarizeActorProfiles(bots) {
+  const byActorClass = {};
+  const byDifficultyBucket = {};
+  const profiles = bots.map((bot) => {
+    const profile = bot.actorProfile;
+    increment(byActorClass, profile.actorClass);
+    increment(byDifficultyBucket, profile.difficultyBucket);
+    return {
+      botId: bot.botId,
+      role: bot.role,
+      actorClass: profile.actorClass,
+      profileId: profile.profileId,
+      profileVersion: profile.profileVersion,
+      profileHash: profile.profileHash,
+      difficultyBucket: profile.difficultyBucket,
+      scoreEffect: profile.scoreEffect,
+    };
+  });
+  return {
+    schemaVersion: "reef.arena.actorProfileSummary.v1",
+    catalogId: actorProfileCatalog.catalogId,
+    catalogVersion: actorProfileCatalog.version,
+    byActorClass: sortedRecord(byActorClass),
+    byDifficultyBucket: sortedRecord(byDifficultyBucket),
+    profiles,
+  };
+}
+
+function npcDifficultyBuckets(bots) {
+  return Array.from(new Set(
+    bots
+      .filter((bot) => bot.actorProfile?.actorClass === "npc_flow")
+      .map((bot) => bot.actorProfile.difficultyBucket),
+  )).sort();
 }
 
 function scheduledTicks(sourceTicks, plan) {
@@ -2236,6 +2368,20 @@ function safeJson(raw) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
+}
+
+function stableHash(value) {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function numberOption(name, fallback) {
