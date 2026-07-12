@@ -17,8 +17,7 @@ import (
 type Service struct {
 	booksMu           sync.RWMutex
 	books             map[string]*orderBook
-	ordersMu          sync.RWMutex
-	orders            map[string]*orderRecord
+	orderIndex        *orderIndex
 	now               func() time.Time
 	orderControls     OrderControls
 	sessionControls   SessionControls
@@ -184,8 +183,8 @@ func WithSelfTradePreventionMode(mode SelfTradePreventionMode) Option {
 
 func NewService(options ...Option) *Service {
 	service := &Service{
-		books:  make(map[string]*orderBook),
-		orders: make(map[string]*orderRecord),
+		books:      make(map[string]*orderBook),
+		orderIndex: newOrderIndex(),
 		terminalRetention: terminalOrderRetention{
 			limit: envInt("MATCHING_ENGINE_TERMINAL_ORDER_RETENTION_LIMIT", 0),
 		},
@@ -540,9 +539,8 @@ func (s *Service) Snapshot() Snapshot {
 	}
 	s.booksMu.RUnlock()
 
-	s.ordersMu.RLock()
-	snapshot.Orders = make([]SnapshotOrderRecord, 0, len(s.orders))
-	for _, record := range s.orders {
+	snapshot.Orders = make([]SnapshotOrderRecord, 0, s.orderIndex.len())
+	s.orderIndex.forEach(func(record *orderRecord) {
 		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
 			OrderID:           record.OrderID,
 			InstrumentID:      record.InstrumentID,
@@ -557,8 +555,7 @@ func (s *Service) Snapshot() Snapshot {
 			Status:            record.Status,
 			LastUpdatedAt:     record.LastUpdatedAt,
 		})
-	}
-	s.ordersMu.RUnlock()
+	})
 	sort.Slice(snapshot.Orders, func(i, j int) bool {
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
 	})
@@ -645,10 +642,9 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 		book.mu.Unlock()
 	}
 
-	s.ordersMu.RLock()
-	for _, record := range s.orders {
+	s.orderIndex.forEach(func(record *orderRecord) {
 		if record.InstrumentID != instrumentID {
-			continue
+			return
 		}
 		snapshot.Orders = append(snapshot.Orders, SnapshotOrderRecord{
 			OrderID:           record.OrderID,
@@ -664,8 +660,7 @@ func (s *Service) SnapshotForInstrument(instrumentID string) (Snapshot, bool) {
 			Status:            record.Status,
 			LastUpdatedAt:     record.LastUpdatedAt,
 		})
-	}
-	s.ordersMu.RUnlock()
+	})
 	sort.Slice(snapshot.Orders, func(i, j int) bool {
 		return snapshot.Orders[i].OrderID < snapshot.Orders[j].OrderID
 	})
@@ -725,7 +720,7 @@ func Restore(snapshot Snapshot, options ...Option) (*Service, bool) {
 			Status:            order.Status,
 			LastUpdatedAt:     order.LastUpdatedAt,
 		}
-		service.orders[record.OrderID] = record
+		service.orderIndex.restore(record)
 	}
 	if service.Snapshot().Checksum != serviceSnapshotChecksum(snapshot.withoutChecksum()) {
 		return nil, false
@@ -1042,26 +1037,24 @@ func (rb *BatchRollback) Rollback() {
 		snap.book.mu.Unlock()
 	}
 
-	rb.service.ordersMu.Lock()
 	for _, snap := range rb.instruments {
 		for orderID, entry := range snap.orders {
+			var record *orderRecord
 			if entry.existed {
 				recordCopy := entry.record
-				rb.service.orders[orderID] = &recordCopy
-			} else {
-				delete(rb.service.orders, orderID)
+				record = &recordCopy
 			}
+			rb.service.orderIndex.restoreOrDelete(orderID, entry.existed, record)
 		}
 	}
 	for orderID, entry := range rb.records {
+		var record *orderRecord
 		if entry.existed {
 			recordCopy := entry.record
-			rb.service.orders[orderID] = &recordCopy
-		} else {
-			delete(rb.service.orders, orderID)
+			record = &recordCopy
 		}
+		rb.service.orderIndex.restoreOrDelete(orderID, entry.existed, record)
 	}
-	rb.service.ordersMu.Unlock()
 }
 
 func (rb *BatchRollback) trackCreatedOrder(book *orderBook, record *orderRecord) {
@@ -1298,9 +1291,7 @@ func (s *Service) trackTerminalOrder(rollback *BatchRollback, record *orderRecor
 			if rollback != nil {
 				rollback.trackOrderRecord(evictRecord)
 			}
-			s.ordersMu.Lock()
-			delete(s.orders, evictID)
-			s.ordersMu.Unlock()
+			s.orderIndex.release(evictID)
 		}
 	})
 }
@@ -1372,26 +1363,15 @@ func (s *Service) removeRestingOrder(rollback *BatchRollback, book *orderBook, r
 }
 
 func (s *Service) loadOrder(orderID string) (*orderRecord, bool) {
-	s.ordersMu.RLock()
-	defer s.ordersMu.RUnlock()
-	record, ok := s.orders[orderID]
-	return record, ok
+	return s.orderIndex.load(orderID)
 }
 
 func (s *Service) reserveOrder(record *orderRecord) bool {
-	s.ordersMu.Lock()
-	defer s.ordersMu.Unlock()
-	if _, exists := s.orders[record.OrderID]; exists {
-		return false
-	}
-	s.orders[record.OrderID] = record
-	return true
+	return s.orderIndex.reserve(record)
 }
 
 func (s *Service) releaseOrder(orderID string) {
-	s.ordersMu.Lock()
-	defer s.ordersMu.Unlock()
-	delete(s.orders, orderID)
+	s.orderIndex.release(orderID)
 }
 
 func envInt(name string, fallback int) int {
