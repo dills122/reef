@@ -1036,7 +1036,8 @@ function aggregateStreamAckProjectorStatus(probes) {
     lastError: "",
   };
   let projectedCount = 0;
-  let lag = 0;
+  let statusLag = 0;
+  const rawWatermarks = [];
   for (const projector of projectors) {
     const rawMetrics = projector.status.metrics ?? {};
     metrics.projected += Number(rawMetrics.projected ?? 0);
@@ -1046,8 +1047,11 @@ function aggregateStreamAckProjectorStatus(probes) {
     metrics.lastFailedAt = maxIso(metrics.lastFailedAt, rawMetrics.lastFailedAt ?? "");
     metrics.lastError = rawMetrics.lastError || metrics.lastError;
     projectedCount = Math.max(projectedCount, Number(projector.status.projectedCount ?? 0));
-    lag += Number(projector.status.lag ?? 0);
+    statusLag += Number(projector.status.lag ?? 0);
+    rawWatermarks.push(...(projector.status.watermarks ?? []));
   }
+  const watermarks = dedupeProjectionWatermarks(rawWatermarks);
+  const lag = watermarks.length > 0 ? watermarks.reduce((sum, watermark) => sum + Number(watermark.lag ?? 0), 0) : statusLag;
   return {
     enabled: projectors.some((projector) => projector.status.status === "running"),
     implementation: projectors.find((projector) => projector.status.implementation)?.status.implementation ?? "",
@@ -1064,8 +1068,35 @@ function aggregateStreamAckProjectorStatus(probes) {
       lag: projector.status.lag,
       metrics: projector.status.metrics ?? {},
     })),
-    watermarks: projectors.flatMap((projector) => projector.status.watermarks ?? []),
+    watermarks,
   };
+}
+
+function dedupeProjectionWatermarks(watermarks) {
+  const byPartition = new Map();
+  for (const watermark of watermarks) {
+    if (!watermark || typeof watermark !== "object") continue;
+    const projectionName = String(watermark.projectionName ?? "");
+    const partition = Number(watermark.partition ?? watermark.partitionId);
+    if (!Number.isFinite(partition)) continue;
+    const key = `${projectionName}:${partition}`;
+    const current = byPartition.get(key);
+    if (!current || projectionWatermarkSortValue(watermark) >= projectionWatermarkSortValue(current)) {
+      byPartition.set(key, watermark);
+    }
+  }
+  return [...byPartition.values()].sort((left, right) => {
+    const leftProjection = String(left.projectionName ?? "");
+    const rightProjection = String(right.projectionName ?? "");
+    if (leftProjection !== rightProjection) return leftProjection.localeCompare(rightProjection);
+    return Number(left.partition ?? left.partitionId) - Number(right.partition ?? right.partitionId);
+  });
+}
+
+function projectionWatermarkSortValue(watermark) {
+  const canonical = Number(watermark.canonicalMaxPartitionSequence ?? 0);
+  const projected = Number(watermark.lastPartitionSequence ?? 0);
+  return (Number.isFinite(canonical) ? canonical : 0) + (Number.isFinite(projected) ? projected : 0);
 }
 
 function aggregateStreamAckWorkerStats(probes) {

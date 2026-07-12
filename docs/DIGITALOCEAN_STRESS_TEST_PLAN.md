@@ -111,7 +111,7 @@ Promotion ladder:
 1. `short`: `60s`, `3` samples. Required after code changes to the materializer path or gate scripts. Passed on 2026-07-08.
 2. `soak-5m`: `5m`, `2` samples. First longer remote soak. Passed on 2026-07-12.
 3. `soak-15m`: `15m`, `1` sample. Optional aged-state/longer-soak confirmation before raising the venue-core target above `10k`.
-4. `projection-read-freshness`: run `make do-projection-freshness-gate ARGS=run-destroy` to enable projection/read-model work under durable venue-event load and report projected throughput, lag/watermarks, read freshness, and replay idempotency separately from canonical materializer throughput. The 2026-07-12 materializer run intentionally had `projected=0` and is not a read-model freshness claim.
+4. `projection-read-freshness`: run `make do-projection-freshness-gate ARGS=run-destroy` to enable projection/read-model work under durable venue-event load and report projected throughput, lag/watermarks, read freshness, and replay idempotency separately from canonical materializer throughput. The wrapper must split projectors across the active direct-stream partitions `0-15`, not the generic `0-63` defaults. The 2026-07-12 materializer run intentionally had `projected=0` and is not a read-model freshness claim.
 
 Longer soaks must compare clean, warm, and aged-state behavior before raising
 the target above `10k`. Watch WAL bytes/command, table bytes/command,

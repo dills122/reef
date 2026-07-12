@@ -17,6 +17,10 @@ assert.match(short.stdout, /min_accepted_rps=2400/);
 assert.match(short.stdout, /min_projected_rps=2400/);
 assert.match(short.stdout, /max_projection_lag=0/);
 assert.match(short.stdout, /max_materialized_to_projected_gap=0/);
+assert.match(short.stdout, /stream_ack_projector_0_partitions=0,1,2,3/);
+assert.match(short.stdout, /stream_ack_projector_1_partitions=4,5,6,7/);
+assert.match(short.stdout, /stream_ack_projector_2_partitions=8,9,10,11/);
+assert.match(short.stdout, /stream_ack_projector_3_partitions=12,13,14,15/);
 assert.match(short.stdout, /min_stream_direct_active_partitions=16/);
 assert.match(short.stdout, /max_stream_direct_partition_skew=4/);
 assert.match(short.stdout, /require_db_diagnostics=1/);
@@ -51,6 +55,10 @@ function runGatePlan(overrides) {
       REEF_DO_MIN_PROJECTED_RPS: "",
       REEF_DO_MAX_PROJECTION_LAG: "",
       REEF_DO_MAX_MATERIALIZED_TO_PROJECTED_GAP: "",
+      STREAM_ACK_PROJECTOR_0_PARTITIONS: "",
+      STREAM_ACK_PROJECTOR_1_PARTITIONS: "",
+      STREAM_ACK_PROJECTOR_2_PARTITIONS: "",
+      STREAM_ACK_PROJECTOR_3_PARTITIONS: "",
       REEF_DO_MIN_STREAM_DIRECT_ACTIVE_PARTITIONS: "",
       REEF_DO_MAX_STREAM_DIRECT_PARTITION_SKEW: "",
       REEF_DO_REQUIRE_DB_DIAGNOSTICS: "",

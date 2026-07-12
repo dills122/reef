@@ -135,7 +135,10 @@ Use this wrapper when local work should not run the heavier projection/read-mode
 freshness load. It uses the same disposable DO harness but switches to the
 `materializer-projection` profile, enables venue-event-batch projection,
 order-lifecycle projection, and market-data projection, and gates the fetched
-reports on projection freshness.
+reports on projection freshness. The wrapper pins four projector instances
+across the active direct-stream partitions `0-15` as `0-3`, `4-7`, `8-11`, and
+`12-15`; using the generic `0-63` projector defaults leaves only one projector
+owning live work in the current direct-materializer profile.
 
 ```bash
 make do-projection-freshness-gate
