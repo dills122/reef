@@ -218,6 +218,75 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun localDevAdminAuthBypassRequiresFlagAndLocalProfile() {
+        assertFalse(localDevAdminAuthBypassEnabled { null })
+        assertFalse(
+            localDevAdminAuthBypassEnabled(
+                envLookup(
+                    "LOCAL_DEV_ADMIN_AUTH_BYPASS" to "true",
+                    "REEF_ENV" to "prod"
+                )
+            )
+        )
+        assertTrue(
+            localDevAdminAuthBypassEnabled(
+                envLookup(
+                    "LOCAL_DEV_ADMIN_AUTH_BYPASS" to "true",
+                    "REEF_ENV" to "local"
+                )
+            )
+        )
+    }
+
+    @Test
+    fun localDevAdminAuthSessionReturnsFakeLoopbackUserWhenEnabled() {
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            localDevAdminAuthBypass = true
+        )
+        try {
+            val response = get(server.address.port, "/admin/auth/session")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"reefUserId\":\"admin-cli\"")
+            assertContains(response.body, "\"githubLogin\":\"local-dev-admin\"")
+            assertContains(response.body, "\"roles\":[\"arena-operator\",\"participant\",\"local-dev\"]")
+            assertContains(response.body, "\"authProvider\":\"local-dev\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun localDevAdminAuthBypassAllowsAdminGatewayWithoutCookie() {
+        val arenaStore = InMemoryArenaBotRegistryStore()
+        arenaStore.saveBot(
+            ArenaBot(
+                botId = "bot-1",
+                fileName = "bot-1.ts",
+                metadata = ArenaBotMetadata(name = "Bot 1", publisher = "Publisher", email = "p1@example.com"),
+                createdAt = java.time.Instant.parse("2026-07-05T12:00:00Z")
+            )
+        )
+        val server = testServerWithGateway(
+            gateway = StaticAcceptedEngineGateway(),
+            localDevAdminAuthBypass = true,
+            arenaAdminService = AdminApplicationService(
+                runtimePersistence = InMemoryRuntimePersistence(),
+                arenaRegistryStore = arenaStore
+            )
+        )
+        try {
+            val response = get(server.address.port, "/admin/v1/arena/bots")
+
+            assertEquals(200, response.status)
+            assertContains(response.body, "\"botId\":\"bot-1\"")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun adminGatewayAcceptsSessionCookieAndServiceToken() {
         val auth = testAdminAuth()
         val user = auth.identityService.ensureGitHubUser(GitHubUserIdentity(12345, "octo"))
@@ -5178,6 +5247,7 @@ class PlatformHttpServerBoundaryTest {
         boundaryRejectionLog: BoundaryRejectionLog = NoopBoundaryRejectionLog(),
         commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult,
         legacyMutationRoutesEnabled: Boolean = true,
+        localDevAdminAuthBypass: Boolean = false,
         seedOrderAuthorization: Boolean = true,
         commandIntakeMaxActive: Long = 0L,
         commandIntakeMaxStaleProcessing: Long = 0L,
@@ -5251,7 +5321,8 @@ class PlatformHttpServerBoundaryTest {
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
             commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
-            legacyMutationRoutesEnabled = legacyMutationRoutesEnabled
+            legacyMutationRoutesEnabled = legacyMutationRoutesEnabled,
+            localDevAdminAuthBypass = localDevAdminAuthBypass
         ).start()
     }
 
@@ -5356,6 +5427,11 @@ class PlatformHttpServerBoundaryTest {
             ?.value
             ?.firstOrNull()
             .orEmpty()
+    }
+
+    private fun envLookup(vararg pairs: Pair<String, String>): (String) -> String? {
+        val values = pairs.toMap()
+        return { key -> values[key] }
     }
 
     private fun waitForCommandStatus(

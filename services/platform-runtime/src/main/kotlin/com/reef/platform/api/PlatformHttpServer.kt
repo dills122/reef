@@ -280,6 +280,9 @@ private data class AdminRequestPrincipal(
 
 private val adminRequestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
 
+private const val localDevAdminActorId = "admin-cli"
+private val localDeploymentProfiles = setOf("", "local", "dev", "development", "test", "ci")
+
 private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
 
 private enum class InternalHttpExposureMode {
@@ -427,7 +430,8 @@ class PlatformHttpServer(
     private val commandIntakeMaxStaleProcessing: Long = RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_MAX_STALE_PROCESSING", 0L, min = 0L),
     private val commandIntakeBackpressureSampleMs: Long =
         RuntimeEnv.long("EXTERNAL_API_COMMAND_INTAKE_BACKPRESSURE_SAMPLE_MS", 100L, min = 0L),
-    private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false)
+    private val legacyMutationRoutesEnabled: Boolean = RuntimeEnv.bool("PLATFORM_LEGACY_MUTATION_ROUTES_ENABLED", false),
+    private val localDevAdminAuthBypass: Boolean = localDevAdminAuthBypassEnabled()
 ) {
     companion object {
         private val streamPublishTimeoutExecutor = ScheduledThreadPoolExecutor(1) { runnable ->
@@ -1356,6 +1360,10 @@ class PlatformHttpServer(
                 methodNotAllowed(exchange)
                 return@createContext
             }
+            if (allowLocalDevAdminAuthBypass(exchange)) {
+                writeLocalDevAdminSession(exchange)
+                return@createContext
+            }
             val auth = adminAuthService
             if (auth == null) {
                 writeHotPathResponse(exchange, adminAuthUnavailableResponse())
@@ -1525,6 +1533,27 @@ class PlatformHttpServer(
         return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin auth is not configured"))
     }
 
+    private fun allowLocalDevAdminAuthBypass(exchange: HttpExchange): Boolean {
+        return localDevAdminAuthBypass && isLoopback(exchange.remoteAddress.address)
+    }
+
+    private fun writeLocalDevAdminSession(exchange: HttpExchange) {
+        writeJson(
+            exchange,
+            200,
+            JsonCodec.writeObject(
+                "status" to "ok",
+                "reefUserId" to localDevAdminActorId,
+                "githubLogin" to "local-dev-admin",
+                "displayName" to "Local Dev Admin",
+                "trustState" to "trusted",
+                "roles" to listOf("arena-operator", "participant", "local-dev"),
+                "authProvider" to "local-dev",
+                "expiresAt" to ""
+            )
+        )
+    }
+
     private fun adminSessionCookie(exchange: HttpExchange): String {
         return headerValue(exchange, "Cookie")
             .split(";")
@@ -1607,6 +1636,10 @@ class PlatformHttpServer(
     }
 
     private fun authorizeAdminGateway(exchange: HttpExchange, route: AdminGatewayRoute): AdminRequestPrincipal? {
+        if (allowLocalDevAdminAuthBypass(exchange)) {
+            return adminPrincipalForActor(exchange, localDevAdminActorId)
+        }
+
         val auth = adminAuthService
         if (auth != null) {
             val sessionToken = adminSessionCookie(exchange)
@@ -6882,3 +6915,19 @@ data class ServerBoundaryDeps(
         RuntimeEnv.string("STREAM_ACK_BACKPRESSURE_WORKER_DURABLES", ""),
     val commandProcessingMode: CommandProcessingMode = CommandProcessingMode.SyncResult
 )
+
+internal fun localDevAdminAuthBypassEnabled(lookup: (String) -> String? = { key -> System.getenv(key) }): Boolean {
+    if (!RuntimeEnv.bool("LOCAL_DEV_ADMIN_AUTH_BYPASS", false, lookup)) return false
+    val profile = listOf(
+        "PLATFORM_RUNTIME_PROFILE",
+        "REEF_ENV",
+        "REEF_DEPLOYMENT_ENV",
+        "DEPLOYMENT_ENV",
+        "ENVIRONMENT",
+        "APP_ENV",
+        "PROFILE"
+    ).firstNotNullOfOrNull { key -> lookup(key)?.trim()?.takeIf { it.isNotBlank() } }
+        ?.lowercase()
+        .orEmpty()
+    return profile in localDeploymentProfiles
+}
