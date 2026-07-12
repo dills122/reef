@@ -25,6 +25,7 @@ export function compareArenaScoringCalibration(baseReport, candidateReport) {
   }
   const topComponentMove = Object.entries(componentDeltas)
     .sort(([, left], [, right]) => Math.abs(right.avgDelta ?? 0) - Math.abs(left.avgDelta ?? 0))[0] ?? null;
+  const topComponentAvgDelta = topComponentMove?.[1]?.avgDelta ?? 0;
   return {
     schemaVersion: "reef.arena.scoringCalibrationComparison.v1",
     base: reportIdentity(baseReport, base),
@@ -43,7 +44,7 @@ export function compareArenaScoringCalibration(baseReport, candidateReport) {
       components: componentDeltas,
       diagnostics: diagnosticDeltas,
     },
-    topComponentMove: topComponentMove === null ? null : {
+    topComponentMove: topComponentMove === null || topComponentAvgDelta === 0 ? null : {
       component: topComponentMove[0],
       avgDelta: topComponentMove[1].avgDelta,
     },

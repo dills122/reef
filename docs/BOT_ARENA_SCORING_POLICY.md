@@ -233,6 +233,18 @@ count changes, shadow-score and component average deltas, the component with
 the largest average movement, and data-quality flags added or removed between
 runs.
 
+Use `scripts/dev/run-arena-scoring-calibration-matrix.mjs` to generate a small
+calibration artifact set. By default it runs the compact dry-run matrix for:
+
+- `equity-sprint-noise`: `equity-sprint.v1`
+- `equity-multi-toxic`: `equity-multi-local.v1`
+
+The matrix writes each compact report, pairwise comparison files from the first
+entry as the baseline, and `manifest.json` with report summaries and comparison
+pointers. Live runs can use the same script with `--submit-mode=live`,
+`--venue-url`, `--arena-admin-url`, `--seed-reference`, and projection-drain
+flags once the local stack is healthy.
+
 Why partition plus small multiplier:
 
 - simple to audit

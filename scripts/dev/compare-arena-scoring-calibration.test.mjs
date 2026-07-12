@@ -89,4 +89,14 @@ assert.deepEqual(comparison.dataQuality.addedFlags, ["partial-pnl-attribution"])
 assert.deepEqual(comparison.dataQuality.removedFlags, ["no-pnl-attribution"]);
 assert.equal(comparison.dataQuality.publicScoreStillUnchanged, true);
 
+const flatComparison = compareArenaScoringCalibration(base, {
+  ...base,
+  runId: "flat-candidate",
+  scoringCalibration: {
+    ...base.scoringCalibration,
+    dataQuality: { flags: ["no-pnl-attribution"], publicScoreUnchanged: true },
+  },
+});
+assert.equal(flatComparison.topComponentMove, null);
+
 console.log("arena scoring calibration comparison checks passed");
