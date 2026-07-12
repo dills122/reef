@@ -388,17 +388,29 @@ class PlatformApi(
         return orderService.findOrderByClientOrderId(participantId, clientOrderId)
     }
 
-    fun order(orderId: String): String {
+    fun order(orderId: String): String = orderWithStatus(orderId).body
+
+    // Callers that need the HTTP status alongside the body (PlatformHttpServer)
+    // should use this instead of sniffing the "error" field out of order()'s
+    // JSON string: that string-matching approach breaks silently if the
+    // success-path payload ever legitimately contains the same substring.
+    fun orderWithStatus(orderId: String): ApiLookupResult {
         val order = orderService.persistedOrder(orderId)
         if (order == null) {
-            return JsonCodec.writeObject("error" to "order not found", "orderId" to orderId)
+            return ApiLookupResult(
+                found = false,
+                body = JsonCodec.writeObject("error" to "order not found", "orderId" to orderId)
+            )
         }
 
-        return JsonCodec.writeObject(
-            "order" to toOrderMap(order),
-            "lifecycleState" to orderService.orderLifecycleState(orderId)?.toMap(),
-            "executions" to orderService.persistedExecutions(orderId).map { it.toMap() },
-            "trades" to orderService.persistedTrades(orderId).map { it.toMap() }
+        return ApiLookupResult(
+            found = true,
+            body = JsonCodec.writeObject(
+                "order" to toOrderMap(order),
+                "lifecycleState" to orderService.orderLifecycleState(orderId)?.toMap(),
+                "executions" to orderService.persistedExecutions(orderId).map { it.toMap() },
+                "trades" to orderService.persistedTrades(orderId).map { it.toMap() }
+            )
         )
     }
 
@@ -496,16 +508,24 @@ class PlatformApi(
     fun marketDataSnapshot(
         instrumentId: String,
         projectionName: String = "market-data-top-of-book"
-    ): String {
+    ): String = marketDataSnapshotWithStatus(instrumentId, projectionName).body
+
+    fun marketDataSnapshotWithStatus(
+        instrumentId: String,
+        projectionName: String = "market-data-top-of-book"
+    ): ApiLookupResult {
         val snapshot = orderService.marketDataSnapshot(instrumentId, projectionName)
         if (snapshot == null) {
-            return JsonCodec.writeObject(
-                "error" to "market data snapshot not found",
-                "instrumentId" to instrumentId,
-                "projectionName" to projectionName
+            return ApiLookupResult(
+                found = false,
+                body = JsonCodec.writeObject(
+                    "error" to "market data snapshot not found",
+                    "instrumentId" to instrumentId,
+                    "projectionName" to projectionName
+                )
             )
         }
-        return JsonCodec.writeObject("snapshot" to snapshot.toMap())
+        return ApiLookupResult(found = true, body = JsonCodec.writeObject("snapshot" to snapshot.toMap()))
     }
 
     fun marketDataDepthSnapshot(
@@ -513,16 +533,26 @@ class PlatformApi(
         levels: Int = 5,
         projectionName: String = "market-data-depth",
         sourceProjectionName: String = "runtime-normalized-venue-outcomes"
-    ): String {
+    ): String = marketDataDepthSnapshotWithStatus(instrumentId, levels, projectionName, sourceProjectionName).body
+
+    fun marketDataDepthSnapshotWithStatus(
+        instrumentId: String,
+        levels: Int = 5,
+        projectionName: String = "market-data-depth",
+        sourceProjectionName: String = "runtime-normalized-venue-outcomes"
+    ): ApiLookupResult {
         val snapshot = orderService.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
         if (snapshot == null) {
-            return JsonCodec.writeObject(
-                "error" to "market data depth not found",
-                "instrumentId" to instrumentId,
-                "projectionName" to projectionName
+            return ApiLookupResult(
+                found = false,
+                body = JsonCodec.writeObject(
+                    "error" to "market data depth not found",
+                    "instrumentId" to instrumentId,
+                    "projectionName" to projectionName
+                )
             )
         }
-        return JsonCodec.writeObject("depth" to snapshot.toMap())
+        return ApiLookupResult(found = true, body = JsonCodec.writeObject("depth" to snapshot.toMap()))
     }
 
     fun trades(): String {
@@ -547,25 +577,34 @@ class PlatformApi(
         )
     }
 
-    fun intradayBars(instrumentId: String, interval: String, start: String, end: String): String {
+    fun intradayBars(instrumentId: String, interval: String, start: String, end: String): String =
+        intradayBarsWithStatus(instrumentId, interval, start, end).body
+
+    fun intradayBarsWithStatus(instrumentId: String, interval: String, start: String, end: String): ApiLookupResult {
         if (interval !in SupportedIntradayBarIntervals) {
-            return JsonCodec.writeObject(
-                "error" to "unsupported interval",
-                "instrumentId" to instrumentId,
-                "interval" to interval
+            return ApiLookupResult(
+                found = false,
+                body = JsonCodec.writeObject(
+                    "error" to "unsupported interval",
+                    "instrumentId" to instrumentId,
+                    "interval" to interval
+                )
             )
         }
         val bars = orderService.intradayBars(instrumentId, interval, start, end)
-        return JsonCodec.writeObject(
-            "instrumentId" to instrumentId,
-            "interval" to interval,
-            "meta" to mapOf(
-                "source" to "runtime.trades",
-                "freshness" to "durable fact row aggregation",
-                "start" to start,
-                "end" to end
-            ),
-            "bars" to bars.map { it.toMap() }
+        return ApiLookupResult(
+            found = true,
+            body = JsonCodec.writeObject(
+                "instrumentId" to instrumentId,
+                "interval" to interval,
+                "meta" to mapOf(
+                    "source" to "runtime.trades",
+                    "freshness" to "durable fact row aggregation",
+                    "start" to start,
+                    "end" to end
+                ),
+                "bars" to bars.map { it.toMap() }
+            )
         )
     }
 
@@ -828,3 +867,8 @@ class PlatformApi(
         "acceptedAt" to order.acceptedAt
     )
 }
+
+// Pairs a JSON response body with whether the lookup/validation it
+// represents actually succeeded, so callers that need an HTTP status code
+// don't have to infer it by string-matching the body's "error" field.
+data class ApiLookupResult(val found: Boolean, val body: String)

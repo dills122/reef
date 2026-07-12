@@ -264,7 +264,8 @@ private data class PreparedApiV1Mutation(
     val clientId: String,
     val idempotencyKey: String,
     val correlationId: String,
-    val body: String
+    val body: String,
+    val parsedBody: JsonDocument
 )
 
 private sealed class PreparedApiV1MutationResult {
@@ -846,9 +847,8 @@ class PlatformHttpServer(
             }
 
             val orderId = path.trimEnd('/')
-            val response = api.order(orderId)
-            val status = if (response.contains("\"error\":\"order not found\"")) 404 else 200
-            writeJson(exchange, status, response)
+            val result = api.orderWithStatus(orderId)
+            writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
         server.createContext("/orders") { exchange ->
@@ -877,9 +877,8 @@ class PlatformHttpServer(
             }
             val instrumentId = exchange.requestURI.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
             val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-top-of-book" }
-            val response = api.marketDataSnapshot(instrumentId, projectionName)
-            val status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200
-            writeJson(exchange, status, response)
+            val result = api.marketDataSnapshotWithStatus(instrumentId, projectionName)
+            writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
         server.createContext("/api/v1/market-data/snapshots") { exchange ->
@@ -963,9 +962,8 @@ class PlatformHttpServer(
             val levels = queryValue(exchange, "levels").toIntOrNull() ?: 5
             val projectionName = queryValue(exchange, "projectionName").ifBlank { "market-data-depth" }
             val sourceProjectionName = queryValue(exchange, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
-            val response = api.marketDataDepthSnapshot(instrumentId, levels, projectionName, sourceProjectionName)
-            val status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200
-            writeJson(exchange, status, response)
+            val result = api.marketDataDepthSnapshotWithStatus(instrumentId, levels, projectionName, sourceProjectionName)
+            writeJson(exchange, if (result.found) 200 else 404, result.body)
         }
 
         server.createContext("/api/v1/market-data/trades/") { exchange ->
@@ -1006,9 +1004,8 @@ class PlatformHttpServer(
             val interval = queryValue(exchange, "interval")
             val start = queryValue(exchange, "start")
             val end = queryValue(exchange, "end")
-            val response = api.intradayBars(instrumentId, interval, start, end)
-            val status = if (response.contains("\"error\":\"unsupported interval\"")) 400 else 200
-            writeJson(exchange, status, response)
+            val result = api.intradayBarsWithStatus(instrumentId, interval, start, end)
+            writeJson(exchange, if (result.found) 200 else 400, result.body)
         }
 
         server.createContext("/api/v1/orders/current") { exchange ->
@@ -1023,7 +1020,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val instrumentId = queryValue(exchange, "instrumentId")
-            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
             writeJson(exchange, 200, api.ownOrders(participantId, openOnly = true, instrumentId = instrumentId, limit = limit))
         }
 
@@ -1039,7 +1036,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val instrumentId = queryValue(exchange, "instrumentId")
-            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
             writeJson(exchange, 200, api.ownOrders(participantId, openOnly = false, instrumentId = instrumentId, limit = limit))
         }
 
@@ -1055,7 +1052,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val instrumentId = queryValue(exchange, "instrumentId")
-            val limit = queryValue(exchange, "limit").toIntOrNull() ?: 0
+            val limit = boundedQueryLimit(queryValue(exchange, "limit"), defaultValue = 50)
             writeJson(exchange, 200, api.ownExecutions(participantId, instrumentId = instrumentId, limit = limit))
         }
 
@@ -1755,14 +1752,11 @@ class PlatformHttpServer(
                     return readError
                 }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/snapshots/").trimEnd('/')
-                val response = api.marketDataSnapshot(
+                val result = api.marketDataSnapshotWithStatus(
                     instrumentId,
                     queryValue(request.query, "projectionName").ifBlank { "market-data-top-of-book" }
                 )
-                PlatformHotPathResponse(
-                    status = if (response.contains("\"error\":\"market data snapshot not found\"")) 404 else 200,
-                    body = response
-                )
+                PlatformHotPathResponse(status = if (result.found) 200 else 404, body = result.body)
             }
             request.path.startsWith("/api/v1/market-data/depth/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/depth/{instrumentId}")
@@ -1770,16 +1764,13 @@ class PlatformHttpServer(
                     return readError
                 }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/depth/").trimEnd('/')
-                val response = api.marketDataDepthSnapshot(
+                val result = api.marketDataDepthSnapshotWithStatus(
                     instrumentId = instrumentId,
                     levels = queryValue(request.query, "levels").toIntOrNull() ?: 5,
                     projectionName = queryValue(request.query, "projectionName").ifBlank { "market-data-depth" },
                     sourceProjectionName = queryValue(request.query, "sourceProjectionName").ifBlank { "runtime-normalized-venue-outcomes" }
                 )
-                PlatformHotPathResponse(
-                    status = if (response.contains("\"error\":\"market data depth not found\"")) 404 else 200,
-                    body = response
-                )
+                PlatformHotPathResponse(status = if (result.found) 200 else 404, body = result.body)
             }
             request.path.startsWith("/api/v1/market-data/trades/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/trades/{instrumentId}")
@@ -1804,16 +1795,13 @@ class PlatformHttpServer(
                     return readError
                 }
                 val instrumentId = request.path.removePrefix("/api/v1/market-data/bars/").trimEnd('/')
-                val response = api.intradayBars(
+                val result = api.intradayBarsWithStatus(
                     instrumentId = instrumentId,
                     interval = queryValue(request.query, "interval"),
                     start = queryValue(request.query, "start"),
                     end = queryValue(request.query, "end")
                 )
-                PlatformHotPathResponse(
-                    status = if (response.contains("\"error\":\"unsupported interval\"")) 400 else 200,
-                    body = response
-                )
+                PlatformHotPathResponse(status = if (result.found) 200 else 400, body = result.body)
             }
             request.path == "/api/v1/orders/current" && request.method == "GET" ->
                 readOrdersResponse(request, "/api/v1/orders/current", openOnly = true)
@@ -1840,7 +1828,7 @@ class PlatformHttpServer(
                 participantId = participantId,
                 openOnly = openOnly,
                 instrumentId = queryValue(request.query, "instrumentId"),
-                limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+                limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
         )
     }
@@ -1859,7 +1847,7 @@ class PlatformHttpServer(
             body = api.ownExecutions(
                 participantId = participantId,
                 instrumentId = queryValue(request.query, "instrumentId"),
-                limit = queryValue(request.query, "limit").toIntOrNull() ?: 0
+                limit = boundedQueryLimit(queryValue(request.query, "limit"), defaultValue = 50)
             )
         )
     }
@@ -2057,12 +2045,15 @@ class PlatformHttpServer(
         val body = presetBody ?: (HotPathMetrics.time("api.readRequestBody") {
             readRequestBody(exchange)
         } ?: return)
-        val validationError = HotPathMetrics.time("api.command.validate") {
-            PlatformCommandParsers.validateApiV1Command(route, body)
+        val validation = HotPathMetrics.time("api.command.validate") {
+            PlatformCommandParsers.parseAndValidateApiV1Command(route, body)
         }
-        if (validationError != null) {
-            writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId))
-            return
+        val parsedBody = when (validation) {
+            is ApiV1CommandValidation.Invalid -> {
+                writeJson(exchange, 400, boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validation.error), correlationId))
+                return
+            }
+            is ApiV1CommandValidation.Valid -> validation.json
         }
 
         if (commandProcessingMode == CommandProcessingMode.AcceptedAsync && route == "/api/v1/orders/submit") {
@@ -2088,7 +2079,7 @@ class PlatformHttpServer(
             }
         }
 
-        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null)
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null, parsedBody)
         val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
             commandCircuitBreakerViolation(riskRequest)
         }
@@ -2280,7 +2271,7 @@ class PlatformHttpServer(
             }
         }
 
-        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null)
+        val riskRequest = accountRiskRequest(clientId, route, idempotencyKey, correlationId, body, null, prepared.parsedBody)
         val breakerViolation = HotPathMetrics.time("api.commandCircuitBreaker.check") {
             commandCircuitBreakerViolation(riskRequest)
         }
@@ -2472,16 +2463,19 @@ class PlatformHttpServer(
         val clientId = boundary.clientId(request.headers).orEmpty()
         val idempotencyKey = boundary.idempotencyKey(request.headers).orEmpty()
         val body = request.body
-        val validationError = HotPathMetrics.time("api.command.validate") {
-            PlatformCommandParsers.validateApiV1Command(route, body)
+        val validation = HotPathMetrics.time("api.command.validate") {
+            PlatformCommandParsers.parseAndValidateApiV1Command(route, body)
         }
-        if (validationError != null) {
-            return PreparedApiV1MutationResult.Rejected(
-                PlatformHotPathResponse(
-                    400,
-                    boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validationError), correlationId)
+        val parsedBody = when (validation) {
+            is ApiV1CommandValidation.Invalid -> {
+                return PreparedApiV1MutationResult.Rejected(
+                    PlatformHotPathResponse(
+                        400,
+                        boundary.toErrorJson(BoundaryError(400, "VALIDATION_ERROR", validation.error), correlationId)
+                    )
                 )
-            )
+            }
+            is ApiV1CommandValidation.Valid -> validation.json
         }
 
         return PreparedApiV1MutationResult.Prepared(
@@ -2490,7 +2484,8 @@ class PlatformHttpServer(
                 clientId = clientId,
                 idempotencyKey = idempotencyKey,
                 correlationId = correlationId,
-                body = body
+                body = body,
+                parsedBody = parsedBody
             )
         )
     }
@@ -2817,9 +2812,10 @@ class PlatformHttpServer(
         idempotencyKey: String,
         correlationId: String,
         body: String,
-        envelope: StreamCommandEnvelope?
+        envelope: StreamCommandEnvelope?,
+        preParsedJson: JsonDocument? = null
     ): AccountRiskCheckRequest {
-        val json = JsonCodec.parseObjectOrEmpty(body)
+        val json = preParsedJson ?: JsonCodec.parseObjectOrEmpty(body)
         val commandType = envelope?.commandType ?: commandType(route)
         return AccountRiskCheckRequest(
             clientId = clientId,
@@ -4096,7 +4092,7 @@ class PlatformHttpServer(
             ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena service unavailable"))
         val modeId = queryValue(query, "modeId")
         val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
-        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
+        val limit = boundedQueryLimit(queryValue(query, "limit"), defaultValue = 50)
         if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
             return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
         }
@@ -6693,6 +6689,18 @@ internal fun rootCause(failure: Throwable): Throwable {
 
 internal fun rootMessage(failure: Throwable): String {
     return rootCause(failure).message ?: "unknown"
+}
+
+// Unlike queryLimit, this never lets an absent, non-positive, or
+// caller-supplied huge limit reach a downstream query unbounded: some
+// internal domain signatures (e.g. ordersForParticipant/
+// executionsForParticipant) treat limit=0 as "no LIMIT clause at all",
+// which is safe for trusted internal callers but not for a value taken
+// directly off an external request's query string.
+internal fun boundedQueryLimit(raw: String, defaultValue: Int, max: Int = 500): Int {
+    val parsed = raw.toIntOrNull()
+    if (parsed == null || parsed <= 0) return defaultValue
+    return parsed.coerceAtMost(max)
 }
 
 private fun defaultBoundary(): ServerBoundaryDeps {

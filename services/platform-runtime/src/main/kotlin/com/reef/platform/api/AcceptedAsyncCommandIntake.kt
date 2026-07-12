@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicLongArray
@@ -89,6 +90,8 @@ class AcceptedAsyncCommandIntake(
     private val queueCapacityPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_QUEUE_CAPACITY", 100_000, min = 1),
     private val inFlightPerLane: Int = RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_IN_FLIGHT_PER_LANE", 32, min = 1),
     private val offerTimeoutMs: Long = RuntimeEnv.long("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS", 0L, min = 0L),
+    private val offerWaitMaxConcurrency: Int =
+        RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_OFFER_WAIT_MAX_CONCURRENCY", 8, min = 1),
     private val terminalStatusMaxRecords: Int =
         RuntimeEnv.int("EXTERNAL_API_ACCEPTED_ASYNC_TERMINAL_STATUS_MAX_RECORDS", 100_000, min = 0),
     private val terminalStatusTtlMs: Long =
@@ -111,6 +114,15 @@ class AcceptedAsyncCommandIntake(
         Thread(runnable, "reef-accepted-async-lane-worker").apply { isDaemon = true }
     }.asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    // Bounds how many calling threads (drawn from the shared, bounded HTTP
+    // application thread pool) can ever be parked inside offer()'s
+    // runBlocking wait at once. Without this, a lane-capacity backpressure
+    // spike with EXTERNAL_API_ACCEPTED_ASYNC_OFFER_TIMEOUT_MS > 0 could park
+    // every application thread waiting for lane space, starving unrelated
+    // routes on the same server. Callers beyond the limit fail fast as
+    // ordinary backpressure instead of queueing for a permit.
+    private val offerWaitPermits = Semaphore(offerWaitMaxConcurrency)
     private val recordsByCommandId = ConcurrentHashMap<String, AcceptedAsyncCommandRecord>()
     private val commandIdByIdempotency = ConcurrentHashMap<String, String>()
     private val terminalCommandIds = ConcurrentHashMap.newKeySet<String>()
@@ -389,12 +401,22 @@ class AcceptedAsyncCommandIntake(
     private fun offer(lane: Int, queue: Channel<AcceptedAsyncCommand>, command: AcceptedAsyncCommand): Boolean {
         val accepted = if (offerTimeoutMs <= 0) {
             queue.trySend(command).isSuccess
+        } else if (!offerWaitPermits.tryAcquire()) {
+            // Bulkhead full: rather than queue this calling thread up behind
+            // other in-progress waits (which would let a backpressure spike
+            // exhaust the shared application thread pool one blocked thread
+            // at a time), fail fast as ordinary backpressure.
+            false
         } else {
-            runBlocking {
-                withTimeoutOrNull(offerTimeoutMs) {
-                    queue.send(command)
-                    true
-                } ?: false
+            try {
+                runBlocking {
+                    withTimeoutOrNull(offerTimeoutMs) {
+                        queue.send(command)
+                        true
+                    } ?: false
+                }
+            } finally {
+                offerWaitPermits.release()
             }
         }
         if (accepted) {

@@ -3521,7 +3521,9 @@ class PostgresRuntimePersistence(
     }
 
     override fun refreshMarketDataSnapshots(projectionName: String, sourceProjectionName: String): Long {
-        rebuildOrderLifecycleState()
+        // See marketDataDepthSnapshot: order_lifecycle_state is already kept
+        // current by the incremental OrderLifecycleProjectionWorker, so a
+        // synchronous full-venue rebuild here is redundant.
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }
@@ -3716,7 +3718,14 @@ class PostgresRuntimePersistence(
         sourceProjectionName: String
     ): MarketDataDepthSnapshot? {
         val boundedLevels = levels.coerceIn(1, 50)
-        rebuildOrderLifecycleState()
+        // order_lifecycle_state is kept current by the incremental
+        // OrderLifecycleProjectionWorker (250ms cadence). Do not force a
+        // synchronous full-venue rebuildOrderLifecycleState() here: it was
+        // redundant with that worker and, worse, scaled with total venue
+        // order history rather than the single requested instrument -
+        // every depth-book read paid for a full DELETE+rebuild across every
+        // order/execution/event in the system. Callers that need a forced
+        // full rebuild use the dedicated rebuildOrderLifecycleState route.
         val sourceStatus = projectionStatus(sourceProjectionName, source = "venue-event-batch")
         val lastPartitionSequence = sourceStatus.watermarks
             .filter { it.partitionId >= 0 }

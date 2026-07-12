@@ -539,13 +539,22 @@ Baseline benchmarks (Apple M1 Max, `go test -benchmem`):
 
 - `BenchmarkSubmitOrderResting`: `1309 ns/op`, `592 B/op`, `14 allocs/op`
 - `BenchmarkSubmitOrderMatchAgainstResting`: `2703 ns/op`, `1524 B/op`, `32 allocs/op`
-- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op`
+- `BenchmarkModifyOrder`: `109443 ns/op`, `199 B/op`, `7 allocs/op` — **stale, see the July 11, 2026 checkpoint below.** This number predates the July 4, 2026 Hot Book Sharding Checkpoint's price-level btree/FIFO book; it reflects the earlier slice-based book's O(n) reinsertion cost, not current behavior.
 
 Deferred high-impact candidates:
 
 1. Split `services/simulator/cmd/load-tester/main.go` (currently large/monolithic) into focused packages (`actions`, `state`, `reporting`, `io`) for maintainability and safer perf changes.
-2. Consider a purpose-built book structure (price levels / indexed queues) if we need to push beyond current TPS envelopes with lower GC/lock pressure.
-3. Add lightweight micro-benchmarks for matching-engine `SubmitOrder`, `ModifyOrder`, and insertion/match loops to quantify future gains and prevent regressions.
+2. ~~Consider a purpose-built book structure (price levels / indexed queues)...~~ Done: superseded by the July 4, 2026 Hot Book Sharding Checkpoint's price-level btree/FIFO book.
+3. ~~Add lightweight micro-benchmarks for matching-engine `SubmitOrder`, `ModifyOrder`, and insertion/match loops...~~ Done: see `services/matching-engine/internal/app/service_benchmark_test.go`.
+
+## HFT Audit Fixes (July 11, 2026)
+
+Targeted audit of `services/matching-engine` for correctness/scaling issues, with tests and before/after measurement for each fix.
+
+1. **`VenueEventBatch.FirstSequence` sentinel bug (fixed).** `streamdirect.buildBatch` used `firstSeq == 0` to mean "not yet set," but Kafka/Redpanda partition offsets legitimately start at `0`. A batch containing offset `0` followed by any higher offset silently overwrote the correct `FirstSequence=0` with the next delivery's sequence, corrupting the replay/gap-detection range for the first batch of every fresh partition. Fixed with an explicit `haveFirstSeq` flag in `services/matching-engine/internal/streamdirect/processor.go`. Regression tests: `TestProcessorBatchFirstSequenceHandlesOffsetZero`, `TestProcessorBatchFirstSequenceHandlesOutOfOrderZero`.
+2. **Self-trade-prevention double book-scan (investigated, not changed).** `applySelfTradePrevention`'s reachability pre-scan and `match()`'s own crossing walk both traverse the same crossing price levels for any order carrying `ParticipantID`/`AccountID`. For reject mode (the default `CancelNewest`), this is required, not a bug: `TestSubmitOrderRejectsSelfTradeReachableAfterOtherLiquidity` locks in that a reachable self-trade must reject the whole order with zero partial execution, which needs a lookahead before any fill commits. Only `CancelOldest` mode's half of the pre-scan is theoretically mergeable into `match()`'s single pass, and that benefit is narrow (non-default mode) relative to the correctness risk of entangling self-trade identity into the core match loop. Deferred.
+3. **Engine-wide `ordersMu` contention (fixed).** `Service.orders`/`ordersMu` was one global `sync.RWMutex` guarding order records for every instrument, undercutting the per-book sharding story from the Hot Book Sharding Checkpoint. A mutex profile of a new `BenchmarkSubmitOrderManyInstrumentsParallel` (64 instruments, 8 cores, book-level contention engineered away) showed `reserveOrder`'s write lock at ~65% of all measured mutex wait time. Replaced with a 64-way striped `orderIndex` (`services/matching-engine/internal/app/order_index.go`), keyed by an inline FNV-1a hash of order ID. Measured effect at 8 cores: `1457 ns/op → 544 ns/op` (2.7x), `reserveOrder`'s mutex-wait share `65% → 7.3%`. Regression/unit tests: `order_index_test.go` (including a `-race` concurrent stress test and a shard-spread guard against a hash regression that collapses back to one shard). `terminalOrderRetention.mu` was deliberately left untouched — the profile didn't implicate it, and it short-circuits entirely when the default retention limit (`0`, unbounded) is in effect.
+4. **`BenchmarkModifyOrder` 83x cliff (ghost finding, doc corrected).** The `109443 ns/op` number above predates the book redesign; current `ModifyOrder` measures `807-939 ns/op` across `200k`–`4.2M` iterations, in the same range as `SubmitOrderResting`. No code change; the stale baseline above is annotated rather than deleted, to keep the historical record intact.
 
 ## Cross-References
 

@@ -72,34 +72,48 @@ object PlatformCommandParsers {
     )
 
     fun validateApiV1Command(route: String, body: String): String? {
+        return when (val result = parseAndValidateApiV1Command(route, body)) {
+            is ApiV1CommandValidation.Invalid -> result.error
+            is ApiV1CommandValidation.Valid -> null
+        }
+    }
+
+    // Parses body once and returns either the parsed JsonDocument (on
+    // success) or the validation error, so callers that both validate and
+    // then read fields out of the same body (e.g. PlatformHttpServer's
+    // account-risk-request assembly) don't have to re-parse it.
+    fun parseAndValidateApiV1Command(route: String, body: String): ApiV1CommandValidation {
         val json = try {
             JsonCodec.parseObject(body)
         } catch (_: Exception) {
-            return "invalid json payload"
+            return ApiV1CommandValidation.Invalid("invalid json payload")
         }
-        val contract = apiV1Contracts[route] ?: return null
+        val contract = apiV1Contracts[route]
+        if (contract == null) {
+            return ApiV1CommandValidation.Valid(json)
+        }
         val unknownField = json.fieldNames().firstOrNull { it !in contract.allowedFields }
         if (unknownField != null) {
-            return "unknown field: $unknownField"
+            return ApiV1CommandValidation.Invalid("unknown field: $unknownField")
         }
         val missingField = contract.requiredFields.firstOrNull { field ->
             !json.has(field) || json.string(field).isBlank()
         }
         if (missingField != null) {
-            return "missing required field: $missingField"
+            return ApiV1CommandValidation.Invalid("missing required field: $missingField")
         }
         if (route == "/api/v1/orders/submit") {
-            enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return it }
-            enumValidationError(json, "orderType", setOf("LIMIT"))?.let { return it }
-            enumValidationError(json, "timeInForce", setOf("DAY", "IOC"))?.let { return it }
-            numericFieldValidationError(json, "quantityUnits")?.let { return it }
-            numericFieldValidationError(json, "limitPrice")?.let { return it }
+            enumValidationError(json, "side", setOf("BUY", "SELL"))?.let { return ApiV1CommandValidation.Invalid(it) }
+            enumValidationError(json, "orderType", setOf("LIMIT"))?.let { return ApiV1CommandValidation.Invalid(it) }
+            enumValidationError(json, "timeInForce", setOf("DAY", "IOC"))?.let { return ApiV1CommandValidation.Invalid(it) }
+            numericFieldValidationError(json, "quantityUnits")?.let { return ApiV1CommandValidation.Invalid(it) }
+            numericFieldValidationError(json, "limitPrice")?.let { return ApiV1CommandValidation.Invalid(it) }
         }
         if (route == "/api/v1/orders/modify") {
-            numericFieldValidationError(json, "quantityUnits")?.let { return it }
-            numericFieldValidationError(json, "limitPrice")?.let { return it }
+            numericFieldValidationError(json, "quantityUnits")?.let { return ApiV1CommandValidation.Invalid(it) }
+            numericFieldValidationError(json, "limitPrice")?.let { return ApiV1CommandValidation.Invalid(it) }
         }
-        return null
+        return ApiV1CommandValidation.Valid(json)
     }
 
     private fun enumValidationError(json: JsonDocument, field: String, allowed: Set<String>): String? {
@@ -234,4 +248,9 @@ object PlatformCommandParsers {
         val requiredFields: List<String>,
         val allowedFields: Set<String>
     )
+}
+
+sealed class ApiV1CommandValidation {
+    data class Valid(val json: JsonDocument) : ApiV1CommandValidation()
+    data class Invalid(val error: String) : ApiV1CommandValidation()
 }
