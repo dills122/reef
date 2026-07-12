@@ -207,6 +207,7 @@ The current gaps are:
 
 4. Complete venue lifecycle projection.
    - This is the next promotion track after the 2026-07-12 materializer `soak-5m` pass: enable the appropriate projector/read surfaces during a durable venue-event load run, record projected throughput, projection lag/watermarks, replay idempotency, and read API freshness separately from canonical accepted/materialized throughput.
+   - Local gate command: `make dev-gate-projection-freshness`. It runs the Redpanda direct-stream plus venue-event-materializer path with venue-event-batch projection, order-lifecycle projection, and market-data projection enabled, then fails if projected work does not catch up to durable canonical materialization with zero projector lag after the configured drain window.
    - Compact submit outcome projection from materialized `runtime.canonical_command_outcomes` into `submit_results` and `runtime_events` now exists as the first persistence test gate.
    - The first persistence-layer live test should run after this compact projection: durable event batch -> canonical batch/outcome rows -> projected submit result/runtime event -> idempotent projector replay.
    - No-DB direct-consume `VenueEventBatch` submit outcomes now carry the compact `acceptedOrder` fact needed to reconstruct `orders` rows; the durable `command_log.command_payloads` join remains a compatibility fallback.

@@ -76,6 +76,13 @@ const streamAckWorkerUrls = parseCsvStrings(
   env("DEV_STRESS_STREAM_ACK_WORKER_URLS", defaultStreamAckWorkerUrls(runtimeUrl).join(",")),
 );
 const captureStreamAckProjectorStats = env("DEV_STRESS_CAPTURE_STREAM_ACK_PROJECTOR", captureStreamAckWorkerStats ? "1" : "0") === "1";
+const failOnStreamAckProjectorFailures =
+  env("DEV_STRESS_FAIL_ON_STREAM_ACK_PROJECTOR_FAILURES", captureStreamAckProjectorStats ? "1" : "0") === "1";
+const maxStreamAckProjectorFailedDelta = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_FAILED_DELTA", "0"));
+const maxStreamAckProjectorLag = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTOR_LAG", "0"));
+const maxStreamAckProjectionGap = Number(env("DEV_STRESS_MAX_STREAM_ACK_PROJECTION_GAP", "0"));
+const streamAckProjectorDrainWaitMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_WAIT_MS", "0"));
+const streamAckProjectorDrainPollMs = Number(env("DEV_STRESS_STREAM_ACK_PROJECTOR_DRAIN_POLL_MS", "1000"));
 const streamAckProjectorUrls = parseCsvStrings(
   env(
     "DEV_STRESS_STREAM_ACK_PROJECTOR_URLS",
@@ -299,6 +306,15 @@ if (!venueEventMaterializerGuardrail.pass) {
   process.exitCode = 1;
 }
 
+const streamAckProjectorGuardrail = evaluateStreamAckProjectorGuardrail(reportFiles);
+if (!streamAckProjectorGuardrail.pass) {
+  console.error("stream-ack projector freshness guardrail failed");
+  for (const failure of streamAckProjectorGuardrail.failures) {
+    console.error(`  - ${failure}`);
+  }
+  process.exitCode = 1;
+}
+
 function parseCsvInts(raw) {
   return raw
     .split(",")
@@ -485,7 +501,12 @@ async function runStressStep({ runtimeUrl, duration, workers, rate, rateSchedule
       attachVenueEventMaterializerStats({ reportOut, duration, beforeVenueEventMaterializer, afterVenueEventMaterializer });
     }
     if (captureStreamAckProjectorStats) {
-      const afterProjector = await sampleStreamAckProjectors();
+      const afterProjector = await waitForStreamAckProjectorDrain({
+        reportOut,
+        beforeProjector,
+        timeoutMs: streamAckProjectorDrainWaitMs,
+        pollMs: streamAckProjectorDrainPollMs,
+      });
       attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, afterProjector });
     }
     if (captureHotPath) {
@@ -963,6 +984,45 @@ async function sampleStreamAckProjectors() {
   };
 }
 
+async function waitForStreamAckProjectorDrain({ reportOut, beforeProjector, timeoutMs, pollMs }) {
+  const started = Date.now();
+  const timeout = Math.max(0, Number(timeoutMs) || 0);
+  const interval = Math.max(100, Number(pollMs) || 1000);
+  const expectedProjected = streamAckExpectedProjectedWorkItems(reportOut);
+  let latest = await sampleStreamAckProjectors();
+
+  while (timeout > 0 && !streamAckProjectorDrainSatisfied(beforeProjector?.json, latest?.json, expectedProjected)) {
+    if (Date.now() - started >= timeout) break;
+    await sleep(Math.min(interval, Math.max(0, timeout - (Date.now() - started))));
+    latest = await sampleStreamAckProjectors();
+  }
+  return latest;
+}
+
+function streamAckExpectedProjectedWorkItems(reportOut) {
+  try {
+    const report = JSON.parse(readFileSync(reportOut, "utf8"));
+    return Number(
+      report.venueEventMaterializer?.delta?.materializedDelta ??
+        report.streamAckWorkers?.delta?.completedDelta ??
+        report.totalSuccess ??
+        report.totalAccepted ??
+        report.totalRequests ??
+        0,
+    );
+  } catch {
+    return 0;
+  }
+}
+
+function streamAckProjectorDrainSatisfied(before, after, expectedProjected) {
+  if (!after?.metrics) return false;
+  const projectedDelta = Number(after.metrics.projected ?? 0) - Number(before?.metrics?.projected ?? 0);
+  const lag = Number(after.lag ?? 0);
+  if (expectedProjected > 0 && projectedDelta < expectedProjected) return false;
+  return lag <= maxStreamAckProjectorLag;
+}
+
 function aggregateStreamAckProjectorStatus(probes) {
   const projectors = probes
     .map((probe, index) => ({ index, url: streamAckProjectorUrls[index], status: probe.json }))
@@ -1368,6 +1428,7 @@ function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, a
     const after = afterProjector?.json ?? null;
     const durationSeconds = Number(report.durationSeconds ?? 0) || parseDurationSeconds(duration);
     const projectedDelta = Number(after?.metrics?.projected ?? 0) - Number(before?.metrics?.projected ?? 0);
+    const failedDelta = Number(after?.metrics?.failed ?? 0) - Number(before?.metrics?.failed ?? 0);
     const lagDelta = Number(after?.lag ?? 0) - Number(before?.lag ?? 0);
     report.streamAckProjector = {
       before,
@@ -1375,6 +1436,7 @@ function attachStreamAckProjectorStats({ reportOut, duration, beforeProjector, a
       delta: {
         projectedDelta,
         projectedRps: durationSeconds > 0 ? projectedDelta / durationSeconds : 0,
+        failedDelta,
         lagDelta,
         beforeLag: Number(before?.lag ?? 0),
         afterLag: Number(after?.lag ?? 0),
@@ -2276,6 +2338,49 @@ function evaluateVenueEventMaterializerGuardrail(reportFiles) {
       }
     } catch {
       failures.push(`${path}: unable to parse report for venue-event-materializer guardrail check`);
+    }
+  }
+  return { pass: failures.length === 0, failures };
+}
+
+function evaluateStreamAckProjectorGuardrail(reportFiles) {
+  if (!failOnStreamAckProjectorFailures) {
+    return { pass: true, failures: [] };
+  }
+  const failures = [];
+  for (const path of reportFiles) {
+    try {
+      const report = JSON.parse(readFileSync(path, "utf8"));
+      if (!report.streamAckProjector?.delta) {
+        failures.push(`${path}: missing stream-ack projector delta`);
+        continue;
+      }
+      if (report.streamAckProjector?.probes?.after?.ok === false) {
+        failures.push(
+          `${path}: stream-ack projector after probe failed: ${report.streamAckProjector.probes.after.error ?? report.streamAckProjector.probes.after.status ?? "unknown"}`,
+        );
+      }
+      const expectedProjected = Number(
+        report.venueEventMaterializer?.delta?.materializedDelta ??
+          report.streamAckWorkers?.delta?.completedDelta ??
+          report.totalSuccess ??
+          0,
+      );
+      const projectedDelta = Number(report.streamAckProjector.delta.projectedDelta ?? 0);
+      const failedDelta = Number(report.streamAckProjector.delta.failedDelta ?? 0);
+      const afterLag = Number(report.streamAckProjector.delta.afterLag ?? 0);
+      const projectionGap = Math.max(expectedProjected - projectedDelta, 0);
+      if (failedDelta > maxStreamAckProjectorFailedDelta) {
+        failures.push(`${path}: stream-ack projector failedDelta ${failedDelta} > ${maxStreamAckProjectorFailedDelta}`);
+      }
+      if (afterLag > maxStreamAckProjectorLag) {
+        failures.push(`${path}: stream-ack projector afterLag ${afterLag} > ${maxStreamAckProjectorLag}`);
+      }
+      if (projectionGap > maxStreamAckProjectionGap) {
+        failures.push(`${path}: materialized/projected gap ${projectionGap} > ${maxStreamAckProjectionGap}`);
+      }
+    } catch {
+      failures.push(`${path}: unable to parse report for stream-ack projector guardrail check`);
     }
   }
   return { pass: failures.length === 0, failures };
