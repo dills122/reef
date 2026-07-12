@@ -137,6 +137,11 @@ jobs:
             scripts/dev/bot-submission-register-merged.test.mjs \
             scripts/dev/export-simulation-run.test.mjs \
             scripts/dev/deploy-receiver.test.mjs \
+            scripts/dev/analyze-arena-actor-diagnostics.test.mjs \
+            scripts/dev/arena-score-breakdown.test.mjs \
+            scripts/dev/compare-arena-scoring-calibration.test.mjs \
+            scripts/dev/run-arena-actor-calibration-matrix.test.mjs \
+            scripts/dev/run-arena-scoring-calibration-matrix.test.mjs \
             scripts/dev/projection-replay-proof.test.mjs \
             scripts/dev/stream-profile-guard.test.mjs | tee coverage/node-dev-tooling/test-output.txt
       - name: Add coverage summary

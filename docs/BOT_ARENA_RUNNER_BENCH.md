@@ -656,13 +656,27 @@ make dev-smoke-bot-arena-local
 Useful direct command:
 
 ```bash
+COMPOSE_PROJECT_NAME=reef \
+ORDER_LIFECYCLE_PROJECTOR_ENABLED=true \
+MARKET_DATA_PROJECTOR_ENABLED=true \
+ORDER_LIFECYCLE_PROJECTOR_POLL_MS=100 \
+MARKET_DATA_PROJECTOR_POLL_MS=100 \
+make dev-reset
+
 bun run arena:local-tick-run --submit-mode=live \
   --venue-url=http://127.0.0.1:8080 \
   --seed-reference \
   --projection-drain-timeout-ms=5000 \
+  --require-projection-drain \
   --compartment=ses \
   --out=/tmp/reef-arena-local-tick-run-live.json
 ```
+
+When `--require-projection-drain` is set, the runner preflights the
+order-lifecycle and market-data projectors before bot traffic starts. Local
+Compose stacks must be created with `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true`
+and `MARKET_DATA_PROJECTOR_ENABLED=true`; setting those variables only on the
+runner command does not reconfigure already-running platform containers.
 
 The same report now includes:
 

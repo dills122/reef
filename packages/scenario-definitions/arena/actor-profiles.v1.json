@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "reef.arena.actorProfiles.v1",
+  "catalogId": "arena-actor-profiles",
+  "version": "2026-07-12",
+  "profiles": [
+    {
+      "profileId": "mm-benchmark-passive",
+      "version": "v1",
+      "actorClass": "house_market_maker",
+      "description": "Symmetric baseline house liquidity provider for replay and regression checks.",
+      "difficultyBucket": "neutral-liquidity",
+      "scoreEffect": "diagnostic-only",
+      "allowedParamKeys": [
+        "aggression",
+        "inventorySkew",
+        "maxSpreadCrossBps",
+        "orderRate",
+        "quoteSize",
+        "quoteSpreadBps",
+        "riskDiscipline"
+      ],
+      "params": {
+        "aggression": 0.25,
+        "inventorySkew": 0,
+        "maxSpreadCrossBps": 0,
+        "orderRate": "responsive",
+        "quoteSize": 10,
+        "quoteSpreadBps": 20,
+        "riskDiscipline": "high"
+      }
+    },
+    {
+      "profileId": "mm-tight-bluechip",
+      "version": "v1",
+      "actorClass": "house_market_maker",
+      "description": "Tight house liquidity for liquid equity-style instruments.",
+      "difficultyBucket": "neutral-liquidity",
+      "scoreEffect": "diagnostic-only",
+      "allowedParamKeys": [
+        "aggression",
+        "inventorySkew",
+        "maxSpreadCrossBps",
+        "orderRate",
+        "quoteSize",
+        "quoteSpreadBps",
+        "riskDiscipline"
+      ],
+      "params": {
+        "aggression": 0.35,
+        "inventorySkew": 0.35,
+        "maxSpreadCrossBps": 0,
+        "orderRate": "responsive",
+        "quoteSize": 10,
+        "quoteSpreadBps": 20,
+        "riskDiscipline": "high"
+      }
+    },
+    {
+      "profileId": "npc-noise-small-random",
+      "version": "v1",
+      "actorClass": "npc_flow",
+      "description": "Small random flow with low information content.",
+      "difficultyBucket": "benign-noise",
+      "scoreEffect": "difficulty-bucket",
+      "allowedParamKeys": [
+        "aggression",
+        "cancelDiscipline",
+        "maxSpreadCrossBps",
+        "orderRate",
+        "panicThreshold",
+        "riskDiscipline"
+      ],
+      "params": {
+        "aggression": 0.2,
+        "cancelDiscipline": "high",
+        "maxSpreadCrossBps": 25,
+        "orderRate": "low",
+        "panicThreshold": 0,
+        "riskDiscipline": "medium"
+      }
+    },
+    {
+      "profileId": "npc-bad-aggressive-retail",
+      "version": "v1",
+      "actorClass": "npc_flow",
+      "description": "Aggressive taker that crosses wide spreads and overtrades.",
+      "difficultyBucket": "toxic-momentum",
+      "scoreEffect": "difficulty-bucket",
+      "allowedParamKeys": [
+        "aggression",
+        "cancelDiscipline",
+        "maxSpreadCrossBps",
+        "orderRate",
+        "panicThreshold",
+        "riskDiscipline"
+      ],
+      "params": {
+        "aggression": 0.95,
+        "cancelDiscipline": "low",
+        "maxSpreadCrossBps": 250,
+        "orderRate": "high",
+        "panicThreshold": 0.1,
+        "riskDiscipline": "low"
+      }
+    },
+    {
+      "profileId": "npc-institutional-slicer",
+      "version": "v1",
+      "actorClass": "npc_flow",
+      "description": "Slower parent-order flow with steadier risk discipline.",
+      "difficultyBucket": "balanced-flow",
+      "scoreEffect": "difficulty-bucket",
+      "allowedParamKeys": [
+        "aggression",
+        "cancelDiscipline",
+        "maxSpreadCrossBps",
+        "orderRate",
+        "riskDiscipline"
+      ],
+      "params": {
+        "aggression": 0.45,
+        "cancelDiscipline": "medium",
+        "maxSpreadCrossBps": 75,
+        "orderRate": "medium",
+        "riskDiscipline": "medium"
+      }
+    },
+    {
+      "profileId": "competitor-standard",
+      "version": "v1",
+      "actorClass": "competitor",
+      "description": "Default ranked competitor profile with no hidden handicap.",
+      "difficultyBucket": "ranked-standard",
+      "scoreEffect": "eligible-for-score",
+      "allowedParamKeys": [
+        "aggression",
+        "cancelDiscipline",
+        "latencyJitter",
+        "maxSpreadCrossBps",
+        "orderRate",
+        "riskDiscipline"
+      ],
+      "params": {
+        "aggression": 0.5,
+        "cancelDiscipline": "standard",
+        "latencyJitter": "standard",
+        "maxSpreadCrossBps": 100,
+        "orderRate": "standard",
+        "riskDiscipline": "standard"
+      }
+    }
+  ]
+}

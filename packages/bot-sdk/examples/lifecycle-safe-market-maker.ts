@@ -35,8 +35,8 @@ export default class LifecycleSafeMarketMaker extends ReefBotV1 {
       return [ctx.actions.noop("snapshot unavailable")];
     }
 
-    const orderSize = ctx.config.number("orderSize");
-    const spread = ctx.config.number("spread");
+    const orderSize = profileOrderSize(ctx);
+    const spread = profileSpread(ctx, snapshot.value.midPrice);
 
     return [
       ctx.orders.placeLimit({
@@ -55,3 +55,14 @@ export default class LifecycleSafeMarketMaker extends ReefBotV1 {
   }
 }
 
+function profileOrderSize(ctx: BotContextV1): number {
+  return Math.max(1, Math.floor(ctx.config.optionalNumber("actorProfile.quoteSize") ?? ctx.config.number("orderSize")));
+}
+
+function profileSpread(ctx: BotContextV1, midPrice: number): number {
+  const quoteSpreadBps = ctx.config.optionalNumber("actorProfile.quoteSpreadBps");
+  if (quoteSpreadBps !== undefined) {
+    return Math.max(0.01, midPrice * Math.max(0, quoteSpreadBps) / 10_000);
+  }
+  return ctx.config.number("spread");
+}

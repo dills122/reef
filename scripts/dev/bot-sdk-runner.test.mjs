@@ -11,12 +11,15 @@ const { createRecordingVenueTransportV1 } = await import(
 );
 
 await assertSimpleMarketMakerRun();
+await assertSimpleMarketMakerActorProfileRun();
 await assertLiveReadClientsRun();
 await assertLifecycleSafeMarketMakerRun();
 await assertRefreshingMarketMakerHealthyNoopRun();
 await assertRefreshingMarketMakerStaleRefreshRun();
 await assertConfigurablePassiveStrategyRestingOrderRun();
 await assertAggressiveTakerRun();
+await assertAggressiveTakerActorProfileRun();
+await assertAggressiveTakerLowSpreadBudgetRun();
 await assertAggressiveTakerWarmupRun();
 await assertPolicyBlockedRunDoesNotSendOrApply();
 
@@ -41,6 +44,31 @@ async function assertSimpleMarketMakerRun() {
   assert.equal(report.ticks[2].venueCommands[1].body.limitPrice, "101250000000");
   assert.equal(report.finalOrders.length, 6);
   assert.equal(transport.requests.length, 6);
+}
+
+async function assertSimpleMarketMakerActorProfileRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/simple-market-maker.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      config: {
+        ...fixture.config,
+        "actorProfile.quoteSize": 7,
+        "actorProfile.quoteSpreadBps": 20,
+      },
+      ticks: fixture.ticks.slice(0, 1),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.ticks[0].venueCommands[0].body.quantityUnits, "7");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "99900000000");
+  assert.equal(report.ticks[0].venueCommands[1].body.quantityUnits, "7");
+  assert.equal(report.ticks[0].venueCommands[1].body.limitPrice, "100100000000");
 }
 
 async function assertLiveReadClientsRun() {
@@ -264,6 +292,72 @@ async function assertAggressiveTakerWarmupRun() {
   assert.equal(report.ticks[1].venueCommands.length, 1);
   assert.equal(report.ticks[1].venueCommands[0].body.side, "BUY");
   assert.equal(transport.requests.length, 1);
+}
+
+async function assertAggressiveTakerActorProfileRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      botId: "configurable-aggressive-taker-bot",
+      actorId: "actor-configurable-aggressive-taker-bot",
+      config: {
+        instrumentId: "AAPL",
+        side: "ALTERNATE",
+        orderSize: 1,
+        crossOffset: 0.05,
+        "actorProfile.aggression": 0.95,
+        "actorProfile.maxSpreadCrossBps": 250,
+        "actorProfile.orderRate": "high",
+        "actorProfile.riskDiscipline": "low",
+      },
+      ticks: fixture.ticks.slice(0, 2),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.ticksRun, 2);
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.ticks[0].venueCommands[0].body.side, "BUY");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "102380000000");
+  assert.equal(report.ticks[1].venueCommands[0].body.side, "SELL");
+  assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "98110000000");
+  assert.equal(transport.requests.length, 2);
+}
+
+async function assertAggressiveTakerLowSpreadBudgetRun() {
+  const module = await import(pathToFileURL(join(repoRoot, "packages/bot-sdk/examples/configurable-aggressive-taker-bot.ts")).href);
+  const transport = createRecordingVenueTransportV1(202);
+  const report = await runBotScenarioV1({
+    BotClass: module.default,
+    fixture: {
+      ...fixture,
+      botId: "configurable-aggressive-taker-bot",
+      actorId: "actor-configurable-aggressive-taker-bot",
+      config: {
+        instrumentId: "AAPL",
+        side: "ALTERNATE",
+        orderSize: 1,
+        crossOffset: 0.05,
+        "actorProfile.aggression": 0.35,
+        "actorProfile.maxSpreadCrossBps": 50,
+        "actorProfile.orderRate": "high",
+        "actorProfile.riskDiscipline": "low",
+      },
+      ticks: fixture.ticks.slice(0, 2),
+    },
+    venueTransport: transport,
+  });
+
+  assert.equal(report.status, "completed");
+  assert.equal(report.orderActionsProposed, 2);
+  assert.equal(report.ticks[0].venueCommands[0].body.side, "BUY");
+  assert.equal(report.ticks[0].venueCommands[0].body.limitPrice, "100170000000");
+  assert.equal(report.ticks[1].venueCommands[0].body.side, "SELL");
+  assert.equal(report.ticks[1].venueCommands[0].body.limitPrice, "100320000000");
 }
 
 async function assertConfigurablePassiveStrategyRestingOrderRun() {

@@ -99,7 +99,28 @@ test("extracts counts, latency, and summary from arena local tick report", async
       generatedAt: "2026-07-08T12:00:00Z",
       runId: "arena-run-1",
       status: "completed",
-      mode: { modeId: "equity-sprint", version: "v1" },
+      mode: { modeId: "equity-sprint", version: "v1", npcDifficultyBuckets: ["benign-noise"] },
+      policyEnvelopeHash: "sha256:abc123",
+      policyEnvelope: {
+        schemaVersion: "reef.arena.policyEnvelope.v1",
+        modeId: "equity-sprint",
+        modeVersion: "v1",
+        scenarioId: "arena-equity-sprint-v1",
+        seed: 170707,
+        scoringPolicyVersion: "score-v0",
+        economicPolicyVersion: "economic-v0",
+        liquidityPolicyVersion: "liquidity-v0",
+        backgroundFlowPolicyVersion: "background-flow-v0",
+        creditPolicyVersion: "credit-v0",
+        interventionPolicyVersion: "intervention-v0",
+        npcDifficultyBuckets: ["benign-noise"],
+      },
+      runPlan: {
+        actorProfiles: {
+          schemaVersion: "reef.arena.actorProfileSummary.v1",
+          byActorClass: { house_market_maker: 1 },
+        },
+      },
       runnerProfile: { compartment: "ses", submitMode: "live" },
       totals: {
         ticks: 4,
@@ -128,6 +149,61 @@ test("extracts counts, latency, and summary from arena local tick report", async
         status: "pass",
         topOfBookPct: 100,
       },
+      liquiditySummary: {
+        schemaVersion: "reef.arena.liquiditySummary.v1",
+        mode: "score-neutral-liquidity-context",
+        scoreNeutral: true,
+        pointsEffect: 0,
+        status: "pass",
+        flags: [],
+        totals: {
+          providerCount: 1,
+          activeProviderCount: 1,
+          fillCount: 2,
+        },
+        instruments: [{
+          instrumentId: "AAPL",
+          providerCount: 1,
+          providerIds: ["builtin-mm-simple"],
+          status: "pass",
+          flags: [],
+        }],
+      },
+      scoringCalibration: {
+        schemaVersion: "reef.arena.scoringCalibration.v1",
+        formulaVersion: "shadow-score-v1",
+        scoringPolicyVersion: "score-v0",
+        mode: "report-only-shadow-score-calibration",
+        eligibility: {
+          totalBots: 1,
+          eligibleCompetitors: 0,
+          nonScoringActors: 1,
+          byActorClass: { house_market_maker: 1 },
+          byScoreEffect: { "diagnostic-only": 1 },
+        },
+        difficultyContext: {
+          npcDifficultyBuckets: ["benign-noise"],
+          difficultyMultiplier: 1,
+        },
+        scoreDistribution: {
+          publicScore: { count: 0, min: null, max: null, avg: null },
+          shadowScore: { count: 0, min: null, max: null, avg: null },
+          components: {
+            equity: { count: 0, min: null, max: null, avg: null },
+            risk: { count: 0, min: null, max: null, avg: null },
+            conduct: { count: 0, min: null, max: null, avg: null },
+            marketInteraction: { count: 0, min: null, max: null, avg: null },
+            difficulty: { count: 0, min: null, max: null, avg: null },
+          },
+        },
+        dataQuality: {
+          flags: ["no-eligible-competitors"],
+          fillCount: 0,
+          pnlAvailableCount: 0,
+          publicScoreMismatchCount: 0,
+          publicScoreUnchanged: true,
+        },
+      },
       venueReadback: {
         mode: "live",
         skipped: false,
@@ -150,9 +226,105 @@ test("extracts counts, latency, and summary from arena local tick report", async
           failedTicks: 0,
           freezeCount: 0,
           disqualified: false,
+          scoreBreakdown: {
+            schemaVersion: "reef.arena.scoreBreakdown.v1",
+            formulaVersion: "shadow-score-v1",
+            scoringPolicyVersion: "score-v0",
+            scoreEligible: false,
+            actorClass: "house_market_maker",
+            scoreEffect: "diagnostic-only",
+            publicScore: null,
+            shadowScore: null,
+            scoringMode: "diagnostic-only",
+            components: {
+              baseline: 0,
+              equity: 0,
+              risk: 0,
+              conduct: 0,
+              marketInteraction: 0,
+              difficulty: 0,
+            },
+            componentDetails: {
+              risk: {
+                inventoryExposurePenalty: 10,
+              },
+              marketInteraction: {
+                completionScore: 5000,
+              },
+            },
+            diagnostics: {
+              finalEquity: 1000100,
+              totalPnl: 100,
+              grossSubmittedQuantity: 4,
+              grossSubmittedNotional: 400,
+              grossExecutedNotional: 200,
+              filledQuantity: 2,
+              fillRatio: 0.5,
+              completionRate: 1,
+              pnlPerExecutedNotionalBps: 5000,
+              inventoryExposureRatio: 0.25,
+              inventoryConcentration: 1,
+              fillCount: 2,
+              submittedCommands: 4,
+              cancelReplaceRatio: 0,
+              timeoutRate: 0,
+              variableScoreBeforeDifficulty: 0,
+              difficultyMultiplier: 1,
+              npcDifficultyBuckets: ["benign-noise"],
+            },
+          },
+          liquidityDiagnostics: {
+            schemaVersion: "reef.arena.liquidityProviderDiagnostics.v1",
+            mode: "score-neutral-liquidity-context",
+            scoreNeutral: true,
+            pointsEffect: 0,
+            status: "pass",
+            flags: [],
+            instruments: ["AAPL"],
+            quoteQuality: {
+              avgTopOfBookPct: 100,
+              avgDepthPct: 100,
+              medianQuotedSpreadBps: 20,
+            },
+            orderActivity: {
+              submittedLimitOrders: 2,
+              cancelCommands: 0,
+            },
+            fillParticipation: {
+              fillCount: 2,
+              filledQuantity: 4,
+            },
+            inventory: {
+              grossNotional: 100,
+            },
+            adverseSelection: {
+              available: false,
+              reason: "requires post-fill price path attribution window",
+            },
+          },
+          actorClass: "house_market_maker",
+          actorProfile: {
+            profileId: "mm-tight-bluechip",
+            profileVersion: "v1",
+            actorClass: "house_market_maker",
+            difficultyBucket: "neutral-liquidity",
+            scoreEffect: "diagnostic-only",
+            profileHash: "sha256:mm",
+          },
           tradingMetrics: {
             commands: { submitted: 4, failed: 0 },
             pnl: { realized: 100 },
+          },
+          conductMetrics: {
+            schemaVersion: "reef.arena.conductMetrics.v0",
+            status: "reported",
+            orderCommands: 4,
+            cancelReplaceRatio: 0,
+            invalidIntentRate: 0,
+            timeoutRate: 0,
+            maxActionsPerTick: 2,
+            maxVenueCommandsPerTick: 2,
+            freezeCount: 0,
           },
         },
       ],
@@ -193,9 +365,29 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.commandAccounting.accountingGap, 0);
   assert.equal(payload.summary.commandStatusSummary.byRoute["/api/v1/orders/cancel"], 2);
   assert.equal(payload.summary.healthSummary.status, "pass");
+  assert.equal(payload.summary.liquiditySummary.schemaVersion, "reef.arena.liquiditySummary.v1");
+  assert.equal(payload.summary.liquiditySummary.pointsEffect, 0);
+  assert.equal(payload.summary.liquiditySummary.totals.providerCount, 1);
+  assert.equal(payload.summary.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+  assert.equal(payload.summary.scoringCalibration.dataQuality.flags[0], "no-eligible-competitors");
+  assert.equal(payload.summary.policyEnvelopeHash, "sha256:abc123");
+  assert.equal(payload.summary.policyEnvelope.economicPolicyVersion, "economic-v0");
+  assert.equal(payload.summary.actorProfiles.byActorClass.house_market_maker, 1);
   assert.equal(payload.summary.botResults[0].botId, "builtin-mm-simple");
   assert.equal(payload.summary.botResults[0].finalEquity, 1000100);
   assert.equal(payload.summary.botResults[0].tradingMetrics.commands.submitted, 4);
+  assert.equal(payload.summary.botResults[0].actorProfile.profileId, "mm-tight-bluechip");
+  assert.equal(payload.summary.botResults[0].conductMetrics.maxVenueCommandsPerTick, 2);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.formulaVersion, "shadow-score-v1");
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.scoreEffect, "diagnostic-only");
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.publicScore, null);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.componentDetails.marketInteraction.completionScore, 5000);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.fillRatio, 0.5);
+  assert.equal(payload.summary.botResults[0].scoreBreakdown.diagnostics.difficultyMultiplier, 1);
+  assert.equal(payload.summary.botResults[0].liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
+  assert.equal(payload.summary.botResults[0].liquidityDiagnostics.scoreNeutral, true);
+  assert.equal(payload.summary.botResults[0].liquidityDiagnostics.fillParticipation.fillCount, 2);
   assert.equal(payload.summary.settlementScore.participants[0].participantId, "builtin-mm-simple");
 });
 

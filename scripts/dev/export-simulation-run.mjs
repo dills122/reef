@@ -214,12 +214,17 @@ function compactSummary(report, reportPath) {
       generatedAt: report.generatedAt ?? "",
       runId: report.runId ?? "",
       mode: report.mode ?? {},
+      policyEnvelopeHash: report.policyEnvelopeHash ?? "",
+      policyEnvelope: compactPolicyEnvelope(report.policyEnvelope),
+      actorProfiles: report.runPlan?.actorProfiles ?? {},
       runnerProfile: report.runnerProfile ?? {},
       status: report.status ?? "",
       totals: report.totals ?? {},
       commandAccounting: report.commandAccounting ?? {},
       commandStatusSummary: report.commandStatusSummary ?? {},
       healthSummary: report.healthSummary ?? {},
+      liquiditySummary: report.liquiditySummary ?? {},
+      scoringCalibration: report.scoringCalibration ?? {},
       venueReadback: {
         mode: report.venueReadback?.mode ?? "",
         skipped: Boolean(report.venueReadback?.skipped),
@@ -237,7 +242,12 @@ function compactSummary(report, reportPath) {
           failedTicks: numberOrZero(bot.failedTicks),
           freezeCount: numberOrZero(bot.freezeCount),
           disqualified: Boolean(bot.disqualified),
+          scoreBreakdown: compactScoreBreakdown(bot.scoreBreakdown),
+          liquidityDiagnostics: compactLiquidityDiagnostics(bot.liquidityDiagnostics),
           tradingMetrics: compactTradingMetrics(bot.tradingMetrics),
+          conductMetrics: compactConductMetrics(bot.conductMetrics),
+          actorClass: bot.actorClass ?? "",
+          actorProfile: compactActorProfile(bot.actorProfile),
         }))
         : [],
       settlementScore: report.settlementScore ?? report.settlementScoreSummary ?? null,
@@ -266,12 +276,114 @@ function isArenaLocalTickReport(report) {
   return report?.schemaVersion === "reef.arena.localTickRun.v0";
 }
 
+function compactScoreBreakdown(scoreBreakdown) {
+  if (scoreBreakdown === undefined || scoreBreakdown === null) return {};
+  return {
+    schemaVersion: scoreBreakdown.schemaVersion ?? "",
+    formulaVersion: scoreBreakdown.formulaVersion ?? "",
+    scoringPolicyVersion: scoreBreakdown.scoringPolicyVersion ?? "",
+    scoreEligible: Boolean(scoreBreakdown.scoreEligible),
+    actorClass: scoreBreakdown.actorClass ?? "",
+    scoreEffect: scoreBreakdown.scoreEffect ?? "",
+    publicScore: nullableNumber(scoreBreakdown.publicScore),
+    shadowScore: nullableNumber(scoreBreakdown.shadowScore),
+    scoringMode: scoreBreakdown.scoringMode ?? "",
+    components: scoreBreakdown.components ?? {},
+    componentDetails: scoreBreakdown.componentDetails ?? {},
+    diagnostics: {
+      finalEquity: nullableNumber(scoreBreakdown.diagnostics?.finalEquity),
+      totalPnl: nullableNumber(scoreBreakdown.diagnostics?.totalPnl),
+      grossSubmittedQuantity: nullableNumber(scoreBreakdown.diagnostics?.grossSubmittedQuantity),
+      grossSubmittedNotional: nullableNumber(scoreBreakdown.diagnostics?.grossSubmittedNotional),
+      grossExecutedNotional: nullableNumber(scoreBreakdown.diagnostics?.grossExecutedNotional),
+      filledQuantity: nullableNumber(scoreBreakdown.diagnostics?.filledQuantity),
+      fillRatio: nullableNumber(scoreBreakdown.diagnostics?.fillRatio),
+      completionRate: nullableNumber(scoreBreakdown.diagnostics?.completionRate),
+      pnlPerExecutedNotionalBps: nullableNumber(scoreBreakdown.diagnostics?.pnlPerExecutedNotionalBps),
+      inventoryExposureRatio: nullableNumber(scoreBreakdown.diagnostics?.inventoryExposureRatio),
+      inventoryConcentration: nullableNumber(scoreBreakdown.diagnostics?.inventoryConcentration),
+      fillCount: numberOrZero(scoreBreakdown.diagnostics?.fillCount),
+      submittedCommands: numberOrZero(scoreBreakdown.diagnostics?.submittedCommands),
+      cancelReplaceRatio: nullableNumber(scoreBreakdown.diagnostics?.cancelReplaceRatio),
+      timeoutRate: nullableNumber(scoreBreakdown.diagnostics?.timeoutRate),
+      variableScoreBeforeDifficulty: nullableNumber(scoreBreakdown.diagnostics?.variableScoreBeforeDifficulty),
+      difficultyMultiplier: nullableNumber(scoreBreakdown.diagnostics?.difficultyMultiplier),
+      npcDifficultyBuckets: Array.isArray(scoreBreakdown.diagnostics?.npcDifficultyBuckets)
+        ? scoreBreakdown.diagnostics.npcDifficultyBuckets
+        : [],
+    },
+  };
+}
+
+function compactLiquidityDiagnostics(diagnostics) {
+  if (diagnostics === undefined || diagnostics === null) return {};
+  return {
+    schemaVersion: diagnostics.schemaVersion ?? "",
+    mode: diagnostics.mode ?? "",
+    scoreNeutral: diagnostics.scoreNeutral === true,
+    pointsEffect: nullableNumber(diagnostics.pointsEffect),
+    status: diagnostics.status ?? "",
+    flags: Array.isArray(diagnostics.flags) ? diagnostics.flags : [],
+    instruments: Array.isArray(diagnostics.instruments) ? diagnostics.instruments : [],
+    quoteQuality: diagnostics.quoteQuality ?? {},
+    orderActivity: diagnostics.orderActivity ?? {},
+    fillParticipation: diagnostics.fillParticipation ?? {},
+    inventory: diagnostics.inventory ?? {},
+    adverseSelection: diagnostics.adverseSelection ?? {},
+  };
+}
+
 function compactTradingMetrics(metrics) {
   if (!metrics || typeof metrics !== "object") return undefined;
   return {
     schemaVersion: metrics.schemaVersion ?? "",
     commands: metrics.commands ?? {},
     pnl: metrics.pnl ?? {},
+  };
+}
+
+function compactPolicyEnvelope(envelope) {
+  if (!envelope || typeof envelope !== "object") return {};
+  return {
+    schemaVersion: envelope.schemaVersion ?? "",
+    modeId: envelope.modeId ?? "",
+    modeVersion: envelope.modeVersion ?? "",
+    scenarioId: envelope.scenarioId ?? "",
+    seed: nullableNumber(envelope.seed),
+    scoringPolicyVersion: envelope.scoringPolicyVersion ?? "",
+    economicPolicyVersion: envelope.economicPolicyVersion ?? "",
+    liquidityPolicyVersion: envelope.liquidityPolicyVersion ?? "",
+    backgroundFlowPolicyVersion: envelope.backgroundFlowPolicyVersion ?? "",
+    creditPolicyVersion: envelope.creditPolicyVersion ?? "",
+    interventionPolicyVersion: envelope.interventionPolicyVersion ?? "",
+    npcDifficultyBuckets: Array.isArray(envelope.npcDifficultyBuckets) ? envelope.npcDifficultyBuckets : [],
+  };
+}
+
+function compactActorProfile(profile) {
+  if (!profile || typeof profile !== "object") return undefined;
+  return {
+    profileId: profile.profileId ?? "",
+    profileVersion: profile.profileVersion ?? "",
+    actorClass: profile.actorClass ?? "",
+    difficultyBucket: profile.difficultyBucket ?? "",
+    scoreEffect: profile.scoreEffect ?? "",
+    profileHash: profile.profileHash ?? "",
+  };
+}
+
+function compactConductMetrics(metrics) {
+  if (!metrics || typeof metrics !== "object") return undefined;
+  return {
+    schemaVersion: metrics.schemaVersion ?? "",
+    status: metrics.status ?? "",
+    orderCommands: numberOrZero(metrics.orderCommands),
+    cancelReplaceRatio: nullableNumber(metrics.cancelReplaceRatio),
+    invalidIntentRate: nullableNumber(metrics.invalidIntentRate),
+    timeoutRate: nullableNumber(metrics.timeoutRate),
+    maxActionsPerTick: numberOrZero(metrics.maxActionsPerTick),
+    maxVenueCommandsPerTick: numberOrZero(metrics.maxVenueCommandsPerTick),
+    freezeCount: numberOrZero(metrics.freezeCount),
   };
 }
 
@@ -340,6 +452,7 @@ function firstNonBlank(...values) {
 }
 
 function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }

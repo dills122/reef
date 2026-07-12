@@ -32,6 +32,74 @@ assert.equal(report.totals.ticks, 16);
 assert.equal(report.sessionReports.length, 5);
 assert.equal(report.sessionReports.flatMap((session) => session.ticks).length, report.totals.ticks);
 assert.equal(report.healthSamples.length, 2);
+assert.equal(report.mode.economicPolicyVersion, "economic-v0");
+assert.equal(report.mode.actorProfileCatalogVersion, "2026-07-12");
+assert.deepEqual(report.mode.npcDifficultyBuckets, ["benign-noise"]);
+assert.equal(report.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
+assert.equal(report.policyEnvelope.economicPolicyVersion, "economic-v0");
+assert.equal(report.policyEnvelope.actorProfiles.length, 5);
+assert.ok(/^sha256:[a-f0-9]{64}$/.test(report.policyEnvelopeHash));
+assert.equal(report.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
+assert.deepEqual(report.runPlan.actorProfiles.byActorClass, {
+  competitor: 1,
+  house_market_maker: 3,
+  npc_flow: 1,
+});
+assert.equal(report.runPlan.actorProfiles.byDifficultyBucket["neutral-liquidity"], 3);
+assert.ok(report.runPlan.actorProfiles.profiles.every((entry) => /^sha256:[a-f0-9]{64}$/.test(entry.profileHash)));
+assert.equal(report.botResults.find((entry) => entry.botId === "builtin-npc-momentum").actorProfile.profileId, "npc-noise-small-random");
+assert.equal(report.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
+assert.equal(report.botResults[0].conductMetrics.status, "reported");
+assert.equal(report.scoringAssumptions.npcDifficultyMode, "leaderboard-partition-plus-shadow-multiplier");
+assert.equal(report.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+assert.equal(report.scoringCalibration.formulaVersion, "shadow-score-v1");
+assert.equal(report.scoringCalibration.eligibility.eligibleCompetitors, 1);
+assert.equal(report.scoringCalibration.eligibility.byActorClass.competitor, 1);
+assert.deepEqual(report.scoringCalibration.dataQuality.flags, [
+  "low-eligible-competitor-count",
+  "no-eligible-fills",
+  "no-pnl-attribution",
+]);
+assert.equal(report.scoringCalibration.dataQuality.publicScoreUnchanged, true);
+assert.equal(report.liquiditySummary.schemaVersion, "reef.arena.liquiditySummary.v1");
+assert.equal(report.liquiditySummary.scoreNeutral, true);
+assert.equal(report.liquiditySummary.pointsEffect, 0);
+assert.equal(report.liquiditySummary.totals.providerCount, 3);
+assert.equal(report.liquiditySummary.totals.activeProviderCount, 3);
+assert.equal(report.liquiditySummary.totals.submittedLimitOrders > 0, true);
+assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "AAPL").providerCount, 3);
+assert.equal(report.liquiditySummary.instruments.find((entry) => entry.instrumentId === "MSFT").providerCount, 0);
+const marketMaker = report.botResults.find((entry) => entry.botId === "builtin-mm-simple");
+assert.equal(marketMaker.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+assert.equal(marketMaker.scoreBreakdown.formulaVersion, "shadow-score-v1");
+assert.equal(marketMaker.scoreBreakdown.scoreEligible, false);
+assert.equal(marketMaker.scoreBreakdown.scoreEffect, "diagnostic-only");
+assert.equal(marketMaker.scoreBreakdown.publicScore, null);
+assert.equal(marketMaker.scoreBreakdown.shadowScore, null);
+assert.equal(marketMaker.liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
+assert.equal(marketMaker.liquidityDiagnostics.scoreNeutral, true);
+assert.equal(marketMaker.liquidityDiagnostics.pointsEffect, 0);
+assert.deepEqual(marketMaker.liquidityDiagnostics.instruments, ["AAPL"]);
+assert.equal(marketMaker.liquidityDiagnostics.quoteQuality.attribution, "market-wide-proxy");
+assert.equal(marketMaker.liquidityDiagnostics.providerQuoteQuality.schemaVersion, "reef.arena.providerQuoteQuality.v1");
+assert.equal(marketMaker.liquidityDiagnostics.providerQuoteQuality.source, "unavailable");
+assert.equal(marketMaker.liquidityDiagnostics.attribution.schemaVersion, "reef.arena.liquidityProviderAttribution.v1");
+assert.equal(marketMaker.liquidityDiagnostics.attribution.source, "dry-run-trading-metrics");
+assert.equal(marketMaker.liquidityDiagnostics.attribution.pointsEffect, 0);
+assert.equal(marketMaker.liquidityDiagnostics.adverseSelection.available, false);
+const npc = report.botResults.find((entry) => entry.botId === "builtin-npc-momentum");
+assert.equal(npc.scoreBreakdown.scoreEligible, false);
+assert.equal(npc.scoreBreakdown.scoreEffect, "difficulty-bucket");
+assert.equal(npc.scoreBreakdown.scoringMode, "difficulty-context-only");
+const competitor = report.botResults.find((entry) => entry.botId === "custom-technical-indicator");
+assert.equal(competitor.scoreBreakdown.scoreEligible, true);
+assert.equal(competitor.scoreBreakdown.publicScore, competitor.score);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.shadowScore), true);
+assert.equal(competitor.scoreBreakdown.components.baseline, 1_000_000);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.diagnostics.fillRatio), true);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.diagnostics.completionRate), true);
+assert.equal(Number.isFinite(competitor.scoreBreakdown.componentDetails.marketInteraction.completionScore), true);
+assert.deepEqual(competitor.scoreBreakdown.diagnostics.npcDifficultyBuckets, ["benign-noise"]);
 
 const compactResult = spawnSync(
   "bun",
@@ -53,6 +121,23 @@ assert.equal(compactReport.schemaVersion, "reef.arena.localTickRun.v0");
 assert.equal(compactReport.reportShape, "compact");
 assert.equal(compactReport.status, "completed");
 assert.equal(compactReport.totals.ticks, 16);
+assert.equal(compactReport.policyEnvelopeHash, report.policyEnvelopeHash);
+assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvelope.v1");
+assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
+assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
+assert.equal(compactReport.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
+assert.equal(compactReport.liquiditySummary.schemaVersion, "reef.arena.liquiditySummary.v1");
+assert.equal(compactReport.liquiditySummary.totals.providerCount, 3);
+assert.equal(compactReport.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+assert.equal(compactReport.scoringCalibration.scoreDistribution.shadowScore.count, 1);
+const compactMarketMaker = compactReport.botResults.find((entry) => entry.botId === "builtin-mm-simple");
+assert.equal(compactMarketMaker.liquidityDiagnostics.schemaVersion, "reef.arena.liquidityProviderDiagnostics.v1");
+assert.equal(compactMarketMaker.liquidityDiagnostics.pointsEffect, 0);
+assert.equal(compactMarketMaker.liquidityDiagnostics.attribution.pointsEffect, 0);
+const compactCompetitor = compactReport.botResults.find((entry) => entry.botId === "custom-technical-indicator");
+assert.equal(compactCompetitor.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
+assert.equal(compactCompetitor.scoreBreakdown.formulaVersion, "shadow-score-v1");
+assert.equal(Number.isFinite(compactCompetitor.scoreBreakdown.diagnostics.completionRate), true);
 assert.equal(compactReport.sessionReports, undefined);
 assert.equal(compactReport.healthSamples, undefined);
 assert.equal(compactReport.omitted.sessionReports, 5);

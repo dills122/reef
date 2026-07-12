@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -13,6 +14,11 @@ import {
   marketPriceValue,
   priceFromExecutionPrice,
 } from "./lib/arena-execution-diagnostics.mjs";
+import {
+  attachScoreBreakdowns,
+  buildScoreContext,
+  summarizeScoreCalibration,
+} from "./lib/arena-score-breakdown.mjs";
 
 loadDotEnv();
 
@@ -39,6 +45,7 @@ const config = {
   commandWaitMode: stringOption("--command-wait-mode", "terminal"),
   projectionDrainTimeoutMs: numberOption("--projection-drain-timeout-ms", 0),
   projectionDrainPollMs: numberOption("--projection-drain-poll-ms", 500),
+  projectorPreflight: stringOption("--projector-preflight", env("ARENA_PROJECTOR_PREFLIGHT", "auto")),
   durationSeconds: numberOption("--duration-seconds", 0),
   tickIntervalMs: numberOption("--tick-interval-ms", 0),
   warmupSeconds: numberOption("--warmup-seconds", 0),
@@ -47,6 +54,7 @@ const config = {
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
   reportShape: stringOption("--report-shape", "full"),
+  skipProjectorPreflight: args.includes("--skip-projector-preflight"),
 };
 
 if (!["vm", "ses"].includes(config.compartment)) {
@@ -61,6 +69,9 @@ if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
 if (!["full", "compact"].includes(config.reportShape)) {
   throw new Error(`unsupported --report-shape=${config.reportShape}; expected full or compact`);
 }
+if (!["auto", "http", "docker", "skip"].includes(config.projectorPreflight)) {
+  throw new Error(`unsupported --projector-preflight=${config.projectorPreflight}; expected auto, http, docker, or skip`);
+}
 if (config.submitMode === "live" && config.venueUrl.length === 0) {
   throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
 }
@@ -71,6 +82,8 @@ if (config.persistResults && config.arenaAdminUrl.length === 0) {
 const mode = readJson(config.mode);
 const catalog = readJson(mode.catalogPath);
 const riskProfiles = catalog.riskProfiles ?? {};
+const actorProfileCatalog = readJson(mode.actorProfileCatalogPath ?? "packages/scenario-definitions/arena/actor-profiles.v1.json");
+const actorProfileIndex = indexActorProfiles(actorProfileCatalog);
 const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   const entry = catalog.bots.find((bot) => bot.botId === botId);
   if (entry === undefined) {
@@ -80,7 +93,8 @@ const selectedBots = [...mode.botRefs, ...config.extraBots].map((botId) => {
   if (riskProfile === undefined) {
     throw new Error(`bot ${botId} references unknown risk profile ${entry.riskProfile}`);
   }
-  return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile };
+  const actorProfile = resolveActorProfile(entry, actorProfileIndex);
+  return { ...entry, riskProfileName: entry.riskProfile, catalogVersionId: entry.versionId, versionId: localVersionId(entry), riskProfile, actorProfile };
 });
 const baseFixture = readJson("packages/bot-sdk/fixtures/aapl-multi-tick.json");
 const runPlan = buildRunPlan(mode, config, baseFixture, selectedBots);
@@ -96,6 +110,7 @@ async function main() {
   try {
     if (config.submitMode === "live") {
       await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+      await assertLiveMarketQualityProjectors();
       if (config.seedReference) {
         await seedReferenceData(selectedBots);
       }
@@ -132,9 +147,9 @@ async function main() {
 
     const baseBotResults = scoreBots(sessionReports, enforcementEvents);
     const venueReadback = await collectVenueReadback(baseBotResults);
-    const botResults = enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
+    const botResults = attachScoreBreakdowns(enrichBotResultsWithExecutionDiagnostics(baseBotResults, venueReadback, healthSamples, {
       fallbackInstruments: mode.instruments ?? [],
-    });
+    }), scoreContext());
     const completedAtIso = new Date().toISOString();
     const report = buildReport({
       botResults,
@@ -275,6 +290,13 @@ function houseLiquidityConfig(bot) {
     ...(mode.houseLiquidityDefaults ?? {}),
     ...(bot.houseLiquidity ?? {}),
   };
+}
+
+function actorClassForBot(bot) {
+  if (bot.role === "market-maker") return "house_market_maker";
+  if (bot.role === "npc") return "npc_flow";
+  if (bot.role === "benchmark") return "benchmark";
+  return "competitor";
 }
 
 function ticksForSchedulingClass(schedulingClass, intervalMs = runPlan.tickIntervalMs) {
@@ -562,6 +584,8 @@ function scoreBots(sessionReports, enforcementEvents) {
       versionId: session.bot.versionId,
       runnerKey: session.bot.runnerKey,
       role: session.bot.role,
+      actorClass: actorClassForBot(session.bot),
+      actorProfile: session.bot.actorProfile,
       schedulingClass: botSchedulingClass(session.bot),
       riskProfile: session.bot.riskProfile === undefined ? undefined : session.bot.riskProfile,
       runtimeConfigPreflight: session.bot.runtimeConfigPreflight.report,
@@ -578,6 +602,7 @@ function scoreBots(sessionReports, enforcementEvents) {
       disqualified: freezeCount > 0,
       score,
       tradingMetrics: summarizeTradingMetrics(session, counters),
+      conductMetrics: summarizeConductMetrics(session, counters, { freezeCount, operationalPauseCount }),
     };
   });
 }
@@ -592,7 +617,10 @@ function scoringAssumptions() {
   return {
     schemaVersion: "reef.arena.scoringAssumptions.v0",
     scoringPolicyVersion: mode.scoringPolicyVersion,
-    scoreBasis: "participation-and-policy-compliance",
+    npcDifficultyMode: "leaderboard-partition-plus-shadow-multiplier",
+    npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
+    economicPolicyLock: "run-scoped; final scoring must use the report policyEnvelopeHash",
+    scoreBasis: "public score remains participation-and-policy-compliance; scoreBreakdown.shadowScore reports score-v0 tuning inputs",
     leaderboardScope: "score-eligible public competitor bots only",
     houseBots: "diagnostics-only; excluded from public leaderboard and not treated as bad actors when supplying configured liquidity",
     pnl: {
@@ -604,9 +632,16 @@ function scoringAssumptions() {
     tradingMetrics: {
       status: "command-mix plus execution diagnostics v0",
       source: "runner pre-submit venue commands, command status summaries, and participant-scoped order-fill readback",
-      fillsAndExecutions: "diagnostic inputs only; public score weighting is a follow-up scoring-policy slice",
+      fillsAndExecutions: "scoreBreakdown.shadowScore uses fill ratio, completion rate, and execution notional as report-only tuning inputs",
     },
   };
+}
+
+function scoreContext() {
+  return buildScoreContext({
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
+  });
 }
 
 function summarizeTradingMetrics(session, counters) {
@@ -698,6 +733,49 @@ function summarizeTradingMetrics(session, counters) {
   };
 }
 
+function summarizeConductMetrics(session, counters, enforcement) {
+  let maxVenueCommandsPerTick = 0;
+  let submitCommands = 0;
+  let modifyCommands = 0;
+  let cancelCommands = 0;
+  let noopActions = 0;
+
+  for (const tick of session.ticks) {
+    maxVenueCommandsPerTick = Math.max(maxVenueCommandsPerTick, tick.venueCommands?.length ?? 0);
+    for (const action of tick.actions ?? []) {
+      if (action.type === "noop") {
+        noopActions += 1;
+      }
+    }
+    for (const command of tick.venueCommands ?? []) {
+      if (command.route === "/api/v1/orders/submit") submitCommands += 1;
+      if (command.route === "/api/v1/orders/modify") modifyCommands += 1;
+      if (command.route === "/api/v1/orders/cancel") cancelCommands += 1;
+    }
+  }
+
+  const orderCommands = submitCommands + modifyCommands + cancelCommands;
+  const cancelReplaceCommands = modifyCommands + cancelCommands;
+  return {
+    schemaVersion: "reef.arena.conductMetrics.v0",
+    policyVersion: mode.scoringPolicyVersion,
+    status: enforcement.freezeCount > 0 ? "disqualified" : "reported",
+    orderCommands,
+    submitCommands,
+    modifyCommands,
+    cancelCommands,
+    noopActions,
+    cancelReplaceRatio: ratio(cancelReplaceCommands, Math.max(1, submitCommands)),
+    invalidIntentRate: ratio(counters.rejectedCommands + counters.failedCommands, Math.max(1, counters.submittedCommands)),
+    timeoutRate: ratio(counters.timedOutCommands, Math.max(1, counters.submittedCommands)),
+    maxActionsPerTick: counters.maxActionsPerTick,
+    maxVenueCommandsPerTick,
+    freezeCount: enforcement.freezeCount,
+    operationalPauseCount: enforcement.operationalPauseCount,
+    notes: "report-only conduct inputs; scoring penalties are a later policy slice",
+  };
+}
+
 function buildReport({ botResults, enforcementEvents, sessionReports, healthSamples, venueReadback, startedAt, completedAt, elapsedMs }) {
   const tickResults = sessionReports.flatMap((session) => session.ticks);
   const commandStatusSummary = summarizeCommandStatuses(tickResults);
@@ -719,7 +797,10 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
   );
   const healthSummary = summarizeHealth(healthSamples, totals);
   const marketQualitySummary = summarizeMarketQuality(healthSamples);
+  const botResultsWithLiquidity = attachLiquidityDiagnostics(botResults, marketQualitySummary, venueReadback);
+  const liquiditySummary = summarizeLiquidityProviders(botResultsWithLiquidity, marketQualitySummary);
   const status = reportStatus(enforcementEvents, healthSummary);
+  const envelope = policyEnvelope();
   return {
     schemaVersion: "reef.arena.localTickRun.v0",
     generatedAt: new Date().toISOString(),
@@ -732,7 +813,16 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
       seed: mode.seed,
       scoringPolicyVersion: mode.scoringPolicyVersion,
       riskPolicyVersion: mode.riskPolicyVersion,
+      economicPolicyVersion: mode.economicPolicyVersion,
+      liquidityPolicyVersion: mode.liquidityPolicyVersion,
+      backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
+      creditPolicyVersion: mode.creditPolicyVersion,
+      interventionPolicyVersion: mode.interventionPolicyVersion,
+      actorProfileCatalogVersion: actorProfileCatalog.version,
+      npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
     },
+    policyEnvelope: envelope,
+    policyEnvelopeHash: `sha256:${stableHash(envelope)}`,
     runPlan,
     expectations: {
       freezeBots: config.expectFreezeBots,
@@ -756,15 +846,17 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     activityBySchedulingClass: summarizeActivityBySchedulingClass(sessionReports),
     healthSummary,
     marketQualitySummary,
+    liquiditySummary,
     executionSummary: venueReadback?.executionSummary,
+    scoringCalibration: summarizeScoreCalibration(botResultsWithLiquidity),
     healthSamples,
     venueReadback,
     enforcementEvents,
-    botResults,
+    botResults: botResultsWithLiquidity,
     leaderboard: rankBotResults(
-      botResults.filter((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified),
+      botResultsWithLiquidity.filter((result) => result.scoreEligible && result.publicLeaderboard && !result.disqualified),
     ),
-    diagnosticLeaderboard: rankBotResults(botResults.filter((result) => result.scoreEligible)),
+    diagnosticLeaderboard: rankBotResults(botResultsWithLiquidity.filter((result) => result.scoreEligible)),
     sessionReports,
   };
 }
@@ -785,6 +877,8 @@ function compactArenaReport(report) {
     completedAt: report.completedAt,
     runId: report.runId,
     mode: report.mode,
+    policyEnvelope: report.policyEnvelope,
+    policyEnvelopeHash: report.policyEnvelopeHash,
     runPlan: report.runPlan,
     expectations: report.expectations,
     runnerProfile: report.runnerProfile,
@@ -799,7 +893,9 @@ function compactArenaReport(report) {
     activityBySchedulingClass: report.activityBySchedulingClass,
     healthSummary: report.healthSummary,
     marketQualitySummary: report.marketQualitySummary,
+    liquiditySummary: report.liquiditySummary,
     executionSummary: report.executionSummary,
+    scoringCalibration: report.scoringCalibration,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,
@@ -811,6 +907,40 @@ function compactArenaReport(report) {
       sessionReports: Array.isArray(report.sessionReports) ? report.sessionReports.length : 0,
       reason: "compact report shape omits high-volume per-tick detail",
     },
+  };
+}
+
+function policyEnvelope() {
+  return {
+    schemaVersion: "reef.arena.policyEnvelope.v1",
+    modeId: mode.modeId,
+    modeVersion: mode.version,
+    scenarioId: mode.scenarioId,
+    venueSessionId: mode.venueSessionId,
+    seed: Number(mode.seed ?? 0),
+    visibleDataPolicyVersion: mode.visibleDataPolicyVersion,
+    actionPolicyVersion: mode.actionPolicyVersion,
+    riskPolicyVersion: mode.riskPolicyVersion,
+    scoringPolicyVersion: mode.scoringPolicyVersion,
+    economicPolicyVersion: mode.economicPolicyVersion,
+    liquidityPolicyVersion: mode.liquidityPolicyVersion,
+    backgroundFlowPolicyVersion: mode.backgroundFlowPolicyVersion,
+    creditPolicyVersion: mode.creditPolicyVersion,
+    interventionPolicyVersion: mode.interventionPolicyVersion,
+    actorProfileCatalog: {
+      catalogId: actorProfileCatalog.catalogId,
+      version: actorProfileCatalog.version,
+    },
+    actorProfiles: summarizeActorProfiles(selectedBots).profiles.map((profile) => ({
+      botId: profile.botId,
+      actorClass: profile.actorClass,
+      profileId: profile.profileId,
+      profileVersion: profile.profileVersion,
+      profileHash: profile.profileHash,
+      difficultyBucket: profile.difficultyBucket,
+      scoreEffect: profile.scoreEffect,
+    })),
+    npcDifficultyBuckets: npcDifficultyBuckets(selectedBots),
   };
 }
 
@@ -985,11 +1115,8 @@ function assertExpectedFreezeBots(report) {
   }
 }
 
-async function maybeCollectHealthSample(healthSamples, tickIndex, tickReports) {
-  if (tickIndex % runPlan.healthSampleEveryTicks !== 0) {
-    return;
-  }
-  const fallbackOccurredAt = new Date(Date.parse("2026-07-04T14:30:00.000Z") + tickIndex * runPlan.tickIntervalMs).toISOString();
+async function maybeCollectHealthSample(healthSamples, healthSampleIndex, tickReports, offsetMs = healthSampleIndex * runPlan.healthSampleIntervalMs) {
+  const fallbackOccurredAt = new Date(Date.parse("2026-07-04T14:30:00.000Z") + offsetMs).toISOString();
   const representativeTick = tickReports.find((tickReport) => tickReport.tick !== undefined)?.tick
     ?? tickReports.find((tickReport) => typeof tickReport.occurredAt === "string")
     ?? { occurredAt: fallbackOccurredAt };
@@ -998,11 +1125,11 @@ async function maybeCollectHealthSample(healthSamples, tickIndex, tickReports) {
     : dryRunHealthSnapshots(representativeTick);
   healthSamples.push({
     sampleIndex: healthSamples.length,
-    tickIndex,
+    tickIndex: healthSampleIndex,
     botId: "",
     sampleScope: "arena_tick",
     occurredAt: representativeTick.occurredAt,
-    postWarmup: tickIndex >= runPlan.warmupTicks,
+    postWarmup: offsetMs >= runPlan.warmupSeconds * 1000,
     submittedCommands: tickReports.reduce((total, tickReport) => total + Number(tickReport.submission?.submitted ?? 0), 0),
     completedCommands: tickReports.reduce((total, tickReport) => total + Number(tickReport.submission?.completed ?? 0), 0),
     snapshots,
@@ -1211,6 +1338,345 @@ function summarizeMarketQuality(healthSamples) {
   };
 }
 
+function attachLiquidityDiagnostics(botResults, marketQualitySummary, venueReadback) {
+  const context = liquidityAttributionContext(botResults, venueReadback);
+  return botResults.map((result) => {
+    if (result.actorClass !== "house_market_maker") return result;
+    return {
+      ...result,
+      liquidityDiagnostics: liquidityProviderDiagnostics(result, marketQualitySummary, context),
+    };
+  });
+}
+
+function liquidityProviderDiagnostics(result, marketQualitySummary, context) {
+  const instruments = liquidityProviderInstruments(result);
+  const quoteCoverage = instruments.map((instrumentId) => liquidityInstrumentCoverage(instrumentId, marketQualitySummary));
+  const medianSpreadValues = quoteCoverage
+    .map((entry) => entry.medianQuotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value));
+  const p95SpreadValues = quoteCoverage
+    .map((entry) => entry.p95QuotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value));
+  const avgTopOfBookPct = average(quoteCoverage.map((entry) => entry.topOfBookPct));
+  const avgDepthPct = average(quoteCoverage.map((entry) => entry.depthPct));
+  const thresholds = marketQualitySummary?.thresholds ?? {};
+  const fillCount = numberValue(result.tradingMetrics?.executions?.fillCount);
+  const inventoryGrossNotional = numberValue(result.tradingMetrics?.inventory?.grossNotional);
+  const grossExecutedNotional = numberValue(result.tradingMetrics?.executions?.grossNotional);
+  const providerQuoteQuality = providerCurrentQuoteQuality(result, context);
+  const flags = [];
+  if (instruments.length === 0) flags.push("no-liquidity-instruments");
+  if (numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders) === 0) flags.push("no-quote-submissions");
+  if (fillCount === 0) flags.push("no-liquidity-fills");
+  if (avgTopOfBookPct !== null && avgTopOfBookPct < Number(thresholds.minTopOfBookPct ?? 90)) flags.push("low-quote-uptime");
+  if (avgDepthPct !== null && avgDepthPct < Number(thresholds.minDepthPct ?? 90)) flags.push("thin-depth");
+  const medianQuotedSpreadBps = average(medianSpreadValues);
+  const p95QuotedSpreadBps = average(p95SpreadValues);
+  if (medianQuotedSpreadBps !== null && medianQuotedSpreadBps > Number(thresholds.maxMedianQuotedSpreadBps ?? 25)) flags.push("wide-median-spread");
+  if (p95QuotedSpreadBps !== null && p95QuotedSpreadBps > Number(thresholds.maxP95QuotedSpreadBps ?? 50)) flags.push("wide-p95-spread");
+  if (grossExecutedNotional > 0 && inventoryGrossNotional / grossExecutedNotional > 0.5) flags.push("inventory-pressure");
+  const adverseSelection = liquidityAdverseSelection(result);
+  if (numberValue(adverseSelection.adverseFillCount) > 0) flags.push("adverse-selection-observed");
+
+  return {
+    schemaVersion: "reef.arena.liquidityProviderDiagnostics.v1",
+    mode: "score-neutral-liquidity-context",
+    scoreEffect: result.actorProfile?.scoreEffect ?? "diagnostic-only",
+    scoreNeutral: true,
+    pointsEffect: 0,
+    publicScore: null,
+    shadowScore: null,
+    status: flags.length === 0 ? "pass" : "warn",
+    flags,
+    instruments,
+    quoteCoverage,
+    quoteQuality: {
+      attribution: "market-wide-proxy",
+      avgTopOfBookPct,
+      avgDepthPct,
+      medianQuotedSpreadBps,
+      p95QuotedSpreadBps,
+    },
+    providerQuoteQuality,
+    orderActivity: {
+      submittedLimitOrders: numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders),
+      modifyCommands: numberValue(result.tradingMetrics?.orderFlow?.modifyCommands),
+      cancelCommands: numberValue(result.tradingMetrics?.orderFlow?.cancelCommands),
+      cancelReplaceRatio: numberValue(result.conductMetrics?.cancelReplaceRatio),
+      maxVenueCommandsPerTick: numberValue(result.conductMetrics?.maxVenueCommandsPerTick),
+    },
+    fillParticipation: {
+      fillCount,
+      filledQuantity: numberValue(result.tradingMetrics?.executions?.filledQuantity),
+      grossExecutedNotional,
+      avgFillPrice: nullableNumber(result.tradingMetrics?.executions?.avgFillPrice),
+    },
+    attribution: providerLiquidityAttribution(result, context),
+    inventory: {
+      netQuantityByInstrument: result.tradingMetrics?.inventory?.netQuantityByInstrument ?? {},
+      grossNotional: nullableNumber(result.tradingMetrics?.inventory?.grossNotional),
+      markPriceSource: result.tradingMetrics?.inventory?.markPriceSource ?? "",
+    },
+    adverseSelection,
+  };
+}
+
+function liquidityAdverseSelection(result) {
+  const diagnostics = result.tradingMetrics?.adverseSelection;
+  if (diagnostics !== undefined && diagnostics !== null) {
+    return diagnostics;
+  }
+  return {
+    schemaVersion: "reef.arena.adverseSelectionDiagnostics.v1",
+    available: false,
+    source: "unavailable",
+    reason: "requires participant-scoped fills plus post-fill health sample mids",
+  };
+}
+
+function liquidityAttributionContext(botResults, venueReadback) {
+  const providers = botResults.filter((result) => result.actorClass === "house_market_maker");
+  const totals = {
+    submittedLimitOrders: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.submittedLimitOrders)),
+    grossSubmittedQuantity: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.grossSubmittedQuantity)),
+    grossSubmittedNotional: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.grossSubmittedNotional)),
+    fillCount: sum(providers.map((provider) => provider.tradingMetrics?.executions?.fillCount)),
+    filledQuantity: sum(providers.map((provider) => provider.tradingMetrics?.executions?.filledQuantity)),
+    grossExecutedNotional: sum(providers.map((provider) => provider.tradingMetrics?.executions?.grossNotional)),
+  };
+  const readbackByBotId = new Map();
+  for (const entry of venueReadback?.ownOrders ?? []) {
+    readbackByBotId.set(entry.botId, entry);
+  }
+  const source = venueReadback?.skipped === true
+    ? "dry-run-trading-metrics"
+    : Array.isArray(venueReadback?.ownOrders)
+      ? "participant-scoped-readback-and-trading-metrics"
+      : "unavailable";
+  return {
+    schemaVersion: "reef.arena.liquidityAttributionContext.v1",
+    source,
+    providerCount: providers.length,
+    totals,
+    readbackByBotId,
+  };
+}
+
+function providerLiquidityAttribution(result, context) {
+  const submittedLimitOrders = numberValue(result.tradingMetrics?.orderFlow?.submittedLimitOrders);
+  const grossSubmittedQuantity = numberValue(result.tradingMetrics?.orderFlow?.grossSubmittedQuantity);
+  const grossSubmittedNotional = numberValue(result.tradingMetrics?.orderFlow?.grossSubmittedNotional);
+  const fillCount = numberValue(result.tradingMetrics?.executions?.fillCount);
+  const filledQuantity = numberValue(result.tradingMetrics?.executions?.filledQuantity);
+  const grossExecutedNotional = numberValue(result.tradingMetrics?.executions?.grossNotional);
+  return {
+    schemaVersion: "reef.arena.liquidityProviderAttribution.v1",
+    source: context.source,
+    orderContribution: {
+      submittedLimitOrders,
+      submittedLimitOrderSharePct: pct(submittedLimitOrders, context.totals.submittedLimitOrders),
+      grossSubmittedQuantity,
+      grossSubmittedQuantitySharePct: pct(grossSubmittedQuantity, context.totals.grossSubmittedQuantity),
+      grossSubmittedNotional,
+      grossSubmittedNotionalSharePct: pct(grossSubmittedNotional, context.totals.grossSubmittedNotional),
+    },
+    fillContribution: {
+      fillCount,
+      fillSharePct: pct(fillCount, context.totals.fillCount),
+      filledQuantity,
+      filledQuantitySharePct: pct(filledQuantity, context.totals.filledQuantity),
+      grossExecutedNotional,
+      grossExecutedNotionalSharePct: pct(grossExecutedNotional, context.totals.grossExecutedNotional),
+    },
+    pointsEffect: 0,
+  };
+}
+
+function providerCurrentQuoteQuality(result, context) {
+  const readback = context.readbackByBotId.get(result.botId);
+  const currentOrders = readbackOrders(readback?.current);
+  const instruments = providerQuoteQualityByInstrument(currentOrders);
+  const spreadBps = instruments
+    .map((entry) => entry.quotedSpreadBps)
+    .filter((value) => value !== null && Number.isFinite(value))
+    .sort((left, right) => left - right);
+  return {
+    schemaVersion: "reef.arena.providerQuoteQuality.v1",
+    source: readback === undefined ? "unavailable" : "participant-current-orders",
+    attribution: readback === undefined ? "unavailable" : "provider-owned-current-orders",
+    currentOrderCount: currentOrders.length,
+    instrumentCount: instruments.length,
+    medianQuotedSpreadBps: percentile(spreadBps, 0.5),
+    p95QuotedSpreadBps: percentile(spreadBps, 0.95),
+    instruments,
+    limitations: [
+      "current-order readback is point-in-time; market-wide quote coverage still comes from health samples",
+      "adverse selection requires post-fill price path attribution",
+    ],
+  };
+}
+
+function readbackOrders(response) {
+  const body = response?.body ?? {};
+  if (Array.isArray(body.orders)) return body.orders;
+  if (Array.isArray(body)) return body;
+  return [];
+}
+
+function providerQuoteQualityByInstrument(orders) {
+  const byInstrument = new Map();
+  for (const order of orders) {
+    const instrumentId = String(order.instrumentId ?? "");
+    if (instrumentId.length === 0) continue;
+    const side = String(order.side ?? "").toUpperCase();
+    const status = String(order.status ?? order.currentStatus ?? "").toUpperCase();
+    const remainingQuantity = numberValue(order.remainingQuantityUnits ?? order.remainingQuantity ?? order.quantityUnits ?? order.quantity);
+    if (!["OPEN", "PARTIALLY_FILLED", ""].includes(status) || remainingQuantity <= 0) continue;
+    const price = marketPriceValue(order.limitPrice ?? order.price);
+    if (price === null) continue;
+    const bucket = byInstrument.get(instrumentId) ?? { instrumentId, bidPrices: [], askPrices: [] };
+    if (side === "BUY") bucket.bidPrices.push(price);
+    if (side === "SELL") bucket.askPrices.push(price);
+    byInstrument.set(instrumentId, bucket);
+  }
+  return Array.from(byInstrument.values())
+    .sort((left, right) => left.instrumentId.localeCompare(right.instrumentId))
+    .map((bucket) => {
+      const bidPrice = bucket.bidPrices.length === 0 ? null : Math.max(...bucket.bidPrices);
+      const askPrice = bucket.askPrices.length === 0 ? null : Math.min(...bucket.askPrices);
+      const midPrice = bidPrice !== null && askPrice !== null ? (bidPrice + askPrice) / 2 : null;
+      const quotedSpread = bidPrice !== null && askPrice !== null ? askPrice - bidPrice : null;
+      const quotedSpreadBps = quotedSpread !== null && midPrice !== null && midPrice > 0
+        ? (quotedSpread / midPrice) * 10000
+        : null;
+      const flags = [];
+      if (bidPrice === null) flags.push("missing-bid");
+      if (askPrice === null) flags.push("missing-ask");
+      if (quotedSpread !== null && quotedSpread < 0) flags.push("crossed-provider-quotes");
+      return {
+        instrumentId: bucket.instrumentId,
+        status: flags.length === 0 ? "pass" : "warn",
+        flags,
+        bidPrice,
+        askPrice,
+        quotedSpread,
+        quotedSpreadBps,
+      };
+    });
+}
+
+function summarizeLiquidityProviders(botResults, marketQualitySummary) {
+  const providers = botResults.filter((result) => result.actorClass === "house_market_maker");
+  const activeProviders = providers.filter((provider) =>
+    numberValue(provider.tradingMetrics?.orderFlow?.submittedLimitOrders) > 0 ||
+    numberValue(provider.tradingMetrics?.commands?.submitted) > 0
+  );
+  const primaryInstruments = liquidityPrimaryInstruments(marketQualitySummary);
+  const instrumentCoverage = primaryInstruments.map((instrumentId) => {
+    const providerIds = providers
+      .filter((provider) => liquidityProviderInstruments(provider).includes(instrumentId))
+      .map((provider) => provider.botId)
+      .sort();
+    const marketQuality = liquidityInstrumentCoverage(instrumentId, marketQualitySummary);
+    const flags = [];
+    if (providerIds.length === 0) flags.push("missing-liquidity-provider");
+    if (marketQuality.topOfBookPct < Number(marketQualitySummary?.thresholds?.minTopOfBookPct ?? 90)) flags.push("low-quote-uptime");
+    if (marketQuality.depthPct < Number(marketQualitySummary?.thresholds?.minDepthPct ?? 90)) flags.push("thin-depth");
+    if (
+      marketQuality.medianQuotedSpreadBps !== null &&
+      marketQuality.medianQuotedSpreadBps > Number(marketQualitySummary?.thresholds?.maxMedianQuotedSpreadBps ?? 25)
+    ) {
+      flags.push("wide-median-spread");
+    }
+    if (marketQuality.crossedBookCount > 0) flags.push("crossed-book");
+    return {
+      instrumentId,
+      providerCount: providerIds.length,
+      providerIds,
+      marketQuality,
+      status: flags.length === 0 ? "pass" : "warn",
+      flags,
+    };
+  });
+  const totals = {
+    providerCount: providers.length,
+    activeProviderCount: activeProviders.length,
+    submittedLimitOrders: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.submittedLimitOrders)),
+    modifyCommands: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.modifyCommands)),
+    cancelCommands: sum(providers.map((provider) => provider.tradingMetrics?.orderFlow?.cancelCommands)),
+    fillCount: sum(providers.map((provider) => provider.tradingMetrics?.executions?.fillCount)),
+    filledQuantity: sum(providers.map((provider) => provider.tradingMetrics?.executions?.filledQuantity)),
+    grossExecutedNotional: Number(sum(providers.map((provider) => provider.tradingMetrics?.executions?.grossNotional)).toFixed(6)),
+    inventoryGrossNotional: Number(sum(providers.map((provider) => provider.tradingMetrics?.inventory?.grossNotional)).toFixed(6)),
+  };
+  const flags = [];
+  if (providers.length === 0) flags.push("missing-liquidity-provider");
+  if (providers.length > 0 && activeProviders.length === 0) flags.push("no-active-liquidity-provider");
+  if (totals.fillCount === 0) flags.push("no-liquidity-fills");
+  for (const coverage of instrumentCoverage) {
+    for (const flag of coverage.flags) {
+      flags.push(`${coverage.instrumentId}:${flag}`);
+    }
+  }
+  return {
+    schemaVersion: "reef.arena.liquiditySummary.v1",
+    mode: "score-neutral-liquidity-context",
+    scoreNeutral: true,
+    pointsEffect: 0,
+    status: flags.length === 0 ? "pass" : "warn",
+    flags,
+    totals,
+    instruments: instrumentCoverage,
+    providerDiagnostics: providers.map((provider) => ({
+      botId: provider.botId,
+      status: provider.liquidityDiagnostics?.status ?? "unknown",
+      flags: provider.liquidityDiagnostics?.flags ?? [],
+      instruments: provider.liquidityDiagnostics?.instruments ?? [],
+      quoteQuality: provider.liquidityDiagnostics?.quoteQuality ?? {},
+      providerQuoteQuality: provider.liquidityDiagnostics?.providerQuoteQuality ?? {},
+      fillParticipation: provider.liquidityDiagnostics?.fillParticipation ?? {},
+      attribution: provider.liquidityDiagnostics?.attribution ?? {},
+      adverseSelection: provider.liquidityDiagnostics?.adverseSelection ?? {},
+      inventory: provider.liquidityDiagnostics?.inventory ?? {},
+      pointsEffect: 0,
+    })),
+    notes: "Liquidity diagnostics are report-only and do not create point gains or losses for house actors.",
+  };
+}
+
+function liquidityProviderInstruments(result) {
+  const instruments = new Set([
+    ...Object.keys(result.tradingMetrics?.orderFlow?.byInstrument ?? {}),
+    ...Object.keys(result.tradingMetrics?.executions?.byInstrument ?? {}),
+    ...Object.keys(result.tradingMetrics?.inventory?.netQuantityByInstrument ?? {}),
+  ]);
+  return Array.from(instruments).filter((instrumentId) => instrumentId.length > 0 && instrumentId !== "unknown").sort();
+}
+
+function liquidityPrimaryInstruments(marketQualitySummary) {
+  const configured = mode.healthTargets?.primaryInstruments ?? mode.instruments ?? [];
+  const fromMarketQuality = (marketQualitySummary?.instruments ?? []).map((instrument) => instrument.instrumentId);
+  return Array.from(new Set([...configured, ...fromMarketQuality])).filter((instrumentId) => String(instrumentId).length > 0).sort();
+}
+
+function liquidityInstrumentCoverage(instrumentId, marketQualitySummary) {
+  const match = (marketQualitySummary?.instruments ?? []).find((instrument) => instrument.instrumentId === instrumentId);
+  return {
+    instrumentId,
+    status: match?.status ?? "unknown",
+    sampleCount: numberValue(match?.sampleCount),
+    topOfBookPct: nullableNumber(match?.topOfBookPct) ?? 0,
+    depthPct: nullableNumber(match?.depthPct) ?? 0,
+    medianQuotedSpreadBps: nullableNumber(match?.medianQuotedSpreadBps),
+    p95QuotedSpreadBps: nullableNumber(match?.p95QuotedSpreadBps),
+    crossedBookCount: numberValue(match?.crossedBookCount),
+    lockedBookCount: numberValue(match?.lockedBookCount),
+    emptyBookCount: numberValue(match?.emptyBookCount),
+    failures: match?.failures ?? [],
+  };
+}
+
 async function collectVenueReadback(botResults) {
   if (config.submitMode !== "live") {
     return { mode: config.submitMode, skipped: true };
@@ -1332,6 +1798,96 @@ async function waitForDataAvailability(baseUrl) {
 function availabilityDrained(availability) {
   const projections = availability.body?.projections;
   return Array.isArray(projections) && projections.every((projection) => Number(projection.lag ?? 0) === 0);
+}
+
+async function assertLiveMarketQualityProjectors() {
+  if (
+    config.submitMode !== "live" ||
+    !config.requireProjectionDrain ||
+    config.skipProjectorPreflight ||
+    config.projectorPreflight === "skip"
+  ) {
+    return;
+  }
+
+  const statuses = await Promise.all([
+    readProjectorStatus("order-lifecycle", "/internal/order-lifecycle/projector/status"),
+    readProjectorStatus("market-data", "/internal/market-data/projector/status"),
+  ]);
+  const failures = statuses.filter((status) => status.ok !== true);
+  if (failures.length === 0) {
+    return;
+  }
+
+  const details = failures.map((failure) => `${failure.name}: ${failure.reason}`).join("; ");
+  throw new Error(
+    "live arena market-quality preflight failed: " +
+    `${details}. Restart the stack with ` +
+    "`ORDER_LIFECYCLE_PROJECTOR_ENABLED=true MARKET_DATA_PROJECTOR_ENABLED=true make dev-reset` " +
+    "or pass --skip-projector-preflight for a non-scoring/debug run.",
+  );
+}
+
+async function readProjectorStatus(name, path) {
+  if (config.projectorPreflight !== "docker") {
+    const httpStatus = await readProjectorStatusHttp(name, path);
+    if (httpStatus.ok === true || config.projectorPreflight === "http") {
+      return httpStatus;
+    }
+  }
+  if (config.projectorPreflight !== "http") {
+    return readProjectorStatusDocker(name, path);
+  }
+  return { name, ok: false, reason: "projector status unavailable" };
+}
+
+async function readProjectorStatusHttp(name, path) {
+  try {
+    const response = await getJson(`${config.venueUrl.replace(/\/$/, "")}${path}`, readbackHeaders());
+    return projectorStatusResult(name, response.statusCode, response.body, "http");
+  } catch (error) {
+    return { name, ok: false, reason: `http status request failed: ${error.message}` };
+  }
+}
+
+function readProjectorStatusDocker(name, path) {
+  const projectName = env("COMPOSE_PROJECT_NAME", "reef");
+  const result = spawnSync("docker", [
+    "compose",
+    "-p",
+    projectName,
+    "exec",
+    "-T",
+    "platform-projector-0",
+    "curl",
+    "-s",
+    `http://127.0.0.1:8080${path}`,
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  if (result.status !== 0) {
+    return {
+      name,
+      ok: false,
+      reason: `docker status request failed: ${(result.stderr || result.stdout || `exit ${result.status}`).trim()}`,
+    };
+  }
+  return projectorStatusResult(name, 200, safeJson(result.stdout), `docker compose -p ${projectName}`);
+}
+
+function projectorStatusResult(name, statusCode, body, source) {
+  if (statusCode < 200 || statusCode >= 300) {
+    return { name, ok: false, reason: `${source} returned ${statusCode}: ${JSON.stringify(body)}` };
+  }
+  if (body?.enabled !== true) {
+    return { name, ok: false, reason: `${source} reports enabled=${JSON.stringify(body?.enabled)} body=${JSON.stringify(body)}` };
+  }
+  if (body?.role !== undefined && body.role !== "projector") {
+    return { name, ok: false, reason: `${source} reports role=${JSON.stringify(body.role)}` };
+  }
+  return { name, ok: true, source, body };
 }
 
 function readbackHeaders(participantId = "") {
@@ -1888,6 +2444,7 @@ function fixtureForBot(bot, schedule = {}) {
     config: {
       ...(baseFixture.config ?? {}),
       ...bot.runtimeConfigPreflight.values,
+      ...actorProfileRuntimeConfig(bot),
       ...(botSchedulingClass(bot) === "house_responsive" ? { houseLiquidity: houseLiquidityConfig(bot) } : {}),
     },
   };
@@ -1949,7 +2506,118 @@ function buildRunPlan(modeConfig, runtimeConfig, fixture, botsOrCount) {
     healthSampleIntervalMs,
     healthSampleEveryTicks: Math.max(1, Math.ceil(healthSampleIntervalMs / tickIntervalMs)),
     healthInstruments: nonEmptyArray(modeConfig.healthTargets?.primaryInstruments, [modeConfig.instruments?.[0] ?? "AAPL"]),
+    actorProfiles: summarizeActorProfiles(selectedBotsForPlan),
   };
+}
+
+function indexActorProfiles(catalog) {
+  if (catalog.schemaVersion !== "reef.arena.actorProfiles.v1") {
+    throw new Error(`unsupported actor profile catalog schema ${catalog.schemaVersion}`);
+  }
+  if (!Array.isArray(catalog.profiles)) {
+    throw new Error("actor profile catalog profiles must be an array");
+  }
+  const profiles = new Map();
+  for (const profile of catalog.profiles) {
+    const profileId = requiredProfileString(profile.profileId, "profileId");
+    if (profiles.has(profileId)) {
+      throw new Error(`duplicate actor profile ${profileId}`);
+    }
+    if (!Array.isArray(profile.allowedParamKeys)) {
+      throw new Error(`actor profile ${profileId} allowedParamKeys must be an array`);
+    }
+    assertKnownProfileParams(profileId, profile.params ?? {}, profile.allowedParamKeys);
+    profiles.set(profileId, profile);
+  }
+  return profiles;
+}
+
+function resolveActorProfile(bot, profiles) {
+  const profileId = bot.actorProfileRef ?? mode.actorProfileDefaults?.[bot.role];
+  if (typeof profileId !== "string" || profileId.length === 0) {
+    throw new Error(`bot ${bot.botId} missing actorProfileRef and no default for role ${bot.role}`);
+  }
+  const profile = profiles.get(profileId);
+  if (profile === undefined) {
+    throw new Error(`bot ${bot.botId} references unknown actor profile ${profileId}`);
+  }
+  const actorClass = actorClassForBot(bot);
+  if (profile.actorClass !== actorClass) {
+    throw new Error(`bot ${bot.botId} role ${bot.role} maps to ${actorClass} but actor profile ${profileId} is ${profile.actorClass}`);
+  }
+  const overrides = bot.actorProfileParams ?? {};
+  assertKnownProfileParams(profileId, overrides, profile.allowedParamKeys);
+  const resolved = {
+    profileId,
+    profileVersion: requiredProfileString(profile.version, `${profileId}.version`),
+    actorClass,
+    difficultyBucket: requiredProfileString(profile.difficultyBucket, `${profileId}.difficultyBucket`),
+    scoreEffect: requiredProfileString(profile.scoreEffect, `${profileId}.scoreEffect`),
+    params: {
+      ...(profile.params ?? {}),
+      ...overrides,
+    },
+  };
+  return {
+    ...resolved,
+    profileHash: `sha256:${stableHash(resolved)}`,
+  };
+}
+
+function assertKnownProfileParams(profileId, params, allowedParamKeys) {
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    throw new Error(`actor profile ${profileId} params must be an object`);
+  }
+  const allowed = new Set(allowedParamKeys);
+  for (const key of Object.keys(params)) {
+    if (!allowed.has(key)) {
+      throw new Error(`actor profile ${profileId} has unknown param ${key}`);
+    }
+  }
+}
+
+function requiredProfileString(value, name) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`actor profile ${name} must be a non-empty string`);
+  }
+  return value;
+}
+
+function summarizeActorProfiles(bots) {
+  const byActorClass = {};
+  const byDifficultyBucket = {};
+  const profiles = bots.map((bot) => {
+    const profile = bot.actorProfile;
+    increment(byActorClass, profile.actorClass);
+    increment(byDifficultyBucket, profile.difficultyBucket);
+    return {
+      botId: bot.botId,
+      role: bot.role,
+      actorClass: profile.actorClass,
+      profileId: profile.profileId,
+      profileVersion: profile.profileVersion,
+      profileHash: profile.profileHash,
+      difficultyBucket: profile.difficultyBucket,
+      scoreEffect: profile.scoreEffect,
+    };
+  });
+  return {
+    schemaVersion: "reef.arena.actorProfileSummary.v1",
+    catalogId: actorProfileCatalog.catalogId,
+    catalogVersion: actorProfileCatalog.version,
+    byActorClass: sortedRecord(byActorClass),
+    byDifficultyBucket: sortedRecord(byDifficultyBucket),
+    profiles,
+    npcDifficultyBuckets: npcDifficultyBuckets(bots),
+  };
+}
+
+function npcDifficultyBuckets(bots) {
+  return Array.from(new Set(
+    bots
+      .filter((bot) => bot.actorProfile?.actorClass === "npc_flow")
+      .map((bot) => bot.actorProfile.difficultyBucket),
+  )).sort();
 }
 
 function scheduledTicks(sourceTicks, plan) {
@@ -1977,6 +2645,27 @@ function botIdentityKey(bot) {
 
 function venueIdentityKey(bot) {
   return `${config.runId}-${botIdentityKey(bot)}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
+function actorProfileRuntimeConfig(bot) {
+  const profile = bot.actorProfile;
+  if (profile === undefined) {
+    return {};
+  }
+  const values = {
+    "actorProfile.profileId": profile.profileId,
+    "actorProfile.profileVersion": profile.profileVersion,
+    "actorProfile.actorClass": profile.actorClass,
+    "actorProfile.difficultyBucket": profile.difficultyBucket,
+    "actorProfile.scoreEffect": profile.scoreEffect,
+    "actorProfile.profileHash": profile.profileHash,
+  };
+  for (const [key, value] of Object.entries(profile.params ?? {})) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      values[`actorProfile.${key}`] = value;
+    }
+  }
+  return values;
 }
 
 function actorIdForIdentity(identityKey) {
@@ -2179,7 +2868,19 @@ function percentile(sortedValues, pct) {
   return sortedValues[index];
 }
 
+function average(values) {
+  const numbers = values
+    .map((value) => nullableNumber(value))
+    .filter((value) => value !== null);
+  return numbers.length === 0 ? null : Number((sum(numbers) / numbers.length).toFixed(6));
+}
+
+function sum(values) {
+  return values.reduce((total, value) => total + numberValue(value), 0);
+}
+
 function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -2190,7 +2891,11 @@ function midpoint(bid, ask) {
 }
 
 function pct(count, total) {
-  return total > 0 ? (count / total) * 100 : 0;
+  return total > 0 ? Number(((count / total) * 100).toFixed(6)) : 0;
+}
+
+function ratio(count, total) {
+  return total > 0 ? Number((count / total).toFixed(6)) : 0;
 }
 
 function positiveNumber(value, fallback) {
@@ -2261,6 +2966,20 @@ function safeJson(raw) {
 
 function readJson(path) {
   return JSON.parse(readFileSync(resolve(repoRoot, path), "utf8"));
+}
+
+function stableHash(value) {
+  return createHash("sha256").update(stableStringify(value)).digest("hex");
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function numberOption(name, fallback) {
