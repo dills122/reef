@@ -45,6 +45,10 @@ for (const taker of aggressiveTakers) {
 
 const competitors = report.botResults.filter((entry) => entry.actorClass === "competitor");
 assert.equal(competitors.length, 11);
+assert.equal(report.scoringCalibration.eligibility.eligibleCompetitors, 11);
+assert.equal(report.scoringCalibration.eligibility.byScoreEffect["eligible-for-score"], 11);
+assert.equal(report.scoringCalibration.dataQuality.flags.includes("low-eligible-competitor-count"), false);
+assert.equal(report.scoringCalibration.dataQuality.flags.includes("no-eligible-fills"), true);
 for (const competitor of competitors) {
   assert.equal(competitor.scoreBreakdown.scoreEligible, true);
   assert.equal(competitor.scoreBreakdown.formulaVersion, "shadow-score-v1");

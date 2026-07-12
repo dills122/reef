@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildScoreBreakdown,
   buildScoreContext,
+  summarizeScoreCalibration,
 } from "./lib/arena-score-breakdown.mjs";
 
 const context = buildScoreContext({
@@ -90,5 +91,23 @@ assert.equal(diagnosticOnly.shadowScore, null);
 assert.equal(diagnosticOnly.scoringMode, "diagnostic-only");
 assert.equal(diagnosticOnly.components.equity, 0);
 assert.equal(diagnosticOnly.diagnostics.fillRatio, 0.5);
+
+const calibration = summarizeScoreCalibration([
+  { ...eligible, scoreBreakdown: eligibleBreakdown },
+  { ...eligible, actorClass: "house_market_maker", scoreBreakdown: diagnosticOnly },
+]);
+assert.equal(calibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+assert.equal(calibration.formulaVersion, "shadow-score-v1");
+assert.equal(calibration.eligibility.totalBots, 2);
+assert.equal(calibration.eligibility.eligibleCompetitors, 1);
+assert.deepEqual(calibration.eligibility.byActorClass, { competitor: 1, house_market_maker: 1 });
+assert.deepEqual(calibration.dataQuality.flags, ["low-eligible-competitor-count"]);
+assert.equal(calibration.dataQuality.fillCount, 3);
+assert.equal(calibration.dataQuality.pnlAvailableCount, 1);
+assert.equal(calibration.dataQuality.publicScoreUnchanged, true);
+assert.deepEqual(calibration.difficultyContext.npcDifficultyBuckets, ["benign-noise", "toxic-momentum"]);
+assert.equal(calibration.scoreDistribution.shadowScore.avg, 1_006_130);
+assert.equal(calibration.scoreDistribution.components.marketInteraction.max, 7_025);
+assert.equal(calibration.scoreDistribution.diagnostics.fillRatio.avg, 0.5);
 
 console.log("arena score breakdown checks passed");

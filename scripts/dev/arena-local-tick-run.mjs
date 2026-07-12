@@ -17,6 +17,7 @@ import {
 import {
   attachScoreBreakdowns,
   buildScoreContext,
+  summarizeScoreCalibration,
 } from "./lib/arena-score-breakdown.mjs";
 
 loadDotEnv();
@@ -843,6 +844,7 @@ function buildReport({ botResults, enforcementEvents, sessionReports, healthSamp
     healthSummary,
     marketQualitySummary,
     executionSummary: venueReadback?.executionSummary,
+    scoringCalibration: summarizeScoreCalibration(botResults),
     healthSamples,
     venueReadback,
     enforcementEvents,
@@ -888,6 +890,7 @@ function compactArenaReport(report) {
     healthSummary: report.healthSummary,
     marketQualitySummary: report.marketQualitySummary,
     executionSummary: report.executionSummary,
+    scoringCalibration: report.scoringCalibration,
     venueReadback: compactVenueReadback(report.venueReadback),
     enforcementEvents: report.enforcementEvents,
     botResults: report.botResults,

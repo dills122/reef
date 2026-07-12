@@ -223,6 +223,7 @@ function compactSummary(report, reportPath) {
       commandAccounting: report.commandAccounting ?? {},
       commandStatusSummary: report.commandStatusSummary ?? {},
       healthSummary: report.healthSummary ?? {},
+      scoringCalibration: report.scoringCalibration ?? {},
       venueReadback: {
         mode: report.venueReadback?.mode ?? "",
         skipped: Boolean(report.venueReadback?.skipped),

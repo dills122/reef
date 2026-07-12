@@ -51,6 +51,16 @@ assert.equal(report.botResults.find((entry) => entry.botId === "builtin-npc-mome
 assert.equal(report.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
 assert.equal(report.botResults[0].conductMetrics.status, "reported");
 assert.equal(report.scoringAssumptions.npcDifficultyMode, "leaderboard-partition-plus-shadow-multiplier");
+assert.equal(report.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+assert.equal(report.scoringCalibration.formulaVersion, "shadow-score-v1");
+assert.equal(report.scoringCalibration.eligibility.eligibleCompetitors, 1);
+assert.equal(report.scoringCalibration.eligibility.byActorClass.competitor, 1);
+assert.deepEqual(report.scoringCalibration.dataQuality.flags, [
+  "low-eligible-competitor-count",
+  "no-eligible-fills",
+  "no-pnl-attribution",
+]);
+assert.equal(report.scoringCalibration.dataQuality.publicScoreUnchanged, true);
 const marketMaker = report.botResults.find((entry) => entry.botId === "builtin-mm-simple");
 assert.equal(marketMaker.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
 assert.equal(marketMaker.scoreBreakdown.formulaVersion, "shadow-score-v1");
@@ -97,6 +107,8 @@ assert.equal(compactReport.policyEnvelope.schemaVersion, "reef.arena.policyEnvel
 assert.equal(compactReport.runPlan.actorProfiles.schemaVersion, "reef.arena.actorProfileSummary.v1");
 assert.equal(compactReport.runPlan.actorProfiles.byActorClass.house_market_maker, 3);
 assert.equal(compactReport.botResults[0].conductMetrics.schemaVersion, "reef.arena.conductMetrics.v0");
+assert.equal(compactReport.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+assert.equal(compactReport.scoringCalibration.scoreDistribution.shadowScore.count, 1);
 const compactCompetitor = compactReport.botResults.find((entry) => entry.botId === "custom-technical-indicator");
 assert.equal(compactCompetitor.scoreBreakdown.schemaVersion, "reef.arena.scoreBreakdown.v1");
 assert.equal(compactCompetitor.scoreBreakdown.formulaVersion, "shadow-score-v1");

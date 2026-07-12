@@ -212,6 +212,27 @@ Current report-only formula:
 `shadow-score-v1` remains report-only until enough live and replay artifacts
 show that the component weights rank strategies in a useful, stable way.
 
+Each arena report should also include `scoringCalibration`, a scenario-level
+summary of the report-only scoring data:
+
+- eligible and non-scoring actor counts by actor class and score effect
+- NPC difficulty buckets and effective difficulty multiplier
+- min/max/average public score, shadow score, component scores, and core
+  diagnostics across eligible competitors
+- data-quality flags such as `low-eligible-competitor-count`,
+  `no-eligible-fills`, `no-pnl-attribution`, `partial-pnl-attribution`, and
+  `public-score-mismatch`
+
+Calibration summaries are intended for comparing run artifacts and tuning the
+formula. They must not affect public leaderboard scoring while shadow scoring
+is in report-only mode.
+
+Use `scripts/dev/compare-arena-scoring-calibration.mjs` to compare two arena
+report artifacts. The comparison reports formula/policy drift, eligible actor
+count changes, shadow-score and component average deltas, the component with
+the largest average movement, and data-quality flags added or removed between
+runs.
+
 Why partition plus small multiplier:
 
 - simple to audit

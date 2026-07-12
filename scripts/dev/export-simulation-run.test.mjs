@@ -149,6 +149,41 @@ test("extracts counts, latency, and summary from arena local tick report", async
         status: "pass",
         topOfBookPct: 100,
       },
+      scoringCalibration: {
+        schemaVersion: "reef.arena.scoringCalibration.v1",
+        formulaVersion: "shadow-score-v1",
+        scoringPolicyVersion: "score-v0",
+        mode: "report-only-shadow-score-calibration",
+        eligibility: {
+          totalBots: 1,
+          eligibleCompetitors: 0,
+          nonScoringActors: 1,
+          byActorClass: { house_market_maker: 1 },
+          byScoreEffect: { "diagnostic-only": 1 },
+        },
+        difficultyContext: {
+          npcDifficultyBuckets: ["benign-noise"],
+          difficultyMultiplier: 1,
+        },
+        scoreDistribution: {
+          publicScore: { count: 0, min: null, max: null, avg: null },
+          shadowScore: { count: 0, min: null, max: null, avg: null },
+          components: {
+            equity: { count: 0, min: null, max: null, avg: null },
+            risk: { count: 0, min: null, max: null, avg: null },
+            conduct: { count: 0, min: null, max: null, avg: null },
+            marketInteraction: { count: 0, min: null, max: null, avg: null },
+            difficulty: { count: 0, min: null, max: null, avg: null },
+          },
+        },
+        dataQuality: {
+          flags: ["no-eligible-competitors"],
+          fillCount: 0,
+          pnlAvailableCount: 0,
+          publicScoreMismatchCount: 0,
+          publicScoreUnchanged: true,
+        },
+      },
       venueReadback: {
         mode: "live",
         skipped: false,
@@ -281,6 +316,8 @@ test("extracts counts, latency, and summary from arena local tick report", async
   assert.equal(payload.summary.commandAccounting.accountingGap, 0);
   assert.equal(payload.summary.commandStatusSummary.byRoute["/api/v1/orders/cancel"], 2);
   assert.equal(payload.summary.healthSummary.status, "pass");
+  assert.equal(payload.summary.scoringCalibration.schemaVersion, "reef.arena.scoringCalibration.v1");
+  assert.equal(payload.summary.scoringCalibration.dataQuality.flags[0], "no-eligible-competitors");
   assert.equal(payload.summary.policyEnvelopeHash, "sha256:abc123");
   assert.equal(payload.summary.policyEnvelope.economicPolicyVersion, "economic-v0");
   assert.equal(payload.summary.actorProfiles.byActorClass.house_market_maker, 1);

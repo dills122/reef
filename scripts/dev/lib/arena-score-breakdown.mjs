@@ -68,6 +68,75 @@ export function buildScoreBreakdown(result, context = buildScoreContext()) {
   };
 }
 
+export function summarizeScoreCalibration(botResults) {
+  const results = Array.isArray(botResults) ? botResults : [];
+  const eligible = results.filter((result) => result.scoreBreakdown?.scoreEligible === true);
+  const scoreBreakdowns = eligible.map((result) => result.scoreBreakdown);
+  const firstBreakdown = results.find((result) => result.scoreBreakdown !== undefined)?.scoreBreakdown;
+  const actorCounts = {};
+  const scoreEffectCounts = {};
+  for (const result of results) {
+    increment(actorCounts, result.actorClass ?? "unknown");
+    increment(scoreEffectCounts, result.scoreBreakdown?.scoreEffect ?? result.actorProfile?.scoreEffect ?? "unknown");
+  }
+
+  const diagnostics = scoreBreakdowns.map((breakdown) => breakdown.diagnostics ?? {});
+  const flags = [];
+  const fillCount = sum(diagnostics.map((entry) => numberValue(entry.fillCount)));
+  const pnlAvailableCount = diagnostics.filter((entry) => entry.pnlAvailable === true).length;
+  const publicScoreMismatchCount = eligible.filter((result) => result.scoreBreakdown?.publicScore !== result.score).length;
+
+  if (eligible.length === 0) flags.push("no-eligible-competitors");
+  if (eligible.length > 0 && eligible.length < 3) flags.push("low-eligible-competitor-count");
+  if (eligible.length > 0 && fillCount === 0) flags.push("no-eligible-fills");
+  if (eligible.length > 0 && pnlAvailableCount === 0) flags.push("no-pnl-attribution");
+  if (pnlAvailableCount > 0 && pnlAvailableCount < eligible.length) flags.push("partial-pnl-attribution");
+  if (publicScoreMismatchCount > 0) flags.push("public-score-mismatch");
+
+  return {
+    schemaVersion: "reef.arena.scoringCalibration.v1",
+    formulaVersion: firstBreakdown?.formulaVersion ?? SHADOW_SCORE_FORMULA_VERSION,
+    scoringPolicyVersion: firstBreakdown?.scoringPolicyVersion ?? "",
+    mode: "report-only-shadow-score-calibration",
+    eligibility: {
+      totalBots: results.length,
+      eligibleCompetitors: eligible.length,
+      nonScoringActors: results.length - eligible.length,
+      byActorClass: sortedRecord(actorCounts),
+      byScoreEffect: sortedRecord(scoreEffectCounts),
+    },
+    difficultyContext: {
+      npcDifficultyBuckets: firstBreakdown?.diagnostics?.npcDifficultyBuckets ?? [],
+      difficultyMultiplier: nullableNumber(firstBreakdown?.diagnostics?.difficultyMultiplier),
+    },
+    scoreDistribution: {
+      publicScore: numericStats(eligible.map((result) => result.scoreBreakdown?.publicScore)),
+      shadowScore: numericStats(scoreBreakdowns.map((breakdown) => breakdown.shadowScore)),
+      components: {
+        equity: numericStats(scoreBreakdowns.map((breakdown) => breakdown.components?.equity)),
+        risk: numericStats(scoreBreakdowns.map((breakdown) => breakdown.components?.risk)),
+        conduct: numericStats(scoreBreakdowns.map((breakdown) => breakdown.components?.conduct)),
+        marketInteraction: numericStats(scoreBreakdowns.map((breakdown) => breakdown.components?.marketInteraction)),
+        difficulty: numericStats(scoreBreakdowns.map((breakdown) => breakdown.components?.difficulty)),
+      },
+      diagnostics: {
+        fillRatio: numericStats(diagnostics.map((entry) => entry.fillRatio)),
+        completionRate: numericStats(diagnostics.map((entry) => entry.completionRate)),
+        pnlPerExecutedNotionalBps: numericStats(diagnostics.map((entry) => entry.pnlPerExecutedNotionalBps)),
+        inventoryExposureRatio: numericStats(diagnostics.map((entry) => entry.inventoryExposureRatio)),
+        inventoryConcentration: numericStats(diagnostics.map((entry) => entry.inventoryConcentration)),
+      },
+    },
+    dataQuality: {
+      flags,
+      fillCount,
+      pnlAvailableCount,
+      publicScoreMismatchCount,
+      publicScoreUnchanged: publicScoreMismatchCount === 0,
+    },
+  };
+}
+
 function nonScoringBreakdown(result, context, scoreEffect) {
   return {
     schemaVersion: "reef.arena.scoreBreakdown.v1",
@@ -291,6 +360,34 @@ function ratio(count, total) {
 
 function boundedRatio(count, total) {
   return clamp(ratio(count, total), 0, 1);
+}
+
+function numericStats(values) {
+  const numbers = values
+    .map((value) => nullableNumber(value))
+    .filter((value) => value !== null)
+    .sort((left, right) => left - right);
+  if (numbers.length === 0) {
+    return { count: 0, min: null, max: null, avg: null };
+  }
+  return {
+    count: numbers.length,
+    min: numbers[0],
+    max: numbers[numbers.length - 1],
+    avg: Number((sum(numbers) / numbers.length).toFixed(6)),
+  };
+}
+
+function sum(values) {
+  return values.reduce((total, value) => total + numberValue(value), 0);
+}
+
+function increment(record, key, amount = 1) {
+  record[key] = (record[key] ?? 0) + amount;
+}
+
+function sortedRecord(record) {
+  return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 function numberValue(value) {
