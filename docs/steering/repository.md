@@ -37,6 +37,14 @@ For product and architecture priorities that should guide every change, read [`r
 - performance scripts should report attempted, durably accepted, processed, and projected throughput separately when those stages apply
 - stress/replay scripts should preserve comparable evidence artifacts across runs
 
+## Code Health
+
+- treat file/class size as a smell signal, not a hard rule: a class mixing more than 2-3 unrelated concerns (auth, routing, business JSON marshaling, composition wiring) should split along concern boundaries even if line count alone looks tolerable
+- once an HTTP/API entrypoint file accumulates route handlers for more than one bounded context, extract per-context route modules instead of adding more private methods to the entrypoint class (see `docs/steering/kotlin.md` for the Kotlin route-module shape)
+- composition-root wiring (default service construction, env-var bootstrap) belongs in its own file, separate from request handling
+- extract a shared helper the second time the same small pattern (env-var lookup, DB bootstrap, retry loop) is copy-pasted, rather than letting copies drift — a duplicated helper that already disagrees on edge-case behavior (e.g. how `0` is treated) is worse than no shared helper
+- when extracting, check for an existing local pattern first (grep sibling files in the same package/directory) before inventing a new structure
+
 ## Naming
 
 - name modules by business role, not by technology novelty

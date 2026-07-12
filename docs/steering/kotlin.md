@@ -72,6 +72,16 @@ Operational UI projections can be optimized for the screen, but they should not 
 
 Simulation code should call application commands and APIs rather than mutating repositories directly.
 
+### API layer stays a thin router
+
+`api/` HTTP entrypoint classes (e.g. `PlatformHttpServer`) register routes and delegate; they should not accumulate business-adjacent JSON marshaling, gateway logic, or composition-root wiring as private methods over time.
+
+- group routes by bounded context into their own class (one per context: settlement, arena admin, risk guardrails, diagnostics, etc.), each exposing the routes it owns and a `handle(method, path, query, body): PlatformHotPathResponse?` dispatcher — see `PlatformDiagnosticRoutes.kt` / `PlatformLegacySetupRoutes.kt` for the existing shape
+- name each route-module class after what it actually serves, not a generic bucket it grew into — a class named `*DiagnosticRoutes` should hold diagnostic/health endpoints, not arena/analytics/settlement business routes riding along because that's where the pattern already existed
+- prefer passing a route module a handful of cohesive service/gateway objects over a long list of individual method-reference lambdas in its constructor; a growing constructor param list of single-method lambdas is the same god-class smell relocated one file over, not a fix
+- keep composition-root wiring (`default*()` factory functions, env-driven DataSource bootstrap) in a dedicated bootstrap file, not appended below the HTTP server class
+- extract a shared Postgres-bootstrap helper once the same `RUNTIME_DB_URL`/user/password → `DataSource` shape appears in a second store or service constructor, instead of copy-pasting the triad again
+
 ## Persistence Guidance
 
 - Postgres is canonical
