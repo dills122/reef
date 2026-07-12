@@ -3,6 +3,7 @@ import http from "node:http";
 import https from "node:https";
 import { runStackUp } from "./lib/dev-stack-profiles.mjs";
 import { env, loadDotEnv, setDefault, setValue, sleep, waitForHttp } from "./lib/dev-utils.mjs";
+import { assertStableProjectionReplaySnapshot } from "./lib/projection-replay-proof.mjs";
 
 loadDotEnv();
 
@@ -235,6 +236,12 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
     throw new Error(`projected runtime_event producer mismatch: ${JSON.stringify(eventRows[0])}`);
   }
 
+  const commandStatus = await getJson(
+    `${runtimeUrl}/api/v1/commands/${encodeURIComponent(outcome.command_id)}`,
+    readApiHeaders,
+  );
+  assertCommandStatus(commandStatus, outcome);
+
   if (expectOrderRead) {
     const orderRows = await queryProjectionRows(`
       SELECT order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force
@@ -346,6 +353,8 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
     lifecycleProcessedRows: lifecycleStatus.metrics?.processedRows ?? 0,
     marketDataCycles: marketDataStatus.metrics?.cycles ?? 0,
     marketDataProcessedRows: marketDataStatus.metrics?.processedRows ?? 0,
+    commandStatus: commandStatus.status,
+    commandStatusSource: commandStatus.source,
     lifecycleStatus: lifecycle.status,
     currentOrders: currentOrders.orders.length,
     orderHistory: orderHistory.orders.length,
@@ -364,9 +373,9 @@ async function proveProjectedReadApisOnce(outcome, partition, streamSequence) {
  * running continuously against this stack. This rewinds the live projection
  * watermark for this command's partition below its stream_sequence, so the
  * running projector background loop naturally re-processes the same canonical
- * command outcome it already projected, then asserts the projected read-model
- * row counts for this command/order are unchanged (still exactly one row each)
- * instead of duplicated, and that the watermark re-advances past the outcome.
+ * command outcome it already projected, then asserts the stable DB/API read
+ * snapshot is unchanged, the projected rows are still singular, and the
+ * watermark re-advances past the outcome.
  */
 async function assertProjectionReplayIdempotent(outcome) {
   const partition = Number(outcome.partition_id);
@@ -375,7 +384,7 @@ async function assertProjectionReplayIdempotent(outcome) {
     throw new Error(`canonical outcome missing numeric partition/sequence for replay idempotency check: ${JSON.stringify(outcome)}`);
   }
 
-  const before = await readProjectedRowCounts(outcome.command_id);
+  const before = await readProjectionReplaySnapshot(outcome);
 
   await runProjectionPsql(`
     UPDATE runtime.projection_watermarks
@@ -403,32 +412,217 @@ async function assertProjectionReplayIdempotent(outcome) {
     throw new Error(`timeout waiting for projector to replay rewound watermark (${last})`);
   }
 
-  const after = await readProjectedRowCounts(outcome.command_id);
-  for (const key of ["submitResults", "runtimeEvents", "orders"]) {
-    if (before[key] !== after[key]) {
-      throw new Error(`projection replay produced duplicate ${key} rows for ${outcome.command_id}: before=${before[key]} after=${after[key]}`);
-    }
-    if (after[key] !== 1) {
-      throw new Error(`expected exactly one ${key} row for ${outcome.command_id} after replay, got ${after[key]}`);
-    }
-  }
+  const after = await readProjectionReplaySnapshot(outcome);
+  assertStableProjectionReplaySnapshot(before, after);
+  assertSingleRowSnapshot(outcome.command_id, after);
   return { commandId: outcome.command_id, partition, streamSequence, before, after };
 }
 
-async function readProjectedRowCounts(commandId) {
+async function readProjectionReplaySnapshot(outcome) {
+  const partition = Number(outcome.partition_id);
   const submitResults = await queryProjectionRows(`
-    SELECT COUNT(*) AS count FROM runtime.submit_results WHERE command_id = '${sqlLiteral(commandId)}'
-  `, ["count"]);
+    SELECT command_id, result_type, event_id, order_id, engine_order_id, code, reason, occurred_at
+    FROM runtime.submit_results
+    WHERE command_id = '${sqlLiteral(outcome.command_id)}'
+    ORDER BY command_id
+  `, ["command_id", "result_type", "event_id", "order_id", "engine_order_id", "code", "reason", "occurred_at"]);
   const runtimeEvents = await queryProjectionRows(`
-    SELECT COUNT(*) AS count FROM runtime.runtime_events WHERE trace_id = '${sqlLiteral(commandId)}'
-  `, ["count"]);
+    SELECT sequence_number, event_id, event_type, order_id, trace_id, producer
+    FROM runtime.runtime_events
+    WHERE trace_id = '${sqlLiteral(outcome.command_id)}'
+    ORDER BY sequence_number
+  `, ["sequence_number", "event_id", "event_type", "order_id", "trace_id", "producer"]);
   const orders = await queryProjectionRows(`
-    SELECT COUNT(*) AS count FROM runtime.orders WHERE order_id = '${sqlLiteral(orderId)}'
-  `, ["count"]);
+    SELECT order_id, instrument_id, participant_id, account_id, side, order_type, quantity_units, limit_price, currency, time_in_force
+    FROM runtime.orders
+    WHERE order_id = '${sqlLiteral(orderId)}'
+    ORDER BY order_id
+  `, ["order_id", "instrument_id", "participant_id", "account_id", "side", "order_type", "quantity_units", "limit_price", "currency", "time_in_force"]);
+  const lifecycle = await queryProjectionRows(`
+    SELECT order_id, instrument_id, participant_id, remaining_quantity_units, filled_quantity_units, status, limit_price
+    FROM runtime.order_lifecycle_state
+    WHERE order_id = '${sqlLiteral(orderId)}'
+    ORDER BY order_id
+  `, ["order_id", "instrument_id", "participant_id", "remaining_quantity_units", "filled_quantity_units", "status", "limit_price"]);
+  const marketSnapshots = await queryProjectionRows(`
+    SELECT projection_name, source_projection_name, instrument_id, best_bid_price, best_bid_quantity, best_ask_price, best_ask_quantity, currency, last_partition_seq, lag
+    FROM runtime.market_data_snapshots
+    WHERE projection_name = '${sqlLiteral(marketDataProjectionName)}'
+      AND instrument_id = '${sqlLiteral(instrumentId)}'
+    ORDER BY projection_name, instrument_id
+  `, ["projection_name", "source_projection_name", "instrument_id", "best_bid_price", "best_bid_quantity", "best_ask_price", "best_ask_quantity", "currency", "last_partition_seq", "lag"]);
+  const watermarks = await queryProjectionRows(`
+    SELECT projection_name, partition_id, last_partition_seq, last_error
+    FROM runtime.projection_watermarks
+    WHERE projection_name = '${sqlLiteral(projectionName)}'
+      AND partition_id = ${partition}
+    ORDER BY projection_name, partition_id
+  `, ["projection_name", "partition_id", "last_partition_seq", "last_error"]);
+  const commandStatus = await getJson(
+    `${runtimeUrl}/api/v1/commands/${encodeURIComponent(outcome.command_id)}`,
+    readApiHeaders,
+  );
+  assertCommandStatus(commandStatus, outcome);
+  const currentOrders = await getJson(
+    `${readApiUrl}/api/v1/orders/current?participantId=${encodeURIComponent(participantId)}&instrumentId=${encodeURIComponent(instrumentId)}&limit=10`,
+    readApiHeaders,
+  );
+  const orderHistory = await getJson(
+    `${readApiUrl}/api/v1/orders/history?participantId=${encodeURIComponent(participantId)}&instrumentId=${encodeURIComponent(instrumentId)}&limit=10`,
+    readApiHeaders,
+  );
+  const snapshot = await getJson(
+    `${readApiUrl}/api/v1/market-data/snapshots/${encodeURIComponent(instrumentId)}?projectionName=${encodeURIComponent(marketDataProjectionName)}`,
+    readApiHeaders,
+  );
+  const depth = await getJson(
+    `${readApiUrl}/api/v1/market-data/depth/${encodeURIComponent(instrumentId)}?levels=5&projectionName=${encodeURIComponent(depthProjectionName)}&sourceProjectionName=${encodeURIComponent(projectionName)}`,
+    readApiHeaders,
+  );
+  const availability = await getJson(
+    `${readApiUrl}/api/v1/data/availability?venueProjectionName=${encodeURIComponent(projectionName)}&marketDataProjectionName=${encodeURIComponent(marketDataProjectionName)}&source=venue-event-batch`,
+    readApiHeaders,
+  );
   return {
-    submitResults: Number(submitResults[0]?.count ?? 0),
-    runtimeEvents: Number(runtimeEvents[0]?.count ?? 0),
-    orders: Number(orders[0]?.count ?? 0),
+    db: {
+      submitResults,
+      runtimeEvents,
+      orders,
+      lifecycle,
+      marketSnapshots,
+      watermarks,
+    },
+    api: {
+      commandStatus: normalizeCommandStatus(commandStatus),
+      currentOrders: normalizeOwnOrders(currentOrders),
+      orderHistory: normalizeOwnOrders(orderHistory),
+      snapshot: normalizeMarketSnapshot(snapshot),
+      depth: normalizeDepth(depth),
+      availability: normalizeAvailability(availability),
+    },
+  };
+}
+
+function assertSingleRowSnapshot(commandId, snapshot) {
+  const rowCounts = {
+    submitResults: snapshot.db.submitResults.length,
+    runtimeEvents: snapshot.db.runtimeEvents.length,
+    orders: snapshot.db.orders.length,
+    lifecycle: snapshot.db.lifecycle.length,
+    marketSnapshots: snapshot.db.marketSnapshots.length,
+    watermarks: snapshot.db.watermarks.length,
+  };
+  for (const [key, count] of Object.entries(rowCounts)) {
+    if (count !== 1) {
+      throw new Error(`expected exactly one ${key} row for ${commandId} after replay, got ${count}`);
+    }
+  }
+}
+
+function assertCommandStatus(status, outcome) {
+  if (
+    status.commandId !== outcome.command_id ||
+    status.status !== "COMPLETED" ||
+    status.canonicalMaterialized !== true ||
+    status.source !== "canonical_outcome" ||
+    status.batchId !== outcome.batch_id ||
+    String(status.partition) !== String(outcome.partition_id) ||
+    String(status.streamSequence) !== String(outcome.stream_sequence)
+  ) {
+    throw new Error(`command status mismatch: ${JSON.stringify(status)}`);
+  }
+}
+
+function normalizeCommandStatus(status) {
+  return {
+    commandId: status.commandId,
+    status: status.status,
+    canonicalMaterialized: status.canonicalMaterialized,
+    source: status.source,
+    batchId: status.batchId,
+    partition: status.partition,
+    streamSequence: status.streamSequence,
+    resultStatus: status.resultStatus,
+    orderId: status.orderId,
+    instrumentId: status.instrumentId,
+  };
+}
+
+function normalizeOwnOrders(response) {
+  return {
+    participantId: response.participantId,
+    meta: {
+      source: response.meta?.source,
+      freshness: response.meta?.freshness,
+      scope: response.meta?.scope,
+      openOnly: response.meta?.openOnly,
+    },
+    orders: (response.orders ?? [])
+      .map((order) => ({
+        orderId: order.orderId,
+        instrumentId: order.instrumentId,
+        side: order.side,
+        status: order.status,
+        remainingQuantityUnits: order.remainingQuantityUnits,
+        filledQuantityUnits: order.filledQuantityUnits,
+        limitPrice: order.limitPrice,
+      }))
+      .sort((left, right) => left.orderId.localeCompare(right.orderId)),
+  };
+}
+
+function normalizeMarketSnapshot(response) {
+  return {
+    instrumentId: response.instrumentId,
+    snapshot: {
+      bestBidPrice: response.snapshot?.bestBidPrice,
+      bestBidQuantity: response.snapshot?.bestBidQuantity,
+      bestAskPrice: response.snapshot?.bestAskPrice,
+      bestAskQuantity: response.snapshot?.bestAskQuantity,
+      currency: response.snapshot?.currency,
+    },
+    meta: {
+      source: response.meta?.source,
+      projectionName: response.meta?.projectionName,
+      sourceProjectionName: response.meta?.sourceProjectionName,
+      lag: response.meta?.lag,
+    },
+  };
+}
+
+function normalizeDepth(response) {
+  return {
+    instrumentId: response.instrumentId,
+    depth: {
+      bidLevels: response.depth?.bidLevels ?? [],
+      askLevels: response.depth?.askLevels ?? [],
+    },
+    meta: {
+      source: response.meta?.source,
+      projectionName: response.meta?.projectionName,
+      sourceProjectionName: response.meta?.sourceProjectionName,
+      lag: response.meta?.lag,
+    },
+  };
+}
+
+function normalizeAvailability(response) {
+  return {
+    source: response.source,
+    surfaces: (response.surfaces ?? [])
+      .filter((surface) => ["currentOrders", "orderHistory", "marketDataSnapshots", "marketDataDepth"].includes(surface.name))
+      .map((surface) => ({
+        name: surface.name,
+        endpoint: surface.endpoint,
+        source: surface.source,
+        freshness: surface.freshness,
+        scope: surface.scope,
+        requiredQuery: surface.requiredQuery ?? [],
+        optionalQuery: surface.optionalQuery ?? [],
+        lag: surface.lag,
+        lastPartitionSequence: surface.lastPartitionSequence,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
   };
 }
 
