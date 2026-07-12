@@ -490,8 +490,12 @@ node scripts/dev/arena-local-hardening-run.mjs \
 It must run against a local stack started with both
 `ORDER_LIFECYCLE_PROJECTOR_ENABLED=true` and
 `MARKET_DATA_PROJECTOR_ENABLED=true`; otherwise top-of-book/depth health samples
-do not reflect the live projected book and the hardening runner fails closed
-before traffic starts. The summary includes per-ticker market-quality evidence:
+do not reflect the live projected book. The arena runner preflights both
+projector status endpoints whenever live mode requires projection drain, and
+fails closed before traffic starts if it cannot verify that both projectors are
+enabled. Setting those variables only on the runner command is insufficient; the
+Compose stack itself must be reset or recreated with them. The summary includes
+per-ticker market-quality evidence:
 sampled top-of-book/depth, spread distribution,
 submitted/completed/rejected/timed-out commands, filled commands, trade count,
 side-level fill coverage, traded quantity, notional, fill rate, and actor-class

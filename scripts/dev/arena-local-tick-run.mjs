@@ -39,6 +39,7 @@ const config = {
   commandWaitMode: stringOption("--command-wait-mode", "terminal"),
   projectionDrainTimeoutMs: numberOption("--projection-drain-timeout-ms", 0),
   projectionDrainPollMs: numberOption("--projection-drain-poll-ms", 500),
+  projectorPreflight: stringOption("--projector-preflight", env("ARENA_PROJECTOR_PREFLIGHT", "auto")),
   durationSeconds: numberOption("--duration-seconds", 0),
   tickIntervalMs: numberOption("--tick-interval-ms", 0),
   warmupSeconds: numberOption("--warmup-seconds", 0),
@@ -47,6 +48,7 @@ const config = {
   paceTicks: args.includes("--pace-ticks"),
   out: stringOption("--out", "/tmp/reef-arena-local-tick-run.json"),
   reportShape: stringOption("--report-shape", "full"),
+  skipProjectorPreflight: args.includes("--skip-projector-preflight"),
 };
 
 if (!["vm", "ses"].includes(config.compartment)) {
@@ -60,6 +62,9 @@ if (!["terminal", "accepted", "none"].includes(config.commandWaitMode)) {
 }
 if (!["full", "compact"].includes(config.reportShape)) {
   throw new Error(`unsupported --report-shape=${config.reportShape}; expected full or compact`);
+}
+if (!["auto", "http", "docker", "skip"].includes(config.projectorPreflight)) {
+  throw new Error(`unsupported --projector-preflight=${config.projectorPreflight}; expected auto, http, docker, or skip`);
 }
 if (config.submitMode === "live" && config.venueUrl.length === 0) {
   throw new Error("--venue-url or BOT_SDK_VENUE_URL is required when --submit-mode=live");
@@ -99,6 +104,7 @@ async function main() {
   try {
     if (config.submitMode === "live") {
       await waitForHttp(`${config.venueUrl.replace(/\/$/, "")}/health`, 120);
+      await assertLiveMarketQualityProjectors();
       if (config.seedReference) {
         await seedReferenceData(selectedBots);
       }
@@ -1434,6 +1440,96 @@ async function waitForDataAvailability(baseUrl) {
 function availabilityDrained(availability) {
   const projections = availability.body?.projections;
   return Array.isArray(projections) && projections.every((projection) => Number(projection.lag ?? 0) === 0);
+}
+
+async function assertLiveMarketQualityProjectors() {
+  if (
+    config.submitMode !== "live" ||
+    !config.requireProjectionDrain ||
+    config.skipProjectorPreflight ||
+    config.projectorPreflight === "skip"
+  ) {
+    return;
+  }
+
+  const statuses = await Promise.all([
+    readProjectorStatus("order-lifecycle", "/internal/order-lifecycle/projector/status"),
+    readProjectorStatus("market-data", "/internal/market-data/projector/status"),
+  ]);
+  const failures = statuses.filter((status) => status.ok !== true);
+  if (failures.length === 0) {
+    return;
+  }
+
+  const details = failures.map((failure) => `${failure.name}: ${failure.reason}`).join("; ");
+  throw new Error(
+    "live arena market-quality preflight failed: " +
+    `${details}. Restart the stack with ` +
+    "`ORDER_LIFECYCLE_PROJECTOR_ENABLED=true MARKET_DATA_PROJECTOR_ENABLED=true make dev-reset` " +
+    "or pass --skip-projector-preflight for a non-scoring/debug run.",
+  );
+}
+
+async function readProjectorStatus(name, path) {
+  if (config.projectorPreflight !== "docker") {
+    const httpStatus = await readProjectorStatusHttp(name, path);
+    if (httpStatus.ok === true || config.projectorPreflight === "http") {
+      return httpStatus;
+    }
+  }
+  if (config.projectorPreflight !== "http") {
+    return readProjectorStatusDocker(name, path);
+  }
+  return { name, ok: false, reason: "projector status unavailable" };
+}
+
+async function readProjectorStatusHttp(name, path) {
+  try {
+    const response = await getJson(`${config.venueUrl.replace(/\/$/, "")}${path}`, readbackHeaders());
+    return projectorStatusResult(name, response.statusCode, response.body, "http");
+  } catch (error) {
+    return { name, ok: false, reason: `http status request failed: ${error.message}` };
+  }
+}
+
+function readProjectorStatusDocker(name, path) {
+  const projectName = env("COMPOSE_PROJECT_NAME", "reef");
+  const result = spawnSync("docker", [
+    "compose",
+    "-p",
+    projectName,
+    "exec",
+    "-T",
+    "platform-projector-0",
+    "curl",
+    "-s",
+    `http://127.0.0.1:8080${path}`,
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  if (result.status !== 0) {
+    return {
+      name,
+      ok: false,
+      reason: `docker status request failed: ${(result.stderr || result.stdout || `exit ${result.status}`).trim()}`,
+    };
+  }
+  return projectorStatusResult(name, 200, safeJson(result.stdout), `docker compose -p ${projectName}`);
+}
+
+function projectorStatusResult(name, statusCode, body, source) {
+  if (statusCode < 200 || statusCode >= 300) {
+    return { name, ok: false, reason: `${source} returned ${statusCode}: ${JSON.stringify(body)}` };
+  }
+  if (body?.enabled !== true) {
+    return { name, ok: false, reason: `${source} reports enabled=${JSON.stringify(body?.enabled)} body=${JSON.stringify(body)}` };
+  }
+  if (body?.role !== undefined && body.role !== "projector") {
+    return { name, ok: false, reason: `${source} reports role=${JSON.stringify(body.role)}` };
+  }
+  return { name, ok: true, source, body };
 }
 
 function readbackHeaders(participantId = "") {
