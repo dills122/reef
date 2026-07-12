@@ -282,34 +282,11 @@ private sealed class PreparedApiV1MutationResult {
     data class Rejected(val response: PlatformHotPathResponse) : PreparedApiV1MutationResult()
 }
 
-private data class AdminRequestPrincipal(
-    val actorId: String,
-    val correlationId: String,
-    val occurredAt: String
-)
-
-private val adminRequestPrincipal = ThreadLocal<AdminRequestPrincipal?>()
-
-private const val localDevAdminActorId = "admin-cli"
+// AdminRequestPrincipal, InternalHttpExposureMode, and admin session/cookie/OAuth
+// handling live in AdminSessionAuth.kt (see adminSessionAuth field below).
 private val localDeploymentProfiles = setOf("", "local", "dev", "development", "test", "ci")
 
-private val adminBotConfigPrivilegedRoles = setOf("operator", "secret-admin", "platform-admin")
-
-private enum class InternalHttpExposureMode {
-    Disabled,
-    LocalOnly,
-    Enabled;
-
-    companion object {
-        fun fromEnv(): InternalHttpExposureMode {
-            return when (RuntimeEnv.string("PLATFORM_INTERNAL_HTTP_MODE", "local").trim().lowercase()) {
-                "disabled", "off", "false", "0" -> Disabled
-                "enabled", "all", "raw-external" -> Enabled
-                else -> LocalOnly
-            }
-        }
-    }
-}
+// adminBotConfigPrivilegedRoles moved to ArenaAdminGateway.kt (its only user).
 
 internal val apiV1OrderMutationRoutes = setOf(
     "/api/v1/orders/submit",
@@ -459,6 +436,38 @@ class PlatformHttpServer(
     private val adminSessionCookieName: String =
         RuntimeEnv.string("ADMIN_SESSION_COOKIE_NAME", "reef_admin_session").trim().ifBlank { "reef_admin_session" }
     private val adminSessionCookieSecure: Boolean = RuntimeEnv.bool("ADMIN_SESSION_COOKIE_SECURE", true)
+    private val adminSessionAuth = AdminSessionAuth(
+        arenaAdminService = arenaAdminService,
+        adminAuthService = adminAuthService,
+        adminIdentityService = adminIdentityService,
+        adminGitHubOAuthClient = adminGitHubOAuthClient,
+        adminSessionCookieName = adminSessionCookieName,
+        adminSessionCookieSecure = adminSessionCookieSecure,
+        localDevAdminAuthBypass = localDevAdminAuthBypass,
+        internalHttpExposureMode = internalHttpExposureMode
+    )
+    private val settlementAdminGateway = SettlementAdminGateway(
+        settlementFactStore = settlementFactStore,
+        settlementObligationMaterializer = settlementObligationMaterializer,
+        postTradeProfileResolver = postTradeProfileResolver,
+        scenarioRunPostTradeProfileLookup = scenarioRunPostTradeProfileLookup,
+        venueSessionPostTradeProfileLookup = venueSessionPostTradeProfileLookup,
+        adminSessionAuth = adminSessionAuth
+    )
+    private val arenaAdminGateway = ArenaAdminGateway(
+        arenaAdminService = arenaAdminService,
+        adminIdentityService = adminIdentityService,
+        analyticsRunExportService = analyticsRunExportService,
+        adminSessionAuth = adminSessionAuth
+    )
+    private val riskGuardrailGateway = RiskGuardrailGateway(
+        api = api,
+        accountRiskControlStore = accountRiskControlStore,
+        accountRiskDecisionLog = accountRiskDecisionLog,
+        commandCircuitBreakerStore = commandCircuitBreakerStore,
+        instrumentPriceCollarStore = instrumentPriceCollarStore,
+        adminSessionAuth = adminSessionAuth
+    )
     @Volatile
     private var backpressureSnapshot: CommandIntakeBackpressureSnapshot? = null
     private val backpressureSnapshotLock = Any()
@@ -476,6 +485,83 @@ class PlatformHttpServer(
         } else {
             null
         }
+    private val runtimeLoopStarter = RuntimeLoopStarter(
+        api = api,
+        runtimeRole = runtimeRole,
+        commandProcessingMode = commandProcessingMode,
+        streamCommandConfig = streamCommandConfig,
+        streamCommandIntakeStore = streamCommandIntakeStore,
+        streamCommandWorkerBatchSize = streamCommandWorkerBatchSize,
+        streamCommandWorkerPollMs = streamCommandWorkerPollMs,
+        streamCommandWorkerFetchTimeoutMs = streamCommandWorkerFetchTimeoutMs,
+        streamCommandWorkerDedicatedRuntimePoolEnabled = streamCommandWorkerDedicatedRuntimePoolEnabled,
+        streamCommandWorkerPartitions = streamCommandWorkerPartitions,
+        streamAckProjectorPartitions = streamAckProjectorPartitions,
+        streamAckProjectionName = streamAckProjectionName,
+        streamAckProjectionSource = streamAckProjectionSource,
+        streamAckProjectionEventStream = streamAckProjectionEventStream,
+        streamAckProjectorBatchSize = streamAckProjectorBatchSize,
+        streamAckProjectorPollMs = streamAckProjectorPollMs,
+        marketDataProjectorEnabled = marketDataProjectorEnabled,
+        marketDataProjectorProjectionName = marketDataProjectorProjectionName,
+        marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
+        marketDataProjectorPollMs = marketDataProjectorPollMs,
+        marketDataProjectorBatchSize = marketDataProjectorBatchSize,
+        orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
+        orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
+        orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+        venueEventMaterializerEnabled = venueEventMaterializerEnabled,
+        venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
+        venueEventMaterializerPollMs = venueEventMaterializerPollMs,
+        venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs
+    )
+    private val diagnosticsGateway = DiagnosticsGateway(
+        runtimeRole = runtimeRole,
+        commandProcessingMode = commandProcessingMode,
+        acceptedAsyncCommandIntake = acceptedAsyncCommandIntake,
+        capturedCommandQueue = capturedCommandQueue,
+        asyncCommandWorkerEnabled = asyncCommandWorkerEnabled,
+        asyncCommandWorkerThreads = asyncCommandWorkerThreads,
+        asyncCommandWorkerBatchSize = asyncCommandWorkerBatchSize,
+        asyncCommandWorkerPollMs = asyncCommandWorkerPollMs,
+        commandIntakeMaxActive = commandIntakeMaxActive,
+        commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
+        commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
+        streamCommandHealthCheck = streamCommandHealthCheck,
+        streamCommandConfig = streamCommandConfig,
+        streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
+        streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
+        streamCommandDrainBackpressurePolicy = streamCommandDrainBackpressurePolicy,
+        streamCommandMaxWorkerStreamLag = streamCommandMaxWorkerStreamLag,
+        streamCommandMaxProjectorLag = streamCommandMaxProjectorLag,
+        streamCommandDrainBackpressureSampleMs = streamCommandDrainBackpressureSampleMs,
+        streamCommandMarkPublishedMode = streamCommandMarkPublishedMode,
+        streamCommandBackpressureWorkerDurables = streamCommandBackpressureWorkerDurables,
+        streamCommandWorkerEnabled = streamCommandWorkerEnabled,
+        streamCommandWorkerBatchSize = streamCommandWorkerBatchSize,
+        streamCommandWorkerPollMs = streamCommandWorkerPollMs,
+        streamCommandWorkerFetchTimeoutMs = streamCommandWorkerFetchTimeoutMs,
+        streamCommandWorkerDedicatedRuntimePoolEnabled = streamCommandWorkerDedicatedRuntimePoolEnabled,
+        venueEventMaterializerShouldStart = { runtimeLoopStarter.venueEventMaterializerShouldStart() },
+        venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
+        venueEventMaterializerPollMs = venueEventMaterializerPollMs,
+        venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs,
+        marketDataProjectorShouldStart = { runtimeLoopStarter.marketDataProjectorShouldStart() },
+        marketDataProjectorProjectionName = marketDataProjectorProjectionName,
+        marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
+        marketDataProjectorPollMs = marketDataProjectorPollMs,
+        marketDataProjectorBatchSize = marketDataProjectorBatchSize,
+        orderLifecycleProjectorShouldStart = { runtimeLoopStarter.orderLifecycleProjectorShouldStart() },
+        orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
+        orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+        streamWorkerPartitions = { runtimeLoopStarter.streamWorkerPartitions() },
+        api = api,
+        streamAckProjectorEnabled = streamAckProjectorEnabled,
+        streamAckProjectionName = streamAckProjectionName,
+        streamAckProjectionSource = streamAckProjectionSource,
+        streamAckProjectionEventStream = streamAckProjectionEventStream,
+        projectorPartitions = { runtimeLoopStarter.projectorPartitions() }
+    )
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
         buildStreamCommandDrainBackpressureSampler()
     }
@@ -503,50 +589,29 @@ class PlatformHttpServer(
             actorRoles = { actorId -> api.actorRoles(actorId) }
         )
     }
-    private val diagnosticRoutes: PlatformDiagnosticRoutes by lazy {
-        PlatformDiagnosticRoutes(
+    private val adminDataRoutes: PlatformAdminDataRoutes by lazy {
+        PlatformAdminDataRoutes(
+            arenaAdminGateway = arenaAdminGateway,
+            settlementAdminGateway = settlementAdminGateway,
             healthJson = { api.health() },
             readinessJson = { readinessJson() },
-            abuseStatsJson = { abuseStatsJson(abuseProtectionHook.stats()) },
-            accountRiskControlsJson = { accountRiskControlsJson() },
-            accountRiskDecisionsJson = { limit -> accountRiskDecisionsJson(limit) },
-            commandCircuitBreakersJson = { commandCircuitBreakersJson() },
-            instrumentPriceCollarsJson = { instrumentPriceCollarsJson() },
-            setAccountRiskControlJson = { body -> setAccountRiskControlResponse(body) },
-            setCommandCircuitBreakerJson = { body -> setCommandCircuitBreakerResponse(body) },
-            setInstrumentPriceCollarJson = { body -> setInstrumentPriceCollarResponse(body) },
-            registerArenaBotJson = { body -> registerArenaBotResponse(body) },
-            arenaBotJson = { query -> arenaBotResponse(query) },
-            registerArenaBotVersionJson = { body -> registerArenaBotVersionResponse(body) },
-            arenaBotVersionJson = { query -> arenaBotVersionResponse(query) },
-            transitionArenaBotVersionJson = { body -> transitionArenaBotVersionResponse(body) },
-            arenaQualificationReportsJson = { query -> arenaQualificationReportsResponse(query) },
-            arenaOperatorDecisionsJson = { query -> arenaOperatorDecisionsResponse(query) },
-            arenaRuntimeConfigDescriptorsJson = { query -> arenaRuntimeConfigDescriptorsResponse(query) },
-            arenaRunJson = { query -> arenaRunResponse(query) },
-            registerArenaRunJson = { body -> registerArenaRunResponse(body) },
-            updateArenaRunStatusJson = { body -> updateArenaRunStatusResponse(body) },
-            arenaRunBotResultsJson = { query -> arenaRunBotResultsResponse(query) },
-            recordArenaRunBotResultJson = { body -> recordArenaRunBotResultResponse(body) },
-            arenaRunEnforcementEventsJson = { query -> arenaRunEnforcementEventsResponse(query) },
-            recordArenaRunEnforcementEventJson = { body -> recordArenaRunEnforcementEventResponse(body) },
-            arenaLeaderboardJson = { query -> arenaLeaderboardResponse(query) },
-            arenaBotOpenBaoProvisionJson = { body -> arenaBotOpenBaoProvisionResponse(body) },
-            assignArenaBotOwnershipJson = { body -> assignArenaBotOwnershipResponse(body) },
-            arenaBotOpenBaoConfigJson = { method, query, body -> arenaBotOpenBaoConfigResponse(method, query, body) },
-            analyticsRunExportsJson = { query -> analyticsRunExportsResponse(query) },
-            recordAnalyticsRunExportJson = { body -> recordAnalyticsRunExportResponse(body) },
-            analyticsRunBotSummariesJson = { query -> analyticsRunBotSummariesResponse(query) },
-            appendSettlementFactsJson = { body -> appendSettlementFactsResponse(body) },
-            dbPoolStatsJson = { dbPoolStatsJson() },
-            asyncCommandStatsJson = { asyncCommandStatsJson() },
-            commandAccountingJson = { runId -> commandAccountingJson(runId) },
-            streamCommandHealthJson = { streamCommandHealthJson() },
-            streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
-            venueEventMaterializerStatsJson = { venueEventMaterializerStatsJson() },
-            projectorStatusJson = { projectorStatusJson() },
-            marketDataProjectorStatsJson = { marketDataProjectorStatusJson() },
-            orderLifecycleProjectorStatsJson = { orderLifecycleProjectorStatusJson() }
+            abuseStatsJson = { riskGuardrailGateway.abuseStatsJson(abuseProtectionHook.stats()) },
+            accountRiskControlsJson = { riskGuardrailGateway.accountRiskControlsJson() },
+            accountRiskDecisionsJson = { limit -> riskGuardrailGateway.accountRiskDecisionsJson(limit) },
+            commandCircuitBreakersJson = { riskGuardrailGateway.commandCircuitBreakersJson() },
+            instrumentPriceCollarsJson = { riskGuardrailGateway.instrumentPriceCollarsJson() },
+            setAccountRiskControlJson = { body -> riskGuardrailGateway.setAccountRiskControlResponse(body) },
+            setCommandCircuitBreakerJson = { body -> riskGuardrailGateway.setCommandCircuitBreakerResponse(body) },
+            setInstrumentPriceCollarJson = { body -> riskGuardrailGateway.setInstrumentPriceCollarResponse(body) },
+            dbPoolStatsJson = { diagnosticsGateway.dbPoolStatsJson() },
+            asyncCommandStatsJson = { diagnosticsGateway.asyncCommandStatsJson() },
+            commandAccountingJson = { runId -> diagnosticsGateway.commandAccountingJson(runId) },
+            streamCommandHealthJson = { diagnosticsGateway.streamCommandHealthJson() },
+            streamCommandWorkerStatsJson = { diagnosticsGateway.streamCommandWorkerStatsJson() },
+            venueEventMaterializerStatsJson = { diagnosticsGateway.venueEventMaterializerStatsJson() },
+            projectorStatusJson = { diagnosticsGateway.projectorStatusJson() },
+            marketDataProjectorStatsJson = { diagnosticsGateway.marketDataProjectorStatusJson() },
+            orderLifecycleProjectorStatsJson = { diagnosticsGateway.orderLifecycleProjectorStatusJson() }
         )
     }
 
@@ -614,7 +679,7 @@ class PlatformHttpServer(
             }
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
-                writeHotPathResponse(exchange, appendSettlementFactsResponse(body))
+                writeHotPathResponse(exchange, settlementAdminGateway.appendSettlementFactsResponse(body))
             }
         }
 
@@ -626,7 +691,7 @@ class PlatformHttpServer(
             }
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
-                writeHotPathResponse(exchange, postCashSettlementRepairResponse(body))
+                writeHotPathResponse(exchange, settlementAdminGateway.postCashSettlementRepairResponse(body))
             }
         }
 
@@ -638,7 +703,7 @@ class PlatformHttpServer(
             }
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
-                writeHotPathResponse(exchange, postSecuritySettlementRepairResponse(body))
+                writeHotPathResponse(exchange, settlementAdminGateway.postSecuritySettlementRepairResponse(body))
             }
         }
 
@@ -650,7 +715,7 @@ class PlatformHttpServer(
             }
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
-                writeHotPathResponse(exchange, forceSettleResponse(body))
+                writeHotPathResponse(exchange, settlementAdminGateway.forceSettleResponse(body))
             }
         }
 
@@ -662,7 +727,7 @@ class PlatformHttpServer(
             }
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
-                writeHotPathResponse(exchange, reverseSettlementLedgerEntryResponse(body))
+                writeHotPathResponse(exchange, settlementAdminGateway.reverseSettlementLedgerEntryResponse(body))
             }
         }
 
@@ -674,7 +739,7 @@ class PlatformHttpServer(
             }
             val body = readRequestBody(exchange) ?: return@createContext
             withAdminRequestPrincipal(exchange) {
-                writeHotPathResponse(exchange, materializeSettlementObligationsResponse(body))
+                writeHotPathResponse(exchange, settlementAdminGateway.materializeSettlementObligationsResponse(body))
             }
         }
 
@@ -921,7 +986,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/facts/").trimEnd('/')
-            writeHotPathResponse(exchange, settlementFactsResponse(scenarioRunId))
+            writeHotPathResponse(exchange, settlementAdminGateway.settlementFactsResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/settlement/obligations/") { exchange ->
@@ -930,7 +995,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/obligations/").trimEnd('/')
-            writeHotPathResponse(exchange, settlementObligationsResponse(scenarioRunId))
+            writeHotPathResponse(exchange, settlementAdminGateway.settlementObligationsResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/settlement/ledger/") { exchange ->
@@ -939,7 +1004,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/ledger/").trimEnd('/')
-            writeHotPathResponse(exchange, settlementLedgerResponse(scenarioRunId))
+            writeHotPathResponse(exchange, settlementAdminGateway.settlementLedgerResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/settlement/proof/") { exchange ->
@@ -948,7 +1013,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/proof/").trimEnd('/')
-            writeHotPathResponse(exchange, settlementProofResponse(scenarioRunId))
+            writeHotPathResponse(exchange, settlementAdminGateway.settlementProofResponse(scenarioRunId))
         }
 
         server.createContext("/api/v1/settlement/score/") { exchange ->
@@ -957,7 +1022,7 @@ class PlatformHttpServer(
                 return@createContext
             }
             val scenarioRunId = exchange.requestURI.path.removePrefix("/api/v1/settlement/score/").trimEnd('/')
-            writeHotPathResponse(exchange, settlementScoreResponse(exchange, scenarioRunId))
+            writeHotPathResponse(exchange, settlementAdminGateway.settlementScoreResponse(exchange, scenarioRunId))
         }
 
         server.createContext("/api/v1/market-data/depth/") { exchange ->
@@ -998,7 +1063,7 @@ class PlatformHttpServer(
             if (!allowApiV1Read(exchange, "/api/v1/arena/leaderboard")) {
                 return@createContext
             }
-            val response = arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
+            val response = arenaAdminGateway.arenaLeaderboardPublicResponse(exchange.requestURI.rawQuery)
             writeJson(exchange, response.status, response.body)
         }
 
@@ -1135,19 +1200,19 @@ class PlatformHttpServer(
             }
         }
         if (runtimeRole.backgroundWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
-            startStreamCommandWorkers()
+            runtimeLoopStarter.startStreamCommandWorkers()
         }
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
-            startCanonicalProjector()
+            runtimeLoopStarter.startCanonicalProjector()
         }
-        if (venueEventMaterializerShouldStart()) {
-            startVenueEventMaterializer()
+        if (runtimeLoopStarter.venueEventMaterializerShouldStart()) {
+            runtimeLoopStarter.startVenueEventMaterializer()
         }
-        if (marketDataProjectorShouldStart()) {
-            startMarketDataProjector()
+        if (runtimeLoopStarter.marketDataProjectorShouldStart()) {
+            runtimeLoopStarter.startMarketDataProjector()
         }
-        if (orderLifecycleProjectorShouldStart()) {
-            startOrderLifecycleProjector()
+        if (runtimeLoopStarter.orderLifecycleProjectorShouldStart()) {
+            runtimeLoopStarter.startOrderLifecycleProjector()
         }
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
@@ -1166,14 +1231,6 @@ class PlatformHttpServer(
         )
     }
 
-    private fun streamCommandWorkerApi(): PlatformApi {
-        if (!streamCommandWorkerDedicatedRuntimePoolEnabled) return api
-        return PlatformApi(
-            OrderApplicationService(
-                runtimePersistence = defaultRuntimePersistence("stream-runtime")
-            )
-        )
-    }
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
         val bytes = json.toByteArray()
@@ -1276,7 +1333,7 @@ class PlatformHttpServer(
     }
 
     private fun registerDiagnosticRoutes(server: HttpServer) {
-        diagnosticRoutes.paths.forEach { path ->
+        adminDataRoutes.paths.forEach { path ->
             server.createContext(path) { exchange ->
                 if (exchange.requestURI.path.startsWith("/internal/") && !allowInternalHttpRoute(exchange)) {
                     return@createContext
@@ -1287,7 +1344,7 @@ class PlatformHttpServer(
                     ""
                 }
                 withAdminRequestPrincipal(exchange) {
-                    val response = diagnosticRoutes.handle(
+                    val response = adminDataRoutes.handle(
                         method = exchange.requestMethod,
                         path = exchange.requestURI.path,
                         query = exchange.requestURI.query,
@@ -1304,206 +1361,25 @@ class PlatformHttpServer(
         }
     }
 
-    private fun registerAdminAuthRoutes(server: HttpServer) {
-        server.createContext("/admin/auth/github/start") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            val auth = adminAuthService
-            val github = adminGitHubOAuthClient
-            if (auth == null || github == null) {
-                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
-                return@createContext
-            }
-            try {
-                val redirectPath = queryParam(exchange, "redirectPath")
-                    .ifBlank { queryParam(exchange, "redirect") }
-                    .ifBlank { "/" }
-                val start = auth.beginGitHubOAuth(redirectPath)
-                redirect(exchange, github.authorizationUrl(start.stateToken))
-            } catch (ex: IllegalArgumentException) {
-                writeHotPathResponse(exchange, PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid admin auth start"))))
-            }
-        }
+    // Delegates to AdminSessionAuth (see field above); kept as same-named forwarding
+    // wrappers so the ~15 call sites elsewhere in this class stay untouched.
+    private fun registerAdminAuthRoutes(server: HttpServer) = adminSessionAuth.register(server)
 
-        server.createContext("/admin/auth/github/callback") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            val auth = adminAuthService
-            val identity = adminIdentityService
-            val github = adminGitHubOAuthClient
-            if (auth == null || identity == null || github == null) {
-                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
-                return@createContext
-            }
-            val error = queryParam(exchange, "error")
-            if (error.isNotBlank()) {
-                writeHotPathResponse(exchange, PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "GitHub OAuth rejected request")))
-                return@createContext
-            }
-            val code = queryParam(exchange, "code")
-            val stateToken = queryParam(exchange, "state")
-            if (code.isBlank() || stateToken.isBlank()) {
-                writeHotPathResponse(exchange, PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "code and state are required")))
-                return@createContext
-            }
-            try {
-                val state = auth.consumeGitHubOAuthState(stateToken)
-                val githubIdentity = github.exchangeCode(code)
-                val user = identity.ensureGitHubUser(githubIdentity)
-                val session = auth.createSession(user.reefUserId)
-                setAdminSessionCookie(exchange, session.token)
-                redirect(exchange, state.redirectPath)
-            } catch (ex: IllegalArgumentException) {
-                writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "admin auth failed")))
-            }
-        }
+    private fun allowInternalHttpRoute(exchange: HttpExchange): Boolean = adminSessionAuth.allowInternalHttpRoute(exchange)
 
-        server.createContext("/admin/auth/session") { exchange ->
-            if (exchange.requestMethod != "GET") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            if (allowLocalDevAdminAuthBypass(exchange)) {
-                writeLocalDevAdminSession(exchange)
-                return@createContext
-            }
-            val auth = adminAuthService
-            if (auth == null) {
-                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
-                return@createContext
-            }
-            val token = adminSessionCookie(exchange)
-            if (token.isBlank()) {
-                writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
-                return@createContext
-            }
-            try {
-                val session = auth.authenticateSession(token)
-                val user = adminIdentityService?.user(session.reefUserId)
-                val identityRoles = adminIdentityService
-                    ?.rolesForUser(session.reefUserId)
-                    ?.map { it.roleId }
-                    .orEmpty()
-                val runtimeRoles = arenaAdminService
-                    ?.listActorRoles(session.reefUserId)
-                    ?.map { it.roleId }
-                    .orEmpty()
-                val roles = (identityRoles + runtimeRoles).distinct().sorted()
-                writeJson(
-                    exchange,
-                    200,
-                    JsonCodec.writeObject(
-                        "status" to "ok",
-                        "reefUserId" to session.reefUserId,
-                        "githubLogin" to (user?.githubLogin ?: ""),
-                        "displayName" to (user?.displayName ?: ""),
-                        "trustState" to (user?.trustState?.dbValue ?: ""),
-                        "roles" to roles,
-                        "authProvider" to session.authProvider.dbValue,
-                        "expiresAt" to session.expiresAt.toString()
-                    )
-                )
-            } catch (ex: IllegalArgumentException) {
-                clearAdminSessionCookie(exchange)
-                writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
-            }
-        }
-
-        server.createContext("/admin/auth/logout") { exchange ->
-            if (exchange.requestMethod != "POST") {
-                methodNotAllowed(exchange)
-                return@createContext
-            }
-            val auth = adminAuthService
-            if (auth == null) {
-                writeHotPathResponse(exchange, adminAuthUnavailableResponse())
-                return@createContext
-            }
-            val token = adminSessionCookie(exchange)
-            if (token.isNotBlank()) {
-                try {
-                    auth.revokeSession(token)
-                } catch (_: IllegalArgumentException) {
-                    // Logout is idempotent from the browser perspective.
-                }
-            }
-            clearAdminSessionCookie(exchange)
-            writeJson(exchange, 200, JsonCodec.writeObject("status" to "ok"))
-        }
-    }
-
-    private fun allowInternalHttpRoute(exchange: HttpExchange): Boolean {
-        return when (internalHttpExposureMode) {
-            InternalHttpExposureMode.Disabled -> {
-                exchange.sendResponseHeaders(404, -1)
-                exchange.close()
-                false
-            }
-            InternalHttpExposureMode.LocalOnly -> {
-                if (isLoopback(exchange.remoteAddress.address)) {
-                    true
-                } else {
-                    writeHotPathResponse(
-                        exchange,
-                        PlatformHotPathResponse(
-                            403,
-                            JsonCodec.writeObject(
-                                "error" to "internal HTTP route requires loopback access",
-                                "mode" to "local"
-                            )
-                        )
-                    )
-                    false
-                }
-            }
-            InternalHttpExposureMode.Enabled -> true
-        }
-    }
-
-    private fun isLoopback(address: InetAddress?): Boolean {
-        return address?.isLoopbackAddress ?: false
-    }
-
-    private fun isLoopback(address: String?): Boolean {
-        if (address.isNullOrBlank()) return true
-        return try {
-            InetAddress.getByName(address).isLoopbackAddress
-        } catch (_: Exception) {
-            false
-        }
-    }
+    private fun isLoopback(address: String?): Boolean = adminSessionAuth.isLoopback(address)
 
     private fun withAdminRequestPrincipal(exchange: HttpExchange, block: () -> Unit) {
-        withAdminRequestPrincipal(adminPrincipal(exchange.requestHeaders), block)
+        adminSessionAuth.withPrincipal(exchange, block)
     }
 
     private fun <T> withAdminRequestPrincipal(principal: AdminRequestPrincipal, block: () -> T): T {
-        val prior = adminRequestPrincipal.get()
-        adminRequestPrincipal.set(principal)
-        try {
-            return block()
-        } finally {
-            adminRequestPrincipal.set(prior)
-        }
+        return adminSessionAuth.withPrincipal(principal, block)
     }
 
-    private fun adminPrincipal(exchange: HttpExchange): AdminRequestPrincipal {
-        return adminPrincipal(exchange.requestHeaders)
-    }
+    private fun adminPrincipal(headers: Headers): AdminRequestPrincipal = adminSessionAuth.principal(headers)
 
-    private fun adminPrincipal(headers: Headers): AdminRequestPrincipal {
-        return AdminRequestPrincipal(
-            actorId = headerValue(headers, "X-Reef-Actor-Id").ifBlank { "admin-cli" },
-            correlationId = headerValue(headers, "X-Correlation-Id").ifBlank {
-                headerValue(headers, "X-Reef-Correlation-Id").ifBlank { "internal-admin" }
-            },
-            occurredAt = headerValue(headers, "X-Reef-Occurred-At").ifBlank { Instant.now().toString() }
-        )
-    }
+    private fun currentAdminPrincipal(): AdminRequestPrincipal = adminSessionAuth.currentPrincipal()
 
     private fun headerValue(exchange: HttpExchange, name: String): String {
         return headerValue(exchange.requestHeaders, name)
@@ -1511,91 +1387,6 @@ class PlatformHttpServer(
 
     private fun headerValue(headers: Headers, name: String): String {
         return headers[name]?.firstOrNull().orEmpty()
-    }
-
-    private fun queryParam(exchange: HttpExchange, name: String): String {
-        val raw = exchange.requestURI.rawQuery ?: return ""
-        return raw.split("&").asSequence()
-            .mapNotNull { part ->
-                val index = part.indexOf('=')
-                if (index < 0) return@mapNotNull null
-                val key = urlDecode(part.substring(0, index))
-                if (key == name) urlDecode(part.substring(index + 1)) else null
-            }
-            .firstOrNull()
-            .orEmpty()
-    }
-
-    private fun urlDecode(value: String): String {
-        return URLDecoder.decode(value, Charsets.UTF_8)
-    }
-
-    private fun redirect(exchange: HttpExchange, location: String) {
-        exchange.responseHeaders.add("Location", location)
-        exchange.sendResponseHeaders(302, -1)
-        exchange.close()
-    }
-
-    private fun adminAuthUnavailableResponse(): PlatformHotPathResponse {
-        return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin auth is not configured"))
-    }
-
-    private fun allowLocalDevAdminAuthBypass(exchange: HttpExchange): Boolean {
-        return localDevAdminAuthBypass && isLoopback(exchange.remoteAddress.address)
-    }
-
-    private fun writeLocalDevAdminSession(exchange: HttpExchange) {
-        writeJson(
-            exchange,
-            200,
-            JsonCodec.writeObject(
-                "status" to "ok",
-                "reefUserId" to localDevAdminActorId,
-                "githubLogin" to "local-dev-admin",
-                "displayName" to "Local Dev Admin",
-                "trustState" to "trusted",
-                "roles" to listOf("arena-operator", "participant", "local-dev"),
-                "authProvider" to "local-dev",
-                "expiresAt" to ""
-            )
-        )
-    }
-
-    private fun adminSessionCookie(exchange: HttpExchange): String {
-        return headerValue(exchange, "Cookie")
-            .split(";")
-            .asSequence()
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("$adminSessionCookieName=") }
-            ?.substringAfter("=")
-            .orEmpty()
-    }
-
-    private fun setAdminSessionCookie(exchange: HttpExchange, token: String) {
-        exchange.responseHeaders.add(
-            "Set-Cookie",
-            adminCookieValue("$adminSessionCookieName=$token; Max-Age=43200")
-        )
-    }
-
-    private fun clearAdminSessionCookie(exchange: HttpExchange) {
-        exchange.responseHeaders.add(
-            "Set-Cookie",
-            adminCookieValue("$adminSessionCookieName=; Max-Age=0")
-        )
-    }
-
-    private fun adminCookieValue(prefix: String): String {
-        val secure = if (adminSessionCookieSecure) "; Secure" else ""
-        return "$prefix; Path=/; HttpOnly; SameSite=Lax$secure"
-    }
-
-    private fun currentAdminPrincipal(): AdminRequestPrincipal {
-        return adminRequestPrincipal.get() ?: AdminRequestPrincipal(
-            actorId = "admin-cli",
-            correlationId = "internal-admin",
-            occurredAt = Instant.now().toString()
-        )
     }
 
     private fun handleAdminGatewayRoute(exchange: HttpExchange) {
@@ -1613,7 +1404,7 @@ class PlatformHttpServer(
         }
         withAdminRequestPrincipal(principal) {
             val response = settlementAdminGatewayResponse(exchange.requestMethod, route.internalPath, body)
-                ?: diagnosticRoutes.handle(
+                ?: adminDataRoutes.handle(
                     method = exchange.requestMethod,
                     path = route.internalPath,
                     query = exchange.requestURI.query,
@@ -1632,81 +1423,19 @@ class PlatformHttpServer(
         if (!path.startsWith("/internal/admin/settlement/")) return null
         if (method != "POST") return methodNotAllowedResponse()
         return when (path) {
-            "/internal/admin/settlement/facts" -> appendSettlementFactsResponse(body)
-            "/internal/admin/settlement/repairs/cash" -> postCashSettlementRepairResponse(body)
-            "/internal/admin/settlement/repairs/security" -> postSecuritySettlementRepairResponse(body)
-            "/internal/admin/settlement/force-settle" -> forceSettleResponse(body)
-            "/internal/admin/settlement/reverse-ledger-entry" -> reverseSettlementLedgerEntryResponse(body)
-            "/internal/admin/settlement/obligations/materialize" -> materializeSettlementObligationsResponse(body)
+            "/internal/admin/settlement/facts" -> settlementAdminGateway.appendSettlementFactsResponse(body)
+            "/internal/admin/settlement/repairs/cash" -> settlementAdminGateway.postCashSettlementRepairResponse(body)
+            "/internal/admin/settlement/repairs/security" -> settlementAdminGateway.postSecuritySettlementRepairResponse(body)
+            "/internal/admin/settlement/force-settle" -> settlementAdminGateway.forceSettleResponse(body)
+            "/internal/admin/settlement/reverse-ledger-entry" -> settlementAdminGateway.reverseSettlementLedgerEntryResponse(body)
+            "/internal/admin/settlement/obligations/materialize" -> settlementAdminGateway.materializeSettlementObligationsResponse(body)
             else -> null
         }
     }
 
-    private fun authorizeAdminGateway(exchange: HttpExchange, route: AdminGatewayRoute): AdminRequestPrincipal? {
-        if (allowLocalDevAdminAuthBypass(exchange)) {
-            return adminPrincipalForActor(exchange, localDevAdminActorId)
-        }
+    private fun authorizeAdminGateway(exchange: HttpExchange, route: AdminGatewayRoute): AdminRequestPrincipal? =
+        adminSessionAuth.authorizeGateway(exchange, route)
 
-        val auth = adminAuthService
-        if (auth != null) {
-            val sessionToken = adminSessionCookie(exchange)
-            if (sessionToken.isNotBlank()) {
-                try {
-                    val session = auth.authenticateSession(sessionToken)
-                    return adminPrincipalForActor(exchange, session.reefUserId)
-                } catch (_: IllegalArgumentException) {
-                    clearAdminSessionCookie(exchange)
-                    writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
-                    return null
-                }
-            }
-            bearerToken(exchange)?.let { token ->
-                route.serviceTokenFamilies.forEach { family ->
-                    try {
-                        val serviceToken = auth.authenticateServiceToken(token, family)
-                        return adminPrincipalForActor(exchange, serviceToken.subjectActorId)
-                    } catch (_: AuthorizationException) {
-                        // Unknown DB-issued service tokens may still be valid
-                        // static gateway fallback tokens configured in env.
-                    } catch (_: IllegalArgumentException) {
-                        // Try the next permitted service-token family for this route.
-                    }
-                }
-            }
-        }
-
-        val envName = when (route.fallbackTokenFamily) {
-            "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
-            "admin" -> "ADMIN_API_TOKEN"
-            else -> "ARENA_ADMIN_API_TOKEN"
-        }
-        val token = RuntimeEnv.string(envName, "")
-        val expected = "Bearer $token"
-        if (token.isNotBlank() && headerValue(exchange, "Authorization") == expected) {
-            return adminPrincipal(exchange)
-        }
-        if (auth != null) {
-            writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
-            return null
-        }
-        if (token.isBlank()) {
-            writeHotPathResponse(exchange, PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "$envName is not configured")))
-            return null
-        }
-        writeHotPathResponse(exchange, PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized")))
-        return null
-    }
-
-    private fun bearerToken(exchange: HttpExchange): String? {
-        val authorization = headerValue(exchange, "Authorization")
-        if (!authorization.startsWith("Bearer ")) return null
-        return authorization.removePrefix("Bearer ").trim().ifBlank { null }
-    }
-
-    private fun adminPrincipalForActor(exchange: HttpExchange, actorId: String): AdminRequestPrincipal {
-        val headerPrincipal = adminPrincipal(exchange)
-        return headerPrincipal.copy(actorId = actorId)
-    }
 
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
         if (request.path.startsWith("/internal/")) {
@@ -1725,7 +1454,7 @@ class PlatformHttpServer(
             }
         }
         val diagnosticResponse = withAdminRequestPrincipal(adminPrincipal(request.headers)) {
-            diagnosticRoutes.handle(request.method, request.path, request.query, request.body)
+            adminDataRoutes.handle(request.method, request.path, request.query, request.body)
         }
         return diagnosticResponse ?: when {
             request.path.startsWith("/api/v1/commands/") -> commandStatusLookupResponse(request)
@@ -1797,7 +1526,7 @@ class PlatformHttpServer(
             }
             request.path == "/api/v1/arena/leaderboard" && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/arena/leaderboard")
-                readError ?: arenaLeaderboardPublicResponse(request.query)
+                readError ?: arenaAdminGateway.arenaLeaderboardPublicResponse(request.query)
             }
             request.path.startsWith("/api/v1/market-data/bars/") && request.method == "GET" -> {
                 val readError = apiV1ReadErrorResponse(request, "/api/v1/market-data/bars/{instrumentId}")
@@ -1886,41 +1615,6 @@ class PlatformHttpServer(
         }
     }
 
-    private fun projectorStatusJson(): String {
-        val partitions = projectorPartitions()
-        val status = api.projectionStatus(streamAckProjectionName, partitions, streamAckProjectionSource.configValue)
-        val metrics = CanonicalProjectionMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "role" to runtimeRole.configValue,
-            "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
-            "implementation" to "canonical-submit-projector",
-            "source" to streamAckProjectionSource.configValue,
-            "eventStream" to streamAckProjectionEventStream,
-            "projectionName" to status.projectionName,
-            "partitions" to partitions,
-            "projectedCount" to status.projectedCount,
-            "lag" to status.lag,
-            "metrics" to mapOf(
-                "projected" to metrics.projected,
-                "failed" to metrics.failed,
-                "emptyPolls" to metrics.emptyPolls,
-                "lastProjectedAt" to metrics.lastProjectedAt,
-                "lastFailedAt" to metrics.lastFailedAt,
-                "lastError" to metrics.lastError
-            ),
-            "watermarks" to status.watermarks.map { watermark ->
-                mapOf(
-                    "projectionName" to watermark.projectionName,
-                    "partition" to watermark.partitionId,
-                    "lastPartitionSequence" to watermark.lastPartitionSequence,
-                    "canonicalMaxPartitionSequence" to watermark.canonicalMaxPartitionSequence,
-                    "lag" to watermark.lag,
-                    "updatedAt" to watermark.updatedAt,
-                    "lastError" to watermark.lastError
-                )
-            }
-        )
-    }
 
     private fun runtimeUnavailableJson(ex: Exception): String {
         return simpleErrorJson("runtime unavailable", ex.message ?: "unknown")
@@ -3281,2861 +2975,13 @@ class PlatformHttpServer(
         return JsonCodec.parseObjectOrEmpty(payload).obj("rejected").string("code").ifBlank { null }
     }
 
-    private fun abuseStatsJson(stats: AbuseProtectionStats): String {
-        return JsonCodec.writeObject(
-            "mode" to stats.mode,
-            "enabled" to stats.enabled,
-            "warningOnly" to stats.warningOnly,
-            "maxRejects" to stats.maxRejects,
-            "windowSeconds" to stats.windowSeconds,
-            "blockSeconds" to stats.blockSeconds,
-            "trackedRejectCodes" to stats.trackedRejectCodes.sorted(),
-            "trackedRoutes" to stats.trackedRoutes.sorted(),
-            "routePolicyOverrides" to stats.routePolicyOverrides.toSortedMap(),
-            "trips" to stats.trips,
-            "blocks" to stats.blocks,
-            "releases" to stats.releases,
-            "activeBlockedClients" to stats.activeBlockedClients
-        )
-    }
+    // Account-risk/circuit-breaker/price-collar admin routes and protective-control
+    // audit logging live in RiskGuardrailGateway.kt (see field above). The inline
+    // hot-path violation checks stay here — they move with OrderCommandDispatcher.
 
-    private fun accountRiskControlsJson(): String {
-        val controls = accountRiskControlStore?.listControls().orEmpty()
-        return JsonCodec.writeObject(
-            "controls" to controls.map { control ->
-                mapOf(
-                    "scopeType" to control.scopeType,
-                    "scopeId" to control.scopeId,
-                    "decision" to control.decision.name,
-                    "reason" to control.reason,
-                    "maxQuantityUnits" to control.maxQuantityUnits,
-                    "maxNotional" to control.maxNotional,
-                    "currency" to control.currency,
-                    "updatedAt" to control.updatedAt
-                )
-            },
-            "controlsCount" to controls.size
-        )
-    }
 
-    private fun accountRiskDecisionsJson(limit: Int): String {
-        val boundedLimit = limit.coerceIn(1, 500)
-        val decisions = accountRiskDecisionLog?.recentDecisions(boundedLimit).orEmpty()
-        return JsonCodec.writeObject(
-            "decisions" to decisions.map { decision ->
-                mapOf(
-                    "decisionId" to decision.decisionId,
-                    "decidedAt" to decision.decidedAt,
-                    "decision" to decision.decision.name,
-                    "code" to decision.code,
-                    "message" to decision.message,
-                    "clientId" to decision.clientId,
-                    "route" to decision.route,
-                    "commandType" to decision.commandType,
-                    "commandId" to decision.commandId,
-                    "correlationId" to decision.correlationId,
-                    "actorId" to decision.actorId,
-                    "participantId" to decision.participantId,
-                    "accountId" to decision.accountId,
-                    "botId" to decision.botId,
-                    "venueSessionId" to decision.venueSessionId,
-                    "instrumentId" to decision.instrumentId,
-                    "orderId" to decision.orderId,
-                    "quantityUnits" to decision.quantityUnits,
-                    "limitPrice" to decision.limitPrice,
-                    "currency" to decision.currency
-                )
-            },
-            "decisionsCount" to decisions.size,
-            "limit" to boundedLimit
-        )
-    }
+    // asyncCommandStatsJson lives in DiagnosticsGateway.kt (see field above).
 
-    private fun commandCircuitBreakersJson(): String {
-        val breakers = commandCircuitBreakerStore?.listBreakers().orEmpty()
-        return JsonCodec.writeObject(
-            "breakers" to breakers.map { breaker ->
-                mapOf(
-                    "scopeType" to breaker.scopeType,
-                    "scopeId" to breaker.scopeId,
-                    "tripped" to breaker.tripped,
-                    "reason" to breaker.reason,
-                    "updatedAt" to breaker.updatedAt
-                )
-            },
-            "breakersCount" to breakers.size
-        )
-    }
-
-    private fun instrumentPriceCollarsJson(): String {
-        val collars = instrumentPriceCollarStore?.listCollars().orEmpty()
-        return JsonCodec.writeObject(
-            "collars" to collars.map { collar ->
-                mapOf(
-                    "instrumentId" to collar.instrumentId,
-                    "minPrice" to collar.minPrice,
-                    "maxPrice" to collar.maxPrice,
-                    "currency" to collar.currency,
-                    "reason" to collar.reason,
-                    "updatedAt" to collar.updatedAt
-                )
-            },
-            "collarsCount" to collars.size
-        )
-    }
-
-    private fun setAccountRiskControlResponse(body: String): PlatformHotPathResponse {
-        val store = accountRiskControlStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "account risk control store unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val scopeType = normalizeAccountRiskScope(json.string("scopeType").ifBlank { json.string("scope") })
-            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk scope"))
-        val scopeId = json.string("scopeId").ifBlank { json.string("id") }
-        if (scopeId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scopeId is required"))
-        }
-        val decision = normalizeAccountRiskDecision(json.string("decision"))
-            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid account risk decision"))
-        val reason = json.string("reason")
-        val maxQuantityUnits = json.string("maxQuantityUnits")
-        if (maxQuantityUnits.isNotBlank() && maxQuantityUnits.toBigDecimalOrNull() == null) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxQuantityUnits"))
-        }
-        val maxNotional = json.string("maxNotional")
-        if (maxNotional.isNotBlank() && maxNotional.toBigDecimalOrNull() == null) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxNotional"))
-        }
-        val currency = json.string("currency").uppercase()
-        val principal = currentAdminPrincipal()
-        val actorId = principal.actorId
-        val correlationId = principal.correlationId
-        val previous = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
-
-        store.upsertControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
-        val current = store.listControls().firstOrNull { it.scopeType == scopeType && it.scopeId == scopeId }
-            ?: AccountRiskControl(scopeType, scopeId, decision, reason, maxQuantityUnits, maxNotional, currency)
-        recordProtectiveControlAudit(
-            actorId = actorId,
-            correlationId = correlationId,
-            eventType = "AccountRiskControlChanged",
-            targetId = "$scopeType:$scopeId",
-            payload = mapOf(
-                "controlType" to "account-risk",
-                "scopeType" to scopeType,
-                "scopeId" to scopeId,
-                "previousDecision" to previous?.decision?.name.orEmpty(),
-                "previousReason" to previous?.reason.orEmpty(),
-                "previousMaxQuantityUnits" to previous?.maxQuantityUnits.orEmpty(),
-                "previousMaxNotional" to previous?.maxNotional.orEmpty(),
-                "previousCurrency" to previous?.currency.orEmpty(),
-                "decision" to decision.name,
-                "reason" to reason,
-                "maxQuantityUnits" to maxQuantityUnits,
-                "maxNotional" to maxNotional,
-                "currency" to currency
-            )
-        )
-
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject(
-                "status" to "ok",
-                "control" to mapOf(
-                    "scopeType" to current.scopeType,
-                    "scopeId" to current.scopeId,
-                    "decision" to current.decision.name,
-                    "reason" to current.reason,
-                    "maxQuantityUnits" to current.maxQuantityUnits,
-                    "maxNotional" to current.maxNotional,
-                    "currency" to current.currency,
-                    "updatedAt" to current.updatedAt
-                )
-            )
-        )
-    }
-
-    private fun transitionArenaBotVersionResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val botId = json.string("botId")
-        val versionId = json.string("versionId")
-        val status = normalizeArenaBotVersionStatus(json.string("status"))
-            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid arena bot version status"))
-        val reason = json.string("reason").ifBlank { "operator transition" }
-        if (botId.isBlank() || versionId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
-        }
-        val actor = arenaAdminActor()
-        return try {
-            val updated = service.transitionArenaBotVersion(
-                actor,
-                ArenaBotVersionDecisionCommand(
-                    botId = botId,
-                    versionId = versionId,
-                    status = status,
-                    reason = reason
-                )
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to updated.botId,
-                    "versionId" to updated.versionId,
-                    "botVersionStatus" to updated.status.name
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena transition")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena transition failed")))
-        }
-    }
-
-    private fun registerArenaBotResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val actor = arenaAdminActor(json)
-        return try {
-            val bot = service.registerArenaBot(
-                actor,
-                ArenaBotRegistrationCommand(
-                    botId = json.string("botId"),
-                    fileName = json.string("fileName"),
-                    name = json.string("name"),
-                    publisher = json.string("publisher"),
-                    email = json.string("email"),
-                    description = json.string("description"),
-                    version = json.string("version")
-                )
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to bot.botId,
-                    "fileName" to bot.fileName
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot registration failed")))
-        }
-    }
-
-    private fun registerArenaBotVersionResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val actor = arenaAdminActor(json)
-        return try {
-            val version = service.registerArenaBotVersion(
-                actor,
-                ArenaBotVersionRegistrationCommand(
-                    botId = json.string("botId"),
-                    versionId = json.string("versionId"),
-                    sourceHash = json.string("sourceHash"),
-                    artifactHash = json.string("artifactHash"),
-                    sdkVersion = json.string("sdkVersion"),
-                    apiVersion = json.string("apiVersion"),
-                    dependencyManifestHash = json.string("dependencyManifestHash")
-                )
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to version.botId,
-                    "versionId" to version.versionId,
-                    "botVersionStatus" to version.status.name
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena bot version")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot version registration failed")))
-        }
-    }
-
-    private fun arenaBotOpenBaoProvisionResponse(body: String): PlatformHotPathResponse {
-        if (arenaAdminService == null) {
-            return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        }
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val githubOidcToken = json.string("githubOidcToken")
-        val submitterIdentity = json.string("submitterIdentity")
-        val botId = json.string("botId")
-        val flow = json.string("flow")
-        if (githubOidcToken.isBlank() || submitterIdentity.isBlank() || botId.isBlank()) {
-            return PlatformHotPathResponse(
-                400,
-                JsonCodec.writeObject("error" to "githubOidcToken, submitterIdentity, and botId are required")
-            )
-        }
-        if (flow !in setOf("add", "update", "remove")) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "flow must be add, update, or remove"))
-        }
-        val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
-            .ifBlank { return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "BAO_ADDR is not configured")) }
-        val service = OpenBaoProvisioningService(OpenBaoProvisioningConfig(baoAddr = baoAddr))
-        return try {
-            when (flow) {
-                "remove" -> service.revokeBotSecretSlice(githubOidcToken, submitterIdentity, botId)
-                "update" -> Unit // existing slice is reused; no new provisioning
-                else -> service.provisionBotSecretSlice(githubOidcToken, submitterIdentity, botId, emptyMap())
-            }
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "botId" to botId, "flow" to flow)
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid submitterIdentity or botId")))
-        } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao provisioning failed")))
-        }
-    }
-
-    private fun assignArenaBotOwnershipResponse(body: String): PlatformHotPathResponse {
-        val identity = adminIdentityService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "admin identity service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val botId = json.string("botId")
-        val githubLogin = json.string("githubLogin")
-        val displayName = json.string("displayName")
-        if (botId.isBlank() || githubLogin.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and githubLogin are required"))
-        }
-        return try {
-            val githubUserId = json.requiredLong("githubUserId")
-            val actor = currentAdminPrincipal().actorId
-            if (actor.startsWith("user-gh-")) {
-                val roles = identity.rolesForUser(actor).map { it.roleId }.toSet()
-                if (roles.none { it in adminBotConfigPrivilegedRoles }) {
-                    return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot ownership"))
-                }
-            }
-            val user = identity.ensureGitHubUser(
-                GitHubUserIdentity(
-                    githubUserId = githubUserId,
-                    githubLogin = githubLogin,
-                    displayName = displayName
-                ),
-                actorId = actor
-            )
-            val ownership = identity.assignBotOwnership(
-                actor,
-                AdminBotOwnershipCommand(reefUserId = user.reefUserId, botId = botId)
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to ownership.botId,
-                    "reefUserId" to ownership.reefUserId,
-                    "githubLogin" to user.githubLogin,
-                    "ownershipState" to ownership.ownershipState.dbValue
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot ownership request")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot ownership assignment failed")))
-        }
-    }
-
-    private fun arenaBotOpenBaoConfigResponse(method: String, query: String?, body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        return when (method) {
-            "GET" -> arenaBotOpenBaoConfigStatusResponse(service, query)
-            "PUT" -> arenaBotOpenBaoConfigReplaceResponse(service, body)
-            "DELETE" -> arenaBotOpenBaoConfigDeleteResponse(service, query)
-            else -> methodNotAllowedResponse()
-        }
-    }
-
-    private fun arenaBotOpenBaoConfigStatusResponse(
-        service: AdminApplicationService,
-        query: String?
-    ): PlatformHotPathResponse {
-        val botId = queryValue(query, "botId")
-        if (botId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
-        }
-        return try {
-            val bot = service.arenaBot(arenaAdminActor(query), botId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
-            val ownerIdentity = openBaoOwnerIdentity(bot)
-                ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
-            if (!canManageBotOpenBaoConfig(bot.botId)) {
-                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
-            }
-            val snapshot = openBaoBotConfigService().status(ownerIdentity, bot.botId)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to snapshot.botId,
-                    "ownerIdentity" to snapshot.ownerIdentity,
-                    "secretPath" to snapshot.secretPath,
-                    "hasConfig" to snapshot.hasConfig,
-                    "keys" to snapshot.keys,
-                    "updatedAt" to snapshot.updatedAt,
-                    "updatedBy" to snapshot.updatedBy,
-                    "version" to snapshot.version
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
-        } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config lookup failed")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config lookup failed")))
-        }
-    }
-
-    private fun arenaBotOpenBaoConfigReplaceResponse(
-        service: AdminApplicationService,
-        body: String
-    ): PlatformHotPathResponse {
-        val json = try {
-            JsonCodec.parseObject(body)
-        } catch (ex: IllegalArgumentException) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid json payload"))
-        }
-        val botId = json.string("botId")
-        val configJson = json.raw("config")
-        if (botId.isBlank() || configJson.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and config are required"))
-        }
-        return try {
-            val bot = service.arenaBot(arenaAdminActor(json), botId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
-            val ownerIdentity = openBaoOwnerIdentity(bot)
-                ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
-            if (!canManageBotOpenBaoConfig(bot.botId)) {
-                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
-            }
-            val actor = currentAdminPrincipal().actorId
-            val result = openBaoBotConfigService().replaceConfig(ownerIdentity, bot.botId, configJson, actor)
-            recordAdminControlPlaneAudit(
-                actor,
-                "AdminArenaBotConfigReplaced",
-                "arena-bot",
-                result.botId,
-                "secretPath=${result.secretPath},keyCount=${result.keys.size}"
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to result.botId,
-                    "ownerIdentity" to result.ownerIdentity,
-                    "secretPath" to result.secretPath,
-                    "hasConfig" to true,
-                    "keys" to result.keys,
-                    "updatedAt" to result.updatedAt
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config")))
-        } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config write failed")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config write failed")))
-        }
-    }
-
-    private fun arenaBotOpenBaoConfigDeleteResponse(
-        service: AdminApplicationService,
-        query: String?
-    ): PlatformHotPathResponse {
-        val botId = queryValue(query, "botId")
-        if (botId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId is required"))
-        }
-        return try {
-            val bot = service.arenaBot(arenaAdminActor(query), botId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
-            val ownerIdentity = openBaoOwnerIdentity(bot)
-                ?: return PlatformHotPathResponse(409, JsonCodec.writeObject("error" to "arena bot has no linked owner"))
-            if (!canManageBotOpenBaoConfig(bot.botId)) {
-                return PlatformHotPathResponse(403, JsonCodec.writeObject("error" to "not authorized for bot config"))
-            }
-            openBaoBotConfigService().deleteConfig(ownerIdentity, bot.botId)
-            val actor = currentAdminPrincipal().actorId
-            val secretPath = "secret/bots/$ownerIdentity/${bot.botId}"
-            recordAdminControlPlaneAudit(
-                actor,
-                "AdminArenaBotConfigDeleted",
-                "arena-bot",
-                bot.botId,
-                "secretPath=$secretPath"
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "botId" to bot.botId,
-                    "ownerIdentity" to ownerIdentity,
-                    "secretPath" to secretPath,
-                    "hasConfig" to false,
-                    "keys" to emptyList<String>()
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid bot config request")))
-        } catch (ex: OpenBaoClientException) {
-            PlatformHotPathResponse(502, JsonCodec.writeObject("error" to (ex.message ?: "OpenBao bot config delete failed")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot config delete failed")))
-        }
-    }
-
-    private fun arenaBotResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val botId = queryValue(query, "botId")
-        if (botId.isBlank()) {
-            return arenaBotsListResponse(service, query)
-        }
-        return try {
-            val bot = service.arenaBot(arenaAdminActor(query), botId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot not found"))
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "bot" to arenaBotJson(bot)))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot lookup failed")))
-        }
-    }
-
-    // botId omitted -> roster listing, most-recently-registered first.
-    private fun arenaBotsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
-        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
-        return try {
-            val bots = service.arenaBots(arenaAdminActor(query), limit)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "bots" to bots.map { arenaBotJson(it) })
-            )
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bots query failed")))
-        }
-    }
-
-    private fun arenaBotVersionResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val botId = queryValue(query, "botId")
-        val versionId = queryValue(query, "versionId")
-        if (botId.isBlank() || versionId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
-        }
-        return try {
-            val version = service.arenaBotVersion(arenaAdminActor(query), botId, versionId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena bot version not found"))
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "version" to arenaBotVersionJson(version)))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena bot version lookup failed")))
-        }
-    }
-
-    private fun arenaQualificationReportsResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val botId = queryValue(query, "botId")
-        val versionId = queryValue(query, "versionId")
-        if (botId.isBlank() || versionId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
-        }
-        return try {
-            val reports = service.arenaQualificationReports(arenaAdminActor(query), botId, versionId)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "reports" to reports.map { arenaQualificationReportJson(it) })
-            )
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena qualification reports query failed")))
-        }
-    }
-
-    private fun arenaOperatorDecisionsResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val botId = queryValue(query, "botId")
-        val versionId = queryValue(query, "versionId")
-        if (botId.isBlank() || versionId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
-        }
-        return try {
-            val decisions = service.arenaOperatorDecisions(arenaAdminActor(query), botId, versionId)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "decisions" to decisions.map { arenaOperatorDecisionJson(it) })
-            )
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena operator decisions query failed")))
-        }
-    }
-
-    private fun arenaRuntimeConfigDescriptorsResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val botId = queryValue(query, "botId")
-        val versionId = queryValue(query, "versionId")
-        if (botId.isBlank() || versionId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "botId and versionId are required"))
-        }
-        return try {
-            val descriptors = service.arenaRuntimeConfigDescriptors(arenaAdminActor(query), botId, versionId)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "descriptors" to descriptors.map { arenaRuntimeConfigDescriptorJson(it) })
-            )
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena runtime config descriptors query failed")))
-        }
-    }
-
-    private fun arenaRunResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val runId = queryValue(query, "runId")
-        if (runId.isBlank()) {
-            return arenaRunsListResponse(service, query)
-        }
-        return try {
-            val run = service.arenaRun(arenaAdminActor(query), runId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "arena run not found"))
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run lookup failed")))
-        }
-    }
-
-    // runId omitted -> recent run listing, most-recently-created first.
-    private fun arenaRunsListResponse(service: AdminApplicationService, query: String?): PlatformHotPathResponse {
-        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
-        return try {
-            val runs = service.arenaRuns(arenaAdminActor(query), limit)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "runs" to runs.map { arenaRunJson(it) })
-            )
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena runs query failed")))
-        }
-    }
-
-    private fun registerArenaRunResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        return try {
-            val run = service.registerArenaRun(
-                arenaAdminActor(json),
-                ArenaRunRegistrationCommand(
-                    runId = json.string("runId"),
-                    modeId = json.string("modeId"),
-                    scenarioId = json.string("scenarioId"),
-                    seed = json.requiredLong("seed"),
-                    policyVersion = json.string("policyVersion"),
-                    botVersions = json.objectDocuments("botVersions").map { ref ->
-                        ArenaRunBotVersionRef(ref.string("botId"), ref.string("versionId"))
-                    }
-                )
-            )
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run registration failed")))
-        }
-    }
-
-    private fun updateArenaRunStatusResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val runId = json.string("runId")
-        val status = normalizeArenaRunStatus(json.string("status"))
-            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid arena run status"))
-        if (runId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
-        }
-        return try {
-            val run = service.updateArenaRunStatus(arenaAdminActor(json), ArenaRunStatusCommand(runId, status))
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "run" to arenaRunJson(run)))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run transition")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run transition failed")))
-        }
-    }
-
-    private fun arenaRunBotResultsResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val runId = queryValue(query, "runId")
-        if (runId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
-        }
-        return try {
-            val results = service.arenaRunBotResults(arenaAdminActor(query), runId)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "results" to results.map { arenaRunBotResultJson(it) })
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run bot results query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run bot results query failed")))
-        }
-    }
-
-    private fun recordArenaRunBotResultResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        return try {
-            val command = ArenaRunBotResultIngestionCommand(
-                runId = json.string("runId"),
-                botId = json.string("botId"),
-                versionId = json.string("versionId"),
-                scoringPolicyVersion = json.string("scoringPolicyVersion"),
-                finalEquity = json.requiredLong("finalEquity"),
-                realizedPnl = json.requiredLong("realizedPnl"),
-                maxDrawdown = json.requiredLong("maxDrawdown"),
-                actionsProposed = json.requiredInt("actionsProposed"),
-                orderActionsProposed = json.requiredInt("orderActionsProposed"),
-                dataCalls = json.requiredInt("dataCalls"),
-                signalsGenerated = json.requiredInt("signalsGenerated"),
-                disqualified = json.boolean("disqualified"),
-                scoreEligible = json.booleanOrDefault("scoreEligible", true),
-                publicLeaderboard = json.booleanOrDefault("publicLeaderboard", true)
-            )
-            val result = service.recordArenaRunBotResult(arenaAdminActor(json), command)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "result" to arenaRunBotResultJson(result))
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run bot result")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run bot result ingestion failed")))
-        }
-    }
-
-    private fun arenaRunEnforcementEventsResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val runId = queryValue(query, "runId")
-        if (runId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "runId is required"))
-        }
-        return try {
-            val events = service.arenaRunEnforcementEvents(arenaAdminActor(query), runId)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "events" to events.map { arenaRunEnforcementEventJson(it) })
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run enforcement query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run enforcement query failed")))
-        }
-    }
-
-    private fun recordArenaRunEnforcementEventResponse(body: String): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        return try {
-            val command = ArenaRunEnforcementEventIngestionCommand(
-                runId = json.string("runId"),
-                botId = json.string("botId"),
-                versionId = json.string("versionId"),
-                decision = json.string("decision"),
-                reasonCode = json.string("reasonCode"),
-                reason = json.string("reason"),
-                policyVersion = json.string("policyVersion"),
-                countersJson = json.string("countersJson")
-            )
-            val event = service.recordArenaRunEnforcementEvent(arenaAdminActor(json), command)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "event" to arenaRunEnforcementEventJson(event))
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid arena run enforcement event")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena run enforcement event ingestion failed")))
-        }
-    }
-
-    private fun arenaLeaderboardResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena admin service unavailable"))
-        val modeId = queryValue(query, "modeId")
-        val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
-        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
-        if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
-        }
-        return try {
-            val entries = service.arenaLeaderboard(arenaAdminActor(query), modeId, scoringPolicyVersion, limit)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "entries" to entries.map { arenaLeaderboardEntryJson(it) })
-            )
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "arena leaderboard query failed")))
-        }
-    }
-
-    // Public, unauthenticated leaderboard read (D-052) — venue-intake visibility class,
-    // not admin/data. No AdminActor derivation: this must not require an admin session.
-    private fun arenaLeaderboardPublicResponse(query: String?): PlatformHotPathResponse {
-        val service = arenaAdminService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "arena service unavailable"))
-        val modeId = queryValue(query, "modeId")
-        val scoringPolicyVersion = queryValue(query, "scoringPolicyVersion")
-        val limit = boundedQueryLimit(queryValue(query, "limit"), defaultValue = 50)
-        if (modeId.isBlank() || scoringPolicyVersion.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "modeId and scoringPolicyVersion are required"))
-        }
-        val entries = service.arenaLeaderboardPublic(modeId, scoringPolicyVersion, limit)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject(
-                "modeId" to modeId,
-                "scoringPolicyVersion" to scoringPolicyVersion,
-                "entries" to entries.map { arenaLeaderboardEntryJson(it) }
-            )
-        )
-    }
-
-    private fun recordAnalyticsRunExportResponse(body: String): PlatformHotPathResponse {
-        val service = analyticsRunExportService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val counts = json.obj("counts")
-        val latency = json.obj("latencyMs")
-        val summaryJson = analyticsExportSummaryJson(json)
-        return try {
-            val record = service.ingest(
-                SimulationRunExportCommand(
-                    runId = json.string("runId"),
-                    scenarioId = json.string("scenarioId"),
-                    runKind = json.string("runKind"),
-                    source = json.string("source"),
-                    gitSha = json.string("gitSha"),
-                    profile = json.string("profile"),
-                    startedAt = instantOrNull(json.string("startedAt")),
-                    completedAt = instantOrNull(json.string("completedAt")),
-                    exportedAt = instantOrNull(json.string("exportedAt")),
-                    status = json.string("status"),
-                    attemptedCount = longValue(json, counts, "attemptedCount", "attempted"),
-                    acceptedCount = longValue(json, counts, "acceptedCount", "accepted"),
-                    completedCount = longValue(json, counts, "completedCount", "completed"),
-                    materializedCount = longValue(json, counts, "materializedCount", "materialized"),
-                    projectedCount = longValue(json, counts, "projectedCount", "projected"),
-                    failedCount = longValue(json, counts, "failedCount", "failed"),
-                    p50LatencyMs = doubleValue(json, latency, "p50LatencyMs", "p50"),
-                    p95LatencyMs = doubleValue(json, latency, "p95LatencyMs", "p95"),
-                    p99LatencyMs = doubleValue(json, latency, "p99LatencyMs", "p99"),
-                    artifactManifestJson = normalizedRawJson(json.raw("artifactManifest").ifBlank { json.raw("artifacts") }, "[]"),
-                    summaryJson = summaryJson
-                )
-            )
-            PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "export" to analyticsRunExportJson(record)))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid analytics run export")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "analytics run export ingestion failed")))
-        }
-    }
-
-    private fun analyticsExportSummaryJson(json: JsonDocument): String {
-        val explicitSummary = json.raw("summary")
-        if (explicitSummary.isNotBlank()) return normalizedRawJson(explicitSummary, "{}")
-        if (!json.has("botResults") && !json.has("settlementScore") && !json.has("settlementScoreSummary")) {
-            return "{}"
-        }
-        return JsonCodec.writeObject(
-            "botResults" to JsonCodec.rawJsonOrText(json.raw("botResults").ifBlank { "[]" }),
-            "settlementScore" to JsonCodec.rawJsonOrText(
-                json.raw("settlementScore").ifBlank { json.raw("settlementScoreSummary").ifBlank { "{}" } }
-            )
-        )
-    }
-
-    private fun analyticsRunExportsResponse(query: String?): PlatformHotPathResponse {
-        val service = analyticsRunExportService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
-        val runId = queryValue(query, "runId")
-        if (runId.isNotBlank()) {
-            val record = service.find(runId)
-                ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "analytics run export not found"))
-            return PlatformHotPathResponse(200, JsonCodec.writeObject("status" to "ok", "export" to analyticsRunExportJson(record)))
-        }
-        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
-        val records = service.list(limit)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject(
-                "status" to "ok",
-                "exports" to records.map { analyticsRunExportJson(it) },
-                "exportsCount" to records.size,
-                "limit" to limit.coerceIn(1, 500)
-            )
-        )
-    }
-
-    private fun analyticsRunBotSummariesResponse(query: String?): PlatformHotPathResponse {
-        val service = analyticsRunExportService
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "analytics run export service unavailable"))
-        val runId = queryValue(query, "runId")
-        val botId = queryValue(query, "botId")
-        val limit = queryValue(query, "limit").toIntOrNull() ?: 50
-        val records = service.listBotPerformanceSummaries(runId, botId, limit)
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject(
-                "status" to "ok",
-                "summaries" to records.map { analyticsRunBotSummaryJson(it) },
-                "summariesCount" to records.size,
-                "limit" to limit.coerceIn(1, 500),
-                "meta" to mapOf(
-                    "sourceFacts" to "analytics.simulation_run_exports summary.botResults plus optional settlementScore participants",
-                    "freshness" to "rebuilt during simulation-run export ingestion; idempotent upsert by runId and botId",
-                    "authoritative" to false
-                )
-            )
-        )
-    }
-
-    private fun analyticsRunExportJson(record: SimulationRunExportRecord): Map<String, Any?> {
-        return mapOf(
-            "runId" to record.runId,
-            "scenarioId" to record.scenarioId,
-            "runKind" to record.runKind,
-            "source" to record.source,
-            "gitSha" to record.gitSha,
-            "profile" to record.profile,
-            "startedAt" to record.startedAt?.toString(),
-            "completedAt" to record.completedAt?.toString(),
-            "exportedAt" to record.exportedAt.toString(),
-            "status" to record.status,
-            "counts" to mapOf(
-                "attempted" to record.attemptedCount,
-                "accepted" to record.acceptedCount,
-                "completed" to record.completedCount,
-                "materialized" to record.materializedCount,
-                "projected" to record.projectedCount,
-                "failed" to record.failedCount
-            ),
-            "latencyMs" to mapOf(
-                "p50" to record.p50LatencyMs,
-                "p95" to record.p95LatencyMs,
-                "p99" to record.p99LatencyMs
-            ),
-            "artifacts" to JsonCodec.rawJsonOrText(record.artifactManifestJson),
-            "summary" to JsonCodec.rawJsonOrText(record.summaryJson)
-        )
-    }
-
-    private fun analyticsRunBotSummaryJson(record: BotRunPerformanceSummaryRecord): Map<String, Any?> {
-        return mapOf(
-            "runId" to record.runId,
-            "botId" to record.botId,
-            "scenarioId" to record.scenarioId,
-            "profile" to record.profile,
-            "source" to record.source,
-            "completedAt" to record.completedAt?.toString(),
-            "exportedAt" to record.exportedAt.toString(),
-            "projectedAt" to record.projectedAt.toString(),
-            "finalEquity" to record.finalEquity,
-            "realizedPnl" to record.realizedPnl,
-            "maxDrawdown" to record.maxDrawdown,
-            "failCount" to record.failCount,
-            "commandCount" to record.commandCount,
-            "settlementScoreSummary" to JsonCodec.rawJsonOrText(record.settlementScoreSummaryJson),
-            "sourceSummary" to JsonCodec.rawJsonOrText(record.sourceSummaryJson)
-        )
-    }
-
-    private fun appendSettlementFactsResponse(body: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        return try {
-            val facts = parseSettlementFactBundle(JsonCodec.parseObject(body))
-            store.appendFacts(facts)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement facts")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement fact append failed")))
-        }
-    }
-
-    private fun postCashSettlementRepairResponse(body: String): PlatformHotPathResponse {
-        return postSettlementRepairResponse(
-            body = body,
-            repairKind = "cash",
-            expectedBreakReason = SettlementBreakOpenedReason,
-            repairAction = SettlementRepairPostedActionCash,
-            assetType = SettlementLedgerEntryTypeCash,
-            defaultParticipantId = { it.buyerParticipantId },
-            defaultAssetId = { it.currency },
-            defaultQuantity = { it.cashAmount }
-        )
-    }
-
-    private fun postSecuritySettlementRepairResponse(body: String): PlatformHotPathResponse {
-        return postSettlementRepairResponse(
-            body = body,
-            repairKind = "security",
-            expectedBreakReason = SettlementBreakOpenedReasonSecurity,
-            repairAction = SettlementRepairPostedActionSecurity,
-            assetType = SettlementLedgerEntryTypeSecurity,
-            defaultParticipantId = { it.sellerParticipantId },
-            defaultAssetId = { it.instrumentId },
-            defaultQuantity = { it.quantity }
-        )
-    }
-
-    private fun postSettlementRepairResponse(
-        body: String,
-        repairKind: String,
-        expectedBreakReason: String,
-        repairAction: String,
-        assetType: String,
-        defaultParticipantId: (SettlementObligationCreatedFact) -> String,
-        defaultAssetId: (SettlementObligationCreatedFact) -> String,
-        defaultQuantity: (SettlementObligationCreatedFact) -> String
-    ): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        return try {
-            val json = JsonCodec.parseObject(body)
-            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
-            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
-            val settlementBreakId = json.string("settlementBreakId")
-            require(settlementBreakId.isNotBlank()) { "settlementBreakId is required" }
-            val accountId = json.string("accountId")
-            require(accountId.isNotBlank()) { "accountId is required" }
-            val existing = store.factsByScenarioRunId(scenarioRunId)
-            val breakFact = existing.breaks.firstOrNull { it.settlementBreakId == settlementBreakId }
-                ?: throw IllegalArgumentException("settlementBreakId not found")
-            require(breakFact.reason == expectedBreakReason) { "settlementBreakId is not a $repairKind break" }
-            val obligation = existing.obligations.firstOrNull {
-                it.settlementObligationId == breakFact.settlementObligationId
-            } ?: throw IllegalArgumentException("settlement obligation not found")
-            val principal = currentAdminPrincipal()
-            val occurredAtRaw = json.string("occurredAt")
-            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
-            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
-            val actorId = json.string("actorId").ifBlank { principal.actorId }
-            require(actorId.isNotBlank()) { "actorId is required" }
-            val participantId = json.string("participantId").ifBlank { defaultParticipantId(obligation) }
-            val assetId = json.string("assetId").ifBlank { defaultAssetId(obligation) }
-            val quantity = json.string("quantity").ifBlank { defaultQuantity(obligation) }
-            require(quantity.isNotBlank()) { "quantity is required" }
-            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-$repairKind" }
-            val resourcePositionId = json.string("resourcePositionId").ifBlank {
-                "resource-$settlementBreakId-$repairKind-repair"
-            }
-            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
-            val causationId = json.string("causationId").ifBlank { settlementBreakId }
-            val facts = SettlementFactBundle(
-                scenarioRunId = scenarioRunId,
-                resourcePositions = listOf(
-                    SettlementResourcePositionFact(
-                        resourcePositionId = resourcePositionId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = breakFact.postTradeProfileId,
-                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = causationId,
-                        participantId = participantId,
-                        accountId = accountId,
-                        assetType = assetType,
-                        assetId = assetId,
-                        quantity = quantity,
-                        occurredAt = occurredAt
-                    )
-                ),
-                repairs = listOf(
-                    SettlementRepairPostedFact(
-                        settlementRepairId = repairId,
-                        settlementBreakId = settlementBreakId,
-                        settlementObligationId = obligation.settlementObligationId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = breakFact.postTradeProfileId,
-                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = causationId,
-                        repairAction = repairAction,
-                        actorId = actorId,
-                        occurredAt = occurredAt
-                    )
-                )
-            )
-            store.appendFacts(facts)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement repair")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement repair failed")))
-        }
-    }
-
-    private fun forceSettleResponse(body: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        val materializer = settlementObligationMaterializer
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
-        return try {
-            val json = JsonCodec.parseObject(body)
-            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
-            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
-            val settlementBreakId = json.string("settlementBreakId")
-            require(settlementBreakId.isNotBlank()) { "settlementBreakId is required" }
-            val accountId = json.string("accountId")
-            require(accountId.isNotBlank()) { "accountId is required" }
-            val reasonNote = json.string("reasonNote")
-            require(reasonNote.isNotBlank()) { "reasonNote is required" }
-            val occurredAtRaw = json.string("occurredAt")
-            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
-            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
-            val existing = store.factsByScenarioRunId(scenarioRunId)
-            val breakFact = existing.breaks.firstOrNull { it.settlementBreakId == settlementBreakId }
-                ?: throw IllegalArgumentException("settlementBreakId not found")
-            val obligation = existing.obligations.firstOrNull { it.settlementObligationId == breakFact.settlementObligationId }
-                ?: throw IllegalArgumentException("settlement obligation not found")
-            val principal = currentAdminPrincipal()
-            val actorId = json.string("actorId").ifBlank { principal.actorId }
-            require(actorId.isNotBlank()) { "actorId is required" }
-            val isCashBreak = breakFact.reason == SettlementBreakOpenedReason
-            val repairKind = if (isCashBreak) "cash" else "security"
-            val resourceAssetType = if (isCashBreak) SettlementLedgerEntryTypeCash else SettlementLedgerEntryTypeSecurity
-            val resourceParticipantId = json.string("participantId").ifBlank {
-                if (isCashBreak) obligation.buyerParticipantId else obligation.sellerParticipantId
-            }
-            val resourceAssetId = json.string("assetId").ifBlank {
-                if (isCashBreak) obligation.currency else obligation.instrumentId
-            }
-            val resourceQuantity = json.string("quantity").ifBlank {
-                if (isCashBreak) obligation.cashAmount else obligation.quantity
-            }
-            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
-            val operatorActionId = json.string("settlementOperatorActionId").ifBlank {
-                "operator-force-settle-$settlementBreakId"
-            }
-            val repairId = json.string("settlementRepairId").ifBlank { "repair-$settlementBreakId-force-settle" }
-            val resourcePositionId = json.string("resourcePositionId").ifBlank {
-                "resource-$settlementBreakId-force-settle"
-            }
-            val auditFacts = SettlementFactBundle(
-                scenarioRunId = scenarioRunId,
-                operatorActions = listOf(
-                    SettlementOperatorActionFact(
-                        settlementOperatorActionId = operatorActionId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = breakFact.postTradeProfileId,
-                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = settlementBreakId,
-                        action = SettlementOperatorActionForceSettle,
-                        targetId = settlementBreakId,
-                        reasonNote = reasonNote,
-                        actorId = actorId,
-                        occurredAt = occurredAt
-                    )
-                ),
-                resourcePositions = listOf(
-                    SettlementResourcePositionFact(
-                        resourcePositionId = resourcePositionId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = breakFact.postTradeProfileId,
-                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = operatorActionId,
-                        participantId = resourceParticipantId,
-                        accountId = accountId,
-                        assetType = resourceAssetType,
-                        assetId = resourceAssetId,
-                        quantity = resourceQuantity,
-                        occurredAt = occurredAt
-                    )
-                ),
-                repairs = listOf(
-                    SettlementRepairPostedFact(
-                        settlementRepairId = repairId,
-                        settlementBreakId = settlementBreakId,
-                        settlementObligationId = obligation.settlementObligationId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = breakFact.postTradeProfileId,
-                        postTradePolicyVersion = breakFact.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = operatorActionId,
-                        repairAction = if (isCashBreak) SettlementRepairPostedActionCash else SettlementRepairPostedActionSecurity,
-                        actorId = actorId,
-                        occurredAt = occurredAt
-                    )
-                )
-            )
-            store.appendFacts(auditFacts)
-            val result = materializer.materialize(scenarioRunId = scenarioRunId, venueSessionId = json.string("venueSessionId"))
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "repairKind" to repairKind,
-                    "facts" to settlementFactBundleJson(auditFacts),
-                    "materialization" to mapOf(
-                        "scenarioRunId" to result.scenarioRunId,
-                        "materializedAllocations" to result.materializedAllocations,
-                        "materializedConfirmations" to result.materializedConfirmations,
-                        "materializedAffirmations" to result.materializedAffirmations,
-                        "materializedAttempts" to result.materializedAttempts,
-                        "materializedLedgerEntries" to result.materializedLedgerEntries,
-                        "materializedSettlements" to result.materializedSettlements,
-                        "materializedResolutions" to result.materializedResolutions
-                    )
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid force settle")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "force settle failed")))
-        }
-    }
-
-    private fun reverseSettlementLedgerEntryResponse(body: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        return try {
-            val json = JsonCodec.parseObject(body)
-            val scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") }
-            require(scenarioRunId.isNotBlank()) { "scenarioRunId is required" }
-            val targetLedgerEntryId = json.string("ledgerEntryId").ifBlank { json.string("targetLedgerEntryId") }
-            require(targetLedgerEntryId.isNotBlank()) { "ledgerEntryId is required" }
-            val reasonNote = json.string("reasonNote")
-            require(reasonNote.isNotBlank()) { "reasonNote is required" }
-            val occurredAtRaw = json.string("occurredAt")
-            require(occurredAtRaw.isNotBlank()) { "occurredAt is required" }
-            val occurredAt = instantFrom(occurredAtRaw, "occurredAt")
-            val existing = store.factsByScenarioRunId(scenarioRunId)
-            val target = existing.ledgerEntries.firstOrNull { it.ledgerEntryId == targetLedgerEntryId }
-                ?: throw IllegalArgumentException("ledgerEntryId not found")
-            val obligation = existing.obligations.firstOrNull { it.settlementObligationId == target.settlementObligationId }
-                ?: throw IllegalArgumentException("settlement obligation not found")
-            val nextAttemptNumber = existing.attempts
-                .filter { it.settlementObligationId == target.settlementObligationId }
-                .maxOfOrNull { it.attemptNumber }
-                ?.plus(1)
-                ?: 1
-            val principal = currentAdminPrincipal()
-            val actorId = json.string("actorId").ifBlank { principal.actorId }
-            require(actorId.isNotBlank()) { "actorId is required" }
-            val correlationId = json.string("correlationId").ifBlank { principal.correlationId }
-            val operatorActionId = json.string("settlementOperatorActionId").ifBlank {
-                "operator-reverse-ledger-$targetLedgerEntryId"
-            }
-            val instructionId = json.string("settlementInstructionId").ifBlank {
-                "settlement-instruction-reversal-$targetLedgerEntryId"
-            }
-            val attemptId = json.string("settlementAttemptId").ifBlank {
-                "settlement-attempt-reversal-$targetLedgerEntryId"
-            }
-            val reversalLedgerEntryId = json.string("reversalLedgerEntryId").ifBlank {
-                "settlement-ledger-reversal-$targetLedgerEntryId"
-            }
-            val facts = SettlementFactBundle(
-                scenarioRunId = scenarioRunId,
-                operatorActions = listOf(
-                    SettlementOperatorActionFact(
-                        settlementOperatorActionId = operatorActionId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = target.postTradeProfileId,
-                        postTradePolicyVersion = target.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = targetLedgerEntryId,
-                        action = SettlementOperatorActionReverseLedgerEntry,
-                        targetId = targetLedgerEntryId,
-                        reasonNote = reasonNote,
-                        actorId = actorId,
-                        occurredAt = occurredAt
-                    )
-                ),
-                instructions = listOf(
-                    SettlementInstructionCreatedFact(
-                        settlementInstructionId = instructionId,
-                        settlementObligationId = target.settlementObligationId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = target.postTradeProfileId,
-                        postTradePolicyVersion = target.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = operatorActionId,
-                        occurredAt = occurredAt
-                    )
-                ),
-                attempts = listOf(
-                    SettlementAttemptStartedFact(
-                        settlementAttemptId = attemptId,
-                        settlementObligationId = target.settlementObligationId,
-                        settlementInstructionId = instructionId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = target.postTradeProfileId,
-                        postTradePolicyVersion = target.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = instructionId,
-                        attemptNumber = nextAttemptNumber,
-                        occurredAt = occurredAt
-                    )
-                ),
-                ledgerEntries = listOf(
-                    SettlementLedgerEntryFact(
-                        ledgerEntryId = reversalLedgerEntryId,
-                        settlementObligationId = target.settlementObligationId,
-                        settlementInstructionId = instructionId,
-                        settlementAttemptId = attemptId,
-                        scenarioRunId = scenarioRunId,
-                        postTradeProfileId = target.postTradeProfileId,
-                        postTradePolicyVersion = target.postTradePolicyVersion,
-                        correlationId = correlationId,
-                        causationId = operatorActionId,
-                        participantId = target.participantId,
-                        accountId = target.accountId,
-                        assetType = target.assetType,
-                        assetId = target.assetId,
-                        direction = oppositeLedgerDirection(target.direction),
-                        quantity = target.quantity,
-                        occurredAt = occurredAt
-                    )
-                )
-            )
-            require(obligation.postTradeProfileId == target.postTradeProfileId) { "ledger entry profile must match obligation" }
-            store.appendFacts(facts)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject("status" to "ok", "facts" to settlementFactBundleJson(facts))
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid ledger reversal")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "ledger reversal failed")))
-        }
-    }
-
-    private fun oppositeLedgerDirection(direction: String): String {
-        return when (direction) {
-            SettlementLedgerDirectionDebit -> SettlementLedgerDirectionCredit
-            SettlementLedgerDirectionCredit -> SettlementLedgerDirectionDebit
-            else -> throw IllegalArgumentException("ledger entry direction must be DEBIT or CREDIT")
-        }
-    }
-
-    private fun materializeSettlementObligationsResponse(body: String): PlatformHotPathResponse {
-        val materializer = settlementObligationMaterializer
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement materializer unavailable"))
-        return try {
-            val json = JsonCodec.parseObject(body)
-            val result = materializer.materialize(
-                scenarioRunId = json.string("scenarioRunId").ifBlank { json.string("runId") },
-                venueSessionId = json.string("venueSessionId")
-            )
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "status" to "ok",
-                    "scenarioRunId" to result.scenarioRunId,
-                    "scannedTrades" to result.scannedTrades,
-                    "materializedObligations" to result.materializedObligations,
-                    "materializedAllocations" to result.materializedAllocations,
-                    "materializedConfirmations" to result.materializedConfirmations,
-                    "materializedAffirmations" to result.materializedAffirmations,
-                    "materializedInstructions" to result.materializedInstructions,
-                    "materializedAttempts" to result.materializedAttempts,
-                    "materializedLegOutcomes" to result.materializedLegOutcomes,
-                    "materializedLedgerEntries" to result.materializedLedgerEntries,
-                    "materializedSettlements" to result.materializedSettlements,
-                    "materializedBreaks" to result.materializedBreaks,
-                    "materializedResolutions" to result.materializedResolutions,
-                    "skippedTrades" to result.skippedTrades
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement materialization request")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(409, JsonCodec.writeObject("error" to (ex.message ?: "settlement materialization failed")))
-        }
-    }
-
-    private fun settlementFactsResponse(scenarioRunId: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        if (scenarioRunId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
-        }
-        return try {
-            PlatformHotPathResponse(200, settlementFactBundleBody(store.factsByScenarioRunId(scenarioRunId)))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement fact query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement fact query failed")))
-        }
-    }
-
-    private fun settlementObligationsResponse(scenarioRunId: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        if (scenarioRunId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
-        }
-        return try {
-            val facts = store.factsByScenarioRunId(scenarioRunId)
-            val obligations = SettlementObligationProjection.project(facts)
-            PlatformHotPathResponse(
-                200,
-                JsonCodec.writeObject(
-                    "scenarioRunId" to scenarioRunId,
-                    "obligationsCount" to obligations.size,
-                    "obligations" to obligations.map { settlementObligationViewJson(it) }
-                )
-            )
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement obligation query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement obligation query failed")))
-        }
-    }
-
-    private fun settlementLedgerResponse(scenarioRunId: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        if (scenarioRunId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
-        }
-        return try {
-            val projection = SettlementLedgerProjection.project(store.factsByScenarioRunId(scenarioRunId))
-            PlatformHotPathResponse(200, settlementLedgerProjectionBody(projection))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement ledger query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement ledger query failed")))
-        }
-    }
-
-    private fun settlementProofResponse(scenarioRunId: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        if (scenarioRunId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
-        }
-        return try {
-            val projection = SettlementScenarioProofProjection.project(store.factsByScenarioRunId(scenarioRunId))
-            PlatformHotPathResponse(200, settlementScenarioProofBody(projection))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement proof query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement proof query failed")))
-        }
-    }
-
-    private fun settlementScoreResponse(exchange: HttpExchange, scenarioRunId: String): PlatformHotPathResponse {
-        val store = settlementFactStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "settlement fact store unavailable"))
-        if (scenarioRunId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scenarioRunId is required"))
-        }
-        return try {
-            val projection = SettlementScoreProjection.project(
-                facts = store.factsByScenarioRunId(scenarioRunId),
-                options = SettlementScoreProjectionOptions(
-                    asOf = queryValue(exchange, "asOf").takeIf { it.isNotBlank() }?.let { instantFrom(it, "asOf") },
-                    agedFailAfterSeconds = queryValue(exchange, "agedFailAfterSeconds")
-                        .takeIf { it.isNotBlank() }
-                        ?.let {
-                            val parsed = it.toLongOrNull()
-                            require(parsed != null && parsed >= 0L) { "agedFailAfterSeconds must be a non-negative integer" }
-                            parsed
-                        }
-                        ?: com.reef.platform.application.settlement.SettlementScoreDefaultAgedFailAfterSeconds
-                )
-            )
-            PlatformHotPathResponse(200, settlementScoreProjectionBody(projection))
-        } catch (ex: IllegalArgumentException) {
-            PlatformHotPathResponse(400, JsonCodec.writeObject("error" to (ex.message ?: "invalid settlement score query")))
-        } catch (ex: Exception) {
-            PlatformHotPathResponse(503, JsonCodec.writeObject("error" to (ex.message ?: "settlement score query failed")))
-        }
-    }
-
-    private fun parseSettlementFactBundle(json: JsonDocument): SettlementFactBundle {
-        val scenarioRunId = json.string("scenarioRunId")
-        val venueSessionId = json.string("venueSessionId")
-        val scenarioRunProfileId = json.string("postTradeProfileId").ifBlank {
-            scenarioRunId.takeIf { it.isNotBlank() }
-                ?.let { scenarioRunPostTradeProfileLookup(it) }
-                .orEmpty()
-        }
-        val selection = postTradeProfileResolver.resolve(
-            scenarioRunProfileId = scenarioRunProfileId,
-            venueSessionProfileId = venueSessionId.takeIf { it.isNotBlank() }
-                ?.let { venueSessionPostTradeProfileLookup(it) }
-                .orEmpty()
-        )
-        val postTradeProfileId = selection.profileId
-        val postTradePolicyVersion = positiveIntOrDefault(
-            json = json,
-            key = "postTradePolicyVersion",
-            defaultValue = selection.policyVersion
-        )
-        return SettlementFactBundle(
-            scenarioRunId = scenarioRunId,
-            resourcePositions = json.objectDocuments("resourcePositions").map {
-                resourcePositionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            obligations = json.objectDocuments("obligations").map {
-                obligationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            allocations = json.objectDocuments("allocations").map {
-                allocationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            confirmations = json.objectDocuments("confirmations").map {
-                confirmationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            affirmations = json.objectDocuments("affirmations").map {
-                affirmationFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            instructions = json.objectDocuments("instructions").map {
-                instructionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            attempts = json.objectDocuments("attempts").map {
-                attemptFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            legOutcomes = json.objectDocuments("legOutcomes").map {
-                legOutcomeFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            ledgerEntries = json.objectDocuments("ledgerEntries").map {
-                ledgerEntryFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            settlements = json.objectDocuments("settlements").map {
-                settlementFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            breaks = json.objectDocuments("breaks").map {
-                breakFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            repairs = json.objectDocuments("repairs").map {
-                repairFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            resolutions = json.objectDocuments("resolutions").map {
-                resolutionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            },
-            operatorActions = json.objectDocuments("operatorActions").map {
-                operatorActionFact(it, scenarioRunId, postTradeProfileId, postTradePolicyVersion)
-            }
-        )
-    }
-
-    private fun resourcePositionFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementResourcePositionFact {
-        return SettlementResourcePositionFact(
-            resourcePositionId = json.string("resourcePositionId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            participantId = json.string("participantId"),
-            accountId = json.string("accountId"),
-            assetType = json.string("assetType"),
-            assetId = json.string("assetId"),
-            quantity = json.string("quantity"),
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun obligationFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementObligationCreatedFact {
-        return SettlementObligationCreatedFact(
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            tradeId = json.string("tradeId"),
-            buyerParticipantId = json.string("buyerParticipantId"),
-            sellerParticipantId = json.string("sellerParticipantId"),
-            instrumentId = json.string("instrumentId"),
-            quantity = json.string("quantity"),
-            cashAmount = json.string("cashAmount"),
-            currency = json.string("currency"),
-            state = json.string("state").ifBlank { "OBLIGATION_CREATED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun allocationFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementAllocationProposedFact {
-        return SettlementAllocationProposedFact(
-            settlementAllocationId = json.string("settlementAllocationId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            tradeId = json.string("tradeId"),
-            buyOrderId = json.string("buyOrderId"),
-            sellOrderId = json.string("sellOrderId"),
-            buyerAccountId = json.string("buyerAccountId"),
-            sellerAccountId = json.string("sellerAccountId"),
-            quantity = json.string("quantity"),
-            state = json.string("state").ifBlank { "ALLOCATION_PROPOSED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun confirmationFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementConfirmationGeneratedFact {
-        return SettlementConfirmationGeneratedFact(
-            settlementConfirmationId = json.string("settlementConfirmationId"),
-            settlementAllocationId = json.string("settlementAllocationId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            tradeId = json.string("tradeId"),
-            state = json.string("state").ifBlank { "CONFIRMATION_GENERATED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun affirmationFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementAffirmationAcceptedFact {
-        return SettlementAffirmationAcceptedFact(
-            settlementAffirmationId = json.string("settlementAffirmationId"),
-            settlementConfirmationId = json.string("settlementConfirmationId"),
-            settlementAllocationId = json.string("settlementAllocationId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            tradeId = json.string("tradeId"),
-            actorType = json.string("actorType").ifBlank { "SYSTEM" },
-            actorId = json.string("actorId").ifBlank { "post-trade-auto-affirmer" },
-            state = json.string("state").ifBlank { "AFFIRMATION_ACCEPTED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun attemptFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementAttemptStartedFact {
-        return SettlementAttemptStartedFact(
-            settlementAttemptId = json.string("settlementAttemptId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            settlementInstructionId = json.string("settlementInstructionId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            attemptNumber = positiveIntOrDefault(json, "attemptNumber", 1),
-            state = json.string("state").ifBlank { "ATTEMPT_STARTED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun instructionFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementInstructionCreatedFact {
-        return SettlementInstructionCreatedFact(
-            settlementInstructionId = json.string("settlementInstructionId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            instructionType = json.string("instructionType").ifBlank { "DVP" },
-            state = json.string("state").ifBlank { "INSTRUCTION_CREATED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun legOutcomeFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementLegOutcomeFact {
-        return SettlementLegOutcomeFact(
-            settlementLegOutcomeId = json.string("settlementLegOutcomeId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            settlementInstructionId = json.string("settlementInstructionId"),
-            settlementAttemptId = json.string("settlementAttemptId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            legType = json.string("legType"),
-            state = json.string("state").ifBlank { "LEG_SUCCEEDED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun ledgerEntryFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementLedgerEntryFact {
-        return SettlementLedgerEntryFact(
-            ledgerEntryId = json.string("ledgerEntryId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            settlementInstructionId = json.string("settlementInstructionId"),
-            settlementAttemptId = json.string("settlementAttemptId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            participantId = json.string("participantId"),
-            accountId = json.string("accountId"),
-            assetType = json.string("assetType"),
-            assetId = json.string("assetId"),
-            direction = json.string("direction"),
-            quantity = json.string("quantity"),
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun settlementFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementSettledFact {
-        return SettlementSettledFact(
-            settlementId = json.string("settlementId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            settlementInstructionId = json.string("settlementInstructionId"),
-            settlementAttemptId = json.string("settlementAttemptId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            settlementState = json.string("settlementState").ifBlank { "SETTLED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun breakFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementBreakOpenedFact {
-        return SettlementBreakOpenedFact(
-            settlementBreakId = json.string("settlementBreakId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            reason = json.string("reason").ifBlank { "CASH_LEG_FAILED" },
-            state = json.string("state").ifBlank { "BROKEN" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun repairFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementRepairPostedFact {
-        return SettlementRepairPostedFact(
-            settlementRepairId = json.string("settlementRepairId"),
-            settlementBreakId = json.string("settlementBreakId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            repairAction = json.string("repairAction").ifBlank { SettlementRepairPostedActionCash },
-            actorType = json.string("actorType").ifBlank { "USER" },
-            actorId = json.string("actorId"),
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun resolutionFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementResolvedFact {
-        return SettlementResolvedFact(
-            settlementResolutionId = json.string("settlementResolutionId"),
-            settlementObligationId = json.string("settlementObligationId"),
-            settlementBreakId = json.string("settlementBreakId"),
-            settlementRepairId = json.string("settlementRepairId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            settlementState = json.string("settlementState").ifBlank { "RESOLVED" },
-            exceptionState = json.string("exceptionState").ifBlank { "RESOLVED" },
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun operatorActionFact(
-        json: JsonDocument,
-        scenarioRunId: String,
-        defaultPostTradeProfileId: String,
-        defaultPostTradePolicyVersion: Int
-    ): SettlementOperatorActionFact {
-        return SettlementOperatorActionFact(
-            settlementOperatorActionId = json.string("settlementOperatorActionId"),
-            scenarioRunId = json.string("scenarioRunId").ifBlank { scenarioRunId },
-            postTradeProfileId = json.string("postTradeProfileId").ifBlank { defaultPostTradeProfileId },
-            postTradePolicyVersion = positiveIntOrDefault(json, "postTradePolicyVersion", defaultPostTradePolicyVersion),
-            correlationId = json.string("correlationId"),
-            causationId = json.string("causationId"),
-            action = json.string("action"),
-            targetId = json.string("targetId"),
-            reasonNote = json.string("reasonNote"),
-            actorType = json.string("actorType").ifBlank { "USER" },
-            actorId = json.string("actorId"),
-            occurredAt = requiredInstant(json, "occurredAt")
-        )
-    }
-
-    private fun positiveIntOrDefault(json: JsonDocument, key: String, defaultValue: Int): Int {
-        val raw = json.string(key)
-        if (raw.isBlank()) return defaultValue
-        val parsed = raw.toIntOrNull()
-        require(parsed != null && parsed > 0) { "$key must be a positive integer" }
-        return parsed
-    }
-
-    private fun requiredInstant(json: JsonDocument, key: String): Instant {
-        return instantFrom(json.string(key), key)
-    }
-
-    private fun instantFrom(value: String, key: String): Instant {
-        return try {
-            Instant.parse(value)
-        } catch (_: Exception) {
-            throw IllegalArgumentException("$key must be RFC3339")
-        }
-    }
-
-    private fun settlementFactBundleJson(facts: SettlementFactBundle): Map<String, Any?> {
-        return mapOf(
-            "scenarioRunId" to facts.scenarioRunId,
-            "resourcePositions" to facts.resourcePositions.map {
-                mapOf(
-                    "resourcePositionId" to it.resourcePositionId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "participantId" to it.participantId,
-                    "accountId" to it.accountId,
-                    "assetType" to it.assetType,
-                    "assetId" to it.assetId,
-                    "quantity" to it.quantity,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "obligations" to facts.obligations.map {
-                mapOf(
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "tradeId" to it.tradeId,
-                    "buyerParticipantId" to it.buyerParticipantId,
-                    "sellerParticipantId" to it.sellerParticipantId,
-                    "instrumentId" to it.instrumentId,
-                    "quantity" to it.quantity,
-                    "cashAmount" to it.cashAmount,
-                    "currency" to it.currency,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "allocations" to facts.allocations.map {
-                mapOf(
-                    "settlementAllocationId" to it.settlementAllocationId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "tradeId" to it.tradeId,
-                    "buyOrderId" to it.buyOrderId,
-                    "sellOrderId" to it.sellOrderId,
-                    "buyerAccountId" to it.buyerAccountId,
-                    "sellerAccountId" to it.sellerAccountId,
-                    "quantity" to it.quantity,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "confirmations" to facts.confirmations.map {
-                mapOf(
-                    "settlementConfirmationId" to it.settlementConfirmationId,
-                    "settlementAllocationId" to it.settlementAllocationId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "tradeId" to it.tradeId,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "affirmations" to facts.affirmations.map {
-                mapOf(
-                    "settlementAffirmationId" to it.settlementAffirmationId,
-                    "settlementConfirmationId" to it.settlementConfirmationId,
-                    "settlementAllocationId" to it.settlementAllocationId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "tradeId" to it.tradeId,
-                    "actorType" to it.actorType,
-                    "actorId" to it.actorId,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "instructions" to facts.instructions.map {
-                mapOf(
-                    "settlementInstructionId" to it.settlementInstructionId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "instructionType" to it.instructionType,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "attempts" to facts.attempts.map {
-                mapOf(
-                    "settlementAttemptId" to it.settlementAttemptId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "settlementInstructionId" to it.settlementInstructionId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "attemptNumber" to it.attemptNumber,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "legOutcomes" to facts.legOutcomes.map {
-                mapOf(
-                    "settlementLegOutcomeId" to it.settlementLegOutcomeId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "settlementInstructionId" to it.settlementInstructionId,
-                    "settlementAttemptId" to it.settlementAttemptId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "legType" to it.legType,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "ledgerEntries" to facts.ledgerEntries.map {
-                mapOf(
-                    "ledgerEntryId" to it.ledgerEntryId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "settlementInstructionId" to it.settlementInstructionId,
-                    "settlementAttemptId" to it.settlementAttemptId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "participantId" to it.participantId,
-                    "accountId" to it.accountId,
-                    "assetType" to it.assetType,
-                    "assetId" to it.assetId,
-                    "direction" to it.direction,
-                    "quantity" to it.quantity,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "settlements" to facts.settlements.map {
-                mapOf(
-                    "settlementId" to it.settlementId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "settlementInstructionId" to it.settlementInstructionId,
-                    "settlementAttemptId" to it.settlementAttemptId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "settlementState" to it.settlementState,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "breaks" to facts.breaks.map {
-                mapOf(
-                    "settlementBreakId" to it.settlementBreakId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "reason" to it.reason,
-                    "state" to it.state,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "repairs" to facts.repairs.map {
-                mapOf(
-                    "settlementRepairId" to it.settlementRepairId,
-                    "settlementBreakId" to it.settlementBreakId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "repairAction" to it.repairAction,
-                    "actorType" to it.actorType,
-                    "actorId" to it.actorId,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "resolutions" to facts.resolutions.map {
-                mapOf(
-                    "settlementResolutionId" to it.settlementResolutionId,
-                    "settlementObligationId" to it.settlementObligationId,
-                    "settlementBreakId" to it.settlementBreakId,
-                    "settlementRepairId" to it.settlementRepairId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "settlementState" to it.settlementState,
-                    "exceptionState" to it.exceptionState,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            },
-            "operatorActions" to facts.operatorActions.map {
-                mapOf(
-                    "settlementOperatorActionId" to it.settlementOperatorActionId,
-                    "scenarioRunId" to it.scenarioRunId,
-                    "postTradeProfileId" to it.postTradeProfileId,
-                    "postTradePolicyVersion" to it.postTradePolicyVersion,
-                    "correlationId" to it.correlationId,
-                    "causationId" to it.causationId,
-                    "action" to it.action,
-                    "targetId" to it.targetId,
-                    "reasonNote" to it.reasonNote,
-                    "actorType" to it.actorType,
-                    "actorId" to it.actorId,
-                    "occurredAt" to it.occurredAt.toString()
-                )
-            }
-        )
-    }
-
-    private fun settlementFactBundleBody(facts: SettlementFactBundle): String {
-        return jsonObjectBody(settlementFactBundleJson(facts))
-    }
-
-    private fun settlementLedgerProjectionBody(projection: SettlementLedgerProjectionView): String {
-        return jsonObjectBody(
-            mapOf(
-                "scenarioRunId" to projection.scenarioRunId,
-                "balancesCount" to projection.balances.size,
-                "settlementProofsCount" to projection.settlementProofs.size,
-                "balances" to projection.balances.map {
-                    mapOf(
-                        "scenarioRunId" to it.scenarioRunId,
-                        "participantId" to it.participantId,
-                        "accountId" to it.accountId,
-                        "assetType" to it.assetType,
-                        "assetId" to it.assetId,
-                        "openingQuantity" to it.openingQuantity,
-                        "debitQuantity" to it.debitQuantity,
-                        "creditQuantity" to it.creditQuantity,
-                        "netQuantity" to it.netQuantity,
-                        "availableQuantity" to it.availableQuantity,
-                        "ledgerEntryCount" to it.ledgerEntryCount,
-                        "updatedAt" to it.updatedAt.toString()
-                    )
-                },
-                "settlementProofs" to projection.settlementProofs.map {
-                    mapOf(
-                        "settlementId" to it.settlementId,
-                        "settlementObligationId" to it.settlementObligationId,
-                        "settlementInstructionId" to it.settlementInstructionId,
-                        "settlementAttemptId" to it.settlementAttemptId,
-                        "scenarioRunId" to it.scenarioRunId,
-                        "postTradeProfileId" to it.postTradeProfileId,
-                        "postTradePolicyVersion" to it.postTradePolicyVersion,
-                        "settlementState" to it.settlementState,
-                        "proofState" to it.proofState,
-                        "cashDebitQuantity" to it.cashDebitQuantity,
-                        "cashCreditQuantity" to it.cashCreditQuantity,
-                        "securityDebitQuantity" to it.securityDebitQuantity,
-                        "securityCreditQuantity" to it.securityCreditQuantity,
-                        "cashBalanced" to it.cashBalanced,
-                        "securityBalanced" to it.securityBalanced,
-                        "legOutcomeCount" to it.legOutcomeCount,
-                        "ledgerEntryCount" to it.ledgerEntryCount,
-                        "updatedAt" to it.updatedAt.toString()
-                    )
-                }
-            )
-        )
-    }
-
-    private fun settlementScenarioProofBody(proof: SettlementScenarioProofView): String {
-        return jsonObjectBody(
-            mapOf(
-                "scenarioRunId" to proof.scenarioRunId,
-                "proofStatus" to proof.proofStatus,
-                "checksumAlgorithm" to proof.checksumAlgorithm,
-                "checksum" to proof.checksum,
-                "factsCount" to proof.factsCount,
-                "obligationsCount" to proof.obligationsCount,
-                "allocationsCount" to proof.allocationsCount,
-                "confirmationsCount" to proof.confirmationsCount,
-                "affirmationsCount" to proof.affirmationsCount,
-                "instructionsCount" to proof.instructionsCount,
-                "attemptsCount" to proof.attemptsCount,
-                "legOutcomesCount" to proof.legOutcomesCount,
-                "ledgerEntriesCount" to proof.ledgerEntriesCount,
-                "settlementsCount" to proof.settlementsCount,
-                "breaksCount" to proof.breaksCount,
-                "repairsCount" to proof.repairsCount,
-                "resolutionsCount" to proof.resolutionsCount,
-                "operatorActionsCount" to proof.operatorActionsCount,
-                "profilePolicies" to proof.profilePolicies.map {
-                    mapOf(
-                        "postTradeProfileId" to it.postTradeProfileId,
-                        "postTradePolicyVersion" to it.postTradePolicyVersion,
-                        "factCount" to it.factCount
-                    )
-                },
-                "causationGapsCount" to proof.causationGaps.size,
-                "causationGaps" to proof.causationGaps.map {
-                    mapOf(
-                        "factType" to it.factType,
-                        "factId" to it.factId,
-                        "missingReferenceType" to it.missingReferenceType,
-                        "missingReferenceId" to it.missingReferenceId
-                    )
-                },
-                "obligations" to proof.obligations.map {
-                    mapOf(
-                        "settlementObligationId" to it.settlementObligationId,
-                        "tradeId" to it.tradeId,
-                        "buyerParticipantId" to it.buyerParticipantId,
-                        "sellerParticipantId" to it.sellerParticipantId,
-                        "instrumentId" to it.instrumentId,
-                        "quantity" to it.quantity,
-                        "cashAmount" to it.cashAmount,
-                        "currency" to it.currency,
-                        "settlementAllocationIds" to it.settlementAllocationIds,
-                        "settlementConfirmationIds" to it.settlementConfirmationIds,
-                        "settlementAffirmationIds" to it.settlementAffirmationIds,
-                        "settlementInstructionIds" to it.settlementInstructionIds,
-                        "settlementAttemptIds" to it.settlementAttemptIds,
-                        "ledgerEntryIds" to it.ledgerEntryIds,
-                        "settlementIds" to it.settlementIds,
-                        "settlementBreakIds" to it.settlementBreakIds,
-                        "settlementRepairIds" to it.settlementRepairIds,
-                        "settlementResolutionIds" to it.settlementResolutionIds
-                    )
-                },
-                "balances" to proof.balances.map {
-                    mapOf(
-                        "participantId" to it.participantId,
-                        "accountId" to it.accountId,
-                        "assetType" to it.assetType,
-                        "assetId" to it.assetId,
-                        "availableQuantity" to it.availableQuantity,
-                        "ledgerEntryCount" to it.ledgerEntryCount
-                    )
-                },
-                "settlementProofs" to proof.settlementProofs.map {
-                    mapOf(
-                        "settlementId" to it.settlementId,
-                        "settlementObligationId" to it.settlementObligationId,
-                        "settlementAttemptId" to it.settlementAttemptId,
-                        "cashBalanced" to it.cashBalanced,
-                        "securityBalanced" to it.securityBalanced,
-                        "ledgerEntryCount" to it.ledgerEntryCount
-                    )
-                },
-                "updatedAt" to proof.updatedAt.toString()
-            )
-        )
-    }
-
-    private fun settlementScoreProjectionBody(projection: SettlementScoreProjectionView): String {
-        return jsonObjectBody(
-            mapOf(
-                "scenarioRunId" to projection.scenarioRunId,
-                "asOf" to projection.asOf.toString(),
-                "agedFailAfterSeconds" to projection.agedFailAfterSeconds,
-                "participantsCount" to projection.participants.size,
-                "participants" to projection.participants.map {
-                    mapOf(
-                        "scenarioRunId" to it.scenarioRunId,
-                        "participantId" to it.participantId,
-                        "cashBalances" to it.cashBalances.map { balance ->
-                            mapOf("assetId" to balance.assetId, "availableQuantity" to balance.availableQuantity)
-                        },
-                        "securityBalances" to it.securityBalances.map { balance ->
-                            mapOf("assetId" to balance.assetId, "availableQuantity" to balance.availableQuantity)
-                        },
-                        "pendingValue" to it.pendingValue,
-                        "haircutAdjustedPendingValue" to it.haircutAdjustedPendingValue,
-                        "blockedUnsettledValue" to it.blockedUnsettledValue,
-                        "scorePenaltyPoints" to it.scorePenaltyPoints,
-                        "settledObligationCount" to it.settledObligationCount,
-                        "pendingObligationCount" to it.pendingObligationCount,
-                        "failedObligationCount" to it.failedObligationCount,
-                        "agedFailCount" to it.agedFailCount,
-                        "openBreakCount" to it.openBreakCount,
-                        "repairPendingCount" to it.repairPendingCount,
-                        "updatedAt" to it.updatedAt.toString()
-                    )
-                },
-                "updatedAt" to projection.updatedAt.toString()
-            )
-        )
-    }
-
-    private fun settlementObligationViewJson(view: SettlementObligationView): Map<String, Any?> {
-        return mapOf(
-            "settlementObligationId" to view.settlementObligationId,
-            "scenarioRunId" to view.scenarioRunId,
-            "postTradeProfileId" to view.postTradeProfileId,
-            "postTradePolicyVersion" to view.postTradePolicyVersion,
-            "tradeId" to view.tradeId,
-            "buyerParticipantId" to view.buyerParticipantId,
-            "sellerParticipantId" to view.sellerParticipantId,
-            "instrumentId" to view.instrumentId,
-            "quantity" to view.quantity,
-            "cashAmount" to view.cashAmount,
-            "currency" to view.currency,
-            "obligationState" to view.obligationState,
-            "settlementState" to view.settlementState,
-            "exceptionState" to view.exceptionState,
-            "settlementInstructionId" to view.settlementInstructionId,
-            "settlementAttemptId" to view.settlementAttemptId,
-            "settlementAttemptNumber" to view.settlementAttemptNumber,
-            "settlementId" to view.settlementId,
-            "cashLegState" to view.cashLegState,
-            "securityLegState" to view.securityLegState,
-            "ledgerEntryCount" to view.ledgerEntryCount,
-            "settlementBreakId" to view.settlementBreakId,
-            "settlementRepairId" to view.settlementRepairId,
-            "settlementResolutionId" to view.settlementResolutionId,
-            "occurredAt" to view.occurredAt.toString(),
-            "updatedAt" to view.updatedAt.toString()
-        )
-    }
-
-    private fun jsonObjectBody(fields: Map<String, Any?>): String {
-        return JsonCodec.writeObject(*fields.map { it.key to it.value }.toTypedArray())
-    }
-
-    private fun longValue(root: JsonDocument, nested: JsonDocument, rootKey: String, nestedKey: String): Long {
-        return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toLongOrNull() ?: 0L
-    }
-
-    private fun doubleValue(root: JsonDocument, nested: JsonDocument, rootKey: String, nestedKey: String): Double? {
-        return root.string(rootKey).ifBlank { nested.string(nestedKey) }.toDoubleOrNull()
-    }
-
-    private fun instantOrNull(value: String): java.time.Instant? {
-        if (value.isBlank()) return null
-        return java.time.Instant.parse(value)
-    }
-
-    private fun normalizedRawJson(raw: String, fallback: String): String {
-        return if (raw.isBlank()) fallback else JsonCodec.writeNode(JsonCodec.rawJsonOrText(raw))
-    }
-
-    private fun arenaAdminActor(json: JsonDocument): AdminActor {
-        return arenaAdminActor()
-    }
-
-    private fun arenaAdminActor(): AdminActor {
-        val principal = currentAdminPrincipal()
-        return AdminActor(
-            actorId = principal.actorId,
-            correlationId = principal.correlationId,
-            occurredAt = principal.occurredAt
-        )
-    }
-
-    private fun arenaAdminActor(query: String?): AdminActor {
-        return arenaAdminActor()
-    }
-
-    private fun openBaoBotConfigService(): OpenBaoBotConfigService {
-        val baoAddr = RuntimeEnv.string("BAO_ADDR", "")
-            .ifBlank { throw IllegalArgumentException("BAO_ADDR is not configured") }
-        val roleId = RuntimeEnv.string("BAO_BOT_CONFIG_ROLE_ID", "")
-            .ifBlank { throw IllegalArgumentException("BAO_BOT_CONFIG_ROLE_ID is not configured") }
-        val secretId = RuntimeEnv.string("BAO_BOT_CONFIG_SECRET_ID", "")
-            .ifBlank { throw IllegalArgumentException("BAO_BOT_CONFIG_SECRET_ID is not configured") }
-        return OpenBaoBotConfigService(
-            OpenBaoBotConfigServiceConfig(
-                baoAddr = baoAddr,
-                roleId = roleId,
-                secretId = secretId
-            )
-        )
-    }
-
-    private fun openBaoOwnerIdentity(bot: ArenaBot): String? {
-        val owner = adminIdentityService?.botOwnerMetadata(bot.botId)
-            .orEmpty()
-            .firstOrNull()
-            ?.githubLogin
-        return owner?.ifBlank { null } ?: bot.metadata.publisher.takeIf { it.isNotBlank() }
-    }
-
-    private fun canManageBotOpenBaoConfig(botId: String): Boolean {
-        val identityService = adminIdentityService ?: return true
-        val actorId = currentAdminPrincipal().actorId
-        if (!actorId.startsWith("user-gh-")) return true
-        val roles = identityService.rolesForUser(actorId).map { it.roleId }.toSet()
-        if (roles.any { it in adminBotConfigPrivilegedRoles }) return true
-        val user = identityService.user(actorId) ?: return false
-        if (user.trustState.dbValue == "banned") return false
-        return identityService.botOwnerMetadata(botId).any { owner ->
-            owner.reefUserId == actorId && owner.ownershipState.dbValue in setOf("owner", "maintainer")
-        }
-    }
-
-    private fun recordAdminControlPlaneAudit(
-        actorId: String,
-        eventType: String,
-        targetType: String,
-        targetId: String,
-        detail: String
-    ) {
-        val identityService = adminIdentityService ?: return
-        try {
-            identityService.recordControlPlaneAudit(actorId, eventType, targetType, targetId, detail)
-        } catch (ex: Exception) {
-            System.err.println(
-                "admin_control_plane_audit_failed eventType=$eventType targetId=$targetId message=${JsonFields.escape(ex.message ?: "unknown")}"
-            )
-        }
-    }
-
-    private fun arenaBotJson(bot: ArenaBot): Map<String, Any?> {
-        return mapOf(
-            "botId" to bot.botId,
-            "fileName" to bot.fileName,
-            "metadata" to mapOf(
-                "name" to bot.metadata.name,
-                "publisher" to bot.metadata.publisher,
-                "email" to bot.metadata.email,
-                "description" to bot.metadata.description,
-                "version" to bot.metadata.version
-            ),
-            "owners" to adminIdentityService?.botOwnerMetadata(bot.botId).orEmpty().map { owner ->
-                mapOf(
-                    "reefUserId" to owner.reefUserId,
-                    "githubLogin" to owner.githubLogin,
-                    "displayName" to owner.displayName,
-                    "trustState" to owner.trustState.dbValue,
-                    "ownershipState" to owner.ownershipState.dbValue,
-                    "assignedAt" to owner.assignedAt.toString()
-                )
-            },
-            "createdAt" to bot.createdAt.toString()
-        )
-    }
-
-    private fun arenaBotVersionJson(version: ArenaBotVersion): Map<String, Any?> {
-        return mapOf(
-            "botId" to version.botId,
-            "versionId" to version.versionId,
-            "sourceHash" to version.sourceHash,
-            "artifactHash" to version.artifactHash,
-            "sdkVersion" to version.sdkVersion,
-            "apiVersion" to version.apiVersion,
-            "dependencyManifestHash" to version.dependencyManifestHash,
-            "status" to version.status.name,
-            "createdAt" to version.createdAt.toString()
-        )
-    }
-
-    private fun arenaQualificationReportJson(report: ArenaQualificationReport): Map<String, Any?> {
-        return mapOf(
-            "botId" to report.botId,
-            "versionId" to report.versionId,
-            "reportId" to report.reportId,
-            "status" to report.status.name,
-            "issues" to report.issues,
-            "policyVersion" to report.policyVersion,
-            "createdAt" to report.createdAt.toString()
-        )
-    }
-
-    private fun arenaOperatorDecisionJson(decision: ArenaOperatorDecision): Map<String, Any?> {
-        return mapOf(
-            "botId" to decision.botId,
-            "versionId" to decision.versionId,
-            "fromStatus" to decision.fromStatus.name,
-            "toStatus" to decision.toStatus.name,
-            "actorId" to decision.actorId,
-            "reason" to decision.reason,
-            "correlationId" to decision.correlationId,
-            "occurredAt" to decision.occurredAt.toString()
-        )
-    }
-
-    private fun arenaRuntimeConfigDescriptorJson(descriptor: ArenaRuntimeConfigDescriptor): Map<String, Any?> {
-        return mapOf(
-            "botId" to descriptor.botId,
-            "versionId" to descriptor.versionId,
-            "key" to descriptor.key,
-            "provider" to descriptor.provider.name,
-            "secretPath" to descriptor.secretPath,
-            "required" to descriptor.required,
-            "description" to descriptor.description
-        )
-    }
-
-    private fun arenaRunJson(run: ArenaRunRecord): Map<String, Any?> {
-        return mapOf(
-            "runId" to run.runId,
-            "modeId" to run.modeId,
-            "scenarioId" to run.scenarioId,
-            "seed" to run.seed,
-            "policyVersion" to run.policyVersion,
-            "botVersions" to run.botVersions.map {
-                mapOf("botId" to it.botId, "versionId" to it.versionId)
-            },
-            "status" to run.status.name,
-            "createdAt" to run.createdAt.toString(),
-            "completedAt" to run.completedAt?.toString()
-        )
-    }
-
-    private fun arenaRunBotResultJson(result: ArenaRunBotResult): Map<String, Any?> {
-        return mapOf(
-            "runId" to result.runId,
-            "botId" to result.botId,
-            "versionId" to result.versionId,
-            "scoringPolicyVersion" to result.scoringPolicyVersion,
-            "finalEquity" to result.finalEquity,
-            "realizedPnl" to result.realizedPnl,
-            "maxDrawdown" to result.maxDrawdown,
-            "actionsProposed" to result.actionsProposed,
-            "orderActionsProposed" to result.orderActionsProposed,
-            "dataCalls" to result.dataCalls,
-            "signalsGenerated" to result.signalsGenerated,
-            "disqualified" to result.disqualified,
-            "scoreEligible" to result.scoreEligible,
-            "publicLeaderboard" to result.publicLeaderboard,
-            "createdAt" to result.createdAt.toString()
-        )
-    }
-
-    private fun arenaRunEnforcementEventJson(event: ArenaRunEnforcementEvent): Map<String, Any?> {
-        return mapOf(
-            "runId" to event.runId,
-            "botId" to event.botId,
-            "versionId" to event.versionId,
-            "decision" to event.decision,
-            "reasonCode" to event.reasonCode,
-            "reason" to event.reason,
-            "policyVersion" to event.policyVersion,
-            "countersJson" to event.countersJson,
-            "occurredAt" to event.occurredAt.toString()
-        )
-    }
-
-    private fun arenaLeaderboardEntryJson(entry: ArenaLeaderboardEntry): Map<String, Any?> {
-        return mapOf(
-            "rank" to entry.rank,
-            "runId" to entry.runId,
-            "botId" to entry.botId,
-            "botName" to entry.botName,
-            "ownerHandle" to entry.ownerHandle,
-            "versionId" to entry.versionId,
-            "scoringPolicyVersion" to entry.scoringPolicyVersion,
-            "finalEquity" to entry.finalEquity,
-            "realizedPnl" to entry.realizedPnl,
-            "maxDrawdown" to entry.maxDrawdown,
-            "disqualified" to entry.disqualified
-        )
-    }
-
-    private fun setCommandCircuitBreakerResponse(body: String): PlatformHotPathResponse {
-        val store = commandCircuitBreakerStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "command circuit breaker store unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val scopeType = normalizeCircuitBreakerScope(json.string("scopeType").ifBlank { json.string("scope") })
-            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker scope"))
-        val scopeId = if (scopeType == "GLOBAL") {
-            json.string("scopeId").ifBlank { "*" }
-        } else {
-            json.string("scopeId").ifBlank { json.string("id") }
-        }
-        if (scopeId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "scopeId is required"))
-        }
-        val tripped = normalizeBreakerTripState(json.string("tripped").ifBlank { json.string("action") })
-            ?: return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid circuit breaker action"))
-        val reason = json.string("reason")
-        val principal = currentAdminPrincipal()
-        val actorId = principal.actorId
-        val correlationId = principal.correlationId
-        val normalizedScopeId = if (scopeType == "GLOBAL") "*" else scopeId
-        val previous = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
-
-        store.setBreaker(scopeType, normalizedScopeId, tripped, reason)
-        val current = store.listBreakers().firstOrNull { it.scopeType == scopeType && it.scopeId == normalizedScopeId }
-            ?: CommandCircuitBreakerState(scopeType, normalizedScopeId, tripped, reason)
-        recordProtectiveControlAudit(
-            actorId = actorId,
-            correlationId = correlationId,
-            eventType = "CommandCircuitBreakerChanged",
-            targetId = "$scopeType:$normalizedScopeId",
-            payload = mapOf(
-                "controlType" to "command-circuit-breaker",
-                "scopeType" to scopeType,
-                "scopeId" to normalizedScopeId,
-                "previousTripped" to (previous?.tripped ?: false),
-                "previousReason" to previous?.reason.orEmpty(),
-                "tripped" to tripped,
-                "reason" to reason
-            )
-        )
-
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject(
-                "status" to "ok",
-                "breaker" to mapOf(
-                    "scopeType" to current.scopeType,
-                    "scopeId" to current.scopeId,
-                    "tripped" to current.tripped,
-                    "reason" to current.reason,
-                    "updatedAt" to current.updatedAt
-                )
-            )
-        )
-    }
-
-    private fun setInstrumentPriceCollarResponse(body: String): PlatformHotPathResponse {
-        val store = instrumentPriceCollarStore
-            ?: return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "instrument price collar store unavailable"))
-        val json = JsonCodec.parseObjectOrEmpty(body)
-        val instrumentId = json.string("instrumentId").ifBlank { json.string("id") }
-        if (instrumentId.isBlank()) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "instrumentId is required"))
-        }
-        val minPrice = json.string("minPrice")
-        val maxPrice = json.string("maxPrice")
-        val parsedMin = minPrice.toBigDecimalOrNull()
-        val parsedMax = maxPrice.toBigDecimalOrNull()
-        if (minPrice.isNotBlank() && parsedMin == null) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid minPrice"))
-        }
-        if (maxPrice.isNotBlank() && parsedMax == null) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "invalid maxPrice"))
-        }
-        if (parsedMin != null && parsedMax != null && parsedMax < parsedMin) {
-            return PlatformHotPathResponse(400, JsonCodec.writeObject("error" to "maxPrice must be greater than or equal to minPrice"))
-        }
-        val currency = json.string("currency").uppercase()
-        val reason = json.string("reason")
-        val principal = currentAdminPrincipal()
-        val actorId = principal.actorId
-        val correlationId = principal.correlationId
-        val previous = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
-
-        store.setCollar(instrumentId, minPrice, maxPrice, currency, reason)
-        val current = store.listCollars().firstOrNull { it.instrumentId == instrumentId }
-            ?: InstrumentPriceCollarState(instrumentId, minPrice, maxPrice, currency, reason)
-        recordProtectiveControlAudit(
-            actorId = actorId,
-            correlationId = correlationId,
-            eventType = "InstrumentPriceCollarChanged",
-            targetId = instrumentId,
-            payload = mapOf(
-                "controlType" to "instrument-price-collar",
-                "instrumentId" to instrumentId,
-                "previousMinPrice" to previous?.minPrice.orEmpty(),
-                "previousMaxPrice" to previous?.maxPrice.orEmpty(),
-                "previousCurrency" to previous?.currency.orEmpty(),
-                "previousReason" to previous?.reason.orEmpty(),
-                "minPrice" to minPrice,
-                "maxPrice" to maxPrice,
-                "currency" to currency,
-                "reason" to reason
-            )
-        )
-
-        return PlatformHotPathResponse(
-            200,
-            JsonCodec.writeObject(
-                "status" to "ok",
-                "collar" to mapOf(
-                    "instrumentId" to current.instrumentId,
-                    "minPrice" to current.minPrice,
-                    "maxPrice" to current.maxPrice,
-                    "currency" to current.currency,
-                    "reason" to current.reason,
-                    "updatedAt" to current.updatedAt
-                )
-            )
-        )
-    }
-
-    private fun recordProtectiveControlAudit(
-        actorId: String,
-        correlationId: String,
-        eventType: String,
-        targetId: String,
-        payload: Map<String, Any?>
-    ) {
-        try {
-            api.recordAdminEvent(actorId, correlationId, eventType, targetId, payload)
-        } catch (ex: Exception) {
-            System.err.println(
-                "protective_control_audit_failed eventType=$eventType targetId=$targetId message=${JsonFields.escape(ex.message ?: "unknown")}"
-            )
-        }
-    }
-
-    private fun normalizeAccountRiskScope(value: String): String? {
-        return when (value.trim().lowercase()) {
-            "account" -> "ACCOUNT"
-            "bot" -> "BOT"
-            else -> null
-        }
-    }
-
-    private fun normalizeAccountRiskDecision(value: String): AccountRiskDecision? {
-        return when (value.trim().lowercase()) {
-            "allow" -> AccountRiskDecision.ALLOW
-            "reject" -> AccountRiskDecision.REJECT
-            "backpressure" -> AccountRiskDecision.BACKPRESSURE
-            "disabled-bot", "disabled_bot" -> AccountRiskDecision.DISABLED_BOT
-            else -> null
-        }
-    }
-
-    private fun normalizeArenaBotVersionStatus(value: String): ArenaBotVersionStatus? {
-        return when (value.trim().lowercase()) {
-            "draft" -> ArenaBotVersionStatus.Draft
-            "submitted" -> ArenaBotVersionStatus.Submitted
-            "checks-passed", "checks_passed" -> ArenaBotVersionStatus.ChecksPassed
-            "approved" -> ArenaBotVersionStatus.Approved
-            "active" -> ArenaBotVersionStatus.Active
-            "suspended", "freeze", "frozen" -> ArenaBotVersionStatus.Suspended
-            "quarantined", "quarantine" -> ArenaBotVersionStatus.Quarantined
-            "banned", "ban" -> ArenaBotVersionStatus.Banned
-            "archived", "archive" -> ArenaBotVersionStatus.Archived
-            else -> null
-        }
-    }
-
-    private fun normalizeArenaRunStatus(value: String): ArenaRunStatus? {
-        return when (value.trim().lowercase()) {
-            "planned" -> ArenaRunStatus.Planned
-            "running" -> ArenaRunStatus.Running
-            "completed", "complete" -> ArenaRunStatus.Completed
-            "failed", "fail" -> ArenaRunStatus.Failed
-            "cancelled", "canceled", "cancel" -> ArenaRunStatus.Cancelled
-            else -> null
-        }
-    }
-
-    private fun normalizeCircuitBreakerScope(value: String): String? {
-        return when (value.trim().lowercase()) {
-            "global" -> "GLOBAL"
-            "venue-session", "venue_session" -> "VENUE_SESSION"
-            "instrument" -> "INSTRUMENT"
-            else -> null
-        }
-    }
-
-    private fun normalizeBreakerTripState(value: String): Boolean? {
-        return when (value.trim().lowercase()) {
-            "true", "trip", "tripped", "on" -> true
-            "false", "reset", "clear", "off" -> false
-            else -> null
-        }
-    }
-
-    private fun asyncCommandStatsJson(): String {
-        val acceptedAsyncStats = acceptedAsyncCommandIntake?.stats()
-        val queueCounts = capturedCommandQueue
-            ?.statusCounts()
-            ?.mapKeys { (status, _) -> status.name }
-            ?: emptyMap()
-        val counts = CommandLogStatus.values().associate { status ->
-            status.name to (queueCounts[status.name] ?: 0L)
-        }
-        val metrics = AsyncCommandProcessorMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to asyncCommandWorkerEnabled,
-            "processingMode" to commandProcessingMode.configValue,
-            "workerThreads" to asyncCommandWorkerThreads,
-            "batchSize" to asyncCommandWorkerBatchSize,
-            "pollIntervalMs" to asyncCommandWorkerPollMs,
-            "acceptedAsync" to if (acceptedAsyncStats == null) {
-                mapOf("enabled" to false)
-            } else {
-                mapOf(
-                    "enabled" to acceptedAsyncStats.enabled,
-                    "laneCount" to acceptedAsyncStats.laneCount,
-                    "activeLaneCount" to acceptedAsyncStats.activeLaneCount,
-                    "queueCapacityPerLane" to acceptedAsyncStats.queueCapacityPerLane,
-                    "inFlightPerLane" to acceptedAsyncStats.inFlightPerLane,
-                    "queued" to acceptedAsyncStats.queued,
-                    "maxLaneDepth" to acceptedAsyncStats.maxLaneDepth,
-                    "inFlight" to acceptedAsyncStats.inFlight,
-                    "completedWaiting" to acceptedAsyncStats.completedWaiting,
-                    "maxOldestInFlightAgeMs" to acceptedAsyncStats.maxOldestInFlightAgeMs,
-                    "saturatedLaneCount" to acceptedAsyncStats.saturatedLaneCount,
-                    "received" to acceptedAsyncStats.received,
-                    "duplicates" to acceptedAsyncStats.duplicates,
-                    "backpressured" to acceptedAsyncStats.backpressured,
-                    "processing" to acceptedAsyncStats.processing,
-                    "completed" to acceptedAsyncStats.completed,
-                    "failed" to acceptedAsyncStats.failed,
-                    "retainedStatuses" to acceptedAsyncStats.retainedStatuses,
-                    "retentionMaxRecords" to acceptedAsyncStats.retentionMaxRecords,
-                    "retentionTtlMs" to acceptedAsyncStats.retentionTtlMs,
-                    "retentionEvicted" to acceptedAsyncStats.retentionEvicted,
-                    "terminalStatusMaxRecords" to acceptedAsyncStats.terminalStatusMaxRecords,
-                    "terminalStatusTtlMs" to acceptedAsyncStats.terminalStatusTtlMs,
-                    "retainedTerminalStatusRecords" to acceptedAsyncStats.retainedTerminalStatusRecords,
-                    "retainedStatusRecords" to acceptedAsyncStats.retainedStatusRecords,
-                    "statusRecordsEvicted" to acceptedAsyncStats.statusRecordsEvicted,
-                    "lastReceivedAt" to acceptedAsyncStats.lastReceivedAt,
-                    "lastCompletedAt" to acceptedAsyncStats.lastCompletedAt,
-                    "lastFailedAt" to acceptedAsyncStats.lastFailedAt,
-                    "lanes" to acceptedAsyncStats.lanes.map { lane ->
-                        mapOf(
-                            "lane" to lane.lane,
-                            "queued" to lane.queued,
-                            "inFlight" to lane.inFlight,
-                            "completedWaiting" to lane.completedWaiting,
-                            "oldestInFlightAgeMs" to lane.oldestInFlightAgeMs,
-                            "windowSaturated" to lane.windowSaturated,
-                            "received" to lane.received,
-                            "backpressured" to lane.backpressured,
-                            "processing" to lane.processing,
-                            "completed" to lane.completed,
-                            "failed" to lane.failed
-                        )
-                    }
-                )
-            },
-            "intakeBackpressure" to mapOf(
-                "maxActiveCommands" to commandIntakeMaxActive,
-                "maxStaleProcessing" to commandIntakeMaxStaleProcessing,
-                "sampleMs" to commandIntakeBackpressureSampleMs
-            ),
-            "queue" to counts,
-            "metrics" to mapOf(
-                "claimed" to metrics.claimed,
-                "completed" to metrics.completed,
-                "failed" to metrics.failed,
-                "emptyPolls" to metrics.emptyPolls,
-                "lastClaimedAt" to metrics.lastClaimedAt,
-                "lastCompletedAt" to metrics.lastCompletedAt,
-                "lastFailedAt" to metrics.lastFailedAt
-            )
-        )
-    }
 
     private fun commandIntakeBackpressure(): BoundaryError? {
         if (commandIntakeMaxActive <= 0L && commandIntakeMaxStaleProcessing <= 0L) {
@@ -6304,353 +3150,12 @@ class PlatformHttpServer(
         }
     }
 
-    private fun commandAccountingJson(runId: String): String {
-        val snapshot = capturedCommandQueue?.accountingSnapshot(runId)
-        if (snapshot == null) {
-            return JsonCodec.writeObject(
-                "available" to false,
-                "runId" to runId,
-                "error" to "captured command queue unavailable"
-            )
-        }
-        return JsonCodec.writeObject(
-            "available" to true,
-            "runId" to snapshot.runId,
-            "accepted" to snapshot.accepted,
-            "received" to snapshot.received,
-            "processing" to snapshot.processing,
-            "completed" to snapshot.completed,
-            "failed" to snapshot.failed,
-            "active" to snapshot.active,
-            "terminal" to snapshot.terminal,
-            "accountingGap" to snapshot.accountingGap,
-            "staleProcessing" to snapshot.staleProcessing
-        )
-    }
+    // commandAccountingJson/dbPoolStatsJson/streamCommandHealthJson/streamCommandWorkerStatsJson/
+    // venueEventMaterializerStatsJson/marketDataProjectorStatusJson/orderLifecycleProjectorStatusJson
+    // live in DiagnosticsGateway.kt; startStreamCommandWorkers/startCanonicalProjector/
+    // startMarketDataProjector/startOrderLifecycleProjector/startVenueEventMaterializer/
+    // projectorPartitions/streamWorkerPartitions live in RuntimeLoopStarter.kt (see fields above).
 
-    private fun dbPoolStatsJson(): String {
-        return JsonCodec.writeObject(
-            "pools" to RuntimeDataSources.snapshots().map { snapshot ->
-                mapOf(
-                    "key" to snapshot.key,
-                    "poolName" to snapshot.poolName,
-                    "jdbcUrl" to snapshot.jdbcUrl,
-                    "username" to snapshot.username,
-                    "maximumPoolSize" to snapshot.maximumPoolSize,
-                    "minimumIdle" to snapshot.minimumIdle,
-                    "activeConnections" to snapshot.activeConnections,
-                    "idleConnections" to snapshot.idleConnections,
-                    "totalConnections" to snapshot.totalConnections,
-                    "threadsAwaitingConnection" to snapshot.threadsAwaitingConnection
-                )
-            }
-        )
-    }
-
-    private fun streamCommandHealthJson(): String {
-        val snapshot = streamCommandHealthCheck?.snapshot()
-        if (snapshot == null) {
-            return JsonCodec.writeObject(
-                "available" to false,
-                "processingMode" to commandProcessingMode.configValue,
-                "stream" to streamCommandConfig.streamName,
-                "error" to "stream command health unavailable"
-            )
-        }
-        return JsonCodec.writeObject(
-            "available" to snapshot.available,
-            "processingMode" to commandProcessingMode.configValue,
-            "stream" to snapshot.streamName,
-            "messages" to snapshot.messageCount,
-            "bytes" to snapshot.byteCount,
-            "maxBytes" to snapshot.maxBytes,
-            "storageUtilization" to snapshot.storageUtilization,
-            "maxStorageUtilization" to streamCommandMaxStorageUtilization,
-            "backpressureSampleMs" to streamCommandBackpressureSampleMs,
-            "drainBackpressure" to mapOf(
-                "policy" to streamCommandDrainBackpressurePolicy.configValue,
-                "maxWorkerStreamLag" to streamCommandMaxWorkerStreamLag,
-                "maxProjectorLag" to streamCommandMaxProjectorLag,
-                "sampleMs" to streamCommandDrainBackpressureSampleMs,
-                "workerDurables" to streamCommandBackpressureWorkerDurableNames()
-            ),
-            "markPublishedMode" to streamCommandMarkPublishedMode,
-            "publishMode" to snapshot.publishMode,
-            "publishInFlight" to snapshot.publishInFlight,
-            "publishMaxInFlight" to snapshot.publishMaxInFlight,
-            "publishQueueDepth" to snapshot.publishQueueDepth,
-            "publishMaxQueueDepth" to snapshot.publishMaxQueueDepth,
-            "publishLaneCount" to snapshot.publishLaneCount,
-            "publishAccepted" to snapshot.publishAccepted,
-            "publishCompleted" to snapshot.publishCompleted,
-            "publishFailed" to snapshot.publishFailed,
-            "publishRejected" to snapshot.publishRejected,
-            "publishQueueWaitLastMs" to snapshot.publishQueueWaitLastMs,
-            "publishQueueWaitMaxMs" to snapshot.publishQueueWaitMaxMs,
-            "publishSlotWaitLastMs" to snapshot.publishSlotWaitLastMs,
-            "publishSlotWaitMaxMs" to snapshot.publishSlotWaitMaxMs,
-            "publishDelegateAckLastMs" to snapshot.publishDelegateAckLastMs,
-            "publishDelegateAckMaxMs" to snapshot.publishDelegateAckMaxMs,
-            "publishPipelineTotalLastMs" to snapshot.publishPipelineTotalLastMs,
-            "publishPipelineTotalMaxMs" to snapshot.publishPipelineTotalMaxMs,
-            "publishLanes" to snapshot.publishLaneSnapshots.map {
-                mapOf(
-                    "partition" to it.partition,
-                    "accepted" to it.accepted,
-                    "completed" to it.completed,
-                    "failed" to it.failed,
-                    "rejected" to it.rejected,
-                    "queueDepth" to it.queueDepth,
-                    "maxQueueDepthObserved" to it.maxQueueDepthObserved,
-                    "inFlight" to it.inFlight,
-                    "maxInFlightObserved" to it.maxInFlightObserved,
-                    "queueWaitLastMs" to it.queueWaitLastMs,
-                    "queueWaitMaxMs" to it.queueWaitMaxMs,
-                    "slotWaitLastMs" to it.slotWaitLastMs,
-                    "slotWaitMaxMs" to it.slotWaitMaxMs,
-                    "delegateAckLastMs" to it.delegateAckLastMs,
-                    "delegateAckMaxMs" to it.delegateAckMaxMs,
-                    "totalLastMs" to it.totalLastMs,
-                    "totalMaxMs" to it.totalMaxMs
-                )
-            },
-            "publishAckLastMs" to snapshot.publishAckLastMs,
-            "publishAckMaxMs" to snapshot.publishAckMaxMs,
-            "producerMetrics" to snapshot.producerMetrics,
-            "checkedAt" to snapshot.checkedAt.toString(),
-            "error" to snapshot.error
-        )
-    }
-
-    private fun streamCommandWorkerStatsJson(): String {
-        val stats = StreamCommandWorkerMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to streamCommandWorkerEnabled,
-            "processingMode" to commandProcessingMode.configValue,
-            "partitions" to streamWorkerPartitions(),
-            "batchSize" to streamCommandWorkerBatchSize,
-            "pollIntervalMs" to streamCommandWorkerPollMs,
-            "fetchTimeoutMs" to streamCommandWorkerFetchTimeoutMs,
-            "dedicatedRuntimePoolEnabled" to streamCommandWorkerDedicatedRuntimePoolEnabled,
-            "metrics" to mapOf(
-                "fetched" to stats.fetched,
-                "completed" to stats.completed,
-                "failed" to stats.failed,
-                "ackFailed" to stats.ackFailed,
-                "unsupported" to stats.unsupported,
-                "emptyPolls" to stats.emptyPolls,
-                "lastFetchedAt" to stats.lastFetchedAt,
-                "lastCompletedAt" to stats.lastCompletedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastAckFailedAt" to stats.lastAckFailedAt,
-                "lastError" to stats.lastError
-            ),
-            "partitionMetrics" to stats.partitions.map { partition ->
-                mapOf(
-                    "partition" to partition.partition,
-                    "fetched" to partition.fetched,
-                    "completed" to partition.completed,
-                    "failed" to partition.failed,
-                    "ackFailed" to partition.ackFailed,
-                    "unsupported" to partition.unsupported,
-                    "localInFlight" to partition.localInFlight,
-                    "maxDeliveredCount" to partition.maxDeliveredCount,
-                    "lastFetchedStreamSequence" to partition.lastFetchedStreamSequence,
-                    "lastCompletedStreamSequence" to partition.lastCompletedStreamSequence,
-                    "lastFetchedAt" to partition.lastFetchedAt,
-                    "lastCompletedAt" to partition.lastCompletedAt,
-                    "lastFailedAt" to partition.lastFailedAt,
-                    "lastAckFailedAt" to partition.lastAckFailedAt,
-                    "oldestLocalInFlightAt" to partition.oldestLocalInFlightAt,
-                    "oldestLocalInFlightAgeMs" to partition.oldestLocalInFlightAgeMs,
-                    "lastError" to partition.lastError
-                )
-            },
-            "consumerMetrics" to stats.consumers.map { consumer ->
-                mapOf(
-                    "partition" to consumer.partition,
-                    "durableName" to consumer.durableName,
-                    "filterSubject" to consumer.filterSubject,
-                    "pending" to consumer.pending,
-                    "waiting" to consumer.waiting,
-                    "ackPending" to consumer.ackPending,
-                    "redelivered" to consumer.redelivered,
-                    "deliveredConsumerSequence" to consumer.deliveredConsumerSequence,
-                    "deliveredStreamSequence" to consumer.deliveredStreamSequence,
-                    "ackFloorConsumerSequence" to consumer.ackFloorConsumerSequence,
-                    "ackFloorStreamSequence" to consumer.ackFloorStreamSequence,
-                    "streamLastSequence" to consumer.streamLastSequence,
-                    "streamLag" to consumer.streamLag,
-                    "lastActiveAt" to consumer.lastActiveAt,
-                    "sampledAt" to consumer.sampledAt,
-                    "error" to consumer.error
-                )
-            }
-        )
-    }
-
-    private fun venueEventMaterializerStatsJson(): String {
-        val stats = VenueEventBatchMaterializerMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to venueEventMaterializerShouldStart(),
-            "role" to runtimeRole.configValue,
-            "processingMode" to commandProcessingMode.configValue,
-            "batchSize" to venueEventMaterializerBatchSize,
-            "pollIntervalMs" to venueEventMaterializerPollMs,
-            "fetchTimeoutMs" to venueEventMaterializerFetchTimeoutMs,
-            "source" to "kafka",
-            "metrics" to mapOf(
-                "fetched" to stats.fetched,
-                "materialized" to stats.materialized,
-                "materializedOutcomes" to stats.materializedOutcomes,
-                "failed" to stats.failed,
-                "ackFailed" to stats.ackFailed,
-                "unsupported" to stats.unsupported,
-                "emptyPolls" to stats.emptyPolls,
-                "lastFetchedStreamSequence" to stats.lastFetchedStreamSequence,
-                "lastMaterializedStreamSequence" to stats.lastMaterializedStreamSequence,
-                "lastMaterializedBatchId" to stats.lastMaterializedBatchId,
-                "lastMaterializedPartition" to stats.lastMaterializedPartition,
-                "lastMaterializedFirstSequence" to stats.lastMaterializedFirstSequence,
-                "lastMaterializedLastSequence" to stats.lastMaterializedLastSequence,
-                "materializerLag" to stats.materializerLag,
-                "lastMaterializedAt" to stats.lastMaterializedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastError" to stats.lastError
-            )
-        )
-    }
-
-    private fun marketDataProjectorStatusJson(): String {
-        val stats = MarketDataProjectionMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to marketDataProjectorShouldStart(),
-            "role" to runtimeRole.configValue,
-            "projectionName" to marketDataProjectorProjectionName,
-            "sourceProjectionName" to marketDataProjectorSourceProjectionName,
-            "pollIntervalMs" to marketDataProjectorPollMs,
-            "batchSize" to marketDataProjectorBatchSize,
-            "metrics" to mapOf(
-                "cycles" to stats.cycles,
-                "processedRows" to stats.processedRows,
-                "failed" to stats.failed,
-                "lastProcessedAt" to stats.lastProcessedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastError" to stats.lastError
-            )
-        )
-    }
-
-    private fun orderLifecycleProjectorStatusJson(): String {
-        val stats = OrderLifecycleProjectionMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to orderLifecycleProjectorShouldStart(),
-            "role" to runtimeRole.configValue,
-            "pollIntervalMs" to orderLifecycleProjectorPollMs,
-            "batchSize" to orderLifecycleProjectorBatchSize,
-            "metrics" to mapOf(
-                "cycles" to stats.cycles,
-                "processedRows" to stats.processedRows,
-                "failed" to stats.failed,
-                "lastProcessedAt" to stats.lastProcessedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastError" to stats.lastError
-            )
-        )
-    }
-
-    private fun startStreamCommandWorkers() {
-        val partitions = streamWorkerPartitions()
-        if (partitions.isEmpty()) {
-            System.err.println("stream_command_worker_unavailable reason=no_partitions_configured")
-            return
-        }
-        val workerApi = streamCommandWorkerApi()
-        partitions.forEach { partition ->
-            val source = StreamCommandWorkerFactory.sourceForPartition(streamCommandConfig, partition)
-            if (source is StreamCommandTelemetrySource) {
-                StreamCommandWorkerMetrics.registerConsumerTelemetry(partition, source)
-            }
-            StreamCommandWorker(
-                source = source,
-                api = workerApi,
-                publicationMarker = streamCommandIntakeStore,
-                partition = partition,
-                batchSize = streamCommandWorkerBatchSize,
-                pollIntervalMs = streamCommandWorkerPollMs,
-                fetchTimeout = java.time.Duration.ofMillis(streamCommandWorkerFetchTimeoutMs),
-                workerName = "reef-stream-command-worker-p$partition"
-            ).start()
-        }
-    }
-
-    private fun startCanonicalProjector() {
-        val partitions = projectorPartitions()
-        if (partitions.isEmpty()) {
-            System.err.println("canonical_projector_unavailable reason=no_partitions_configured")
-            return
-        }
-        CanonicalProjectionWorker(
-            api = api,
-            projectionName = streamAckProjectionName,
-            projectionSource = streamAckProjectionSource,
-            eventStream = streamAckProjectionEventStream,
-            partitions = partitions,
-            batchSize = streamAckProjectorBatchSize,
-            pollIntervalMs = streamAckProjectorPollMs,
-            workerName = "reef-canonical-projector-$streamAckProjectionName"
-        ).start()
-    }
-
-    private fun marketDataProjectorShouldStart(): Boolean {
-        return runtimeRole == PlatformRuntimeRole.Projector && marketDataProjectorEnabled
-    }
-
-    private fun startMarketDataProjector() {
-        MarketDataProjectionWorker(
-            api = api,
-            projectionName = marketDataProjectorProjectionName,
-            sourceProjectionName = marketDataProjectorSourceProjectionName,
-            pollIntervalMs = marketDataProjectorPollMs,
-            batchSize = marketDataProjectorBatchSize,
-            workerName = "reef-market-data-projector-$marketDataProjectorProjectionName"
-        ).start()
-    }
-
-    private fun orderLifecycleProjectorShouldStart(): Boolean {
-        return runtimeRole == PlatformRuntimeRole.Projector && orderLifecycleProjectorEnabled
-    }
-
-    private fun startOrderLifecycleProjector() {
-        OrderLifecycleProjectionWorker(
-            api = api,
-            pollIntervalMs = orderLifecycleProjectorPollMs,
-            batchSize = orderLifecycleProjectorBatchSize,
-            workerName = "reef-order-lifecycle-projector"
-        ).start()
-    }
-
-    private fun venueEventMaterializerShouldStart(): Boolean {
-        return commandProcessingMode == CommandProcessingMode.StreamAck &&
-            runtimeRole == PlatformRuntimeRole.Materializer &&
-            venueEventMaterializerEnabled
-    }
-
-    private fun startVenueEventMaterializer() {
-        val provider = StreamCommandLogProvider.fromEnv()
-        if (provider != StreamCommandLogProvider.Redpanda) {
-            System.err.println("venue_event_materializer_unavailable reason=unsupported_log_provider provider=${provider.configValue}")
-            return
-        }
-        VenueEventBatchMaterializer(
-            source = venueEventBatchSourceWithLocalFaultHooks(KafkaVenueEventBatchSource()),
-            api = api,
-            batchSize = venueEventMaterializerBatchSize,
-            pollIntervalMs = venueEventMaterializerPollMs,
-            fetchTimeout = java.time.Duration.ofMillis(venueEventMaterializerFetchTimeoutMs),
-            workerName = "reef-venue-event-batch-materializer"
-        ).start()
-    }
 
     private fun startStreamCommandDrainBackpressureSampler() {
         val sampler = streamCommandDrainBackpressureSampler ?: return
@@ -6675,13 +3180,6 @@ class PlatformHttpServer(
         }
     }
 
-    private fun projectorPartitions(): List<Int> {
-        return configuredRuntimePartitions(streamAckProjectorPartitions, streamCommandConfig.partitionCount)
-    }
-
-    private fun streamWorkerPartitions(): List<Int> {
-        return configuredRuntimePartitions(streamCommandWorkerPartitions, streamCommandConfig.partitionCount)
-    }
 }
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
@@ -6713,153 +3211,9 @@ internal fun boundedQueryLimit(raw: String, defaultValue: Int, max: Int = 500): 
     return parsed.coerceAtMost(max)
 }
 
-private fun defaultBoundary(): ServerBoundaryDeps {
-    val hooks = defaultBoundaryHooks()
-    PlatformRuntimeProfileValidator.requireValidProfile(PlatformRuntimeProfileConfig.fromEnv())
-    val runtimePersistence = defaultRuntimePersistence("post-trade-profile-resolver")
-    val adminHttpAuth = defaultAdminHttpAuth()
-    val postTradeProfileResolver = PostTradeProfileResolver.fromPersistence(
-        runtimePersistence = runtimePersistence,
-        environmentProfileId = { RuntimeEnv.string("POST_TRADE_PROFILE", "") },
-        environmentPolicyVersion = { RuntimeEnv.int("POST_TRADE_POLICY_VERSION", DefaultPostTradePolicyVersion, min = 1) }
-    )
-    val settlementFactStore = defaultSettlementFactStore()
-    val streamPublisher = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
-        StreamCommandIntakeFactory.defaultPublisher()
-    } else {
-        null
-    }
-    return ServerBoundaryDeps(
-        boundary = ExternalApiBoundary(
-            authHook = hooks.authHook,
-            rateLimitHook = hooks.rateLimitHook
-        ),
-        abuseProtectionHook = hooks.abuseProtectionHook,
-        accountRiskCheck = hooks.accountRiskCheck,
-        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore,
-        accountRiskDecisionLog = hooks.accountRiskCheck as? AccountRiskDecisionLog,
-        commandCircuitBreakerCheck = hooks.commandCircuitBreakerCheck,
-        commandCircuitBreakerStore = hooks.commandCircuitBreakerCheck as? CommandCircuitBreakerStore,
-        instrumentPriceCollarCheck = hooks.instrumentPriceCollarCheck,
-        instrumentPriceCollarStore = hooks.instrumentPriceCollarCheck as? InstrumentPriceCollarStore,
-        arenaAdminService = defaultArenaAdminService(hooks),
-        adminAuthService = adminHttpAuth?.authService,
-        adminIdentityService = adminHttpAuth?.identityService,
-        adminGitHubOAuthClient = adminHttpAuth?.githubOAuthClient,
-        analyticsRunExportService = defaultAnalyticsRunExportService(),
-        settlementFactStore = settlementFactStore,
-        settlementObligationMaterializer = settlementFactStore?.let {
-            TradeSettlementObligationMaterializer(
-                runtimePersistence = runtimePersistence,
-                settlementFactStore = it,
-                postTradeProfileResolver = postTradeProfileResolver
-            )
-        },
-        postTradeProfileResolver = postTradeProfileResolver,
-        scenarioRunPostTradeProfileLookup = { scenarioRunId ->
-            runtimePersistence.scenarioRunPostTradeProfileId(scenarioRunId)
-        },
-        venueSessionPostTradeProfileLookup = { venueSessionId ->
-            runtimePersistence.venueSessionPostTradeProfileId(venueSessionId)
-        },
-        boundaryRejectionLog = hooks.boundaryRejectionLog,
-        idempotencyStore = hooks.idempotencyStore,
-        idempotencyRetentionPolicy = hooks.idempotencyRetentionPolicy,
-        commandCaptureStore = hooks.commandCaptureStore,
-        commandStatusLookup = hooks.commandCaptureStore as? CommandStatusLookup,
-        capturedCommandQueue = hooks.commandCaptureStore as? CapturedCommandQueue,
-        streamCommandIntakeStore = if (hooks.commandProcessingMode == CommandProcessingMode.StreamAck) {
-            StreamCommandIntakeFactory.defaultStore()
-        } else {
-            null
-        },
-        streamCommandPublisher = streamPublisher,
-        streamCommandHealthCheck = streamPublisher as? StreamCommandHealthCheck,
-        streamCommandConfig = StreamCommandConfig(),
-        commandProcessingMode = hooks.commandProcessingMode
-    )
-}
-
-private data class AdminHttpAuthDefaults(
-    val authService: AdminAuthService,
-    val identityService: AdminIdentityService,
-    val githubOAuthClient: AdminGitHubOAuthClient
-)
-
-private fun defaultAdminHttpAuth(): AdminHttpAuthDefaults? {
-    if (!RuntimeEnv.bool("PLATFORM_ADMIN_AUTH_ENABLED", false)) return null
-    val jdbcUrl = RuntimeEnv.string("ADMIN_POSTGRES_JDBC_URL", RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", ""))
-        .ifBlank { error("ADMIN_POSTGRES_JDBC_URL or RUNTIME_POSTGRES_JDBC_URL is required when PLATFORM_ADMIN_AUTH_ENABLED=true") }
-    val dbUser = RuntimeEnv.string("ADMIN_POSTGRES_USER", RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef"))
-    val dbPassword = RuntimeEnv.string("ADMIN_POSTGRES_PASSWORD", RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef"))
-    val dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "admin-auth")
-    val identityStore = PostgresAdminIdentityStore(dataSource)
-    val authStore = PostgresAdminAuthStore(dataSource)
-    val identityService = AdminIdentityService(identityStore)
-    val authService = AdminAuthService(authStore = authStore, identityStore = identityStore)
-    val githubClient = ConfiguredAdminGitHubOAuthClient(
-        clientId = RuntimeEnv.string("GITHUB_OAUTH_CLIENT_ID", "")
-            .ifBlank { error("GITHUB_OAUTH_CLIENT_ID is required when PLATFORM_ADMIN_AUTH_ENABLED=true") },
-        clientSecret = RuntimeEnv.string("GITHUB_OAUTH_CLIENT_SECRET", "")
-            .ifBlank { error("GITHUB_OAUTH_CLIENT_SECRET is required when PLATFORM_ADMIN_AUTH_ENABLED=true") },
-        redirectUri = RuntimeEnv.string("GITHUB_OAUTH_REDIRECT_URI", "")
-            .ifBlank { error("GITHUB_OAUTH_REDIRECT_URI is required when PLATFORM_ADMIN_AUTH_ENABLED=true") }
-    )
-    return AdminHttpAuthDefaults(
-        authService = authService,
-        identityService = identityService,
-        githubOAuthClient = githubClient
-    )
-}
-
-private fun defaultArenaAdminService(hooks: BoundaryHooks): AdminApplicationService? {
-    if (!RuntimeEnv.bool("PLATFORM_ARENA_ADMIN_ENABLED", false)) return null
-    val jdbcUrl = RuntimeEnv.string("ARENA_POSTGRES_JDBC_URL", "")
-        .ifBlank { error("ARENA_POSTGRES_JDBC_URL is required when PLATFORM_ARENA_ADMIN_ENABLED=true") }
-    val dbUser = RuntimeEnv.string("ARENA_POSTGRES_USER", "reef")
-    val dbPassword = RuntimeEnv.string("ARENA_POSTGRES_PASSWORD", "reef")
-    return AdminApplicationService(
-        runtimePersistence = defaultRuntimePersistence(),
-        arenaRegistryStore = PostgresArenaBotRegistryStore(
-            dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "arena-admin")
-        ),
-        accountRiskControlStore = hooks.accountRiskCheck as? AccountRiskControlStore
-    )
-}
-
-private fun defaultAnalyticsRunExportService(): SimulationRunExportService? {
-    val jdbcUrl = RuntimeEnv.string("ANALYTICS_POSTGRES_JDBC_URL", "")
-    val enabled = RuntimeEnv.bool("PLATFORM_ANALYTICS_EXPORT_ENABLED", jdbcUrl.isNotBlank())
-    if (!enabled) return null
-    val store = if (jdbcUrl.isBlank()) {
-        InMemorySimulationRunExportStore()
-    } else {
-        val dbUser = RuntimeEnv.string("ANALYTICS_POSTGRES_USER", "reef")
-        val dbPassword = RuntimeEnv.string("ANALYTICS_POSTGRES_PASSWORD", "reef")
-        val schema = RuntimeEnv.string("ANALYTICS_POSTGRES_SCHEMA", "analytics")
-        PostgresSimulationRunExportStore(
-            dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "analytics-run-export"),
-            names = PostgresAnalyticsSqlNames(schema)
-        )
-    }
-    return SimulationRunExportService(store)
-}
-
-private fun defaultSettlementFactStore(): SettlementFactStore? {
-    val explicitJdbcUrl = RuntimeEnv.string("SETTLEMENT_POSTGRES_JDBC_URL", "")
-    val runtimeJdbcUrl = RuntimeEnv.string("RUNTIME_POSTGRES_JDBC_URL", "")
-    val jdbcUrl = explicitJdbcUrl.ifBlank { runtimeJdbcUrl }
-    val enabled = RuntimeEnv.bool("PLATFORM_SETTLEMENT_FACTS_ENABLED", jdbcUrl.isNotBlank())
-    if (!enabled) return null
-    if (jdbcUrl.isBlank()) return InMemorySettlementFactStore()
-    val dbUser = RuntimeEnv.string("SETTLEMENT_POSTGRES_USER", RuntimeEnv.string("RUNTIME_POSTGRES_USER", "reef"))
-    val dbPassword = RuntimeEnv.string("SETTLEMENT_POSTGRES_PASSWORD", RuntimeEnv.string("RUNTIME_POSTGRES_PASSWORD", "reef"))
-    val schema = RuntimeEnv.string("SETTLEMENT_POSTGRES_SCHEMA", "settlement")
-    return PostgresSettlementFactStore(
-        dataSource = RuntimeDataSources.dataSource(jdbcUrl, dbUser, dbPassword, "settlement-facts"),
-        names = PostgresSettlementSqlNames(schema)
-    )
-}
+// defaultBoundary/defaultAdminHttpAuth/defaultArenaAdminService/
+// defaultAnalyticsRunExportService/defaultSettlementFactStore (composition-root
+// wiring) live in PlatformHttpServerBootstrap.kt.
 
 internal fun JsonDocument.requiredLong(key: String): Long {
     return string(key).toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
