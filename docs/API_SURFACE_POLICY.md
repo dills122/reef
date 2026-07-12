@@ -81,7 +81,7 @@ Current implementation checkpoint:
 - raw `/internal/*` HTTP registration is controlled by `PLATFORM_INTERNAL_HTTP_MODE`
 - local development may use `PLATFORM_INTERNAL_HTTP_MODE=local` for loopback tooling
 - hosted/non-local profiles must set boundary modes explicitly and must not expose raw `/internal/*` externally
-- admin/data adapters use versioned gateway paths such as `/admin/v1/...`; the runtime currently has arena, analytics export, risk-control, and settlement gateway routes
+- admin/data adapters use versioned gateway paths such as `/admin/v1/...`; the runtime currently has arena, analytics export, risk-control, and settlement gateway routes, and the Netty hot-path adapter dispatches these gateway reads/writes instead of returning `404`
 - hosted Caddy exposes only narrow `/admin/v1/arena/...` and `/admin/v1/analytics/...` paths today; raw `/internal/*` is not proxied
 - admin HTTP actor identity is bound from request principal headers/token context, not request body or query fields
 - `/healthz` remains cheap liveness; `/readyz` reports runtime role, internal HTTP mode, DB pool pressure, and stream availability
@@ -109,6 +109,7 @@ This backlog is active work, not optional cleanup.
 2. Move remaining internal HTTP callers off raw `/internal/*`.
    - local smoke scripts may keep loopback adapters while migration is active
    - CI, hosted run-plane, bot-submission, and operator workflows should use `/admin/v1/...`, gRPC, or CLI adapters
+   - local admin CLI risk-control list/set commands now use `/admin/v1/risk/...`; raw boundary reads for those controls are diagnostics only
    - new external needs must start as gateway-backed contracts, not Caddy exceptions to `/internal/*`
    - source inventory lives in [`INTERNAL_HTTP_CALLER_INVENTORY.md`](./INTERNAL_HTTP_CALLER_INVENTORY.md)
 

@@ -1178,6 +1178,22 @@ class PlatformHttpServerBoundaryTest {
                     "X-Participant-Id" to "participant-1"
                 )
             )
+            val historyDenied = get(
+                server.address.port,
+                "/api/v1/orders/history?participantId=participant-2",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1"
+                )
+            )
+            val historyAllowed = get(
+                server.address.port,
+                "/api/v1/orders/history?participantId=participant-1",
+                headers = mapOf(
+                    "X-Client-Id" to "client-1",
+                    "X-Participant-Id" to "participant-1"
+                )
+            )
             val fillsDenied = get(
                 server.address.port,
                 "/api/v1/orders/fills?participantId=participant-2",
@@ -1194,15 +1210,26 @@ class PlatformHttpServerBoundaryTest {
                     "X-Participant-Id" to "participant-1"
                 )
             )
+            val missingParticipant = get(
+                server.address.port,
+                "/api/v1/orders/current?participantId=participant-1",
+                headers = mapOf("X-Client-Id" to "client-1")
+            )
 
             assertEquals(403, denied.status)
             assertContains(denied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
             assertEquals(200, allowed.status)
             assertContains(allowed.body, "\"orders\"")
+            assertEquals(403, historyDenied.status)
+            assertContains(historyDenied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertEquals(200, historyAllowed.status)
+            assertContains(historyAllowed.body, "\"orders\"")
             assertEquals(403, fillsDenied.status)
             assertContains(fillsDenied.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
             assertEquals(200, fillsAllowed.status)
             assertContains(fillsAllowed.body, "\"fills\"")
+            assertEquals(403, missingParticipant.status)
+            assertContains(missingParticipant.body, "\"code\":\"OBJECT_AUTH_REQUIRED\"")
         } finally {
             server.stop(0)
         }
@@ -1957,12 +1984,19 @@ class PlatformHttpServerBoundaryTest {
                 "/api/v1/commands/cmd-status-scope",
                 headers = apiReadHeaders(participantId = "participant-2")
             )
+            val missingParticipant = get(
+                server.address.port,
+                "/api/v1/commands/cmd-status-scope",
+                headers = mapOf("X-Client-Id" to "client-1")
+            )
 
             assertEquals(200, submit.status)
             assertEquals(403, deniedClient.status)
             assertContains(deniedClient.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
             assertEquals(403, deniedParticipant.status)
             assertContains(deniedParticipant.body, "\"code\":\"OBJECT_AUTH_DENIED\"")
+            assertEquals(403, missingParticipant.status)
+            assertContains(missingParticipant.body, "\"code\":\"OBJECT_AUTH_REQUIRED\"")
         } finally {
             server.stop(0)
         }
@@ -4330,6 +4364,34 @@ class PlatformHttpServerBoundaryTest {
     }
 
     @Test
+    fun nettyHotPathServesAdminRiskGatewayReads() {
+        val riskStore = RecordingAccountRiskStore()
+        riskStore.upsertControl(
+            scopeType = "ACCOUNT",
+            scopeId = "account-1",
+            decision = AccountRiskDecision.REJECT,
+            reason = "test risk",
+            maxQuantityUnits = "",
+            maxNotional = "",
+            currency = "USD"
+        )
+        val server = testNettyHotPathServerWithGateway(
+            gateway = EchoOrderEngineGateway(),
+            accountRiskCheck = riskStore,
+            localDevAdminAuthBypass = true
+        )
+        try {
+            val controls = get(server.port, "/admin/v1/risk/account-controls")
+
+            assertEquals(200, controls.status, controls.body)
+            assertContains(controls.body, "\"scopeId\":\"account-1\"")
+            assertContains(controls.body, "\"decision\":\"REJECT\"")
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun nettyHotPathStreamAckPublishesThroughPartitionedPipeline() {
         val publisher = RecordingStreamCommandPublisher()
         val streamPublisher = PartitionedStreamCommandPublisher(
@@ -5506,7 +5568,8 @@ class PlatformHttpServerBoundaryTest {
         streamCommandIntakeStore: StreamCommandIntakeStore? = null,
         streamCommandPublisher: StreamCommandPublisher? = null,
         streamCommandHealthCheck: StreamCommandHealthCheck? = streamCommandPublisher as? StreamCommandHealthCheck,
-        streamCommandConfig: StreamCommandConfig = StreamCommandConfig()
+        streamCommandConfig: StreamCommandConfig = StreamCommandConfig(),
+        localDevAdminAuthBypass: Boolean = false
     ): RunningPlatformNettyServer {
         val persistence = InMemoryRuntimePersistence()
         seedOrderReferenceData(persistence)
@@ -5545,7 +5608,8 @@ class PlatformHttpServerBoundaryTest {
             commandIntakeMaxActive = commandIntakeMaxActive,
             commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
             commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
-            legacyMutationRoutesEnabled = true
+            legacyMutationRoutesEnabled = true,
+            localDevAdminAuthBypass = localDevAdminAuthBypass
         )
         return PlatformNettyHotPathServer(
             delegate = delegate,

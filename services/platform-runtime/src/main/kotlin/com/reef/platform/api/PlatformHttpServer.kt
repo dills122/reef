@@ -15,7 +15,6 @@ import com.reef.platform.application.admin.ArenaRunEnforcementEventIngestionComm
 import com.reef.platform.application.admin.ArenaRunBotResultIngestionCommand
 import com.reef.platform.application.admin.ArenaRunRegistrationCommand
 import com.reef.platform.application.admin.ArenaRunStatusCommand
-import com.reef.platform.application.admin.AuthorizationException
 import com.reef.platform.application.admin.ConfiguredAdminGitHubOAuthClient
 import com.reef.platform.application.admin.GitHubUserIdentity
 import com.reef.platform.application.admin.PostgresAdminAuthStore
@@ -97,8 +96,6 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
-import java.net.InetAddress
-import java.net.URLDecoder
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -1415,6 +1412,24 @@ class PlatformHttpServer(
         }
     }
 
+    private fun handleAdminGatewayRequest(request: PlatformHotPathRequest): PlatformHotPathResponse {
+        val route = adminGatewayRouteFor(request.path, request.method)
+            ?: return PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
+        val principal = authorizeAdminGateway(request, route)
+            ?: return unauthorizedAdminGatewayResponse(route)
+        val body = if (request.method in setOf("POST", "PUT", "PATCH")) request.body else ""
+        return withAdminRequestPrincipal(principal) {
+            settlementAdminGatewayResponse(request.method, route.internalPath, body)
+                ?: adminDataRoutes.handle(
+                    method = request.method,
+                    path = route.internalPath,
+                    query = request.query,
+                    body = body
+                )
+                ?: PlatformHotPathResponse(404, JsonCodec.writeObject("error" to "admin route not found"))
+        }
+    }
+
     private fun settlementAdminGatewayResponse(
         method: String,
         path: String,
@@ -1436,8 +1451,16 @@ class PlatformHttpServer(
     private fun authorizeAdminGateway(exchange: HttpExchange, route: AdminGatewayRoute): AdminRequestPrincipal? =
         adminSessionAuth.authorizeGateway(exchange, route)
 
+    private fun authorizeAdminGateway(request: PlatformHotPathRequest, route: AdminGatewayRoute): AdminRequestPrincipal? =
+        adminSessionAuth.authorizeGateway(request, route)
+
+    private fun unauthorizedAdminGatewayResponse(route: AdminGatewayRoute): PlatformHotPathResponse =
+        adminSessionAuth.unauthorizedGatewayResponse(route)
 
     internal fun handleHotPathRequest(request: PlatformHotPathRequest): PlatformHotPathResponse? {
+        if (request.path.startsWith("/admin/v1/")) {
+            return handleAdminGatewayRequest(request)
+        }
         if (request.path.startsWith("/internal/")) {
             when (internalHttpExposureMode) {
                 InternalHttpExposureMode.Disabled -> return PlatformHotPathResponse(404, "")
@@ -1598,7 +1621,7 @@ class PlatformHttpServer(
             commandProcessingMode == CommandProcessingMode.StreamAck
         ) {
             return handleApiV1MutationResponseAsync(request, request.path)
-                .thenApply { it as PlatformHotPathResponse? }
+                .thenApply<PlatformHotPathResponse?> { it }
         }
         return CompletableFuture.completedFuture(handleHotPathRequest(request))
     }

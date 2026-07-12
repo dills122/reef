@@ -319,14 +319,81 @@ internal class AdminSessionAuth(
         return null
     }
 
+    fun authorizeGateway(request: PlatformHotPathRequest, route: AdminGatewayRoute): AdminRequestPrincipal? {
+        if (allowLocalDevAdminAuthBypass(request)) {
+            return adminPrincipalForActor(request.headers, localDevAdminActorId)
+        }
+
+        val auth = adminAuthService
+        if (auth != null) {
+            val sessionToken = adminSessionCookie(request.headers)
+            if (sessionToken.isNotBlank()) {
+                try {
+                    val session = auth.authenticateSession(sessionToken)
+                    return adminPrincipalForActor(request.headers, session.reefUserId)
+                } catch (_: IllegalArgumentException) {
+                    return null
+                }
+            }
+            bearerToken(request.headers)?.let { token ->
+                route.serviceTokenFamilies.forEach { family ->
+                    try {
+                        val serviceToken = auth.authenticateServiceToken(token, family)
+                        return adminPrincipalForActor(request.headers, serviceToken.subjectActorId)
+                    } catch (_: AuthorizationException) {
+                        // Unknown DB-issued service tokens may still be valid
+                        // static gateway fallback tokens configured in env.
+                    } catch (_: IllegalArgumentException) {
+                        // Try the next permitted service-token family for this route.
+                    }
+                }
+            }
+        }
+
+        val envName = adminGatewayFallbackTokenEnv(route)
+        val token = RuntimeEnv.string(envName, "")
+        val expected = "Bearer $token"
+        if (token.isNotBlank() && headerValue(request.headers, "Authorization") == expected) {
+            return principal(request.headers)
+        }
+        return null
+    }
+
+    fun unauthorizedGatewayResponse(route: AdminGatewayRoute): PlatformHotPathResponse {
+        if (adminAuthService != null) {
+            return PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized"))
+        }
+        val envName = adminGatewayFallbackTokenEnv(route)
+        if (RuntimeEnv.string(envName, "").isBlank()) {
+            return PlatformHotPathResponse(503, JsonCodec.writeObject("error" to "$envName is not configured"))
+        }
+        return PlatformHotPathResponse(401, JsonCodec.writeObject("error" to "unauthorized"))
+    }
+
+    private fun adminGatewayFallbackTokenEnv(route: AdminGatewayRoute): String {
+        return when (route.fallbackTokenFamily) {
+            "analytics" -> "ANALYTICS_EXPORT_API_TOKEN"
+            "admin" -> "ADMIN_API_TOKEN"
+            else -> "ARENA_ADMIN_API_TOKEN"
+        }
+    }
+
     private fun bearerToken(exchange: HttpExchange): String? {
-        val authorization = headerValue(exchange, "Authorization")
+        return bearerToken(exchange.requestHeaders)
+    }
+
+    private fun bearerToken(headers: Headers): String? {
+        val authorization = headerValue(headers, "Authorization")
         if (!authorization.startsWith("Bearer ")) return null
         return authorization.removePrefix("Bearer ").trim().ifBlank { null }
     }
 
     private fun adminPrincipalForActor(exchange: HttpExchange, actorId: String): AdminRequestPrincipal {
-        val headerPrincipal = principal(exchange)
+        return adminPrincipalForActor(exchange.requestHeaders, actorId)
+    }
+
+    private fun adminPrincipalForActor(headers: Headers, actorId: String): AdminRequestPrincipal {
+        val headerPrincipal = principal(headers)
         return headerPrincipal.copy(actorId = actorId)
     }
 
@@ -336,6 +403,10 @@ internal class AdminSessionAuth(
 
     private fun allowLocalDevAdminAuthBypass(exchange: HttpExchange): Boolean {
         return localDevAdminAuthBypass && isLoopback(exchange.remoteAddress.address)
+    }
+
+    private fun allowLocalDevAdminAuthBypass(request: PlatformHotPathRequest): Boolean {
+        return localDevAdminAuthBypass && isLoopback(request.remoteAddress)
     }
 
     private fun writeLocalDevAdminSession(exchange: HttpExchange) {
@@ -356,7 +427,11 @@ internal class AdminSessionAuth(
     }
 
     private fun adminSessionCookie(exchange: HttpExchange): String {
-        return headerValue(exchange, "Cookie")
+        return adminSessionCookie(exchange.requestHeaders)
+    }
+
+    private fun adminSessionCookie(headers: Headers): String {
+        return headerValue(headers, "Cookie")
             .split(";")
             .asSequence()
             .map { it.trim() }

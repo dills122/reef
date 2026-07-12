@@ -54,6 +54,23 @@ Immediate implications:
 3. Track WAL/table bytes per command, `pg_stat_activity` waits, `pg_stat_io`, Kafka producer queue/request latency, materializer batch behavior, and restart counts during every promotion run.
 4. Use `make do-materializer-10k-gate` so SLO, repeat-sample, and partition-spread gates stay consistent.
 
+## DigitalOcean Materializer 10k Soak-5m Gate (July 12, 2026)
+
+The c-16 DigitalOcean `soak-5m` tier passed after adding application-level retry for retriable Kafka-compatible publish callback failures inside the existing publish-ack timeout. The retry does not change the durable acceptance contract: `202 Accepted` is still emitted only after the configured durable producer acknowledges the command.
+
+Evidence: `reports/do-benchmark/do-benchmark-20260712T143401Z/`.
+
+- sample 1: `3000001` attempted, `3000001` accepted, `3000001` direct-acked, `3000001` materialized, `9999.57` accepted/materialized rps, p95 `28.11ms`, p99 `58.38ms`, accepted/direct-acked/materialized gaps `0`.
+- sample 2: `2999950` attempted, `2999950` accepted, `2999950` direct-acked, `2999950` materialized, `9999.79` accepted/materialized rps, p95 `28.38ms`, p99 `56.05ms`, accepted/direct-acked/materialized gaps `0`.
+- averages: `100%` success, `9999.68` accepted/materialized rps, p95 `28.25ms`, p99 `57.21ms`, materializer lag `0`, stream-direct clean.
+
+Immediate implications:
+
+1. The direct-stream plus venue-event-materializer path is now the canonical `10k` venue-core baseline for accepted/direct-acked/materialized throughput.
+2. Do not use this run as projection or read API freshness evidence: `projected=0` was intentional for the materializer gate.
+3. The next performance risk is projection/read-model freshness and replay under the same durable venue-event load, not canonical materialization throughput.
+4. Keep `soak-15m` as aged-state confirmation before raising the venue-core target above `10k`, and track WAL/table bytes per command plus Kafka producer queue/request latency in every longer run.
+
 ## Stream-Ack No-DB Intake Retention Checkpoint (July 6, 2026)
 
 Local long-soak investigation showed the failed no-DB stream-ack run was not primarily a small JVM heap problem. It was unbounded API-side intake/idempotency retention in the `STREAM_ACK_INTAKE_STORE=inmemory` ceiling profile.

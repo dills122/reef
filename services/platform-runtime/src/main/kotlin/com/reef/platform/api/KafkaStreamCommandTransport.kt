@@ -8,10 +8,14 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.Callback
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.Metric
+import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidPartitionsException
+import org.apache.kafka.common.errors.RetriableException
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -43,7 +47,39 @@ class KafkaStreamCommandPublisher(
     private val maxPublishAckMs = AtomicLong(0L)
     private val inFlightSlots = Semaphore(maxInFlight)
     private val inFlight = AtomicInteger(0)
+    private var producerOverride: KafkaCommandProducer? = null
+    private var publishRetryAttemptsOverride: Int? = null
+    private var publishRetryDelayOverride: Duration? = null
     private val producer by lazy {
+        producerOverride ?: KafkaCommandProducerAdapter(
+            KafkaProducer<String, String>(
+                producerProperties()
+            )
+        )
+    }
+    private val publishRetryAttempts: Int
+        get() = publishRetryAttemptsOverride
+            ?: RuntimeEnv.int("STREAM_ACK_KAFKA_PUBLISH_RETRY_ATTEMPTS", 3, min = 0)
+    private val publishRetryDelay: Duration
+        get() = publishRetryDelayOverride
+            ?: Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_KAFKA_PUBLISH_RETRY_DELAY_MS", 25L, min = 0L))
+
+    internal constructor(
+        bootstrapServers: String = RuntimeEnv.string("STREAM_ACK_KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+        ackTimeout: Duration = Duration.ofMillis(RuntimeEnv.long("STREAM_ACK_PUBLISH_ACK_TIMEOUT_MS", 2_000L, min = 1L)),
+        config: StreamCommandConfig = StreamCommandConfig(),
+        maxInFlight: Int = RuntimeEnv.int("STREAM_ACK_KAFKA_PUBLISH_MAX_IN_FLIGHT", 16_384, min = 1),
+        producer: KafkaCommandProducer,
+        publishRetryAttempts: Int,
+        publishRetryDelay: Duration
+    ) : this(bootstrapServers, ackTimeout, config, maxInFlight) {
+        this.producerOverride = producer
+        this.publishRetryAttemptsOverride = publishRetryAttempts
+        this.publishRetryDelayOverride = publishRetryDelay
+        this.topicReady.set(true)
+    }
+
+    private fun producerProperties(): Properties {
         val publishAckTimeoutMs = ackTimeout.toMillis().coerceAtLeast(1L)
         val lingerMs = RuntimeEnv.long("STREAM_ACK_KAFKA_LINGER_MS", 1L, min = 0L)
         val requestTimeoutMs = RuntimeEnv.long(
@@ -56,25 +92,23 @@ class KafkaStreamCommandPublisher(
             maxOf(publishAckTimeoutMs, requestTimeoutMs + lingerMs + 1L),
             min = 1L
         )
-        KafkaProducer<String, String>(
-            Properties().apply {
-                put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-                put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
-                put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
-                put(ProducerConfig.ACKS_CONFIG, "all")
-                put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-                put(ProducerConfig.RETRIES_CONFIG, Int.MAX_VALUE.toString())
-                put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, RuntimeEnv.int("STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION", 5, min = 1).coerceAtMost(5).toString())
-                put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString())
-                put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString())
-                put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString())
-                put(ProducerConfig.BATCH_SIZE_CONFIG, RuntimeEnv.int("STREAM_ACK_KAFKA_BATCH_SIZE", 65_536, min = 1).toString())
-                put(ProducerConfig.COMPRESSION_TYPE_CONFIG, RuntimeEnv.string("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4"))
-                put(ProducerConfig.BUFFER_MEMORY_CONFIG, RuntimeEnv.long("STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES", 67_108_864L, min = 1L).toString())
-                put(ProducerConfig.MAX_BLOCK_MS_CONFIG, RuntimeEnv.long("STREAM_ACK_KAFKA_MAX_BLOCK_MS", 250L, min = 1L).toString())
-                put(ProducerConfig.CLIENT_ID_CONFIG, RuntimeEnv.string("STREAM_ACK_KAFKA_CLIENT_ID", "reef-platform-runtime-command-producer"))
-            }
-        )
+        return Properties().apply {
+            put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+            put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer::class.java.name)
+            put(ProducerConfig.ACKS_CONFIG, "all")
+            put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+            put(ProducerConfig.RETRIES_CONFIG, Int.MAX_VALUE.toString())
+            put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, RuntimeEnv.int("STREAM_ACK_KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION", 5, min = 1).coerceAtMost(5).toString())
+            put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString())
+            put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString())
+            put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString())
+            put(ProducerConfig.BATCH_SIZE_CONFIG, RuntimeEnv.int("STREAM_ACK_KAFKA_BATCH_SIZE", 65_536, min = 1).toString())
+            put(ProducerConfig.COMPRESSION_TYPE_CONFIG, RuntimeEnv.string("STREAM_ACK_KAFKA_COMPRESSION_TYPE", "lz4"))
+            put(ProducerConfig.BUFFER_MEMORY_CONFIG, RuntimeEnv.long("STREAM_ACK_KAFKA_BUFFER_MEMORY_BYTES", 67_108_864L, min = 1L).toString())
+            put(ProducerConfig.MAX_BLOCK_MS_CONFIG, RuntimeEnv.long("STREAM_ACK_KAFKA_MAX_BLOCK_MS", 250L, min = 1L).toString())
+            put(ProducerConfig.CLIENT_ID_CONFIG, RuntimeEnv.string("STREAM_ACK_KAFKA_CLIENT_ID", "reef-platform-runtime-command-producer"))
+        }
     }
 
     override fun publish(envelope: StreamCommandEnvelope): StreamPublishAck {
@@ -106,29 +140,81 @@ class KafkaStreamCommandPublisher(
         val started = System.nanoTime()
         inFlight.incrementAndGet()
         val result = CompletableFuture<StreamPublishAck>()
+        sendWithRetry(record, result, started, attempt = 0, deadlineNanos = started + ackTimeout.toNanos())
+        return result
+    }
+
+    private fun sendWithRetry(
+        record: ProducerRecord<String, String>,
+        result: CompletableFuture<StreamPublishAck>,
+        started: Long,
+        attempt: Int,
+        deadlineNanos: Long
+    ) {
         try {
             producer.send(record) { metadata, exception ->
-                inFlight.decrementAndGet()
-                inFlightSlots.release()
-                recordPublishAckElapsed(started)
                 if (exception != null) {
-                    result.completeExceptionally(exception)
-                } else {
-                    result.complete(
-                        StreamPublishAck(
-                            streamName = topic,
-                            streamSequence = kafkaStreamSequence(metadata.partition(), metadata.offset())
-                        )
-                    )
+                    if (shouldRetryPublish(exception, attempt, deadlineNanos)) {
+                        scheduleRetry(record, result, started, attempt + 1, deadlineNanos)
+                    } else {
+                        completePublish(started, result, exception)
+                    }
+                    return@send
                 }
+                if (metadata == null) {
+                    completePublish(started, result, IllegalStateException("Kafka publish callback completed without metadata"))
+                    return@send
+                }
+                completePublish(
+                    started,
+                    result,
+                    StreamPublishAck(
+                        streamName = topic,
+                        streamSequence = kafkaStreamSequence(metadata.partition(), metadata.offset())
+                    )
+                )
             }
         } catch (ex: Exception) {
-            inFlight.decrementAndGet()
-            inFlightSlots.release()
-            recordPublishAckElapsed(started)
-            result.completeExceptionally(ex)
+            if (shouldRetryPublish(ex, attempt, deadlineNanos)) {
+                scheduleRetry(record, result, started, attempt + 1, deadlineNanos)
+            } else {
+                completePublish(started, result, ex)
+            }
         }
-        return result
+    }
+
+    private fun shouldRetryPublish(exception: Exception, attempt: Int, deadlineNanos: Long): Boolean {
+        return attempt < publishRetryAttempts &&
+            System.nanoTime() < deadlineNanos &&
+            isRetriableKafkaPublishException(exception)
+    }
+
+    private fun scheduleRetry(
+        record: ProducerRecord<String, String>,
+        result: CompletableFuture<StreamPublishAck>,
+        started: Long,
+        attempt: Int,
+        deadlineNanos: Long
+    ) {
+        val remainingNanos = deadlineNanos - System.nanoTime()
+        val delayNanos = publishRetryDelay.toNanos().coerceAtMost(remainingNanos).coerceAtLeast(0L)
+        CompletableFuture.delayedExecutor(delayNanos, TimeUnit.NANOSECONDS).execute {
+            sendWithRetry(record, result, started, attempt, deadlineNanos)
+        }
+    }
+
+    private fun completePublish(started: Long, result: CompletableFuture<StreamPublishAck>, ack: StreamPublishAck) {
+        inFlight.decrementAndGet()
+        inFlightSlots.release()
+        recordPublishAckElapsed(started)
+        result.complete(ack)
+    }
+
+    private fun completePublish(started: Long, result: CompletableFuture<StreamPublishAck>, exception: Exception) {
+        inFlight.decrementAndGet()
+        inFlightSlots.release()
+        recordPublishAckElapsed(started)
+        result.completeExceptionally(exception)
     }
 
     override fun snapshot(): StreamCommandHealthSnapshot {
@@ -251,6 +337,28 @@ class KafkaStreamCommandPublisher(
             emptyMap()
         }
     }
+}
+
+internal interface KafkaCommandProducer {
+    fun send(record: ProducerRecord<String, String>, callback: Callback)
+    fun metrics(): Map<MetricName, Metric>
+}
+
+private class KafkaCommandProducerAdapter(private val producer: KafkaProducer<String, String>) : KafkaCommandProducer {
+    override fun send(record: ProducerRecord<String, String>, callback: Callback) {
+        producer.send(record, callback)
+    }
+
+    override fun metrics(): Map<MetricName, Metric> = producer.metrics()
+}
+
+internal fun isRetriableKafkaPublishException(exception: Throwable): Boolean {
+    var current: Throwable? = exception
+    while (current != null) {
+        if (current is RetriableException) return true
+        current = current.cause
+    }
+    return false
 }
 
 private val KAFKA_PRODUCER_METRIC_NAMES = setOf(
