@@ -57,6 +57,11 @@ The intended output of this review should be one or more focused specs, likely:
 - order, matching, and settlement lifecycle for arena-originated activity
 - leaderboard, scoring, replay, and audit rules
 
+Draft economic-control direction now lives in
+[`BOT_ARENA_MONETARY_POLICY.md`](./BOT_ARENA_MONETARY_POLICY.md), covering house
+market makers, NPC flow, fees, source/sink accounting, policy versioning, and
+economic report requirements for arena games.
+
 ## Resolved Slice: Bot Submission Workflow And OpenBao Provisioning
 
 Status: agreed direction, 2026-07-05. This resolves the "bot creation flow" and part of "secret handling rules" items from Deferred Second Review above (line 28, line 45: secret partition activation, who provisions, isolation by bot/user). Other Deferred Second Review items (safety limits, fairness rules, order lifecycle, failure handling beyond what's listed here) remain open.
