@@ -1885,6 +1885,7 @@ function fixtureForBot(bot, schedule = {}) {
     config: {
       ...(baseFixture.config ?? {}),
       ...bot.runtimeConfigPreflight.values,
+      ...actorProfileRuntimeConfig(bot),
       ...(botSchedulingClass(bot) === "house_responsive" ? { houseLiquidity: houseLiquidityConfig(bot) } : {}),
     },
   };
@@ -2084,6 +2085,27 @@ function botIdentityKey(bot) {
 
 function venueIdentityKey(bot) {
   return `${config.runId}-${botIdentityKey(bot)}`.replace(/[^A-Za-z0-9_.-]/g, "-");
+}
+
+function actorProfileRuntimeConfig(bot) {
+  const profile = bot.actorProfile;
+  if (profile === undefined) {
+    return {};
+  }
+  const values = {
+    "actorProfile.profileId": profile.profileId,
+    "actorProfile.profileVersion": profile.profileVersion,
+    "actorProfile.actorClass": profile.actorClass,
+    "actorProfile.difficultyBucket": profile.difficultyBucket,
+    "actorProfile.scoreEffect": profile.scoreEffect,
+    "actorProfile.profileHash": profile.profileHash,
+  };
+  for (const [key, value] of Object.entries(profile.params ?? {})) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      values[`actorProfile.${key}`] = value;
+    }
+  }
+  return values;
 }
 
 function actorIdForIdentity(identityKey) {

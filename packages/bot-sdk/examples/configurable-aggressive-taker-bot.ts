@@ -17,12 +17,19 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
   override async onTick(ctx: BotContextV1): Promise<readonly BotActionV1[]> {
     const instrumentId = ctx.config.string("instrumentId");
     const orderSize = ctx.config.number("orderSize");
-    const crossOffset = ctx.config.optionalNumber("crossOffset") ?? 0.01;
+    const configuredCrossOffset = ctx.config.optionalNumber("crossOffset") ?? 0.01;
     const configuredSide = ctx.config.optionalString("side") ?? "ALTERNATE";
     const startAfterTicks = Math.max(0, Math.floor(ctx.config.optionalNumber("startAfterTicks") ?? 0));
+    const orderRate = ctx.config.optionalString("actorProfile.orderRate") ?? "high";
+    const aggression = clamp(ctx.config.optionalNumber("actorProfile.aggression") ?? 1, 0.1, 1);
+    const riskDiscipline = ctx.config.optionalString("actorProfile.riskDiscipline") ?? "standard";
     if (this.tickIndex < startAfterTicks) {
       this.tickIndex += 1;
       return [ctx.actions.noop("waiting for liquidity warmup")];
+    }
+    if (!this.shouldTradeThisTick(orderRate, startAfterTicks)) {
+      this.tickIndex += 1;
+      return [ctx.actions.noop(`profile order rate ${orderRate}`)];
     }
 
     const ownOrders = await ctx.orders.current();
@@ -36,7 +43,7 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
         (order.status === "OPEN" || order.status === "PARTIALLY_FILLED") &&
         order.remainingQuantity > 0,
     );
-    if (activeOrders.length > 0) {
+    if (riskDiscipline !== "low" && activeOrders.length > 0) {
       return [ctx.actions.noop("taker order already active")];
     }
 
@@ -50,6 +57,10 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
     const referencePrice = side === "BUY"
       ? snapshot.value.askPrice ?? snapshot.value.midPrice
       : snapshot.value.bidPrice ?? snapshot.value.midPrice;
+    const maxSpreadCrossBps = ctx.config.optionalNumber("actorProfile.maxSpreadCrossBps");
+    const crossOffset = maxSpreadCrossBps === undefined
+      ? configuredCrossOffset
+      : Math.max(configuredCrossOffset, referencePrice * (Math.max(0, maxSpreadCrossBps) / 10_000) * aggression);
     const signedOffset = side === "BUY" ? Math.abs(crossOffset) : -Math.abs(crossOffset);
     return [
       ctx.orders.placeLimit({
@@ -62,10 +73,21 @@ export default class ConfigurableAggressiveTakerBot extends ReefBotV1 {
     ];
   }
 
+  private shouldTradeThisTick(orderRate: string, startAfterTicks: number): boolean {
+    const activeTick = Math.max(0, this.tickIndex - startAfterTicks);
+    if (orderRate === "low") return activeTick % 4 === 0;
+    if (orderRate === "medium" || orderRate === "standard") return activeTick % 2 === 0;
+    return true;
+  }
+
   private sideForTick(configuredSide: string): OrderSideV1 {
     if (configuredSide === "BUY" || configuredSide === "SELL") {
       return configuredSide;
     }
     return this.tickIndex % 2 === 0 ? "BUY" : "SELL";
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
