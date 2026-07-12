@@ -8,6 +8,10 @@ accepted D-045 constraints: bots use the normal venue command boundary, the
 matching engine remains unaware of game mechanics, arena facts stay outside the
 trading hot-path database, and runs remain deterministic and replayable.
 
+Scoring-specific direction lives in
+[`BOT_ARENA_SCORING_POLICY.md`](./BOT_ARENA_SCORING_POLICY.md). This document
+only defines the economic and actor-policy inputs that scoring consumes.
+
 ## Goals
 
 Bot Arena monetary policy should optimize for:

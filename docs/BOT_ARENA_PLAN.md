@@ -62,6 +62,11 @@ Draft economic-control direction now lives in
 market makers, NPC flow, fees, source/sink accounting, policy versioning, and
 economic report requirements for arena games.
 
+Draft scoring direction now lives in
+[`BOT_ARENA_SCORING_POLICY.md`](./BOT_ARENA_SCORING_POLICY.md), covering
+eligibility gates, final-equity ranking, risk and conduct metrics, NPC
+difficulty buckets, leaderboard partitioning, and season aggregation questions.
+
 ## Resolved Slice: Bot Submission Workflow And OpenBao Provisioning
 
 Status: agreed direction, 2026-07-05. This resolves the "bot creation flow" and part of "secret handling rules" items from Deferred Second Review above (line 28, line 45: secret partition activation, who provisions, isolation by bot/user). Other Deferred Second Review items (safety limits, fairness rules, order lifecycle, failure handling beyond what's listed here) remain open.
