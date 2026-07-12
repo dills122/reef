@@ -476,6 +476,83 @@ class PlatformHttpServer(
         } else {
             null
         }
+    private val runtimeLoopStarter = RuntimeLoopStarter(
+        api = api,
+        runtimeRole = runtimeRole,
+        commandProcessingMode = commandProcessingMode,
+        streamCommandConfig = streamCommandConfig,
+        streamCommandIntakeStore = streamCommandIntakeStore,
+        streamCommandWorkerBatchSize = streamCommandWorkerBatchSize,
+        streamCommandWorkerPollMs = streamCommandWorkerPollMs,
+        streamCommandWorkerFetchTimeoutMs = streamCommandWorkerFetchTimeoutMs,
+        streamCommandWorkerDedicatedRuntimePoolEnabled = streamCommandWorkerDedicatedRuntimePoolEnabled,
+        streamCommandWorkerPartitions = streamCommandWorkerPartitions,
+        streamAckProjectorPartitions = streamAckProjectorPartitions,
+        streamAckProjectionName = streamAckProjectionName,
+        streamAckProjectionSource = streamAckProjectionSource,
+        streamAckProjectionEventStream = streamAckProjectionEventStream,
+        streamAckProjectorBatchSize = streamAckProjectorBatchSize,
+        streamAckProjectorPollMs = streamAckProjectorPollMs,
+        marketDataProjectorEnabled = marketDataProjectorEnabled,
+        marketDataProjectorProjectionName = marketDataProjectorProjectionName,
+        marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
+        marketDataProjectorPollMs = marketDataProjectorPollMs,
+        marketDataProjectorBatchSize = marketDataProjectorBatchSize,
+        orderLifecycleProjectorEnabled = orderLifecycleProjectorEnabled,
+        orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
+        orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+        venueEventMaterializerEnabled = venueEventMaterializerEnabled,
+        venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
+        venueEventMaterializerPollMs = venueEventMaterializerPollMs,
+        venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs
+    )
+    private val diagnosticsGateway = DiagnosticsGateway(
+        runtimeRole = runtimeRole,
+        commandProcessingMode = commandProcessingMode,
+        acceptedAsyncCommandIntake = acceptedAsyncCommandIntake,
+        capturedCommandQueue = capturedCommandQueue,
+        asyncCommandWorkerEnabled = asyncCommandWorkerEnabled,
+        asyncCommandWorkerThreads = asyncCommandWorkerThreads,
+        asyncCommandWorkerBatchSize = asyncCommandWorkerBatchSize,
+        asyncCommandWorkerPollMs = asyncCommandWorkerPollMs,
+        commandIntakeMaxActive = commandIntakeMaxActive,
+        commandIntakeMaxStaleProcessing = commandIntakeMaxStaleProcessing,
+        commandIntakeBackpressureSampleMs = commandIntakeBackpressureSampleMs,
+        streamCommandHealthCheck = streamCommandHealthCheck,
+        streamCommandConfig = streamCommandConfig,
+        streamCommandMaxStorageUtilization = streamCommandMaxStorageUtilization,
+        streamCommandBackpressureSampleMs = streamCommandBackpressureSampleMs,
+        streamCommandDrainBackpressurePolicy = streamCommandDrainBackpressurePolicy,
+        streamCommandMaxWorkerStreamLag = streamCommandMaxWorkerStreamLag,
+        streamCommandMaxProjectorLag = streamCommandMaxProjectorLag,
+        streamCommandDrainBackpressureSampleMs = streamCommandDrainBackpressureSampleMs,
+        streamCommandMarkPublishedMode = streamCommandMarkPublishedMode,
+        streamCommandBackpressureWorkerDurables = streamCommandBackpressureWorkerDurables,
+        streamCommandWorkerEnabled = streamCommandWorkerEnabled,
+        streamCommandWorkerBatchSize = streamCommandWorkerBatchSize,
+        streamCommandWorkerPollMs = streamCommandWorkerPollMs,
+        streamCommandWorkerFetchTimeoutMs = streamCommandWorkerFetchTimeoutMs,
+        streamCommandWorkerDedicatedRuntimePoolEnabled = streamCommandWorkerDedicatedRuntimePoolEnabled,
+        venueEventMaterializerShouldStart = { runtimeLoopStarter.venueEventMaterializerShouldStart() },
+        venueEventMaterializerBatchSize = venueEventMaterializerBatchSize,
+        venueEventMaterializerPollMs = venueEventMaterializerPollMs,
+        venueEventMaterializerFetchTimeoutMs = venueEventMaterializerFetchTimeoutMs,
+        marketDataProjectorShouldStart = { runtimeLoopStarter.marketDataProjectorShouldStart() },
+        marketDataProjectorProjectionName = marketDataProjectorProjectionName,
+        marketDataProjectorSourceProjectionName = marketDataProjectorSourceProjectionName,
+        marketDataProjectorPollMs = marketDataProjectorPollMs,
+        marketDataProjectorBatchSize = marketDataProjectorBatchSize,
+        orderLifecycleProjectorShouldStart = { runtimeLoopStarter.orderLifecycleProjectorShouldStart() },
+        orderLifecycleProjectorPollMs = orderLifecycleProjectorPollMs,
+        orderLifecycleProjectorBatchSize = orderLifecycleProjectorBatchSize,
+        streamWorkerPartitions = { runtimeLoopStarter.streamWorkerPartitions() },
+        api = api,
+        streamAckProjectorEnabled = streamAckProjectorEnabled,
+        streamAckProjectionName = streamAckProjectionName,
+        streamAckProjectionSource = streamAckProjectionSource,
+        streamAckProjectionEventStream = streamAckProjectionEventStream,
+        projectorPartitions = { runtimeLoopStarter.projectorPartitions() }
+    )
     private val streamCommandDrainBackpressureSampler: StreamCommandDrainBackpressureSampler? by lazy {
         buildStreamCommandDrainBackpressureSampler()
     }
@@ -517,15 +594,15 @@ class PlatformHttpServer(
             setAccountRiskControlJson = { body -> riskGuardrailGateway.setAccountRiskControlResponse(body) },
             setCommandCircuitBreakerJson = { body -> riskGuardrailGateway.setCommandCircuitBreakerResponse(body) },
             setInstrumentPriceCollarJson = { body -> riskGuardrailGateway.setInstrumentPriceCollarResponse(body) },
-            dbPoolStatsJson = { dbPoolStatsJson() },
-            asyncCommandStatsJson = { asyncCommandStatsJson() },
-            commandAccountingJson = { runId -> commandAccountingJson(runId) },
-            streamCommandHealthJson = { streamCommandHealthJson() },
-            streamCommandWorkerStatsJson = { streamCommandWorkerStatsJson() },
-            venueEventMaterializerStatsJson = { venueEventMaterializerStatsJson() },
-            projectorStatusJson = { projectorStatusJson() },
-            marketDataProjectorStatsJson = { marketDataProjectorStatusJson() },
-            orderLifecycleProjectorStatsJson = { orderLifecycleProjectorStatusJson() }
+            dbPoolStatsJson = { diagnosticsGateway.dbPoolStatsJson() },
+            asyncCommandStatsJson = { diagnosticsGateway.asyncCommandStatsJson() },
+            commandAccountingJson = { runId -> diagnosticsGateway.commandAccountingJson(runId) },
+            streamCommandHealthJson = { diagnosticsGateway.streamCommandHealthJson() },
+            streamCommandWorkerStatsJson = { diagnosticsGateway.streamCommandWorkerStatsJson() },
+            venueEventMaterializerStatsJson = { diagnosticsGateway.venueEventMaterializerStatsJson() },
+            projectorStatusJson = { diagnosticsGateway.projectorStatusJson() },
+            marketDataProjectorStatsJson = { diagnosticsGateway.marketDataProjectorStatusJson() },
+            orderLifecycleProjectorStatsJson = { diagnosticsGateway.orderLifecycleProjectorStatusJson() }
         )
     }
 
@@ -1113,19 +1190,19 @@ class PlatformHttpServer(
             }
         }
         if (runtimeRole.backgroundWorkersEnabled && streamCommandWorkerEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
-            startStreamCommandWorkers()
+            runtimeLoopStarter.startStreamCommandWorkers()
         }
         if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled && commandProcessingMode == CommandProcessingMode.StreamAck) {
-            startCanonicalProjector()
+            runtimeLoopStarter.startCanonicalProjector()
         }
-        if (venueEventMaterializerShouldStart()) {
-            startVenueEventMaterializer()
+        if (runtimeLoopStarter.venueEventMaterializerShouldStart()) {
+            runtimeLoopStarter.startVenueEventMaterializer()
         }
-        if (marketDataProjectorShouldStart()) {
-            startMarketDataProjector()
+        if (runtimeLoopStarter.marketDataProjectorShouldStart()) {
+            runtimeLoopStarter.startMarketDataProjector()
         }
-        if (orderLifecycleProjectorShouldStart()) {
-            startOrderLifecycleProjector()
+        if (runtimeLoopStarter.orderLifecycleProjectorShouldStart()) {
+            runtimeLoopStarter.startOrderLifecycleProjector()
         }
         if (runtimeRole == PlatformRuntimeRole.Api && commandProcessingMode == CommandProcessingMode.StreamAck) {
             startStreamCommandDrainBackpressureSampler()
@@ -1144,14 +1221,6 @@ class PlatformHttpServer(
         )
     }
 
-    private fun streamCommandWorkerApi(): PlatformApi {
-        if (!streamCommandWorkerDedicatedRuntimePoolEnabled) return api
-        return PlatformApi(
-            OrderApplicationService(
-                runtimePersistence = defaultRuntimePersistence("stream-runtime")
-            )
-        )
-    }
 
     private fun writeJson(exchange: HttpExchange, status: Int, json: String) {
         val bytes = json.toByteArray()
@@ -1536,41 +1605,6 @@ class PlatformHttpServer(
         }
     }
 
-    private fun projectorStatusJson(): String {
-        val partitions = projectorPartitions()
-        val status = api.projectionStatus(streamAckProjectionName, partitions, streamAckProjectionSource.configValue)
-        val metrics = CanonicalProjectionMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "role" to runtimeRole.configValue,
-            "status" to if (runtimeRole == PlatformRuntimeRole.Projector && streamAckProjectorEnabled) "running" else "inactive",
-            "implementation" to "canonical-submit-projector",
-            "source" to streamAckProjectionSource.configValue,
-            "eventStream" to streamAckProjectionEventStream,
-            "projectionName" to status.projectionName,
-            "partitions" to partitions,
-            "projectedCount" to status.projectedCount,
-            "lag" to status.lag,
-            "metrics" to mapOf(
-                "projected" to metrics.projected,
-                "failed" to metrics.failed,
-                "emptyPolls" to metrics.emptyPolls,
-                "lastProjectedAt" to metrics.lastProjectedAt,
-                "lastFailedAt" to metrics.lastFailedAt,
-                "lastError" to metrics.lastError
-            ),
-            "watermarks" to status.watermarks.map { watermark ->
-                mapOf(
-                    "projectionName" to watermark.projectionName,
-                    "partition" to watermark.partitionId,
-                    "lastPartitionSequence" to watermark.lastPartitionSequence,
-                    "canonicalMaxPartitionSequence" to watermark.canonicalMaxPartitionSequence,
-                    "lag" to watermark.lag,
-                    "updatedAt" to watermark.updatedAt,
-                    "lastError" to watermark.lastError
-                )
-            }
-        )
-    }
 
     private fun runtimeUnavailableJson(ex: Exception): String {
         return simpleErrorJson("runtime unavailable", ex.message ?: "unknown")
@@ -2936,89 +2970,8 @@ class PlatformHttpServer(
     // hot-path violation checks stay here — they move with OrderCommandDispatcher.
 
 
-    private fun asyncCommandStatsJson(): String {
-        val acceptedAsyncStats = acceptedAsyncCommandIntake?.stats()
-        val queueCounts = capturedCommandQueue
-            ?.statusCounts()
-            ?.mapKeys { (status, _) -> status.name }
-            ?: emptyMap()
-        val counts = CommandLogStatus.values().associate { status ->
-            status.name to (queueCounts[status.name] ?: 0L)
-        }
-        val metrics = AsyncCommandProcessorMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to asyncCommandWorkerEnabled,
-            "processingMode" to commandProcessingMode.configValue,
-            "workerThreads" to asyncCommandWorkerThreads,
-            "batchSize" to asyncCommandWorkerBatchSize,
-            "pollIntervalMs" to asyncCommandWorkerPollMs,
-            "acceptedAsync" to if (acceptedAsyncStats == null) {
-                mapOf("enabled" to false)
-            } else {
-                mapOf(
-                    "enabled" to acceptedAsyncStats.enabled,
-                    "laneCount" to acceptedAsyncStats.laneCount,
-                    "activeLaneCount" to acceptedAsyncStats.activeLaneCount,
-                    "queueCapacityPerLane" to acceptedAsyncStats.queueCapacityPerLane,
-                    "inFlightPerLane" to acceptedAsyncStats.inFlightPerLane,
-                    "queued" to acceptedAsyncStats.queued,
-                    "maxLaneDepth" to acceptedAsyncStats.maxLaneDepth,
-                    "inFlight" to acceptedAsyncStats.inFlight,
-                    "completedWaiting" to acceptedAsyncStats.completedWaiting,
-                    "maxOldestInFlightAgeMs" to acceptedAsyncStats.maxOldestInFlightAgeMs,
-                    "saturatedLaneCount" to acceptedAsyncStats.saturatedLaneCount,
-                    "received" to acceptedAsyncStats.received,
-                    "duplicates" to acceptedAsyncStats.duplicates,
-                    "backpressured" to acceptedAsyncStats.backpressured,
-                    "processing" to acceptedAsyncStats.processing,
-                    "completed" to acceptedAsyncStats.completed,
-                    "failed" to acceptedAsyncStats.failed,
-                    "retainedStatuses" to acceptedAsyncStats.retainedStatuses,
-                    "retentionMaxRecords" to acceptedAsyncStats.retentionMaxRecords,
-                    "retentionTtlMs" to acceptedAsyncStats.retentionTtlMs,
-                    "retentionEvicted" to acceptedAsyncStats.retentionEvicted,
-                    "terminalStatusMaxRecords" to acceptedAsyncStats.terminalStatusMaxRecords,
-                    "terminalStatusTtlMs" to acceptedAsyncStats.terminalStatusTtlMs,
-                    "retainedTerminalStatusRecords" to acceptedAsyncStats.retainedTerminalStatusRecords,
-                    "retainedStatusRecords" to acceptedAsyncStats.retainedStatusRecords,
-                    "statusRecordsEvicted" to acceptedAsyncStats.statusRecordsEvicted,
-                    "lastReceivedAt" to acceptedAsyncStats.lastReceivedAt,
-                    "lastCompletedAt" to acceptedAsyncStats.lastCompletedAt,
-                    "lastFailedAt" to acceptedAsyncStats.lastFailedAt,
-                    "lanes" to acceptedAsyncStats.lanes.map { lane ->
-                        mapOf(
-                            "lane" to lane.lane,
-                            "queued" to lane.queued,
-                            "inFlight" to lane.inFlight,
-                            "completedWaiting" to lane.completedWaiting,
-                            "oldestInFlightAgeMs" to lane.oldestInFlightAgeMs,
-                            "windowSaturated" to lane.windowSaturated,
-                            "received" to lane.received,
-                            "backpressured" to lane.backpressured,
-                            "processing" to lane.processing,
-                            "completed" to lane.completed,
-                            "failed" to lane.failed
-                        )
-                    }
-                )
-            },
-            "intakeBackpressure" to mapOf(
-                "maxActiveCommands" to commandIntakeMaxActive,
-                "maxStaleProcessing" to commandIntakeMaxStaleProcessing,
-                "sampleMs" to commandIntakeBackpressureSampleMs
-            ),
-            "queue" to counts,
-            "metrics" to mapOf(
-                "claimed" to metrics.claimed,
-                "completed" to metrics.completed,
-                "failed" to metrics.failed,
-                "emptyPolls" to metrics.emptyPolls,
-                "lastClaimedAt" to metrics.lastClaimedAt,
-                "lastCompletedAt" to metrics.lastCompletedAt,
-                "lastFailedAt" to metrics.lastFailedAt
-            )
-        )
-    }
+    // asyncCommandStatsJson lives in DiagnosticsGateway.kt (see field above).
+
 
     private fun commandIntakeBackpressure(): BoundaryError? {
         if (commandIntakeMaxActive <= 0L && commandIntakeMaxStaleProcessing <= 0L) {
@@ -3187,353 +3140,12 @@ class PlatformHttpServer(
         }
     }
 
-    private fun commandAccountingJson(runId: String): String {
-        val snapshot = capturedCommandQueue?.accountingSnapshot(runId)
-        if (snapshot == null) {
-            return JsonCodec.writeObject(
-                "available" to false,
-                "runId" to runId,
-                "error" to "captured command queue unavailable"
-            )
-        }
-        return JsonCodec.writeObject(
-            "available" to true,
-            "runId" to snapshot.runId,
-            "accepted" to snapshot.accepted,
-            "received" to snapshot.received,
-            "processing" to snapshot.processing,
-            "completed" to snapshot.completed,
-            "failed" to snapshot.failed,
-            "active" to snapshot.active,
-            "terminal" to snapshot.terminal,
-            "accountingGap" to snapshot.accountingGap,
-            "staleProcessing" to snapshot.staleProcessing
-        )
-    }
+    // commandAccountingJson/dbPoolStatsJson/streamCommandHealthJson/streamCommandWorkerStatsJson/
+    // venueEventMaterializerStatsJson/marketDataProjectorStatusJson/orderLifecycleProjectorStatusJson
+    // live in DiagnosticsGateway.kt; startStreamCommandWorkers/startCanonicalProjector/
+    // startMarketDataProjector/startOrderLifecycleProjector/startVenueEventMaterializer/
+    // projectorPartitions/streamWorkerPartitions live in RuntimeLoopStarter.kt (see fields above).
 
-    private fun dbPoolStatsJson(): String {
-        return JsonCodec.writeObject(
-            "pools" to RuntimeDataSources.snapshots().map { snapshot ->
-                mapOf(
-                    "key" to snapshot.key,
-                    "poolName" to snapshot.poolName,
-                    "jdbcUrl" to snapshot.jdbcUrl,
-                    "username" to snapshot.username,
-                    "maximumPoolSize" to snapshot.maximumPoolSize,
-                    "minimumIdle" to snapshot.minimumIdle,
-                    "activeConnections" to snapshot.activeConnections,
-                    "idleConnections" to snapshot.idleConnections,
-                    "totalConnections" to snapshot.totalConnections,
-                    "threadsAwaitingConnection" to snapshot.threadsAwaitingConnection
-                )
-            }
-        )
-    }
-
-    private fun streamCommandHealthJson(): String {
-        val snapshot = streamCommandHealthCheck?.snapshot()
-        if (snapshot == null) {
-            return JsonCodec.writeObject(
-                "available" to false,
-                "processingMode" to commandProcessingMode.configValue,
-                "stream" to streamCommandConfig.streamName,
-                "error" to "stream command health unavailable"
-            )
-        }
-        return JsonCodec.writeObject(
-            "available" to snapshot.available,
-            "processingMode" to commandProcessingMode.configValue,
-            "stream" to snapshot.streamName,
-            "messages" to snapshot.messageCount,
-            "bytes" to snapshot.byteCount,
-            "maxBytes" to snapshot.maxBytes,
-            "storageUtilization" to snapshot.storageUtilization,
-            "maxStorageUtilization" to streamCommandMaxStorageUtilization,
-            "backpressureSampleMs" to streamCommandBackpressureSampleMs,
-            "drainBackpressure" to mapOf(
-                "policy" to streamCommandDrainBackpressurePolicy.configValue,
-                "maxWorkerStreamLag" to streamCommandMaxWorkerStreamLag,
-                "maxProjectorLag" to streamCommandMaxProjectorLag,
-                "sampleMs" to streamCommandDrainBackpressureSampleMs,
-                "workerDurables" to streamCommandBackpressureWorkerDurableNames()
-            ),
-            "markPublishedMode" to streamCommandMarkPublishedMode,
-            "publishMode" to snapshot.publishMode,
-            "publishInFlight" to snapshot.publishInFlight,
-            "publishMaxInFlight" to snapshot.publishMaxInFlight,
-            "publishQueueDepth" to snapshot.publishQueueDepth,
-            "publishMaxQueueDepth" to snapshot.publishMaxQueueDepth,
-            "publishLaneCount" to snapshot.publishLaneCount,
-            "publishAccepted" to snapshot.publishAccepted,
-            "publishCompleted" to snapshot.publishCompleted,
-            "publishFailed" to snapshot.publishFailed,
-            "publishRejected" to snapshot.publishRejected,
-            "publishQueueWaitLastMs" to snapshot.publishQueueWaitLastMs,
-            "publishQueueWaitMaxMs" to snapshot.publishQueueWaitMaxMs,
-            "publishSlotWaitLastMs" to snapshot.publishSlotWaitLastMs,
-            "publishSlotWaitMaxMs" to snapshot.publishSlotWaitMaxMs,
-            "publishDelegateAckLastMs" to snapshot.publishDelegateAckLastMs,
-            "publishDelegateAckMaxMs" to snapshot.publishDelegateAckMaxMs,
-            "publishPipelineTotalLastMs" to snapshot.publishPipelineTotalLastMs,
-            "publishPipelineTotalMaxMs" to snapshot.publishPipelineTotalMaxMs,
-            "publishLanes" to snapshot.publishLaneSnapshots.map {
-                mapOf(
-                    "partition" to it.partition,
-                    "accepted" to it.accepted,
-                    "completed" to it.completed,
-                    "failed" to it.failed,
-                    "rejected" to it.rejected,
-                    "queueDepth" to it.queueDepth,
-                    "maxQueueDepthObserved" to it.maxQueueDepthObserved,
-                    "inFlight" to it.inFlight,
-                    "maxInFlightObserved" to it.maxInFlightObserved,
-                    "queueWaitLastMs" to it.queueWaitLastMs,
-                    "queueWaitMaxMs" to it.queueWaitMaxMs,
-                    "slotWaitLastMs" to it.slotWaitLastMs,
-                    "slotWaitMaxMs" to it.slotWaitMaxMs,
-                    "delegateAckLastMs" to it.delegateAckLastMs,
-                    "delegateAckMaxMs" to it.delegateAckMaxMs,
-                    "totalLastMs" to it.totalLastMs,
-                    "totalMaxMs" to it.totalMaxMs
-                )
-            },
-            "publishAckLastMs" to snapshot.publishAckLastMs,
-            "publishAckMaxMs" to snapshot.publishAckMaxMs,
-            "producerMetrics" to snapshot.producerMetrics,
-            "checkedAt" to snapshot.checkedAt.toString(),
-            "error" to snapshot.error
-        )
-    }
-
-    private fun streamCommandWorkerStatsJson(): String {
-        val stats = StreamCommandWorkerMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to streamCommandWorkerEnabled,
-            "processingMode" to commandProcessingMode.configValue,
-            "partitions" to streamWorkerPartitions(),
-            "batchSize" to streamCommandWorkerBatchSize,
-            "pollIntervalMs" to streamCommandWorkerPollMs,
-            "fetchTimeoutMs" to streamCommandWorkerFetchTimeoutMs,
-            "dedicatedRuntimePoolEnabled" to streamCommandWorkerDedicatedRuntimePoolEnabled,
-            "metrics" to mapOf(
-                "fetched" to stats.fetched,
-                "completed" to stats.completed,
-                "failed" to stats.failed,
-                "ackFailed" to stats.ackFailed,
-                "unsupported" to stats.unsupported,
-                "emptyPolls" to stats.emptyPolls,
-                "lastFetchedAt" to stats.lastFetchedAt,
-                "lastCompletedAt" to stats.lastCompletedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastAckFailedAt" to stats.lastAckFailedAt,
-                "lastError" to stats.lastError
-            ),
-            "partitionMetrics" to stats.partitions.map { partition ->
-                mapOf(
-                    "partition" to partition.partition,
-                    "fetched" to partition.fetched,
-                    "completed" to partition.completed,
-                    "failed" to partition.failed,
-                    "ackFailed" to partition.ackFailed,
-                    "unsupported" to partition.unsupported,
-                    "localInFlight" to partition.localInFlight,
-                    "maxDeliveredCount" to partition.maxDeliveredCount,
-                    "lastFetchedStreamSequence" to partition.lastFetchedStreamSequence,
-                    "lastCompletedStreamSequence" to partition.lastCompletedStreamSequence,
-                    "lastFetchedAt" to partition.lastFetchedAt,
-                    "lastCompletedAt" to partition.lastCompletedAt,
-                    "lastFailedAt" to partition.lastFailedAt,
-                    "lastAckFailedAt" to partition.lastAckFailedAt,
-                    "oldestLocalInFlightAt" to partition.oldestLocalInFlightAt,
-                    "oldestLocalInFlightAgeMs" to partition.oldestLocalInFlightAgeMs,
-                    "lastError" to partition.lastError
-                )
-            },
-            "consumerMetrics" to stats.consumers.map { consumer ->
-                mapOf(
-                    "partition" to consumer.partition,
-                    "durableName" to consumer.durableName,
-                    "filterSubject" to consumer.filterSubject,
-                    "pending" to consumer.pending,
-                    "waiting" to consumer.waiting,
-                    "ackPending" to consumer.ackPending,
-                    "redelivered" to consumer.redelivered,
-                    "deliveredConsumerSequence" to consumer.deliveredConsumerSequence,
-                    "deliveredStreamSequence" to consumer.deliveredStreamSequence,
-                    "ackFloorConsumerSequence" to consumer.ackFloorConsumerSequence,
-                    "ackFloorStreamSequence" to consumer.ackFloorStreamSequence,
-                    "streamLastSequence" to consumer.streamLastSequence,
-                    "streamLag" to consumer.streamLag,
-                    "lastActiveAt" to consumer.lastActiveAt,
-                    "sampledAt" to consumer.sampledAt,
-                    "error" to consumer.error
-                )
-            }
-        )
-    }
-
-    private fun venueEventMaterializerStatsJson(): String {
-        val stats = VenueEventBatchMaterializerMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to venueEventMaterializerShouldStart(),
-            "role" to runtimeRole.configValue,
-            "processingMode" to commandProcessingMode.configValue,
-            "batchSize" to venueEventMaterializerBatchSize,
-            "pollIntervalMs" to venueEventMaterializerPollMs,
-            "fetchTimeoutMs" to venueEventMaterializerFetchTimeoutMs,
-            "source" to "kafka",
-            "metrics" to mapOf(
-                "fetched" to stats.fetched,
-                "materialized" to stats.materialized,
-                "materializedOutcomes" to stats.materializedOutcomes,
-                "failed" to stats.failed,
-                "ackFailed" to stats.ackFailed,
-                "unsupported" to stats.unsupported,
-                "emptyPolls" to stats.emptyPolls,
-                "lastFetchedStreamSequence" to stats.lastFetchedStreamSequence,
-                "lastMaterializedStreamSequence" to stats.lastMaterializedStreamSequence,
-                "lastMaterializedBatchId" to stats.lastMaterializedBatchId,
-                "lastMaterializedPartition" to stats.lastMaterializedPartition,
-                "lastMaterializedFirstSequence" to stats.lastMaterializedFirstSequence,
-                "lastMaterializedLastSequence" to stats.lastMaterializedLastSequence,
-                "materializerLag" to stats.materializerLag,
-                "lastMaterializedAt" to stats.lastMaterializedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastError" to stats.lastError
-            )
-        )
-    }
-
-    private fun marketDataProjectorStatusJson(): String {
-        val stats = MarketDataProjectionMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to marketDataProjectorShouldStart(),
-            "role" to runtimeRole.configValue,
-            "projectionName" to marketDataProjectorProjectionName,
-            "sourceProjectionName" to marketDataProjectorSourceProjectionName,
-            "pollIntervalMs" to marketDataProjectorPollMs,
-            "batchSize" to marketDataProjectorBatchSize,
-            "metrics" to mapOf(
-                "cycles" to stats.cycles,
-                "processedRows" to stats.processedRows,
-                "failed" to stats.failed,
-                "lastProcessedAt" to stats.lastProcessedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastError" to stats.lastError
-            )
-        )
-    }
-
-    private fun orderLifecycleProjectorStatusJson(): String {
-        val stats = OrderLifecycleProjectionMetrics.snapshot()
-        return JsonCodec.writeObject(
-            "enabled" to orderLifecycleProjectorShouldStart(),
-            "role" to runtimeRole.configValue,
-            "pollIntervalMs" to orderLifecycleProjectorPollMs,
-            "batchSize" to orderLifecycleProjectorBatchSize,
-            "metrics" to mapOf(
-                "cycles" to stats.cycles,
-                "processedRows" to stats.processedRows,
-                "failed" to stats.failed,
-                "lastProcessedAt" to stats.lastProcessedAt,
-                "lastFailedAt" to stats.lastFailedAt,
-                "lastError" to stats.lastError
-            )
-        )
-    }
-
-    private fun startStreamCommandWorkers() {
-        val partitions = streamWorkerPartitions()
-        if (partitions.isEmpty()) {
-            System.err.println("stream_command_worker_unavailable reason=no_partitions_configured")
-            return
-        }
-        val workerApi = streamCommandWorkerApi()
-        partitions.forEach { partition ->
-            val source = StreamCommandWorkerFactory.sourceForPartition(streamCommandConfig, partition)
-            if (source is StreamCommandTelemetrySource) {
-                StreamCommandWorkerMetrics.registerConsumerTelemetry(partition, source)
-            }
-            StreamCommandWorker(
-                source = source,
-                api = workerApi,
-                publicationMarker = streamCommandIntakeStore,
-                partition = partition,
-                batchSize = streamCommandWorkerBatchSize,
-                pollIntervalMs = streamCommandWorkerPollMs,
-                fetchTimeout = java.time.Duration.ofMillis(streamCommandWorkerFetchTimeoutMs),
-                workerName = "reef-stream-command-worker-p$partition"
-            ).start()
-        }
-    }
-
-    private fun startCanonicalProjector() {
-        val partitions = projectorPartitions()
-        if (partitions.isEmpty()) {
-            System.err.println("canonical_projector_unavailable reason=no_partitions_configured")
-            return
-        }
-        CanonicalProjectionWorker(
-            api = api,
-            projectionName = streamAckProjectionName,
-            projectionSource = streamAckProjectionSource,
-            eventStream = streamAckProjectionEventStream,
-            partitions = partitions,
-            batchSize = streamAckProjectorBatchSize,
-            pollIntervalMs = streamAckProjectorPollMs,
-            workerName = "reef-canonical-projector-$streamAckProjectionName"
-        ).start()
-    }
-
-    private fun marketDataProjectorShouldStart(): Boolean {
-        return runtimeRole == PlatformRuntimeRole.Projector && marketDataProjectorEnabled
-    }
-
-    private fun startMarketDataProjector() {
-        MarketDataProjectionWorker(
-            api = api,
-            projectionName = marketDataProjectorProjectionName,
-            sourceProjectionName = marketDataProjectorSourceProjectionName,
-            pollIntervalMs = marketDataProjectorPollMs,
-            batchSize = marketDataProjectorBatchSize,
-            workerName = "reef-market-data-projector-$marketDataProjectorProjectionName"
-        ).start()
-    }
-
-    private fun orderLifecycleProjectorShouldStart(): Boolean {
-        return runtimeRole == PlatformRuntimeRole.Projector && orderLifecycleProjectorEnabled
-    }
-
-    private fun startOrderLifecycleProjector() {
-        OrderLifecycleProjectionWorker(
-            api = api,
-            pollIntervalMs = orderLifecycleProjectorPollMs,
-            batchSize = orderLifecycleProjectorBatchSize,
-            workerName = "reef-order-lifecycle-projector"
-        ).start()
-    }
-
-    private fun venueEventMaterializerShouldStart(): Boolean {
-        return commandProcessingMode == CommandProcessingMode.StreamAck &&
-            runtimeRole == PlatformRuntimeRole.Materializer &&
-            venueEventMaterializerEnabled
-    }
-
-    private fun startVenueEventMaterializer() {
-        val provider = StreamCommandLogProvider.fromEnv()
-        if (provider != StreamCommandLogProvider.Redpanda) {
-            System.err.println("venue_event_materializer_unavailable reason=unsupported_log_provider provider=${provider.configValue}")
-            return
-        }
-        VenueEventBatchMaterializer(
-            source = venueEventBatchSourceWithLocalFaultHooks(KafkaVenueEventBatchSource()),
-            api = api,
-            batchSize = venueEventMaterializerBatchSize,
-            pollIntervalMs = venueEventMaterializerPollMs,
-            fetchTimeout = java.time.Duration.ofMillis(venueEventMaterializerFetchTimeoutMs),
-            workerName = "reef-venue-event-batch-materializer"
-        ).start()
-    }
 
     private fun startStreamCommandDrainBackpressureSampler() {
         val sampler = streamCommandDrainBackpressureSampler ?: return
@@ -3558,13 +3170,6 @@ class PlatformHttpServer(
         }
     }
 
-    private fun projectorPartitions(): List<Int> {
-        return configuredRuntimePartitions(streamAckProjectorPartitions, streamCommandConfig.partitionCount)
-    }
-
-    private fun streamWorkerPartitions(): List<Int> {
-        return configuredRuntimePartitions(streamCommandWorkerPartitions, streamCommandConfig.partitionCount)
-    }
 }
 
 private const val DEFAULT_BODY_BUFFER_BYTES = 8192
